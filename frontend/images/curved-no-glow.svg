@@ -1,0 +1,11 @@
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+            
+            <!-- Left half with clipping to match rounded corners -->
+            <rect x="0" y="0" width="70" height="100" fill="#808080" rx="20" ry="20"/>
+            
+            <!-- Top right quadrant with rounded top-right corner -->
+            <path d="M50 0h30c11 0 20 9 20 20v30h-50z" fill="white"/>
+            
+            <!-- Bottom right quadrant with rounded bottom-right corner -->
+            <path d="M50 50h50v30c0 11-9 20-20 20h-30z" fill="#000"/>
+        </svg>

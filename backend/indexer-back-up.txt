@@ -1,0 +1,344 @@
+import { EventId, SuiClient, SuiEvent, SuiEventFilter } from '@mysten/sui/client';
+import { CONFIG } from '../config';
+import { prisma } from '../db';
+import { getClient } from '../sui-utils';
+import { handleProposalObjects } from './proposal-handler';
+import { handleDAOObjects } from './dao-handler';
+import { handleTokenMintedEvents } from './minted-handler';
+import { handleSwapEvents } from './swap-handler';
+import { handleProposalStateChanges } from './state-handler';
+import { handleTokenBurnedEvents } from './burn-handler';
+import { handleTokenSplitEvents } from './split-handler';
+import { handleTokenMergeManyEvents } from './merge-handler';
+
+type SuiEventsCursor = EventId | null | undefined;
+
+type EventExecutionResult = {
+    cursor: SuiEventsCursor;
+    hasNextPage: boolean;
+};
+
+type EventTracker = {
+    type: string;
+    filter: SuiEventFilter;
+    callback: (events: SuiEvent[], type: string) => Promise<void>;
+};
+
+interface HealthStatus {
+    lastProcessedTime: number;
+    lastCursor?: EventId;
+    consecutiveErrors: number;
+    isHealthy: boolean;
+}
+
+const EVENTS_TO_TRACK: EventTracker[] = [
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::proposal::ProposalCreated`,
+        filter: {
+            MoveEventModule: {
+                module: 'proposal',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleProposalObjects,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::dao::DAOCreated`,
+        filter: {
+            MoveEventModule: {
+                module: 'dao',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleDAOObjects,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::conditional_token::TokenMinted`,
+        filter: {
+            MoveEventModule: {
+                module: 'conditional_token',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleTokenMintedEvents,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::amm::SwapEvent`,
+        filter: {
+            MoveEventModule: {
+                module: 'amm',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleSwapEvents,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::proposal::ProposalStateChanged`,
+        filter: {
+            MoveEventModule: {
+                module: 'proposal',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleProposalStateChanges,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::conditional_token::TokenBurned`,
+        filter: {
+            MoveEventModule: {
+                module: 'conditional_token',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleTokenBurnedEvents,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::conditional_token::TokenSplit`,
+        filter: {
+            MoveEventModule: {
+                module: 'conditional_token',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleTokenSplitEvents,
+    },
+    {
+        type: `${CONFIG.DAO_CONTRACT.packageId}::conditional_token::TokenMergeMany`,
+        filter: {
+            MoveEventModule: {
+                module: 'conditional_token',
+                package: CONFIG.DAO_CONTRACT.packageId,
+            },
+        },
+        callback: handleTokenMergeManyEvents,
+    }
+];
+
+// Helper function for delays
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Retry logic
+async function withRetry<T>(
+    operation: () => Promise<T>,
+    retries = 3,
+    baseDelay = 1000
+): Promise<T> {
+    let lastError;
+    for (let i = 0; i < retries; i++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (i < retries - 1) {
+                const delayTime = baseDelay * Math.pow(2, i);
+                console.log(`Retry ${i + 1}/${retries} after ${delayTime}ms`);
+                await delay(delayTime);
+            }
+        }
+    }
+    throw lastError;
+}
+
+const getLatestCursor = async (tracker: EventTracker) => {
+    try {
+        const cursor = await prisma.cursor.findUnique({
+            where: {
+                id: tracker.type,
+            },
+        });
+        return cursor || undefined;
+    } catch (error) {
+        console.error('Error getting latest cursor:', error);
+        return undefined;
+    }
+};
+
+const saveLatestCursor = async (tracker: EventTracker, cursor: EventId) => {
+    const data = {
+        eventSeq: cursor.eventSeq,
+        txDigest: cursor.txDigest,
+    };
+
+    try {
+        return await prisma.cursor.upsert({
+            where: {
+                id: tracker.type,
+            },
+            update: data,
+            create: { id: tracker.type, ...data },
+        });
+    } catch (error) {
+        console.error('Error saving cursor:', error);
+        throw error;
+    }
+};
+
+class EventProcessor {
+    private healthStatus: Map<string, HealthStatus> = new Map();
+    private readonly MAX_CONSECUTIVE_ERRORS = 3;
+    private readonly HEALTH_CHECK_INTERVAL = 60000; // 1 minute
+    private readonly ERROR_RESET_TIMEOUT = 300000; // 5 minutes
+    private isShuttingDown = false;
+
+    constructor(private client: SuiClient, private trackers: EventTracker[]) {
+        this.setupHealthCheck();
+        this.setupGracefulShutdown();
+    }
+
+    private setupHealthCheck() {
+        setInterval(() => {
+            this.checkHealth();
+        }, this.HEALTH_CHECK_INTERVAL);
+    }
+
+    private setupGracefulShutdown() {
+        process.on('SIGTERM', this.handleShutdown.bind(this));
+        process.on('SIGINT', this.handleShutdown.bind(this));
+    }
+
+    private async handleShutdown() {
+        console.log('Received shutdown signal. Gracefully stopping...');
+        this.isShuttingDown = true;
+        
+        // Wait for current processing to complete
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Disconnect from database
+        await prisma.$disconnect();
+        process.exit(0);
+    }
+
+    private async checkHealth() {
+        for (const [eventType, status] of this.healthStatus.entries()) {
+            const now = Date.now();
+            const timeSinceLastProcess = now - status.lastProcessedTime;
+
+            if (timeSinceLastProcess > this.ERROR_RESET_TIMEOUT || status.consecutiveErrors >= this.MAX_CONSECUTIVE_ERRORS) {
+                console.warn(`Event processor for ${eventType} appears stuck or unhealthy. Restarting...`);
+                await this.restartEventProcessor(eventType);
+            }
+        }
+    }
+
+    private async restartEventProcessor(eventType: string) {
+        const tracker = this.trackers.find(t => t.type === eventType);
+        if (!tracker) return;
+
+        // Reset health status
+        this.healthStatus.set(eventType, {
+            lastProcessedTime: Date.now(),
+            consecutiveErrors: 0,
+            isHealthy: true
+        });
+
+        // Restart processing from last known cursor
+        const cursor = await getLatestCursor(tracker);
+        this.runEventJob(tracker, cursor);
+    }
+
+    private updateHealthStatus(eventType: string, success: boolean, cursor?: EventId) {
+        const currentStatus = this.healthStatus.get(eventType) || {
+            lastProcessedTime: Date.now(),
+            consecutiveErrors: 0,
+            isHealthy: true
+        };
+
+        if (success) {
+            currentStatus.consecutiveErrors = 0;
+            currentStatus.isHealthy = true;
+        } else {
+            currentStatus.consecutiveErrors++;
+            currentStatus.isHealthy = currentStatus.consecutiveErrors < this.MAX_CONSECUTIVE_ERRORS;
+        }
+
+        currentStatus.lastProcessedTime = Date.now();
+        if (cursor) {
+            currentStatus.lastCursor = cursor;
+        }
+
+        this.healthStatus.set(eventType, currentStatus);
+    }
+
+    private async executeEventJob(
+        tracker: EventTracker,
+        cursor: SuiEventsCursor,
+    ): Promise<EventExecutionResult> {
+        if (this.isShuttingDown) {
+            return { cursor, hasNextPage: false };
+        }
+
+        try {
+            const { data, hasNextPage, nextCursor } = await withRetry(
+                () => this.client.queryEvents({
+                    query: tracker.filter,
+                    cursor,
+                    order: 'ascending',
+                }),
+                3,
+                2000
+            );
+
+            if (data.length > 0) {
+                console.log(`Processing ${data.length} events for ${tracker.type}`);
+                await tracker.callback(data, tracker.type);
+            }
+
+            if (nextCursor && data.length > 0) {
+                await saveLatestCursor(tracker, nextCursor);
+                this.updateHealthStatus(tracker.type, true, nextCursor);
+                return {
+                    cursor: nextCursor,
+                    hasNextPage,
+                };
+            }
+
+            this.updateHealthStatus(tracker.type, true);
+        } catch (e) {
+            this.updateHealthStatus(tracker.type, false);
+            console.error('Error executing event job:', {
+                type: tracker.type,
+                error: e instanceof Error ? e.message : String(e),
+                stack: e instanceof Error ? e.stack : undefined
+            });
+        }
+
+        return { cursor, hasNextPage: false };
+    }
+
+    private async runEventJob(tracker: EventTracker, cursor: SuiEventsCursor) {
+        if (this.isShuttingDown) return;
+
+        const result = await this.executeEventJob(tracker, cursor);
+        
+        // Add jitter to polling interval
+        const jitter = Math.random() * 1000;
+        const pollInterval = result.hasNextPage ? 100 : CONFIG.POLLING_INTERVAL_MS + jitter;
+
+        setTimeout(
+            () => {
+                this.runEventJob(tracker, result.cursor);
+            },
+            pollInterval
+        );
+    }
+
+    public async start() {
+        console.log('Starting event processor...');
+        for (const tracker of this.trackers) {
+            console.log(`Starting listener for ${tracker.type}`);
+            const cursor = await getLatestCursor(tracker);
+            this.healthStatus.set(tracker.type, {
+                lastProcessedTime: Date.now(),
+                lastCursor: cursor as EventId,
+                consecutiveErrors: 0,
+                isHealthy: true
+            });
+            this.runEventJob(tracker, cursor);
+        }
+    }
+}
+
+export const setupListeners = async () => {
+    const processor = new EventProcessor(getClient(CONFIG.NETWORK), EVENTS_TO_TRACK);
+    await processor.start();
+};

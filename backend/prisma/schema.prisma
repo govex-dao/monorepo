@@ -1,0 +1,182 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+/// We can setup the provider to our database
+/// For this DEMO, we're using sqlite, which allows us to not
+/// have external dependencies.
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db?pragma=journal_mode=WAL&pragma=synchronous=normal&pragma=busy_timeout=5000"
+}
+
+/// Saves the latest cursor for a given key.
+model Cursor {
+  id String @id
+  eventSeq String
+  txDigest String
+}
+
+model Dao {
+  id Int @id @default(autoincrement())
+  dao_id String @unique
+  minAssetAmount BigInt
+  minStableAmount BigInt
+  timestamp BigInt
+  assetType String
+  stableType String
+  icon_url String
+  icon_cache_path String? // Add this field to store the cached image path
+  dao_name String 
+  asset_decimals Int
+  stable_decimals Int
+  asset_name String
+  stable_name String
+  asset_icon_url String
+  stable_icon_url String
+  asset_symbol String
+  stable_symbol String
+  review_period_ms BigInt
+  trading_period_ms BigInt
+  amm_twap_start_delay BigInt
+  amm_twap_step_max BigInt
+  twap_threshold BigInt
+  proposals Proposal[]
+  verificationRequests DaoVerificationRequest[]
+  verification DaoVerification?  // Changed to optional one-to-one
+  @@index([dao_id])
+}
+
+model Proposal {
+  id Int @id @default(autoincrement())
+  proposal_id String @unique
+  market_state_id String @unique
+  dao_id String
+  dao Dao? @relation(fields: [dao_id], references: [dao_id]) // Make this optional with ?
+  proposer String
+  outcome_count BigInt
+  outcome_messages String  // Stored as JSON string
+  created_at BigInt
+  escrow_id String
+  asset_value BigInt
+  stable_value BigInt
+  asset_type String
+  stable_type String
+  title String   
+  details String 
+  metadata String
+  current_state Int?
+  state_history ProposalStateChange[]
+  review_period_ms BigInt
+  trading_period_ms BigInt
+  initial_outcome_amounts String?  // Stored as JSON string for the Option<vector<u64>>
+  twap_start_delay BigInt
+  twap_step_max BigInt
+  twap_threshold BigInt
+  twapHistory    ProposalTWAP[]
+  result ProposalResult?
+  
+  @@index([dao_id]) // Add this index for better query performance
+}
+
+model ProposalTWAP {
+  id         String   @id @default(uuid())
+  proposalId String
+  outcome    Int
+  twap       BigInt
+  timestamp  BigInt
+  oracle_id  String
+  proposal   Proposal @relation(fields: [proposalId], references: [proposal_id])
+
+  @@unique([proposalId, outcome])
+}
+
+model DaoVerificationRequest {
+  id Int @id @default(autoincrement())
+  dao_id String
+  dao Dao? @relation(fields: [dao_id], references: [dao_id])
+  requester String
+  attestation_url String
+  verification_id String
+  timestamp BigInt
+  status String @default("pending") // Add status field
+
+  @@index([verification_id])
+  @@index([dao_id, status, timestamp])
+}
+
+model DaoVerification {
+  id Int @id @default(autoincrement())
+  dao_id String @unique  // Added @unique constraint
+  dao Dao? @relation(fields: [dao_id], references: [dao_id])
+  attestation_url String
+  verification_id String
+  verified Boolean
+  validator String
+  timestamp BigInt
+  reject_reason String?
+  @@unique([dao_id, verification_id])
+  
+  @@index([verification_id])
+  @@index([dao_id, timestamp, verified])
+}
+
+model ProposalStateChange {
+  id Int @id @default(autoincrement())
+  proposal_id String
+  old_state Int
+  new_state Int
+  timestamp BigInt
+  proposal Proposal @relation(fields: [proposal_id], references: [proposal_id])
+
+  @@index([proposal_id])
+}
+
+model ProposalResult {
+  id Int @id @default(autoincrement())
+  proposal_id String @unique
+  proposal Proposal @relation(fields: [proposal_id], references: [proposal_id])
+  dao_id String
+  outcome String  // Maps to outcome from ResultSigned
+  winning_outcome BigInt  // Maps to winning_outcome from ResultSigned, using BigInt for u64
+  timestamp BigInt // Maps to timestamp from ResultSigned
+  
+  @@index([proposal_id])
+  @@index([dao_id])
+}
+
+model SwapEvent {
+  id          Int      @id @default(autoincrement())
+  market_id   String   
+  outcome     Int      
+  is_buy      Boolean  
+  amount_in   BigInt   
+  amount_out  BigInt   
+  price_impact BigInt  
+  price       BigInt   
+  sender      String   
+  timestamp   BigInt
+  asset_reserve  BigInt
+  stable_reserve BigInt
+
+  @@index([market_id])
+  @@index([outcome])
+  @@index([sender])
+  @@index([timestamp])
+}
+
+model ResultSigned {
+  id Int @id @default(autoincrement())
+  dao_id String
+  proposal_id String @unique
+  result String     // We'll store the vector<u8> as a string
+  winning_outcome BigInt
+  timestamp BigInt
+
+  @@index([proposal_id])
+  @@index([dao_id])
+  @@index([timestamp])
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Main circle background -->
+  <circle cx="50" cy="50" r="50" fill="#000"/>
+  
+  <!-- Left half -->
+  <path d="M50 0 A50 50 0 0 0 50 100 A50 50 0 0 0 50 0" fill="#808080"/>
+  
+  <!-- Top right quadrant -->
+  <path d="M50 0 A50 50 0 0 1 100 50 L50 50 Z" fill="white"/>
+  
+  <!-- Bottom right quadrant -->
+  <path d="M50 50 L100 50 A50 50 0 0 1 50 100 Z" fill="black"/>
+</svg>

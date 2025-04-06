@@ -1,0 +1,42 @@
+{
+	"name": "escrow-api-demo",
+	"version": "1.0.10",
+	"private": true,
+	"description": "Demo package for escrow",
+	"main": "server.ts",
+	"scripts": {
+		"fresh:db": "chmod +x fresh-db.sh && ./fresh-db.sh",
+		"branch:db": "chmod +x branch-db.sh && ./branch-db.sh",
+		"dev": "concurrently \"pnpm api:dev\" \"pnpm indexer\" \"pnpm poll:dev\"",
+		"dev:local": "cross-env NETWORK=devnet pnpm dev",
+		"dev:prod": "cross-env NETWORK=testnetProd pnpm dev",
+		"db:setup:dev": "npx prisma migrate dev --name init",
+		"db:reset:dev": "npx prisma db push --force-reset",
+		"db:studio": "npx prisma studio",
+		"api:dev": "npx ts-node server.ts",
+		"poll:dev": "npx ts-node poller.ts",
+		"indexer": "npx ts-node indexer.ts"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "Apache-2.0",
+	"devDependencies": {
+		"@prisma/client": "^5.22.0",
+		"@types/cors": "^2.8.17",
+		"@types/express": "^4.17.21",
+		"@types/node": "^20.14.10",
+		"concurrently": "^8.2.2",
+		"cross-env": "^7.0.3",
+		"prisma": "^5.22.0",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.5.3"
+	},
+	"dependencies": {
+		"@mysten/dapp-kit": "^0.14.39",
+		"@mysten/sui": "1.14.2",
+		"cors": "^2.8.5",
+		"express": "^4.20.0",
+		"sharp": "^0.33.5",
+		"sqlite3": "^5.1.7"
+	}
+}

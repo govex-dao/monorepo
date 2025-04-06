@@ -1,0 +1,14 @@
+# Contracts
+contracts/futarchy/build/
+contracts/govex-coin/build/
+
+# Backend
+backend/public/
+backend/node_modules/
+backend/.env
+
+# Frontend
+frontend/node_modules/
+
+# General
+**/.env

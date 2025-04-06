@@ -1,0 +1,8 @@
+{
+  "packageId": "0x6dd66f8e91cd6ebe427ceac80203a3369d4e220a8ba6db70c8b9325aa77868ea",
+  "treasuryCapId": "0x2a6f93ac460cce22e8c1eca3e9d9e67d6853e5bb03dd72c59263a4f62df9c7d0",
+  "metadataId": "0x7ca75126f78ea006b5d2c5cef94ccda10799022d6e0af83ac2526488e95d99fa",
+  "upgradeCapId": "0x8d052c7e2c0389d16aa96a42fa3490e3395f088b4f8725e60079c135d1107350",
+  "transactionDigest": "EBuybopKmmWESgAsH56kLLDxGwYoiwu7W6UoXmSSS2WY",
+  "coinType": "0x6dd66f8e91cd6ebe427ceac80203a3369d4e220a8ba6db70c8b9325aa77868ea::my_asset::MY_ASSET"
+}
