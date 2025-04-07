@@ -1,6 +1,0 @@
-dev.db
-dev.db-journal
-demo-contract.json
-escrow-contract.json
-**/node_modules/
-node_modules/

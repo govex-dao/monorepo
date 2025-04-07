@@ -6,6 +6,8 @@ contracts/govex-coin/build/
 backend/public/
 backend/node_modules/
 backend/.env
+backend/dev.db
+backend/dev.db-journal
 
 # Frontend
 frontend/node_modules/
