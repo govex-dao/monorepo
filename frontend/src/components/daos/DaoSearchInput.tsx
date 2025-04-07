@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect, ChangeEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent } from "react";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
 import { CONSTANTS } from "@/constants";
-import { VerifiedIcon } from '../state/VerifiedIcon';
+import { VerifiedIcon } from "../state/VerifiedIcon";
 
 interface DaoData {
   dao_id: string;
@@ -23,7 +23,7 @@ interface DaoData {
   asset_symbol: String;
   stable_symbol: String;
   verification?: {
-        verified: boolean;
+    verified: boolean;
   };
 }
 
@@ -39,40 +39,54 @@ const truncateAddress = (address: string) => {
   return `${address.slice(0, 10)}...${address.slice(-10)}`;
 };
 
-const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInputProps) => {
+const DaoSearchInput = ({
+  value,
+  onChange,
+  onDaoSelect,
+  tooltip,
+}: DaoSearchInputProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setSearchTerm(value);
   }, [value]);
 
-  const { data: daos, isLoading, error } = useQuery({
-    queryKey: ['daos', searchTerm],
+  const {
+    data: daos,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["daos", searchTerm],
     queryFn: async () => {
       if (!searchTerm) return { data: [] };
-      
-      const response = await fetch(`${CONSTANTS.apiEndpoint}daos?dao_id=${encodeURIComponent(searchTerm)}`);
+
+      const response = await fetch(
+        `${CONSTANTS.apiEndpoint}daos?dao_id=${encodeURIComponent(searchTerm)}`,
+      );
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`);
       }
-      
+
       return response.json();
     },
     enabled: searchTerm.length > 0,
-    staleTime: 1
+    staleTime: 1,
   });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -80,8 +94,8 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
     setSearchTerm(newValue);
     setIsOpen(true);
     onChange(e);
-    
-    if (newValue === '' && onDaoSelect) {
+
+    if (newValue === "" && onDaoSelect) {
       onDaoSelect(null);
     }
   };
@@ -89,11 +103,11 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
   const handleSelect = (dao: DaoData) => {
     const syntheticEvent = {
       target: {
-        name: 'daoId',
-        value: dao.dao_id
-      }
+        name: "daoId",
+        value: dao.dao_id,
+      },
     } as ChangeEvent<HTMLInputElement>;
-    
+
     setSearchTerm(dao.dao_id);
     onChange(syntheticEvent);
     if (onDaoSelect) {
@@ -104,17 +118,21 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
 
   const highlightMatch = (text: string, term: string) => {
     if (!term) return text;
-    
-    const regex = new RegExp(`(${term})`, 'gi');
+
+    const regex = new RegExp(`(${term})`, "gi");
     const parts = text.split(regex);
-    
+
     return (
       <>
-        {parts.map((part, i) => (
-          regex.test(part) ? 
-            <span key={i} className="bg-blue-500 bg-opacity-30">{part}</span> : 
+        {parts.map((part, i) =>
+          regex.test(part) ? (
+            <span key={i} className="bg-blue-500 bg-opacity-30">
+              {part}
+            </span>
+          ) : (
             <span key={i}>{part}</span>
-        ))}
+          ),
+        )}
       </>
     );
   };
@@ -123,7 +141,9 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
     <Theme appearance="dark">
       <div className="space-y-2">
         <div className="flex items-center space-x-2">
-          <label className="block text-sm font-medium text-gray-200">DAO Search</label>
+          <label className="block text-sm font-medium text-gray-200">
+            DAO Search
+          </label>
           <div className="relative group">
             <InfoCircledIcon className="w-4 h-4 text-gray-400" />
             <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-800 text-gray-200 text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
@@ -131,7 +151,7 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
             </div>
           </div>
         </div>
-        
+
         <div className="relative" ref={dropdownRef}>
           <input
             type="text"
@@ -143,14 +163,16 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
             className="w-full p-2 bg-black border border-blue-500 rounded-md text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             placeholder="Search by DAO name or ID"
           />
-          
+
           {isOpen && (searchTerm || isLoading) && (
             <div className="absolute w-full mt-1 bg-gray-900 border border-gray-800 rounded-md shadow-xl z-10 max-h-60 overflow-auto">
               {isLoading ? (
                 <div className="p-2 text-gray-400">Loading...</div>
               ) : error ? (
                 <div className="p-2 text-red-400">
-                  {error instanceof Error ? error.message : 'Error loading DAOs'}
+                  {error instanceof Error
+                    ? error.message
+                    : "Error loading DAOs"}
                 </div>
               ) : daos?.data?.length ? (
                 daos.data.map((dao: DaoData) => (
@@ -161,24 +183,24 @@ const DaoSearchInput = ({ value, onChange, onDaoSelect, tooltip }: DaoSearchInpu
                   >
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 flex-shrink-0">
-                        <img 
-                          src={dao.dao_icon || '/placeholder-dao.png'} 
+                        <img
+                          src={dao.dao_icon || "/placeholder-dao.png"}
                           alt={dao.dao_name}
                           className="w-full h-full rounded-full object-cover"
                           onError={(e) => {
-                            e.currentTarget.src = '/placeholder-dao.png';
+                            e.currentTarget.src = "/placeholder-dao.png";
                           }}
                         />
                       </div>
                       <div className="flex-grow min-w-0 space-y-1">
-                      <div className="font-medium truncate flex items-center">
+                        <div className="font-medium truncate flex items-center">
                           {highlightMatch(dao.dao_name, searchTerm)}
                           {dao.verification?.verified && (
-                              <VerifiedIcon className="ml-1 flex-shrink-0" />
+                            <VerifiedIcon className="ml-1 flex-shrink-0" />
                           )}
                         </div>
                         <div className="font-mono text-sm text-gray-400 truncate">
-                        {truncateAddress(dao.dao_id)}
+                          {truncateAddress(dao.dao_id)}
                         </div>
                       </div>
                     </div>

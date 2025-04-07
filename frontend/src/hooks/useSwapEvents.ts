@@ -1,6 +1,6 @@
 // useSwapEvents.ts
-import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { CONSTANTS } from '@/constants';
+import { useQuery, UseQueryOptions } from "@tanstack/react-query";
+import { CONSTANTS } from "@/constants";
 
 export interface SwapEvent {
   price: string;
@@ -12,18 +12,23 @@ export interface SwapEvent {
   stable_reserve: string;
 }
 
-type UseSwapEventsOptions = Omit<UseQueryOptions<SwapEvent[], Error>, 'queryKey' | 'queryFn'>;
+type UseSwapEventsOptions = Omit<
+  UseQueryOptions<SwapEvent[], Error>,
+  "queryKey" | "queryFn"
+>;
 
 export const useSwapEvents = (
   proposalId: string,
-  options?: UseSwapEventsOptions
+  options?: UseSwapEventsOptions,
 ) => {
   return useQuery<SwapEvent[], Error>({
-    queryKey: ['swaps', proposalId],
+    queryKey: ["swaps", proposalId],
     queryFn: async () => {
-      const response = await fetch(`${CONSTANTS.apiEndpoint}swaps?market_id=${proposalId}`);
+      const response = await fetch(
+        `${CONSTANTS.apiEndpoint}swaps?market_id=${proposalId}`,
+      );
       if (!response.ok) {
-        throw new Error('Failed to fetch swap events');
+        throw new Error("Failed to fetch swap events");
       }
       const data = await response.json();
       return data.data as SwapEvent[];

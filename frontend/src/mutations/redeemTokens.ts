@@ -57,8 +57,12 @@ export function useRedeemTokensMutation() {
         // Split winning tokens by asset type
         const winningOutcome = parseInt(winning_outcome, 10);
         const winningTokensByType = {
-          asset: userTokens.filter(t => t.outcome === winningOutcome && t.asset_type === 0),
-          stable: userTokens.filter(t => t.outcome === winningOutcome && t.asset_type === 1)
+          asset: userTokens.filter(
+            (t) => t.outcome === winningOutcome && t.asset_type === 0,
+          ),
+          stable: userTokens.filter(
+            (t) => t.outcome === winningOutcome && t.asset_type === 1,
+          ),
         };
 
         // Handle asset tokens if present
@@ -70,8 +74,10 @@ export function useRedeemTokensMutation() {
               target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
               arguments: [
                 txb.object(baseToken.id),
-                txb.makeMoveVec({ elements: restTokens.map(t => txb.object(t.id)) }),
-                txb.object("0x6")
+                txb.makeMoveVec({
+                  elements: restTokens.map((t) => txb.object(t.id)),
+                }),
+                txb.object("0x6"),
               ],
             });
             tokenToRedeem = baseToken.id;
@@ -82,7 +88,7 @@ export function useRedeemTokensMutation() {
             arguments: [
               txb.object(escrow),
               txb.object(tokenToRedeem),
-              txb.object("0x6")
+              txb.object("0x6"),
             ],
             typeArguments: [`0x${asset_type}`, `0x${stable_type}`],
           });
@@ -97,8 +103,10 @@ export function useRedeemTokensMutation() {
               target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
               arguments: [
                 txb.object(baseToken.id),
-                txb.makeMoveVec({ elements: restTokens.map(t => txb.object(t.id)) }),
-                txb.object("0x6")
+                txb.makeMoveVec({
+                  elements: restTokens.map((t) => txb.object(t.id)),
+                }),
+                txb.object("0x6"),
               ],
             });
             tokenToRedeem = baseToken.id;
@@ -109,7 +117,7 @@ export function useRedeemTokensMutation() {
             arguments: [
               txb.object(escrow),
               txb.object(tokenToRedeem),
-              txb.object("0x6")
+              txb.object("0x6"),
             ],
             typeArguments: [`0x${asset_type}`, `0x${stable_type}`],
           });
@@ -117,15 +125,15 @@ export function useRedeemTokensMutation() {
       } else {
         // Complete Set Redemption
         const tokensByType = {
-          asset: userTokens.filter(t => t.asset_type === 0),
-          stable: userTokens.filter(t => t.asset_type === 1)
+          asset: userTokens.filter((t) => t.asset_type === 0),
+          stable: userTokens.filter((t) => t.asset_type === 1),
         };
 
         // Handle asset tokens complete set
         if (tokensByType.asset.length > 0) {
           const assetTokensByOutcome = new Array(parseInt(outcome_count, 10))
             .fill(null)
-            .map((_, i) => tokensByType.asset.filter(t => t.outcome === i));
+            .map((_, i) => tokensByType.asset.filter((t) => t.outcome === i));
 
           let completeSetTokens: string[] = [];
           let commonAmount: bigint | undefined;
@@ -142,8 +150,10 @@ export function useRedeemTokensMutation() {
                 target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
                 arguments: [
                   txb.object(baseToken.id),
-                  txb.makeMoveVec({ elements: restTokens.map(t => txb.object(t.id)) }),
-                  txb.object("0x6")
+                  txb.makeMoveVec({
+                    elements: restTokens.map((t) => txb.object(t.id)),
+                  }),
+                  txb.object("0x6"),
                 ],
               });
               tokenId = baseToken.id;
@@ -151,7 +161,7 @@ export function useRedeemTokensMutation() {
 
             const outcomeBalance = tokensForOutcome.reduce(
               (sum, t) => sum + BigInt(t.balance),
-              0n
+              0n,
             );
             if (commonAmount === undefined || outcomeBalance < commonAmount) {
               commonAmount = outcomeBalance;
@@ -167,13 +177,17 @@ export function useRedeemTokensMutation() {
               const outcomeTokens = assetTokensByOutcome[i];
               const tokenBalance = outcomeTokens.reduce(
                 (sum, t) => sum + BigInt(t.balance),
-                0n
+                0n,
               );
 
               if (tokenBalance > commonAmount) {
                 txb.moveCall({
                   target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
-                  arguments: [txb.object(tokenId), txb.pure.u64(tokenBalance - commonAmount), txb.object("0x6")],
+                  arguments: [
+                    txb.object(tokenId),
+                    txb.pure.u64(tokenBalance - commonAmount),
+                    txb.object("0x6"),
+                  ],
                 });
                 // Token ID stays the same after split
               }
@@ -185,8 +199,10 @@ export function useRedeemTokensMutation() {
               target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_complete_set_asset_entry`,
               arguments: [
                 txb.object(escrow),
-                txb.makeMoveVec({ elements: completeSetTokens.map(id => txb.object(id)) }),
-                txb.object("0x6")
+                txb.makeMoveVec({
+                  elements: completeSetTokens.map((id) => txb.object(id)),
+                }),
+                txb.object("0x6"),
               ],
               typeArguments: [`0x${asset_type}`, `0x${stable_type}`],
             });
@@ -197,7 +213,7 @@ export function useRedeemTokensMutation() {
         if (tokensByType.stable.length > 0) {
           const stableTokensByOutcome = new Array(parseInt(outcome_count, 10))
             .fill(null)
-            .map((_, i) => tokensByType.stable.filter(t => t.outcome === i));
+            .map((_, i) => tokensByType.stable.filter((t) => t.outcome === i));
 
           let completeSetTokens: string[] = [];
           let commonAmount: bigint | undefined;
@@ -214,8 +230,10 @@ export function useRedeemTokensMutation() {
                 target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
                 arguments: [
                   txb.object(baseToken.id),
-                  txb.makeMoveVec({ elements: restTokens.map(t => txb.object(t.id)) }),
-                  txb.object("0x6")
+                  txb.makeMoveVec({
+                    elements: restTokens.map((t) => txb.object(t.id)),
+                  }),
+                  txb.object("0x6"),
                 ],
               });
               tokenId = baseToken.id;
@@ -223,7 +241,7 @@ export function useRedeemTokensMutation() {
 
             const outcomeBalance = tokensForOutcome.reduce(
               (sum, t) => sum + BigInt(t.balance),
-              0n
+              0n,
             );
             if (commonAmount === undefined || outcomeBalance < commonAmount) {
               commonAmount = outcomeBalance;
@@ -238,13 +256,17 @@ export function useRedeemTokensMutation() {
               const outcomeTokens = stableTokensByOutcome[i];
               const tokenBalance = outcomeTokens.reduce(
                 (sum, t) => sum + BigInt(t.balance),
-                0n
+                0n,
               );
 
               if (tokenBalance > commonAmount) {
                 txb.moveCall({
                   target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
-                  arguments: [txb.object(tokenId), txb.pure.u64(tokenBalance - commonAmount), txb.object("0x6")],
+                  arguments: [
+                    txb.object(tokenId),
+                    txb.pure.u64(tokenBalance - commonAmount),
+                    txb.object("0x6"),
+                  ],
                 });
                 // Token ID stays the same after split
               }
@@ -256,8 +278,10 @@ export function useRedeemTokensMutation() {
               target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_complete_set_stable_entry`,
               arguments: [
                 txb.object(escrow),
-                txb.makeMoveVec({ elements: completeSetTokens.map(id => txb.object(id)) }),
-                txb.object("0x6")
+                txb.makeMoveVec({
+                  elements: completeSetTokens.map((id) => txb.object(id)),
+                }),
+                txb.object("0x6"),
               ],
               typeArguments: [`0x${asset_type}`, `0x${stable_type}`],
             });

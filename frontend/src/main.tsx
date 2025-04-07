@@ -30,10 +30,13 @@ if (!root) throw new Error("Root element not found");
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <HelmetProvider >
+    <HelmetProvider>
       <Theme appearance="dark">
         <QueryClientProvider client={queryClient}>
-          <SuiClientProvider networks={networkConfig} defaultNetwork={CONSTANTS.network}>
+          <SuiClientProvider
+            networks={networkConfig}
+            defaultNetwork={CONSTANTS.network}
+          >
             <WalletProvider autoConnect>
               <RouterProvider router={router} />
             </WalletProvider>

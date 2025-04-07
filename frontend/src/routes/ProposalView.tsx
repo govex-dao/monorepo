@@ -1,16 +1,15 @@
-import { useParams } from 'react-router-dom';
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { Theme } from "@radix-ui/themes";
 import MarketPriceChart from "../components/trade/MarketPriceChart.tsx";
 import TradeForm from "../components/trade/TradeForm.tsx";
-import { VerifiedIcon } from '@/components/state/VerifiedIcon';
-import TabSection from '../components/trade/TabSection';
-import { useTokenEvents } from '../hooks/useTokenEvents';
+import { VerifiedIcon } from "@/components/state/VerifiedIcon";
+import TabSection from "../components/trade/TabSection";
+import { useTokenEvents } from "../hooks/useTokenEvents";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useSwapEvents } from '@/hooks/useSwapEvents';
-
+import { useSwapEvents } from "@/hooks/useSwapEvents";
 
 interface StateHistory {
   id: number;
@@ -27,8 +26,9 @@ interface ApiProposal {
   dao_id: string;
   dao_name: string;
   dao_icon: string | null;
-  dao_verified: boolean;    // Added dao_verified field
-  dao: {                    // Added dao object
+  dao_verified: boolean; // Added dao_verified field
+  dao: {
+    // Added dao object
     minAssetAmount: string;
     minStableAmount: string;
     dao_name: string;
@@ -36,8 +36,8 @@ interface ApiProposal {
     stableType: string;
     icon_url?: string;
     icon_cache_path?: string;
-    asset_symbol: string,
-    stable_symbol: string,
+    asset_symbol: string;
+    stable_symbol: string;
     asset_decimals: number;
     stable_decimals: number;
   };
@@ -56,11 +56,11 @@ interface ApiProposal {
   stable_type: string;
   current_state: number;
   state_history: StateHistory[];
-  review_period_ms: string;      // Using string since other number fields are strings
-  trading_period_ms: string;     // Using string since other number fields are strings
-  initial_outcome_amounts?: string[];  // Optional array of strings
-  twap_start_delay: string;      // Using string since other number fields are strings
-  twap_step_max: string;         // Using string since other number fields are strings
+  review_period_ms: string; // Using string since other number fields are strings
+  trading_period_ms: string; // Using string since other number fields are strings
+  initial_outcome_amounts?: string[]; // Optional array of strings
+  twap_start_delay: string; // Using string since other number fields are strings
+  twap_step_max: string; // Using string since other number fields are strings
   twap_threshold: string;
   twaps: string[] | null;
 }
@@ -94,11 +94,11 @@ interface ApiProposal {
 // Define the custom hook outside of the component.
 const useWindowWidth = () => {
   const [width, setWidth] = useState<number>(window.innerWidth);
-  
+
   useEffect(() => {
     const handleResize = () => setWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
   return width;
 };
@@ -109,30 +109,41 @@ export function ProposalView() {
   const { proposalId } = useParams<{ proposalId: string }>();
   const windowWidth = useWindowWidth();
 
-  const { data: proposal, isLoading, error } = useQuery<ApiProposal>({
+  const {
+    data: proposal,
+    isLoading,
+    error,
+  } = useQuery<ApiProposal>({
     queryKey: [QueryKey.ProposalDetail, proposalId],
     queryFn: async () => {
-      const response = await fetch(`${CONSTANTS.apiEndpoint}proposals/${proposalId}`);
+      const response = await fetch(
+        `${CONSTANTS.apiEndpoint}proposals/${proposalId}`,
+      );
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || `API error: ${response.statusText}`);
+        throw new Error(
+          errorData.message || `API error: ${response.statusText}`,
+        );
       }
       return response.json();
-    }
+    },
   });
 
   // Wait for proposal to load before fetching tokens.
   const { tokens } = useTokenEvents({
-    proposalId: proposal?.proposal_id ?? '',
+    proposalId: proposal?.proposal_id ?? "",
     address: account?.address,
     assetType: null,
-    enabled: !!account?.address && !!proposal?.proposal_id
+    enabled: !!account?.address && !!proposal?.proposal_id,
   });
 
   // Call useSwapEvents unconditionally, but disable fetching until proposal is available.
-  const { data: swapEvents, error: swapError } = useSwapEvents(proposal?.proposal_id ?? '', {
-    enabled: !!proposal?.proposal_id,
-  });
+  const { data: swapEvents, error: swapError } = useSwapEvents(
+    proposal?.proposal_id ?? "",
+    {
+      enabled: !!proposal?.proposal_id,
+    },
+  );
 
   // Early returns (all hooks have already been called).
   if (isLoading) {
@@ -169,26 +180,34 @@ export function ProposalView() {
     <Theme appearance="dark" className="flex flex-col min-h-screen">
       <h1 className="text-3xl font-bold mt-4 pl-6 pr-6">
         {proposal.dao_icon ? (
-          <img 
+          <img
             src={proposal.dao_icon}
             alt={`${proposal.dao_name} icon`}
             className="w-9 h-9 -mt-1 rounded-full inline-block mr-2 object-cover border-2 border-gray-700"
             onError={(e) => {
-              e.currentTarget.src = '/fallback-icon.png';
+              e.currentTarget.src = "/fallback-icon.png";
             }}
           />
         ) : (
           <div className="w-9 h-9 rounded-full bg-gray-700 inline-block mr-2 border-2 border-gray-700" />
         )}
         <span className="text-gray-400">{proposal.dao_name}</span>
-        {proposal.dao_verified && <VerifiedIcon className="ml-1 -mt-1 inline-block" size={24}/>}
-        {': '}
+        {proposal.dao_verified && (
+          <VerifiedIcon className="ml-1 -mt-1 inline-block" size={24} />
+        )}
+        {": "}
         {proposal.title}
       </h1>
       <div className="flex-1 overflow-hidden p-4">
-        <div className={isInlineLayout ? 'flex items-center space-x-4' : 'flex flex-col space-y-4'}>
+        <div
+          className={
+            isInlineLayout
+              ? "flex items-center space-x-4"
+              : "flex flex-col space-y-4"
+          }
+        >
           {/* MarketPriceChart is now on the left */}
-          <div className={isInlineLayout ? 'w-3/4' : 'w-full'}>
+          <div className={isInlineLayout ? "w-3/4" : "w-full"}>
             <MarketPriceChart
               proposalId={proposal.proposal_id}
               assetValue={proposal.asset_value}
@@ -207,33 +226,37 @@ export function ProposalView() {
             />
           </div>
           {/* TradeForm is now on the right */}
-          <div className={isInlineLayout ? 'w-1/4 px-6' : 'w-full'}>
-          {proposal.current_state === 1 ? (
-            <TradeForm
-              proposalId={proposal.proposal_id}
-              escrowId={proposal.escrow_id}
-              outcomeCount={proposal.outcome_count}
-              assetType={proposal.asset_type}
-              stableType={proposal.stable_type}
-              packageId={CONSTANTS.futarchyPackage}
-              tokens={tokens}
-              outcome_messages={proposal.outcome_messages}
-              asset_symbol={proposal.dao.asset_symbol}
-              stable_symbol={proposal.dao.stable_symbol}
-              initial_outcome_amounts={proposal.initial_outcome_amounts}
-              asset_value={proposal.asset_value}
-              stable_value={proposal.stable_value}
-              asset_decimals={proposal.dao.asset_decimals}
-              stable_decimals={proposal.dao.stable_decimals}
-              swapEvents={swapEvents}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full">
-              <h1 className="text-center text-1xl font-bold">
-                {proposal.current_state === 0 ? 'Trading not started' : proposal.current_state === 2 ? 'Trading finished' : ''}
-              </h1>
-            </div>
-          )}
+          <div className={isInlineLayout ? "w-1/4 px-6" : "w-full"}>
+            {proposal.current_state === 1 ? (
+              <TradeForm
+                proposalId={proposal.proposal_id}
+                escrowId={proposal.escrow_id}
+                outcomeCount={proposal.outcome_count}
+                assetType={proposal.asset_type}
+                stableType={proposal.stable_type}
+                packageId={CONSTANTS.futarchyPackage}
+                tokens={tokens}
+                outcome_messages={proposal.outcome_messages}
+                asset_symbol={proposal.dao.asset_symbol}
+                stable_symbol={proposal.dao.stable_symbol}
+                initial_outcome_amounts={proposal.initial_outcome_amounts}
+                asset_value={proposal.asset_value}
+                stable_value={proposal.stable_value}
+                asset_decimals={proposal.dao.asset_decimals}
+                stable_decimals={proposal.dao.stable_decimals}
+                swapEvents={swapEvents}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full">
+                <h1 className="text-center text-1xl font-bold">
+                  {proposal.current_state === 0
+                    ? "Trading not started"
+                    : proposal.current_state === 2
+                      ? "Trading finished"
+                      : ""}
+                </h1>
+              </div>
+            )}
           </div>
         </div>
         <TabSection

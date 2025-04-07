@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
-import { InfoCircledIcon, ClipboardIcon  } from "@radix-ui/react-icons";
+import { InfoCircledIcon, ClipboardIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
-import DaoSearchInput from './DaoSearchInput';
-import { CONSTANTS } from '../../constants';
+import DaoSearchInput from "./DaoSearchInput";
+import { CONSTANTS } from "../../constants";
 import { VerificationHistory } from "./VerificationHistory";
-import { VerifiedIcon } from '../state/VerifiedIcon';
+import { VerifiedIcon } from "../state/VerifiedIcon";
 
 interface DaoData {
   dao_id: string;
@@ -29,7 +29,8 @@ interface FormData {
 
 const tooltips = {
   daoId: "The DAO name or ID that you want to get verified",
-  attestationUrl: "Tweet @govexdotai with the onchain ID of the DAO you wish to formally affiliate with your organization."
+  attestationUrl:
+    "Tweet @govexdotai with the onchain ID of the DAO you wish to formally affiliate with your organization.",
 };
 
 const truncateAddress = (address: string) => {
@@ -40,7 +41,7 @@ const truncateAddress = (address: string) => {
 const VerifyDaoForm = () => {
   const [formData, setFormData] = useState<FormData>({
     daoId: "",
-    attestationUrl: ""
+    attestationUrl: "",
   });
 
   const [selectedDao, setSelectedDao] = useState<DaoData | null>(null);
@@ -50,17 +51,17 @@ const VerifyDaoForm = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const handleDaoSelect = (daoData: DaoData | null) => {
     setSelectedDao(daoData);
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      daoId: daoData?.dao_id || ""
+      daoId: daoData?.dao_id || "",
     }));
   };
 
@@ -73,16 +74,16 @@ const VerifyDaoForm = () => {
 
     try {
       if (!formData.daoId) {
-        throw new Error('No DAO selected');
+        throw new Error("No DAO selected");
       }
 
       if (!formData.attestationUrl) {
-        throw new Error('Tweet URL is required');
+        throw new Error("Tweet URL is required");
       }
 
       const tx = new Transaction();
       tx.setGasBudget(50000000);
-      
+
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000)]);
 
       tx.moveCall({
@@ -92,29 +93,30 @@ const VerifyDaoForm = () => {
           splitCoin,
           tx.object(formData.daoId),
           tx.pure.string(formData.attestationUrl),
-          tx.object('0x6')
+          tx.object("0x6"),
         ],
       });
 
       await signAndExecute({ transaction: tx });
-      
+
       toast.dismiss(loadingToast);
       toast.success("Successfully requested DAO verification!", {
-        duration: 5000
+        duration: 5000,
       });
 
       // Reset form
       setFormData({
         daoId: "",
-        attestationUrl: ""
+        attestationUrl: "",
       });
       setSelectedDao(null);
     } catch (err) {
       toast.dismiss(loadingToast);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to request verification';
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to request verification";
       setError(errorMessage);
       toast.error(`Failed to verify DAO: ${errorMessage}`, {
-        duration: 5000
+        duration: 5000,
       });
     } finally {
       setVerifying(false);
@@ -135,30 +137,34 @@ const VerifyDaoForm = () => {
           <div className="bg-gray-900 rounded-lg p-3">
             <div className="flex items-center space-x-3 mb-2">
               <div className="w-10 h-10 flex-shrink-0">
-                <img 
-                  src={selectedDao.icon_url || '/placeholder-dao.png'} 
+                <img
+                  src={selectedDao.icon_url || "/placeholder-dao.png"}
                   alt={selectedDao.dao_name}
                   className="w-full h-full rounded-full object-cover"
                   onError={(e) => {
-                    e.currentTarget.src = '/placeholder-dao.png';
+                    e.currentTarget.src = "/placeholder-dao.png";
                   }}
                 />
               </div>
               <div className="flex-grow min-w-0">
-              <div className="font-medium text-gray-200 truncate flex items-center">
-                {selectedDao.dao_name}
-                {selectedDao.verification?.verified && (
-                  <VerifiedIcon className="ml-1 flex-shrink-0" />
-                )}
+                <div className="font-medium text-gray-200 truncate flex items-center">
+                  {selectedDao.dao_name}
+                  {selectedDao.verification?.verified && (
+                    <VerifiedIcon className="ml-1 flex-shrink-0" />
+                  )}
                 </div>
                 <div className="font-mono text-sm text-gray-400 flex items-center space-x-2">
-                  <span className="truncate">{truncateAddress(formData.daoId)}</span>
+                  <span className="truncate">
+                    {truncateAddress(formData.daoId)}
+                  </span>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.preventDefault();
-                      navigator.clipboard.writeText(`@govexdotai here is the ID for our official DAO: ${formData.daoId}. We are excited to try futarchy on Sui 🚀`);
-                      toast.success('DAO ID copied to clipboard');
+                      navigator.clipboard.writeText(
+                        `@govexdotai here is the ID for our official DAO: ${formData.daoId}. We are excited to try futarchy on Sui 🚀`,
+                      );
+                      toast.success("DAO ID copied to clipboard");
                     }}
                     className="hover:text-gray-200 transition-colors"
                   >
@@ -172,7 +178,10 @@ const VerifyDaoForm = () => {
 
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
-            <label className="block text-sm font-medium">Give us a tweet from the project's official Twitter account with the DAO ID.</label>
+            <label className="block text-sm font-medium">
+              Give us a tweet from the project's official Twitter account with
+              the DAO ID.
+            </label>
             <div className="relative group">
               <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
               <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
@@ -192,32 +201,38 @@ const VerifyDaoForm = () => {
         </div>
 
         <div className=" rounded-lg p-4 space-y-2">
-          <h3 className="text-lg font-medium text-gray-200 mb-3">Verification Requirements:</h3>
+          <h3 className="text-lg font-medium text-gray-200 mb-3">
+            Verification Requirements:
+          </h3>
           <ul className="list-disc pl-5 space-y-2 text-gray-300">
             <li>The DAO's metadata is unique.</li>
-            <li>The attestation tweet is from the organization's official Twitter account.</li>
+            <li>
+              The attestation tweet is from the organization's official Twitter
+              account.
+            </li>
             <li>The Twitter account has a verified tick.</li>
-            <li>The DAO stable token has $100,000+ of liquidity onchain against USDC or SUI.</li>
+            <li>
+              The DAO stable token has $100,000+ of liquidity onchain against
+              USDC or SUI.
+            </li>
             <li>Please wait for up to one week to get your DAO verified.</li>
           </ul>
         </div>
 
-        {error && (
-          <div className="text-red-500 text-sm">{error}</div>
-        )}
+        {error && <div className="text-red-500 text-sm">{error}</div>}
 
         <button
           type="submit"
           disabled={verifying}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {verifying ? 'Verifying...' : 'Get DAO Verified'}
+          {verifying ? "Verifying..." : "Get DAO Verified"}
         </button>
       </form>
-      <VerificationHistory 
+      <VerificationHistory
         daoId={formData.daoId}
         daoName={selectedDao?.dao_name}
-        isSelected={Boolean(selectedDao)} 
+        isSelected={Boolean(selectedDao)}
       />
     </div>
   );

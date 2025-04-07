@@ -47,7 +47,9 @@ export function WithdrawProposerLiquidityButton({
       disabled={withdrawLiquidity.isPending}
       className={buttonStyle}
     >
-      {withdrawLiquidity.isPending ? "Withdrawing..." : "Withdraw Proposer Liquidity"}
+      {withdrawLiquidity.isPending
+        ? "Withdrawing..."
+        : "Withdraw Proposer Liquidity"}
     </button>
   );
 }

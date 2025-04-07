@@ -8,16 +8,16 @@ import futarchyPackage from "../../backend/futarchy-results/futarchy-pub-short.j
 import assetPackage from "../../backend/futarchy-results/futarchy-pub-asset-contract-short.json";
 import stablePackage from "../../backend/futarchy-results/futarchy-pub-stable-contract-short.json";
 
-export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
+export type Network = "mainnet" | "testnet" | "devnet" | "localnet";
 
 export enum QueryKey {
   Locked = "locked",
   Escrow = "escrow",
   GetOwnedObjects = "getOwnedObjects",
   Dao = "dao",
-  Proposals = 'proposals',
-  ProposalDetail = '',
-  VerificationHistory = 'verification-history',
+  Proposals = "proposals",
+  ProposalDetail = "",
+  VerificationHistory = "verification-history",
 }
 
 export const CONSTANTS = {
@@ -33,5 +33,5 @@ export const CONSTANTS = {
   stableTreasury: stablePackage.treasuryCapId,
   stableMetaData: stablePackage.metadataId,
   stableType: stablePackage.coinType,
-  network: 'testnet' as Network,
+  network: "testnet" as Network,
 };

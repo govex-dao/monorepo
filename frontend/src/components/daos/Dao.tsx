@@ -18,11 +18,7 @@ export function Dao({ dao }: { dao: ApiDaoObject }) {
             <p className="text-sm text-gray-600">Fee Paid: {dao.feePaid}</p>
           )}
         </div>
-        {isAdmin && (
-          <Button className="cursor-pointer">
-            Manage DAO
-          </Button>
-        )}
+        {isAdmin && <Button className="cursor-pointer">Manage DAO</Button>}
       </div>
     </Card>
   );

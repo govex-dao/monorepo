@@ -1,5 +1,5 @@
 // components/CoinTypeInput.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import { useSuiClient } from "@mysten/dapp-kit";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 
@@ -18,22 +18,22 @@ interface CoinTypeInputProps {
   tooltipText: string;
   placeholder?: string;
   required?: boolean;
-  onMetadataChange?: (metadata: CoinMetadata | null) => void;  // Add this prop
+  onMetadataChange?: (metadata: CoinMetadata | null) => void; // Add this prop
 }
 
-const CoinTypeInput = ({ 
-  value, 
-  onChange, 
-  label, 
-  tooltipText, 
+const CoinTypeInput = ({
+  value,
+  onChange,
+  label,
+  tooltipText,
   placeholder = "package::module::type",
   required = false,
-  onMetadataChange
+  onMetadataChange,
 }: CoinTypeInputProps) => {
   const [metadata, setMetadata] = useState<CoinMetadata | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const suiClient = useSuiClient();
 
   const validateTypeFormat = (value: string) => {
@@ -41,9 +41,10 @@ const CoinTypeInput = ({
     if (value === "0x2::sui::SUI") {
       return true;
     }
-    
+
     // Strict regex for all other coin types
-    const regex = /^0x[a-fA-F0-9]{64}::[a-z][a-z0-9_]*[a-z0-9]::[A-Z][A-Z0-9_]*[A-Z0-9]$/;
+    const regex =
+      /^0x[a-fA-F0-9]{64}::[a-z][a-z0-9_]*[a-z0-9]::[A-Z][A-Z0-9_]*[A-Z0-9]$/;
     return regex.test(value);
   };
 
@@ -62,7 +63,7 @@ const CoinTypeInput = ({
 
   const fetchMetadata = async (type: string) => {
     if (!validateTypeFormat(type)) {
-      setError('Invalid format. Expected: package::module::type');
+      setError("Invalid format. Expected: package::module::type");
       setMetadata(null);
       onChange(type, undefined);
       return;
@@ -78,14 +79,14 @@ const CoinTypeInput = ({
         onChange(type, response as CoinMetadata);
         onMetadataChange?.(response as CoinMetadata);
       } else {
-        setError('Coin type not found');
+        setError("Coin type not found");
         setMetadata(null);
         onChange(type, undefined);
         onMetadataChange?.(null);
       }
     } catch (err) {
-      console.error('Metadata fetch error:', err);
-      setError('Failed to fetch coin metadata');
+      console.error("Metadata fetch error:", err);
+      setError("Failed to fetch coin metadata");
       setMetadata(null);
       onChange(type, undefined);
       onMetadataChange?.(null);
@@ -101,7 +102,7 @@ const CoinTypeInput = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       fetchMetadata(value);
     }
@@ -125,7 +126,7 @@ const CoinTypeInput = ({
           </span>
         )}
       </div>
-      
+
       <div className="relative">
         <input
           type="text"
@@ -134,7 +135,7 @@ const CoinTypeInput = ({
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           className={`w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 ${
-            error ? 'border-red-500' : metadata ? 'border-green-500' : ''
+            error ? "border-red-500" : metadata ? "border-green-500" : ""
           }`}
           placeholder={placeholder}
           required={required}
@@ -146,9 +147,7 @@ const CoinTypeInput = ({
         )}
       </div>
 
-      {error && (
-        <p className="text-sm text-red-500 mt-1">{error}</p>
-      )}
+      {error && <p className="text-sm text-red-500 mt-1">{error}</p>}
     </div>
   );
 };
