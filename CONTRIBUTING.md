@@ -1,4 +1,4 @@
-# Contributors
+# Contributing
 
 Thank you for your interest in contributing to Govex! We value your efforts to improve and enhance our project. Please follow these guidelines to help us maintain a consistent and efficient development process.
 
