@@ -17,7 +17,9 @@
     "eslint:check": "eslint --max-warnings=0 .",
     "eslint:fix": "pnpm run eslint:check --fix",
     "lint": "pnpm run eslint:check && pnpm run prettier:check",
-    "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+    "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@mysten/dapp-kit": "0.14.30",
@@ -39,6 +41,9 @@
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@rollup/plugin-terser": "^0.4.4",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -53,11 +58,14 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
     "globals": "^15.14.0",
+    "happy-dom": "^17.4.4",
+    "jsdom": "^26.0.0",
     "postcss": "^8.4.39",
     "prettier": "^3.3.3",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^3.1.1"
   }
 }
