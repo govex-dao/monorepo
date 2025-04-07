@@ -1,0 +1,93 @@
+# Adapted from https://github.com/sui-potatoes/app/blob/main/.github/workflows/potatoes-qa.yml
+name: Maintainer-Only Workflow
+
+on:
+  pull_request:
+    branches: [main]  # Runs on PRs targeting main branch
+  workflow_dispatch:  # Allows manual triggering via UI button
+# Restrict who can run the workflow manually
+permissions:
+  contents: write  # Only users with write access can trigger
+  
+jobs:
+  test-move-packages:
+    name: Test Move Packages
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Sui
+        uses: jaxxstorm/action-install-gh-release@v1.12.0
+        with:
+          repo: MystenLabs/sui
+          platform: ubuntu
+          version: testnet
+          cache: enable
+      # Test only the futarchy directory
+      - run: sui move test --path ./futarchy/
+  prettier-move:
+    name: Check Move formatting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+      - run: npm install
+      - run: npx prettier -c ./futarchy/sources/**/*.move
+  prettier-ts:
+    name: Check TypeScript formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+      - run: npm i -g prettier
+      - run: npx prettier -c "frontend/src/**/*.{ts,tsx}" "backend/**/*.ts"
+  frontend-app-build:
+    name: Build Web Application
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          cache-dependency-path: "./frontend/package.json"
+      - name: Install dependencies
+        run: pnpm install
+      - name: Run build
+        run: pnpm build-frontend
+  backend-build:
+    name: Build Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          cache: "pnpm"
+          cache-dependency-path: "./backend/package.json"
+      - name: Install dependencies
+        run: pnpm install
+      # TypeScript check
+      - name: TypeScript check
+        run: pnpm exec tsc --noEmit
