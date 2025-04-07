@@ -616,7 +616,7 @@ public fun swap_token_asset_to_stable<AssetType, StableType>(
         clock,
         ctx,
     );
-    (token)
+    token
 }
 
 public fun swap_token_stable_to_asset<AssetType, StableType>(
@@ -648,7 +648,7 @@ public fun swap_token_stable_to_asset<AssetType, StableType>(
         clock,
         ctx,
     );
-    (token)
+    token
 }
 
 // === Internal Helpers ===
