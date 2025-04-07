@@ -9,10 +9,11 @@ Thank you for your interest in contributing to Govex! We value your efforts to i
 
 ### Pull Requests
 1. Look for an [issue](https://github.com/govex-dao/monorepo/issues) you can complete or dicuss your idea with this team in [Discord](https://discord.com/channels/1314531947590193212/1314590617275203635). 
-2. Fork the repository.
-3. Create a new branch for your work.
-4. Make your changes with clear commit messages.
-5. Open a pull request describing your changes.
+2. Comment on an existing issue if you with to be assigned to it.
+3. Fork the repository.
+4. Create a new branch for your work.
+5. Make your changes with clear commit messages.
+6. Open a pull request describing your changes.
 
 We welcome contributions of all kinds, including but not limited to:
 - **Bug reports and fixes**
@@ -28,6 +29,7 @@ Due to the finanical nature of the project we are extremely strict with the exte
 ### Additional Guidelines
 - **Licensing:** By contributing, you agree that your contributions will be licensed under the same terms as the project.
 - **Reviews:** We will aim to review your code within a week.
+- **Issies:** You will be unassigned from issues with no progress in one week.
 
 ## List of Contributors
 
