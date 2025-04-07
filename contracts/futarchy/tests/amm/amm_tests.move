@@ -652,19 +652,15 @@ fun test_swap_round_trip() {
     debug::print(&b"Reserve changes:");
     debug::print(&b"Asset reserve change:");
     debug::print(
-        &(
-            if (final_asset > initial_asset) { final_asset - initial_asset } else {
+        &(if (final_asset > initial_asset) { final_asset - initial_asset } else {
                 initial_asset - final_asset
-            },
-        ),
+            }),
     );
     debug::print(&b"Stable reserve change:");
     debug::print(
-        &(
-            if (final_stable > initial_stable) { final_stable - initial_stable } else {
+        &(if (final_stable > initial_stable) { final_stable - initial_stable } else {
                 initial_stable - final_stable
-            },
-        ),
+            }),
     );
 
     // The protocol should have collected fees
