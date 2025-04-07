@@ -19,7 +19,6 @@ const EZERO_LIQUIDITY: u64 = 4;
 const EPRICE_TOO_HIGH: u64 = 5;
 const EZERO_AMOUNT: u64 = 6;
 
-
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%

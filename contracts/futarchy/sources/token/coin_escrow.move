@@ -21,7 +21,6 @@ const EWRONG_OUTCOME: u64 = 6;
 const ENOT_ENOUGH: u64 = 7;
 const ENOT_ENOUGH_LIQUIDITY: u64 = 8;
 
-
 // === Constants ===
 const TOKEN_TYPE_STABLE: u8 = 1;
 const TOKEN_TYPE_ASSET: u8 = 0;

@@ -27,7 +27,6 @@ const ELONG_TRADING_TIME: u64 = 6;
 const ELONG_REVIEW_TIME: u64 = 7;
 const ELONG_TWAP_DELAY_TIME: u64 = 8;
 
-
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1; // Equals 0.01%
 const MAX_TRADING_TIME: u64 = 604_800_000;

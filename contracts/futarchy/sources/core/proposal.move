@@ -25,7 +25,6 @@ const EASSET_LIQUIDITY_TOO_LOW: u64 = 4;
 const ESTABLE_LIQUIDITY_TOO_LOW: u64 = 5;
 const EPOOL_NOT_FOUND: u64 = 6;
 
-
 // === Constants ===
 const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;

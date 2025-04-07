@@ -25,7 +25,6 @@ const EZERO_STEP: u64 = 4;
 const ELONG_DELAY: u64 = 5;
 const ESTALE_TWAP: u64 = 6;
 
-
 // ======== Configuration Struct ========
 public struct Oracle has key, store {
     id: UID,
