@@ -1,3 +1,4 @@
 #[test_only]
-module futarchy::swap_tests {
-}
+module futarchy::swap_tests;
+
+

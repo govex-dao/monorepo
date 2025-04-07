@@ -1,3 +1,4 @@
 #[test_only]
-module futarchy::liquidity_initialize_tests {
-}
+module futarchy::liquidity_initialize_tests;
+
+

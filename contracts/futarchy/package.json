@@ -1,0 +1,9 @@
+{
+    "devDependencies": {
+        "@mysten/prettier-plugin-move": "^0.3.0",
+        "prettier": "^3.5.3"
+    },
+    "scripts": {
+        "prettier": "prettier --write ."
+    }
+}
