@@ -21,22 +21,22 @@
 	"author": "",
 	"license": "Apache-2.0",
 	"devDependencies": {
-		"@prisma/client": "^5.22.0",
+		"@prisma/client": "^6.5.0",
 		"@types/cors": "^2.8.17",
-		"@types/express": "^4.17.21",
-		"@types/node": "^20.14.10",
-		"concurrently": "^8.2.2",
+		"@types/express": "^5.0.1",
+		"@types/node": "^22.14.0",
+		"concurrently": "^9.1.2",
 		"cross-env": "^7.0.3",
-		"prisma": "^5.22.0",
+		"prisma": "^6.5.0",
 		"ts-node": "^10.9.2",
-		"typescript": "^5.5.3"
+		"typescript": "^5.8.3"
 	},
 	"dependencies": {
-		"@mysten/dapp-kit": "^0.14.39",
-		"@mysten/sui": "1.14.2",
+		"@mysten/dapp-kit": "^0.15.2",
+		"@mysten/sui": "1.26.1",
 		"cors": "^2.8.5",
-		"express": "^4.20.0",
-		"sharp": "^0.33.5",
+		"express": "^5.1.0",
+		"sharp": "^0.34.0",
 		"sqlite3": "^5.1.7"
 	}
 }
