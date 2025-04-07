@@ -1,6 +1,7 @@
 # Contracts
 contracts/futarchy/build/
 contracts/govex-coin/build/
+contracts/node_modules/
 
 # Backend
 backend/public/
