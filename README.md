@@ -1,4 +1,4 @@
-# Govex
+![License](https://img.shields.io/badge/license-BSL--1.0-blue.svg)
 
 Govex is a DAO management platform on Sui.
 
