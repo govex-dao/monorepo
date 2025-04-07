@@ -8,7 +8,7 @@ type RouteMetadata = {
   title: string;
   description: string;
   ogImage?: string;
-}
+};
 
 const logo = "/images/twitter-image-govex.png";
 const routeMetadata: Record<string, RouteMetadata> = {
@@ -26,7 +26,7 @@ const routeMetadata: Record<string, RouteMetadata> = {
     title: "Learn - Govex",
     description: "Learn more about the Govex platform.",
     ogImage: logo,
-  }
+  },
 };
 
 function getRouteMetadata(pathname: string): RouteMetadata {
@@ -38,9 +38,9 @@ function getRouteMetadata(pathname: string): RouteMetadata {
   // Parse the URL to handle query parameters
   const url = new URL(window.location.origin + pathname);
   const searchParams = new URLSearchParams(url.search);
-  
+
   // Handle /?dao={daoid}
-  if (pathname === '/' && searchParams.has('dao')) {
+  if (pathname === "/" && searchParams.has("dao")) {
     return {
       title: "Proposal View - Govex",
       description: "View proposals for your DAO.",
@@ -49,7 +49,7 @@ function getRouteMetadata(pathname: string): RouteMetadata {
   }
 
   // Handle /create?dao={daoid}
-  if (pathname === '/create' && searchParams.has('dao')) {
+  if (pathname === "/create" && searchParams.has("dao")) {
     return {
       title: "Create Proposal - Govex",
       description: "Create proposals for your DAO.",
@@ -58,7 +58,7 @@ function getRouteMetadata(pathname: string): RouteMetadata {
   }
 
   // Handle /trade/:proposalId
-  if (pathname.startsWith('/trade/')) {
+  if (pathname.startsWith("/trade/")) {
     return {
       title: "Proposal View - Govex",
       description: "Trade the selected proposal",
@@ -67,13 +67,13 @@ function getRouteMetadata(pathname: string): RouteMetadata {
   }
 
   // Default to home route metadata
-  return routeMetadata['/'];
+  return routeMetadata["/"];
 }
 
 export function Root() {
   const location = useLocation();
   const { title, description, ogImage } = getRouteMetadata(location.pathname);
-  
+
   return (
     <div>
       <Helmet>
@@ -88,7 +88,7 @@ export function Root() {
       </Helmet>
       <Toaster position="bottom-center" />
       <Header />
-      <Container py="4" style={{ maxWidth: '100vw', width: '100vw' }}>
+      <Container py="4" style={{ maxWidth: "100vw", width: "100vw" }}>
         <Outlet />
       </Container>
     </div>

@@ -3,7 +3,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useMutation } from "@tanstack/react-query";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import toast from "react-hot-toast";
-import { CONSTANTS } from '../../constants';
+import { CONSTANTS } from "../../constants";
 
 export function useMintTestnetCoins() {
   const account = useCurrentAccount();
@@ -24,7 +24,7 @@ export function useMintTestnetCoins() {
         arguments: [
           txb.object(CONSTANTS.assetTreasury),
           txb.pure.u64(10000000),
-          txb.pure.address(account.address)
+          txb.pure.address(account.address),
         ],
       });
 
@@ -34,25 +34,29 @@ export function useMintTestnetCoins() {
         arguments: [
           txb.object(CONSTANTS.stableTreasury),
           txb.pure.u64(10000000),
-          txb.pure.address(account.address)
+          txb.pure.address(account.address),
         ],
       });
 
       // Show loading toast while transaction is processing
       const loadingToast = toast.loading("Minting testnet coins...");
-      
+
       try {
         const result = await executeTransaction(txb);
-        
+
         // Dismiss loading toast
         toast.dismiss(loadingToast);
-        
-        if (result && 'effects' in result && result.effects?.status?.status === "success") {
+
+        if (
+          result &&
+          "effects" in result &&
+          result.effects?.status?.status === "success"
+        ) {
           toast.success("Successfully minted testnet coins!");
         } else {
           toast.error("Failed to mint coins: Transaction failed");
         }
-        
+
         return result;
       } catch (error) {
         toast.dismiss(loadingToast);
@@ -61,7 +65,7 @@ export function useMintTestnetCoins() {
     },
     onError: (error) => {
       toast.error(`Failed to mint coins: ${error.message}`);
-    }
+    },
   });
 }
 

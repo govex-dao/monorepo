@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
-import { TokenInfo } from '../components/trade/TradeForm';
+import { useState, useEffect } from "react";
+import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
+import { TokenInfo } from "../components/trade/TradeForm";
 import { CONSTANTS } from "@/constants";
-import { SuiObjectResponse } from '@mysten/sui/client';
+import { SuiObjectResponse } from "@mysten/sui/client";
 
 const packageId = CONSTANTS.futarchyPackage;
 const client = new SuiClient({ url: getFullnodeUrl(CONSTANTS.network) });
@@ -14,7 +14,12 @@ interface UseTokenEventsOptions {
   enabled?: boolean;
 }
 
-export function useTokenEvents({ proposalId, address, assetType, enabled = true }: UseTokenEventsOptions) {
+export function useTokenEvents({
+  proposalId,
+  address,
+  assetType,
+  enabled = true,
+}: UseTokenEventsOptions) {
   const [tokens, setTokens] = useState<TokenInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -37,35 +42,40 @@ export function useTokenEvents({ proposalId, address, assetType, enabled = true 
             cursor,
             limit: 50,
             filter: {
-              StructType: tokenType
+              StructType: tokenType,
             },
             options: {
               showType: true,
               showContent: true,
-              showDisplay: true
-            }
+              showDisplay: true,
+            },
           });
 
           const pageTokens = objects.data
             .filter((obj: SuiObjectResponse) => {
-              if (!obj.data?.content || obj.data.content.dataType !== 'moveObject') return false;
+              if (
+                !obj.data?.content ||
+                obj.data.content.dataType !== "moveObject"
+              )
+                return false;
               const content = obj.data.content as any;
               if (content.fields.market_id !== proposalId) return false;
-              if (assetType && content.fields.asset_type !== Number(assetType)) return false;
+              if (assetType && content.fields.asset_type !== Number(assetType))
+                return false;
               return true;
             })
             .map((obj: SuiObjectResponse) => {
               const content = obj.data?.content as any;
               return {
-                id: obj.data?.objectId || '',
+                id: obj.data?.objectId || "",
                 balance: content.fields.balance,
                 outcome: content.fields.outcome,
-                asset_type: content.fields.asset_type
+                asset_type: content.fields.asset_type,
               };
             });
 
           allTokens = [...allTokens, ...pageTokens];
-          
+
           hasNextPage = objects.hasNextPage;
           cursor = objects.nextCursor ?? null;
 
@@ -83,8 +93,10 @@ export function useTokenEvents({ proposalId, address, assetType, enabled = true 
         }
         setTokens(dedupedTokens);
       } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to fetch tokens'));
-        console.error('Error fetching tokens:', err);
+        setError(
+          err instanceof Error ? err : new Error("Failed to fetch tokens"),
+        );
+        console.error("Error fetching tokens:", err);
       } finally {
         setIsLoading(false);
       }

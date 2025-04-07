@@ -1,5 +1,5 @@
-import React from 'react';
-import { InfoCircledIcon } from '@radix-ui/react-icons';
+import React from "react";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
 
 interface TwapLegendProps {
   twaps: string[] | null;
@@ -22,12 +22,12 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
 
   // Format TWAP value consistently
   const formatTwap = (value: number | null): string => {
-     if (value === null) return 'N/A';
-     if (value === 0) return '0.0000';  // Always show 4 decimal places for zero
-     const basisPoints = Math.pow(10, asset_decimals - stable_decimals);
-     const adjustedValue = value / (basisPoints * 10000 * 100000000);
-     return adjustedValue.toFixed(5);
-   };
+    if (value === null) return "N/A";
+    if (value === 0) return "0.0000"; // Always show 4 decimal places for zero
+    const basisPoints = Math.pow(10, asset_decimals - stable_decimals);
+    const adjustedValue = value / (basisPoints * 10000 * 100000000);
+    return adjustedValue.toFixed(5);
+  };
 
   // Generate default colors if not provided
   let defaultColors: string[] = [];
@@ -35,9 +35,9 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
     defaultColors = colors;
   } else {
     if (outcomeCount === 1) {
-      defaultColors = ['#ef4444'];
+      defaultColors = ["#ef4444"];
     } else if (outcomeCount === 2) {
-      defaultColors = ['#ef4444', '#22c55e'];
+      defaultColors = ["#ef4444", "#22c55e"];
     } else {
       defaultColors = Array.from({ length: outcomeCount }, (_, i) => {
         const hue = (i * (360 / outcomeCount)) % 360;
@@ -59,7 +59,10 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
   });
 
   // For outcome index 0, adjust its TWAP by multiplying it by (1 + threshold/100000)
-  const effectiveSortValue = (item: { index: number; twap: number | null }): number => {
+  const effectiveSortValue = (item: {
+    index: number;
+    twap: number | null;
+  }): number => {
     if (item.twap === null) return -Infinity;
     if (item.index === 0) {
       return item.twap * ((100000 + Number(twap_threshold)) / 100000);
@@ -70,7 +73,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
   // Sort items in descending order based on effective TWAP value
   items.sort((a, b) => effectiveSortValue(b) - effectiveSortValue(a));
 
-  const pluralSuffix = items.length > 2 ? 's' : '';
+  const pluralSuffix = items.length > 2 ? "s" : "";
 
   return (
     <div>
@@ -82,7 +85,9 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           <div className="relative group ml-1 mr-0.5">
             <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
             <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-              The time average weighted price for the {outcomeMessages[0]} market. Coins for market with the highest TWAP at the end of the traded period can be redeemed for cannonical tokens.
+              The time average weighted price for the {outcomeMessages[0]}{" "}
+              market. Coins for market with the highest TWAP at the end of the
+              traded period can be redeemed for cannonical tokens.
             </div>
           </div>
           <span className="text-base font-bold text-gray-300">:</span>
@@ -92,13 +97,13 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           <div key={item.index} className="flex items-center relative">
             <div className="flex items-center">
               <svg width="8" height="8">
-                <circle cx="4" cy="4" r="4" fill={item.color}/>
+                <circle cx="4" cy="4" r="4" fill={item.color} />
               </svg>
               <span className="text-gray-300 text-base ml-2 whitespace-nowrap">
-                <span className="font-bold">
-                  {formatTwap(item.twap)}{' '}
+                <span className="font-bold">{formatTwap(item.twap)} </span>
+                <span className="text-gray-400 font-bold">
+                  for {item.message}
                 </span>
-                <span className="text-gray-400 font-bold">for {item.message}</span>
               </span>
             </div>
           </div>
@@ -111,7 +116,10 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           <div className="relative group ml-1 mr-0.5">
             <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
             <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-              The time average weighted price for the failing market{items.length > 2 ? 's' : ''}. Coins for markets that fail cannot be redeemed for cannonical tokens at the end of the trading period.
+              The time average weighted price for the failing market
+              {items.length > 2 ? "s" : ""}. Coins for markets that fail cannot
+              be redeemed for cannonical tokens at the end of the trading
+              period.
             </div>
           </div>
           <span className="text-base font-bold text-gray-300">:</span>
@@ -122,13 +130,13 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
             <div key={item.index} className="flex items-center relative">
               <div className="flex items-center">
                 <svg width="8" height="8">
-                  <circle cx="4" cy="4" r="4" fill={item.color}/>
+                  <circle cx="4" cy="4" r="4" fill={item.color} />
                 </svg>
                 <span className="text-gray-300 text-base ml-2 whitespace-nowrap">
-                  <span className="font-bold">
-                    {formatTwap(item.twap)}{' '}
+                  <span className="font-bold">{formatTwap(item.twap)} </span>
+                  <span className="text-gray-400 font-bold">
+                    for {item.message}
                   </span>
-                  <span className="text-gray-400 font-bold">for {item.message}</span>
                 </span>
               </div>
             </div>

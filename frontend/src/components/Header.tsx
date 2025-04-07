@@ -3,7 +3,7 @@ import { SizeIcon, HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { Box, Container, Flex, IconButton } from "@radix-ui/themes";
 import { NavLink } from "react-router-dom";
 import { HeaderWithGlowIcon } from "./HeaderWithGlowIcon.tsx";
-import { useState, useCallback } from 'react';
+import { useState, useCallback } from "react";
 
 const menu = [
   { title: "Trade", link: "/" },
@@ -19,7 +19,7 @@ export function Header() {
   }, [isOpen]);
 
   return (
-    <Container style={{ maxWidth: '100vw', width: '100vw' }}>
+    <Container style={{ maxWidth: "100vw", width: "100vw" }}>
       <Flex
         position="sticky"
         px="4"
@@ -61,15 +61,19 @@ export function Header() {
               <ConnectButton className="hover:bg-gray-700 text-gray-100" />
             </div>
           </Box>
-          
+
           {/* Mobile Menu Button - Moved here */}
           <Box className="md:hidden">
-            <IconButton 
-              className="md:hidden bg-gray-800 rounded-lg hover:bg-gray-700" 
+            <IconButton
+              className="md:hidden bg-gray-800 rounded-lg hover:bg-gray-700"
               variant="ghost"
               onClick={handleClick}
             >
-              <HamburgerMenuIcon width="24" height="24" className="text-gray-300" />
+              <HamburgerMenuIcon
+                width="24"
+                height="24"
+                className="text-gray-300"
+              />
             </IconButton>
 
             {/* Dropdown overlay */}

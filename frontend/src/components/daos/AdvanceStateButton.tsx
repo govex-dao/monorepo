@@ -1,6 +1,5 @@
 // components/AdvanceStateButton.tsx
-import { useAdvanceStateMutation } from "@/mutations/advanceState"
-
+import { useAdvanceStateMutation } from "@/mutations/advanceState";
 
 interface AdvanceStateButtonProps {
   proposalId: string;
@@ -14,8 +13,8 @@ interface AdvanceStateButtonProps {
 export function AdvanceStateButton({
   proposalId,
   escrowId,
-  assetType,  // Default value, replace with your default
-  stableType,  // Default value, replace with your default
+  assetType, // Default value, replace with your default
+  stableType, // Default value, replace with your default
   daoId,
   proposalState,
 }: AdvanceStateButtonProps) {
@@ -26,7 +25,7 @@ export function AdvanceStateButton({
       case 0:
         return "Initialize trading";
       case 1:
-          return "Finalize proposal";
+        return "Finalize proposal";
       case 2:
         return "Execute proposal";
     }
@@ -58,9 +57,9 @@ export function AdvanceStateButton({
     }
   };
 
-  const baseButtonStyle = "px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
+  const baseButtonStyle =
+    "px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
   const stateStyle = getButtonStyle(proposalState);
-
 
   return (
     <button

@@ -22,7 +22,6 @@ const EEMPTY_VECTOR: u64 = 6;
 const ENO_TOKEN_FOUND: u64 = 7;
 const ENONZERO_BALANCE: u64 = 8;
 
-
 // === Structs ===
 // Supply tracking object for a specific conditional token type
 public struct Supply has key, store {

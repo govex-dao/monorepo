@@ -16,7 +16,6 @@ const ETRADING_NOT_ENDED: u64 = 4;
 const ENOT_FINALIZED: u64 = 5;
 const ETRADING_NOT_STARTED: u64 = 6;
 
-
 // === Structs ===
 public struct MarketStatus has copy, drop, store {
     trading_started: bool,

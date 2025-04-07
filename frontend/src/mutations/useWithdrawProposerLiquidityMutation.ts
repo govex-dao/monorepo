@@ -37,7 +37,7 @@ export function useWithdrawProposerLiquidityMutation() {
           txb.object(proposalId),
           txb.object(escrowId),
           txb.pure.u64(winning_outcome),
-          txb.object('0x6')
+          txb.object("0x6"),
         ],
         typeArguments: [`0x${assetType}`, `0x${stableType}`],
       });
@@ -48,7 +48,11 @@ export function useWithdrawProposerLiquidityMutation() {
         const result = await executeTransaction(txb);
         toast.dismiss(loadingToast);
 
-        if (result && "effects" in result && result.effects?.status?.status === "success") {
+        if (
+          result &&
+          "effects" in result &&
+          result.effects?.status?.status === "success"
+        ) {
           toast.success("Liquidity withdrawn successfully!");
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
@@ -64,6 +68,6 @@ export function useWithdrawProposerLiquidityMutation() {
     },
     onError: (error: any) => {
       toast.error(`Failed to withdraw liquidity: ${error.message}`);
-    }
+    },
   });
 }

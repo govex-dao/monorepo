@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { RedeemTokensButton } from './RedeemTokensButton';
+import React, { useMemo } from "react";
+import { RedeemTokensButton } from "./RedeemTokensButton";
 
 interface TokenSectionProps {
   userTokens: {
@@ -23,10 +23,10 @@ interface GroupedToken {
   stableBalance: string;
 }
 
-const TokenSection: React.FC<TokenSectionProps> = ({ 
-  userTokens, 
-  outcomeMessages, 
-  winning_outcome, 
+const TokenSection: React.FC<TokenSectionProps> = ({
+  userTokens,
+  outcomeMessages,
+  winning_outcome,
   current_state,
   escrow,
   asset_type,
@@ -34,9 +34,12 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   outcome_count,
 }) => {
   const groupedByOutcome = useMemo<GroupedToken[]>(() => {
-    const outcomeMap = new Map<number, { assetBalance: bigint; stableBalance: bigint }>();
+    const outcomeMap = new Map<
+      number,
+      { assetBalance: bigint; stableBalance: bigint }
+    >();
 
-    userTokens.forEach(token => {
+    userTokens.forEach((token) => {
       if (!outcomeMap.has(token.outcome)) {
         outcomeMap.set(token.outcome, { assetBalance: 0n, stableBalance: 0n });
       }
@@ -53,7 +56,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
       .map(([outcome, balances]) => ({
         outcome,
         assetBalance: balances.assetBalance.toString(),
-        stableBalance: balances.stableBalance.toString()
+        stableBalance: balances.stableBalance.toString(),
       }));
   }, [userTokens]);
 
@@ -76,9 +79,11 @@ const TokenSection: React.FC<TokenSectionProps> = ({
               <span>Asset</span>
               <span>Stable</span>
             </div>
-            {groupedByOutcome.map(token => (
+            {groupedByOutcome.map((token) => (
               <div key={token.outcome} className="grid grid-cols-3 gap-4 mb-1">
-                <span>{outcomeMessages[token.outcome] || `Outcome ${token.outcome}`}</span>
+                <span>
+                  {outcomeMessages[token.outcome] || `Outcome ${token.outcome}`}
+                </span>
                 <span>{token.assetBalance}</span>
                 <span>{token.stableBalance}</span>
               </div>
@@ -90,7 +95,6 @@ const TokenSection: React.FC<TokenSectionProps> = ({
       )}
     </div>
   );
-  
 };
 
 export default TokenSection;
