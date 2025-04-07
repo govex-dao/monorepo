@@ -12,3 +12,5 @@ frontend/node_modules/
 
 # General
 **/.env
+.DS_Store
+**/.DS_Store
