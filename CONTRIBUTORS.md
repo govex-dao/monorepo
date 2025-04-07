@@ -8,10 +8,11 @@ Thank you for your interest in contributing to Govex! We value your efforts to i
 - **Bug Reports:** Tell us in our [Discord channel](https://discord.com/channels/1314531947590193212/1358528626017960006) or Use the GitHub issue tracker to report bugs. Provide a clear description, steps to reproduce the issue, and any relevant logs or screenshots.
 
 ### Pull Requests
-1. Fork the repository.
-2. Create a new branch for your work.
-3. Make your changes with clear commit messages.
-4. Open a pull request describing your changes.
+1. Look for an [issue](https://github.com/govex-dao/monorepo/issues) you can complete or dicuss your idea with this team in [Discord](https://discord.com/channels/1314531947590193212/1314590617275203635). 
+2. Fork the repository.
+3. Create a new branch for your work.
+4. Make your changes with clear commit messages.
+5. Open a pull request describing your changes.
 
 We welcome contributions of all kinds, including but not limited to:
 - **Bug reports and fixes**
