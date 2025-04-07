@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: contracts
+        working-directory: contracts/futarchy
     steps:
       - uses: actions/checkout@v4
       - name: Use Node.js
@@ -47,7 +47,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
       - run: npm i -g prettier
-      - run: npx prettier -c "frontend/src/**/*.{ts,tsx}" "backend/**/*.ts"
+      - run: npx prettier -c "frontend/src/**/*.{ts,tsx}"
   frontend-app-build:
     name: Build Web Application
     runs-on: ubuntu-latest
@@ -69,25 +69,3 @@ jobs:
         run: pnpm install
       - name: Run build
         run: pnpm build-frontend
-  backend-build:
-    name: Build Backend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          cache: "pnpm"
-          cache-dependency-path: "./backend/package.json"
-      - name: Install dependencies
-        run: pnpm install
-      # TypeScript check
-      - name: TypeScript check
-        run: pnpm exec tsc --noEmit
