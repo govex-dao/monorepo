@@ -17,13 +17,14 @@ const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
 const ONE_WEEK_MS: u64 = 604_800_000;
 
 // ======== Error Constants ========
-const ETWAP_NOT_STARTED: u64 = 201;
-const EZERO_PERIOD: u64 = 202;
-const EZERO_INITIALIZATION: u64 = 203;
-const EZERO_STEP: u64 = 204;
-const ELONG_DELAY: u64 = 205;
-const ESTALE_TWAP: u64 = 206;
-const ETIMESTAMP_REGRESSION: u64 = 207;
+const ETIMESTAMP_REGRESSION: u64 = 0;
+const ETWAP_NOT_STARTED: u64 = 1;
+const EZERO_PERIOD: u64 = 2;
+const EZERO_INITIALIZATION: u64 = 3;
+const EZERO_STEP: u64 = 4;
+const ELONG_DELAY: u64 = 5;
+const ESTALE_TWAP: u64 = 6;
+
 
 // ======== Configuration Struct ========
 public struct Oracle has key, store {

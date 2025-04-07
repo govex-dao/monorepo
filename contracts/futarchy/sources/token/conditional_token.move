@@ -12,15 +12,16 @@ use sui::event;
 // market_amounts: Table<(ID, ID), Table<address, u64>>,
 
 // === Errors ===
-const EWRONG_MARKET: u64 = 601;
-const EWRONG_TOKEN_TYPE: u64 = 602;
-const EWRONG_OUTCOME: u64 = 603;
-const EZERO_AMOUNT: u64 = 604;
-const EINSUFFICIENT_BALANCE: u64 = 605;
-const EEMPTY_VECTOR: u64 = 606;
-const ENO_TOKEN_FOUND: u64 = 607;
-const ENONZERO_BALANCE: u64 = 608;
-const EINVALID_ASSET_TYPE: u64 = 609;
+const EINVALID_ASSET_TYPE: u64 = 0;
+const EWRONG_MARKET: u64 = 1;
+const EWRONG_TOKEN_TYPE: u64 = 2;
+const EWRONG_OUTCOME: u64 = 3;
+const EZERO_AMOUNT: u64 = 4;
+const EINSUFFICIENT_BALANCE: u64 = 5;
+const EEMPTY_VECTOR: u64 = 6;
+const ENO_TOKEN_FOUND: u64 = 7;
+const ENONZERO_BALANCE: u64 = 8;
+
 
 // === Structs ===
 // Supply tracking object for a specific conditional token type

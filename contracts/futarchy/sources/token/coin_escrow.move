@@ -11,15 +11,16 @@ use sui::event;
 // Tracks and stores coins
 
 // === Errors ===
-const EINCORRECT_SEQUENCE: u64 = 701;
-const EWRONG_MARKET: u64 = 702;
-const EWRONG_TOKEN_TYPE: u64 = 703;
-const ESUPPLIES_NOT_INITIALIZED: u64 = 704;
-const EOUTCOME_OUT_OF_BOUNDS: u64 = 705;
-const EWRONG_OUTCOME: u64 = 706;
-const ENOT_ENOUGH: u64 = 707;
-const ENOT_ENOUGH_LIQUIDITY: u64 = 708;
-const EINSUFFICIENT_BALANCE: u64 = 709;
+const EINSUFFICIENT_BALANCE: u64 = 0;
+const EINCORRECT_SEQUENCE: u64 = 1;
+const EWRONG_MARKET: u64 = 2;
+const EWRONG_TOKEN_TYPE: u64 = 3;
+const ESUPPLIES_NOT_INITIALIZED: u64 = 4;
+const EOUTCOME_OUT_OF_BOUNDS: u64 = 5;
+const EWRONG_OUTCOME: u64 = 6;
+const ENOT_ENOUGH: u64 = 7;
+const ENOT_ENOUGH_LIQUIDITY: u64 = 8;
+
 
 // === Constants ===
 const TOKEN_TYPE_STABLE: u8 = 1;

@@ -12,10 +12,10 @@ use sui::coin::Coin;
 // Defines entry methods for swaping and combining coins and conditional tokens
 
 // === Errors ===
-const EINVALID_OUTCOME: u64 = 1201;
-const EWRONG_TOKEN_TYPE: u64 = 1202;
-const EWRONG_OUTCOME: u64 = 1203;
-const EINVALID_STATE: u64 = 1204;
+const EINVALID_OUTCOME: u64 = 0;
+const EWRONG_TOKEN_TYPE: u64 = 1;
+const EWRONG_OUTCOME: u64 = 2;
+const EINVALID_STATE: u64 = 3;
 
 // === Constants ===
 const STATE_TRADING: u8 = 1;

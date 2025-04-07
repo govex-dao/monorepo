@@ -17,13 +17,14 @@ use sui::event;
 // This defines the core proposal logic and details
 
 // === Errors ===
-const EINVALID_AMOUNT: u64 = 1501;
-const EINVALID_STATE: u64 = 1502;
-const EINVALID_LIQUIDITY: u64 = 1503;
-const EASSET_LIQUIDITY_TOO_LOW: u64 = 1504;
-const ESTABLE_LIQUIDITY_TOO_LOW: u64 = 1505;
-const EPOOL_NOT_FOUND: u64 = 1506;
-const EINVALID_POOL_LENGTH: u64 = 1507;
+const EINVALID_POOL_LENGTH: u64 = 0;
+const EINVALID_AMOUNT: u64 = 1;
+const EINVALID_STATE: u64 = 2;
+const EINVALID_LIQUIDITY: u64 = 3;
+const EASSET_LIQUIDITY_TOO_LOW: u64 = 4;
+const ESTABLE_LIQUIDITY_TOO_LOW: u64 = 5;
+const EPOOL_NOT_FOUND: u64 = 6;
+
 
 // === Constants ===
 const STATE_REVIEW: u8 = 0;

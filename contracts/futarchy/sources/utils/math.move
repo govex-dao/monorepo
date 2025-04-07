@@ -7,9 +7,9 @@ use std::u64;
 // Integer type conversion and integer methods
 
 // === Errors ===
-const EOVERFLOW: u64 = 1001;
-const EDIVIDE_BY_ZERO: u64 = 1002;
-const EVALUE_EXCEEDS_U64: u64 = 1003;
+const EOVERFLOW: u64 = 0;
+const EDIVIDE_BY_ZERO: u64 = 1;
+const EVALUE_EXCEEDS_U64: u64 = 2;
 
 /// Multiplies two u64 values and divides by a third, checking for overflow
 /// Returns (a * b) / c

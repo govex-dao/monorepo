@@ -12,8 +12,8 @@ use sui::event;
 // This handles advancing proposal stages
 
 // === Errors ===
-const EINVALID_STATE_TRANSITION: u64 = 1301;
-const EINVALID_STATE: u64 = 1302;
+const EINVALID_STATE_TRANSITION: u64 = 0;
+const EINVALID_STATE: u64 = 1;
 
 // === Constants ===
 const TWAP_BASIS_POINTS: u128 = 100_000;

@@ -8,13 +8,14 @@ use sui::event;
 // This tracks proposal life cycle and acts a source of truth for proposal state
 
 // ======== Error Constants ========
-const EOUTCOME_OUT_OF_BOUNDS: u64 = 901;
-const EALREADY_FINALIZED: u64 = 902;
-const ETRADING_ALREADY_ENDED: u64 = 903;
-const ETRADING_NOT_ENDED: u64 = 904;
-const ENOT_FINALIZED: u64 = 905;
-const ETRADING_NOT_STARTED: u64 = 906;
-const ETRADING_ALREADY_STARTED: u64 = 907;
+const ETRADING_ALREADY_STARTED: u64 = 0;
+const EOUTCOME_OUT_OF_BOUNDS: u64 = 1;
+const EALREADY_FINALIZED: u64 = 2;
+const ETRADING_ALREADY_ENDED: u64 = 3;
+const ETRADING_NOT_ENDED: u64 = 4;
+const ENOT_FINALIZED: u64 = 5;
+const ETRADING_NOT_STARTED: u64 = 6;
+
 
 // === Structs ===
 public struct MarketStatus has copy, drop, store {

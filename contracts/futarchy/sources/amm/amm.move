@@ -11,13 +11,14 @@ use sui::event;
 // This a Uniswap V2-style XY=K AMM implementation with controlled liquidity methods.
 
 // === Errors ===
-const EPOOL_EMPTY: u64 = 101;
-const EEXCESSIVE_SLIPPAGE: u64 = 102;
-const EDIV_BY_ZERO: u64 = 103;
-const EZERO_LIQUIDITY: u64 = 104;
-const EPRICE_TOO_HIGH: u64 = 105;
-const EZERO_AMOUNT: u64 = 106;
-const ELOW_LIQUIDITY: u64 = 107;
+const ELOW_LIQUIDITY: u64 = 0;
+const EPOOL_EMPTY: u64 = 1;
+const EEXCESSIVE_SLIPPAGE: u64 = 2;
+const EDIV_BY_ZERO: u64 = 3;
+const EZERO_LIQUIDITY: u64 = 4;
+const EPRICE_TOO_HIGH: u64 = 5;
+const EZERO_AMOUNT: u64 = 6;
+
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;

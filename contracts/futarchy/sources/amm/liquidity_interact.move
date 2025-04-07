@@ -10,10 +10,10 @@ use sui::clock::Clock;
 // Methods to interact with AMM liquidity
 
 // ====== Error Codes ======
-const EINVALID_OUTCOME: u64 = 1401;
-const EINVALID_LIQUIDITY_TRANSFER: u64 = 1402;
-const EWRONG_OUTCOME: u64 = 1403;
-const EINVALID_STATE: u64 = 1404;
+const EINVALID_OUTCOME: u64 = 0;
+const EINVALID_LIQUIDITY_TRANSFER: u64 = 1;
+const EWRONG_OUTCOME: u64 = 2;
+const EINVALID_STATE: u64 = 3;
 
 // ====== States ======
 const STATE_FINALIZED: u8 = 2;

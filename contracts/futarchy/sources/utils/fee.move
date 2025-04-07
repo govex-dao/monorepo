@@ -14,9 +14,9 @@ use sui::transfer::{public_share_object, public_transfer};
 // Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
 
 // === Errors ===
-const EINVALID_PAYMENT: u64 = 801;
-const ESTABLE_TYPE_NOT_FOUND: u64 = 802;
-const EBAD_WITNESS: u64 = 803;
+const EINVALID_PAYMENT: u64 = 0;
+const ESTABLE_TYPE_NOT_FOUND: u64 = 1;
+const EBAD_WITNESS: u64 = 2;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;

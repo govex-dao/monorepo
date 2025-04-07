@@ -17,15 +17,16 @@ use sui::vec_set::{Self, VecSet};
 // This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
 
 // === Errors ===
-const EPAUSED: u64 = 401;
-const EALREADY_VERIFIED: u64 = 402;
-const EBAD_WITNESS: u64 = 403;
-const ESTABLE_TYPE_NOT_ALLOWED: u64 = 404;
-const TWAP_TWAP_WINDOW_CAP: u64 = 405;
-const ELONG_TRADING_TIME: u64 = 406;
-const ELONG_REVIEW_TIME: u64 = 407;
-const ELONG_TWAP_DELAY_TIME: u64 = 408;
-const EHIGH_TWAP_THRESHOLD: u64 = 409;
+const EHIGH_TWAP_THRESHOLD: u64 = 0;
+const EPAUSED: u64 = 1;
+const EALREADY_VERIFIED: u64 = 2;
+const EBAD_WITNESS: u64 = 3;
+const ESTABLE_TYPE_NOT_ALLOWED: u64 = 4;
+const TWAP_TWAP_WINDOW_CAP: u64 = 5;
+const ELONG_TRADING_TIME: u64 = 6;
+const ELONG_REVIEW_TIME: u64 = 7;
+const ELONG_TWAP_DELAY_TIME: u64 = 8;
+
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1; // Equals 0.01%
