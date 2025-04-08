@@ -202,7 +202,7 @@ export function ProposalView() {
         <div
           className={
             isInlineLayout
-              ? "flex items-center space-x-4"
+              ? "flex items-start space-x-4"
               : "flex flex-col space-y-4"
           }
         >
@@ -264,6 +264,10 @@ export function ProposalView() {
           outcomeMessages={proposal.outcome_messages}
           userTokens={tokens}
           details={proposal.details}
+          asset_symbol={proposal.dao.asset_symbol}
+          stable_symbol={proposal.dao.stable_symbol}
+          asset_decimals={proposal.dao.asset_decimals}
+          stable_decimals={proposal.dao.stable_decimals}
         />
       </div>
     </Theme>

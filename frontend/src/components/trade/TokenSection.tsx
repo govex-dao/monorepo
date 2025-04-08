@@ -15,12 +15,18 @@ interface TokenSectionProps {
   asset_type: string;
   stable_type: string;
   outcome_count: string;
+  asset_decimals: number;
+  stable_decimals: number;
+  asset_symbol: string;
+  stable_symbol: string;
 }
 
 interface GroupedToken {
   outcome: number;
   assetBalance: string;
   stableBalance: string;
+  assetBalanceFormatted: string;
+  stableBalanceFormatted: string;
 }
 
 const TokenSection: React.FC<TokenSectionProps> = ({
@@ -32,7 +38,16 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   asset_type,
   stable_type,
   outcome_count,
+  asset_decimals = 9,
+  stable_decimals = 9,
+  asset_symbol = "Asset",
+  stable_symbol = "Stable",
 }) => {
+  const [assetScale, stableScale] = useMemo(() => [
+    10 ** asset_decimals, 
+    10 ** stable_decimals
+  ], [asset_decimals, stable_decimals]);
+
   const groupedByOutcome = useMemo<GroupedToken[]>(() => {
     const outcomeMap = new Map<
       number,
@@ -53,12 +68,24 @@ const TokenSection: React.FC<TokenSectionProps> = ({
 
     return Array.from(outcomeMap.entries())
       .sort(([aOutcome], [bOutcome]) => aOutcome - bOutcome)
-      .map(([outcome, balances]) => ({
-        outcome,
-        assetBalance: balances.assetBalance.toString(),
-        stableBalance: balances.stableBalance.toString(),
-      }));
-  }, [userTokens]);
+      .map(([outcome, balances]) => {
+        // Convert raw balances to human-readable format with proper decimals
+        const assetBalanceRaw = balances.assetBalance.toString();
+        const stableBalanceRaw = balances.stableBalance.toString();
+        
+        // Format with proper decimals
+        const assetBalanceFormatted = (Number(assetBalanceRaw) / Number(assetScale)).toFixed(asset_decimals);
+        const stableBalanceFormatted = (Number(stableBalanceRaw) / Number(stableScale)).toFixed(stable_decimals);
+        
+        return {
+          outcome,
+          assetBalance: assetBalanceRaw,
+          stableBalance: stableBalanceRaw,
+          assetBalanceFormatted,
+          stableBalanceFormatted,
+        };
+      });
+  }, [userTokens, assetScale, stableScale, asset_decimals, stable_decimals]);
 
   return (
     <div className="space-y-2 px-6">
@@ -76,16 +103,16 @@ const TokenSection: React.FC<TokenSectionProps> = ({
           <div className="pl-1 text-gray-300">
             <div className="grid grid-cols-3 gap-4 mb-2 font-semibold">
               <span>Outcome</span>
-              <span>Asset</span>
-              <span>Stable</span>
+              <span>{asset_symbol}</span>
+              <span>{stable_symbol}</span>
             </div>
             {groupedByOutcome.map((token) => (
               <div key={token.outcome} className="grid grid-cols-3 gap-4 mb-1">
                 <span>
                   {outcomeMessages[token.outcome] || `Outcome ${token.outcome}`}
                 </span>
-                <span>{token.assetBalance}</span>
-                <span>{token.stableBalance}</span>
+                <span>{token.assetBalanceFormatted}</span>
+                <span>{token.stableBalanceFormatted}</span>
               </div>
             ))}
           </div>
