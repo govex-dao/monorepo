@@ -5,11 +5,10 @@ import { CONSTANTS } from "../../constants";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
 import CoinTypeInput from "./CoinTypeInput";
-import TimeInput from '../TimeInput';
+import TimeInput from "../TimeInput";
 
 const DEFAULT_ASSET_TYPE = CONSTANTS.assetType;
 const DEFAULT_STABLE_TYPE = CONSTANTS.stableType;
-const MILLISECONDS_DEFAULT = 0;
 
 interface FormData {
   assetType: string;
@@ -376,119 +375,121 @@ const CreateDaoForm = () => {
         </div>
         {/* Advanced configuration section */}
         <div className={`space-y-4 mt-4 ${showAdvanced ? "" : "hidden"}`}>
-        <TimeInput
-          label="Pre-trading Period"
-          tooltip={tooltips.reviewPeriodMs}
-          valueMs={formData.reviewPeriodMs}
-          onChange={(newValueMs) =>
-            setFormData((prev) => ({ ...prev, reviewPeriodMs: newValueMs }))
-          }
-        />
-        <TimeInput
-          label="TWAP Start Delay"
-          tooltip={tooltips.twapStartDelay}
-          valueMs={formData.twapStartDelay}
-          onChange={(newValueMs) =>
-            setFormData((prev) => ({ ...prev, twapStartDelay: newValueMs }))
-          }
-        />
-        <TimeInput
-          label="Trading Period"
-          tooltip={tooltips.tradingPeriodMs}
-          valueMs={formData.tradingPeriodMs}
-          onChange={(newValueMs) =>
-            setFormData((prev) => ({ ...prev, tradingPeriodMs: newValueMs }))
-          }
-        />
-        
-        {/* Other advanced settings remain unchanged */}
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <label className="block text-sm font-medium">
-              TWAP Step Max (%)
-            </label>
-            <div className="relative group">
-              <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                {tooltips.twapStepMax}
-              </div>
-            </div>
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              name="twapStepMax"
-              value={Number(formData.twapStepMax).toFixed(2)}
-              onChange={(e) => {
-                const value = Math.round(parseFloat(e.target.value) * 100) / 100;
-                setFormData((prev) => ({ ...prev, twapStepMax: value }));
-              }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
-              min="0.01"
-              step="0.01"
-              required
-            />
-            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-              %
-            </span>
-          </div>
-        </div>
-      
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <label className="block text-sm font-medium">
-              TWAP Threshold (%)
-            </label>
-            <div className="relative group">
-              <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                {tooltips.twapThreshold}
-              </div>
-            </div>
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              name="twapThreshold"
-              value={Number(formData.twapThreshold).toFixed(3)}
-              onChange={(e) => {
-                const value = Math.round(parseFloat(e.target.value) * 1000) / 1000;
-                setFormData((prev) => ({ ...prev, twapThreshold: value }));
-              }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
-              min="0.001"
-              step="0.001"
-              required
-            />
-            <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-              %
-            </span>
-          </div>
-        </div>
-      
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <label className="block text-sm font-medium">
-              Overwrite default DAO image with new URL
-            </label>
-            <div className="relative group">
-              <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                {tooltips.imageUrl}
-              </div>
-            </div>
-          </div>
-          <input
-            type="text"
-            name="imageUrl"
-            value={formData.imageUrl}
-            onChange={handleInputChange}
-            className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-            placeholder="Enter image URL"
+          <TimeInput
+            label="Pre-trading Period"
+            tooltip={tooltips.reviewPeriodMs}
+            valueMs={formData.reviewPeriodMs}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, reviewPeriodMs: newValueMs }))
+            }
           />
+          <TimeInput
+            label="TWAP Start Delay"
+            tooltip={tooltips.twapStartDelay}
+            valueMs={formData.twapStartDelay}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, twapStartDelay: newValueMs }))
+            }
+          />
+          <TimeInput
+            label="Trading Period"
+            tooltip={tooltips.tradingPeriodMs}
+            valueMs={formData.tradingPeriodMs}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, tradingPeriodMs: newValueMs }))
+            }
+          />
+
+          {/* Other advanced settings remain unchanged */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium">
+                TWAP Step Max (%)
+              </label>
+              <div className="relative group">
+                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {tooltips.twapStepMax}
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                name="twapStepMax"
+                value={Number(formData.twapStepMax).toFixed(2)}
+                onChange={(e) => {
+                  const value =
+                    Math.round(parseFloat(e.target.value) * 100) / 100;
+                  setFormData((prev) => ({ ...prev, twapStepMax: value }));
+                }}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
+                min="0.01"
+                step="0.01"
+                required
+              />
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                %
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium">
+                TWAP Threshold (%)
+              </label>
+              <div className="relative group">
+                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {tooltips.twapThreshold}
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                name="twapThreshold"
+                value={Number(formData.twapThreshold).toFixed(3)}
+                onChange={(e) => {
+                  const value =
+                    Math.round(parseFloat(e.target.value) * 1000) / 1000;
+                  setFormData((prev) => ({ ...prev, twapThreshold: value }));
+                }}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
+                min="0.001"
+                step="0.001"
+                required
+              />
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                %
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium">
+                Overwrite default DAO image with new URL
+              </label>
+              <div className="relative group">
+                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {tooltips.imageUrl}
+                </div>
+              </div>
+            </div>
+            <input
+              type="text"
+              name="imageUrl"
+              value={formData.imageUrl}
+              onChange={handleInputChange}
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter image URL"
+            />
+          </div>
         </div>
-      </div>
-      
+
         {/* End of advanced configuration section */}
         {/* Image preview section */}
         <div className="mt-6 space-y-2">

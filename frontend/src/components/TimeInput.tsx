@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { InfoCircledIcon } from '@radix-ui/react-icons';
+import React, { useState, useEffect } from "react";
+import { InfoCircledIcon } from "@radix-ui/react-icons";
 
 interface TimeInputProps {
   label: string;
@@ -8,13 +8,20 @@ interface TimeInputProps {
   onChange: (newValueMs: number) => void;
 }
 
-const TimeInput: React.FC<TimeInputProps> = ({ label, tooltip, valueMs, onChange }) => {
+const TimeInput: React.FC<TimeInputProps> = ({
+  label,
+  tooltip,
+  valueMs,
+  onChange,
+}) => {
   const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
   const MILLISECONDS_IN_HOUR = 60 * 60 * 1000;
 
   // Calculate initial days and hours from the given milliseconds.
   const initialDays = Math.floor(valueMs / MILLISECONDS_IN_DAY);
-  const initialHours = Math.floor((valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR);
+  const initialHours = Math.floor(
+    (valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR,
+  );
 
   // Local state to control the input values as strings.
   const [daysInput, setDaysInput] = useState<string>(String(initialDays));
@@ -23,7 +30,9 @@ const TimeInput: React.FC<TimeInputProps> = ({ label, tooltip, valueMs, onChange
   // Update local state if the external value changes.
   useEffect(() => {
     const newDays = Math.floor(valueMs / MILLISECONDS_IN_DAY);
-    const newHours = Math.floor((valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR);
+    const newHours = Math.floor(
+      (valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR,
+    );
     setDaysInput(String(newDays));
     setHoursInput(String(newHours));
   }, [valueMs]);
@@ -35,7 +44,9 @@ const TimeInput: React.FC<TimeInputProps> = ({ label, tooltip, valueMs, onChange
     const parsedDays = parseInt(inputValue, 10);
     if (!isNaN(parsedDays)) {
       const parsedHours = parseInt(hoursInput, 10) || 0;
-      onChange(parsedDays * MILLISECONDS_IN_DAY + parsedHours * MILLISECONDS_IN_HOUR);
+      onChange(
+        parsedDays * MILLISECONDS_IN_DAY + parsedHours * MILLISECONDS_IN_HOUR,
+      );
     }
   };
 
@@ -48,7 +59,10 @@ const TimeInput: React.FC<TimeInputProps> = ({ label, tooltip, valueMs, onChange
       // Clamp hours between 0 and 24.
       const normalizedHours = Math.min(Math.max(parsedHours, 0), 24);
       const parsedDays = parseInt(daysInput, 10) || 0;
-      onChange(parsedDays * MILLISECONDS_IN_DAY + normalizedHours * MILLISECONDS_IN_HOUR);
+      onChange(
+        parsedDays * MILLISECONDS_IN_DAY +
+          normalizedHours * MILLISECONDS_IN_HOUR,
+      );
     }
   };
 
