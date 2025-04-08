@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from 'react';
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { Transaction } from "@mysten/sui/transactions";
+import { Transaction } from '@mysten/sui/transactions';
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiClient } from "@mysten/sui/client";
-import { getFullnodeUrl } from "@mysten/sui/client";
+import { SuiClient } from '@mysten/sui/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
 import {
@@ -482,6 +482,52 @@ const TradeForm: React.FC<TradeFormProps> = ({
       );
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Add a function to handle max button click
+  const handleMaxClick = async () => {
+    try {
+      if (!account) return;
+
+      // For existing conditional tokens
+      const existingTokens = filteredTokens;
+      let maxAmount = '0';
+
+      if (existingTokens.length > 0) {
+        // If we have existing conditional tokens, use their total balance
+        const totalBalance = existingTokens.reduce(
+          (sum, token) => sum + BigInt(token.balance), 0n
+        );
+        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
+        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+      } else {
+        // Otherwise, get regular coins from wallet
+        const client = new SuiClient({ url: getFullnodeUrl(network) });
+        const coinType = tradeDirection === 'assetToStable'
+          ? assetType
+          : stableType;
+
+        const coins = await client.getCoins({
+          owner: account.address,
+          coinType: `0x${coinType}`
+        });
+
+        // Calculate total balance from coins
+        const totalBalance = coins.data.reduce(
+          (sum, coin) => sum + BigInt(coin.balance), 0n
+        );
+
+        // Convert to human-readable format based on decimals
+        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
+        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+      }
+
+      // Update amount input with max value
+      updateFromAmount(maxAmount);
+    } catch (error) {
+      console.error('Error calculating max amount:', error);
+      setError('Failed to calculate maximum amount');
     }
   };
 
