@@ -87,7 +87,7 @@ fun test_write_observation_after_delay_upward_cap() {
         let mut oracle_inst = setup_test_oracle(ctx);
         // Delay threshold is 1000+2000 = 3000.
         // Use timestamp 3500; additional time = 3500 - 3000 = 500.
-        // Allowed upward change: INIT_PRICE + (INIT_PRICE * TWAP_STEP_MAX / BASIS_POINTS) = 10000 + 1000 = 11000.
+        // Allowed upward change: INIT_PRICE + TWAP_STEP_MAX = 10000 + 1000 = 11000.
         let observation_time = 3500;
         let high_price = 15000; // Exceeds allowed cap.
         oracle::write_observation(&mut oracle_inst, observation_time, high_price);

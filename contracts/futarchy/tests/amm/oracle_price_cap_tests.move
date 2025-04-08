@@ -8,7 +8,6 @@ use sui::clock;
 use sui::test_scenario::{Self as test, Scenario};
 
 // ======== Test Constants ========
-const BASIS_POINTS: u64 = 10000;
 const TWAP_STEP_MAX: u64 = 1000; // Allow 10% movement
 const TWAP_START_DELAY: u64 = 2000;
 const MARKET_START_TIME: u64 = 1000;
@@ -89,8 +88,7 @@ fun test_price_capping_multi_window() {
         oracle::write_observation(&mut oracle_inst, first_window_time, 13000);
 
         // Verify first window TWAP and new price
-        let first_window_price = oracle::get_last_price(&oracle_inst);
-        debug::print(&first_window_price); // Let's see what we actually get
+        assert!(oracle::get_last_price(&oracle_inst) == 12000, 0);
 
         // After second window:
         // New TWAP becomes base for capping
@@ -125,7 +123,7 @@ fun test_price_capping_edge_cases() {
 
         // Test case 3: Exactly at cap limit
         let exact_cap_price =
-            INIT_PRICE + (INIT_PRICE * (TWAP_STEP_MAX as u128)) / (BASIS_POINTS as u128);
+            INIT_PRICE + (TWAP_STEP_MAX as u128);
         oracle::write_observation(&mut oracle_inst, delay_threshold + 300, exact_cap_price);
         assert!(oracle::get_last_price(&oracle_inst) == exact_cap_price, 2);
 
