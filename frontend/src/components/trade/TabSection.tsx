@@ -10,6 +10,10 @@ interface TabSectionProps {
   outcomeMessages: any[];
   userTokens: TokenInfo[];
   details: string;
+  asset_symbol?: string;
+  stable_symbol?: string;
+  asset_decimals?: number;
+  stable_decimals?: number;
 }
 
 const TabSection: React.FC<TabSectionProps> = ({
@@ -17,6 +21,10 @@ const TabSection: React.FC<TabSectionProps> = ({
   outcomeMessages,
   userTokens,
   details,
+  asset_symbol = "Asset",
+  stable_symbol = "Stable",
+  asset_decimals = 9,
+  stable_decimals = 9,
 }) => {
   const [activeTab, setActiveTab] = useState<
     "tokens" | "description" | "details" | "liquidity"
@@ -77,6 +85,10 @@ const TabSection: React.FC<TabSectionProps> = ({
           asset_type={proposal.asset_type}
           stable_type={proposal.stable_type}
           outcome_count={proposal.outcome_count}
+          asset_decimals={asset_decimals}
+          stable_decimals={stable_decimals}
+          asset_symbol={asset_symbol}
+          stable_symbol={stable_symbol}
         />
       )}
       {activeTab === "description" && <Description details={details} />}

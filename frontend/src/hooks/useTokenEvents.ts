@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
-import { TokenInfo } from "../components/trade/TradeForm";
 import { CONSTANTS } from "@/constants";
 import { SuiObjectResponse } from "@mysten/sui/client";
+import { TokenInfo } from "@/components/trade/TradeForm";
 
 const packageId = CONSTANTS.futarchyPackage;
 const client = new SuiClient({ url: getFullnodeUrl(CONSTANTS.network) });
