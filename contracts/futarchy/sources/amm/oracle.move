@@ -67,7 +67,7 @@ public(package) fun new_oracle(
         twap_start_delay: twap_start_delay,
         twap_cap_step: twap_cap_step,
         market_start_time: market_start_time,
-        twap_initialization_price: twap_initialization_price
+        twap_initialization_price: twap_initialization_price,
     }
 }
 
