@@ -2,8 +2,8 @@ import { ShowMoreDetails } from '@/components/ShowMoreDetails';
 import React, { Dispatch, SetStateAction, useState } from 'react';
 
 interface TradeInsightProps {
-  tradeDirection: 'assetToStable' | 'stableToAsset';
-  setTradeDirection: Dispatch<SetStateAction<'assetToStable' | 'stableToAsset'>>;
+  isBuy: boolean;
+  setIsBuy: Dispatch<SetStateAction<boolean>>;
   selectedOutcome: string;
   outcomeMessages: string[];
   amount: string;
@@ -16,8 +16,8 @@ interface TradeInsightProps {
 }
 
 const TradeInsight: React.FC<TradeInsightProps> = ({
-  tradeDirection,
-  setTradeDirection,
+  isBuy,
+  setIsBuy,
   selectedOutcome,
   outcomeMessages,
   amount,
@@ -29,12 +29,11 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
   assetScale
 }) => {
   const [showTradeInsight, setShowTradeInsight] = useState<boolean>(false);
-  const isBullish = tradeDirection === 'stableToAsset';
   const selectedOutcomeIndex = parseInt(selectedOutcome);
   const outcomeMessage = outcomeMessages[selectedOutcomeIndex];
   const outcomeClass = selectedOutcome !== "0" ? "text-green-300" : "text-red-300";
-  const fromSymbol = isBullish ? stableSymbol : assetSymbol;
-  const scale = isBullish ? stableScale : assetScale;
+  const fromSymbol = isBuy ? stableSymbol : assetSymbol;
+  const scale = isBuy ? stableScale : assetScale;
 
   
   function renderAmountInput(symbol: string, scale: number) {
@@ -56,7 +55,7 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
     return (
       <button
         className={`${isPositive ? "bg-green-900/40 text-green-300 hover:bg-green-800/40" : "bg-red-900/40 text-red-300 hover:bg-red-800/40"} font-medium px-3 py-1.5 rounded-md mr-2 inline-flex items-center shadow-sm cursor-pointer transition-colors duration-200`}
-        onClick={() => setTradeDirection(p => p === "stableToAsset" ? 'assetToStable' : 'stableToAsset')}
+        onClick={() => setIsBuy(p => !p)}
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d={isPositive ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
@@ -69,15 +68,15 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
   function renderTradeDescription() {
     return (
       <div>
-        {renderTradeButton(isBullish)}
+        {renderTradeButton(isBuy)}
         <p className="leading-relaxed mt-2.5 text-xs">
-          You expect the price to {isBullish 
+          You expect the price to {isBuy 
             ? <strong className="text-green-300">rise</strong> 
-            : <strong className="text-red-300">fall</strong>} if <strong className={outcomeClass}>{outcomeMessage}</strong> occurs.
+            : <strong className="text-red-300">fall</strong>} if <strong className={outcomeClass}>{outcomeMessage}</strong> wins.
         </p>
         <p className="leading-relaxed mt-1 text-xs">
           You're betting {renderAmountInput(fromSymbol, scale)} that
-          the price of {isBullish ? stableSymbol : assetSymbol} <span className="font-mono bg-black/30 px-2 py-0.5 rounded-md font-medium">${averagePrice}</span> is too {isBullish ? 'low' : 'high'}.
+          the price of {isBuy ? stableSymbol : assetSymbol} <span className="font-mono bg-black/30 px-2 py-0.5 rounded-md font-medium">${averagePrice}</span> is too {isBuy ? 'low' : 'high'}.
         </p>
       </div>
     );
