@@ -125,6 +125,29 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const fromToken = isBuy ? tokenData.stable : tokenData.asset;
   const toToken = isBuy ? tokenData.asset : tokenData.stable;
 
+  const tokenData = {
+    stable: {
+      name: "stable",
+      symbol: stable_symbol,
+      scale: stableScale,
+      balance: stableBalance,
+      decimals: stable_decimals,
+      type: stableType,
+    },
+    asset: {
+      name: "asset",
+      symbol: asset_symbol,
+      scale: assetScale,
+      balance: assetBalance,
+      decimals: asset_decimals,
+      type: assetType
+    }
+  };
+
+  // Determine from/to tokens based on trade direction
+  const fromToken = isBuy ? tokenData.stable : tokenData.asset;
+  const toToken = isBuy ? tokenData.asset : tokenData.stable;
+
   const updateFromAmount = (newAmount: string) => {
     setAmount(newAmount);
     const x = parseFloat(newAmount);
@@ -499,18 +522,14 @@ const TradeForm: React.FC<TradeFormProps> = ({
         const totalBalance = existingTokens.reduce(
           (sum, token) => sum + BigInt(token.balance), 0n
         );
-        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
-        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
       } else {
         // Otherwise, get regular coins from wallet
         const client = new SuiClient({ url: getFullnodeUrl(network) });
-        const coinType = tradeDirection === 'assetToStable'
-          ? assetType
-          : stableType;
 
         const coins = await client.getCoins({
           owner: account.address,
-          coinType: `0x${coinType}`
+          coinType: `0x${fromToken.type}`
         });
 
         // Calculate total balance from coins
@@ -519,8 +538,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
         );
 
         // Convert to human-readable format based on decimals
-        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
-        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
       }
 
       // Update amount input with max value
