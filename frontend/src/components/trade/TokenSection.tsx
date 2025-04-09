@@ -38,10 +38,10 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   asset_type,
   stable_type,
   outcome_count,
-  asset_decimals = 9,
-  stable_decimals = 9,
-  asset_symbol = "Asset",
-  stable_symbol = "Stable",
+  asset_decimals,
+  stable_decimals,
+  asset_symbol,
+  stable_symbol,
 }) => {
   const [assetScale, stableScale] = useMemo(() => [
     10 ** asset_decimals, 
