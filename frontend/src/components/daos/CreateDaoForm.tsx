@@ -20,7 +20,7 @@ interface FormData {
   reviewPeriodMs: number;
   tradingPeriodMs: number;
   twapStartDelay: number;
-  twapStepMax: number;
+  twapStepMax: string;
   twapThreshold: number;
 }
 
@@ -43,7 +43,7 @@ const CreateDaoForm = () => {
     reviewPeriodMs: 3600000, // 1 hour in milliseconds
     tradingPeriodMs: 7200000, // 2 hours in milliseconds
     twapStartDelay: 60000,
-    twapStepMax: 0.1,
+    twapStepMax: "1",
     twapThreshold: 1,
   });
 
@@ -123,7 +123,7 @@ const CreateDaoForm = () => {
     stableMetadata:
       "The metadata object ID for the stable coin type selected above",
     twapStartDelay: "Delay before TWAP calculations begin (in milliseconds)",
-    twapStepMax: "Maximum % step size for TWAP cap per a 60s window",
+    twapStepMax: "Maximum price change step size for TWAP price accumulation per a 60s window",
     twapThreshold:
       "% difference by which an outcome must be greater than Reject to pass",
   };
@@ -158,6 +158,8 @@ const CreateDaoForm = () => {
       );
       return;
     }
+
+    const chainTwapStepMax = BigInt(formData.twapStepMax);
 
     // Validate amounts
     if (!formData.minAssetAmount || !formData.minStableAmount) {
@@ -214,10 +216,6 @@ const CreateDaoForm = () => {
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000)]);
 
       const chainAdjustedTwapThreshold = formData.twapThreshold * 1000;
-      const chainAdjustedTwapStepMax = Math.max(
-        1,
-        Math.round(formData.twapStepMax * 100),
-      );
 
       tx.moveCall({
         target: `${CONSTANTS.futarchyPackage}::factory::create_dao`,
@@ -235,7 +233,7 @@ const CreateDaoForm = () => {
           tx.object(assetMetadata.id),
           tx.object(stableMetadata.id),
           tx.pure.u64(formData.twapStartDelay),
-          tx.pure.u64(chainAdjustedTwapStepMax),
+          tx.pure.u64(chainTwapStepMax),
           tx.pure.u64(chainAdjustedTwapThreshold),
           tx.object("0x6"),
         ],
@@ -393,7 +391,7 @@ const CreateDaoForm = () => {
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <label className="block text-sm font-medium">
-                TWAP Step Max (%)
+                TWAP Step Max
               </label>
               <div className="relative group">
                 <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
@@ -404,22 +402,17 @@ const CreateDaoForm = () => {
             </div>
             <div className="relative">
               <input
-                type="number"
+                type="text"
                 name="twapStepMax"
-                value={Number(formData.twapStepMax).toFixed(2)}
+                value={formData.twapStepMax}
                 onChange={(e) => {
-                  const value =
-                    Math.round(parseFloat(e.target.value) * 100) / 100;
+                  const cleanValue = e.target.value.replace(/[^0-9]/g, '');
+                  const value = cleanValue === '0' ? '0' : cleanValue.replace(/^0+/, '');
                   setFormData((prev) => ({ ...prev, twapStepMax: value }));
                 }}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
-                min="0.01"
-                step="0.01"
                 required
               />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                %
-              </span>
             </div>
           </div>
 

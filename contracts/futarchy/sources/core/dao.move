@@ -169,7 +169,7 @@ public fun create<AssetType, StableType>(
 
     let timestamp = clock::timestamp_ms(clock);
 
-    // there is a limit where this migth affect TWAP and AMM calculation so let's go with 9 for now
+    // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
     assert!(if (stable_decimals >= asset_decimals) {
         (stable_decimals - asset_decimals) <= 9
     } else {
