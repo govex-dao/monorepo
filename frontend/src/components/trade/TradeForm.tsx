@@ -7,7 +7,7 @@ import { getFullnodeUrl } from '@mysten/sui/client';
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
 import { calculateSwapBreakdown, SwapBreakdown } from "@/utils/trade/calculateSwapBreakdown";
-import { Select } from '@/components/Select';
+import { SelectDropDown } from '@/components/SelectDropDown';
 import TradeInsight from './swap/TradeInsight';
 import TradeDetails from './swap/TradeDetails';
 import TradeDirectionToggle, { TradeDirectionSwapButton } from './swap/TradeDirectionToggle';
@@ -75,7 +75,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const account = useCurrentAccount();
   const [amount, setAmount] = useState("");
   const [selectedOutcome, setSelectedOutcome] = useState("0");
-  const [tradeDirection, setTradeDirection] = useState<"assetToStable" | "stableToAsset">("assetToStable");
+  const [isBuy, setIsBuy] = useState(true);
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
   const [averagePrice, setAveragePrice] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
@@ -84,6 +84,29 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
   const { assetBalance, stableBalance } = useTokenBalances({ assetType, stableType, assetScale, stableScale, network });
+
+  const tokenData = {
+    stable: {
+      name: "stable",
+      symbol: stable_symbol,
+      scale: stableScale,
+      balance: stableBalance,
+      decimals: stable_decimals,
+      type: stableType,
+    },
+    asset: {
+      name: "asset",
+      symbol: asset_symbol,
+      scale: assetScale,
+      balance: assetBalance,
+      decimals: asset_decimals,
+      type: assetType
+    }
+  };
+
+  // Determine from/to tokens based on trade direction
+  const fromToken = isBuy ? tokenData.stable : tokenData.asset;
+  const toToken = isBuy ? tokenData.asset : tokenData.stable;
 
   const updateFromAmount = (newAmount: string) => {
     setAmount(newAmount);
@@ -98,17 +121,14 @@ const TradeForm: React.FC<TradeFormProps> = ({
     const S = Number(stable) / Number(stableScale);
 
     const breakdown = calculateSwapBreakdown({
-      reserveIn: tradeDirection === 'assetToStable' ? A : S,
-      reserveOut: tradeDirection === 'assetToStable' ? S : A,
+      reserveIn: isBuy ? S : A,
+      reserveOut: isBuy ? A : S,
       amountIn: x,
       slippageTolerance: TOLERANCE,
     });
 
     setSwapDetails(breakdown);
-
-    const decimalPlaces = tradeDirection === 'assetToStable' ? stable_decimals : asset_decimals;
-    setExpectedAmountOut(breakdown.exactAmountOut.toFixed(decimalPlaces));
-
+    setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
     setAveragePrice(breakdown.averagePrice.toPrecision(6));
   };
 
@@ -116,15 +136,15 @@ const TradeForm: React.FC<TradeFormProps> = ({
     return tokens.filter(
       (t) =>
         t.outcome === parseInt(selectedOutcome) &&
-        t.asset_type === (tradeDirection === "assetToStable" ? 0 : 1),
+        t.asset_type === (isBuy ? 1 : 0),
     );
-  }, [tokens, selectedOutcome, tradeDirection]);
+  }, [tokens, selectedOutcome, isBuy]);
 
   // Reset error when inputs change
   useEffect(() => {
     setError(null);
     if (!amount) setAveragePrice("");
-  }, [amount, selectedOutcome, tradeDirection]);
+  }, [amount, selectedOutcome, isBuy]);
 
   useEffect(() => {
     // Calculate average price whenever liquidity data changes
@@ -154,7 +174,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
     if (amount) {
       updateFromAmount(amount);
     }
-  }, [tradeDirection, selectedOutcome]);
+  }, [isBuy, selectedOutcome]);
 
   // Helper: get the starting liquidity for the selected outcome.
   const getStartingLiquidity = (): { asset: bigint; stable: bigint } => {
@@ -264,14 +284,10 @@ const TradeForm: React.FC<TradeFormProps> = ({
   ) => {
     const client = new SuiClient({ url: getFullnodeUrl(network) });
 
-    // For asset to stable, we need asset coins. For stable to asset, we need stable coins
-    const coinType =
-      tradeDirection === "assetToStable" ? `${assetType}` : `${stableType}`;
-
     // Get coins based on selected type
     const coins = await client.getCoins({
       owner: account!.address,
-      coinType: `0x${coinType}`,
+      coinType: `0x${fromToken.type}`,
     });
 
     // Find and merge coins if needed
@@ -282,7 +298,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
     if (sortedCoins.length === 0) {
       throw new Error(
-        `No ${tradeDirection === "assetToStable" ? "asset" : "stable"} coins available in wallet`,
+        `No ${fromToken.symbol} coins available in wallet`,
       );
     }
 
@@ -302,7 +318,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
       if (totalBalance < amountBig) {
         throw new Error(
-          `Insufficient ${tradeDirection === "assetToStable" ? "asset" : "stable"} balance in wallet`,
+          `Insufficient ${fromToken.symbol} balance in wallet`,
         );
       }
 
@@ -335,19 +351,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
     try {
       setIsLoading(true);
       // Convert from human-readable to blockchain amounts
-      const amountScaled =
-        tradeDirection === "assetToStable"
-          ? BigInt(Math.floor(parseFloat(amount) * Number(assetScale)))
-          : BigInt(Math.floor(parseFloat(amount) * Number(stableScale)));
-
-      const expectedAmountOutScaled =
-        tradeDirection === "assetToStable"
-          ? BigInt(
-              Math.floor(parseFloat(expectedAmountOut) * Number(stableScale)),
-            )
-          : BigInt(
-              Math.floor(parseFloat(expectedAmountOut) * Number(assetScale)),
-            );
+      const amountScaled = BigInt(Math.floor(parseFloat(amount) * Number(fromToken.scale)))
+      const expectedAmountOutScaled = BigInt(Math.floor(parseFloat(expectedAmountOut) * Number(toToken.scale)))
 
       console.log(
         "trade-amounts (scaled)",
@@ -357,8 +362,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       const txb = new Transaction();
       txb.setGasBudget(100000000);
 
-      const existingConditionalType =
-        tradeDirection === "assetToStable" ? 0 : 1;
+      const existingConditionalType = isBuy ? 1 : 0;
       const hasExistingTokens = filteredTokens.some(
         (t) =>
           t.outcome === parseInt(selectedOutcome) &&
@@ -421,10 +425,9 @@ const TradeForm: React.FC<TradeFormProps> = ({
         const splitCoin = await handleTradeWithNewDeposit(txb, amountScaled);
 
         // Then create and swap tokens in one step
-        const swapTarget =
-          tradeDirection === "assetToStable"
-            ? `${packageId}::swap::create_and_swap_asset_to_stable_entry`
-            : `${packageId}::swap::create_and_swap_stable_to_asset_entry`;
+        const swapTarget = isBuy
+          ? `${packageId}::swap::create_and_swap_stable_to_asset_entry`
+          : `${packageId}::swap::create_and_swap_asset_to_stable_entry`;
 
         txb.moveCall({
           target: swapTarget,
@@ -470,18 +473,14 @@ const TradeForm: React.FC<TradeFormProps> = ({
         const totalBalance = existingTokens.reduce(
           (sum, token) => sum + BigInt(token.balance), 0n
         );
-        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
-        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
       } else {
         // Otherwise, get regular coins from wallet
         const client = new SuiClient({ url: getFullnodeUrl(network) });
-        const coinType = tradeDirection === 'assetToStable'
-          ? assetType
-          : stableType;
 
         const coins = await client.getCoins({
           owner: account.address,
-          coinType: `0x${coinType}`
+          coinType: `0x${fromToken.type}`
         });
 
         // Calculate total balance from coins
@@ -490,8 +489,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
         );
 
         // Convert to human-readable format based on decimals
-        const scale = tradeDirection === 'assetToStable' ? assetScale : stableScale;
-        maxAmount = (Number(totalBalance) / Number(scale)).toString();
+        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
       }
 
       // Update amount input with max value
@@ -511,7 +509,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       )}
       <div className="flex flex-col gap-2 p-3">
         {/* Outcome Selection using Select component */}
-        <Select
+        <SelectDropDown
           value={selectedOutcome}
           onChange={setSelectedOutcome}
           options={[...Array(parseInt(outcomeCount))].map((_, i) => ({
@@ -522,12 +520,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
         />
 
         {/* Buy/Sell Toggle */}
-        <TradeDirectionToggle tradeDirection={tradeDirection} setTradeDirection={setTradeDirection} />
+        <TradeDirectionToggle isBuy={isBuy} setIsBuy={setIsBuy} />
 
         {/* Trade explanation */}
         <TradeInsight
-          tradeDirection={tradeDirection}
-          setTradeDirection={setTradeDirection}
+          isBuy={isBuy}
+          setIsBuy={setIsBuy}
           selectedOutcome={selectedOutcome}
           outcomeMessages={outcome_messages}
           amount={amount}
@@ -545,26 +543,25 @@ const TradeForm: React.FC<TradeFormProps> = ({
           value={amount}
           onChange={updateFromAmount}
           placeholder="0.0"
-          symbol={tradeDirection === 'assetToStable' ? asset_symbol : stable_symbol}
-          balance={tradeDirection === 'assetToStable' ? assetBalance : stableBalance}
-          step={tradeDirection === 'assetToStable' ? 1 / Number(assetScale) : 1 / Number(stableScale)}
+          symbol={fromToken.symbol}
+          balance={fromToken.balance}
+          step={1 / Number(fromToken.scale)}
           onMaxClick={handleMaxClick}
         />
 
         {/* Two-way arrow icon */}
-        <TradeDirectionSwapButton tradeDirection={tradeDirection} setTradeDirection={setTradeDirection} />
+        <TradeDirectionSwapButton isBuy={isBuy} setIsBuy={setIsBuy} />
 
         {/* To token input */}
         <TokenInputField
           label="To"
           value={expectedAmountOut}
           placeholder="0.0"
-          symbol={tradeDirection === 'assetToStable' ? stable_symbol : asset_symbol}
-          balance={tradeDirection === 'assetToStable' ? stableBalance : assetBalance}
+          symbol={toToken.symbol}
+          balance={toToken.balance}
           readOnly={true}
-          step={tradeDirection === 'assetToStable' ? 1 / Number(stableScale) : 1 / Number(assetScale)}
+          step={1 / Number(toToken.scale)}
         />
-
 
         {/* Details of swap amounts */}
         <TradeDetails
@@ -573,7 +570,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
           swapDetails={swapDetails}
           assetSymbol={asset_symbol}
           stableSymbol={stable_symbol}
-          tradeDirection={tradeDirection}
+          isBuy={isBuy}
           tolerance={TOLERANCE}
         />
 
