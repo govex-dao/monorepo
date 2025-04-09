@@ -9,7 +9,6 @@ interface TokenInputFieldProps {
   balance: string;
   readOnly?: boolean;
   step?: number;
-  onMaxClick?: () => void;
 }
 
 const TokenInputField: React.FC<TokenInputFieldProps> = ({
@@ -21,7 +20,6 @@ const TokenInputField: React.FC<TokenInputFieldProps> = ({
   balance,
   readOnly = false,
   step,
-  onMaxClick
 }) => {
   return (
     <div className="bg-gray-800/70 rounded-lg p-3 border border-gray-700/50">
@@ -56,18 +54,8 @@ const TokenInputField: React.FC<TokenInputFieldProps> = ({
             readOnly={readOnly}
           />
         </div>
-        <div className="flex items-center">
-          {onMaxClick && (
-            <button
-              onClick={onMaxClick}
-              className="mr-2 bg-gray-700/80 hover:bg-gray-600/80 px-2 py-0.5 text-xs rounded-md text-white transition-colors duration-200 font-medium"
-            >
-              MAX
-            </button>
-          )}
-          <div className="bg-gray-700/80 px-2 py-1 rounded-md flex items-center">
-            <span className="text-white font-medium text-sm">{symbol}</span>
-          </div>
+        <div className="bg-gray-700/80 px-2 py-1 rounded-md flex items-center">
+          <span className="text-white font-medium text-sm">{symbol}</span>
         </div>
       </div>
     </div>
