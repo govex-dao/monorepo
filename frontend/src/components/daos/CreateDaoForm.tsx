@@ -123,7 +123,8 @@ const CreateDaoForm = () => {
     stableMetadata:
       "The metadata object ID for the stable coin type selected above",
     twapStartDelay: "Delay before TWAP calculations begin (in milliseconds)",
-    twapStepMax: "Maximum price change step size for TWAP price accumulation per a 60s window",
+    twapStepMax:
+      "Maximum price change step size for TWAP price accumulation per a 60s window",
     twapThreshold:
       "% difference by which an outcome must be greater than Reject to pass",
   };
@@ -390,9 +391,7 @@ const CreateDaoForm = () => {
           {/* Other advanced settings remain unchanged */}
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="block text-sm font-medium">
-                TWAP Step Max
-              </label>
+              <label className="block text-sm font-medium">TWAP Step Max</label>
               <div className="relative group">
                 <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
@@ -406,8 +405,9 @@ const CreateDaoForm = () => {
                 name="twapStepMax"
                 value={formData.twapStepMax}
                 onChange={(e) => {
-                  const cleanValue = e.target.value.replace(/[^0-9]/g, '');
-                  const value = cleanValue === '0' ? '0' : cleanValue.replace(/^0+/, '');
+                  const cleanValue = e.target.value.replace(/[^0-9]/g, "");
+                  const value =
+                    cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
                   setFormData((prev) => ({ ...prev, twapStepMax: value }));
                 }}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
