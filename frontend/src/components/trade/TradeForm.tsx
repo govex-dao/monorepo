@@ -12,7 +12,7 @@ import TradeInsight from './swap/TradeInsight';
 import TradeDetails from './swap/TradeDetails';
 import TradeDirectionToggle, { TradeDirectionSwapButton } from './swap/TradeDirectionToggle';
 import TokenInputField from './swap/TokenInputField';
-import { useTokenBalances } from '@/hooks/useTokenBalances';
+import { useTokenBalance } from '@/hooks/useTokenBalance';
 
 interface SwapEvent {
   price: string;
@@ -83,7 +83,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const TOLERANCE = 0.01;
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
-  const { assetBalance, stableBalance } = useTokenBalances({ assetType, stableType, assetScale, stableScale, network });
+  const { balance: assetBalance } = useTokenBalance({ type: assetType, scale: assetScale, network });
+  const { balance: stableBalance } = useTokenBalance({ type: stableType, scale: stableScale, network });
 
   const tokenData = {
     stable: {
