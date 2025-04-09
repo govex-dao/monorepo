@@ -1,13 +1,10 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { useState, useRef, useEffect } from "react";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 
 /**
  * A reusable custom Select component with enhanced styling and accessibility.
  */
-export function Select({
+export function SelectDropDown({
   value,
   onChange,
   options,
