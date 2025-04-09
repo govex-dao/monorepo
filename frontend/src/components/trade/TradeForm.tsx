@@ -508,47 +508,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
     }
   };
 
-  // Add a function to handle max button click
-  const handleMaxClick = async () => {
-    try {
-      if (!account) return;
-
-      // For existing conditional tokens
-      const existingTokens = filteredTokens;
-      let maxAmount = '0';
-
-      if (existingTokens.length > 0) {
-        // If we have existing conditional tokens, use their total balance
-        const totalBalance = existingTokens.reduce(
-          (sum, token) => sum + BigInt(token.balance), 0n
-        );
-        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
-      } else {
-        // Otherwise, get regular coins from wallet
-        const client = new SuiClient({ url: getFullnodeUrl(network) });
-
-        const coins = await client.getCoins({
-          owner: account.address,
-          coinType: `0x${fromToken.type}`
-        });
-
-        // Calculate total balance from coins
-        const totalBalance = coins.data.reduce(
-          (sum, coin) => sum + BigInt(coin.balance), 0n
-        );
-
-        // Convert to human-readable format based on decimals
-        maxAmount = (Number(totalBalance) / Number(fromToken.scale)).toString();
-      }
-
-      // Update amount input with max value
-      updateFromAmount(maxAmount);
-    } catch (error) {
-      console.error('Error calculating max amount:', error);
-      setError('Failed to calculate maximum amount');
-    }
-  };
-
   return (
     <div className="rounded-lg bg-gray-900 shadow-xl border border-gray-800">
       {error && (
