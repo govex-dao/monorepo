@@ -1,4 +1,4 @@
-export const SWAP_FEE_BPS = 40; // 0.4% fee in basis points
+export const SWAP_FEE_BPS = 30; // 0.3% fee in basis points
 
 /**
  * Parameters for calculating a swap
