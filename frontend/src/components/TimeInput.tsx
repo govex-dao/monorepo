@@ -1,5 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useReducer, useEffect } from "react";
+import { Tooltip } from "@radix-ui/themes";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
+
+// Constants defined outside component to avoid recreation on each render
+const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
+const MILLISECONDS_IN_HOUR = 60 * 60 * 1000;
+const MAX_HOURS = 24;
+const MIN_VALUE = 0;
 
 interface TimeInputProps {
   label: string;
@@ -8,115 +15,218 @@ interface TimeInputProps {
   onChange: (newValueMs: number) => void;
 }
 
+// State interface for our reducer
+interface TimeState {
+  days: string;
+  hours: string;
+  error?: string;
+}
+
+// Action types for our reducer
+type TimeAction =
+  | { type: "SET_DAYS"; payload: string }
+  | { type: "SET_HOURS"; payload: string }
+  | {
+      type: "NORMALIZE";
+      payload?: { forceDays?: boolean; forceHours?: boolean };
+    }
+  | { type: "SET_FROM_MS"; payload: number };
+
+// Helper functions
+const normalizeTimeValue = (
+  value: string,
+  min = MIN_VALUE,
+  max?: number,
+): number => {
+  const parsed = parseInt(value, 10) || 0;
+  if (max !== undefined) {
+    return Math.min(Math.max(parsed, min), max);
+  }
+  return Math.max(parsed, min);
+};
+
+const calculateMs = (days: number, hours: number): number => {
+  return days * MILLISECONDS_IN_DAY + hours * MILLISECONDS_IN_HOUR;
+};
+
+// Reducer function for managing time state
+const timeReducer = (state: TimeState, action: TimeAction): TimeState => {
+  switch (action.type) {
+    case "SET_DAYS":
+      return { ...state, days: action.payload, error: undefined };
+
+    case "SET_HOURS":
+      return { ...state, hours: action.payload, error: undefined };
+
+    case "NORMALIZE": {
+      const { forceDays = false, forceHours = false } = action.payload || {};
+      const normalizedDays = forceDays
+        ? String(normalizeTimeValue(state.days))
+        : state.days;
+      const normalizedHours = forceHours
+        ? String(normalizeTimeValue(state.hours, MIN_VALUE, MAX_HOURS))
+        : state.hours;
+
+      return {
+        days: normalizedDays,
+        hours: normalizedHours,
+        error: undefined,
+      };
+    }
+
+    case "SET_FROM_MS": {
+      const days = Math.floor(action.payload / MILLISECONDS_IN_DAY);
+      const hours = Math.floor(
+        (action.payload % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR,
+      );
+
+      return {
+        days: String(days),
+        hours: String(hours),
+        error: undefined,
+      };
+    }
+
+    default:
+      return state;
+  }
+};
+
 const TimeInput: React.FC<TimeInputProps> = ({
   label,
   tooltip,
   valueMs,
   onChange,
 }) => {
-  const MILLISECONDS_IN_DAY = 24 * 60 * 60 * 1000;
-  const MILLISECONDS_IN_HOUR = 60 * 60 * 1000;
-
-  // Calculate initial days and hours from the given milliseconds.
+  // Calculate initial values
   const initialDays = Math.floor(valueMs / MILLISECONDS_IN_DAY);
   const initialHours = Math.floor(
     (valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR,
   );
 
-  // Local state to control the input values as strings.
-  const [daysInput, setDaysInput] = useState<string>(String(initialDays));
-  const [hoursInput, setHoursInput] = useState<string>(String(initialHours));
+  // Use reducer for state management
+  const [timeState, dispatch] = useReducer(timeReducer, {
+    days: String(initialDays),
+    hours: String(initialHours),
+  });
 
-  // Update local state if the external value changes.
+  // Helper function to call onChange with calculated ms value
+  const handleValueChange = (days: number, hours: number) => {
+    onChange(calculateMs(days, hours));
+  };
+
+  // Update state if external value changes
   useEffect(() => {
-    const newDays = Math.floor(valueMs / MILLISECONDS_IN_DAY);
-    const newHours = Math.floor(
-      (valueMs % MILLISECONDS_IN_DAY) / MILLISECONDS_IN_HOUR,
-    );
-    setDaysInput(String(newDays));
-    setHoursInput(String(newHours));
+    dispatch({ type: "SET_FROM_MS", payload: valueMs });
   }, [valueMs]);
 
-  // Handle days change: update local state and notify parent if valid.
+  // Handle days input change
   const handleDaysChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
-    setDaysInput(inputValue);
+    dispatch({ type: "SET_DAYS", payload: inputValue });
+
     const parsedDays = parseInt(inputValue, 10);
     if (!isNaN(parsedDays)) {
-      const parsedHours = parseInt(hoursInput, 10) || 0;
-      onChange(
-        parsedDays * MILLISECONDS_IN_DAY + parsedHours * MILLISECONDS_IN_HOUR,
+      const parsedHours = normalizeTimeValue(
+        timeState.hours,
+        MIN_VALUE,
+        MAX_HOURS,
       );
+      handleValueChange(parsedDays, parsedHours);
     }
   };
 
-  // Handle hours change: update local state and notify parent if valid.
+  // Handle hours input change
   const handleHoursChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const inputValue = e.target.value;
-    setHoursInput(inputValue);
+    dispatch({ type: "SET_HOURS", payload: inputValue });
+
     const parsedHours = parseInt(inputValue, 10);
     if (!isNaN(parsedHours)) {
-      // Clamp hours between 0 and 24.
-      const normalizedHours = Math.min(Math.max(parsedHours, 0), 24);
-      const parsedDays = parseInt(daysInput, 10) || 0;
-      onChange(
-        parsedDays * MILLISECONDS_IN_DAY +
-          normalizedHours * MILLISECONDS_IN_HOUR,
+      // Consistently normalize hours before notifying parent
+      const normalizedHours = normalizeTimeValue(
+        inputValue,
+        MIN_VALUE,
+        MAX_HOURS,
       );
+      const parsedDays = normalizeTimeValue(timeState.days);
+      handleValueChange(parsedDays, normalizedHours);
     }
   };
 
-  // On blur for days: normalize the input by clamping any negative values to 0.
+  // Handle blur events
   const handleDaysBlur = () => {
-    const parsed = Math.max(0, parseInt(daysInput, 10) || 0);
-    setDaysInput(String(parsed));
+    dispatch({ type: "NORMALIZE", payload: { forceDays: true } });
+    const days = normalizeTimeValue(timeState.days);
+    const hours = normalizeTimeValue(timeState.hours, MIN_VALUE, MAX_HOURS);
+    onChange(calculateMs(days, hours));
   };
 
-  // On blur for hours: normalize and clamp the input between 0 and 24.
   const handleHoursBlur = () => {
-    const parsed = parseInt(hoursInput, 10) || 0;
-    const clamped = Math.min(Math.max(parsed, 0), 24);
-    setHoursInput(String(clamped));
+    dispatch({ type: "NORMALIZE", payload: { forceHours: true } });
+    const days = normalizeTimeValue(timeState.days);
+    const hours = normalizeTimeValue(timeState.hours, MIN_VALUE, MAX_HOURS);
+    onChange(calculateMs(days, hours));
   };
 
   return (
     <div className="space-y-2">
       <div className="flex items-center space-x-2">
-        <label className="block text-sm font-medium">{label}</label>
-        <div className="relative group">
-          <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-          <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-            {tooltip}
-          </div>
-        </div>
+        <label className="block text-sm font-medium" id="time-input-label">
+          {label}
+        </label>
+        <Tooltip content={tooltip}>
+          <button
+            type="button"
+            className="inline-flex"
+            aria-label={`Information about ${label}`}
+          >
+            <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600" />
+          </button>
+        </Tooltip>
       </div>
-      <div className="flex space-x-2">
+      <div
+        className="flex space-x-2"
+        role="group"
+        aria-labelledby="time-input-label"
+      >
         <div className="flex-1">
-          <label className="block text-xs">Days</label>
+          <label htmlFor="days-input" className="block text-xs">
+            Days
+          </label>
           <input
+            id="days-input"
             type="number"
-            value={daysInput}
+            value={timeState.days}
             onChange={handleDaysChange}
             onBlur={handleDaysBlur}
             className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
             min="0"
             step="1"
+            aria-label="Days"
           />
         </div>
         <div className="flex-1">
-          <label className="block text-xs">Hours</label>
+          <label htmlFor="hours-input" className="block text-xs">
+            Hours
+          </label>
           <input
+            id="hours-input"
             type="number"
-            value={hoursInput}
+            value={timeState.hours}
             onChange={handleHoursChange}
             onBlur={handleHoursBlur}
             className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
             min="0"
             max="24"
             step="1"
+            aria-label="Hours"
           />
         </div>
       </div>
+      {timeState.error && (
+        <p className="text-sm text-red-500">{timeState.error}</p>
+      )}
     </div>
   );
 };

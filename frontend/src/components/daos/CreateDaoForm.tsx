@@ -32,17 +32,6 @@ interface CoinMetadata {
   decimals: number;
 }
 
-interface Props {
-  formData: FormData;
-  setFormData: React.Dispatch<React.SetStateAction<FormData>>;
-  tooltips: {
-    reviewPeriodMs: string;
-    twapStartDelay: string;
-    tradingPeriodMs: string;
-  };
-  showAdvanced: boolean;
-}
-
 const CreateDaoForm = () => {
   const [formData, setFormData] = useState<FormData>({
     assetType: DEFAULT_ASSET_TYPE,
