@@ -77,6 +77,8 @@ const TabSection: React.FC<TabSectionProps> = ({
           asset_type={proposal.asset_type}
           stable_type={proposal.stable_type}
           outcome_count={proposal.outcome_count}
+          asset_decimals={proposal.dao.asset_decimals}
+          stable_decimals={proposal.dao.stable_decimals}
         />
       )}
       {activeTab === "description" && <Description details={details} />}
