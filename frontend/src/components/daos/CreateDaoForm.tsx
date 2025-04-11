@@ -422,32 +422,37 @@ const CreateDaoForm = () => {
             </div>
           </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <label className="block text-sm font-medium">TWAP Initial Observation</label>
-            <div className="relative group">
-              <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                {tooltips.twapInitialObservation}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium">
+                TWAP Initial Observation
+              </label>
+              <div className="relative group">
+                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {tooltips.twapInitialObservation}
+                </div>
               </div>
             </div>
+            <div className="relative">
+              <input
+                type="text"
+                name="twapInitialObservation"
+                value={formData.twapInitialObservation}
+                onChange={(e) => {
+                  const cleanValue = e.target.value.replace(/[^0-9]/g, "");
+                  const value =
+                    cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
+                  setFormData((prev) => ({
+                    ...prev,
+                    twapInitialObservation: value,
+                  }));
+                }}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
+                required
+              />
+            </div>
           </div>
-          <div className="relative">
-            <input
-              type="text"
-              name="twapInitialObservation"
-              value={formData.twapInitialObservation}
-              onChange={(e) => {
-                const cleanValue = e.target.value.replace(/[^0-9]/g, "");
-                const value =
-                  cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
-                setFormData((prev) => ({ ...prev, twapInitialObservation: value }));
-              }}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
-              required
-            />
-          </div>
-        </div>
 
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
