@@ -62,8 +62,8 @@ public fun new<AssetType, StableType>(
         market_state,
         escrowed_asset: balance::zero(), // Initial liquidity goes directly to escrowed
         escrowed_stable: balance::zero(),
-        outcome_asset_supplies: vector::empty(),
-        outcome_stable_supplies: vector::empty(),
+        outcome_asset_supplies: vector[],
+        outcome_stable_supplies: vector[],
     }
 }
 
@@ -94,7 +94,7 @@ public fun deposit_initial_liquidity<AssetType, StableType>(
 ) {
     let asset_amount = balance::value(&initial_asset);
     let stable_amount = balance::value(&initial_stable);
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
 
     // 1. Add to escrow balances
     balance::join(&mut escrow.escrowed_asset, initial_asset);
@@ -169,7 +169,7 @@ public fun remove_liquidity<AssetType, StableType>(
     stable_amount: u64,
     ctx: &mut TxContext,
 ) {
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
 
     // Verify there's enough liquidity to withdraw
     assert!(balance::value(&escrow.escrowed_asset) >= asset_amount, ENOT_ENOUGH_LIQUIDITY);
@@ -257,7 +257,7 @@ fun verify_token_set<AssetType, StableType>(
         assert!(token::asset_type(token) == token_type, EWRONG_TOKEN_TYPE);
         assert!(token::value(token) == amount, EINSUFFICIENT_BALANCE);
 
-        let outcome = token::outcome(token);
+        let outcome = token.outcome();
         let outcome_idx = (outcome as u64);
 
         // Verify outcome is valid and not seen before
@@ -348,7 +348,7 @@ public entry fun redeem_complete_set_asset_entry<AssetType, StableType>(
 ) {
     let balance = redeem_complete_set_asset(escrow, tokens, clock, ctx);
     let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(coin, ctx.sender());
 }
 
 // Entry function for stable redemption
@@ -360,7 +360,7 @@ public entry fun redeem_complete_set_stable_entry<AssetType, StableType>(
 ) {
     let balance = redeem_complete_set_stable(escrow, tokens, clock, ctx);
     let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(coin, ctx.sender());
 }
 
 // Asset token redemption for winning outcome
@@ -446,7 +446,7 @@ public entry fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
 ) {
     let balance = redeem_winning_tokens_asset(escrow, token, clock, ctx);
     let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(coin, ctx.sender());
 }
 
 // Entry function for stable winning token redemption
@@ -458,7 +458,7 @@ public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
 ) {
     let balance = redeem_winning_tokens_stable(escrow, token, clock, ctx);
     let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
+    transfer::public_transfer(coin, ctx.sender());
 }
 
 // Event for token redemption
@@ -486,7 +486,7 @@ public fun mint_complete_set_asset<AssetType, StableType>(
     balance::join(&mut escrow.escrowed_asset, balance_in);
 
     // Mint tokens for each outcome
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
     let mut tokens = vector::empty<token::ConditionalToken>();
     let mut i = 0;
     while (i < outcome_count) {
@@ -513,7 +513,7 @@ public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     let mut tokens = mint_complete_set_asset(escrow, coin_in, clock, ctx);
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
     let tokens_count = vector::length(&tokens);
     let mut i = 0;
     while (i < tokens_count) {
@@ -544,7 +544,7 @@ public fun mint_complete_set_stable<AssetType, StableType>(
     balance::join(&mut escrow.escrowed_stable, balance_in);
 
     // Mint tokens for each outcome
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
     let mut tokens = vector::empty<token::ConditionalToken>();
     let mut i = 0;
     while (i < outcome_count) {
@@ -572,7 +572,7 @@ public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     let mut tokens = mint_complete_set_stable(escrow, coin_in, clock, ctx);
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
 
     let len = vector::length(&tokens);
     let mut i = 0;
@@ -611,7 +611,7 @@ public fun swap_token_asset_to_stable<AssetType, StableType>(
         ms,
         stable_supply,
         amount_out,
-        tx_context::sender(ctx),
+        ctx.sender(),
         clock,
         ctx,
     );
@@ -643,7 +643,7 @@ public fun swap_token_stable_to_asset<AssetType, StableType>(
         ms,
         asset_supply,
         amount_out,
-        tx_context::sender(ctx),
+        ctx.sender(),
         clock,
         ctx,
     );

@@ -63,7 +63,7 @@ public(package) fun new(
     clock: &Clock,
     ctx: &mut TxContext,
 ): MarketState {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
 
     let state = MarketState {
         id: object::new(ctx),
@@ -89,7 +89,7 @@ public(package) fun new(
 public(package) fun start_trading(state: &mut MarketState, duration_ms: u64, clock: &Clock) {
     assert!(!state.status.trading_started, ETRADING_ALREADY_STARTED);
 
-    let start_time = clock::timestamp_ms(clock);
+    let start_time = clock.timestamp_ms();
     let end_time = start_time + duration_ms;
 
     state.status.trading_started = true;
@@ -116,7 +116,7 @@ public(package) fun end_trading(state: &mut MarketState, clock: &Clock) {
     assert!(state.status.trading_started, ETRADING_NOT_STARTED);
     assert!(!state.status.trading_ended, ETRADING_ALREADY_ENDED);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     state.status.trading_ended = true;
 
     event::emit(TradingEndedEvent {
@@ -130,7 +130,7 @@ public(package) fun finalize(state: &mut MarketState, winner: u64, clock: &Clock
     assert!(!state.status.finalized, EALREADY_FINALIZED);
     assert!(winner < state.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     state.status.finalized = true;
     state.winning_outcome = option::some(winner);
     state.finalization_time = option::some(timestamp);
@@ -197,7 +197,7 @@ public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
         id: object::new(ctx),
         market_id,
         dao_id: market_id,
-        outcome_messages: vector::empty(),
+        outcome_messages: vector[],
         outcome_count: outcomes,
         status: MarketStatus {
             trading_started: false,

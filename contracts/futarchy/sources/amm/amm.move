@@ -152,7 +152,7 @@ public(package) fun swap_asset_to_stable(
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
     write_observation(
         &mut pool.oracle,
@@ -171,7 +171,7 @@ public(package) fun swap_asset_to_stable(
         amount_out, // Amount after fee for event logging
         price_impact,
         price: current_price,
-        sender: tx_context::sender(ctx),
+        sender: ctx.sender(),
         asset_reserve: pool.asset_reserve,
         stable_reserve: pool.stable_reserve,
         timestamp,
@@ -225,7 +225,7 @@ public(package) fun swap_stable_to_asset(
     pool.asset_reserve = pool.asset_reserve - amount_out;
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
     write_observation(
         &mut pool.oracle,
@@ -244,7 +244,7 @@ public(package) fun swap_stable_to_asset(
         amount_out,
         price_impact,
         price: current_price,
-        sender: tx_context::sender(ctx),
+        sender: ctx.sender(),
         asset_reserve: pool.asset_reserve,
         stable_reserve: pool.stable_reserve,
         timestamp,
@@ -345,7 +345,7 @@ public fun get_current_price(pool: &LiquidityPool): u128 {
 }
 
 public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Clock) {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let current_price = get_current_price(pool);
     // Use the sum of reserves as a liquidity measure
     oracle::write_observation(&mut pool.oracle, timestamp, current_price);
@@ -433,6 +433,6 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         oracle,
         protocol_fees: _,
     } = pool;
-    object::delete(id);
-    oracle::destroy_for_testing(oracle);
+    id.delete();
+    oracle.destroy_for_testing();
 }

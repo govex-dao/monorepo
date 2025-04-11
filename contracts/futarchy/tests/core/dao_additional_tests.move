@@ -101,7 +101,7 @@ fun test_create_dao_with_invalid_decimals_diff() {
         );
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -146,7 +146,7 @@ fun test_create_dao_with_large_decimals() {
         );
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -226,7 +226,7 @@ fun test_create_proposal_with_title_too_long() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -306,7 +306,7 @@ fun test_create_proposal_with_metadata_too_long() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -380,7 +380,7 @@ fun test_create_proposal_with_empty_title() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -461,7 +461,7 @@ fun test_create_proposal_with_wrong_asset_type() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -542,7 +542,7 @@ fun test_create_proposal_with_wrong_stable_type() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -623,7 +623,7 @@ fun test_create_proposal_when_disabled() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -720,7 +720,7 @@ fun test_sign_result_nonexistent_proposal() {
         test_scenario::return_shared(escrow);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -872,7 +872,7 @@ fun test_sign_result_already_executed() {
         test_scenario::return_shared(dao);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -932,7 +932,7 @@ fun test_verification_functions() {
     // In a real test within the futarchy package, we would need to create
     // test-only wrappers for these functions.
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -1010,7 +1010,7 @@ fun test_create_proposal_with_insufficient_amounts() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -1099,6 +1099,6 @@ fun test_create_proposal_with_invalid_outcome_count() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }

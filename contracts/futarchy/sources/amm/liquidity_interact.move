@@ -27,7 +27,7 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
 ) {
     assert!(outcome_idx < proposal::outcome_count(proposal), EINVALID_OUTCOME);
     assert!(proposal::get_state(proposal) == STATE_FINALIZED, EINVALID_STATE);
-    assert!(tx_context::sender(ctx) == proposal::proposer(proposal), EINVALID_LIQUIDITY_TRANSFER);
+    assert!(ctx.sender() == proposal::proposer(proposal), EINVALID_LIQUIDITY_TRANSFER);
     assert!(outcome_idx == proposal::get_winning_outcome(proposal), EWRONG_OUTCOME);
 
     let market_state = coin_escrow::get_market_state(escrow);

@@ -108,8 +108,8 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
     };
 
     public_share_object(factory);
-    public_transfer(owner_cap, tx_context::sender(ctx));
-    public_transfer(validator_cap, tx_context::sender(ctx));
+    public_transfer(owner_cap, ctx.sender());
+    public_transfer(validator_cap, ctx.sender());
 
     // Consuming the witness ensures one-time initialization.
     let _ = witness;
@@ -239,9 +239,9 @@ public entry fun request_verification(
     event::emit(VerificationRequested {
         dao_id: object::id(dao),
         verification_id: verification_id_inner,
-        requester: tx_context::sender(ctx),
+        requester: ctx.sender(),
         attestation_url,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -265,8 +265,8 @@ public entry fun verify_dao(
         verification_id,
         attestation_url,
         verified,
-        validator: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        validator: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
         reject_reason,
     });
 }
@@ -284,8 +284,8 @@ public entry fun add_allowed_stable_type<StableType>(
 
         event::emit(StableCoinTypeAdded {
             type_str,
-            admin: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            admin: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
     }
 }
@@ -302,8 +302,8 @@ public entry fun remove_allowed_stable_type<StableType>(
 
         event::emit(StableCoinTypeRemoved {
             type_str,
-            admin: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            admin: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
     }
 }
@@ -363,8 +363,8 @@ public fun create_factory(ctx: &mut TxContext) {
     };
 
     public_share_object(factory);
-    public_transfer(owner_cap, tx_context::sender(ctx));
-    public_transfer(validator_cap, tx_context::sender(ctx));
+    public_transfer(owner_cap, ctx.sender());
+    public_transfer(validator_cap, ctx.sender());
 }
 
 #[test_only]

@@ -83,7 +83,7 @@ fun add_asset_balance<AssetType, StableType>(
     let coin = coin::mint_for_testing<AssetType>(amount, ctx);
     let clock = clock::create_for_testing(ctx);
     coin_escrow::mint_complete_set_asset_entry(escrow, coin, &clock, ctx);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 }
 
 // Helper function to add stable balance to escrow
@@ -96,7 +96,7 @@ fun add_stable_balance<AssetType, StableType>(
     let coin = coin::mint_for_testing<StableType>(amount, ctx);
     let clock = clock::create_for_testing(ctx);
     coin_escrow::mint_complete_set_stable_entry(escrow, coin, &clock, ctx);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 }
 
 #[test]
@@ -187,7 +187,7 @@ fun test_mint_and_redeem_complete_set() {
 
     // Clean up resources
     balance::destroy_for_testing(redeemed_balance);
-    sui::clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_utils::destroy(escrow);
 }
 
@@ -239,7 +239,7 @@ fun test_deposit_initial_liquidity() {
     assert!(stable_balance == 2000, 1);
 
     // Clean up
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     market_state::destroy_for_testing(ms);
     test_utils::destroy(escrow);
 }
@@ -329,7 +329,7 @@ fun test_mint_and_redeem_complete_set_stable() {
 
     // Clean up
     balance::destroy_for_testing(redeemed_balance);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     market_state::destroy_for_testing(ms);
     test_utils::destroy(escrow);
 }

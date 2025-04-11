@@ -97,7 +97,7 @@ fun test_create_proposal() {
         test::return_shared(escrow);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -164,7 +164,7 @@ fun test_basic_state_transition() {
         test::return_shared(escrow);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -220,6 +220,6 @@ fun test_state_transitions() {
         test::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }

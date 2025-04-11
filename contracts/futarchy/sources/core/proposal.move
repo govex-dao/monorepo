@@ -118,8 +118,8 @@ public fun create<AssetType, StableType>(
         let amounts = option::destroy_some(initial_outcome_amounts);
         assert!(vector::length(&amounts) == outcome_count * 2, EINVALID_POOL_LENGTH);
 
-        let mut asset_amounts = vector::empty();
-        let mut stable_amounts = vector::empty();
+        let mut asset_amounts = vector[];
+        let mut stable_amounts = vector[];
         let mut max_asset = 0;
         let mut max_stable = 0;
 
@@ -150,8 +150,8 @@ public fun create<AssetType, StableType>(
         (asset_amounts, stable_amounts)
     } else {
         // Default to equal distribution if no initial amounts specified
-        let mut asset_amounts = vector::empty();
-        let mut stable_amounts = vector::empty();
+        let mut asset_amounts = vector[];
+        let mut stable_amounts = vector[];
         let mut i = 0;
         while (i < outcome_count) {
             vector::push_back(&mut asset_amounts, asset_value);
@@ -161,7 +161,7 @@ public fun create<AssetType, StableType>(
         (asset_amounts, stable_amounts)
     };
 
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     let id = object::new(ctx);
     let proposal_id = object::uid_to_inner(&id);
 
@@ -193,7 +193,7 @@ public fun create<AssetType, StableType>(
         twap_start_delay,
         twap_initial_observation,
         twap_step_max,
-        clock::timestamp_ms(clock),
+        clock.timestamp_ms(),
         initial_asset,
         initial_stable,
         clock,
@@ -202,7 +202,7 @@ public fun create<AssetType, StableType>(
 
     let proposal = Proposal<AssetType, StableType> {
         id,
-        created_at: clock::timestamp_ms(clock),
+        created_at: clock.timestamp_ms(),
         state: STATE_REVIEW,
         outcome_count,
         dao_id,
@@ -215,8 +215,8 @@ public fun create<AssetType, StableType>(
         details,
         metadata,
         outcome_messages,
-        twap_prices: vector::empty(),
-        last_twap_update: clock::timestamp_ms(clock),
+        twap_prices: vector[],
+        last_twap_update: clock.timestamp_ms(),
         review_period_ms,
         trading_period_ms,
         min_asset_liquidity,
@@ -379,7 +379,7 @@ public fun get_metadata<AssetType, StableType>(
 public fun get_amm_pool_ids<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<ID> {
-    let mut ids = vector::empty();
+    let mut ids = vector[];
     let mut i = 0;
     let len = vector::length(&proposal.amm_pools);
     while (i < len) {

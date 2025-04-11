@@ -51,7 +51,7 @@ fun test_create_market_state() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -72,7 +72,7 @@ fun test_start_trading() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -95,7 +95,7 @@ fun test_end_trading() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -120,7 +120,7 @@ fun test_finalize_market() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -139,7 +139,7 @@ fun test_start_trading_twice() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -157,7 +157,7 @@ fun test_end_trading_without_starting() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -177,7 +177,7 @@ fun test_end_trading_twice() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -196,7 +196,7 @@ fun test_finalize_without_ending_trading() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -217,7 +217,7 @@ fun test_finalize_twice() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -237,7 +237,7 @@ fun test_finalize_with_invalid_outcome() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -257,7 +257,7 @@ fun test_get_winning_outcome_before_finalization() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -291,7 +291,7 @@ fun test_assert_functions() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -309,7 +309,7 @@ fun test_assert_trading_active_fails_when_not_started() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -331,7 +331,7 @@ fun test_assert_trading_active_fails_when_ended() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -354,7 +354,7 @@ fun test_assert_not_finalized_fails_when_finalized() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -372,7 +372,7 @@ fun test_assert_market_finalized_fails_when_not_finalized() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -390,7 +390,7 @@ fun test_validate_outcome_fails_with_invalid_outcome() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -440,7 +440,7 @@ fun test_getter_functions() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -474,7 +474,7 @@ fun test_full_market_lifecycle() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -496,7 +496,7 @@ fun test_assert_in_trading_or_pre_trading_fails_when_ended() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -517,7 +517,7 @@ fun test_trading_with_zero_duration() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -544,7 +544,7 @@ fun test_trading_with_very_short_duration() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -566,7 +566,7 @@ fun test_trading_with_maximum_duration() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }
@@ -590,7 +590,7 @@ fun test_assert_in_trading_or_pre_trading_fails_when_finalized() {
 
         // Clean up
         market_state::destroy_for_testing(market);
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     };
     test::end(scenario);
 }

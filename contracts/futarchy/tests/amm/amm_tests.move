@@ -51,7 +51,7 @@ fun setup_market(scenario: &mut Scenario, clock: &Clock): (MarketState) {
 
     market_state::start_trading(
         &mut state,
-        clock::timestamp_ms(clock),
+        clock.timestamp_ms(),
         clock,
     );
 
@@ -67,7 +67,7 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(clock),
+        clock.timestamp_ms(),
         ctx(scenario),
     )
 }
@@ -90,7 +90,7 @@ fun test_pool_creation() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -121,7 +121,7 @@ fun test_swap_asset_to_stable() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -164,7 +164,7 @@ fun test_swap_stable_to_asset() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -201,7 +201,7 @@ fun test_oracle_price_updates() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -235,7 +235,7 @@ fun test_empty_all_amm_liquidity() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -287,7 +287,7 @@ fun test_protocol_fee_accumulation() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -339,7 +339,7 @@ fun test_quote_functions() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -389,7 +389,7 @@ fun test_twap_updates() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -481,7 +481,7 @@ fun test_price_impact_on_different_swap_sizes() {
     };
 
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -512,7 +512,7 @@ fun test_excessive_slippage_protection() {
     // This should never execute due to expected failure
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -538,7 +538,7 @@ fun test_zero_amount_swap_asset_to_stable() {
     // This should never execute due to expected failure
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -563,7 +563,7 @@ fun test_zero_amount_swap_stable_to_asset() {
     // This should never execute due to expected failure
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -595,7 +595,7 @@ fun test_swap_with_empty_pool() {
     // This should never execute due to expected failure
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
 
@@ -665,6 +665,6 @@ fun test_swap_round_trip() {
 
     amm::destroy_for_testing(pool);
     market_state::destroy_for_testing(state);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
