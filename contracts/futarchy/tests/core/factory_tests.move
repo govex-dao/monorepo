@@ -39,6 +39,7 @@ module futarchy::factory_tests {
     const TEST_DAO_NAME: vector<u8> = b"TestDAO";
     const TEST_DAO_URL: vector<u8> = b"https://test.com";
     const TWAP_THRESHOLD: u64 = 1_000;
+    const TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
 
     fun mint_sui(amount: u64, ctx: &mut sui::tx_context::TxContext): Coin<SUI> {
         coin::mint_for_testing(amount, ctx)
@@ -142,6 +143,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+                TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 clock,
                 ctx(scenario),
@@ -408,6 +410,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),
@@ -474,6 +477,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),
@@ -600,6 +604,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),
@@ -646,6 +651,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),
@@ -691,6 +697,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),
@@ -743,6 +750,7 @@ module futarchy::factory_tests {
                 &stable_metadata,
                 60_000,
                 300_000,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 &clock,
                 ctx(&mut scenario),

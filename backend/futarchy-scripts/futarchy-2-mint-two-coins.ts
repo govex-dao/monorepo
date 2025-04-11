@@ -35,7 +35,7 @@ const performMinting = async (amount: number) => {
         await mintCoins({
             amount: amount,
             recipientAddress: getActiveAddress(),
-            network: 'devnet',
+            network: 'testnet',
             packageId: assetPub.packageId,
             treasuryCapId: assetPub.treasuryCapId,
             number: 1,
@@ -49,7 +49,7 @@ const performMinting = async (amount: number) => {
         await mintCoins({
             amount: amount,
             recipientAddress: getActiveAddress(),
-            network: 'devnet',
+            network: 'testnet',
             packageId: stablePub.packageId,
             treasuryCapId: stablePub.treasuryCapId,
             number: 2,

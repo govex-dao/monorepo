@@ -59,6 +59,7 @@ interface ApiProposal {
   review_period_ms: string; // Using string since other number fields are strings
   trading_period_ms: string; // Using string since other number fields are strings
   initial_outcome_amounts?: string[]; // Optional array of strings
+  twap_initial_observation: string;
   twap_start_delay: string; // Using string since other number fields are strings
   twap_step_max: string; // Using string since other number fields are strings
   twap_threshold: string;

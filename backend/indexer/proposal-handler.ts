@@ -22,6 +22,7 @@ interface ProposalCreated {
     trading_period_ms: string;
     initial_outcome_amounts: string[] | null;  // Handle Option<vector<u64>>
     twap_start_delay: string;
+    twap_initial_observation: string;
     twap_step_max: string;
     twap_threshold: string;
     oracle_ids: string[];
@@ -94,6 +95,7 @@ function formatProposalData(data: ProposalCreated): Prisma.ProposalCreateInput {
         trading_period_ms: safeBigInt(data.trading_period_ms),
         initial_outcome_amounts: data.initial_outcome_amounts ? JSON.stringify(data.initial_outcome_amounts) : null,
         twap_start_delay: safeBigInt(data.twap_start_delay),
+        twap_initial_observation: safeBigInt(data.twap_initial_observation),
         twap_step_max: safeBigInt(data.twap_step_max),
         twap_threshold: safeBigInt(data.twap_threshold),
         twapHistory: {

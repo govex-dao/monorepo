@@ -23,6 +23,7 @@ const DAO: address = @0xda0;
 const MIN_ASSET_LIQUIDITY: u64 = 1_000_000;
 const MIN_STABLE_LIQUIDITY: u64 = 1_000_000;
 const STARTING_TIMESTAMP: u64 = 1_000_000_000;
+const TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
 const TWAP_START_DELAY: u64 = 100;
 const TWAP_STEP_MAX: u64 = 10000;
 
@@ -58,6 +59,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         string::utf8(b"Test Metadata"), // metadata
         outcome_messages,
         TWAP_START_DELAY,
+        TWAP_INITIAL_OBSERVATION,
         TWAP_STEP_MAX,
         option::none<vector<u64>>(), // initial_outcome_amounts
         TWAP_THRESHOLD,

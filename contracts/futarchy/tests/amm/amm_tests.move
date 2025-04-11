@@ -23,8 +23,6 @@ const BASIS_POINTS: u64 = 1_000_000_000_000;
 const TWAP_START_DELAY: u64 = 2000;
 const TWAP_STEP_MAX: u64 = 1000;
 const OUTCOME_COUNT: u64 = 2;
-const MIN_ASSET_AMOUNT: u64 = 1000000000;
-const MIN_STABLE_AMOUNT: u64 = 1000000000;
 
 // ======== Test Setup Functions ========
 fun setup_test(): (Scenario, Clock) {
@@ -66,11 +64,10 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         0, // outcome_idx
         INITIAL_ASSET,
         INITIAL_STABLE,
+        (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
         clock::timestamp_ms(clock),
-        MIN_ASSET_AMOUNT,
-        MIN_STABLE_AMOUNT,
         ctx(scenario),
     )
 }

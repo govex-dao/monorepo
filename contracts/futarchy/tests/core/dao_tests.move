@@ -18,6 +18,7 @@ public struct ASSET has copy, drop {}
 public struct STABLE has copy, drop {}
 
 const DEFAULT_TWAP_START_DELAY: u64 = 60_000;
+const DEFAULT_TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
 const DEFAULT_TWAP_STEP_MAX: u64 = 300_000;
 const TEST_DAO_NAME: vector<u8> = b"TestDAO";
 const TEST_DAO_URL: vector<u8> = b"https://test.com";
@@ -82,6 +83,7 @@ fun test_create_dao() {
             std::ascii::string(STABLE_SYMBOL), // stable_symbol
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -105,9 +107,10 @@ fun test_create_dao() {
         assert!(min_stable == 2000, 3);
 
         // Verify default AMM config
-        let (twap_start_delay, twap_step_max) = dao::get_amm_config(&dao);
+        let (twap_start_delay, twap_step_max, twap_initial_observation) = dao::get_amm_config(&dao);
         assert!(twap_start_delay == DEFAULT_TWAP_START_DELAY, 7);
         assert!(twap_step_max == DEFAULT_TWAP_STEP_MAX, 8);
+        assert!(twap_initial_observation == DEFAULT_TWAP_INITIAL_OBSERVATION, 9);
 
         // Return the DAO to the scenario
         test_scenario::return_shared(dao);
@@ -147,6 +150,7 @@ fun test_create_valid_proposal() {
             std::ascii::string(STABLE_SYMBOL), // stable_symbol
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -229,6 +233,7 @@ fun test_create_proposal_invalid_messages() {
             std::ascii::string(STABLE_SYMBOL), // stable_symbol
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -313,6 +318,7 @@ fun test_create_proposal_empty_details() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -389,6 +395,7 @@ fun test_query_functions() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -487,6 +494,7 @@ fun test_sign_result_entry() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -621,6 +629,7 @@ fun test_create_proposal_with_initial_amounts() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -708,6 +717,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -789,6 +799,7 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             std::ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             &clock,
             test_scenario::ctx(&mut scenario),
