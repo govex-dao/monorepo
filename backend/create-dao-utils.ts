@@ -164,9 +164,10 @@ export const createDao = async ({
                 txb.pure.u64(trading_period_ms), // New argument
                 txb.object(asset_metadata),
                 txb.object(stable_metadata),
-                txb.pure.u64(60_000),
-                txb.pure.u64(100),
-                txb.pure.u64(50),
+                txb.pure.u64(60_000), //amm_twap_start_delay
+                txb.pure.u64(10000),  //  amm_twap_step_max
+                txb.pure.u128(10000000), // twap initial observation
+                txb.pure.u64(50), //twap_threshold
                 txb.object('0x6')        // <CLOCK_OBJECT_ID>
             ],
         });

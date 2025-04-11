@@ -59,11 +59,10 @@ public(package) fun new_pool(
     outcome_idx: u8,
     initial_asset: u64,
     initial_stable: u64,
+    twap_initial_observation: u128,
     twap_start_delay: u64,
     twap_step_max: u64,
     start_time: u64,
-    min_stable: u64,
-    min_asset: u64,
     ctx: &mut TxContext,
 ): LiquidityPool {
     // Same validations
@@ -71,7 +70,7 @@ public(package) fun new_pool(
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELOW_LIQUIDITY);
 
-    let twap_initialization_price = math::mul_div_to_128(min_stable, BASIS_POINTS, min_asset);
+    let twap_initialization_price = twap_initial_observation;
     let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
 
     check_price_under_max(initial_price);

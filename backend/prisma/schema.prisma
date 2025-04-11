@@ -43,6 +43,7 @@ model Dao {
   trading_period_ms BigInt
   amm_twap_start_delay BigInt
   amm_twap_step_max BigInt
+  amm_twap_initial_observation BigInt
   twap_threshold BigInt
   proposals Proposal[]
   verificationRequests DaoVerificationRequest[]
@@ -75,6 +76,7 @@ model Proposal {
   initial_outcome_amounts String?  // Stored as JSON string for the Option<vector<u64>>
   twap_start_delay BigInt
   twap_step_max BigInt
+  twap_initial_observation BigInt
   twap_threshold BigInt
   twapHistory    ProposalTWAP[]
   result ProposalResult?

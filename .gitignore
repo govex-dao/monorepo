@@ -1,6 +1,8 @@
 # Contracts
 contracts/futarchy/build/
 contracts/govex-coin/build/
+contracts/test_stable/build/
+contracts/test_asset/build/
 contracts/futarchy/node_modules/
 
 # Backend
