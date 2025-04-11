@@ -15,8 +15,6 @@ interface TokenSectionProps {
   asset_type: string;
   stable_type: string;
   outcome_count: string;
-  asset_decimals: number;
-  stable_decimals: number;
 }
 
 interface GroupedToken {
@@ -34,13 +32,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   asset_type,
   stable_type,
   outcome_count,
-  asset_decimals,
-  stable_decimals,
 }) => {
-  const [assetScale, stableScale] = useMemo(
-    () => [Math.pow(10, asset_decimals), Math.pow(10, stable_decimals)],
-    [asset_decimals, stable_decimals],
-  );
   const groupedByOutcome = useMemo<GroupedToken[]>(() => {
     const outcomeMap = new Map<
       number,
@@ -92,8 +84,8 @@ const TokenSection: React.FC<TokenSectionProps> = ({
                 <span>
                   {outcomeMessages[token.outcome] || `Outcome ${token.outcome}`}
                 </span>
-                <span>{parseInt(token.assetBalance) / assetScale}</span>
-                <span>{parseInt(token.stableBalance) / stableScale}</span>
+                <span>{token.assetBalance}</span>
+                <span>{token.stableBalance}</span>
               </div>
             ))}
           </div>
