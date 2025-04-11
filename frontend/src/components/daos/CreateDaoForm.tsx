@@ -160,7 +160,10 @@ const CreateDaoForm = () => {
       return;
     }
 
-    const chainAdjustedTwapStepMax = Math.max(1, Math.round(formData.twapStepMax * 10));
+    const chainAdjustedTwapStepMax = Math.max(
+      1,
+      Math.round(formData.twapStepMax * 10),
+    );
 
     // Validate amounts
     if (!formData.minAssetAmount || !formData.minStableAmount) {
@@ -234,7 +237,7 @@ const CreateDaoForm = () => {
           tx.object(assetMetadata.id),
           tx.object(stableMetadata.id),
           tx.pure.u64(formData.twapStartDelay),
-          tx.pure.u64(chainAdjustedTwapStepMax),
+          tx.pure.u128(chainAdjustedTwapStepMax),
           tx.pure.u64(chainAdjustedTwapThreshold),
           tx.object("0x6"),
         ],
@@ -405,15 +408,18 @@ const CreateDaoForm = () => {
                 name="twapStepMax"
                 value={Number(formData.twapStepMax).toFixed(2)}
                 onChange={(e) => {
-                  const value = Math.round(parseFloat(e.target.value) * 100) / 100;
-                  setFormData(prev => ({ ...prev, twapStepMax: value }));
+                  const value =
+                    Math.round(parseFloat(e.target.value) * 100) / 100;
+                  setFormData((prev) => ({ ...prev, twapStepMax: value }));
                 }}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
                 min="0.0"
                 step="0.1"
                 required
               />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">%</span>
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
+                %
+              </span>
             </div>
           </div>
 

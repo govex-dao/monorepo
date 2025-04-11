@@ -1,5 +1,6 @@
 module futarchy::amm;
 
+use futarchy::shared_constants::amm_basis_points;
 use futarchy::market_state::{Self, MarketState};
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
@@ -22,7 +23,6 @@ const EZERO_AMOUNT: u64 = 6;
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
-const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for saftey to values don't round to 0
 const MINIMUM_LIQUIDITY: u128 = 1000;
 
 // === Structs ===
@@ -71,8 +71,8 @@ public(package) fun new_pool(
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELOW_LIQUIDITY);
 
-    let twap_initialization_price = math::mul_div_to_128(min_stable, BASIS_POINTS, min_asset);
-    let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
+    let twap_initialization_price = math::mul_div_to_128(min_stable, amm_basis_points(), min_asset);
+    let initial_price = math::mul_div_to_128(initial_stable, amm_basis_points(), initial_asset);
 
     check_price_under_max(initial_price);
     check_price_under_max(twap_initialization_price);
@@ -154,7 +154,7 @@ public(package) fun swap_asset_to_stable(
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    let old_price = math::mul_div_to_128(old_stable, amm_basis_points(), old_asset);
     write_observation(
         &mut pool.oracle,
         timestamp,
@@ -227,7 +227,7 @@ public(package) fun swap_stable_to_asset(
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    let old_price = math::mul_div_to_128(old_stable, amm_basis_points(), old_asset);
     write_observation(
         &mut pool.oracle,
         timestamp,
@@ -338,7 +338,7 @@ public fun get_current_price(pool: &LiquidityPool): u128 {
 
     let price = math::mul_div_to_128(
         pool.stable_reserve,
-        BASIS_POINTS,
+        amm_basis_points(),
         pool.asset_reserve,
     );
 
@@ -381,7 +381,7 @@ public fun get_id(pool: &LiquidityPool): ID {
 }
 
 public fun check_price_under_max(price: u128) {
-    let max_price = (u64::max_value!() as u128) * (BASIS_POINTS as u128);
+    let max_price = (u64::max_value!() as u128) * (amm_basis_points() as u128);
     assert!(price <= max_price, EPRICE_TOO_HIGH)
 }
 

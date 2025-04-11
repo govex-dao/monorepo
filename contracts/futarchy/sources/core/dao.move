@@ -1,6 +1,7 @@
 module futarchy::dao;
 
 use futarchy::coin_escrow;
+use futarchy::shared_constants::amm_basis_points;
 use futarchy::fee;
 use futarchy::market_state;
 use futarchy::proposal;
@@ -40,6 +41,7 @@ const ETITLE_TOO_SHORT: u64 = 16;
 const ETITLE_TOO_LONG: u64 = 17;
 const EDETAILS_TOO_SHORT: u64 = 18;
 const EONE_OUTCOME: u64 = 19;
+const EINVALID_TWAP_MAX_STEP: u64 = 20;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -145,7 +147,7 @@ public fun create<AssetType, StableType>(
     asset_symbol: AsciiString,
     stable_symbol: AsciiString,
     amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
+    amm_twap_step_max_percentage: u128,
     twap_threshold: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -169,17 +171,13 @@ public fun create<AssetType, StableType>(
 
     let timestamp = clock::timestamp_ms(clock);
 
-    // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
-    assert!(if (stable_decimals >= asset_decimals) {
-        (stable_decimals - asset_decimals) <= 9
-    } else {
-        (asset_decimals - stable_decimals) <= 9
-    }, EINVALID_DECIMALS_DIFF);
-
-    let amm_twap_step_max = (((amm_twap_step_max as u128) * 1_000_000_000 * 10u128.pow(stable_decimals))/(10u128.pow(asset_decimals) ) as u64);
-
-    assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
-    assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
+    let amm_twap_step_max = calculate_amm_twap_step_max(
+        amm_twap_step_max_percentage,
+        min_stable_amount,
+        min_asset_amount,
+        stable_decimals,
+        asset_decimals,
+    );
 
     let dao = DAO {
         id: object::new(ctx),
@@ -395,6 +393,46 @@ public entry fun sign_result_entry<AssetType, StableType>(
         ctx,
     );
 }
+
+// ======== Internal Functions ========
+// amm_twap_step_max is set as a % of TWAP initialization price. step_percentage is divided by 1000 as the precision is 0.1%.
+public fun calculate_amm_twap_step_max(
+    amm_twap_step_max_percentage: u128,
+    min_stable_amount: u64,
+    min_asset_amount: u64,
+    stable_decimals: u8,
+    asset_decimals: u8,
+): u64 {
+    // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
+    assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
+    assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
+    
+    assert!(if (stable_decimals >= asset_decimals) {
+        (stable_decimals - asset_decimals) <= 9
+    } else {
+        (asset_decimals - stable_decimals) <= 9
+    }, EINVALID_DECIMALS_DIFF);
+
+    // Convert inputs to u128 for division
+    let stable_amount_u128 = min_stable_amount as u128;
+    let asset_amount_u128 = min_asset_amount as u128;
+    let basis_points_u128 = amm_basis_points() as u128;
+    
+    // Calculate numerator
+    let numerator = amm_twap_step_max_percentage * stable_amount_u128 * basis_points_u128 * 10u128.pow(stable_decimals);
+    
+    // Calculate divisor
+    let divisor = asset_amount_u128 * 10u128.pow(asset_decimals) * 1000;
+    
+    // Perform division and cast result to u64
+    let amm_twap_step_max = (numerator / divisor) as u64;
+    
+    // Validate result
+    assert!(amm_twap_step_max >= 1, EINVALID_TWAP_MAX_STEP);
+
+    amm_twap_step_max
+}
+
 
 // ======== Admin Functions ========
 public(package) fun set_pending_verification(dao: &mut DAO, attestation_url: String) {
