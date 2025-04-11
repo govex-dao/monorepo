@@ -176,6 +176,8 @@ public fun create<AssetType, StableType>(
         (asset_decimals - stable_decimals) <= 9
     }, EINVALID_DECIMALS_DIFF);
 
+    let amm_twap_step_max = (((amm_twap_step_max as u128) * 1_000_000_000 * 10u128.pow(stable_decimals))/(10u128.pow(asset_decimals) ) as u64);
+
     assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
     assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
 

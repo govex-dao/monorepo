@@ -20,7 +20,7 @@ interface FormData {
   reviewPeriodMs: number;
   tradingPeriodMs: number;
   twapStartDelay: number;
-  twapStepMax: string;
+  twapStepMax: number;
   twapThreshold: number;
 }
 
@@ -43,7 +43,7 @@ const CreateDaoForm = () => {
     reviewPeriodMs: 3600000, // 1 hour in milliseconds
     tradingPeriodMs: 7200000, // 2 hours in milliseconds
     twapStartDelay: 60000,
-    twapStepMax: "1",
+    twapStepMax: 0.1,
     twapThreshold: 1,
   });
 
@@ -124,7 +124,7 @@ const CreateDaoForm = () => {
       "The metadata object ID for the stable coin type selected above",
     twapStartDelay: "Delay before TWAP calculations begin (in milliseconds)",
     twapStepMax:
-      "Maximum price change step size for TWAP price accumulation per a 60s window",
+      "Maximum % step size for TWAP price accumulation per a 60s window.",
     twapThreshold:
       "% difference by which an outcome must be greater than Reject to pass",
   };
@@ -160,7 +160,7 @@ const CreateDaoForm = () => {
       return;
     }
 
-    const chainTwapStepMax = BigInt(formData.twapStepMax);
+    const chainAdjustedTwapStepMax = Math.max(1, Math.round(formData.twapStepMax * 10));
 
     // Validate amounts
     if (!formData.minAssetAmount || !formData.minStableAmount) {
@@ -234,7 +234,7 @@ const CreateDaoForm = () => {
           tx.object(assetMetadata.id),
           tx.object(stableMetadata.id),
           tx.pure.u64(formData.twapStartDelay),
-          tx.pure.u64(chainTwapStepMax),
+          tx.pure.u64(chainAdjustedTwapStepMax),
           tx.pure.u64(chainAdjustedTwapThreshold),
           tx.object("0x6"),
         ],
@@ -401,18 +401,19 @@ const CreateDaoForm = () => {
             </div>
             <div className="relative">
               <input
-                type="text"
+                type="number"
                 name="twapStepMax"
-                value={formData.twapStepMax}
+                value={Number(formData.twapStepMax).toFixed(2)}
                 onChange={(e) => {
-                  const cleanValue = e.target.value.replace(/[^0-9]/g, "");
-                  const value =
-                    cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
-                  setFormData((prev) => ({ ...prev, twapStepMax: value }));
+                  const value = Math.round(parseFloat(e.target.value) * 100) / 100;
+                  setFormData(prev => ({ ...prev, twapStepMax: value }));
                 }}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
+                min="0.0"
+                step="0.1"
                 required
               />
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">%</span>
             </div>
           </div>
 

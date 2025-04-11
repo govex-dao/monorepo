@@ -107,7 +107,8 @@ fun test_create_dao() {
         // Verify default AMM config
         let (twap_start_delay, twap_step_max) = dao::get_amm_config(&dao);
         assert!(twap_start_delay == DEFAULT_TWAP_START_DELAY, 7);
-        assert!(twap_step_max == DEFAULT_TWAP_STEP_MAX, 8);
+        let calculated_twap_step_max = (((DEFAULT_TWAP_STEP_MAX as u128) * 1_000_000_000 * 10u128.pow(STABLE_DECIMALS))/(10u128.pow(ASSET_DECIMALS) ) as u64);
+        assert!(twap_step_max == calculated_twap_step_max, 8);
 
         // Return the DAO to the scenario
         test_scenario::return_shared(dao);
