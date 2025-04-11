@@ -28,7 +28,8 @@ const ELONG_REVIEW_TIME: u64 = 7;
 const ELONG_TWAP_DELAY_TIME: u64 = 8;
 
 // === Constants ===
-const TWAP_MINIMUM_WINDOW_CAP: u64 = 1; // Equals 0.01%
+const TWAP_MINIMUM_WINDOW_CAP: u128 = 1; // Equivialant to 0.1%
+const TWAP_MAXIMUM_WINDOW_CAP: u128 = 1000; // Equivialant to 100%
 const MAX_TRADING_TIME: u64 = 604_800_000;
 const MAX_REVIEW_TIME: u64 = 604_800_000;
 const MAX_TWAP_START_DELAY: u64 = 86_400_000;
@@ -129,7 +130,7 @@ public entry fun create_dao<AssetType, StableType>(
     asset_metadata: &CoinMetadata<AssetType>,
     stable_metadata: &CoinMetadata<StableType>,
     amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
+    amm_twap_step_max_percentage: u128,
     twap_threshold: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -174,7 +175,8 @@ public entry fun create_dao<AssetType, StableType>(
     let asset_symbol = coin::get_symbol(asset_metadata);
     let stable_symbol = coin::get_symbol(stable_metadata);
 
-    assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, TWAP_TWAP_WINDOW_CAP);
+    assert!(amm_twap_step_max_percentage >= TWAP_MINIMUM_WINDOW_CAP, TWAP_TWAP_WINDOW_CAP);
+    assert!(amm_twap_step_max_percentage <= TWAP_MAXIMUM_WINDOW_CAP);
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELONG_REVIEW_TIME);
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELONG_TRADING_TIME);
     assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELONG_TWAP_DELAY_TIME);
@@ -197,7 +199,7 @@ public entry fun create_dao<AssetType, StableType>(
         asset_symbol,
         stable_symbol,
         amm_twap_start_delay,
-        amm_twap_step_max,
+        amm_twap_step_max_percentage,
         twap_threshold,
         clock,
         ctx,

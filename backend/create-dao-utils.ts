@@ -165,7 +165,7 @@ export const createDao = async ({
                 txb.object(asset_metadata),
                 txb.object(stable_metadata),
                 txb.pure.u64(60_000),
-                txb.pure.u64(100),
+                txb.pure.u128(100),
                 txb.pure.u64(50),
                 txb.object('0x6')        // <CLOCK_OBJECT_ID>
             ],

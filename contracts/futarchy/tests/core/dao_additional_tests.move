@@ -105,7 +105,7 @@ fun test_create_dao_with_invalid_decimals_diff() {
 
 // Test: Create DAO with decimals that are too large
 #[test]
-#[expected_failure(abort_code = dao::EINVALID_DECIMALS_DIFF)]
+#[expected_failure(abort_code = dao::E_DECIMALS_TOO_LARGE)]
 fun test_create_dao_with_large_decimals() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);
