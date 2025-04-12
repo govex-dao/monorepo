@@ -2,7 +2,7 @@
 npx ts-node futarchy-scripts/futarchy-1-pub-coin.ts
 // npx ts-node futarchy-scripts/futarchy-1-pub-coin-merged.ts dont use this id why
 
-npx ts-node futarchy-scripts/futarchy-1-pub-contract.ts
+npx ts-node futarchy-scripts/futarchy-1-pub-contract.ts 
 
 npx ts-node futarchy-scripts/futarchy-1-add-coin-type.ts
 
