@@ -59,7 +59,7 @@ module futarchy::allowed_stable_tests {
                 &clock,
                 ctx(&mut scenario),
             );
-            clock::destroy_for_testing(clock);
+            clock.destroy_for_testing();
 
             // Now check that TEST_STABLE_COIN is allowed (this should not abort).
             factory::check_stable_type_allowed<TEST_STABLE_COIN>(&factory);
@@ -95,7 +95,7 @@ module futarchy::allowed_stable_tests {
                 &clock,
                 ctx(&mut scenario),
             );
-            clock::destroy_for_testing(clock);
+            clock.destroy_for_testing();
 
             // Now this call should abort because TEST_STABLE_COIN is no longer allowed.
             factory::check_stable_type_allowed<TEST_STABLE_COIN>(&factory);
@@ -132,7 +132,7 @@ module futarchy::allowed_stable_tests {
             );
             assert!(!factory::is_stable_type_allowed<TEST_STABLE_COIN>(&factory), 1);
 
-            clock::destroy_for_testing(clock);
+            clock.destroy_for_testing();
             test::return_shared(factory);
             test::return_to_address(@0xA, owner_cap);
         };
@@ -172,7 +172,7 @@ module futarchy::allowed_stable_tests {
             );
             assert!(factory::is_stable_type_allowed<TEST_STABLE_COIN>(&factory), 1);
 
-            clock::destroy_for_testing(clock);
+            clock.destroy_for_testing();
             test::return_shared(factory);
             test::return_to_address(@0xA, owner_cap);
         };

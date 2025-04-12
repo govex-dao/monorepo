@@ -87,7 +87,7 @@ public fun collect_protocol_fees<AssetType, StableType>(
             proposal_id: proposal::get_id(proposal),
             winning_outcome,
             fee_amount: protocol_fee_amount,
-            timestamp_ms: clock::timestamp_ms(clock),
+            timestamp_ms: clock.timestamp_ms(),
         });
     }
 }
@@ -106,7 +106,7 @@ public fun try_advance_state<AssetType, StableType>(
     state: &mut MarketState,
     clock: &Clock,
 ) {
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     let elapsed = current_time - proposal::get_created_at(proposal);
     let old_state = proposal::state(proposal);
 
@@ -169,8 +169,8 @@ public fun finalize<AssetType, StableType>(
     assert!(proposal::state(proposal) == STATE_TRADING, EINVALID_STATE);
 
     // Record final TWAP prices and find winner
-    let timestamp = clock::timestamp_ms(clock);
-    let empty_twap_prices = vector::empty();
+    let timestamp = clock.timestamp_ms();
+    let empty_twap_prices = vector[];
     proposal::set_twap_prices(proposal, empty_twap_prices);
 
     let mut i = 0;
@@ -183,7 +183,7 @@ public fun finalize<AssetType, StableType>(
     while (i < pools_count) {
         let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
         let twap = amm::get_twap(pool, clock);
-        let mut twap_prices = vector::empty();
+        let mut twap_prices = vector[];
         vector::push_back(&mut twap_prices, twap);
 
         if (i == 0) {

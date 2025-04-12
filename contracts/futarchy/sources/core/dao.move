@@ -170,7 +170,7 @@ public fun create<AssetType, StableType>(
         url::new_unsafe(icon_url_string)
     };
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
 
     // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
     assert!(if (stable_decimals >= asset_decimals) {
@@ -277,13 +277,13 @@ public fun create_proposal<AssetType, StableType>(
 
     // Assert first outcome is "Reject"
     let reject_string = string::utf8(b"Reject");
-    let first_message = vector::borrow(&outcome_messages, 0);
+    let first_message = &outcome_messages[0];
     assert!(first_message == &reject_string, EINVALID_MESSAGES);
 
     // For 2-outcome proposals, assert second outcome is "Approve"
     if (outcome_count == 2) {
         let approve_string = string::utf8(b"Accept");
-        let second_message = vector::borrow(&outcome_messages, 1);
+        let second_message = &outcome_messages[1];
         assert!(second_message == &approve_string, EINVALID_MESSAGES);
     };
     assert!(
@@ -327,8 +327,8 @@ public fun create_proposal<AssetType, StableType>(
     );
 
     let info = ProposalInfo {
-        proposer: tx_context::sender(ctx),
-        created_at: clock::timestamp_ms(clock),
+        proposer: ctx.sender(),
+        created_at: clock.timestamp_ms(),
         state,
         outcome_count,
         description: title, // Changed to use title instead of description
@@ -367,7 +367,7 @@ public(package) fun sign_result(
 
     option::fill(&mut info.result, message);
     info.executed = true;
-    info.execution_time = option::some(clock::timestamp_ms(clock));
+    info.execution_time = option::some(clock.timestamp_ms());
 
     // Safey reduce active_proposal_count
     if (dao.active_proposal_count > 0) {
@@ -379,7 +379,7 @@ public(package) fun sign_result(
         proposal_id,
         outcome: message,
         winning_outcome: winning_outcome,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 

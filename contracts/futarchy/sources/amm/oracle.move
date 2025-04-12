@@ -174,7 +174,7 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 }
 
 public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
 
     // TWAP is only allowed to be read in the same instance, after a write has occured
     // So no logic is needed to extrapolate TWAP for last write to current timestamp
@@ -198,7 +198,7 @@ public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
 
 // ======== Validation Functions ========
 public fun is_twap_valid(oracle: &Oracle, min_period: u64, clock: &Clock): bool {
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     current_time >= oracle.last_timestamp + min_period
 }
 

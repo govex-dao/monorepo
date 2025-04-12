@@ -116,7 +116,7 @@ fun test_create_dao() {
         test_scenario::return_shared(dao);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -198,7 +198,7 @@ fun test_create_valid_proposal() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -283,7 +283,7 @@ fun test_create_proposal_invalid_messages() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -361,7 +361,7 @@ fun test_create_proposal_empty_details() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -460,7 +460,7 @@ fun test_query_functions() {
         test_scenario::return_shared(dao);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -595,7 +595,7 @@ fun test_sign_result_entry() {
         test_scenario::return_shared(dao);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -682,7 +682,7 @@ fun test_create_proposal_with_initial_amounts() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -764,7 +764,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }
 
@@ -850,6 +850,6 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
         test_scenario::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test_scenario::end(scenario);
 }

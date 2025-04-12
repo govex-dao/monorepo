@@ -69,7 +69,7 @@ public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
         ctx,
     );
 
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     transfer::public_transfer(stable_token, sender);
 }
 
@@ -121,7 +121,7 @@ public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
         ctx,
     );
 
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     transfer::public_transfer(asset_token, sender);
 }
 
@@ -145,11 +145,11 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     assert!(token::asset_type(&existing_token) == 1, EWRONG_TOKEN_TYPE);
 
-    let mut existing_token_in_vector = vector::empty();
+    let mut existing_token_in_vector = vector[];
     vector::push_back(&mut existing_token_in_vector, existing_token);
     token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
 
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
 
     // Swap the selected token
     swap_stable_to_asset_entry(
@@ -169,7 +169,7 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     };
 
     // Clean up the vector
-    vector::destroy_empty(tokens);
+    tokens.destroy_empty();
 }
 
 #[allow(lint(self_transfer))]
@@ -190,11 +190,11 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     assert!(token::asset_type(&existing_token) == 0, EWRONG_TOKEN_TYPE);
 
-    let mut existing_token_in_vector = vector::empty();
+    let mut existing_token_in_vector = vector[];
     vector::push_back(&mut existing_token_in_vector, existing_token);
     token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
 
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
 
     // Swap the selected token
     swap_asset_to_stable_entry(
@@ -208,13 +208,8 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 
-    // Clean up the vector
-    vector::destroy_empty(tokens);
 }
 
 /// Entry function for creating and swapping asset to stable without an existing token
@@ -231,7 +226,7 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
 
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
 
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
 
     // Swap the selected token
     swap_asset_to_stable_entry(
@@ -245,13 +240,7 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
-
-    // Clean up the vector
-    vector::destroy_empty(tokens);
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 }
 
 /// Entry function for creating and swapping stable to asset without an existing token
@@ -268,7 +257,7 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
 
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
 
-    let recipient = tx_context::sender(ctx);
+    let recipient = ctx.sender();
 
     // Swap the selected token
     swap_stable_to_asset_entry(
@@ -282,11 +271,6 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 
-    // Clean up the vector
-    vector::destroy_empty(tokens);
 }

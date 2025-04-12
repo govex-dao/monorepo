@@ -288,7 +288,7 @@ fun test_merge_many() {
         let ctx = test_scenario::ctx(&mut scenario);
 
         // Create vector of tokens to merge
-        let mut tokens_to_merge = vector::empty();
+        let mut tokens_to_merge = vector[];
         vector::push_back(&mut tokens_to_merge, token2);
         vector::push_back(&mut tokens_to_merge, token3);
 

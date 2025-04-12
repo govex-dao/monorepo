@@ -116,8 +116,8 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         id: object::new(ctx),
     };
 
-    public_transfer(fee_manager, tx_context::sender(ctx));
-    public_transfer(fee_admin_cap, tx_context::sender(ctx));
+    public_transfer(fee_manager, ctx.sender());
+    public_transfer(fee_admin_cap, ctx.sender());
 
     // Consuming the witness ensures one-time initialization.
     let _ = witness;
@@ -151,8 +151,8 @@ public fun deposit_dao_creation_payment(
     // Emit event
     event::emit(DAOCreationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -170,8 +170,8 @@ public fun deposit_proposal_creation_payment(
     // Emit event
     event::emit(ProposalCreationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -188,8 +188,8 @@ public fun deposit_verification_payment(
     // Emit event
     event::emit(VerificationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -202,7 +202,7 @@ public entry fun withdraw_all_fees(
     ctx: &mut TxContext,
 ) {
     let amount = balance::value(&fee_manager.sui_balance);
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
 
     let withdrawal = coin::from_balance(
         balance::split(&mut fee_manager.sui_balance, amount),
@@ -212,7 +212,7 @@ public entry fun withdraw_all_fees(
     event::emit(FeesWithdrawn {
         amount,
         recipient: sender,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     public_transfer(withdrawal, sender);
@@ -232,8 +232,8 @@ public entry fun update_dao_creation_fee(
     event::emit(DAOCreationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -251,8 +251,8 @@ public entry fun update_proposal_creation_fee(
     event::emit(ProposalCreationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -270,8 +270,8 @@ public entry fun update_verification_fee(
     event::emit(VerificationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -318,7 +318,7 @@ public fun deposit_stable_fees<StableType>(
         amount,
         stable_type: type_str,
         proposal_id,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -355,12 +355,12 @@ public entry fun withdraw_stable_fees<StableType>(
         event::emit(StableFeesWithdrawn {
             amount,
             stable_type: type_str,
-            recipient: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            recipient: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
 
         // Transfer to sender
-        transfer::public_transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, ctx.sender());
     }
 }
 
@@ -414,5 +414,5 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
     };
 
     public_share_object(fee_manager);
-    public_transfer(admin_cap, tx_context::sender(ctx));
+    public_transfer(admin_cap, ctx.sender());
 }

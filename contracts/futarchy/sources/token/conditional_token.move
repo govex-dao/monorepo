@@ -154,7 +154,7 @@ public fun split(
         original_amount: token.balance,
         split_amount: amount,
         owner: recipient,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     transfer::transfer(new_token, recipient);
@@ -166,7 +166,7 @@ public entry fun split_entry(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     split(token, amount, sender, clock, ctx);
 }
 
@@ -181,7 +181,7 @@ public fun merge_many(
 
     let mut i = 0;
     let mut total_merged_amount = 0;
-    let mut token_ids = vector::empty();
+    let mut token_ids = vector[];
 
     while (i < len) {
         let token = vector::remove(&mut tokens, 0);
@@ -215,8 +215,8 @@ public fun merge_many(
         outcome: base_token.outcome,
         base_amount: base_token.balance - total_merged_amount,
         merged_amount: total_merged_amount,
-        owner: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        owner: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 
     vector::destroy_empty(tokens);
@@ -255,8 +255,8 @@ public fun burn(supply: &mut Supply, token: ConditionalToken, clock: &Clock, ctx
         asset_type,
         outcome,
         amount: balance,
-        sender: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        sender: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 
     // Clean up
@@ -295,7 +295,7 @@ public fun mint(
         outcome: supply.outcome,
         amount,
         recipient,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     // Return token instead of transferring

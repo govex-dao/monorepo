@@ -90,7 +90,7 @@ fun test_deposit_dao_creation_payment() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -115,7 +115,7 @@ fun test_deposit_proposal_creation_payment() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -140,7 +140,7 @@ fun test_deposit_verification_payment() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -166,7 +166,7 @@ fun test_invalid_payment_amount() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -198,7 +198,7 @@ fun test_update_dao_creation_fee() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -230,7 +230,7 @@ fun test_update_proposal_creation_fee() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -262,7 +262,7 @@ fun test_update_verification_fee() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -311,7 +311,7 @@ fun test_withdraw_fees() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -344,7 +344,7 @@ fun test_deposit_stable_fees() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -401,7 +401,7 @@ fun test_withdraw_stable_fees() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -432,7 +432,7 @@ fun test_withdraw_nonexistent_stable_fees() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -562,7 +562,7 @@ fun test_multiple_operations() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -643,7 +643,7 @@ fun test_multiple_stable_coin_types() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -707,7 +707,7 @@ fun test_zero_balance_withdraw() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }
@@ -734,7 +734,7 @@ fun test_payment_amount_too_large() {
 
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
 
     test_scenario::end(scenario);
 }

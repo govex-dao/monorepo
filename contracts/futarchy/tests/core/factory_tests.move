@@ -239,7 +239,7 @@ module futarchy::factory_tests {
             test::return_shared(dao);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -269,7 +269,7 @@ module futarchy::factory_tests {
             test::return_to_address(ADMIN, owner_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -336,7 +336,7 @@ module futarchy::factory_tests {
             test::return_to_address(ADMIN, validator_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -422,7 +422,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_shared(stable_metadata);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -507,7 +507,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_to_address(ADMIN, coin);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -537,7 +537,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_to_address(ADMIN, fee_admin_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -616,7 +616,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_shared(stable_metadata);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -663,7 +663,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_shared(stable_metadata);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -715,7 +715,7 @@ TWAP_INITIAL_OBSERVATION,
             assert!(test::has_most_recent_shared<DAO>(), 1);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 
@@ -838,7 +838,7 @@ TWAP_INITIAL_OBSERVATION,
             test::return_to_address(ADMIN, validator_cap);
         };
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
         test::end(scenario);
     }
 }

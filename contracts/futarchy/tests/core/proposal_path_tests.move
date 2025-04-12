@@ -187,6 +187,6 @@ fun test_proposal_complete_happy_path() {
         test::return_shared(fee_manager);
     };
 
-    clock::destroy_for_testing(clock);
+    clock.destroy_for_testing();
     test::end(scenario);
 }
