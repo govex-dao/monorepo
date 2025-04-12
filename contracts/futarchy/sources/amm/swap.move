@@ -169,7 +169,7 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     };
 
     // Clean up the vector
-    vector::destroy_empty(tokens);
+    tokens.destroy_empty();
 }
 
 #[allow(lint(self_transfer))]
@@ -208,13 +208,8 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 
-    // Clean up the vector
-    vector::destroy_empty(tokens);
 }
 
 /// Entry function for creating and swapping asset to stable without an existing token
@@ -245,13 +240,7 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
-
-    // Clean up the vector
-    vector::destroy_empty(tokens);
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 }
 
 /// Entry function for creating and swapping stable to asset without an existing token
@@ -282,11 +271,6 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
     );
 
     // Transfer the remaining tokens to the recipient
-    while (!vector::is_empty(&tokens)) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-    };
+    tokens.do!(|token| transfer::public_transfer(token, recipient));
 
-    // Clean up the vector
-    vector::destroy_empty(tokens);
 }

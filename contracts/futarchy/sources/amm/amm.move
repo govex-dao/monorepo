@@ -22,7 +22,7 @@ const EZERO_AMOUNT: u64 = 6;
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
-const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for saftey to values don't round to 0
+const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for safety to values don't round to 0
 const MINIMUM_LIQUIDITY: u128 = 1000;
 
 // === Structs ===

@@ -48,15 +48,14 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
 public fun get_liquidity_for_proposal<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<u64> {
-    let pools = proposal::get_amm_pools(proposal);
-    let mut liquidity = vector::empty<u64>();
-    let mut i = 0;
-    while (i < vector::length(pools)) {
-        let pool = vector::borrow(pools, i);
-        let (asset, stable) = amm::get_reserves(pool);
-        vector::push_back(&mut liquidity, asset);
-        vector::push_back(&mut liquidity, stable);
-        i = i + 1;
-    };
+    let pools = proposal.get_amm_pools();
+    let mut liquidity = vector<u64>[];
+
+    pools.length().do!(|i| {
+        let pool = &pools[i];
+        let (asset, stable) = pool.get_reserves();
+        liquidity.push_back(asset);
+        liquidity.push_back(stable);
+    });
     liquidity
 }

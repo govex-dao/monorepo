@@ -115,18 +115,17 @@ public fun create<AssetType, StableType>(
     assert!(stable_value >= min_stable_liquidity, ESTABLE_LIQUIDITY_TOO_LOW);
 
     let (asset_amounts, stable_amounts) = if (option::is_some(&initial_outcome_amounts)) {
-        let amounts = option::destroy_some(initial_outcome_amounts);
-        assert!(vector::length(&amounts) == outcome_count * 2, EINVALID_POOL_LENGTH);
+        let amounts = initial_outcome_amounts.destroy_some();
+        assert!(amounts.length() == outcome_count * 2, EINVALID_POOL_LENGTH);
 
         let mut asset_amounts = vector[];
         let mut stable_amounts = vector[];
         let mut max_asset = 0;
         let mut max_stable = 0;
 
-        let mut i = 0;
-        while (i < outcome_count) {
-            let asset_amt = *vector::borrow(&amounts, i * 2);
-            let stable_amt = *vector::borrow(&amounts, i * 2 + 1);
+        outcome_count.do!(|i| {
+            let asset_amt = *&amounts[i * 2];
+            let stable_amt = *&amounts[i * 2 + 1];
 
             assert!(asset_amt >= min_asset_liquidity, EINVALID_AMOUNT);
             assert!(stable_amt >= min_stable_liquidity, EINVALID_AMOUNT);
@@ -139,10 +138,9 @@ public fun create<AssetType, StableType>(
                 max_stable = stable_amt;
             };
 
-            vector::push_back(&mut asset_amounts, asset_amt);
-            vector::push_back(&mut stable_amounts, stable_amt);
-            i = i + 1;
-        };
+            asset_amounts.push_back(asset_amt);
+            stable_amounts.push_back(stable_amt);
+        });
 
         assert!(max_asset == asset_value, EINVALID_LIQUIDITY);
         assert!(max_stable == stable_value, EINVALID_LIQUIDITY);
@@ -152,12 +150,10 @@ public fun create<AssetType, StableType>(
         // Default to equal distribution if no initial amounts specified
         let mut asset_amounts = vector[];
         let mut stable_amounts = vector[];
-        let mut i = 0;
-        while (i < outcome_count) {
-            vector::push_back(&mut asset_amounts, asset_value);
-            vector::push_back(&mut stable_amounts, stable_value);
-            i = i + 1;
-        };
+        outcome_count.do!(|_i| {
+            asset_amounts.push_back(asset_value);
+            stable_amounts.push_back(stable_value);
+        });
         (asset_amounts, stable_amounts)
     };
 
@@ -228,15 +224,13 @@ public fun create<AssetType, StableType>(
     // Build oracle_ids vector from each liquidity pool's oracle.
     let amm_pools_ref = &proposal.amm_pools; // Create a reference to the proposal's amm_pools
     let mut oracle_ids = vector::empty<ID>();
-    let mut i = 0;
-    while (i < vector::length(amm_pools_ref)) {
-        let pool = vector::borrow(amm_pools_ref, i);
+    amm_pools_ref.length().do!(|i| {
+        let pool = &amm_pools_ref[i];
         let oracle_ref = amm::get_oracle(pool);
         let oracle_uid_ref = oracle::get_id(oracle_ref);
         let oracle_id = object::uid_to_inner(oracle_uid_ref);
-        vector::push_back(&mut oracle_ids, oracle_id);
-        i = i + 1;
-    };
+        oracle_ids.push_back(oracle_id);
+    });
 
     event::emit(ProposalCreated {
         proposal_id,
@@ -281,14 +275,12 @@ public fun get_twaps_for_proposal<AssetType, StableType>(
     clock: &Clock,
 ): vector<u128> {
     let pools = &mut proposal.amm_pools;
-    let mut twaps = vector::empty<u128>();
-    let mut i = 0;
-    while (i < vector::length(pools)) {
-        let pool = vector::borrow_mut(pools, i);
+    let mut twaps = vector<u128>[];
+    pools.length().do!(|i| {
+        let pool = &mut pools[i];
         let twap = amm::get_twap(pool, clock);
-        vector::push_back(&mut twaps, twap);
-        i = i + 1;
-    };
+        twaps.push_back(twap);
+    });
     twaps
 }
 
@@ -297,7 +289,7 @@ fun get_pool_mut(pools: &mut vector<LiquidityPool>, outcome_idx: u8): &mut Liqui
     let mut i = 0;
     let len = vector::length(pools);
     while (i < len) {
-        let pool = vector::borrow_mut(pools, i);
+        let pool = &mut pools[i];
         if (amm::get_outcome_idx(pool) == outcome_idx) {
             return pool
         };
@@ -380,13 +372,10 @@ public fun get_amm_pool_ids<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<ID> {
     let mut ids = vector[];
-    let mut i = 0;
-    let len = vector::length(&proposal.amm_pools);
-    while (i < len) {
-        let pool = vector::borrow(&proposal.amm_pools, i);
-        vector::push_back(&mut ids, amm::get_id(pool));
-        i = i + 1;
-    };
+    proposal.amm_pools.length().do!(|i| {
+        let pool = &proposal.amm_pools[i];
+        ids.push_back(amm::get_id(pool));
+    });
     ids
 }
 

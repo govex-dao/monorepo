@@ -277,13 +277,13 @@ public fun create_proposal<AssetType, StableType>(
 
     // Assert first outcome is "Reject"
     let reject_string = string::utf8(b"Reject");
-    let first_message = vector::borrow(&outcome_messages, 0);
+    let first_message = &outcome_messages[0];
     assert!(first_message == &reject_string, EINVALID_MESSAGES);
 
     // For 2-outcome proposals, assert second outcome is "Approve"
     if (outcome_count == 2) {
         let approve_string = string::utf8(b"Accept");
-        let second_message = vector::borrow(&outcome_messages, 1);
+        let second_message = &outcome_messages[1];
         assert!(second_message == &approve_string, EINVALID_MESSAGES);
     };
     assert!(

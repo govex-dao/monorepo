@@ -24,12 +24,11 @@ public fun create_outcome_markets<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ID>, vector<LiquidityPool>) {
-    let mut supply_ids = vector::empty<ID>();
-    let mut amm_pools = vector::empty<LiquidityPool>();
+    let mut supply_ids = vector[];
+    let mut amm_pools = vector[];
 
     // 1. Create supplies and register them for each outcome
-    let mut i = 0;
-    while (i < outcome_count) {
+    outcome_count.do!(|i| {
         // Use same pattern as original to avoid borrow issues
         {
             let ms = coin_escrow::get_market_state(escrow); // Immutable borrow
@@ -39,15 +38,13 @@ public fun create_outcome_markets<AssetType, StableType>(
             // Record their IDs
             let asset_supply_id = object::id(&asset_supply);
             let stable_supply_id = object::id(&stable_supply);
-            vector::push_back(&mut supply_ids, asset_supply_id);
-            vector::push_back(&mut supply_ids, stable_supply_id);
+            supply_ids.push_back(asset_supply_id); // Method syntax
+            supply_ids.push_back(stable_supply_id); // Method syntax
 
             // Register
             coin_escrow::register_supplies(escrow, i, asset_supply, stable_supply);
         };
-
-        i = i + 1;
-    };
+    });
 
     // 2. Deposit liquidity and handle differential minting in one step
     coin_escrow::deposit_initial_liquidity(
@@ -61,11 +58,10 @@ public fun create_outcome_markets<AssetType, StableType>(
         ctx,
     );
 
-    // 3. Create AMM pools for each outcome - same as original
-    i = 0;
-    while (i < outcome_count) {
-        let asset_amt = *vector::borrow(&asset_amounts, i);
-        let stable_amt = *vector::borrow(&stable_amounts, i);
+    // 3. Create AMM pools for each outcome
+    outcome_count.do!(|i| {
+        let asset_amt = asset_amounts[i]; // Using index syntax instead of vector::borrow
+        let stable_amt = stable_amounts[i];
 
         // Use same scoped borrow pattern as original
         {
@@ -81,11 +77,9 @@ public fun create_outcome_markets<AssetType, StableType>(
                 creation_time,
                 ctx,
             );
-            vector::push_back(&mut amm_pools, pool);
+            amm_pools.push_back(pool); // Method syntax
         };
-
-        i = i + 1;
-    };
+    });
 
     (supply_ids, amm_pools)
 }

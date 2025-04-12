@@ -105,8 +105,8 @@ public fun deposit_initial_liquidity<AssetType, StableType>(
     let mut max_stable = 0;
     let mut i = 0;
     while (i < outcome_count) {
-        let asset_amt = *vector::borrow(asset_amounts, i);
-        let stable_amt = *vector::borrow(stable_amounts, i);
+        let asset_amt = *&asset_amounts[i];
+        let stable_amt = *&stable_amounts[i];
         if (asset_amt > max_asset) { max_asset = asset_amt };
         if (stable_amt > max_stable) { max_stable = stable_amt };
         i = i + 1;
@@ -121,7 +121,7 @@ public fun deposit_initial_liquidity<AssetType, StableType>(
         // Mint asset tokens if necessary
         if (asset_amt < max_asset) {
             let diff = max_asset - asset_amt;
-            let asset_supply = vector::borrow_mut(&mut escrow.outcome_asset_supplies, i);
+            let asset_supply = &mut escrow.outcome_asset_supplies[i];
             let token = token::mint(
                 &escrow.market_state,
                 asset_supply,
@@ -240,7 +240,7 @@ fun verify_token_set<AssetType, StableType>(
     let amount = token::value(first_token);
 
     // Track which outcomes we've seen
-    let mut outcomes_seen = vector::empty<bool>();
+    let mut outcomes_seen = vector<bool>[];
     let mut i = 0;
     while (i < outcome_count) {
         vector::push_back(&mut outcomes_seen, false);
@@ -487,7 +487,7 @@ public fun mint_complete_set_asset<AssetType, StableType>(
 
     // Mint tokens for each outcome
     let recipient = ctx.sender();
-    let mut tokens = vector::empty<token::ConditionalToken>();
+    let mut tokens = vector<token::ConditionalToken>[];
     let mut i = 0;
     while (i < outcome_count) {
         let supply = vector::borrow_mut(&mut escrow.outcome_asset_supplies, i);
