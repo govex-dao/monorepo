@@ -1,11 +1,11 @@
 {
-  "digest": "BkQ7NJfVY8M3wuQWHLMSgQ3QL24r3bR4sgqecTQtaGcG",
+  "digest": "71H8MMww25XBzHPw2bQyrwmG1xhAWQKBYzvJscchKaWR",
   "effects": {
     "messageVersion": "v1",
     "status": {
       "status": "success"
     },
-    "executedEpoch": "701",
+    "executedEpoch": "703",
     "gasUsed": {
       "computationCost": "1000000",
       "storageCost": "4164800",
@@ -15,30 +15,30 @@
     "modifiedAtVersions": [
       {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "sequenceNumber": "386993570"
+        "sequenceNumber": "388350296"
       },
       {
         "objectId": "0x64f96d762c6fc8b91507a7b1c61ef55cb5dedf283bcece055763a223cadde815",
-        "sequenceNumber": "376244216"
+        "sequenceNumber": "386993571"
       }
     ],
     "sharedObjects": [
       {
         "objectId": "0x64f96d762c6fc8b91507a7b1c61ef55cb5dedf283bcece055763a223cadde815",
-        "version": 376244216,
-        "digest": "4DtQgAwiqZqS3TG2sApyHcq575MXB1PmykhEjZRNdPmi"
+        "version": 386993571,
+        "digest": "BUJTe6ugX5FwkVQypsPj3ncczRVthYYAFxYLcXUTkTVG"
       }
     ],
-    "transactionDigest": "BkQ7NJfVY8M3wuQWHLMSgQ3QL24r3bR4sgqecTQtaGcG",
+    "transactionDigest": "71H8MMww25XBzHPw2bQyrwmG1xhAWQKBYzvJscchKaWR",
     "created": [
       {
         "owner": {
           "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
         },
         "reference": {
-          "objectId": "0x58fac23344bf70ff207685e4a6f1ff08f7313f3c2124d4e8cfd76839525edb55",
-          "version": 386993571,
-          "digest": "A6xjsgxdmYAiawoELepn8Zq9tw8XZNqSYXAwvCFdNW9"
+          "objectId": "0xc23f411c9794cfee13292ceb0c063085aa05f79f03488a7531846326ca36315b",
+          "version": 388350297,
+          "digest": "5kmHu4ksanjJpoQqXhfnFgTVkpTfQ2Yp2UYePWoGvNow"
         }
       }
     ],
@@ -49,8 +49,8 @@
         },
         "reference": {
           "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-          "version": 386993571,
-          "digest": "2kKcxH14B9CM85Ffx1Kitfngczirgx5CaiVLwSsTtUu6"
+          "version": 388350297,
+          "digest": "CNiPhxEWof6QnGrDySKzGUAQp6ysnCroWi4QHBmcvjLr"
         }
       },
       {
@@ -61,8 +61,8 @@
         },
         "reference": {
           "objectId": "0x64f96d762c6fc8b91507a7b1c61ef55cb5dedf283bcece055763a223cadde815",
-          "version": 386993571,
-          "digest": "BUJTe6ugX5FwkVQypsPj3ncczRVthYYAFxYLcXUTkTVG"
+          "version": 388350297,
+          "digest": "5G2zPriqVQzxmzMXDavyuqfRZTVhfEeaHGRzczLbs9ev"
         }
       }
     ],
@@ -72,14 +72,14 @@
       },
       "reference": {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "version": 386993571,
-        "digest": "2kKcxH14B9CM85Ffx1Kitfngczirgx5CaiVLwSsTtUu6"
+        "version": 388350297,
+        "digest": "CNiPhxEWof6QnGrDySKzGUAQp6ysnCroWi4QHBmcvjLr"
       }
     },
     "dependencies": [
-      "3w89QZa8EFEjg9nL3Dx1kf5bcbPX7CyHTeWqEHyrNuZs",
+      "pqNZukj7Efj24DPPMC3RT8h6zt3z2napmEs2mY8iSqZ",
       "5obSZAujujBtYxhbtgxjCE43CdVYAxqxrgjh88grJ7h6",
-      "9ZSsgzv3C7E4VxcQE3asws9SLTpkAiupxQweQvobtajf"
+      "BkQ7NJfVY8M3wuQWHLMSgQ3QL24r3bR4sgqecTQtaGcG"
     ]
   },
   "objectChanges": [
@@ -91,9 +91,9 @@
       },
       "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
       "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-      "version": "386993571",
-      "previousVersion": "386993570",
-      "digest": "2kKcxH14B9CM85Ffx1Kitfngczirgx5CaiVLwSsTtUu6"
+      "version": "388350297",
+      "previousVersion": "388350296",
+      "digest": "CNiPhxEWof6QnGrDySKzGUAQp6ysnCroWi4QHBmcvjLr"
     },
     {
       "type": "mutated",
@@ -105,9 +105,9 @@
       },
       "objectType": "0x2::coin::TreasuryCap<0xbca761149ecff8360788d8e7536285719504f9cc88cce162b2cfef1cef9138ce::my_stable::MY_STABLE>",
       "objectId": "0x64f96d762c6fc8b91507a7b1c61ef55cb5dedf283bcece055763a223cadde815",
-      "version": "386993571",
-      "previousVersion": "376244216",
-      "digest": "BUJTe6ugX5FwkVQypsPj3ncczRVthYYAFxYLcXUTkTVG"
+      "version": "388350297",
+      "previousVersion": "386993571",
+      "digest": "5G2zPriqVQzxmzMXDavyuqfRZTVhfEeaHGRzczLbs9ev"
     },
     {
       "type": "created",
@@ -116,9 +116,9 @@
         "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
       },
       "objectType": "0x2::coin::Coin<0xbca761149ecff8360788d8e7536285719504f9cc88cce162b2cfef1cef9138ce::my_stable::MY_STABLE>",
-      "objectId": "0x58fac23344bf70ff207685e4a6f1ff08f7313f3c2124d4e8cfd76839525edb55",
-      "version": "386993571",
-      "digest": "A6xjsgxdmYAiawoELepn8Zq9tw8XZNqSYXAwvCFdNW9"
+      "objectId": "0xc23f411c9794cfee13292ceb0c063085aa05f79f03488a7531846326ca36315b",
+      "version": "388350297",
+      "digest": "5kmHu4ksanjJpoQqXhfnFgTVkpTfQ2Yp2UYePWoGvNow"
     }
   ],
   "confirmedLocalExecution": false

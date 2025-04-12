@@ -54,7 +54,7 @@ const getCreateDaoParams = () => {
         trading_period_ms: 2000,  // 2 s in milliseconds
         asset_metadata: assetPub.metadataId,
         stable_metadata: stablePub.metadataId, 
-        network: 'devnet' as Network
+        network: 'testnet' as Network
     };
 };
 
