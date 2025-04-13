@@ -9,10 +9,6 @@ use sui::clock::{Self, Clock};
 // Crankless Time Weighted Average Price (TWAP) Oracle
 
 // ========== Constants =========
-const BASIS_POINTS: u64 = 10_000;
-/// Basis points scalar (10,000 = 100%)
-/// Used for scaling max price step correctly. Allows for minimum TWAP max step of 0.01%,
-/// which over 12 hours equates to a maximum growth of 7.47%.
 const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
 const ONE_WEEK_MS: u64 = 604_800_000;
 
@@ -42,7 +38,7 @@ public struct Oracle has key, store {
     last_window_twap: u128,
     twap_start_delay: u64,
     // Reduces attacker advantage with surprise proposals
-    max_bps_per_step: u64,
+    twap_cap_step: u64,
     // Maximum relative step size for TWAP calculations
     market_start_time: u64,
     twap_initialization_price: u128,
@@ -53,14 +49,14 @@ public(package) fun new_oracle(
     twap_initialization_price: u128,
     market_start_time: u64,
     twap_start_delay: u64,
-    max_bps_per_step: u64,
+    twap_cap_step: u64,
     ctx: &mut TxContext,
 ): Oracle {
     assert!(twap_initialization_price > 0, EZERO_INITIALIZATION);
-    assert!(max_bps_per_step > 0, EZERO_STEP);
+    assert!(twap_cap_step > 0, EZERO_STEP);
     assert!(twap_start_delay < ONE_WEEK_MS, ELONG_DELAY); // One week in milliseconds
 
-    let oracle = Oracle {
+    Oracle {
         id: object::new(ctx), // Create a unique ID for the oracle
         last_price: twap_initialization_price,
         last_timestamp: market_start_time,
@@ -69,12 +65,10 @@ public(package) fun new_oracle(
         last_window_end: 0,
         last_window_twap: twap_initialization_price,
         twap_start_delay: twap_start_delay,
-        max_bps_per_step: max_bps_per_step,
+        twap_cap_step: twap_cap_step,
         market_start_time: market_start_time,
         twap_initialization_price: twap_initialization_price,
-    };
-
-    oracle
+    }
 }
 
 // ======== Helper Functions ========
@@ -82,20 +76,14 @@ public(package) fun new_oracle(
 fun cap_price_change(
     twap_base: u128,
     new_price: u128,
-    max_bps_per_step: u64,
+    twap_cap_step: u64,
     full_windows_since_last_update: u64,
 ): u128 {
-    // Calculate maximum allowed price movement as a percentage of base price
-    // max_bps_per_step is in basis points (e.g., 1000 = 10%)
+    // Calculate max change as absolute value step * number of windows
     let steps = full_windows_since_last_update + 1;
 
-    // Basis points can't be 0, see calculate_decimal_scale_factor in maths module
-    let unsafe_max_change =
-        (
-            ((twap_base as u256) * (max_bps_per_step as u256) * (steps as u256)) / (BASIS_POINTS as u256),
-        ) as u128;
-    // Ensure cap is not 0
-    let max_change = if (unsafe_max_change < 1) { 1 } else { unsafe_max_change };
+    // This could overflow if a proposal went on for longer than approximately 6.5 × 10^29 years, given windows are 60s.
+    let max_change = (twap_cap_step as u128) * (steps as u128);
 
     if (new_price > twap_base) {
         // Cap upward movement: min(new_price, saturating_add(twap_base, max_change))
@@ -145,7 +133,7 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
                 let capped_price = cap_price_change(
                     oracle.last_window_twap,
                     price,
-                    oracle.max_bps_per_step,
+                    oracle.twap_cap_step,
                     (full_windows_since_last_update as u64),
                 );
 
@@ -168,7 +156,7 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
                 let capped_price = cap_price_change(
                     oracle.last_window_twap,
                     price,
-                    oracle.max_bps_per_step,
+                    oracle.twap_cap_step,
                     full_windows_since_last_update,
                 );
 
@@ -224,7 +212,7 @@ public fun get_last_timestamp(oracle: &Oracle): u64 {
 }
 
 public fun get_config(oracle: &Oracle): (u64, u64) {
-    (oracle.twap_start_delay, oracle.max_bps_per_step)
+    (oracle.twap_start_delay, oracle.twap_cap_step)
 }
 
 public fun get_market_start_time(oracle: &Oracle): u64 {
@@ -276,7 +264,7 @@ public fun destroy_for_testing(oracle: Oracle) {
         last_window_end_cumulative_price: _,
         last_window_twap: _,
         twap_start_delay: _,
-        max_bps_per_step: _,
+        twap_cap_step: _,
         market_start_time: _,
         twap_initialization_price: _,
     } = oracle;

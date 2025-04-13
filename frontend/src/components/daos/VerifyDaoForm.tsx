@@ -211,10 +211,6 @@ const VerifyDaoForm = () => {
               account.
             </li>
             <li>The Twitter account has a verified tick.</li>
-            <li>
-              The DAO stable token has $100,000+ of liquidity onchain against
-              USDC or SUI.
-            </li>
             <li>Please wait for up to one week to get your DAO verified.</li>
           </ul>
         </div>

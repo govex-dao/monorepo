@@ -366,7 +366,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
         expectedAmountOutScaled.toString(),
       );
       const txb = new Transaction();
-      txb.setGasBudget(1000000000);
+      txb.setGasBudget(100000000);
 
       const existingConditionalType =
         tradeDirection === "assetToStable" ? 0 : 1;

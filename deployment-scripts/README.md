@@ -4,6 +4,8 @@ chmod +x setup.sh
 
 Set admin email as an env variable
 
+export ADMIN_EMAIL=your.email@example.com
+
 ./redeploy.sh deploy # reinstall the repo and deploy both backend and frontend
 
 ./setup.sh deploy # reinstall the repo and deploy both backend and frontend

@@ -17,7 +17,7 @@ const performCreatePayment = async () => {
 
         const splitResult = await splitCoin({
             amount: 10000,
-            network: 'devnet'
+            network: 'testnet'
         });
         console.log('Split result:', splitResult);
         

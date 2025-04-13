@@ -162,6 +162,7 @@ export const handleVerifications = async (events: SuiEvent[], type: string) => {
                                 review_period_ms: 0n,
                                 trading_period_ms: 0n,
                                 amm_twap_start_delay: 0n,
+                                amm_twap_initial_observation: 0n,
                                 amm_twap_step_max: 0n,
                                 twap_threshold: 0n
                             },
