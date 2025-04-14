@@ -149,7 +149,7 @@ public(package) fun swap_asset_to_stable(
     // Update reserves - include full asset in, but only remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
-    pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
+    pool.stable_reserve = pool.stable_reserve - amount_out;
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
@@ -353,7 +353,15 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
 
 // ======== Internal Functions ========
 fun calculate_fee(amount: u64, fee_percent: u64): u64 {
-    math::mul_div_to_64(amount, fee_percent, FEE_SCALE)
+    // Calculate fee normally
+    let calculated_fee = math::mul_div_to_64(amount, fee_percent, FEE_SCALE);
+    
+    // If the calculated fee would be 0 but amount is non-zero, return 1 instead
+    if (calculated_fee == 0) {
+        1
+    } else {
+        calculated_fee
+    }
 }
 
 public(package) fun calculate_output(
