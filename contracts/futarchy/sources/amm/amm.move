@@ -152,7 +152,7 @@ public(package) fun swap_asset_to_stable(
     let old_asset = pool.asset_reserve;
     let old_stable = pool.stable_reserve;
 
-    // Update reserves - include full asset in, but only remove amount_out_before_fee
+    // Update reserves - include full asset in, but remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
