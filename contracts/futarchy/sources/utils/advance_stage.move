@@ -155,7 +155,7 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
         clock,
     );
 
-    // If the proposal is finalized, collect fees
+    // If the proposal is finalized, collect fees before anyone can call empty_all_amm_liquidity
     if (proposal::state(proposal) == STATE_FINALIZED) {
         collect_protocol_fees(proposal, escrow, fee_manager, clock);
     }

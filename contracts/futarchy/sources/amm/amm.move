@@ -259,7 +259,17 @@ public(package) fun empty_all_amm_liquidity(
     _ctx: &mut TxContext,
 ): (u64, u64) {
     let asset_amount_out = pool.asset_reserve;
-    let stable_amount_out = pool.stable_reserve;
+    let mut stable_amount_out = pool.stable_reserve;
+
+    // Cap protocol fees at available stable amount and subtract from returned amount
+    if (pool.protocol_fees > 0) {
+        let fees_to_extract = if (pool.protocol_fees <= stable_amount_out) {
+            pool.protocol_fees
+        } else {
+            stable_amount_out // Cap at available amount
+        };
+        stable_amount_out = stable_amount_out - fees_to_extract;
+    };
 
     // Update reserves
     pool.asset_reserve = 0;
@@ -324,11 +334,7 @@ fun calculate_price_impact(
     reserve_out: u64,
 ): u128 {
     let ideal_out = math::mul_div_to_64(amount_in, reserve_out, reserve_in);
-    if (ideal_out <= amount_out) {
-        0
-    } else {
-        math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
-    }
+    math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
 }
 
 // Update the LiquidityPool struct price calculation to use TWAP:
