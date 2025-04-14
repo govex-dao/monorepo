@@ -324,11 +324,7 @@ fun calculate_price_impact(
     reserve_out: u64,
 ): u128 {
     let ideal_out = math::mul_div_to_64(amount_in, reserve_out, reserve_in);
-    if (ideal_out <= amount_out) {
-        0
-    } else {
-        math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
-    }
+    math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
 }
 
 // Update the LiquidityPool struct price calculation to use TWAP:
