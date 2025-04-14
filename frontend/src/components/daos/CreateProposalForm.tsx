@@ -9,7 +9,7 @@ import {
   CreateProposalData,
 } from "./proposal-transaction";
 import { CONSTANTS } from "../../constants";
-import { VerifiedIcon } from "../state/VerifiedIcon";
+import { VerifiedIcon } from "../icons/VerifiedIcon";
 import ReactMarkdown from "markdown-to-jsx";
 
 interface DaoData {

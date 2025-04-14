@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { Theme } from "@radix-ui/themes";
 import MarketPriceChart from "../components/trade/MarketPriceChart.tsx";
 import TradeForm from "../components/trade/TradeForm.tsx";
-import { VerifiedIcon } from "@/components/state/VerifiedIcon";
+import { VerifiedIcon } from "@/components/icons/VerifiedIcon.tsx";
 import TabSection from "../components/trade/TabSection";
 import { useTokenEvents } from "../hooks/useTokenEvents";
 import { useCurrentAccount } from "@mysten/dapp-kit";

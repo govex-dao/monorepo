@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
 import { CONSTANTS } from "../../constants";
 import { VerificationHistory } from "./VerificationHistory";
-import { VerifiedIcon } from "../state/VerifiedIcon";
+import { VerifiedIcon } from "../icons/VerifiedIcon";
 
 interface DaoData {
   dao_id: string;
