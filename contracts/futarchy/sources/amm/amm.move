@@ -155,7 +155,7 @@ public(package) fun swap_asset_to_stable(
     // Update reserves - include full asset in, but only remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
-    pool.stable_reserve = pool.stable_reserve - amount_out;
+    pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
     pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
