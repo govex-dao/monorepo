@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { CONSTANTS } from "../../constants";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
@@ -49,7 +50,8 @@ const CreateDaoForm = () => {
     twapThreshold: 1,
   });
 
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
   const [creating, setCreating] = useState(false);
   const [_error, setError] = useState<string | null>(null);
   const [_success, setSuccess] = useState(false);
@@ -151,6 +153,11 @@ const CreateDaoForm = () => {
     console.log(assetMetadata, stableMetadata);
     e.preventDefault();
 
+    if (!currentAccount?.address) {
+      toast.error("Please connect your wallet before creating a DAO.");
+      return;
+    }
+
     if (!assetMetadata?.id || !stableMetadata?.id) {
       setError(
         "Valid coin metadata is required for both asset and stable coins",
@@ -214,6 +221,15 @@ const CreateDaoForm = () => {
     setCreating(true);
     setError(null);
     setSuccess(false);
+    const loadingToast = toast.loading("Preparing transaction...");
+    const walletApprovalTimeout = setTimeout(() => {
+      toast.error("Wallet approval timeout - no response after 1 minute", {
+        id: loadingToast,
+        duration: 5000,
+      });
+      setError("Wallet approval timeout");
+      setCreating(false);
+    }, 60000); // 1 minute timeout
 
     try {
       const tx = new Transaction();
@@ -246,18 +262,27 @@ const CreateDaoForm = () => {
         ],
       });
 
-      await signAndExecute({ transaction: tx });
-      setSuccess(true);
-      toast.success("Successfully executed transaction!", {
-        duration: 5000, // Will show for 5 seconds
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create DAO");
-      toast.error(`Failed to execute transaction: ${err as string}`, {
-        duration: 5000,
-      });
+      toast.loading("Waiting for wallet approval...", { id: loadingToast });
+
+      const response = await executeTransaction(tx);
+
+      if (
+        response &&
+        response.digest &&
+        "effects" in response &&
+        response.effects?.status?.status === "success"
+      ) {
+        setSuccess(true);
+      } else {
+        // Handle case where response exists but doesn't indicate success
+        setError("Transaction completed but with unexpected result");
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Transaction failed");
     } finally {
       setCreating(false);
+      clearTimeout(walletApprovalTimeout);
+      toast.dismiss(loadingToast);
     }
   };
 
