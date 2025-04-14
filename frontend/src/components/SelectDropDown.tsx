@@ -22,14 +22,10 @@ export function SelectDropDown({
   className?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Update the selected label when value or options change
-  useEffect(() => {
-    const selected = options.find(option => option.value === value);
-    setSelectedLabel(selected ? selected.label : placeholder);
-  }, [value, options, placeholder]);
+  const selectedOption = options.find(option => option.value === value);
+  const selectedLabel = selectedOption ? selectedOption.label : placeholder;
 
   // Close dropdown when clicking outside
   useEffect(() => {
