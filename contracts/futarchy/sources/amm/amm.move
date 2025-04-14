@@ -121,7 +121,7 @@ public(package) fun swap_asset_to_stable(
     // When selling outcome tokens (asset -> stable):
     // 1. We calculate the full swap output first (before fees)
     // 2. Then collect fee from the stable output
-    // 
+    //
     // This approach is used because it:
     // - Maintains accurate asset pricing through the entire reserve
     // - Preserves the XY=K invariant for the actual pool tokens
@@ -272,7 +272,7 @@ public(package) fun empty_all_amm_liquidity(
 ): (u64, u64) {
     // Since fees are now tracked separately and don't affect the LP ratio,
     // we can simply return all values separately without any adjustments
-    let asset_amount_out = pool.asset_reserve; 
+    let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
 
     // Update reserves
