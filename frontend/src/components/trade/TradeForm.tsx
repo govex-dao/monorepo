@@ -121,16 +121,23 @@ const TradeForm: React.FC<TradeFormProps> = ({
     const A = Number(asset) / Number(assetScale);
     const S = Number(stable) / Number(stableScale);
 
-    const breakdown = calculateSwapBreakdown({
-      reserveIn: isBuy ? S : A,
-      reserveOut: isBuy ? A : S,
-      amountIn: x,
-      slippageTolerance: TOLERANCE,
-    });
+    try {
+      const breakdown = calculateSwapBreakdown({
+        reserveIn: isBuy ? S : A,
+        reserveOut: isBuy ? A : S,
+        amountIn: x,
+        slippageTolerance: TOLERANCE,
+      });
 
-    setSwapDetails(breakdown);
-    setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
-    setAveragePrice(breakdown.averagePrice.toPrecision(6));
+      setSwapDetails(breakdown);
+      setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
+      setAveragePrice(breakdown.averagePrice.toPrecision(6));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Failed to calculate swap");
+      setSwapDetails(null);
+      setExpectedAmountOut("");
+      setAveragePrice("");
+    }
   };
 
   const filteredTokens = useMemo(() => {

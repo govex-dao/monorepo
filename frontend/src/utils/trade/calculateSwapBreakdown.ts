@@ -7,7 +7,6 @@ interface SwapParams {
   reserveIn: number;   // Current reserve of the input token
   reserveOut: number;  // Current reserve of the output token
   amountIn: number;    // Amount of input token the user wants to swap
-  feeBps?: number;     // Optional custom fee in basis points
   slippageTolerance?: number; // Optional slippage tolerance (default 0.5%)
 }
 
@@ -35,7 +34,11 @@ export interface SwapBreakdown {
  */
 export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
   const { reserveIn, reserveOut, amountIn, slippageTolerance = 0.005 } = params
-
+  
+  if (reserveIn <= 0 || reserveOut <= 0) {
+    throw new Error('Invalid pool state: reserves must be greater than zero');
+  }
+  
   // Calculate fee and amount after fee is deducted
   const feeMultiplier = 1 - SWAP_FEE_BPS / 10_000;
   const amountInAfterFee = amountIn * feeMultiplier;
