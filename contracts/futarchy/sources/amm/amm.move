@@ -118,7 +118,13 @@ public(package) fun swap_asset_to_stable(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate output based on full amount (no fee yet)
+    // When selling outcome tokens (asset -> stable):
+    // 1. We calculate the full swap output first (before fees)
+    // 2. Then collect fee from the stable output
+    // 
+    // This approach is used because it:
+    // - Maintains accurate asset pricing through the entire reserve
+    // - Preserves the XY=K invariant for the actual pool tokens
     let amount_out_before_fee = calculate_output(
         amount_in,
         pool.asset_reserve,
@@ -192,7 +198,13 @@ public(package) fun swap_stable_to_asset(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate fee from stable tokens
+    // When buying outcome tokens (stable -> asset):
+    // 1. We collect fee from stable input first
+    // 2. Then execute swap with the remaining amount
+    //
+    // This approach is used because it:
+    // - Maintains consistent fee collection in stable tokens only
+    // - Prevents dilution of the outcome token reserves
     let fee_amount = calculate_fee(amount_in, pool.fee_percent);
     let amount_in_after_fee = amount_in - fee_amount;
 
@@ -258,18 +270,10 @@ public(package) fun empty_all_amm_liquidity(
     pool: &mut LiquidityPool,
     _ctx: &mut TxContext,
 ): (u64, u64) {
-    let asset_amount_out = pool.asset_reserve;
-    let mut stable_amount_out = pool.stable_reserve;
-
-    // Cap protocol fees at available stable amount and subtract from returned amount
-    if (pool.protocol_fees > 0) {
-        let fees_to_extract = if (pool.protocol_fees <= stable_amount_out) {
-            pool.protocol_fees
-        } else {
-            stable_amount_out // Cap at available amount
-        };
-        stable_amount_out = stable_amount_out - fees_to_extract;
-    };
+    // Since fees are now tracked separately and don't affect the LP ratio,
+    // we can simply return all values separately without any adjustments
+    let asset_amount_out = pool.asset_reserve; 
+    let stable_amount_out = pool.stable_reserve;
 
     // Update reserves
     pool.asset_reserve = 0;
