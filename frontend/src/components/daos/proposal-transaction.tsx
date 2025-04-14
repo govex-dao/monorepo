@@ -1,6 +1,5 @@
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
-import toast from "react-hot-toast";
 import { CONSTANTS } from "@/constants";
 
 export const PROPOSAL_CONSTANTS = {
@@ -157,19 +156,13 @@ export async function createProposalTransaction(
 
     txb.setGasBudget(1000000000);
 
-    toast.success("Proposal transaction created successfully", {
-      duration: 5000,
-    });
-
     return txb;
   } catch (error) {
-    const errorMessage =
+    console.error(
       error instanceof Error
         ? error.message
-        : "Failed to create proposal transaction";
-    toast.error(errorMessage, {
-      duration: 5000,
-    });
+        : "Failed to create proposal transaction",
+    );
 
     throw error; // Re-throw to allow caller to handle the error if needed
   }

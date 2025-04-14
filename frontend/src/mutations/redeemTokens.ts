@@ -49,6 +49,13 @@ export function useRedeemTokensMutation() {
       if (!currentAccount?.address) {
         throw new Error("Wallet not connected");
       }
+      const loadingToast = toast.loading("Preparing transaction...");
+      const walletApprovalTimeout = setTimeout(() => {
+        toast.error("Wallet approval timeout - no response after 1 minute", {
+          id: loadingToast,
+          duration: 5000,
+        });
+      }, 60000);
 
       const txb = new Transaction();
       txb.setGasBudget(50000000);
@@ -289,24 +296,26 @@ export function useRedeemTokensMutation() {
         }
       }
 
-      const loadingToast = toast.loading("Redeeming tokens...");
+      toast.loading("Redeeming tokens...", { id: loadingToast });
       try {
         const result = await executeTransaction(txb);
-        toast.dismiss(loadingToast);
-        if (result?.effects?.status?.status === "success") {
-          toast.success("Tokens redeemed successfully!");
+        if (
+          result &&
+          result.digest &&
+          "effects" in result &&
+          result.effects?.status?.status === "success"
+        ) {
           queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
-        } else {
-          toast.error("Token redemption failed: Transaction unsuccessful");
         }
         return result;
       } catch (error: any) {
+        console.error(
+          error instanceof Error ? error.message : "Transaction failed",
+        );
+      } finally {
         toast.dismiss(loadingToast);
-        throw error;
+        clearTimeout(walletApprovalTimeout);
       }
-    },
-    onError: (error: any) => {
-      toast.error(`Token redemption failed: ${error.message}`);
     },
   });
 }
