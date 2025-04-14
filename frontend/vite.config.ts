@@ -65,5 +65,14 @@ export default defineConfig(({ command, mode }) => {
      legalComments: 'none',
      treeShaking: true,
    },
+   // Add Vitest configuration here
+   test: {
+     environment: 'jsdom',
+     globals: true,
+     include: ['**/*.{test,spec}.{ts,tsx}'],
+     coverage: {
+       reporter: ['text', 'json', 'html'],
+     },
+   },
  }
 });

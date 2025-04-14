@@ -59,11 +59,10 @@ public(package) fun new_pool(
     outcome_idx: u8,
     initial_asset: u64,
     initial_stable: u64,
+    twap_initial_observation: u128,
     twap_start_delay: u64,
     twap_step_max: u64,
     start_time: u64,
-    min_stable: u64,
-    min_asset: u64,
     ctx: &mut TxContext,
 ): LiquidityPool {
     // Same validations
@@ -71,7 +70,7 @@ public(package) fun new_pool(
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELOW_LIQUIDITY);
 
-    let twap_initialization_price = math::mul_div_to_128(min_stable, BASIS_POINTS, min_asset);
+    let twap_initialization_price = twap_initial_observation;
     let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
 
     check_price_under_max(initial_price);
@@ -119,7 +118,13 @@ public(package) fun swap_asset_to_stable(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate output based on full amount (no fee yet)
+    // When selling outcome tokens (asset -> stable):
+    // 1. We calculate the full swap output first (before fees)
+    // 2. Then collect fee from the stable output
+    //
+    // This approach is used because it:
+    // - Maintains accurate asset pricing through the entire reserve
+    // - Preserves the XY=K invariant for the actual pool tokens
     let amount_out_before_fee = calculate_output(
         amount_in,
         pool.asset_reserve,
@@ -147,7 +152,7 @@ public(package) fun swap_asset_to_stable(
     let old_asset = pool.asset_reserve;
     let old_stable = pool.stable_reserve;
 
-    // Update reserves - include full asset in, but only remove amount_out_before_fee
+    // Update reserves - include full asset in, but remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
@@ -193,7 +198,13 @@ public(package) fun swap_stable_to_asset(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate fee from stable tokens
+    // When buying outcome tokens (stable -> asset):
+    // 1. We collect fee from stable input first
+    // 2. Then execute swap with the remaining amount
+    //
+    // This approach is used because it:
+    // - Maintains consistent fee collection in stable tokens only
+    // - Prevents dilution of the outcome token reserves
     let fee_amount = calculate_fee(amount_in, pool.fee_percent);
     let amount_in_after_fee = amount_in - fee_amount;
 
@@ -259,6 +270,8 @@ public(package) fun empty_all_amm_liquidity(
     pool: &mut LiquidityPool,
     _ctx: &mut TxContext,
 ): (u64, u64) {
+    // Since fees are now tracked separately and don't affect the LP ratio,
+    // we can simply return all values separately without any adjustments
     let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
 
@@ -325,11 +338,7 @@ fun calculate_price_impact(
     reserve_out: u64,
 ): u128 {
     let ideal_out = math::mul_div_to_64(amount_in, reserve_out, reserve_in);
-    if (ideal_out <= amount_out) {
-        0
-    } else {
-        math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
-    }
+    math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
 }
 
 // Update the LiquidityPool struct price calculation to use TWAP:
@@ -354,7 +363,15 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
 
 // ======== Internal Functions ========
 fun calculate_fee(amount: u64, fee_percent: u64): u64 {
-    math::mul_div_to_64(amount, fee_percent, FEE_SCALE)
+    // Calculate fee normally
+    let calculated_fee = math::mul_div_to_64(amount, fee_percent, FEE_SCALE);
+
+    // If the calculated fee would be 0 but amount is non-zero, return 1 instead
+    if (calculated_fee == 0) {
+        1
+    } else {
+        calculated_fee
+    }
 }
 
 public(package) fun calculate_output(

@@ -64,6 +64,7 @@ public struct DAO has key, store {
     creation_time: u64,
     amm_twap_start_delay: u64,
     amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
     twap_threshold: u64,
     dao_name: AsciiString,
     icon_url: Url,
@@ -117,6 +118,7 @@ public struct DAOCreated has copy, drop {
     trading_period_ms: u64,
     amm_twap_start_delay: u64,
     amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
     twap_threshold: u64,
 }
 
@@ -146,6 +148,7 @@ public fun create<AssetType, StableType>(
     stable_symbol: AsciiString,
     amm_twap_start_delay: u64,
     amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
     twap_threshold: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -169,7 +172,7 @@ public fun create<AssetType, StableType>(
 
     let timestamp = clock::timestamp_ms(clock);
 
-    // there is a limit where this migth affect TWAP and AMM calculation so let's go with 9 for now
+    // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
     assert!(if (stable_decimals >= asset_decimals) {
         (stable_decimals - asset_decimals) <= 9
     } else {
@@ -191,6 +194,7 @@ public fun create<AssetType, StableType>(
         creation_time: timestamp,
         amm_twap_start_delay,
         amm_twap_step_max,
+        amm_twap_initial_observation,
         twap_threshold,
         dao_name: dao_name,
         icon_url,
@@ -231,6 +235,7 @@ public fun create<AssetType, StableType>(
         trading_period_ms,
         amm_twap_start_delay,
         amm_twap_step_max,
+        amm_twap_initial_observation,
         twap_threshold,
     });
 
@@ -313,6 +318,7 @@ public fun create_proposal<AssetType, StableType>(
         metadata,
         outcome_messages,
         dao.amm_twap_start_delay,
+        dao.amm_twap_initial_observation,
         dao.amm_twap_step_max,
         initial_outcome_amounts,
         dao.twap_threshold,
@@ -420,8 +426,8 @@ public fun is_verified(dao: &DAO): bool { dao.verified }
 public fun get_attestation_url(dao: &DAO): &String { &dao.attestation_url }
 
 // === Getters ===
-public fun get_amm_config(dao: &DAO): (u64, u64) {
-    (dao.amm_twap_start_delay, dao.amm_twap_step_max)
+public fun get_amm_config(dao: &DAO): (u64, u64, u128) {
+    (dao.amm_twap_start_delay, dao.amm_twap_step_max, dao.amm_twap_initial_observation)
 }
 
 public fun get_proposal_info(dao: &DAO, proposal_id: ID): &ProposalInfo {

@@ -32,7 +32,7 @@ const getRequestDaoParams = () => {
         paymentCoinId: payResults.splitCoinObjectId,
         dao: daoResults.daoId,
         attestationUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Retriever_in_water.jpg',
-        network: 'devnet' as Network
+        network: 'testnet' as Network
     };
 };
 

@@ -32,6 +32,15 @@ export function useAdvanceStateMutation() {
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
+
+      const loadingToast = toast.loading("Preparing transaction...");
+      const walletApprovalTimeout = setTimeout(() => {
+        toast.error("Wallet approval timeout - no response after 1 minute", {
+          id: loadingToast,
+          duration: 5000,
+        });
+      }, 60000);
+
       const txb = new Transaction();
       txb.setGasBudget(50000000);
       console.log(
@@ -81,14 +90,9 @@ export function useAdvanceStateMutation() {
         });
       }
 
-      // Show loading toast while transaction is processing
-      const loadingToast = toast.loading("Advancing state...");
-
       try {
+        toast.loading("Waiting for wallet approval...", { id: loadingToast });
         const result = await executeTransaction(txb);
-
-        // Dismiss loading toast
-        toast.dismiss(loadingToast);
 
         // Check if we have a result and it was successful
         if (
@@ -96,21 +100,22 @@ export function useAdvanceStateMutation() {
           "effects" in result &&
           result.effects?.status?.status === "success"
         ) {
-          toast.success("State advanced successfully!");
           // Wait for backend to update (10 seconds)
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
           }, 10_000);
-        } else {
-          // Handle failed transaction
-          toast.error("Failed to advance state: Transaction failed");
         }
 
         return result;
       } catch (error) {
         // Dismiss loading toast and show error
-        toast.dismiss(loadingToast);
+        console.error(
+          error instanceof Error ? error.message : "Transaction failed",
+        );
         throw error;
+      } finally {
+        clearTimeout(walletApprovalTimeout);
+        toast.dismiss(loadingToast);
       }
     },
 

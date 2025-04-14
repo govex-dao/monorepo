@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
+import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
 import {
   createProposalTransaction,
@@ -275,6 +277,8 @@ const CreateProposalForm = ({
     ...DEFAULT_FORM_DATA,
     senderAddress: walletAddress, // Set initial value
   }));
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
 
   // Add this query to fetch DAO data when loading from URL
   const { data: daoData } = useQuery({
@@ -347,9 +351,6 @@ const CreateProposalForm = ({
     });
     setCustomAmounts(newAmounts);
   };
-
-  // This is your existing signAndExecute declaration
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -406,6 +407,19 @@ const CreateProposalForm = ({
     e.preventDefault();
     setCreating(true);
     setError(null);
+
+    if (!currentAccount?.address) {
+      toast.error("Please connect your wallet before creating a proposal.");
+      return;
+    }
+
+    const loadingToast = toast.loading("Preparing transaction...");
+    const walletApprovalTimeout = setTimeout(() => {
+      toast.error("Wallet approval timeout - no response after 1 minute", {
+        id: loadingToast,
+        duration: 5000,
+      });
+    }, 60000);
 
     try {
       // Constants for maximum lengths
@@ -493,24 +507,31 @@ const CreateProposalForm = ({
         CONSTANTS.futarchyPackage,
       );
 
-      await signAndExecute({
-        transaction: txBlock,
-      });
+      toast.loading("Waiting for wallet approval...", { id: loadingToast });
 
-      setFormData((prev) => ({
-        ...DEFAULT_FORM_DATA,
-        senderAddress: prev.senderAddress,
-      }));
+      const response = await executeTransaction(txBlock);
+
+      // Handle the response
+      if (
+        response &&
+        response.digest &&
+        "effects" in response &&
+        response.effects?.status?.status === "success"
+      ) {
+        setFormData((prev) => ({
+          ...DEFAULT_FORM_DATA,
+          senderAddress: prev.senderAddress,
+        }));
+      }
     } catch (error: unknown) {
       console.error("Error creating proposal:", {
         message: error instanceof Error ? error.message : String(error),
         details: error,
       });
-      setError(
-        error instanceof Error ? error.message : "Failed to create proposal",
-      );
     } finally {
       setCreating(false);
+      clearTimeout(walletApprovalTimeout);
+      toast.dismiss(loadingToast);
     }
   };
   return (

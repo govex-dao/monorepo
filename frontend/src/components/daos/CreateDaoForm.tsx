@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { CONSTANTS } from "../../constants";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
 import CoinTypeInput from "./CoinTypeInput";
+import TimeInput from "../TimeInput";
 
 const DEFAULT_ASSET_TYPE = CONSTANTS.assetType;
 const DEFAULT_STABLE_TYPE = CONSTANTS.stableType;
@@ -19,7 +21,8 @@ interface FormData {
   reviewPeriodMs: number;
   tradingPeriodMs: number;
   twapStartDelay: number;
-  twapStepMax: number;
+  twapStepMax: string;
+  twapInitialObservation: string;
   twapThreshold: number;
 }
 
@@ -42,11 +45,13 @@ const CreateDaoForm = () => {
     reviewPeriodMs: 3600000, // 1 hour in milliseconds
     tradingPeriodMs: 7200000, // 2 hours in milliseconds
     twapStartDelay: 60000,
-    twapStepMax: 0.1,
+    twapInitialObservation: "1000000000",
+    twapStepMax: "5000000",
     twapThreshold: 1,
   });
 
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
   const [creating, setCreating] = useState(false);
   const [_error, setError] = useState<string | null>(null);
   const [_success, setSuccess] = useState(false);
@@ -122,9 +127,12 @@ const CreateDaoForm = () => {
     stableMetadata:
       "The metadata object ID for the stable coin type selected above",
     twapStartDelay: "Delay before TWAP calculations begin (in milliseconds)",
-    twapStepMax: "Maximum % step size for TWAP cap per a 60s window",
+    twapStepMax:
+      "Maximum price change step size for TWAP price accumulation per a 60s window",
     twapThreshold:
       "% difference by which an outcome must be greater than Reject to pass",
+    twapInitialObservation:
+      "The starting anchor price for the TWAP calculation",
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,6 +153,11 @@ const CreateDaoForm = () => {
     console.log(assetMetadata, stableMetadata);
     e.preventDefault();
 
+    if (!currentAccount?.address) {
+      toast.error("Please connect your wallet before creating a DAO.");
+      return;
+    }
+
     if (!assetMetadata?.id || !stableMetadata?.id) {
       setError(
         "Valid coin metadata is required for both asset and stable coins",
@@ -157,6 +170,9 @@ const CreateDaoForm = () => {
       );
       return;
     }
+
+    const chainTwapStepMax = BigInt(formData.twapStepMax);
+    const chainTwapInitialObservation = BigInt(formData.twapInitialObservation);
 
     // Validate amounts
     if (!formData.minAssetAmount || !formData.minStableAmount) {
@@ -205,6 +221,15 @@ const CreateDaoForm = () => {
     setCreating(true);
     setError(null);
     setSuccess(false);
+    const loadingToast = toast.loading("Preparing transaction...");
+    const walletApprovalTimeout = setTimeout(() => {
+      toast.error("Wallet approval timeout - no response after 1 minute", {
+        id: loadingToast,
+        duration: 5000,
+      });
+      setError("Wallet approval timeout");
+      setCreating(false);
+    }, 60000); // 1 minute timeout
 
     try {
       const tx = new Transaction();
@@ -213,10 +238,6 @@ const CreateDaoForm = () => {
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000)]);
 
       const chainAdjustedTwapThreshold = formData.twapThreshold * 1000;
-      const chainAdjustedTwapStepMax = Math.max(
-        1,
-        Math.round(formData.twapStepMax * 100),
-      );
 
       tx.moveCall({
         target: `${CONSTANTS.futarchyPackage}::factory::create_dao`,
@@ -234,24 +255,34 @@ const CreateDaoForm = () => {
           tx.object(assetMetadata.id),
           tx.object(stableMetadata.id),
           tx.pure.u64(formData.twapStartDelay),
-          tx.pure.u64(chainAdjustedTwapStepMax),
+          tx.pure.u64(chainTwapStepMax),
+          tx.pure.u128(chainTwapInitialObservation),
           tx.pure.u64(chainAdjustedTwapThreshold),
           tx.object("0x6"),
         ],
       });
 
-      await signAndExecute({ transaction: tx });
-      setSuccess(true);
-      toast.success("Successfully executed transaction!", {
-        duration: 5000, // Will show for 5 seconds
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create DAO");
-      toast.error(`Failed to execute transaction: ${err as string}`, {
-        duration: 5000,
-      });
+      toast.loading("Waiting for wallet approval...", { id: loadingToast });
+
+      const response = await executeTransaction(tx);
+
+      if (
+        response &&
+        response.digest &&
+        "effects" in response &&
+        response.effects?.status?.status === "success"
+      ) {
+        setSuccess(true);
+      } else {
+        // Handle case where response exists but doesn't indicate success
+        setError("Transaction completed but with unexpected result");
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Transaction failed");
     } finally {
       setCreating(false);
+      clearTimeout(walletApprovalTimeout);
+      toast.dismiss(loadingToast);
     }
   };
 
@@ -363,81 +394,35 @@ const CreateDaoForm = () => {
         </div>
         {/* Advanced configuration section */}
         <div className={`space-y-4 mt-4 ${showAdvanced ? "" : "hidden"}`}>
-          {/* Move the following fields inside this div */}
+          <TimeInput
+            label="Pre-trading Period"
+            tooltip={tooltips.reviewPeriodMs}
+            valueMs={formData.reviewPeriodMs}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, reviewPeriodMs: newValueMs }))
+            }
+          />
+          <TimeInput
+            label="TWAP Start Delay"
+            tooltip={tooltips.twapStartDelay}
+            valueMs={formData.twapStartDelay}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, twapStartDelay: newValueMs }))
+            }
+          />
+          <TimeInput
+            label="Trading Period"
+            tooltip={tooltips.tradingPeriodMs}
+            valueMs={formData.tradingPeriodMs}
+            onChange={(newValueMs) =>
+              setFormData((prev) => ({ ...prev, tradingPeriodMs: newValueMs }))
+            }
+          />
 
+          {/* Other advanced settings remain unchanged */}
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="block text-sm font-medium">
-                Pre-trading Period (ms)
-              </label>
-              <div className="relative group">
-                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                  {tooltips.reviewPeriodMs}
-                </div>
-              </div>
-            </div>
-            <input
-              type="number"
-              name="reviewPeriodMs"
-              value={formData.reviewPeriodMs}
-              onChange={handleInputChange}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-              min="0"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <label className="block text-sm font-medium">
-                Trading Period (ms)
-              </label>
-              <div className="relative group">
-                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                  {tooltips.tradingPeriodMs}
-                </div>
-              </div>
-            </div>
-            <input
-              type="number"
-              name="tradingPeriodMs"
-              value={formData.tradingPeriodMs}
-              onChange={handleInputChange}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-              min="0"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <label className="block text-sm font-medium">
-                TWAP Start Delay (ms)
-              </label>
-              <div className="relative group">
-                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-                  {tooltips.twapStartDelay}
-                </div>
-              </div>
-            </div>
-            <input
-              type="number"
-              name="twapStartDelay"
-              value={formData.twapStartDelay}
-              onChange={handleInputChange}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500"
-              min="0"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center space-x-2">
-              <label className="block text-sm font-medium">
-                TWAP Step Max (%)
-              </label>
+              <label className="block text-sm font-medium">TWAP Step Max</label>
               <div className="relative group">
                 <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
@@ -447,22 +432,50 @@ const CreateDaoForm = () => {
             </div>
             <div className="relative">
               <input
-                type="number"
+                type="text"
                 name="twapStepMax"
-                value={Number(formData.twapStepMax).toFixed(2)}
+                value={formData.twapStepMax}
                 onChange={(e) => {
+                  const cleanValue = e.target.value.replace(/[^0-9]/g, "");
                   const value =
-                    Math.round(parseFloat(e.target.value) * 100) / 100;
+                    cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
                   setFormData((prev) => ({ ...prev, twapStepMax: value }));
                 }}
                 className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
-                min="0.01"
-                step="0.01"
                 required
               />
-              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500">
-                %
-              </span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <label className="block text-sm font-medium">
+                TWAP Initial Observation
+              </label>
+              <div className="relative group">
+                <InfoCircledIcon className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {tooltips.twapInitialObservation}
+                </div>
+              </div>
+            </div>
+            <div className="relative">
+              <input
+                type="text"
+                name="twapInitialObservation"
+                value={formData.twapInitialObservation}
+                onChange={(e) => {
+                  const cleanValue = e.target.value.replace(/[^0-9]/g, "");
+                  const value =
+                    cleanValue === "0" ? "0" : cleanValue.replace(/^0+/, "");
+                  setFormData((prev) => ({
+                    ...prev,
+                    twapInitialObservation: value,
+                  }));
+                }}
+                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 pr-8"
+                required
+              />
             </div>
           </div>
 
@@ -520,7 +533,8 @@ const CreateDaoForm = () => {
               placeholder="Enter image URL"
             />
           </div>
-        </div>{" "}
+        </div>
+
         {/* End of advanced configuration section */}
         {/* Image preview section */}
         <div className="mt-6 space-y-2">

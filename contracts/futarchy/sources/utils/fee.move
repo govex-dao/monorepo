@@ -116,7 +116,7 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         id: object::new(ctx),
     };
 
-    public_transfer(fee_manager, tx_context::sender(ctx));
+    public_share_object(fee_manager);
     public_transfer(fee_admin_cap, tx_context::sender(ctx));
 
     // Consuming the witness ensures one-time initialization.

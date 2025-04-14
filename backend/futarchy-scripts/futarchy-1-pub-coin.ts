@@ -9,7 +9,7 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function deployContracts() {
     try {
         // Deploy asset contract
-        const assetPath = path.resolve(__dirname + '/../../contracts/asset');
+        const assetPath = path.resolve(__dirname + '/../../contracts/test_asset');
         
         // Remove the build directory if it exists
         const assetBuildPath = path.join(assetPath, 'build');
@@ -27,7 +27,7 @@ async function deployContracts() {
 
         // Publish first contract
         await publishPackage({
-            packagePath: __dirname + '/../../contracts/asset',
+            packagePath: __dirname + '/../../contracts/test_asset',
             network: 'testnet',
             exportFileName: 'asset-contract',
         });
@@ -36,7 +36,7 @@ async function deployContracts() {
         await delay(10000); // 10 second delay
 
         // Deploy stable contract
-        const stablePath = path.resolve(__dirname + '/../../contracts/stable');
+        const stablePath = path.resolve(__dirname + '/../../contracts/test_stable');
         
         // Remove the build directory if it exists
         const stableBuildPath = path.join(stablePath, 'build');
@@ -54,7 +54,7 @@ async function deployContracts() {
 
         // Publish second contract
         await publishPackage({
-            packagePath: __dirname + '/../../contracts/stable',
+            packagePath: __dirname + '/../../contracts/test_stable',
             network: 'testnet',
             exportFileName: 'stable-contract',
         });

@@ -38,6 +38,7 @@ interface DAOCreated {
     trading_period_ms: string;
     amm_twap_start_delay: string;
     amm_twap_step_max: string;
+    amm_twap_initial_observation: string;
     twap_threshold: string;
 }
 
@@ -365,6 +366,7 @@ function validateDAOData(data: any): data is DAOCreated {
         'trading_period_ms',
         'amm_twap_start_delay',
         'amm_twap_step_max',
+        'amm_twap_initial_observation',
         'twap_threshold'
     ];
 
@@ -426,6 +428,7 @@ export const handleDAOObjects = async (events: SuiEvent[], type: string) => {
                 trading_period_ms: safeBigInt(data.trading_period_ms),
                 amm_twap_start_delay: safeBigInt(data.amm_twap_start_delay),
                 amm_twap_step_max: safeBigInt(data.amm_twap_step_max),
+                amm_twap_initial_observation: safeBigInt(data.amm_twap_initial_observation),
                 twap_threshold: safeBigInt(data.twap_threshold)
             });
         } catch (error) {

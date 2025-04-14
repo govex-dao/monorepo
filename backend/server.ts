@@ -23,7 +23,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', async (req, res) => {
-	return res.send({ message: '🚀 API is functional 🚀' });
+	res.send({ message: '🚀 API is functional 🚀' });
 });
 
 function serializeAllBigInts(obj: any): any {  
@@ -84,11 +84,11 @@ app.get('/dao/:daoId/verification-requests', async (req, res) => {
                 null
         }));
 
-        return res.json(transformedRequests);
+        res.json(transformedRequests);
         
     } catch (e) {
         console.error('Error fetching verification requests:', e);
-        return res.status(500).json({
+        res.status(500).json({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -181,7 +181,7 @@ app.get('/daos', async (req, res) => {
             return 0;
         });
 
-        return res.json({ 
+        res.json({ 
             data: sortedDaos,
             pagination: {
                 hasMore: false
@@ -189,7 +189,7 @@ app.get('/daos', async (req, res) => {
         });
     } catch (e) {
         console.error('DAO search error:', e);
-        return res.status(400).json({
+        res.status(400).json({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -244,10 +244,10 @@ app.get('/dao/:daoId/proposals', async (req, res) => {
             };
         }));
 
-        return res.json(formatPaginatedResponse(transformedProposals));
+        res.json(formatPaginatedResponse(transformedProposals));
     } catch (e) {
         console.error('Error fetching DAO proposals:', e);
-        return res.status(500).json({
+        res.status(500).json({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -258,7 +258,7 @@ app.get('/search', async (req, res) => {
     const { query } = req.query;
 
     if (!query) {
-        return res.json({ data: [] });
+        res.json({ data: [] });
     }
 
     try {
@@ -346,10 +346,10 @@ app.get('/search', async (req, res) => {
         };
         
 
-        return res.json({ data: formattedResults });
+        res.json({ data: formattedResults });
     } catch (e) {
         console.error('Search error:', e);
-        return res.status(400).json({
+        res.status(400).json({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -361,9 +361,10 @@ app.get('/proposals/search', async (req, res) => {
         const { proposal_id, market_state_id } = req.query;
 
         if (!proposal_id && !market_state_id) {
-            return res.status(400).send({ 
+            res.status(400).send({ 
                 message: 'Either proposal_id or market_state_id must be provided' 
             });
+            return;
         }
 
         // Build the where clause based on provided parameters
@@ -386,15 +387,16 @@ app.get('/proposals/search', async (req, res) => {
         });
 
         if (!proposal) {
-            return res.status(404).send({ 
+            res.status(404).send({ 
                 message: 'Proposal not found' 
             });
+            return;
         }
 
-        return res.send(proposal);
+        res.send(proposal);
     } catch (e) {
         console.error('Error searching proposals:', e);
-        return res.status(500).send({ 
+        res.status(500).send({ 
             message: 'Internal server error',
             error: e 
         });
@@ -454,10 +456,10 @@ app.get('/proposals', async (req, res) => {
             };
         }));
 
-        return res.send(formatPaginatedResponse(transformedProposals));
+        res.send(formatPaginatedResponse(transformedProposals));
     } catch (e) {
         console.error('Error fetching proposals:', e);
-        return res.status(500).send({ 
+        res.status(500).send({ 
             message: 'Internal server error',
             error: e instanceof Error ? e.message : 'Unknown error'
         });
@@ -560,7 +562,8 @@ app.get('/proposals/:id', async (req, res) => {
       }
   
       if (!proposal) {
-        return res.status(404).send({ message: 'Proposal not found' });
+        res.status(404).send({ message: 'Proposal not found' });
+        return;
       }
   
       // Helper function to serialize BigInt values
@@ -593,6 +596,7 @@ app.get('/proposals/:id', async (req, res) => {
           stable_value: serializeBigInt(proposal.stable_value),
           review_period_ms: serializeBigInt(proposal.review_period_ms),
           trading_period_ms: serializeBigInt(proposal.trading_period_ms),
+          twap_initial_observation: serializeBigInt(proposal.twap_initial_observation),
           twap_start_delay: serializeBigInt(proposal.twap_start_delay),
           twap_step_max: serializeBigInt(proposal.twap_step_max),
           twap_threshold: serializeBigInt(proposal.twap_threshold),
@@ -622,10 +626,10 @@ app.get('/proposals/:id', async (req, res) => {
       const replacer = (key: string, value: any) =>
         typeof value === 'bigint' ? value.toString() : value;
   
-      return res.send(JSON.parse(JSON.stringify(transformedProposal, replacer)));
+      res.send(JSON.parse(JSON.stringify(transformedProposal, replacer)));
     } catch (e) {
       console.error('Error fetching proposal:', e);
-      return res.status(500).send({
+      res.status(500).send({
         message: 'Internal server error',
         error: e instanceof Error ? e.message : 'Unknown error'
       });
@@ -658,10 +662,10 @@ app.get('/proposals/:proposalId/state-history', async (req, res) => {
             timestamp: history.timestamp.toString()
         }));
 
-        return res.send(formatPaginatedResponse(transformedHistory));
+        res.send(formatPaginatedResponse(transformedHistory));
     } catch (e) {
         console.error('Error fetching state history:', e);
-        return res.status(400).send({
+        res.status(400).send({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -711,10 +715,10 @@ app.get('/swaps', async (req, res) => {
             stable_reserve: swap.stable_reserve.toString()   // Added
         }));
 
-        return res.send(formatPaginatedResponse(serializedSwaps));
+        res.send(formatPaginatedResponse(serializedSwaps));
     } catch (e) {
         console.error(e);
-        return res.status(400).send(e);
+        res.status(400).send(e);
     }
 });
 
@@ -727,15 +731,15 @@ app.get('/results/:proposalId', async (req, res) => {
         });
 
         if (!result) {
-            return res.status(404).send({ 
+            res.status(404).send({ 
                 message: 'Result not found for this proposal' 
             });
         }
 
-        return res.send(result);
+        res.send(result);
     } catch (e) {
         console.error('Error fetching result:', e);
-        return res.status(500).send({ 
+        res.status(500).send({ 
             message: 'Internal server error',
             error: e 
         });

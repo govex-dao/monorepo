@@ -14,7 +14,13 @@ export function useMintTestnetCoins() {
       if (!account?.address) {
         throw new Error("Please connect your wallet first!");
       }
-
+      const loadingToast = toast.loading("Preparing transaction...");
+      const walletApprovalTimeout = setTimeout(() => {
+        toast.error("Wallet approval timeout - no response after 1 minute", {
+          id: loadingToast,
+          duration: 5000,
+        });
+      }, 60000);
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -39,32 +45,21 @@ export function useMintTestnetCoins() {
       });
 
       // Show loading toast while transaction is processing
-      const loadingToast = toast.loading("Minting testnet coins...");
+
+      toast.loading("Minting testnet coins...", { id: loadingToast });
 
       try {
         const result = await executeTransaction(txb);
 
-        // Dismiss loading toast
-        toast.dismiss(loadingToast);
-
-        if (
-          result &&
-          "effects" in result &&
-          result.effects?.status?.status === "success"
-        ) {
-          toast.success("Successfully minted testnet coins!");
-        } else {
-          toast.error("Failed to mint coins: Transaction failed");
-        }
-
         return result;
       } catch (error) {
+        console.error(
+          error instanceof Error ? error.message : "Transaction failed",
+        );
+      } finally {
         toast.dismiss(loadingToast);
-        throw error;
+        clearTimeout(walletApprovalTimeout);
       }
-    },
-    onError: (error) => {
-      toast.error(`Failed to mint coins: ${error.message}`);
     },
   });
 }
