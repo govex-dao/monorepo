@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { Theme, Tooltip, DropdownMenu, Checkbox } from "@radix-ui/themes";
 import { constructUrlSearchParams } from "@/utils/helpers";
-import { VerifiedIcon } from "@/components/state/VerifiedIcon";
+import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import UnifiedSearch from "@/components/UnifiedSearch.tsx";
 

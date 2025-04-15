@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
 import { CONSTANTS } from "@/constants";
-import { VerifiedIcon } from "./state/VerifiedIcon";
+import { VerifiedIcon } from "./icons/VerifiedIcon";
 
 interface DaoResult {
   type: "dao";
