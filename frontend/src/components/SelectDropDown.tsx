@@ -24,13 +24,16 @@ export function SelectDropDown({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find(option => option.value === value);
+  const selectedOption = options.find((option) => option.value === value);
   const selectedLabel = selectedOption ? selectedOption.label : placeholder;
 
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -55,7 +58,9 @@ export function SelectDropDown({
       )}
       <div
         className={`px-3 py-2.5 rounded-lg bg-gray-800 text-white w-full border ${
-          isOpen ? "border-blue-500 shadow-md shadow-blue-500/20" : "border-gray-700"
+          isOpen
+            ? "border-blue-500 shadow-md shadow-blue-500/20"
+            : "border-gray-700"
         } transition-all duration-200 ${className} flex justify-between items-center cursor-pointer ${
           disabled ? "opacity-50 cursor-not-allowed" : "hover:border-gray-500"
         }`}
@@ -65,18 +70,20 @@ export function SelectDropDown({
         aria-haspopup="listbox"
         aria-labelledby={label}
       >
-        <span className={`${!value ? "text-gray-400" : "text-white"} font-medium`}>
+        <span
+          className={`${!value ? "text-gray-400" : "text-white"} font-medium`}
+        >
           {selectedLabel}
         </span>
-        <ChevronDownIcon 
-          className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""} text-gray-400`} 
-          width={18} 
+        <ChevronDownIcon
+          className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""} text-gray-400`}
+          width={18}
           height={18}
         />
       </div>
-      
+
       {isOpen && !disabled && (
-        <div 
+        <div
           className="absolute z-50 mt-2 w-full bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-auto animate-fadeIn"
           role="listbox"
         >
@@ -84,7 +91,9 @@ export function SelectDropDown({
             <div
               key={option.value}
               className={`px-3 py-2.5 hover:bg-gray-700 cursor-pointer transition-colors duration-150 ${
-                option.value === value ? "bg-blue-900/40 text-blue-300 font-medium" : "text-white"
+                option.value === value
+                  ? "bg-blue-900/40 text-blue-300 font-medium"
+                  : "text-white"
               }`}
               onClick={() => handleSelect(option.value)}
               role="option"
@@ -94,7 +103,9 @@ export function SelectDropDown({
             </div>
           ))}
           {options.length === 0 && (
-            <div className="p-3 text-gray-400 text-center italic">No options available</div>
+            <div className="p-3 text-gray-400 text-center italic">
+              No options available
+            </div>
           )}
         </div>
       )}

@@ -43,10 +43,10 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   asset_symbol,
   stable_symbol,
 }) => {
-  const [assetScale, stableScale] = useMemo(() => [
-    10 ** asset_decimals, 
-    10 ** stable_decimals
-  ], [asset_decimals, stable_decimals]);
+  const [assetScale, stableScale] = useMemo(
+    () => [10 ** asset_decimals, 10 ** stable_decimals],
+    [asset_decimals, stable_decimals],
+  );
 
   const groupedByOutcome = useMemo<GroupedToken[]>(() => {
     const outcomeMap = new Map<
@@ -72,11 +72,15 @@ const TokenSection: React.FC<TokenSectionProps> = ({
         // Convert raw balances to human-readable format with proper decimals
         const assetBalanceRaw = balances.assetBalance.toString();
         const stableBalanceRaw = balances.stableBalance.toString();
-        
+
         // Format with proper decimals
-        const assetBalanceFormatted = (Number(assetBalanceRaw) / Number(assetScale)).toFixed(asset_decimals);
-        const stableBalanceFormatted = (Number(stableBalanceRaw) / Number(stableScale)).toFixed(stable_decimals);
-        
+        const assetBalanceFormatted = (
+          Number(assetBalanceRaw) / Number(assetScale)
+        ).toFixed(asset_decimals);
+        const stableBalanceFormatted = (
+          Number(stableBalanceRaw) / Number(stableScale)
+        ).toFixed(stable_decimals);
+
         return {
           outcome,
           assetBalance: assetBalanceRaw,
