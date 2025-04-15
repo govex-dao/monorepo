@@ -63,40 +63,39 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
         </div>
       </div>
 
-      {showTradeDetails && (
-        <div className="mb-2.5 pt-2.5 border-t border-gray-800/40 space-y-2.5 bg-gray-700/20 p-3 rounded-md text-xs backdrop-blur-sm">
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400">Start Price</p>
-            <p className="text-blue-400 font-medium">
-              ${swapDetails.startPrice.toPrecision(6)}
-            </p>
-          </div>
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400">Average Price</p>
-            <p className="text-blue-400 font-medium">${averagePrice}</p>
-          </div>
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400">Final Price</p>
-            <p className="text-blue-400 font-medium">
-              ${swapDetails.finalPrice.toPrecision(6)}
-            </p>
-          </div>
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400">Fee</p>
-            <p className="text-white font-medium">
-              {swapDetails.ammFee.toFixed(6)}{" "}
-              {isBuy ? stableSymbol : assetSymbol}
-            </p>
-          </div>
-          <div className="flex justify-between items-center">
-            <p className="text-gray-400">Min Received</p>
-            <p className="text-white font-medium">
-              {swapDetails.minAmountOut.toFixed(6)}{" "}
-              {isBuy ? assetSymbol : stableSymbol}
-            </p>
-          </div>
+      <div
+        className={`${showTradeDetails ? "block" : "hidden"} md:block mb-2.5 pt-2.5 border-t border-gray-800/40 space-y-2.5 bg-gray-700/20 p-3 rounded-md text-xs backdrop-blur-sm`}
+      >
+        <div className="flex justify-between items-center">
+          <p className="text-gray-400">Start Price</p>
+          <p className="text-blue-400 font-medium">
+            ${swapDetails.startPrice.toPrecision(6)}
+          </p>
         </div>
-      )}
+        <div className="flex justify-between items-center">
+          <p className="text-gray-400">Average Price</p>
+          <p className="text-blue-400 font-medium">${averagePrice}</p>
+        </div>
+        <div className="flex justify-between items-center">
+          <p className="text-gray-400">Final Price</p>
+          <p className="text-blue-400 font-medium">
+            ${swapDetails.finalPrice.toPrecision(6)}
+          </p>
+        </div>
+        <div className="flex justify-between items-center">
+          <p className="text-gray-400">Fee</p>
+          <p className="text-white font-medium">
+            {swapDetails.ammFee.toFixed(6)} {isBuy ? stableSymbol : assetSymbol}
+          </p>
+        </div>
+        <div className="flex justify-between items-center">
+          <p className="text-gray-400">Min Received</p>
+          <p className="text-white font-medium">
+            {swapDetails.minAmountOut.toFixed(6)}{" "}
+            {isBuy ? assetSymbol : stableSymbol}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
