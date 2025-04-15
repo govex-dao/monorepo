@@ -105,6 +105,15 @@ function deploy_backend() {
 function setup_nginx_and_ssl() {
     echo "=== Setting Up Nginx and SSL ==="
     sudo apt install -y nginx certbot python3-certbot-nginx
+
+    # Set server_tokens off using a separate config file
+    echo "Configuring Nginx security settings..."
+    sudo tee /etc/nginx/conf.d/security.conf > /dev/null <<EOF
+    # Security settings
+    server_tokens off;
+    EOF
+    echo "Added server_tokens off configuration"
+
     sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
 server {
     listen 80;
