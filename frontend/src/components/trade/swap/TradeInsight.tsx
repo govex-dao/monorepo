@@ -133,9 +133,10 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
         </p>
         <p className="leading-relaxed mt-1 text-xs">
           You're betting {renderAmountInput(fromSymbol, scale)} that the price
-          of {isBuy ? stableSymbol : assetSymbol} at{" "}
+          of {assetSymbol} at{" "}
           <span className="font-mono bg-black/30 px-2 py-0.5 rounded-md font-medium">
-            ${finalPrice?.toFixed(3)}
+            $
+            {finalPrice ? (isBuy ? finalPrice : 1 / finalPrice).toFixed(3) : ""}
           </span>{" "}
           is too {isBuy ? "low" : "high"}.
         </p>
