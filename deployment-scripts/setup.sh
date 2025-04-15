@@ -109,6 +109,7 @@ function setup_nginx_and_ssl() {
 server {
     listen 80;
     server_name www.govex.ai govex.ai;
+    server_tokens off;
 
     if (\$host = govex.ai) {
         return 301 https://www.govex.ai\$request_uri;
