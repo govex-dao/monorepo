@@ -1,18 +1,23 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from "react";
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiClient } from '@mysten/sui/client';
-import { getFullnodeUrl } from '@mysten/sui/client';
+import { SuiClient } from "@mysten/sui/client";
+import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
-import { calculateSwapBreakdown, SwapBreakdown } from "@/utils/trade/calculateSwapBreakdown";
-import { SelectDropDown } from '@/components/SelectDropDown';
-import TradeInsight from './swap/TradeInsight';
-import TradeDetails from './swap/TradeDetails';
-import TradeDirectionToggle, { TradeDirectionSwapButton } from './swap/TradeDirectionToggle';
-import TokenInputField from './swap/TokenInputField';
-import { useTokenBalance } from '@/hooks/useTokenBalance';
+import {
+  calculateSwapBreakdown,
+  SwapBreakdown,
+} from "@/utils/trade/calculateSwapBreakdown";
+import { SelectDropDown } from "@/components/SelectDropDown";
+import TradeInsight from "./swap/TradeInsight";
+import TradeDetails from "./swap/TradeDetails";
+import TradeDirectionToggle, {
+  TradeDirectionSwapButton,
+} from "./swap/TradeDirectionToggle";
+import TokenInputField from "./swap/TokenInputField";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
 
 interface SwapEvent {
   price: string;
@@ -71,7 +76,10 @@ const TradeForm: React.FC<TradeFormProps> = ({
   stable_decimals,
   swapEvents,
 }) => {
-  const [assetScale, stableScale] = useMemo(() => [10 ** asset_decimals, 10 ** stable_decimals], [asset_decimals, stable_decimals]);
+  const [assetScale, stableScale] = useMemo(
+    () => [10 ** asset_decimals, 10 ** stable_decimals],
+    [asset_decimals, stable_decimals],
+  );
   const account = useCurrentAccount();
   const [amount, setAmount] = useState("");
   const [selectedOutcome, setSelectedOutcome] = useState("0");
@@ -83,8 +91,16 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const TOLERANCE = 0.01;
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
-  const { balance: assetBalance } = useTokenBalance({ type: assetType, scale: assetScale, network });
-  const { balance: stableBalance } = useTokenBalance({ type: stableType, scale: stableScale, network });
+  const { balance: assetBalance } = useTokenBalance({
+    type: assetType,
+    scale: assetScale,
+    network,
+  });
+  const { balance: stableBalance } = useTokenBalance({
+    type: stableType,
+    scale: stableScale,
+    network,
+  });
 
   const tokenData = {
     stable: {
@@ -101,8 +117,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
       scale: assetScale,
       balance: assetBalance,
       decimals: asset_decimals,
-      type: assetType
-    }
+      type: assetType,
+    },
   };
 
   // Determine from/to tokens based on trade direction
@@ -133,7 +149,9 @@ const TradeForm: React.FC<TradeFormProps> = ({
       setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
       setAveragePrice(breakdown.averagePrice.toPrecision(6));
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Failed to calculate swap");
+      setError(
+        error instanceof Error ? error.message : "Failed to calculate swap",
+      );
       setSwapDetails(null);
       setExpectedAmountOut("");
       setAveragePrice("");
@@ -305,9 +323,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
     );
 
     if (sortedCoins.length === 0) {
-      throw new Error(
-        `No ${fromToken.symbol} coins available in wallet`,
-      );
+      throw new Error(`No ${fromToken.symbol} coins available in wallet`);
     }
 
     let coinToUse;
@@ -325,9 +341,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       }
 
       if (totalBalance < amountBig) {
-        throw new Error(
-          `Insufficient ${fromToken.symbol} balance in wallet`,
-        );
+        throw new Error(`Insufficient ${fromToken.symbol} balance in wallet`);
       }
 
       coinToUse = txb.mergeCoins(
@@ -359,8 +373,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
     try {
       setIsLoading(true);
       // Convert from human-readable to blockchain amounts
-      const amountScaled = BigInt(Math.floor(parseFloat(amount) * Number(fromToken.scale)))
-      const expectedAmountOutScaled = BigInt(Math.floor(parseFloat(expectedAmountOut) * Number(toToken.scale)))
+      const amountScaled = BigInt(
+        Math.floor(parseFloat(amount) * Number(fromToken.scale)),
+      );
+      const expectedAmountOutScaled = BigInt(
+        Math.floor(parseFloat(expectedAmountOut) * Number(toToken.scale)),
+      );
 
       console.log(
         "trade-amounts (scaled)",
@@ -481,7 +499,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
           onChange={setSelectedOutcome}
           options={[...Array(parseInt(outcomeCount))].map((_, i) => ({
             value: i.toString(),
-            label: outcome_messages[i] || `Outcome ${i}`
+            label: outcome_messages[i] || `Outcome ${i}`,
           }))}
           label="Select Outcome"
         />
@@ -546,27 +564,42 @@ const TradeForm: React.FC<TradeFormProps> = ({
             <button
               onClick={handleTrade}
               disabled={isLoading || !amount || !expectedAmountOut}
-              className={`w-full py-2.5 px-4 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center ${isLoading || !amount || !expectedAmountOut
-                ? 'bg-gray-700/80 cursor-not-allowed opacity-70'
-                : 'bg-blue-600/90 hover:bg-blue-500/90 shadow-md hover:shadow-lg'
-                }`}
+              className={`w-full py-2.5 px-4 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center ${
+                isLoading || !amount || !expectedAmountOut
+                  ? "bg-gray-700/80 cursor-not-allowed opacity-70"
+                  : "bg-blue-600/90 hover:bg-blue-500/90 shadow-md hover:shadow-lg"
+              }`}
             >
               {isLoading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   Processing...
                 </>
-              ) :
+              ) : (
                 "Swap"
-              }
+              )}
             </button>
           ) : (
-            <ConnectButton
-              className="w-full py-2.5 px-4 rounded-lg font-medium text-white bg-blue-600/90 hover:bg-blue-500/90 transition-all duration-200 shadow-md hover:shadow-lg"
-            />
+            <ConnectButton className="w-full py-2.5 px-4 rounded-lg font-medium text-white bg-blue-600/90 hover:bg-blue-500/90 transition-all duration-200 shadow-md hover:shadow-lg" />
           )}
         </div>
       </div>

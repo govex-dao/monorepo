@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ShowMoreDetails } from '../../ShowMoreDetails';
+import React, { useState } from "react";
+import { ShowMoreDetails } from "../../ShowMoreDetails";
 import { SwapBreakdown } from "@/utils/trade/calculateSwapBreakdown";
 
 interface TradeDetailsProps {
@@ -19,7 +19,7 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
   assetSymbol,
   stableSymbol,
   isBuy,
-  tolerance
+  tolerance,
 }) => {
   const [showTradeDetails, setShowTradeDetails] = useState<boolean>(false);
   if (!amount || !averagePrice || !swapDetails) return null;
@@ -40,20 +40,26 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
       <div className="grid grid-cols-2 gap-2 w-full text-xs">
         <div className="bg-gray-800/40 px-3 py-1.5 rounded-md border border-gray-700/20 flex justify-between items-center">
           <p className="text-gray-400 font-medium">Price Impact</p>
-          <span className={`font-semibold ${swapDetails.priceImpact > 5
-            ? "text-red-400"
-            : swapDetails.priceImpact > 2
-              ? "text-yellow-400"
-              : "text-green-400"
-            }`}>
+          <span
+            className={`font-semibold ${
+              swapDetails.priceImpact > 5
+                ? "text-red-400"
+                : swapDetails.priceImpact > 2
+                  ? "text-yellow-400"
+                  : "text-green-400"
+            }`}
+          >
             {swapDetails.priceImpact > 1000
               ? swapDetails.priceImpact.toExponential(2)
-              : swapDetails.priceImpact.toFixed(2)}%
+              : swapDetails.priceImpact.toFixed(2)}
+            %
           </span>
         </div>
         <div className="bg-gray-800/40 px-3 py-1 rounded-md border border-gray-700/20 flex justify-between items-center">
           <p className="text-gray-400 font-medium">Slippage</p>
-          <p className="text-blue-400 font-semibold">{(tolerance * 100).toFixed(1)}%</p>
+          <p className="text-blue-400 font-semibold">
+            {(tolerance * 100).toFixed(1)}%
+          </p>
         </div>
       </div>
 
@@ -67,9 +73,7 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Average Price</p>
-            <p className="text-blue-400 font-medium">
-              ${averagePrice}
-            </p>
+            <p className="text-blue-400 font-medium">${averagePrice}</p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Final Price</p>
@@ -80,13 +84,15 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Fee</p>
             <p className="text-white font-medium">
-              {swapDetails.ammFee.toFixed(6)} {isBuy ? stableSymbol : assetSymbol}
+              {swapDetails.ammFee.toFixed(6)}{" "}
+              {isBuy ? stableSymbol : assetSymbol}
             </p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Min Received</p>
             <p className="text-white font-medium">
-              {swapDetails.minAmountOut.toFixed(6)} {isBuy ? assetSymbol : stableSymbol}
+              {swapDetails.minAmountOut.toFixed(6)}{" "}
+              {isBuy ? assetSymbol : stableSymbol}
             </p>
           </div>
         </div>
@@ -95,4 +101,4 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
   );
 };
 
-export default TradeDetails; 
+export default TradeDetails;

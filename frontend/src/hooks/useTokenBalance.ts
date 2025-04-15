@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiClient } from '@mysten/sui/client';
-import { getFullnodeUrl } from '@mysten/sui/client';
+import { SuiClient } from "@mysten/sui/client";
+import { getFullnodeUrl } from "@mysten/sui/client";
 import { CONSTANTS } from "@/constants";
 
 interface TokenBalanceProps {
@@ -14,8 +14,12 @@ interface TokenBalanceProps {
  * Custom hook to fetch a token balance
  * @returns {Object} Object containing token balance as formatted string and loading state
  */
-export function useTokenBalance({ type, scale, network = CONSTANTS.network }: TokenBalanceProps) {
-  const [balance, setBalance] = useState<string>('0');
+export function useTokenBalance({
+  type,
+  scale,
+  network = CONSTANTS.network,
+}: TokenBalanceProps) {
+  const [balance, setBalance] = useState<string>("0");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const account = useCurrentAccount();
 
@@ -28,18 +32,19 @@ export function useTokenBalance({ type, scale, network = CONSTANTS.network }: To
 
       const coins = await client.getCoins({
         owner: account.address,
-        coinType: `0x${type}`
+        coinType: `0x${type}`,
       });
 
       const totalBalance = coins.data.reduce(
-        (sum, coin) => sum + BigInt(coin.balance), 0n
+        (sum, coin) => sum + BigInt(coin.balance),
+        0n,
       );
 
       const formattedBalance = Number(totalBalance / BigInt(scale)).toFixed(6);
       setBalance(formattedBalance);
     } catch (error) {
-      console.error('Error fetching balance:', error);
-      setBalance('0');
+      console.error("Error fetching balance:", error);
+      setBalance("0");
     } finally {
       setIsLoading(false);
     }
@@ -63,7 +68,7 @@ export function useTokenBalance({ type, scale, network = CONSTANTS.network }: To
           },
           onMessage: () => {
             fetchBalance(); // Refresh balance when changes occur
-          }
+          },
         });
 
         // Return cleanup function
@@ -71,7 +76,7 @@ export function useTokenBalance({ type, scale, network = CONSTANTS.network }: To
           unsubscribe();
         };
       } catch (error) {
-        console.error('Error subscribing to balance changes:', error);
+        console.error("Error subscribing to balance changes:", error);
       }
     };
 
@@ -80,7 +85,7 @@ export function useTokenBalance({ type, scale, network = CONSTANTS.network }: To
     return () => {
       // Clean up subscription on unmount
       if (unsubscribe) {
-        unsubscribe.then(cleanup => {
+        unsubscribe.then((cleanup) => {
           if (cleanup) cleanup();
         });
       }

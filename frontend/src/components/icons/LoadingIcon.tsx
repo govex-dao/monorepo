@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface LoadingIconProps {
   className?: string;
@@ -24,4 +24,4 @@ const LoadingIcon: React.FC<LoadingIconProps> = ({ className }) => {
   );
 };
 
-export default LoadingIcon; 
+export default LoadingIcon;
