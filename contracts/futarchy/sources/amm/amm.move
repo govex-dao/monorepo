@@ -428,7 +428,7 @@ public fun create_test_pool(
         k: math::mul_div_to_128(asset_reserve, stable_reserve, 1),
         fee_percent: DEFAULT_FEE,
         oracle: oracle::new_oracle(
-            math::mul_div_to_128(stable_reserve, 10_0000, asset_reserve),
+            math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
             0, // market start time
             2_000,
             1_000,
