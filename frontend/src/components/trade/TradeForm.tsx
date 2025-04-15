@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from "react";
 import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { SuiClient } from '@mysten/sui/client';
-import { getFullnodeUrl } from '@mysten/sui/client';
+import { SuiClient } from "@mysten/sui/client";
+import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
 import {
@@ -140,8 +140,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
       scale: assetScale,
       balance: assetBalance,
       decimals: asset_decimals,
-      type: assetType
-    }
+      type: assetType,
+    },
   };
 
   // Determine from/to tokens based on trade direction
