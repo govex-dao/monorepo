@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import LoadingIcon from './icons/LoadingIcon';
+import LoadingIcon from "./icons/LoadingIcon";
 
 /**
  * A loading spinner that can be re-used across the app.

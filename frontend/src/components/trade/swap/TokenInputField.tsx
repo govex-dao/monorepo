@@ -1,8 +1,8 @@
-import React from 'react';
-import WalletIcon from '../../icons/WalletIcon';
+import React from "react";
+import WalletIcon from "../../icons/WalletIcon";
 
 interface TokenInputFieldProps {
-  label: 'From' | 'To';
+  label: "From" | "To";
   value: string;
   onChange?: (value: string) => void;
   placeholder?: string;
@@ -16,7 +16,7 @@ const TokenInputField: React.FC<TokenInputFieldProps> = ({
   label,
   value,
   onChange,
-  placeholder = '0.0',
+  placeholder = "0.0",
   symbol,
   balance,
   readOnly = false,
@@ -51,4 +51,4 @@ const TokenInputField: React.FC<TokenInputFieldProps> = ({
   );
 };
 
-export default TokenInputField; 
+export default TokenInputField;
