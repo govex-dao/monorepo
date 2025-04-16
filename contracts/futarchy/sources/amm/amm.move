@@ -156,7 +156,6 @@ public(package) fun swap_asset_to_stable(
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
-    pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
@@ -235,7 +234,6 @@ public(package) fun swap_stable_to_asset(
     // Update reserves with amount after fee
     pool.stable_reserve = pool.stable_reserve + amount_in_after_fee;
     pool.asset_reserve = pool.asset_reserve - amount_out;
-    pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
@@ -397,8 +395,12 @@ public fun get_id(pool: &LiquidityPool): ID {
     object::uid_to_inner(&pool.id)
 }
 
+public fun get_k(pool: &LiquidityPool): u128 {
+    pool.k
+}
+
 public fun check_price_under_max(price: u128) {
-    let max_price = (u64::max_value!() as u128) * (BASIS_POINTS as u128);
+    let max_price = (u64::max_value!() as u128);
     assert!(price <= max_price, EPRICE_TOO_HIGH)
 }
 

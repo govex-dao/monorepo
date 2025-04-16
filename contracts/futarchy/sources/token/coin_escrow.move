@@ -682,3 +682,77 @@ public fun get_asset_supply<AssetType, StableType>(
 ): &mut Supply {
     vector::borrow_mut(&mut escrow.outcome_asset_supplies, outcome_idx)
 }
+
+// === Test Helper Functions ===
+// These functions help avoid borrow checker issues in tests
+
+#[test_only]
+/// Creates a complete set of tokens and returns specific token for testing
+public fun create_asset_token_for_testing<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext
+): ConditionalToken {
+    // First create all tokens using an existing function
+    let mut tokens = mint_complete_set_asset(
+        escrow,
+        coin::from_balance(balance::create_for_testing<AssetType>(amount), ctx),
+        clock,
+        ctx
+    );
+    
+    // Find and return the token for the requested outcome
+    let outcome_count = vector::length(&tokens);
+    let mut result_token = vector::pop_back(&mut tokens);
+    
+    // Process all other tokens
+    let mut i = 0;
+    while (i < outcome_count - 1) {
+        let token = vector::pop_back(&mut tokens);
+        let this_outcome = token::outcome(&token);
+        
+        if (this_outcome == (outcome_idx as u8)) {
+            // Swap if we found the requested token
+            transfer::public_transfer(result_token, tx_context::sender(ctx));
+            result_token = token;
+        } else {
+            // Otherwise transfer to sender
+            transfer::public_transfer(token, tx_context::sender(ctx));
+        };
+        i = i + 1;
+    };
+    
+    vector::destroy_empty(tokens);
+    result_token
+}
+
+#[test_only]
+/// Creates a complete set of stable tokens and returns specific token for testing
+public fun create_stable_token_for_testing<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext
+): ConditionalToken {
+    // Same approach as asset token but for stable tokens
+    let coin = coin::from_balance(balance::create_for_testing<StableType>(amount), ctx);
+    let mut tokens = mint_complete_set_stable(escrow, coin, clock, ctx);
+    
+    // Extract the token we want and return it
+    let token = vector::remove(&mut tokens, outcome_idx);
+    
+    // Transfer the other tokens to the sender
+    let token_count = vector::length(&tokens);
+    let mut i = 0;
+    while (i < token_count) {
+        let t = vector::pop_back(&mut tokens);
+        transfer::public_transfer(t, tx_context::sender(ctx));
+        i = i + 1;
+    };
+    vector::destroy_empty(tokens);
+    
+    token
+}
