@@ -87,7 +87,7 @@ public struct TokenMergeMany has copy, drop {
 }
 
 // ======== Supply Functions ========
-public fun new_supply(
+public(package) fun new_supply(
     state: &market_state::MarketState,
     asset_type: u8,
     outcome: u8,
@@ -106,7 +106,7 @@ public fun new_supply(
     }
 }
 
-public fun update_supply(supply: &mut Supply, amount: u64, increase: bool) {
+public(package) fun update_supply(supply: &mut Supply, amount: u64, increase: bool) {
     assert!(amount > 0, EZERO_AMOUNT);
     if (increase) {
         supply.total_supply = supply.total_supply + amount;
@@ -118,13 +118,13 @@ public fun update_supply(supply: &mut Supply, amount: u64, increase: bool) {
 
 // ======== Token Functions ========
 // Destroys a ConditionalToken. The token's balance must be zero.
-public fun destroy(token: ConditionalToken) {
+public(package) fun destroy(token: ConditionalToken) {
     let ConditionalToken { id, market_id: _, asset_type: _, outcome: _, balance } = token;
     assert!(balance == 0, ENONZERO_BALANCE);
     object::delete(id);
 }
 
-public fun split(
+public(package) fun split(
     token: &mut ConditionalToken,
     amount: u64,
     recipient: address,
@@ -170,7 +170,7 @@ public entry fun split_entry(
     split(token, amount, sender, clock, ctx);
 }
 
-public fun merge_many(
+public(package) fun merge_many(
     base_token: &mut ConditionalToken,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
@@ -231,7 +231,7 @@ public entry fun merge_many_entry(
     merge_many(base_token, tokens, clock, ctx);
 }
 
-public fun burn(supply: &mut Supply, token: ConditionalToken, clock: &Clock, ctx: &mut TxContext) {
+public(package) fun burn(supply: &mut Supply, token: ConditionalToken, clock: &Clock, ctx: &mut TxContext) {
     // Verify token matches supply
     assert!(token.market_id == supply.market_id, EWRONG_MARKET);
     assert!(token.asset_type == supply.asset_type, EWRONG_TOKEN_TYPE);
@@ -263,7 +263,7 @@ public fun burn(supply: &mut Supply, token: ConditionalToken, clock: &Clock, ctx
     object::delete(id);
 }
 
-public fun mint(
+public(package) fun mint(
     state: &market_state::MarketState,
     supply: &mut Supply,
     amount: u64,
@@ -302,7 +302,7 @@ public fun mint(
     token
 }
 
-public fun extract(option: &mut Option<ConditionalToken>): ConditionalToken {
+public(package) fun extract(option: &mut Option<ConditionalToken>): ConditionalToken {
     assert!(option::is_some(option), ENO_TOKEN_FOUND);
     let token = option::extract(option);
     token

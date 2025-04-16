@@ -10,7 +10,7 @@ use sui::clock::Clock;
 // Method to initialize AMM liquidity
 
 // === Public Functions ===
-public fun create_outcome_markets<AssetType, StableType>(
+public(package) fun create_outcome_markets<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_count: u64,
     asset_amounts: vector<u64>,
