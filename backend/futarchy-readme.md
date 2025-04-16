@@ -49,4 +49,6 @@ npx ts-node futarchy-scripts/futarchy-10-split-tokens.ts
 npx ts-node futarchy-scripts/futarchy-11-merge-tokens.ts
 
 npx ts-node futarchy-scripts/futarchy-test-owner-gov.ts
+
+npx ts-node futarchy-scripts/futarchy-20-withdraw-fees.ts
 ```
