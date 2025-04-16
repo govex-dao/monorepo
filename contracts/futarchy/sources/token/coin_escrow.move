@@ -163,7 +163,7 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
 // TODO: This implementation has known atomicity issues and will be refactored in v2
 // Current risk is mitigated by restricted access controls
 #[allow(lint(self_transfer))]
-public fun remove_liquidity<AssetType, StableType>(
+public(package) fun remove_liquidity<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_amount: u64,
     stable_amount: u64,
@@ -663,20 +663,20 @@ public fun get_market_state<AssetType, StableType>(
     &escrow.market_state
 }
 
-public fun get_market_state_mut<AssetType, StableType>(
+public(package) fun get_market_state_mut<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
 ): &mut MarketState {
     &mut escrow.market_state
 }
 
-public fun get_stable_supply<AssetType, StableType>(
+public(package) fun get_stable_supply<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
 ): &mut Supply {
     vector::borrow_mut(&mut escrow.outcome_stable_supplies, outcome_idx)
 }
 
-public fun get_asset_supply<AssetType, StableType>(
+public(package) fun get_asset_supply<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
 ): &mut Supply {

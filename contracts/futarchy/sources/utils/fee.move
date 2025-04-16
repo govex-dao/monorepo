@@ -381,7 +381,7 @@ public fun get_sui_balance(fee_manager: &FeeManager): u64 {
     balance::value(&fee_manager.sui_balance)
 }
 
-public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
+public(package) fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
     if (
         dynamic_field::exists_with_type<
             StableFeeRegistry<StableType>,
