@@ -131,7 +131,7 @@ public struct ResultSigned has copy, drop {
 }
 
 // === Creation Functions ===
-public fun create<AssetType, StableType>(
+public(package) fun create<AssetType, StableType>(
     min_asset_amount: u64,
     min_stable_amount: u64,
     dao_name: AsciiString,
@@ -244,7 +244,7 @@ public fun create<AssetType, StableType>(
 }
 
 // ======== Proposal Functions ========
-public fun create_proposal<AssetType, StableType>(
+public(package) fun create_proposal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>, // New fee payment parameter
