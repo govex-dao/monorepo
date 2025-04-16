@@ -86,7 +86,7 @@ public struct ProposalCreated has copy, drop {
 
 // === Public Functions ===
 #[allow(lint(share_owned))]
-public fun create<AssetType, StableType>(
+public(package) fun create<AssetType, StableType>(
     dao_id: ID,
     outcome_count: u64,
     initial_asset: Balance<AssetType>,
@@ -390,7 +390,7 @@ public fun get_amm_pool_ids<AssetType, StableType>(
     ids
 }
 
-public fun get_pool_mut_by_outcome<AssetType, StableType>(
+public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_idx: u8,
 ): &mut LiquidityPool {
@@ -407,7 +407,7 @@ public fun get_amm_pools<AssetType, StableType>(
     &proposal.amm_pools
 }
 
-public fun get_amm_pools_mut<AssetType, StableType>(
+public(package) fun get_amm_pools_mut<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
 ): &mut vector<LiquidityPool> {
     &mut proposal.amm_pools
