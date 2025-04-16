@@ -231,7 +231,12 @@ public entry fun merge_many_entry(
     merge_many(base_token, tokens, clock, ctx);
 }
 
-public(package) fun burn(supply: &mut Supply, token: ConditionalToken, clock: &Clock, ctx: &mut TxContext) {
+public(package) fun burn(
+    supply: &mut Supply,
+    token: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
     // Verify token matches supply
     assert!(token.market_id == supply.market_id, EWRONG_MARKET);
     assert!(token.asset_type == supply.asset_type, EWRONG_TOKEN_TYPE);
