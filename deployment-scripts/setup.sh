@@ -106,13 +106,14 @@ function setup_nginx_and_ssl() {
     echo "=== Setting Up Nginx and SSL ==="
     sudo apt install -y nginx certbot python3-certbot-nginx
 
-    # Set server_tokens off using a separate config file
+    # Add server_tokens off to the main nginx.conf if it doesn't exist
     echo "Configuring Nginx security settings..."
-    sudo tee /etc/nginx/conf.d/security.conf > /dev/null <<EOF
-    # Security settings
-    server_tokens off;
-    EOF
-    echo "Added server_tokens off configuration"
+    if ! grep -q "server_tokens off" /etc/nginx/nginx.conf; then
+        sudo sed -i '/http {/a \    server_tokens off;' /etc/nginx/nginx.conf
+        echo "Added server_tokens off to nginx.conf"
+    else
+        echo "server_tokens off already configured in nginx.conf"
+    fi
 
     sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
 server {
