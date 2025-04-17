@@ -407,11 +407,11 @@ public fun get_state<AssetType, StableType>(proposal: &Proposal<AssetType, Stabl
 }
 
 public fun get_dao_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
-   proposal.dao_id
+    proposal.dao_id
 }
 
 public fun proposal_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
-   object::uid_to_inner(&proposal.id)
+    object::uid_to_inner(&proposal.id)
 }
 
 public fun get_amm_pools<AssetType, StableType>(

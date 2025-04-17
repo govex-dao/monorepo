@@ -51,7 +51,10 @@ public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let amount_in = token::value(&token_to_swap);
 
     // Calculate the swap amount using AMM
@@ -106,7 +109,10 @@ public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let amount_in = token::value(&token_to_swap);
 
     // Calculate the swap amount using AMM
@@ -145,7 +151,10 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
     let mut swap_token = vector::remove(&mut tokens, outcome_idx);
@@ -154,7 +163,10 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
 
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     assert!(token::asset_type(&existing_token) == 1, EWRONG_TOKEN_TYPE);
-       assert!(token::market_id(&existing_token) == market_state::market_id(coin_escrow::get_market_state(escrow)), EMARKET_ID_MISMATCH);
+    assert!(
+        token::market_id(&existing_token) == market_state::market_id(coin_escrow::get_market_state(escrow)),
+        EMARKET_ID_MISMATCH,
+    );
 
     assert!(token::outcome(&swap_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     let mut existing_token_in_vector = vector::empty();
@@ -195,14 +207,20 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
     let mut swap_token = vector::remove(&mut tokens, outcome_idx);
 
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     assert!(token::asset_type(&existing_token) == 0, EWRONG_TOKEN_TYPE);
-    assert!(token::market_id(&existing_token) == market_state::market_id(coin_escrow::get_market_state(escrow)), EMARKET_ID_MISMATCH);
+    assert!(
+        token::market_id(&existing_token) == market_state::market_id(coin_escrow::get_market_state(escrow)),
+        EMARKET_ID_MISMATCH,
+    );
 
     assert!(token::outcome(&swap_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     let mut existing_token_in_vector = vector::empty();
@@ -242,7 +260,10 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
@@ -280,7 +301,10 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow), EMARKET_ID_MISMATCH);
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
     let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);

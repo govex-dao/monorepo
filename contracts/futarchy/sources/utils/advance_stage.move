@@ -60,7 +60,10 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
     assert!(proposal::state(proposal) == STATE_FINALIZED, EINVALID_STATE);
     assert!(proposal::is_winning_outcome_set(proposal), EINVALID_STATE);
 
-    assert!(coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal), EINVALID_STATE);
+    assert!(
+        coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal),
+        EINVALID_STATE,
+    );
 
     let winning_outcome = proposal::get_winning_outcome(proposal);
     let winning_pool = proposal::get_pool_mut_by_outcome(proposal, (winning_outcome as u8));
@@ -156,7 +159,10 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     fee_manager: &mut FeeManager,
     clock: &Clock,
 ) {
-    assert!(coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal), EINVALID_STATE);
+    assert!(
+        coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal),
+        EINVALID_STATE,
+    );
 
     let market_state = coin_escrow::get_market_state_mut(escrow);
     try_advance_state(
