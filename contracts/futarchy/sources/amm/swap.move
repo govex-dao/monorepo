@@ -17,7 +17,6 @@ const EWRONG_TOKEN_TYPE: u64 = 1;
 const EWRONG_OUTCOME: u64 = 2;
 const EINVALID_STATE: u64 = 3;
 const EMARKET_ID_MISMATCH: u64 = 4;
-const EDAO_ID_MISMATCH: u64 = 5;
 
 // === Constants ===
 const STATE_TRADING: u8 = 1;
@@ -33,7 +32,6 @@ fun swap_asset_to_stable<AssetType, StableType>(
     ctx: &TxContext,
 ): u64 {
     assert!(proposal::proposal_id(proposal) == market_state::market_id(state), EMARKET_ID_MISMATCH);
-    assert!(proposal::get_dao_id(proposal) == market_state::dao_id(state), EDAO_ID_MISMATCH);
 
     assert!(outcome_idx < proposal::outcome_count(proposal), EINVALID_OUTCOME);
     assert!(proposal::state(proposal) == STATE_TRADING, EINVALID_STATE);
@@ -92,7 +90,6 @@ fun swap_stable_to_asset<AssetType, StableType>(
     ctx: &TxContext,
 ): u64 {
     assert!(proposal::proposal_id(proposal) == market_state::market_id(state), EMARKET_ID_MISMATCH);
-    assert!(proposal::get_dao_id(proposal) == market_state::dao_id(state), EDAO_ID_MISMATCH);
     assert!(outcome_idx < proposal::outcome_count(proposal), EINVALID_OUTCOME);
     assert!(proposal::state(proposal) == STATE_TRADING, EINVALID_STATE);
 
