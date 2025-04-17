@@ -174,7 +174,7 @@ public(package) fun merge_many(
     base_token: &mut ConditionalToken,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ) {
     let len = vector::length(&tokens);
     assert!(len > 0, EEMPTY_VECTOR);
@@ -235,7 +235,7 @@ public(package) fun burn(
     supply: &mut Supply,
     token: ConditionalToken,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ) {
     // Verify token matches supply
     assert!(token.market_id == supply.market_id, EWRONG_MARKET);
@@ -280,6 +280,7 @@ public(package) fun mint(
     market_state::assert_in_trading_or_pre_trading(state);
     assert!(amount > 0, EZERO_AMOUNT);
 
+    assert!(market_state::market_id(state) == supply.market_id, EWRONG_MARKET);
     // Update supply
     update_supply(supply, amount, true);
 
@@ -333,4 +334,12 @@ public fun value(token: &ConditionalToken): u64 {
 
 public fun total_supply(supply: &Supply): u64 {
     supply.total_supply
+}
+
+public fun is_asset_token(token: &ConditionalToken): bool {
+    asset_type(token) == 0
+}
+
+public fun is_stable_token(token: &ConditionalToken): bool {
+    asset_type(token) == 1
 }

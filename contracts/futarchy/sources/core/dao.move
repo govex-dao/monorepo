@@ -358,6 +358,7 @@ public(package) fun sign_result(
     assert!(!info.executed, EALREADY_EXECUTED);
 
     assert!(object::id(market_state) == info.market_state_id, EUNAUTHORIZED);
+    assert!(market_state::market_id(market_state) == proposal_id, EUNAUTHORIZED);
     assert!(market_state::dao_id(market_state) == object::uid_to_inner(&dao.id), EUNAUTHORIZED);
 
     market_state::assert_market_finalized(market_state);
@@ -390,6 +391,10 @@ public entry fun sign_result_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    let escrow_market_state_id = coin_escrow::get_market_state_id(escrow);
+    let info = get_proposal_info(dao, proposal_id);
+    assert!(escrow_market_state_id == info.market_state_id, EUNAUTHORIZED);
+    
     let market_state = coin_escrow::get_market_state_mut(escrow);
     sign_result(
         dao,

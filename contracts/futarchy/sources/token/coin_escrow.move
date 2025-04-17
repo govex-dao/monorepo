@@ -52,6 +52,20 @@ public struct LiquidityDeposit has copy, drop {
     stable_amount: u64,
 }
 
+public struct EscrowBalance has copy, drop {
+    escrowed_asset: u64,
+    escrowed_stable: u64,
+    outcome_count: u64,
+    asset_supplies: vector<u64>,
+    stable_supplies: vector<u64>,
+}
+
+public struct TokenRedemption has copy, drop {
+    outcome: u64,
+    token_type: u8,
+    amount: u64,
+}
+
 // === Public Functions ===
 public(package) fun new<AssetType, StableType>(
     market_state: MarketState,
@@ -233,21 +247,20 @@ fun verify_token_set<AssetType, StableType>(
     // Must have exactly one token per outcome
     assert!(vector::length(tokens) == outcome_count, EINCORRECT_SEQUENCE);
 
-    // Check first token for basic validation
-    let first_token = vector::borrow(tokens, 0);
-    assert!(token::market_id(first_token) == market_id, EWRONG_MARKET);
-    assert!(token::asset_type(first_token) == token_type, EWRONG_TOKEN_TYPE);
-    let amount = token::value(first_token);
-
-    // Track which outcomes we've seen
+    // Initialize outcomes_seen vector
     let mut outcomes_seen = vector::empty<bool>();
+    // We still need to initialize the vector, but we can combine with the token validation
     let mut i = 0;
     while (i < outcome_count) {
         vector::push_back(&mut outcomes_seen, false);
         i = i + 1;
     };
 
-    // Verify all tokens and mark outcomes as seen
+    // Get amount from first token to verify consistency
+    let first_token = vector::borrow(tokens, 0);
+    let amount = token::value(first_token);
+    
+    // Verify all tokens and mark outcomes as seen in a single pass
     i = 0;
     while (i < outcome_count) {
         let token = vector::borrow(tokens, i);
@@ -284,7 +297,7 @@ public(package) fun redeem_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ): Balance<AssetType> {
     market_state::assert_not_finalized(&escrow.market_state);
     assert_supplies_initialized(escrow);
@@ -298,6 +311,8 @@ public(package) fun redeem_complete_set_asset<AssetType, StableType>(
     while (i < outcome_count) {
         let token = vector::pop_back(&mut tokens);
         let outcome = token::outcome(&token);
+
+        assert!(token::market_id(&token) == market_state::market_id(&escrow.market_state), EWRONG_MARKET);
         let supply = vector::borrow_mut(&mut escrow.outcome_asset_supplies, (outcome as u64));
         token::burn(supply, token, clock, ctx);
         i = i + 1;
@@ -314,7 +329,7 @@ public(package) fun redeem_complete_set_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ): Balance<StableType> {
     market_state::assert_not_finalized(&escrow.market_state);
     assert_supplies_initialized(escrow);
@@ -368,7 +383,7 @@ public(package) fun redeem_winning_tokens_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     token: ConditionalToken,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ): Balance<AssetType> {
     // Verify market is finalized and get winning outcome
     market_state::assert_market_finalized(&escrow.market_state);
@@ -405,7 +420,7 @@ public(package) fun redeem_winning_tokens_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     token: ConditionalToken,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ): Balance<StableType> {
     // Verify market is finalized and get winning outcome
     market_state::assert_market_finalized(&escrow.market_state);
@@ -459,13 +474,6 @@ public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
     let balance = redeem_winning_tokens_stable(escrow, token, clock, ctx);
     let coin = coin::from_balance(balance, ctx);
     transfer::public_transfer(coin, tx_context::sender(ctx));
-}
-
-// Event for token redemption
-public struct TokenRedemption has copy, drop {
-    outcome: u64,
-    token_type: u8,
-    amount: u64,
 }
 
 public(package) fun mint_complete_set_asset<AssetType, StableType>(
@@ -650,6 +658,39 @@ public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     token
 }
 
+/// Entry function that gets and emits the current escrow balances and supply information as an event
+public entry fun get_escrow_balance_entry<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+    _ctx: & TxContext,
+) {
+    let (asset_amount, stable_amount) = get_balances(escrow);
+    let outcome_count = market_state::outcome_count(&escrow.market_state);
+    
+    // Get supply information for all outcomes
+    let mut asset_supplies = vector::empty<u64>();
+    let mut stable_supplies = vector::empty<u64>();
+    
+    let mut i = 0;
+    while (i < outcome_count) {
+        let asset_supply = vector::borrow(&escrow.outcome_asset_supplies, i);
+        let stable_supply = vector::borrow(&escrow.outcome_stable_supplies, i);
+        
+        vector::push_back(&mut asset_supplies, token::total_supply(asset_supply));
+        vector::push_back(&mut stable_supplies, token::total_supply(stable_supply));
+        
+        i = i + 1;
+    };
+    
+    // Emit event with all information
+    event::emit(EscrowBalance {
+        escrowed_asset: asset_amount,
+        escrowed_stable: stable_amount,
+        outcome_count,
+        asset_supplies,
+        stable_supplies,
+    });
+}
+
 // === Internal Helpers ===
 public fun get_balances<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
@@ -661,6 +702,12 @@ public fun get_market_state<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ): &MarketState {
     &escrow.market_state
+}
+
+public fun get_market_state_id<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+): ID {
+    object::id(&escrow.market_state)
 }
 
 public(package) fun get_market_state_mut<AssetType, StableType>(

@@ -60,6 +60,8 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
     assert!(proposal::state(proposal) == STATE_FINALIZED, EINVALID_STATE);
     assert!(proposal::is_winning_outcome_set(proposal), EINVALID_STATE);
 
+    assert!(coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal), EINVALID_STATE);
+
     let winning_outcome = proposal::get_winning_outcome(proposal);
     let winning_pool = proposal::get_pool_mut_by_outcome(proposal, (winning_outcome as u8));
     let protocol_fee_amount = amm::get_protocol_fees(winning_pool);
@@ -106,6 +108,12 @@ public(package) fun try_advance_state<AssetType, StableType>(
     state: &mut MarketState,
     clock: &Clock,
 ) {
+    // Validate the proposal and market state are for the same market
+    assert!(object::id(state) == proposal::market_state_id(proposal), EINVALID_STATE);
+    assert!(market_state::market_id(state) == proposal::get_id(proposal), EINVALID_STATE);
+    // Validate DAO ID matches
+    assert!(market_state::dao_id(state) == proposal::get_dao_id(proposal), EINVALID_STATE);
+
     let current_time = clock::timestamp_ms(clock);
     let elapsed = current_time - proposal::get_created_at(proposal);
     let old_state = proposal::state(proposal);
@@ -148,6 +156,8 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     fee_manager: &mut FeeManager,
     clock: &Clock,
 ) {
+    assert!(coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal), EINVALID_STATE);
+
     let market_state = coin_escrow::get_market_state_mut(escrow);
     try_advance_state(
         proposal,
@@ -167,6 +177,11 @@ public(package) fun finalize<AssetType, StableType>(
     clock: &Clock,
 ) {
     assert!(proposal::state(proposal) == STATE_TRADING, EINVALID_STATE);
+    // Validate state belongs to this proposal
+    assert!(object::id(state) == proposal::market_state_id(proposal), EINVALID_STATE);
+    assert!(market_state::market_id(state) == proposal::get_id(proposal), EINVALID_STATE);
+    // Validate DAO ID matches
+    assert!(market_state::dao_id(state) == proposal::get_dao_id(proposal), EINVALID_STATE);
 
     // Record final TWAP prices and find winner
     let timestamp = clock::timestamp_ms(clock);
