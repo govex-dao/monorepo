@@ -118,7 +118,13 @@ public(package) fun swap_asset_to_stable(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate output based on full amount (no fee yet)
+    // When selling outcome tokens (asset -> stable):
+    // 1. We calculate the full swap output first (before fees)
+    // 2. Then collect fee from the stable output
+    //
+    // This approach is used because it:
+    // - Maintains accurate asset pricing through the entire reserve
+    // - Preserves the XY=K invariant for the actual pool tokens
     let amount_out_before_fee = calculate_output(
         amount_in,
         pool.asset_reserve,
@@ -146,11 +152,10 @@ public(package) fun swap_asset_to_stable(
     let old_asset = pool.asset_reserve;
     let old_stable = pool.stable_reserve;
 
-    // Update reserves - include full asset in, but only remove amount_out_before_fee
+    // Update reserves - include full asset in, but remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     pool.asset_reserve = pool.asset_reserve + amount_in;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
-    pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
@@ -192,7 +197,13 @@ public(package) fun swap_stable_to_asset(
     market_state::assert_trading_active(state);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
-    // Calculate fee from stable tokens
+    // When buying outcome tokens (stable -> asset):
+    // 1. We collect fee from stable input first
+    // 2. Then execute swap with the remaining amount
+    //
+    // This approach is used because it:
+    // - Maintains consistent fee collection in stable tokens only
+    // - Prevents dilution of the outcome token reserves
     let fee_amount = calculate_fee(amount_in, pool.fee_percent);
     let amount_in_after_fee = amount_in - fee_amount;
 
@@ -223,7 +234,6 @@ public(package) fun swap_stable_to_asset(
     // Update reserves with amount after fee
     pool.stable_reserve = pool.stable_reserve + amount_in_after_fee;
     pool.asset_reserve = pool.asset_reserve - amount_out;
-    pool.k = math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1);
 
     let timestamp = clock::timestamp_ms(clock);
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
@@ -258,6 +268,8 @@ public(package) fun empty_all_amm_liquidity(
     pool: &mut LiquidityPool,
     _ctx: &mut TxContext,
 ): (u64, u64) {
+    // Since fees are now tracked separately and don't affect the LP ratio,
+    // we can simply return all values separately without any adjustments
     let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
 
@@ -324,11 +336,7 @@ fun calculate_price_impact(
     reserve_out: u64,
 ): u128 {
     let ideal_out = math::mul_div_to_64(amount_in, reserve_out, reserve_in);
-    if (ideal_out <= amount_out) {
-        0
-    } else {
-        math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
-    }
+    math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
 }
 
 // Update the LiquidityPool struct price calculation to use TWAP:
@@ -353,7 +361,15 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
 
 // ======== Internal Functions ========
 fun calculate_fee(amount: u64, fee_percent: u64): u64 {
-    math::mul_div_to_64(amount, fee_percent, FEE_SCALE)
+    // Calculate fee normally
+    let calculated_fee = math::mul_div_to_64(amount, fee_percent, FEE_SCALE);
+
+    // If the calculated fee would be 0 but amount is non-zero, return 1 instead
+    if (calculated_fee == 0) {
+        1
+    } else {
+        calculated_fee
+    }
 }
 
 public(package) fun calculate_output(
@@ -379,8 +395,12 @@ public fun get_id(pool: &LiquidityPool): ID {
     object::uid_to_inner(&pool.id)
 }
 
+public fun get_k(pool: &LiquidityPool): u128 {
+    pool.k
+}
+
 public fun check_price_under_max(price: u128) {
-    let max_price = (u64::max_value!() as u128) * (BASIS_POINTS as u128);
+    let max_price = (u64::max_value!() as u128);
     assert!(price <= max_price, EPRICE_TOO_HIGH)
 }
 
@@ -410,7 +430,7 @@ public fun create_test_pool(
         k: math::mul_div_to_128(asset_reserve, stable_reserve, 1),
         fee_percent: DEFAULT_FEE,
         oracle: oracle::new_oracle(
-            math::mul_div_to_128(stable_reserve, 10_0000, asset_reserve),
+            math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
             0, // market start time
             2_000,
             1_000,

@@ -6,6 +6,18 @@ import { SuiClient } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
+import {
+  calculateSwapBreakdown,
+  SwapBreakdown,
+} from "@/utils/trade/calculateSwapBreakdown";
+import { SelectDropDown } from "@/components/SelectDropDown";
+import TradeInsight from "./swap/TradeInsight";
+import TradeDetails from "./swap/TradeDetails";
+import TradeDirectionToggle, {
+  TradeDirectionSwapButton,
+} from "./swap/TradeDirectionToggle";
+import TokenInputField from "./swap/TokenInputField";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
 
 interface SwapEvent {
   price: string;
@@ -68,74 +80,97 @@ const TradeForm: React.FC<TradeFormProps> = ({
     () => [10 ** asset_decimals, 10 ** stable_decimals],
     [asset_decimals, stable_decimals],
   );
-  console.log(assetScale, stableScale);
-
   const account = useCurrentAccount();
   const [amount, setAmount] = useState("");
   const [selectedOutcome, setSelectedOutcome] = useState("0");
-  const [tradeDirection, setTradeDirection] = useState<
-    "assetToStable" | "stableToAsset"
-  >("assetToStable");
+  const [isBuy, setIsBuy] = useState(true);
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
   const [averagePrice, setAveragePrice] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorMessage>(null);
   const TOLERANCE = 0.01;
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
+  const { balance: assetBalance } = useTokenBalance({
+    type: assetType,
+    scale: assetScale,
+    network,
+  });
+  const { balance: stableBalance } = useTokenBalance({
+    type: stableType,
+    scale: stableScale,
+    network,
+  });
+
+  const tokenData = {
+    stable: {
+      name: "stable",
+      symbol: stable_symbol,
+      scale: stableScale,
+      balance: stableBalance,
+      decimals: stable_decimals,
+      type: stableType,
+    },
+    asset: {
+      name: "asset",
+      symbol: asset_symbol,
+      scale: assetScale,
+      balance: assetBalance,
+      decimals: asset_decimals,
+      type: assetType,
+    },
+  };
+
+  // Determine from/to tokens based on trade direction
+  const fromToken = isBuy ? tokenData.stable : tokenData.asset;
+  const toToken = isBuy ? tokenData.asset : tokenData.stable;
 
   const updateFromAmount = (newAmount: string) => {
     setAmount(newAmount);
     const x = parseFloat(newAmount);
-    if (isNaN(x) || x <= 0) return;
+    if (isNaN(x) || x <= 0) {
+      setSwapDetails(null);
+      return;
+    }
+
     const { asset, stable } = getStartingLiquidity();
     const A = Number(asset) / Number(assetScale);
     const S = Number(stable) / Number(stableScale);
-    let expectedOut;
-    if (tradeDirection === "assetToStable") {
-      // For asset-to-stable, the effective price (in stable per asset) is S/(A+x)
-      // Expected stable out = S*x/(A+x)
-      expectedOut = (S * x) / (A + x);
-    } else {
-      // For stable-to-asset, show asset price as stable per asset: (S+x)/A
-      // Expected asset out = A*x/(S+x)
-      expectedOut = (A * x) / (S + x);
-    }
-    // Compute the minimum output as the expected output reduced by the tolerance.
-    // Round down to the appropriate number of decimal places
-    const decimalPlaces =
-      tradeDirection === "assetToStable" ? stable_decimals : asset_decimals;
-    const scaleFactor = 10 ** decimalPlaces;
-    const computedMin =
-      Math.floor(expectedOut * (1 - TOLERANCE) * scaleFactor) / scaleFactor;
 
-    // Calculate the effective price based on the user's input amount
-    if (x > 0) {
-      let effectivePrice;
-      if (tradeDirection === "assetToStable") {
-        // For asset-to-stable: stable per asset
-        effectivePrice = expectedOut / x;
-      } else {
-        // For stable-to-asset: stable per asset
-        effectivePrice = x / expectedOut;
-      }
-      setAveragePrice(effectivePrice.toPrecision(6));
+    try {
+      const breakdown = calculateSwapBreakdown({
+        reserveIn: isBuy ? S : A,
+        reserveOut: isBuy ? A : S,
+        amountIn: x,
+        slippageTolerance: TOLERANCE,
+      });
+
+      setSwapDetails(breakdown);
+      setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
+      setAveragePrice(breakdown.averagePrice.toPrecision(6));
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Failed to calculate swap",
+      );
+      setSwapDetails(null);
+      setExpectedAmountOut("");
+      setAveragePrice("");
     }
-    setExpectedAmountOut(computedMin.toFixed(decimalPlaces));
   };
 
   const filteredTokens = useMemo(() => {
     return tokens.filter(
       (t) =>
         t.outcome === parseInt(selectedOutcome) &&
-        t.asset_type === (tradeDirection === "assetToStable" ? 0 : 1),
+        t.asset_type === (isBuy ? 1 : 0),
     );
-  }, [tokens, selectedOutcome, tradeDirection]);
+  }, [tokens, selectedOutcome, isBuy]);
 
   // Reset error when inputs change
   useEffect(() => {
     setError(null);
     if (!amount) setAveragePrice("");
-  }, [amount, selectedOutcome, tradeDirection]);
+  }, [amount, selectedOutcome, isBuy]);
 
   useEffect(() => {
     // Calculate average price whenever liquidity data changes
@@ -165,7 +200,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
     if (amount) {
       updateFromAmount(amount);
     }
-  }, [tradeDirection, selectedOutcome]);
+  }, [isBuy, selectedOutcome]);
 
   // Helper: get the starting liquidity for the selected outcome.
   const getStartingLiquidity = (): { asset: bigint; stable: bigint } => {
@@ -275,14 +310,10 @@ const TradeForm: React.FC<TradeFormProps> = ({
   ) => {
     const client = new SuiClient({ url: getFullnodeUrl(network) });
 
-    // For asset to stable, we need asset coins. For stable to asset, we need stable coins
-    const coinType =
-      tradeDirection === "assetToStable" ? `${assetType}` : `${stableType}`;
-
     // Get coins based on selected type
     const coins = await client.getCoins({
       owner: account!.address,
-      coinType: `0x${coinType}`,
+      coinType: `0x${fromToken.type}`,
     });
 
     // Find and merge coins if needed
@@ -292,9 +323,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
     );
 
     if (sortedCoins.length === 0) {
-      throw new Error(
-        `No ${tradeDirection === "assetToStable" ? "asset" : "stable"} coins available in wallet`,
-      );
+      throw new Error(`No ${fromToken.symbol} coins available in wallet`);
     }
 
     let coinToUse;
@@ -312,9 +341,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       }
 
       if (totalBalance < amountBig) {
-        throw new Error(
-          `Insufficient ${tradeDirection === "assetToStable" ? "asset" : "stable"} balance in wallet`,
-        );
+        throw new Error(`Insufficient ${fromToken.symbol} balance in wallet`);
       }
 
       coinToUse = txb.mergeCoins(
@@ -346,19 +373,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
     try {
       setIsLoading(true);
       // Convert from human-readable to blockchain amounts
-      const amountScaled =
-        tradeDirection === "assetToStable"
-          ? BigInt(Math.floor(parseFloat(amount) * Number(assetScale)))
-          : BigInt(Math.floor(parseFloat(amount) * Number(stableScale)));
-
-      const expectedAmountOutScaled =
-        tradeDirection === "assetToStable"
-          ? BigInt(
-              Math.floor(parseFloat(expectedAmountOut) * Number(stableScale)),
-            )
-          : BigInt(
-              Math.floor(parseFloat(expectedAmountOut) * Number(assetScale)),
-            );
+      const amountScaled = BigInt(
+        Math.floor(parseFloat(amount) * Number(fromToken.scale)),
+      );
+      const expectedAmountOutScaled = BigInt(
+        Math.floor(parseFloat(expectedAmountOut) * Number(toToken.scale)),
+      );
 
       console.log(
         "trade-amounts (scaled)",
@@ -368,8 +388,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       const txb = new Transaction();
       txb.setGasBudget(100000000);
 
-      const existingConditionalType =
-        tradeDirection === "assetToStable" ? 0 : 1;
+      const existingConditionalType = isBuy ? 1 : 0;
       const hasExistingTokens = filteredTokens.some(
         (t) =>
           t.outcome === parseInt(selectedOutcome) &&
@@ -432,10 +451,9 @@ const TradeForm: React.FC<TradeFormProps> = ({
         const splitCoin = await handleTradeWithNewDeposit(txb, amountScaled);
 
         // Then create and swap tokens in one step
-        const swapTarget =
-          tradeDirection === "assetToStable"
-            ? `${packageId}::swap::create_and_swap_asset_to_stable_entry`
-            : `${packageId}::swap::create_and_swap_stable_to_asset_entry`;
+        const swapTarget = isBuy
+          ? `${packageId}::swap::create_and_swap_stable_to_asset_entry`
+          : `${packageId}::swap::create_and_swap_asset_to_stable_entry`;
 
         txb.moveCall({
           target: swapTarget,
@@ -468,114 +486,122 @@ const TradeForm: React.FC<TradeFormProps> = ({
   };
 
   return (
-    <div className="rounded-lg">
-      {error && <div className="text-red-500 mb-4 text-center">{error}</div>}
-      <div className="flex flex-col gap-2 justify-center">
-        {/* Toggle for Buy and Sell */}
-        <select
+    <div className="rounded-lg bg-gray-900 shadow-xl border border-gray-800">
+      {error && (
+        <div className="text-red-500 mb-4 p-3 bg-red-900/20 border border-red-800/50 rounded-md text-center font-medium">
+          {error}
+        </div>
+      )}
+      <div className="flex flex-col gap-2 p-3">
+        {/* Outcome Selection using Select component */}
+        <SelectDropDown
           value={selectedOutcome}
-          onChange={(e) => setSelectedOutcome(e.target.value)}
-          className="p-2 rounded bg-gray-800 text-white w-full"
-        >
-          {[...Array(parseInt(outcomeCount))].map((_, i) => (
-            <option
-              key={i}
-              value={i}
-              // Inline styles for one-line truncation with ellipsis
-              style={{
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
+          onChange={setSelectedOutcome}
+          options={[...Array(parseInt(outcomeCount))].map((_, i) => ({
+            value: i.toString(),
+            label: outcome_messages[i] || `Outcome ${i}`,
+          }))}
+          label="Select Outcome"
+        />
+
+        {/* Buy/Sell Toggle */}
+        <TradeDirectionToggle isBuy={isBuy} setIsBuy={setIsBuy} />
+
+        {/* Trade explanation */}
+        <TradeInsight
+          isBuy={isBuy}
+          setIsBuy={setIsBuy}
+          selectedOutcome={selectedOutcome}
+          outcomeMessages={outcome_messages}
+          amount={amount}
+          updateFromAmount={updateFromAmount}
+          finalPrice={swapDetails?.finalPrice}
+          assetScale={assetScale}
+          assetSymbol={asset_symbol}
+          stableScale={stableScale}
+          stableSymbol={stable_symbol}
+        />
+
+        {/* From token input */}
+        <TokenInputField
+          label="From"
+          value={amount}
+          onChange={updateFromAmount}
+          placeholder="0.0"
+          symbol={fromToken.symbol}
+          balance={fromToken.balance}
+          step={1 / Number(fromToken.scale)}
+        />
+
+        {/* Two-way arrow icon */}
+        <TradeDirectionSwapButton isBuy={isBuy} setIsBuy={setIsBuy} />
+
+        {/* To token input */}
+        <TokenInputField
+          label="To"
+          value={expectedAmountOut}
+          placeholder="0.0"
+          symbol={toToken.symbol}
+          balance={toToken.balance}
+          readOnly={true}
+          step={1 / Number(toToken.scale)}
+        />
+
+        {/* Details of swap amounts */}
+        <TradeDetails
+          amount={amount}
+          averagePrice={averagePrice}
+          swapDetails={swapDetails}
+          assetSymbol={asset_symbol}
+          stableSymbol={stable_symbol}
+          isBuy={isBuy}
+          tolerance={TOLERANCE}
+        />
+
+        {/* Action Button */}
+        <div className="mt-1">
+          {account ? (
+            <button
+              onClick={handleTrade}
+              disabled={isLoading || !amount || !expectedAmountOut}
+              className={`w-full py-2.5 px-4 rounded-lg font-medium text-white transition-all duration-200 flex items-center justify-center ${
+                isLoading || !amount || !expectedAmountOut
+                  ? "bg-gray-700/80 cursor-not-allowed opacity-70"
+                  : "bg-blue-600/90 hover:bg-blue-500/90 shadow-md hover:shadow-lg"
+              }`}
             >
-              {outcome_messages[i] || `Outcome ${i}`}
-            </option>
-          ))}
-        </select>
-
-        <div className="flex">
-          <button
-            type="button"
-            onClick={() => setTradeDirection("stableToAsset")}
-            className={`flex-1 p-2 rounded-l ${
-              tradeDirection === "stableToAsset"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-800 text-white"
-            }`}
-          >
-            Buy
-          </button>
-          <button
-            type="button"
-            onClick={() => setTradeDirection("assetToStable")}
-            className={`flex-1 p-2 rounded-r ${
-              tradeDirection === "assetToStable"
-                ? "bg-blue-500 text-white"
-                : "bg-gray-800 text-white"
-            }`}
-          >
-            Sell
-          </button>
+              {isLoading ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                "Swap"
+              )}
+            </button>
+          ) : (
+            <ConnectButton className="w-full py-2.5 px-4 rounded-lg font-medium text-white bg-blue-600/90 hover:bg-blue-500/90 transition-all duration-200 shadow-md hover:shadow-lg" />
+          )}
         </div>
-
-        <div className="flex items-center">
-          <span className="mr-2 w-[30%] break-words">
-            {tradeDirection === "assetToStable"
-              ? `${asset_symbol}:`
-              : `${stable_symbol}:`}
-          </span>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => updateFromAmount(e.target.value)}
-            placeholder="Amount to swap"
-            className="p-2 rounded bg-gray-800 text-white flex-1"
-            step={
-              tradeDirection === "assetToStable"
-                ? 1 / Number(assetScale)
-                : 1 / Number(stableScale)
-            }
-          />
-        </div>
-
-        <div className="flex items-center">
-          <span className="mr-2 w-[30%] break-words">
-            {tradeDirection === "assetToStable"
-              ? `${stable_symbol} to receive:`
-              : `${asset_symbol} to receive:`}
-          </span>
-          <input
-            type="number"
-            value={expectedAmountOut}
-            readOnly
-            placeholder="Amount to receive"
-            className="p-2 rounded bg-gray-700 text-white flex-1"
-            // To show with proper decimal places
-            step={
-              tradeDirection === "assetToStable"
-                ? 1 / Number(stableScale)
-                : 1 / Number(assetScale)
-            }
-          />
-        </div>
-
-        {amount && averagePrice && (
-          <div className="text-blue-400 text-xs text-right mt-1 mb-2">
-            Average price: {averagePrice} {stable_symbol}/{asset_symbol}
-          </div>
-        )}
-
-        {account ? (
-          <button
-            onClick={handleTrade}
-            disabled={isLoading || !amount || !expectedAmountOut}
-            className="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-700"
-          >
-            {isLoading ? "Processing..." : "Swap"}
-          </button>
-        ) : (
-          <ConnectButton className="bg-blue-500 text-white p-2 rounded w-full hover:bg-blue-700" />
-        )}
       </div>
     </div>
   );

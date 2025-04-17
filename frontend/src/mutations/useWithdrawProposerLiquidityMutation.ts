@@ -26,7 +26,13 @@ export function useWithdrawProposerLiquidityMutation() {
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
-
+      const loadingToast = toast.loading("Preparing transaction...");
+      const walletApprovalTimeout = setTimeout(() => {
+        toast.error("Wallet approval timeout - no response after 1 minute", {
+          id: loadingToast,
+          duration: 5000,
+        });
+      }, 60000);
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -42,32 +48,29 @@ export function useWithdrawProposerLiquidityMutation() {
         typeArguments: [`0x${assetType}`, `0x${stableType}`],
       });
 
-      const loadingToast = toast.loading("Withdrawing liquidity...");
+      toast.loading("Withdrawing liquidity...", { id: loadingToast });
 
       try {
         const result = await executeTransaction(txb);
-        toast.dismiss(loadingToast);
 
         if (
           result &&
           "effects" in result &&
           result.effects?.status?.status === "success"
         ) {
-          toast.success("Liquidity withdrawn successfully!");
           setTimeout(() => {
             queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
           }, 10_000);
-        } else {
-          toast.error("Failed to withdraw liquidity: Transaction failed");
         }
         return result;
       } catch (error: any) {
+        console.error(
+          error instanceof Error ? error.message : "Transaction failed",
+        );
+      } finally {
         toast.dismiss(loadingToast);
-        throw error;
+        clearTimeout(walletApprovalTimeout);
       }
-    },
-    onError: (error: any) => {
-      toast.error(`Failed to withdraw liquidity: ${error.message}`);
     },
   });
 }

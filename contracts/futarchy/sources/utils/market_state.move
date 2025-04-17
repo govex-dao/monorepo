@@ -245,3 +245,18 @@ public fun destroy_for_testing(state: MarketState) {
 
     object::delete(id);
 }
+
+#[test_only]
+public fun copy_market_id(state: &MarketState): ID {
+    state.market_id
+}
+
+#[test_only]
+public fun copy_status(state: &MarketState): MarketStatus {
+    state.status
+}
+
+#[test_only]
+public fun copy_winning_outcome(state: &MarketState): Option<u64> {
+    state.winning_outcome
+}

@@ -50,7 +50,7 @@ public struct ProtocolFeesCollected has copy, drop {
 }
 
 // === Public Functions ===
-public fun collect_protocol_fees<AssetType, StableType>(
+public(package) fun collect_protocol_fees<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     fee_manager: &mut FeeManager,
@@ -101,7 +101,7 @@ public entry fun collect_protocol_fees_entry<AssetType, StableType>(
     collect_protocol_fees(proposal, escrow, fee_manager, clock);
 }
 
-public fun try_advance_state<AssetType, StableType>(
+public(package) fun try_advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
     clock: &Clock,
@@ -155,13 +155,13 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
         clock,
     );
 
-    // If the proposal is finalized, collect fees
+    // If the proposal is finalized, collect fees before anyone can call empty_all_amm_liquidity
     if (proposal::state(proposal) == STATE_FINALIZED) {
         collect_protocol_fees(proposal, escrow, fee_manager, clock);
     }
 }
 
-public fun finalize<AssetType, StableType>(
+public(package) fun finalize<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
     clock: &Clock,

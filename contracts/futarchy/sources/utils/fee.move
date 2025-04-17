@@ -138,7 +138,7 @@ fun deposit_payment(fee_manager: &mut FeeManager, fee_amount: u64, payment: Coin
 }
 
 // Function to collect DAO creation fee
-public fun deposit_dao_creation_payment(
+public(package) fun deposit_dao_creation_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
@@ -157,7 +157,7 @@ public fun deposit_dao_creation_payment(
 }
 
 // Function to collect proposal creation fee
-public fun deposit_proposal_creation_payment(
+public(package) fun deposit_proposal_creation_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
@@ -176,7 +176,7 @@ public fun deposit_proposal_creation_payment(
 }
 
 // Function to collect verification fee
-public fun deposit_verification_payment(
+public(package) fun deposit_verification_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
@@ -285,7 +285,7 @@ public struct StableCoinBalance<phantom T> has store {
 public struct StableFeeRegistry<phantom T> has copy, drop, store {}
 
 // Modified stable fees storage with more structure
-public fun deposit_stable_fees<StableType>(
+public(package) fun deposit_stable_fees<StableType>(
     fee_manager: &mut FeeManager,
     fees: Balance<StableType>,
     proposal_id: ID,

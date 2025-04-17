@@ -18,7 +18,7 @@ const EINVALID_STATE: u64 = 3;
 // ====== States ======
 const STATE_FINALIZED: u8 = 2;
 
-public entry fun empty_all_amm_liquidity<AssetType, StableType>(
+public(package) entry fun empty_all_amm_liquidity<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -45,7 +45,7 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     );
 }
 
-public fun get_liquidity_for_proposal<AssetType, StableType>(
+public(package) fun get_liquidity_for_proposal<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<u64> {
     let pools = proposal::get_amm_pools(proposal);

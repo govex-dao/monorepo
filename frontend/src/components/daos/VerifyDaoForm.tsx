@@ -1,12 +1,13 @@
 import React, { useState } from "react";
-import { useSignAndExecuteTransaction } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { InfoCircledIcon, ClipboardIcon } from "@radix-ui/react-icons";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
 import { CONSTANTS } from "../../constants";
 import { VerificationHistory } from "./VerificationHistory";
-import { VerifiedIcon } from "../state/VerifiedIcon";
+import { VerifiedIcon } from "../icons/VerifiedIcon";
 
 interface DaoData {
   dao_id: string;
@@ -45,9 +46,10 @@ const VerifyDaoForm = () => {
   });
 
   const [selectedDao, setSelectedDao] = useState<DaoData | null>(null);
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const currentAccount = useCurrentAccount();
+  const executeTransaction = useTransactionExecution();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -70,7 +72,18 @@ const VerifyDaoForm = () => {
     setVerifying(true);
     setError(null);
 
-    const loadingToast = toast.loading("Requesting DAO verification...");
+    if (!currentAccount) {
+      toast.error("Please connect your wallet before creating a DAO.");
+      return;
+    }
+
+    const loadingToast = toast.loading("Preparing DAO verification...");
+    const walletApprovalTimeout = setTimeout(() => {
+      toast.error("Wallet approval timeout - no response after 1 minute", {
+        id: loadingToast,
+        duration: 5000,
+      });
+    }, 60000);
 
     try {
       if (!formData.daoId) {
@@ -97,29 +110,25 @@ const VerifyDaoForm = () => {
         ],
       });
 
-      await signAndExecute({ transaction: tx });
+      toast.loading("Waiting for wallet approval...", { id: loadingToast });
 
-      toast.dismiss(loadingToast);
-      toast.success("Successfully requested DAO verification!", {
-        duration: 5000,
-      });
+      const response = await executeTransaction(tx);
 
-      // Reset form
-      setFormData({
-        daoId: "",
-        attestationUrl: "",
-      });
-      setSelectedDao(null);
+      if (response && response.digest) {
+        setFormData({
+          daoId: "",
+          attestationUrl: "",
+        });
+        setSelectedDao(null);
+      }
     } catch (err) {
-      toast.dismiss(loadingToast);
       const errorMessage =
         err instanceof Error ? err.message : "Failed to request verification";
       setError(errorMessage);
-      toast.error(`Failed to verify DAO: ${errorMessage}`, {
-        duration: 5000,
-      });
     } finally {
       setVerifying(false);
+      clearTimeout(walletApprovalTimeout);
+      toast.dismiss(loadingToast);
     }
   };
 
