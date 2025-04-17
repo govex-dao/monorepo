@@ -12,6 +12,7 @@ use sui::sui::SUI;
 use sui::transfer::{public_share_object, public_transfer};
 use sui::url;
 use sui::vec_set::{Self, VecSet};
+use std::u64;
 
 // === Introduction ===
 // This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
@@ -26,6 +27,7 @@ const TWAP_TWAP_WINDOW_CAP: u64 = 5;
 const ELONG_TRADING_TIME: u64 = 6;
 const ELONG_REVIEW_TIME: u64 = 7;
 const ELONG_TWAP_DELAY_TIME: u64 = 8;
+const ETWAP_INITIAL_TOO_LARGE: u64 = 9;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1; // Equals 0.01%
@@ -180,6 +182,7 @@ public entry fun create_dao<AssetType, StableType>(
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELONG_TRADING_TIME);
     assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELONG_TWAP_DELAY_TIME);
     assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHIGH_TWAP_THRESHOLD);
+    assert!(amm_twap_initial_observation <= (u64::max_value!() as u128), ETWAP_INITIAL_TOO_LARGE);
 
     // Create DAO and AdminCap
     dao::create<AssetType, StableType>(
