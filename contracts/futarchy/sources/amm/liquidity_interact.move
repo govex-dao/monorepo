@@ -14,6 +14,7 @@ const EINVALID_OUTCOME: u64 = 0;
 const EINVALID_LIQUIDITY_TRANSFER: u64 = 1;
 const EWRONG_OUTCOME: u64 = 2;
 const EINVALID_STATE: u64 = 3;
+const EMARKET_ID_MISMATCH: u64 = 4;
 
 // ====== States ======
 const STATE_FINALIZED: u8 = 2;
@@ -29,6 +30,11 @@ public(package) entry fun empty_all_amm_liquidity<AssetType, StableType>(
     assert!(proposal::get_state(proposal) == STATE_FINALIZED, EINVALID_STATE);
     assert!(tx_context::sender(ctx) == proposal::proposer(proposal), EINVALID_LIQUIDITY_TRANSFER);
     assert!(outcome_idx == proposal::get_winning_outcome(proposal), EWRONG_OUTCOME);
+
+    // Validate that proposal and escrow belong to the same market
+    let market_id = proposal::market_state_id(proposal);
+    let escrow_market_id = coin_escrow::get_market_state_id(escrow);
+    assert!(market_id == escrow_market_id, EMARKET_ID_MISMATCH);
 
     let market_state = coin_escrow::get_market_state(escrow);
     market_state::assert_market_finalized(market_state);

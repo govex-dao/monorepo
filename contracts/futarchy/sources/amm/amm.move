@@ -18,6 +18,7 @@ const EDIV_BY_ZERO: u64 = 3;
 const EZERO_LIQUIDITY: u64 = 4;
 const EPRICE_TOO_HIGH: u64 = 5;
 const EZERO_AMOUNT: u64 = 6;
+const EMARKET_ID_MISMATCH: u64 = 7;
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -65,7 +66,6 @@ public(package) fun new_pool(
     start_time: u64,
     ctx: &mut TxContext,
 ): LiquidityPool {
-    // Same validations
     assert!(initial_asset > 0 && initial_stable > 0, EZERO_AMOUNT);
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELOW_LIQUIDITY);
@@ -116,6 +116,7 @@ public(package) fun swap_asset_to_stable(
     ctx: &TxContext,
 ): u64 {
     market_state::assert_trading_active(state);
+    assert!(pool.market_id == market_state::market_id(state), EMARKET_ID_MISMATCH);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
     // When selling outcome tokens (asset -> stable):
@@ -195,6 +196,7 @@ public(package) fun swap_stable_to_asset(
     ctx: &TxContext,
 ): u64 {
     market_state::assert_trading_active(state);
+    assert!(pool.market_id == market_state::market_id(state), EMARKET_ID_MISMATCH);
     assert!(amount_in > 0, EZERO_AMOUNT);
 
     // When buying outcome tokens (stable -> asset):

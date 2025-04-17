@@ -24,6 +24,7 @@ const EINVALID_LIQUIDITY: u64 = 3;
 const EASSET_LIQUIDITY_TOO_LOW: u64 = 4;
 const ESTABLE_LIQUIDITY_TOO_LOW: u64 = 5;
 const EPOOL_NOT_FOUND: u64 = 6;
+const EOUTCOME_OUT_OF_BOUNDS: u64 = 7;
 
 // === Constants ===
 const STATE_REVIEW: u8 = 0;
@@ -183,6 +184,9 @@ public(package) fun create<AssetType, StableType>(
     );
 
     let escrow_id = object::id(&escrow);
+
+    let escrow_market_state_id = coin_escrow::get_market_state_id(&escrow);
+    assert!(escrow_market_state_id == market_state_id, EINVALID_STATE);
 
     // Initialize supplies and AMM pools
     let (supply_ids, amm_pools) = liquidity_initialize::create_outcome_markets(
@@ -394,11 +398,20 @@ public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_idx: u8,
 ): &mut LiquidityPool {
+    assert!((outcome_idx as u64) < proposal.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
     get_pool_mut(&mut proposal.amm_pools, outcome_idx)
 }
 
 public fun get_state<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u8 {
     proposal.state
+}
+
+public fun get_dao_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
+   proposal.dao_id
+}
+
+public fun proposal_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
+   object::uid_to_inner(&proposal.id)
 }
 
 public fun get_amm_pools<AssetType, StableType>(
@@ -436,28 +449,28 @@ public fun get_twap_threshold<AssetType, StableType>(
 }
 
 // Mutator functions
-public fun set_state<AssetType, StableType>(
+public(package) fun set_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     new_state: u8,
 ) {
     proposal.state = new_state;
 }
 
-public fun set_twap_prices<AssetType, StableType>(
+public(package) fun set_twap_prices<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     twap_prices: vector<u128>,
 ) {
     proposal.twap_prices = twap_prices;
 }
 
-public fun set_last_twap_update<AssetType, StableType>(
+public(package) fun set_last_twap_update<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     timestamp: u64,
 ) {
     proposal.last_twap_update = timestamp;
 }
 
-public fun set_winning_outcome<AssetType, StableType>(
+public(package) fun set_winning_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome: u64,
 ) {

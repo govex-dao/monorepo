@@ -18,6 +18,3 @@ Govex Bug Bounty-1
 - Unprofitable attacks which require a significant net loss of attacker funds will not be considered critical.
 
 Govex team reserves right to reject or deny any bug bounty claim, but will endeavour to be fair.
-
-___
-known bugs around missing Input Validation for swaps and liquidity and escrow etc. Currently implementing fix

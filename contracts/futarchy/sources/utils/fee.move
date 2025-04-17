@@ -142,7 +142,7 @@ public(package) fun deposit_dao_creation_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ) {
     let fee_amount = fee_manager.dao_creation_fee;
 
@@ -161,7 +161,7 @@ public(package) fun deposit_proposal_creation_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ) {
     let fee_amount = fee_manager.proposal_creation_fee;
 
@@ -180,7 +180,7 @@ public(package) fun deposit_verification_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: & TxContext,
 ) {
     let fee_amount = fee_manager.verification_fee;
     let payment_amount = deposit_payment(fee_manager, fee_amount, payment);
