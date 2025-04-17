@@ -1,19 +1,24 @@
-nano setup.sh
+# Make the deployment script executable
+chmod +x govex-deploy.sh
 
-chmod +x setup.sh
-
-Set admin email as an env variable
-
+# Set admin email as an environment variable (only needed for nginx/SSL setup)
+# Skip this step if you're only running the deploy command
 export ADMIN_EMAIL=your.email@example.com
 
-./redeploy.sh deploy # reinstall the repo and deploy both backend and frontend
+# Run full deployment (removes existing repo, clones fresh, deploys both backend and frontend)
+./govex-deploy.sh deploy
 
-./setup.sh deploy # reinstall the repo and deploy both backend and frontend
-
+# Optional: For manually building and serving the frontend statically
+cd /root/monorepo/frontend
 pnpm vite build
-
 serve -s dist -l 5173
 
+# Generate SSH key for GitHub access (if needed)
+# This creates a new SSH key for connecting to GitHub
 ssh-keygen -t ed25519 -C "your_email@example.com"
 
+# Return to home directory
 cd ~
+
+# Run all setup steps in a new VM:
+# ./govex-deploy.sh all
