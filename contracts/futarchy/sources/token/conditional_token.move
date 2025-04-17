@@ -335,11 +335,3 @@ public fun value(token: &ConditionalToken): u64 {
 public fun total_supply(supply: &Supply): u64 {
     supply.total_supply
 }
-
-public fun is_asset_token(token: &ConditionalToken): bool {
-    asset_type(token) == 0
-}
-
-public fun is_stable_token(token: &ConditionalToken): bool {
-    asset_type(token) == 1
-}

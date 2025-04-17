@@ -312,10 +312,6 @@ public(package) fun redeem_complete_set_asset<AssetType, StableType>(
         let token = vector::pop_back(&mut tokens);
         let outcome = token::outcome(&token);
 
-        assert!(
-            token::market_id(&token) == market_state::market_id(&escrow.market_state),
-            EWRONG_MARKET,
-        );
         let supply = vector::borrow_mut(&mut escrow.outcome_asset_supplies, (outcome as u64));
         token::burn(supply, token, clock, ctx);
         i = i + 1;
@@ -346,6 +342,7 @@ public(package) fun redeem_complete_set_stable<AssetType, StableType>(
     while (i < outcome_count) {
         let token = vector::pop_back(&mut tokens);
         let outcome = token::outcome(&token);
+        
         let supply = vector::borrow_mut(&mut escrow.outcome_stable_supplies, (outcome as u64));
         token::burn(supply, token, clock, ctx);
         i = i + 1;
