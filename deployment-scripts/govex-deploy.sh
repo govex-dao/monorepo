@@ -1,4 +1,4 @@
-  GNU nano 8.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              redeploy.sh                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+GNU nano 8.1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              redeploy.sh                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 #!/bin/bash
 set -e
 
@@ -30,7 +30,7 @@ function setup_swap() {
     else
         echo "Creating and activating 2 GB swap file..."
         sudo fallocate -l 2G /swapfile
-        s#udo chmod 600 /swapfile
+        sudo chmod 600 /swapfile
         sudo mkswap /swapfile
         sudo swapon /swapfile
         echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
@@ -97,38 +97,9 @@ function reinstall_and_deploy() {
     echo "=== Govex Reinstallation and Deployment Complete ==="
 }
 
-function deploy_frontend() {
-    echo "=== Deploying Frontend ==="
-    cd "$PROJECT_DIR/frontend"
-    git pull origin main # Pull the latest frontend code (adjust branch as needed)
-    pnpm install --ignore-workspace
-    pm2 start "pnpm dev --host 127.0.0.1" --name frontend
-    pm2 save
-}
-
-function deploy_backend() {
-    echo "=== Deploying Backend ==="
-    cd "$PROJECT_DIR/api"
-    git pull origin main # Pull the latest backend code (adjust branch as needed)
-    pnpm install
-    pnpm db:setup:dev
-    pm2 start "pnpm dev" --name backend
-    pm2 save
-}
-
 function setup_nginx_and_ssl() {
     echo "=== Setting Up Nginx and SSL ==="
     sudo apt install -y nginx certbot python3-certbot-nginx
-
-    # Add server_tokens off to the main nginx.conf if it doesn't exist
-    echo "Configuring Nginx security settings..."
-    if ! grep -q "server_tokens off" /etc/nginx/nginx.conf; then
-        sudo sed -i '/http {/a \    server_tokens off;' /etc/nginx/nginx.conf
-        echo "Added server_tokens off to nginx.conf"
-    else
-        echo "server_tokens off already configured in nginx.conf"
-    fi
-
     sudo tee /etc/nginx/sites-available/default > /dev/null <<EOF
 server {
     listen 80;
@@ -170,42 +141,21 @@ EOF
 # Main Script Logic
 function main() {
     case $1 in
-    system)
-        update_system
-        ;;
-    swap)
-        setup_swap
-        ;;
-    dependencies)
-        install_dependencies
-        install_node_and_pnpm
-        ;;
     deploy)
         reinstall_and_deploy
-        ;;
-    frontend)
-        deploy_frontend
-        ;;
-    backend)
-        deploy_backend
-        ;;
-    nginx)
-        setup_nginx_and_ssl
         ;;
     all)
         update_system
         setup_swap
         install_dependencies
         install_node_and_pnpm
-        deploy_backend
-        deploy_frontend
+        reinstall_and_deploy    
         setup_nginx_and_ssl
         ;;
     *)
-        echo "Usage: $0 {system|swap|dependencies|frontend|backend|nginx|all}"
+        echo "Usage: $0 {deploy|all}"
         ;;
     esac
 }
 
 main "$@"
-
