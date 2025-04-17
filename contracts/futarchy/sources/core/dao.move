@@ -394,7 +394,7 @@ public entry fun sign_result_entry<AssetType, StableType>(
     let escrow_market_state_id = coin_escrow::get_market_state_id(escrow);
     let info = get_proposal_info(dao, proposal_id);
     assert!(escrow_market_state_id == info.market_state_id, EUNAUTHORIZED);
-    
+
     let market_state = coin_escrow::get_market_state_mut(escrow);
     sign_result(
         dao,

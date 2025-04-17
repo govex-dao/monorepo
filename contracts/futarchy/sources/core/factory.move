@@ -5,6 +5,7 @@ use futarchy::fee;
 use std::ascii::{Self, String as AsciiString};
 use std::string::{Self, String as UTF8String};
 use std::type_name;
+use std::u64;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin, CoinMetadata};
 use sui::event;
@@ -12,7 +13,6 @@ use sui::sui::SUI;
 use sui::transfer::{public_share_object, public_transfer};
 use sui::url;
 use sui::vec_set::{Self, VecSet};
-use std::u64;
 
 // === Introduction ===
 // This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs

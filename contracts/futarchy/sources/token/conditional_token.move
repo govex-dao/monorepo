@@ -174,7 +174,7 @@ public(package) fun merge_many(
     base_token: &mut ConditionalToken,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
-    ctx: & TxContext,
+    ctx: &TxContext,
 ) {
     let len = vector::length(&tokens);
     assert!(len > 0, EEMPTY_VECTOR);
@@ -235,7 +235,7 @@ public(package) fun burn(
     supply: &mut Supply,
     token: ConditionalToken,
     clock: &Clock,
-    ctx: & TxContext,
+    ctx: &TxContext,
 ) {
     // Verify token matches supply
     assert!(token.market_id == supply.market_id, EWRONG_MARKET);
