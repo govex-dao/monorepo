@@ -33,7 +33,6 @@ public struct LiquidityPool has key, store {
     outcome_idx: u8,
     asset_reserve: u64,
     stable_reserve: u64,
-    k: u128,
     fee_percent: u64,
     oracle: Oracle,
     protocol_fees: u64, // Track accumulated stable fees
@@ -97,7 +96,6 @@ public(package) fun new_pool(
         outcome_idx,
         asset_reserve: initial_asset,
         stable_reserve: initial_stable,
-        k,
         fee_percent: DEFAULT_FEE,
         oracle,
         protocol_fees: 0,
@@ -279,9 +277,6 @@ public(package) fun empty_all_amm_liquidity(
     pool.asset_reserve = 0;
     pool.stable_reserve = 0;
 
-    // Update K
-    pool.k = 0;
-
     (asset_amount_out, stable_amount_out)
 }
 
@@ -398,7 +393,7 @@ public fun get_id(pool: &LiquidityPool): ID {
 }
 
 public fun get_k(pool: &LiquidityPool): u128 {
-    pool.k
+    math::mul_div_to_128(pool.asset_reserve, pool.stable_reserve, 1)
 }
 
 public fun check_price_under_max(price: u128) {
@@ -429,7 +424,6 @@ public fun create_test_pool(
         outcome_idx,
         asset_reserve,
         stable_reserve,
-        k: math::mul_div_to_128(asset_reserve, stable_reserve, 1),
         fee_percent: DEFAULT_FEE,
         oracle: oracle::new_oracle(
             math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
@@ -450,7 +444,6 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         outcome_idx: _,
         asset_reserve: _,
         stable_reserve: _,
-        k: _,
         fee_percent: _,
         oracle,
         protocol_fees: _,
