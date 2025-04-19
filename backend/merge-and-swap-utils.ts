@@ -208,8 +208,8 @@ export const mergeAndSwapTokens = async ({
 
         // Determine which swap function to call based on existingConditionalType
         const swapTarget = existingConditionalType === 0
-            ? `${packageId}::proposal::create_and_swap_asset_to_stable_with_existing`
-            : `${packageId}::proposal::create_and_swap_stable_to_asset_with_existing`;
+            ? `${packageId}::proposal::create_and_swap_asset_to_stable_with_existing_entry`
+            : `${packageId}::proposal::create_and_swap_stable_to_asset_with_existing_entry`;
 
         // Then create and swap tokens
         txb.moveCall({

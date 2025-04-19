@@ -24,6 +24,7 @@ const ENONZERO_BALANCE: u64 = 8;
 
 // === Structs ===
 // Supply tracking object for a specific conditional token type
+// Total supply is tracked to aid with testing, it is not a source of truth. Token balances are the source of truth
 public struct Supply has key, store {
     id: UID,
     market_id: ID,

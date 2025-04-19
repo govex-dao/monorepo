@@ -739,10 +739,10 @@ fun test_deposit_initial_liquidity_with_imbalanced_outcomes() {
     let mut stable_amounts = vector::empty<u64>();
     
     vector::push_back(&mut asset_amounts, 100);  // Outcome 0
-    vector::push_back(&mut asset_amounts, 900);  // Outcome 1
+    vector::push_back(&mut asset_amounts, 1000);  // Outcome 1
     vector::push_back(&mut asset_amounts, 500);  // Outcome 2
     
-    vector::push_back(&mut stable_amounts, 1800); // Outcome 0
+    vector::push_back(&mut stable_amounts, 2000); // Outcome 0
     vector::push_back(&mut stable_amounts, 200);  // Outcome 1
     vector::push_back(&mut stable_amounts, 1000); // Outcome 2
     
