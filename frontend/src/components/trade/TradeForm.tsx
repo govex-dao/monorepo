@@ -429,8 +429,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
           const swapTarget =
             existingConditionalType === 0
-              ? `${packageId}::swap::create_and_swap_asset_to_stable_with_existing`
-              : `${packageId}::swap::create_and_swap_stable_to_asset_with_existing`;
+              ? `${packageId}::swap::create_and_swap_asset_to_stable_with_existing_entry`
+              : `${packageId}::swap::create_and_swap_stable_to_asset_with_existing_entry`;
 
           txb.moveCall({
             target: swapTarget,

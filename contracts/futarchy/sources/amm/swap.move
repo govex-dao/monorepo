@@ -22,7 +22,7 @@ const EMARKET_ID_MISMATCH: u64 = 4;
 const STATE_TRADING: u8 = 1;
 
 // ==== AMM Operations ====
-fun swap_asset_to_stable<AssetType, StableType>(
+fun swap_asset_to_stable_internal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &MarketState,
     outcome_idx: u64,
@@ -40,7 +40,7 @@ fun swap_asset_to_stable<AssetType, StableType>(
     amm::swap_asset_to_stable(pool, state, amount_in, min_amount_out, clock, ctx)
 }
 
-public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
+public fun swap_asset_to_stable<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -48,7 +48,7 @@ public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
     min_amount_out: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): ConditionalToken {
     assert!(
         proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
         EMARKET_ID_MISMATCH,
@@ -56,7 +56,7 @@ public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
     let amount_in = token::value(&token_to_swap);
 
     // Calculate the swap amount using AMM
-    let amount_out = swap_asset_to_stable(
+    let amount_out = swap_asset_to_stable_internal(
         proposal,
         coin_escrow::get_market_state(escrow),
         outcome_idx,
@@ -76,11 +76,32 @@ public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
         ctx,
     );
 
-    let sender = tx_context::sender(ctx);
-    transfer::public_transfer(stable_token, sender);
+    stable_token
 }
 
-fun swap_stable_to_asset<AssetType, StableType>(
+public entry fun swap_asset_to_stable_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    token_to_swap: ConditionalToken,
+    min_amount_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let recipient = tx_context::sender(ctx);
+    let result_token = swap_asset_to_stable(
+        proposal,
+        escrow,
+        outcome_idx,
+        token_to_swap,
+        min_amount_out,
+        clock,
+        ctx,
+    );
+    transfer::public_transfer(result_token, recipient);
+}
+
+fun swap_stable_to_asset_internal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &MarketState,
     outcome_idx: u64,
@@ -97,7 +118,7 @@ fun swap_stable_to_asset<AssetType, StableType>(
     amm::swap_stable_to_asset(pool, state, amount_in, min_amount_out, clock, ctx)
 }
 
-public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
+public fun swap_stable_to_asset<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -105,7 +126,7 @@ public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
     min_amount_out: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): ConditionalToken {
     assert!(
         proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
         EMARKET_ID_MISMATCH,
@@ -113,7 +134,7 @@ public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
     let amount_in = token::value(&token_to_swap);
 
     // Calculate the swap amount using AMM
-    let amount_out = swap_stable_to_asset(
+    let amount_out = swap_stable_to_asset_internal(
         proposal,
         coin_escrow::get_market_state(escrow),
         outcome_idx,
@@ -133,12 +154,33 @@ public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
         ctx,
     );
 
-    let sender = tx_context::sender(ctx);
-    transfer::public_transfer(asset_token, sender);
+    asset_token
 }
 
-#[allow(lint(self_transfer))]
-public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
+public entry fun swap_stable_to_asset_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    token_to_swap: ConditionalToken,
+    min_amount_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let recipient = tx_context::sender(ctx);
+    let result_token = swap_stable_to_asset(
+        proposal,
+        escrow,
+        outcome_idx,
+        token_to_swap,
+        min_amount_out,
+        clock,
+        ctx,
+    );
+    transfer::public_transfer(result_token, recipient);
+}
+
+// Public function that returns all tokens with swapped token at the end
+public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -147,7 +189,7 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     coin_in: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): vector<ConditionalToken> {
     assert!(
         proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
         EMARKET_ID_MISMATCH,
@@ -157,7 +199,6 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     let mut swap_token = vector::remove(&mut tokens, outcome_idx);
 
     // Merge existing token if present
-
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
     assert!(token::asset_type(&existing_token) == 1, EWRONG_TOKEN_TYPE);
     assert!(
@@ -170,10 +211,8 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     vector::push_back(&mut existing_token_in_vector, existing_token);
     token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
 
-    let recipient = tx_context::sender(ctx);
-
     // Swap the selected token
-    swap_stable_to_asset_entry(
+    let asset_token = swap_stable_to_asset(
         proposal,
         escrow,
         outcome_idx,
@@ -183,7 +222,38 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
         ctx,
     );
 
-    // Transfer the remaining tokens to the recipient
+    // Add the swapped token to the end of the vector
+    vector::push_back(&mut tokens, asset_token);
+
+    tokens
+}
+
+// Entry function that uses the public function and handles transfers
+#[allow(lint(self_transfer))]
+public entry fun create_and_swap_stable_to_asset_with_existing_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    existing_token: ConditionalToken,
+    min_amount_out: u64,
+    coin_in: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut tokens = create_and_swap_stable_to_asset_with_existing(
+        proposal,
+        escrow,
+        outcome_idx,
+        existing_token,
+        min_amount_out,
+        coin_in,
+        clock,
+        ctx,
+    );
+
+    let recipient = tx_context::sender(ctx);
+
+    // Transfer all tokens to the recipient
     while (!vector::is_empty(&tokens)) {
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);
@@ -193,8 +263,8 @@ public entry fun create_and_swap_stable_to_asset_with_existing<AssetType, Stable
     vector::destroy_empty(tokens);
 }
 
-#[allow(lint(self_transfer))]
-public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
+// Public function that returns all tokens with swapped token at the end
+public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -203,7 +273,7 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     coin_in: Coin<AssetType>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): vector<ConditionalToken> {
     assert!(
         proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
         EMARKET_ID_MISMATCH,
@@ -224,10 +294,8 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     vector::push_back(&mut existing_token_in_vector, existing_token);
     token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
 
-    let recipient = tx_context::sender(ctx);
-
     // Swap the selected token
-    swap_asset_to_stable_entry(
+    let stable_token = swap_asset_to_stable(
         proposal,
         escrow,
         outcome_idx,
@@ -237,7 +305,38 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
         ctx,
     );
 
-    // Transfer the remaining tokens to the recipient
+    // Add the swapped token to the end of the vector
+    vector::push_back(&mut tokens, stable_token);
+
+    tokens
+}
+
+// Entry function that uses the public function and handles transfers
+#[allow(lint(self_transfer))]
+public entry fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    existing_token: ConditionalToken,
+    min_amount_out: u64,
+    coin_in: Coin<AssetType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut tokens = create_and_swap_asset_to_stable_with_existing(
+        proposal,
+        escrow,
+        outcome_idx,
+        existing_token,
+        min_amount_out,
+        coin_in,
+        clock,
+        ctx,
+    );
+
+    let recipient = tx_context::sender(ctx);
+
+    // Transfer all tokens to the recipient
     while (!vector::is_empty(&tokens)) {
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);
@@ -247,7 +346,43 @@ public entry fun create_and_swap_asset_to_stable_with_existing<AssetType, Stable
     vector::destroy_empty(tokens);
 }
 
-/// Entry function for creating and swapping asset to stable without an existing token
+// Public function that returns all tokens with swapped token at the end
+public fun create_and_swap_asset_to_stable<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    min_amount_out: u64,
+    coin_in: Coin<AssetType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): vector<ConditionalToken> {
+    assert!(
+        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        EMARKET_ID_MISMATCH,
+    );
+    let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
+
+    let token_to_swap = vector::remove(&mut tokens, outcome_idx);
+
+    // Swap the selected token
+    let stable_token = swap_asset_to_stable(
+        proposal,
+        escrow,
+        outcome_idx,
+        token_to_swap,
+        min_amount_out,
+        clock,
+        ctx,
+    );
+
+    // Add the swapped token to the end of the vector
+    vector::push_back(&mut tokens, stable_token);
+
+    tokens
+}
+
+// Entry function that uses the public function and handles transfers
+#[allow(lint(self_transfer))]
 public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -257,28 +392,19 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
-        EMARKET_ID_MISMATCH,
-    );
-    let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
-
-    let token_to_swap = vector::remove(&mut tokens, outcome_idx);
-
-    let recipient = tx_context::sender(ctx);
-
-    // Swap the selected token
-    swap_asset_to_stable_entry(
+    let mut tokens = create_and_swap_asset_to_stable(
         proposal,
         escrow,
         outcome_idx,
-        token_to_swap,
         min_amount_out,
+        coin_in,
         clock,
         ctx,
     );
 
-    // Transfer the remaining tokens to the recipient
+    let recipient = tx_context::sender(ctx);
+
+    // Transfer all tokens to the recipient
     while (!vector::is_empty(&tokens)) {
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);
@@ -288,8 +414,8 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     vector::destroy_empty(tokens);
 }
 
-/// Entry function for creating and swapping stable to asset without an existing token
-public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
+// Public function that returns all tokens with swapped token at the end
+public fun create_and_swap_stable_to_asset<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -297,7 +423,7 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
     coin_in: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): vector<ConditionalToken> {
     assert!(
         proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
         EMARKET_ID_MISMATCH,
@@ -306,10 +432,8 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
 
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
 
-    let recipient = tx_context::sender(ctx);
-
     // Swap the selected token
-    swap_stable_to_asset_entry(
+    let asset_token = swap_stable_to_asset(
         proposal,
         escrow,
         outcome_idx,
@@ -319,7 +443,36 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
         ctx,
     );
 
-    // Transfer the remaining tokens to the recipient
+    // Add the swapped token to the end of the vector
+    vector::push_back(&mut tokens, asset_token);
+
+    tokens
+}
+
+// Entry function that uses the public function and handles transfers
+#[allow(lint(self_transfer))]
+public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    min_amount_out: u64,
+    coin_in: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut tokens = create_and_swap_stable_to_asset(
+        proposal,
+        escrow,
+        outcome_idx,
+        min_amount_out,
+        coin_in,
+        clock,
+        ctx,
+    );
+
+    let recipient = tx_context::sender(ctx);
+
+    // Transfer all tokens to the recipient
     while (!vector::is_empty(&tokens)) {
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);

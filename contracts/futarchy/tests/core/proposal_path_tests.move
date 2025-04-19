@@ -357,7 +357,7 @@ fun test_proposal_path_with_swaps() {
         
         // Create and swap with existing asset token
         let asset_coin = coin::from_balance(balance::create_for_testing<u64>(1_500_000), ctx(&mut scenario));
-        swap::create_and_swap_asset_to_stable_with_existing(
+        swap::create_and_swap_asset_to_stable_with_existing_entry(
             &mut proposal,
             &mut escrow,
             0, // outcome_idx
@@ -398,7 +398,7 @@ fun test_proposal_path_with_swaps() {
         
         // Create and swap with existing stable token
         let stable_coin = coin::from_balance(balance::create_for_testing<u64>(100_000_000), ctx(&mut scenario));
-        swap::create_and_swap_stable_to_asset_with_existing(
+        swap::create_and_swap_stable_to_asset_with_existing_entry(
             &mut proposal,
             &mut escrow,
             1, // outcome_idx

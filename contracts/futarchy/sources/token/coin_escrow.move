@@ -20,6 +20,8 @@ const EOUTCOME_OUT_OF_BOUNDS: u64 = 5;
 const EWRONG_OUTCOME: u64 = 6;
 const ENOT_ENOUGH: u64 = 7;
 const ENOT_ENOUGH_LIQUIDITY: u64 = 8;
+const EInsufficientAsset: u64 = 9;
+const EInsufficientStable: u64 = 10;
 
 // === Constants ===
 const TOKEN_TYPE_STABLE: u8 = 1;
@@ -126,6 +128,9 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
         i = i + 1;
     };
 
+    assert!(asset_amount == max_asset, EInsufficientAsset);
+    assert!(stable_amount == max_stable, EInsufficientStable);
+
     // 3. Mint differential tokens for each outcome
     i = 0;
     while (i < outcome_count) {
@@ -174,8 +179,6 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     });
 }
 
-// TODO: This implementation has known atomicity issues and will be refactored in v2
-// Current risk is mitigated by restricted access controls
 #[allow(lint(self_transfer))]
 public(package) fun remove_liquidity<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -212,8 +215,6 @@ public(package) fun remove_liquidity<AssetType, StableType>(
     });
 }
 
-// TODO: This implementation has known atomicity issues and will be refactored in v2
-// Current risk is mitigated by restricted access controls
 public(package) fun extract_stable_fees<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     amount: u64,
@@ -293,7 +294,7 @@ fun verify_token_set<AssetType, StableType>(
 }
 
 // Asset token redemption implementation
-public(package) fun redeem_complete_set_asset<AssetType, StableType>(
+public fun redeem_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
@@ -318,13 +319,13 @@ public(package) fun redeem_complete_set_asset<AssetType, StableType>(
     };
 
     vector::destroy_empty(tokens);
-
+    assert!(balance::value(&escrow.escrowed_asset) >= amount, EINSUFFICIENT_BALANCE);
     // Return the redeemed assets
     balance::split(&mut escrow.escrowed_asset, amount)
 }
 
 // Stable token redemption implementation
-public(package) fun redeem_complete_set_stable<AssetType, StableType>(
+public fun redeem_complete_set_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
@@ -349,7 +350,7 @@ public(package) fun redeem_complete_set_stable<AssetType, StableType>(
     };
 
     vector::destroy_empty(tokens);
-
+    assert!(balance::value(&escrow.escrowed_stable) >= amount, EINSUFFICIENT_BALANCE);
     // Return the redeemed stable tokens
     balance::split(&mut escrow.escrowed_stable, amount)
 }
@@ -403,7 +404,7 @@ public(package) fun redeem_winning_tokens_asset<AssetType, StableType>(
     let amount = token::value(&token);
     let winning_supply = vector::borrow_mut(&mut escrow.outcome_asset_supplies, winner);
     token::burn(winning_supply, token, clock, ctx);
-
+    assert!(balance::value(&escrow.escrowed_asset) >= amount, EINSUFFICIENT_BALANCE);
     // Emit redemption event
     event::emit(TokenRedemption {
         outcome: winner,
@@ -440,7 +441,7 @@ public(package) fun redeem_winning_tokens_stable<AssetType, StableType>(
     let amount = token::value(&token);
     let winning_supply = vector::borrow_mut(&mut escrow.outcome_stable_supplies, winner);
     token::burn(winning_supply, token, clock, ctx);
-
+    assert!(balance::value(&escrow.escrowed_stable) >= amount, EINSUFFICIENT_BALANCE);
     // Emit redemption event
     event::emit(TokenRedemption {
         outcome: winner,
@@ -476,7 +477,7 @@ public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
     transfer::public_transfer(coin, tx_context::sender(ctx));
 }
 
-public(package) fun mint_complete_set_asset<AssetType, StableType>(
+public fun mint_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     coin_in: Coin<AssetType>,
     clock: &Clock,
@@ -534,7 +535,7 @@ public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
 
 /// Mint a complete set of stable tokens by depositing stable coins
 /// Returns the minted tokens instead of transferring them directly
-public(package) fun mint_complete_set_stable<AssetType, StableType>(
+public fun mint_complete_set_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     coin_in: Coin<StableType>,
     clock: &Clock,
@@ -573,7 +574,7 @@ public(package) fun mint_complete_set_stable<AssetType, StableType>(
 }
 
 /// Entry function for minting stable tokens
-public(package) entry fun mint_complete_set_stable_entry<AssetType, StableType>(
+public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     coin_in: Coin<StableType>,
     clock: &Clock,
