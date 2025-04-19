@@ -238,7 +238,7 @@ public entry fun create_and_swap_stable_to_asset_with_existing_entry<AssetType, 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let (mut tokens, stable_token) = create_and_swap_stable_to_asset_with_existing(
+    let (mut tokens, asset_token) = create_and_swap_stable_to_asset_with_existing(
         proposal,
         escrow,
         outcome_idx,
@@ -256,7 +256,7 @@ public entry fun create_and_swap_stable_to_asset_with_existing_entry<AssetType, 
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);
     };
-    transfer::public_transfer(stable_token, recipient);
+    transfer::public_transfer(asset_token, recipient);
 
     // Clean up the vector
     vector::destroy_empty(tokens);
@@ -320,7 +320,7 @@ public entry fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let (mut tokens, asset_token) =  create_and_swap_asset_to_stable_with_existing(
+    let (mut tokens, stable_token) =  create_and_swap_asset_to_stable_with_existing(
         proposal,
         escrow,
         outcome_idx,
@@ -338,7 +338,7 @@ public entry fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, 
         let token = vector::pop_back(&mut tokens);
         transfer::public_transfer(token, recipient);
     };
-    transfer::public_transfer(asset_token, recipient);
+    transfer::public_transfer(stable_token, recipient);
 
     // Clean up the vector
     vector::destroy_empty(tokens);
