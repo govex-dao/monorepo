@@ -73,8 +73,6 @@ public(package) fun new_oracle(
 
 // ======== Helper Functions ========
 // Cap TWAP accumalation price against previous windows to stop an attacker moving it quickly
-// ======== Helper Functions ========
-// Cap TWAP accumalation price against previous windows to stop an attacker moving it quickly
 fun cap_price_change(
     twap_base: u128,
     new_price: u128,
@@ -119,9 +117,6 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
         oracle.last_window_end = delay_threshold;
         // Initialize last_window_end_cumulative_price - since no time elapsed yet at threshold, it's 0.
         oracle.last_window_end_cumulative_price = 0; // Assuming total_cumulative_price is also 0 initially
-        // Initialize last_window_twap to the initialization price
-        oracle.last_window_twap = oracle.twap_initialization_price;
-        oracle.last_price = oracle.twap_initialization_price; // Also set last_price
     };
 
     let additional_time_to_include = timestamp - oracle.last_timestamp;
