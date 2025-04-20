@@ -320,7 +320,7 @@ public entry fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let (mut tokens, stable_token) =  create_and_swap_asset_to_stable_with_existing(
+    let (mut tokens, stable_token) = create_and_swap_asset_to_stable_with_existing(
         proposal,
         escrow,
         outcome_idx,
