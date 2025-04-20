@@ -664,7 +664,8 @@ public entry fun get_escrow_balances_and_winning_supply<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
     winning_outcome: u64, // Added parameter
     _ctx: &TxContext,
-): (u64, u64, u64, u64) { // Changed return type to a tuple
+): (u64, u64, u64, u64) {
+    // Changed return type to a tuple
     // Get current escrow balances
     let (escrowed_asset_balance, escrowed_stable_balance) = get_balances(escrow);
     let outcome_count = market_state::outcome_count(&escrow.market_state);
@@ -676,7 +677,10 @@ public entry fun get_escrow_balances_and_winning_supply<AssetType, StableType>(
 
     // Get the supply counts for the *winning* outcome directly
     let winning_asset_supply_cap = vector::borrow(&escrow.outcome_asset_supplies, winning_outcome);
-    let winning_stable_supply_cap = vector::borrow(&escrow.outcome_stable_supplies, winning_outcome);
+    let winning_stable_supply_cap = vector::borrow(
+        &escrow.outcome_stable_supplies,
+        winning_outcome,
+    );
 
     let winning_asset_total_supply = token::total_supply(winning_asset_supply_cap);
     let winning_stable_total_supply = token::total_supply(winning_stable_supply_cap);
@@ -686,7 +690,7 @@ public entry fun get_escrow_balances_and_winning_supply<AssetType, StableType>(
         escrowed_asset_balance,
         escrowed_stable_balance,
         winning_asset_total_supply,
-        winning_stable_total_supply
+        winning_stable_total_supply,
     )
 }
 
