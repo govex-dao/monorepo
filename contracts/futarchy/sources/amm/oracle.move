@@ -132,8 +132,9 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
         let time_since_last_window_end = timestamp - oracle.last_window_end;
         if (time_since_last_window_end >= TWAP_PRICE_CAP_WINDOW) {
             // Calculate how many full windows have completed since the last boundary update
-            let full_windows_since_last_update =
-                (time_since_last_window_end / TWAP_PRICE_CAP_WINDOW); // u64 division is fine
+            let full_windows_since_last_update = (
+                time_since_last_window_end / TWAP_PRICE_CAP_WINDOW,
+            ); // u64 division is fine
 
             // Determine the price to use for accumulation, capped relative to the last window's TWAP
             let capped_price = cap_price_change(
@@ -148,23 +149,28 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 
             // 1. Determine the New Window End Timestamp
             // This is the exact time the last full window completed before 'timestamp'.
-            let new_last_window_end = oracle.last_window_end
+            let new_last_window_end =
+                oracle.last_window_end
                 + TWAP_PRICE_CAP_WINDOW * full_windows_since_last_update;
 
             // 2. Calculate Contribution *Only Until* the New Window End
             // Time from the last observation up to the exact end of the completed window(s).
             let time_until_window_end = new_last_window_end - oracle.last_timestamp;
-            let price_contribution_until_window_end = scaled_price * (time_until_window_end as u256);
+            let price_contribution_until_window_end =
+                scaled_price * (time_until_window_end as u256);
 
             // 3. Calculate Cumulative Price *Exactly At* the New Window End
             // This is the total cumulative price at the precise moment the window(s) ended.
-            let cumulative_at_new_window_end = oracle.total_cumulative_price + price_contribution_until_window_end;
+            let cumulative_at_new_window_end =
+                oracle.total_cumulative_price + price_contribution_until_window_end;
 
             // 4. Calculate the TWAP for the Window(s) that Just Ended
             // Accumulation during the window(s) = Cumulative price at end - Cumulative price at start.
-            let accumulation_during_windows = cumulative_at_new_window_end - oracle.last_window_end_cumulative_price;
+            let accumulation_during_windows =
+                cumulative_at_new_window_end - oracle.last_window_end_cumulative_price;
             // Total time elapsed during these full window(s).
-            let time_elapsed_in_windows = (TWAP_PRICE_CAP_WINDOW as u256) * (full_windows_since_last_update as u256);
+            let time_elapsed_in_windows =
+                (TWAP_PRICE_CAP_WINDOW as u256) * (full_windows_since_last_update as u256);
             assert!(time_elapsed_in_windows > 0, EZERO_PERIOD); // Safety check, should be guaranteed by the if condition
             // Calculate the TWAP for the completed window(s).
             let new_last_window_twap = accumulation_during_windows / time_elapsed_in_windows;
@@ -172,14 +178,16 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
             // 5. Calculate the Remaining Contribution *After* the New Window End
             // Time from the window end up to the current observation timestamp.
             let time_after_window_end = timestamp - new_last_window_end;
-            let price_contribution_after_window_end = scaled_price * (time_after_window_end as u256);
+            let price_contribution_after_window_end =
+                scaled_price * (time_after_window_end as u256);
 
             // --- Update Oracle State Correctly ---
             oracle.last_window_twap = (new_last_window_twap as u128); // Use correctly calculated TWAP (Fix #1 part 1)
             oracle.last_window_end_cumulative_price = cumulative_at_new_window_end; // Set cumulative price AT window end (Fix #2)
             oracle.last_window_end = new_last_window_end; // Update window end time
             // Update total price correctly incorporating both parts of the period (Fix #1 part 2)
-            oracle.total_cumulative_price = cumulative_at_new_window_end + price_contribution_after_window_end;
+            oracle.total_cumulative_price =
+                cumulative_at_new_window_end + price_contribution_after_window_end;
             oracle.last_price = capped_price; // Update last observed (capped) price
 
             // No window closure: continue accumulating within the current open window
