@@ -178,7 +178,7 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
             oracle.last_window_twap = (new_last_window_twap as u128);
             oracle.last_window_end_cumulative_price = cumulative_at_new_window_end; // Set cumulative price AT window end
             oracle.last_window_end = new_last_window_end; // Update window end time
-            // Update total price incorporating both parts of the period 
+            // Update total price incorporating both parts of the period
             oracle.total_cumulative_price =
                 cumulative_at_new_window_end + price_contribution_after_window_end;
             oracle.last_price = capped_price; // Update last observed (capped) price
