@@ -39,6 +39,14 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     outcome_stable_supplies: vector<Supply>,
 }
 
+public struct EscrowBalanceData has copy, drop, store {
+    escrowed_asset: u64,
+    escrowed_stable: u64,
+    outcome_count: u64,
+    asset_supplies: vector<u64>,
+    stable_supplies: vector<u64>,
+}
+
 // === Events ===
 public struct LiquidityWithdrawal has copy, drop {
     escrowed_asset: u64,
@@ -52,14 +60,6 @@ public struct LiquidityDeposit has copy, drop {
     escrowed_stable: u64,
     asset_amount: u64,
     stable_amount: u64,
-}
-
-public struct EscrowBalance has copy, drop {
-    escrowed_asset: u64,
-    escrowed_stable: u64,
-    outcome_count: u64,
-    asset_supplies: vector<u64>,
-    stable_supplies: vector<u64>,
 }
 
 public struct TokenRedemption has copy, drop {
@@ -659,37 +659,35 @@ public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     token
 }
 
-/// Entry function that gets and emits the current escrow balances and supply information as an event
-public entry fun get_escrow_balance_entry<AssetType, StableType>(
+// Entry function that gets and emits the current escrow balances and supply information as an event
+public entry fun get_escrow_balances_and_winning_supply<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
+    winning_outcome: u64, // Added parameter
     _ctx: &TxContext,
-) {
-    let (asset_amount, stable_amount) = get_balances(escrow);
+): (u64, u64, u64, u64) { // Changed return type to a tuple
+    // Get current escrow balances
+    let (escrowed_asset_balance, escrowed_stable_balance) = get_balances(escrow);
     let outcome_count = market_state::outcome_count(&escrow.market_state);
 
-    // Get supply information for all outcomes
-    let mut asset_supplies = vector::empty<u64>();
-    let mut stable_supplies = vector::empty<u64>();
+    // Ensure the winning outcome index is valid
+    assert!(winning_outcome < outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+    // Ensure supplies were initialized
+    assert_supplies_initialized(escrow);
 
-    let mut i = 0;
-    while (i < outcome_count) {
-        let asset_supply = vector::borrow(&escrow.outcome_asset_supplies, i);
-        let stable_supply = vector::borrow(&escrow.outcome_stable_supplies, i);
+    // Get the supply counts for the *winning* outcome directly
+    let winning_asset_supply_cap = vector::borrow(&escrow.outcome_asset_supplies, winning_outcome);
+    let winning_stable_supply_cap = vector::borrow(&escrow.outcome_stable_supplies, winning_outcome);
 
-        vector::push_back(&mut asset_supplies, token::total_supply(asset_supply));
-        vector::push_back(&mut stable_supplies, token::total_supply(stable_supply));
+    let winning_asset_total_supply = token::total_supply(winning_asset_supply_cap);
+    let winning_stable_total_supply = token::total_supply(winning_stable_supply_cap);
 
-        i = i + 1;
-    };
-
-    // Emit event with all information
-    event::emit(EscrowBalance {
-        escrowed_asset: asset_amount,
-        escrowed_stable: stable_amount,
-        outcome_count,
-        asset_supplies,
-        stable_supplies,
-    });
+    // Return the tuple: (escrow_asset, escrow_stable, winning_asset_supply, winning_stable_supply)
+    (
+        escrowed_asset_balance,
+        escrowed_stable_balance,
+        winning_asset_total_supply,
+        winning_stable_total_supply
+    )
 }
 
 // === Internal Helpers ===

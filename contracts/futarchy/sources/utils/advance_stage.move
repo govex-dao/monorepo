@@ -16,7 +16,7 @@ const EINVALID_STATE_TRANSITION: u64 = 0;
 const EINVALID_STATE: u64 = 1;
 
 // === Constants ===
-const TWAP_BASIS_POINTS: u128 = 100_000;
+const TWAP_BASIS_POINTS: u256 = 100_000;
 const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
@@ -191,8 +191,7 @@ public(package) fun finalize<AssetType, StableType>(
 
     // Record final TWAP prices and find winner
     let timestamp = clock::timestamp_ms(clock);
-    let empty_twap_prices = vector::empty();
-    proposal::set_twap_prices(proposal, empty_twap_prices);
+    let mut final_twap_prices = vector::empty<u128>();
 
     let mut i = 0;
     let mut highest_twap = 0;
@@ -204,8 +203,7 @@ public(package) fun finalize<AssetType, StableType>(
     while (i < pools_count) {
         let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
         let twap = amm::get_twap(pool, clock);
-        let mut twap_prices = vector::empty();
-        vector::push_back(&mut twap_prices, twap);
+        vector::push_back(&mut final_twap_prices, twap);
 
         if (i == 0) {
             base_twap = twap; // Store outcome 0's TWAP
@@ -213,8 +211,8 @@ public(package) fun finalize<AssetType, StableType>(
             // For non-zero outcomes, check if this TWAP beats the current highest
             // and exceeds the threshold compared to outcome 0
             let threshold_price =
-                (base_twap * (TWAP_BASIS_POINTS + (proposal::get_twap_threshold(proposal) as u128))) / TWAP_BASIS_POINTS;
-            if (twap > highest_twap && twap > threshold_price) {
+                ((base_twap as u256) * (TWAP_BASIS_POINTS + (proposal::get_twap_threshold(proposal) as u256))) / TWAP_BASIS_POINTS;
+            if (twap > highest_twap && twap > (threshold_price as u128)) {
                 highest_twap = twap;
                 winning_outcome = i;
             };
@@ -235,6 +233,7 @@ public(package) fun finalize<AssetType, StableType>(
         winning_outcome = 0;
     };
 
+    proposal::set_twap_prices(proposal, final_twap_prices);
     proposal::set_last_twap_update(proposal, timestamp);
 
     market_state::finalize(state, winning_outcome, clock);

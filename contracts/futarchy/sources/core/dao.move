@@ -370,7 +370,7 @@ public(package) fun sign_result(
     info.executed = true;
     info.execution_time = option::some(clock::timestamp_ms(clock));
 
-    // Safey reduce active_proposal_count
+    // Safely reduce active_proposal_count
     if (dao.active_proposal_count > 0) {
         dao.active_proposal_count = dao.active_proposal_count - 1;
     };

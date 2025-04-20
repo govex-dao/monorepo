@@ -19,7 +19,7 @@ const EMARKET_ID_MISMATCH: u64 = 4;
 // ====== States ======
 const STATE_FINALIZED: u8 = 2;
 
-public(package) entry fun empty_all_amm_liquidity<AssetType, StableType>(
+public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
