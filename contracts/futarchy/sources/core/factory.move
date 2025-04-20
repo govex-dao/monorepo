@@ -147,7 +147,7 @@ public entry fun create_dao<AssetType, StableType>(
         ESTABLE_TYPE_NOT_ALLOWED,
     );
 
-    fee::deposit_verification_payment(fee_manager, payment, clock, ctx);
+    fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
     let asset_decimals = coin::get_decimals(asset_metadata);
     let stable_decimals = coin::get_decimals(stable_metadata);
@@ -228,7 +228,7 @@ public entry fun request_verification(
 ) {
     assert!(!dao::is_verified(dao), EALREADY_VERIFIED);
 
-    fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
+    fee::deposit_verification_payment(fee_manager, payment, clock, ctx);
 
     // Generate unique verification ID
     let verification_id = object::new(ctx);

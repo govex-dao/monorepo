@@ -481,21 +481,16 @@ public(package) fun set_winning_outcome<AssetType, StableType>(
 #[test_only]
 /// Gets a mutable reference to the token escrow of the proposal
 public fun test_get_coin_escrow<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
 ): &mut coin_escrow::TokenEscrow<AssetType, StableType> {
-    let id = escrow_id(proposal);
-    dynamic_field::borrow_mut(&mut proposal.id, id)
+    // The function now directly returns the mutable reference passed in.
+    escrow
 }
 
 #[test_only]
 /// Gets the market state through the token escrow
 public fun test_get_market_state<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
+    escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
 ): &market_state::MarketState {
-    let id = escrow_id(proposal);
-    let escrow: &coin_escrow::TokenEscrow<AssetType, StableType> = dynamic_field::borrow(
-        &proposal.id,
-        id,
-    );
     coin_escrow::get_market_state<AssetType, StableType>(escrow)
 }

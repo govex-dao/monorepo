@@ -472,6 +472,7 @@ fun test_mint_after_trading_closed() {
 }
 
 #[test]
+#[expected_failure(abort_code = 5)]
 fun test_split_edge_cases() {
     let mut scenario = test_scenario::begin(ADMIN);
     

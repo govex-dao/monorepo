@@ -7,6 +7,7 @@ use futarchy::fee;
 use futarchy::liquidity_interact;
 use futarchy::market_state;
 use futarchy::proposal::{Self, Proposal};
+use futarchy::conditional_token;
 use std::option;
 use std::string::{Self, String};
 use std::vector;
@@ -148,18 +149,15 @@ fun test_proposal_complete_happy_path() {
         test::return_shared(fee_manager);
     };
 
-    // Step 5: Admin extracts liquidity from the winning outcome pool
+    // Step 5: Admin extracts liquidity from the winning outcome pool & Verify Balances
     next_tx(&mut scenario, ADMIN);
     {
         let mut proposal = test::take_shared<Proposal<u64, u64>>(&scenario);
         let mut escrow = test::take_shared<TokenEscrow<u64, u64>>(&scenario);
         let winning_outcome = proposal::get_winning_outcome(&proposal);
 
-        // Get initial balances to compare later
-        let (asset_before, stable_before) = coin_escrow::get_balances(&escrow);
-
-        // Extract liquidity
-        futarchy::liquidity_interact::empty_all_amm_liquidity(
+        // Extract liquidity (moves funds from AMM back to escrow)
+        liquidity_interact::empty_all_amm_liquidity(
             &mut proposal,
             &mut escrow,
             winning_outcome,
@@ -167,24 +165,41 @@ fun test_proposal_complete_happy_path() {
             ctx(&mut scenario),
         );
 
-        // Verify escrow balances have changed (decreased) after extraction
-        let (asset_after, stable_after) = coin_escrow::get_balances(&escrow);
-        assert!(asset_after < asset_before, 9); // Asset balance should decrease
-        assert!(stable_after < stable_before, 10); // Stable balance should decrease
+        // ---- Start: Added Check ----
+        // Call the function to get current escrow balances and winning token supplies
+        let (
+            escrow_asset,
+            escrow_stable,
+            winning_supply_asset,
+            winning_supply_stable
+        ) = coin_escrow::get_escrow_balances_and_winning_supply(
+            &escrow,
+            winning_outcome, // Pass the winner index
+            ctx(&mut scenario)
+        );
+
+        // Assert that the escrow balances now match the total supply of the winning tokens
+        // This verifies that after pulling liquidity back, the escrow holds exactly
+        // what's needed to cover redemptions of winning tokens.
+        assert!(escrow_asset == winning_supply_asset, 9); // New assertion code 9
+        assert!(escrow_stable == winning_supply_stable, 10); // New assertion code 10
+        // ---- End: Added Check ----
+
+
+        // Note: The old assertions checking for balance decrease were removed as they
+        // are generally incorrect after emptying liquidity (balances should increase/stay same).
 
         test::return_shared(proposal);
         test::return_shared(escrow);
     };
 
-    // Step 6: Verify that stable fees were collected
+    // Step 6: Verify that stable fees were collected (or check function runs)
     next_tx(&mut scenario, ADMIN);
     {
         let fee_manager = test::take_shared<fee::FeeManager>(&scenario);
-
-        // Verify fee manager has collected some stable fees
         let stable_fees = fee::get_stable_fee_balance<u64>(&fee_manager);
-        // Fees might be 0 since we didn't have any trades, but the function should have run
-        // We can at least check that the function call works
+        // In the happy path with no swaps, fees should be 0.
+        assert!(stable_fees == 0, 11); // Changed assertion code to 11
 
         test::return_shared(fee_manager);
     };
@@ -462,17 +477,17 @@ fun test_proposal_path_with_swaps() {
         test::return_shared(fee_manager);
     };
 
-    // Step 6: Empty AMM liquidity
+    // Step 6: Empty AMM liquidity for the winning outcome
     next_tx(&mut scenario, ADMIN);
     {
         let mut proposal = test::take_shared<Proposal<u64, u64>>(&scenario);
         let mut escrow = test::take_shared<TokenEscrow<u64, u64>>(&scenario);
         let winning_outcome = proposal::get_winning_outcome(&proposal);
 
-        // Get initial balances to compare later
+        // Get escrow balances *before* emptying liquidity (optional comparison point)
         let (asset_before, stable_before) = coin_escrow::get_balances(&escrow);
 
-        // Extract liquidity
+        // Extract liquidity from the *winning* AMM pool
         liquidity_interact::empty_all_amm_liquidity(
             &mut proposal,
             &mut escrow,
@@ -481,10 +496,50 @@ fun test_proposal_path_with_swaps() {
             ctx(&mut scenario),
         );
 
-        // Verify escrow balances have changed after extraction
+        // Verify escrow balances have *not* necessarily decreased here.
+        // Emptying liquidity *returns* the underlying coins from the AMM *to* the escrow.
+        // The total amount available for redemption *increases* (or stays same if pool was empty).
+        // The balances only decrease when users redeem winning tokens.
         let (asset_after, stable_after) = coin_escrow::get_balances(&escrow);
-        assert!(asset_after < asset_before, 7); // Asset balance should decrease
-        assert!(stable_after < stable_before, 8); // Stable balance should decrease
+        // We can't make simple assertions like asset_after < asset_before here.
+        // We expect the balances might *increase* as liquidity returns to the escrow.
+        // The critical check is the next step.
+
+        test::return_shared(proposal);
+        test::return_shared(escrow);
+    };
+
+    // Step 7: Verify Escrow Balances Match Winning Token Supplies via Tuple Return
+    next_tx(&mut scenario, ADMIN);
+    {
+        let proposal = test::take_shared<Proposal<u64, u64>>(&scenario);
+        let escrow = test::take_shared<TokenEscrow<u64, u64>>(&scenario);
+        let winning_outcome = proposal::get_winning_outcome(&proposal);
+
+        // Call the modified function, passing the winning_outcome
+        // It now returns a tuple directly
+        let (
+            escrow_asset,
+            escrow_stable,
+            winning_supply_asset,
+            winning_supply_stable
+        ) = coin_escrow::get_escrow_balances_and_winning_supply(
+            &escrow,
+            winning_outcome, // Pass the winner index
+            ctx(&mut scenario)
+        );
+
+        // Assert that the escrow balance for each type equals the total supply
+        // of the winning token type using the unpacked tuple values
+        assert!(escrow_asset == winning_supply_asset, 9); // Asset balance matches winning asset token supply
+        assert!(escrow_stable == winning_supply_stable, 10); // Stable balance matches winning stable token supply
+
+        // Optional: Print values for debugging
+        // debug::print(&winning_outcome);
+        // debug::print(&escrow_asset);
+        // debug::print(&escrow_stable);
+        // debug::print(&winning_supply_asset);
+        // debug::print(&winning_supply_stable);
 
         test::return_shared(proposal);
         test::return_shared(escrow);

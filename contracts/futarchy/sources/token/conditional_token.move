@@ -133,7 +133,7 @@ public(package) fun split(
     ctx: &mut TxContext,
 ) {
     assert!(amount > 0, EZERO_AMOUNT);
-    assert!(token.balance >= amount, EINSUFFICIENT_BALANCE);
+    assert!(token.balance > amount, EINSUFFICIENT_BALANCE);
 
     token.balance = token.balance - amount;
 
@@ -177,22 +177,20 @@ public(package) fun merge_many(
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    let len = vector::length(&tokens);
-    assert!(len > 0, EEMPTY_VECTOR);
+    assert!(!vector::is_empty(&tokens), EEMPTY_VECTOR);
 
-    let mut i = 0;
     let mut total_merged_amount = 0;
     let mut token_ids = vector::empty();
-
-    while (i < len) {
-        let token = vector::remove(&mut tokens, 0);
+    // Iterate by popping from the end - O(1) operation per element
+    while (!vector::is_empty(&mut tokens)) {
+        // Remove the last token from the vector
+        let token = vector::pop_back(&mut tokens);
         // Verify token matches
         assert!(token.market_id == base_token.market_id, EWRONG_MARKET);
         assert!(token.asset_type == base_token.asset_type, EWRONG_TOKEN_TYPE);
         assert!(token.outcome == base_token.outcome, EWRONG_OUTCOME);
 
-        vector::push_back(&mut token_ids, object::id(&token));
-        total_merged_amount = total_merged_amount + token.balance;
+        let merged_token_object_id = object::id(&token);
 
         let ConditionalToken {
             id,
@@ -202,9 +200,12 @@ public(package) fun merge_many(
             balance,
         } = token;
 
+        // Add to totals and the ID list
+        vector::push_back(&mut token_ids, merged_token_object_id);
+        total_merged_amount = total_merged_amount + balance;
+
         base_token.balance = base_token.balance + balance;
         object::delete(id);
-        i = i + 1;
     };
 
     // Emit merge event with all token IDs

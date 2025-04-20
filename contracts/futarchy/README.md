@@ -10,3 +10,8 @@ Run this in root
 ```
 npm run prettier -- -w sources/amm/amm.move  
 ```
+
+Concatenating all .Move files for use with LLMs 
+```
+find . -type f -name '*.move' -exec cat {} + > all_moves.txt
+```
