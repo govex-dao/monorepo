@@ -145,13 +145,10 @@ public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Call the underlying package function from coin_escrow
     let balance_out = coin_escrow::redeem_winning_tokens_stable(escrow, token, clock, ctx);
 
-    // Assert consistency
     assert_winning_reserves_consistency(proposal, escrow);
 
-    // Handle result (transfer coin)
     let coin_out = coin::from_balance(balance_out, ctx);
     transfer::public_transfer(coin_out, tx_context::sender(ctx));
 }
@@ -164,16 +161,11 @@ public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Call the underlying package function from coin_escrow
-    // Note: This function returns a vector of tokens, but the original entry function
-    // didn't use the return value directly, it called the function *again* inside.
-    // Assuming the intent was to call the NON-entry version that returns the vector:
     let mut tokens_out = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
     // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
 
-    // Handle result (transfer tokens)
     let recipient = tx_context::sender(ctx);
     while (!vector::is_empty(&tokens_out)) {
         let token = vector::pop_back(&mut tokens_out);
@@ -190,10 +182,8 @@ public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Call the underlying package function from coin_escrow
     let mut tokens_out = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
-    // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
 
     // Handle result (transfer tokens)
@@ -232,10 +222,8 @@ public entry fun redeem_complete_set_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Call the underlying package function from coin_escrow
     let balance_out = coin_escrow::redeem_complete_set_stable(escrow, tokens, clock, ctx);
 
-    // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
 
     // Handle result (transfer coin)
@@ -250,10 +238,8 @@ public entry fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Call the underlying package function from coin_escrow
     let balance_out = coin_escrow::redeem_winning_tokens_asset(escrow, token, clock, ctx);
 
-    // Assert consistency
     // Pass ctx only if the assert function requires it
     assert_winning_reserves_consistency(proposal, escrow);
 
@@ -277,7 +263,6 @@ public fun redeem_winning_tokens_stable<AssetType, StableType>(
     // Call the core logic in coin_escrow
     let balance_out = coin_escrow::redeem_winning_tokens_stable(escrow, token, clock, ctx);
 
-    // Assert consistency AFTER the operation
     assert_winning_reserves_consistency(proposal, escrow);
 
     // Return the result
@@ -301,7 +286,6 @@ public fun redeem_winning_tokens_asset<AssetType, StableType>(
     // Call the core logic in coin_escrow
     let balance_out = coin_escrow::redeem_winning_tokens_asset(escrow, token, clock, ctx);
 
-    // Assert consistency AFTER the operation
     assert_winning_reserves_consistency(proposal, escrow);
 
     // Return the result
@@ -323,7 +307,6 @@ public fun mint_complete_set_asset<AssetType, StableType>(
     // Call the core logic in coin_escrow
     let tokens_out = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
-    // Assert consistency AFTER the operation
     assert_all_reserves_consistency(proposal, escrow);
 
     // Return the result
@@ -345,7 +328,6 @@ public fun mint_complete_set_stable<AssetType, StableType>(
     // Call the core logic in coin_escrow
     let tokens_out = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
-    // Assert consistency AFTER the operation
     assert_all_reserves_consistency(proposal, escrow);
 
     // Return the result
@@ -367,7 +349,6 @@ public fun redeem_complete_set_asset<AssetType, StableType>(
     // Call the core logic in coin_escrow
     let balance_out = coin_escrow::redeem_complete_set_asset(escrow, tokens, clock, ctx);
 
-    // Assert consistency AFTER the operation
     assert_all_reserves_consistency(proposal, escrow);
 
     // Return the result
