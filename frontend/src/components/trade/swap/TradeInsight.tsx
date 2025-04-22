@@ -136,7 +136,9 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
           of {assetSymbol} at{" "}
           <span className="font-mono bg-black/30 px-2 py-0.5 rounded-md font-medium">
             $
-            {averagePrice ? (isBuy ? averagePrice : 1 / averagePrice).toFixed(3) : ""}
+            {averagePrice
+              ? (isBuy ? averagePrice : 1 / averagePrice).toFixed(3)
+              : ""}
           </span>{" "}
           is too {isBuy ? "low" : "high"}.
         </p>

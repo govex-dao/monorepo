@@ -2,13 +2,17 @@ import { describe, it, expect } from "vitest";
 import { calculateSwapBreakdown, SWAP_FEE_BPS } from "./calculateSwapBreakdown";
 
 // Helper function to calculate theoretical output before fees (for Asset->Stable tests)
-const calculateOutputBeforeFee = (amountIn: number, reserveIn: number, reserveOut: number): number => {
-    if (reserveIn <= 0 || reserveOut <= 0) return 0;
-    const numerator = amountIn * reserveOut;
-    const denominator = reserveIn + amountIn;
-    if (denominator === 0) return 0; // Avoid division by zero
-    return numerator / denominator;
-}
+const calculateOutputBeforeFee = (
+  amountIn: number,
+  reserveIn: number,
+  reserveOut: number,
+): number => {
+  if (reserveIn <= 0 || reserveOut <= 0) return 0;
+  const numerator = amountIn * reserveOut;
+  const denominator = reserveIn + amountIn;
+  if (denominator === 0) return 0; // Avoid division by zero
+  return numerator / denominator;
+};
 
 describe("calculateSwapBreakdown", () => {
   const feeRate = SWAP_FEE_BPS / 10_000;
@@ -75,7 +79,9 @@ describe("calculateSwapBreakdown", () => {
     // Price: ReserveIn / ReserveOut = Stable / Asset
     expect(result.startPrice).toBeCloseTo(2); // 2 Stable per 1 Asset
     expect(result.exactAmountOut).toBeGreaterThan(0);
-    expect(result.exactAmountOut).toBeLessThan(params.amountIn / result.startPrice); // Should get less than 50 Asset
+    expect(result.exactAmountOut).toBeLessThan(
+      params.amountIn / result.startPrice,
+    ); // Should get less than 50 Asset
   });
 
   // --- Fee Calculation ---
@@ -104,12 +110,18 @@ describe("calculateSwapBreakdown", () => {
 
     const result = calculateSwapBreakdown(params);
     // Fee is calculated on the theoretical output *before* fee deduction
-    const amountOutBeforeFee = calculateOutputBeforeFee(params.amountIn, params.reserveIn, params.reserveOut);
+    const amountOutBeforeFee = calculateOutputBeforeFee(
+      params.amountIn,
+      params.reserveIn,
+      params.reserveOut,
+    );
     const expectedFee = amountOutBeforeFee * feeRate;
 
     expect(result.ammFee).toBeCloseTo(expectedFee);
     // Verify the exactAmountOut is indeed the amount before fee minus the fee
-    expect(result.exactAmountOut).toBeCloseTo(amountOutBeforeFee - result.ammFee);
+    expect(result.exactAmountOut).toBeCloseTo(
+      amountOutBeforeFee - result.ammFee,
+    );
   });
 
   // --- Constant Product (K) Check (Focus on internal calculation consistency) ---
@@ -126,7 +138,11 @@ describe("calculateSwapBreakdown", () => {
     // Calculate expected new reserves based *on the function's logic*
     const fee = params.amountIn * feeRate;
     const amountInAfterFee = params.amountIn - fee;
-    const exactAmountOut = calculateOutputBeforeFee(amountInAfterFee, params.reserveIn, params.reserveOut); // Output based on post-fee input
+    const exactAmountOut = calculateOutputBeforeFee(
+      amountInAfterFee,
+      params.reserveIn,
+      params.reserveOut,
+    ); // Output based on post-fee input
     const expectedNewReserveIn = params.reserveIn + amountInAfterFee;
     const expectedNewReserveOut = params.reserveOut - exactAmountOut;
     const expectedFinalK = expectedNewReserveIn * expectedNewReserveOut;
@@ -135,7 +151,7 @@ describe("calculateSwapBreakdown", () => {
     expect(expectedFinalK).toBeCloseTo(initialK);
   });
 
-   it("should reflect constant product internally (Asset->Stable)", () => {
+  it("should reflect constant product internally (Asset->Stable)", () => {
     const params = {
       reserveIn: 1000, // Asset
       reserveOut: 1000, // Stable
@@ -145,7 +161,11 @@ describe("calculateSwapBreakdown", () => {
     const initialK = params.reserveIn * params.reserveOut;
 
     // Calculate expected new reserves based *on the function's logic*
-    const amountOutBeforeFee = calculateOutputBeforeFee(params.amountIn, params.reserveIn, params.reserveOut);
+    const amountOutBeforeFee = calculateOutputBeforeFee(
+      params.amountIn,
+      params.reserveIn,
+      params.reserveOut,
+    );
     // Reserves update based on full input and *pre-fee* output
     const expectedNewReserveIn = params.reserveIn + params.amountIn;
     const expectedNewReserveOut = params.reserveOut - amountOutBeforeFee;
@@ -193,7 +213,7 @@ describe("calculateSwapBreakdown", () => {
   it("should handle very large input amounts (near pool exhaustion)", () => {
     const params = {
       reserveIn: 1000, // Input reserve
-      reserveOut: 500,  // Output reserve (easier to exhaust)
+      reserveOut: 500, // Output reserve (easier to exhaust)
       amountIn: 1800, // Amount that would drain > 50% output without fees/slippage
       isStableToAsset: true,
     };
@@ -205,7 +225,6 @@ describe("calculateSwapBreakdown", () => {
     expect(result.priceImpact).toBeGreaterThan(50); // Expect very high impact
     expect(result.finalPrice).toBeGreaterThan(result.startPrice * 2); // Price moves significantly
   });
-
 
   it("should handle extreme slippage tolerance values", () => {
     // Test with no slippage tolerance
@@ -300,8 +319,8 @@ describe("calculateSwapBreakdown", () => {
     const smallNumber = 1e-9;
     const params = {
       reserveIn: smallNumber * 10, // Stable
-      reserveOut: smallNumber * 5,  // Asset
-      amountIn: smallNumber * 1,   // Stable In (10% of reserveIn)
+      reserveOut: smallNumber * 5, // Asset
+      amountIn: smallNumber * 1, // Stable In (10% of reserveIn)
       isStableToAsset: true,
     };
 
@@ -323,7 +342,11 @@ describe("calculateSwapBreakdown", () => {
     const initialK = params.reserveIn * params.reserveOut;
     const fee = params.amountIn * feeRate;
     const amountInAfterFee = params.amountIn - fee;
-    const exactAmountOut = calculateOutputBeforeFee(amountInAfterFee, params.reserveIn, params.reserveOut);
+    const exactAmountOut = calculateOutputBeforeFee(
+      amountInAfterFee,
+      params.reserveIn,
+      params.reserveOut,
+    );
     const expectedNewReserveIn = params.reserveIn + amountInAfterFee;
     const expectedNewReserveOut = params.reserveOut - exactAmountOut;
     const expectedFinalK = expectedNewReserveIn * expectedNewReserveOut;
@@ -342,10 +365,10 @@ describe("calculateSwapBreakdown", () => {
     };
     // The function might return 0s instead of throwing now for invalid reserves
     // Depending on the implementation change - let's assume it still throws for simplicity
-     expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
-     // If it returns zeros instead:
-     // const result = calculateSwapBreakdown(params);
-     // expect(result.exactAmountOut).toEqual(0); // etc.
+    expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
+    // If it returns zeros instead:
+    // const result = calculateSwapBreakdown(params);
+    // expect(result.exactAmountOut).toEqual(0); // etc.
   });
 
   it("should throw an error when reserveOut is zero", () => {
@@ -355,19 +378,18 @@ describe("calculateSwapBreakdown", () => {
       amountIn: 100,
       isStableToAsset: true, // Direction irrelevant
     };
-     expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
+    expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
   });
 
-    it("should throw an error when both reserves are zero", () => {
+  it("should throw an error when both reserves are zero", () => {
     const params = {
       reserveIn: 0,
       reserveOut: 0,
       amountIn: 100,
       isStableToAsset: true, // Direction irrelevant
     };
-     expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
+    expect(() => calculateSwapBreakdown(params)).toThrow("Invalid pool state");
   });
-
 
   // --- Sequential Swaps ---
 
@@ -389,9 +411,13 @@ describe("calculateSwapBreakdown", () => {
     // Calculate new reserves *based on the function's logic for Stable->Asset*
     const fee1 = amountIn1 * feeRate;
     const amountInAfterFee1 = amountIn1 - fee1;
-    const amountOut1 = calculateOutputBeforeFee(amountInAfterFee1, reserveIn, reserveOut);
+    const amountOut1 = calculateOutputBeforeFee(
+      amountInAfterFee1,
+      reserveIn,
+      reserveOut,
+    );
     reserveIn += amountInAfterFee1; // Update state for next swap
-    reserveOut -= amountOut1;      // Update state for next swap
+    reserveOut -= amountOut1; // Update state for next swap
     const productAfterFirst = reserveIn * reserveOut;
     expect(productAfterFirst).toBeCloseTo(initialProduct); // Verify K held for the first swap
 
@@ -412,7 +438,11 @@ describe("calculateSwapBreakdown", () => {
     // Calculate final reserves after second swap
     const fee2 = amountIn2 * feeRate;
     const amountInAfterFee2 = amountIn2 - fee2;
-    const amountOut2 = calculateOutputBeforeFee(amountInAfterFee2, reserveIn, reserveOut); // Calculate output based on current reserves
+    const amountOut2 = calculateOutputBeforeFee(
+      amountInAfterFee2,
+      reserveIn,
+      reserveOut,
+    ); // Calculate output based on current reserves
     const finalReserveIn = reserveIn + amountInAfterFee2;
     const finalReserveOut = reserveOut - amountOut2; // Use calculated amountOut2
     const finalProduct = finalReserveIn * finalReserveOut;
@@ -424,53 +454,62 @@ describe("calculateSwapBreakdown", () => {
     expect(secondSwapResult.startPrice).toEqual(firstSwapResult.finalPrice);
   });
 
-    it("should calculate correct results for sequential swaps (Mixed Directions)", () => {
+  it("should calculate correct results for sequential swaps (Mixed Directions)", () => {
     // Initial pool state
     let reserveStable = 1000.0;
     let reserveAsset = 1000.0;
     const initialProduct = reserveStable * reserveAsset;
+    const feeRate = SWAP_FEE_BPS / 10_000; // Make sure feeRate is defined if not globally
 
     // --- First swap: Stable -> Asset ---
     const amountIn1 = 100.0; // Stable
-    const firstSwapResult = calculateSwapBreakdown({
-      reserveIn: reserveStable,
-      reserveOut: reserveAsset,
-      amountIn: amountIn1,
-      isStableToAsset: true,
-    });
     const fee1 = amountIn1 * feeRate;
     const amountInAfterFee1 = amountIn1 - fee1;
-    const amountOut1 = calculateOutputBeforeFee(amountInAfterFee1, reserveStable, reserveAsset); // Asset out
+    const amountOut1 = calculateOutputBeforeFee(
+      amountInAfterFee1,
+      reserveStable,
+      reserveAsset,
+    ); // Asset out
     reserveStable += amountInAfterFee1;
     reserveAsset -= amountOut1;
     const productAfterFirst = reserveStable * reserveAsset;
     expect(productAfterFirst).toBeCloseTo(initialProduct);
 
+    // --- State *before* second swap ---
+    const reserveAsset_before_swap2 = reserveAsset;
+    const reserveStable_before_swap2 = reserveStable;
+    const expectedStartPrice_swap2 = reserveAsset_before_swap2 / reserveStable_before_swap2; // Price: Asset per Stable
+
     // --- Second swap: Asset -> Stable ---
     const amountIn2 = 50.0; // Asset
     const secondSwapResult = calculateSwapBreakdown({
-      reserveIn: reserveAsset,  // Input is now Asset
-      reserveOut: reserveStable, // Output is now Stable
+      reserveIn: reserveAsset_before_swap2, // Input is now Asset state *before* swap 2
+      reserveOut: reserveStable_before_swap2, // Output is now Stable state *before* swap 2
       amountIn: amountIn2,
       isStableToAsset: false, // Selling Asset
     });
-    // Calculate based on Asset->Stable logic
-    const amountOutBeforeFee2 = calculateOutputBeforeFee(amountIn2, reserveAsset, reserveStable); // Stable out (before fee)
+
+    // Calculate expected results based on state *before* swap 2
+    const amountOutBeforeFee2 = calculateOutputBeforeFee(
+      amountIn2,
+      reserveAsset_before_swap2,
+      reserveStable_before_swap2,
+    ); // Stable out (before fee)
     const fee2 = amountOutBeforeFee2 * feeRate; // Fee is in Stable
     const amountOut2 = amountOutBeforeFee2 - fee2; // Actual Stable user gets
-    // Update reserves based on full input and pre-fee output
-    reserveAsset += amountIn2;
-    reserveStable -= amountOutBeforeFee2;
-    const finalProduct = reserveStable * reserveAsset;
 
-    // Verify second swap calculation
-    expect(secondSwapResult.startPrice).toBeCloseTo(reserveAsset / reserveStable); // Asset / Stable price before second swap
+    // Verify second swap calculation results against expectations
+    // **** FIX IS HERE: Compare against the pre-swap price ****
+    expect(secondSwapResult.startPrice).toBeCloseTo(expectedStartPrice_swap2);
     expect(secondSwapResult.exactAmountOut).toBeCloseTo(amountOut2);
     expect(secondSwapResult.ammFee).toBeCloseTo(fee2);
 
-    // Check if K still holds
+    // --- Update reserves *after* calculating/verifying swap 2 results ---
+    reserveAsset = reserveAsset_before_swap2 + amountIn2; // Update using pre-swap state + input
+    reserveStable = reserveStable_before_swap2 - amountOutBeforeFee2; // Update using pre-swap state - pre-fee output
+    const finalProduct = reserveStable * reserveAsset;
+
+    // Check if K still holds relative to the initial state
     expect(finalProduct).toBeCloseTo(initialProduct);
   });
-
-
 });
