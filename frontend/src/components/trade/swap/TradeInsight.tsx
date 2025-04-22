@@ -32,7 +32,7 @@ interface TradeInsightProps {
   stableSymbol: string;
   stableScale: number;
   assetScale: number;
-  finalPrice?: number;
+  averagePrice?: number;
 }
 
 const TradeInsight: React.FC<TradeInsightProps> = ({
@@ -42,7 +42,7 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
   outcomeMessages,
   amount,
   updateFromAmount,
-  finalPrice,
+  averagePrice,
   assetSymbol,
   stableSymbol,
   stableScale,
@@ -136,7 +136,7 @@ const TradeInsight: React.FC<TradeInsightProps> = ({
           of {assetSymbol} at{" "}
           <span className="font-mono bg-black/30 px-2 py-0.5 rounded-md font-medium">
             $
-            {finalPrice ? (isBuy ? finalPrice : 1 / finalPrice).toFixed(3) : ""}
+            {averagePrice ? (isBuy ? averagePrice : 1 / averagePrice).toFixed(3) : ""}
           </span>{" "}
           is too {isBuy ? "low" : "high"}.
         </p>
