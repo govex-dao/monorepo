@@ -127,36 +127,82 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
   const updateFromAmount = (newAmount: string) => {
     setAmount(newAmount);
+    setError(null); // Clear error on new input
     const x = parseFloat(newAmount);
     if (isNaN(x) || x <= 0) {
       setSwapDetails(null);
+      setExpectedAmountOut("");
+      // Don't reset averagePrice here, let the useEffect handle initial price
       return;
     }
 
     const { asset, stable } = getStartingLiquidity();
+    // Ensure reserves are not zero before calculating
+    if (asset === 0n || stable === 0n) {
+        setError("Pool has zero liquidity for this outcome.");
+        setSwapDetails(null);
+        setExpectedAmountOut("");
+        return;
+    }
+
+    // Use floating point numbers for calculation function
     const A = Number(asset) / Number(assetScale);
     const S = Number(stable) / Number(stableScale);
 
     try {
+      // **** PASS isBuy AS isStableToAsset ****
       const breakdown = calculateSwapBreakdown({
-        reserveIn: isBuy ? S : A,
-        reserveOut: isBuy ? A : S,
+        reserveIn: isBuy ? S : A, // If buying (Stable->Asset), reserveIn is Stable
+        reserveOut: isBuy ? A : S,// If buying (Stable->Asset), reserveOut is Asset
         amountIn: x,
         slippageTolerance: TOLERANCE,
+        isStableToAsset: isBuy, // Pass the direction flag
       });
 
       setSwapDetails(breakdown);
+      // Format based on the *output* token's decimals
       setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
-      setAveragePrice(breakdown.averagePrice.toPrecision(6));
+      // Average price is In/Out, format appropriately
+      setAveragePrice(breakdown.averagePrice > 0 ? breakdown.averagePrice.toPrecision(6) : "N/A");
+
     } catch (error) {
+      console.error("Swap calculation error:", error);
       setError(
         error instanceof Error ? error.message : "Failed to calculate swap",
       );
       setSwapDetails(null);
       setExpectedAmountOut("");
-      setAveragePrice("");
+      // Don't reset averagePrice here on error
     }
   };
+
+  // Update the useEffect that sets the initial price
+  useEffect(() => {
+    // Calculate initial price whenever relevant state changes
+    const { asset, stable } = getStartingLiquidity();
+    if (asset > 0n && stable > 0n) { // Check both reserves are non-zero
+      const A = Number(asset) / Number(assetScale);
+      const S = Number(stable) / Number(stableScale);
+
+      // Calculate the initial price (Stable per Asset) S/A
+      const initialPrice = S / A;
+      // Only set averagePrice if amount is empty, otherwise updateFromAmount handles it
+      if (!amount) {
+         setAveragePrice(initialPrice.toPrecision(6));
+      }
+    } else {
+       if (!amount) { // Only clear if no amount is entered
+          setAveragePrice("N/A"); // Indicate no price if reserves are zero
+       }
+    }
+  }, [
+    selectedOutcome,
+    swapEvents, // Re-run if events change
+    // initial_outcome_amounts, // These should be reflected in swapEvents or initial state
+    // asset_value, stable_value, // These are fallbacks, covered by getStartingLiquidity
+    assetScale, stableScale, // Include scales
+    amount // Also re-run if amount changes (to reset initial price if amount is cleared)
+  ]);
 
   const filteredTokens = useMemo(() => {
     return tokens.filter(
@@ -515,7 +561,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
           outcomeMessages={outcome_messages}
           amount={amount}
           updateFromAmount={updateFromAmount}
-          finalPrice={swapDetails?.finalPrice}
+          averagePrice={swapDetails?.averagePrice}
           assetScale={assetScale}
           assetSymbol={asset_symbol}
           stableScale={stableScale}
@@ -550,7 +596,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
         {/* Details of swap amounts */}
         <TradeDetails
           amount={amount}
-          averagePrice={averagePrice}
           swapDetails={swapDetails}
           assetSymbol={asset_symbol}
           stableSymbol={stable_symbol}

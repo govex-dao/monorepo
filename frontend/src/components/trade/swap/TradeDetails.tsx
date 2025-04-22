@@ -4,7 +4,6 @@ import { SwapBreakdown } from "@/utils/trade/calculateSwapBreakdown";
 
 interface TradeDetailsProps {
   amount: string;
-  averagePrice: string;
   swapDetails: SwapBreakdown | null;
   assetSymbol: string;
   stableSymbol: string;
@@ -14,7 +13,6 @@ interface TradeDetailsProps {
 
 const TradeDetails: React.FC<TradeDetailsProps> = ({
   amount,
-  averagePrice,
   swapDetails,
   assetSymbol,
   stableSymbol,
@@ -28,13 +26,13 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
     setShowTradeDetails(!isMobile);
   }, []);
 
-  if (!amount || !averagePrice || !swapDetails) return null;
+  if (!amount || !swapDetails) return null;
 
   return (
     <div className="border-t pt-3 border-gray-700/50 mt-3 backdrop-blur-sm shadow-inner space-y-2">
       <div className="flex justify-between items-center">
         <span className="text-white text-xs font-medium whitespace-nowrap">
-          1 {assetSymbol} ≈ {averagePrice} {stableSymbol}
+          1 {assetSymbol} ≈ {swapDetails.averagePrice} {stableSymbol}
         </span>
         <ShowMoreDetails
           show={showTradeDetails}
@@ -74,17 +72,17 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Start Price</p>
             <p className="text-blue-400 font-medium">
-              ${swapDetails.startPrice.toPrecision(6)}
+              {isBuy ? swapDetails.startPrice.toPrecision(6) : ( 1 / swapDetails.startPrice).toPrecision(6)}
             </p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Average Price</p>
-            <p className="text-blue-400 font-medium">${averagePrice}</p>
+            <p className="text-blue-400 font-medium">{isBuy ? swapDetails.averagePrice.toPrecision(6): ( 1 / swapDetails.averagePrice).toPrecision(6)}</p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Final Price</p>
             <p className="text-blue-400 font-medium">
-              ${swapDetails.finalPrice.toPrecision(6)}
+              {isBuy ? swapDetails.finalPrice.toPrecision(6): (1 / swapDetails.finalPrice).toPrecision(6)}
             </p>
           </div>
           <div className="flex justify-between items-center">
