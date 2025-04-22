@@ -33,7 +33,7 @@ export interface SwapBreakdown {
  *   - Expected asset out = A*x/(S+x) where A=assetReserve, S=stableReserve, x=amountIn
  */
 export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
-  const { reserveIn, reserveOut, amountIn, slippageTolerance = 0.005 } = params;
+  const { reserveIn, reserveOut, amountIn, slippageTolerance = 0.05 } = params;
 
   if (reserveIn <= 0 || reserveOut <= 0) {
     throw new Error("Invalid pool state: reserves must be greater than zero");

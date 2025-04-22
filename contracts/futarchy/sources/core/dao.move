@@ -244,7 +244,7 @@ public(package) fun create<AssetType, StableType>(
 }
 
 // ======== Proposal Functions ========
-public(package) fun create_proposal<AssetType, StableType>(
+public entry fun create_proposal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>, // New fee payment parameter
