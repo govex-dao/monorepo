@@ -172,10 +172,9 @@ fun test_proposal_complete_happy_path() {
             escrow_stable,
             winning_supply_asset,
             winning_supply_stable
-        ) = coin_escrow::get_escrow_balances_and_winning_supply(
+        ) = coin_escrow::get_escrow_balances_and_supply(
             &escrow,
             winning_outcome, // Pass the winner index
-            ctx(&mut scenario)
         );
 
         // Assert that the escrow balances now match the total supply of the winning tokens
@@ -523,10 +522,9 @@ fun test_proposal_path_with_swaps() {
             escrow_stable,
             winning_supply_asset,
             winning_supply_stable
-        ) = coin_escrow::get_escrow_balances_and_winning_supply(
+        ) = coin_escrow::get_escrow_balances_and_supply(
             &escrow,
             winning_outcome, // Pass the winner index
-            ctx(&mut scenario)
         );
 
         // Assert that the escrow balance for each type equals the total supply

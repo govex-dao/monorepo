@@ -31,9 +31,9 @@ const ETWAP_INITIAL_TOO_LARGE: u64 = 9;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1;
-const MAX_TRADING_TIME: u64 = 604_800_000;
-const MAX_REVIEW_TIME: u64 = 604_800_000;
-const MAX_TWAP_START_DELAY: u64 = 86_400_000;
+const MAX_TRADING_TIME: u64 = 604_800_000; // 7 days in ms
+const MAX_REVIEW_TIME: u64 = 604_800_000; // 7 days in ms
+const MAX_TWAP_START_DELAY: u64 = 86_400_000; // 1 days in ms
 const MAX_TWAP_THRESHOLD: u64 = 1_000_000; //equivilant to requiring 10x increase in price to pass
 
 // === Structs ===

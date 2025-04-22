@@ -1,8 +1,9 @@
 module futarchy::advance_stage;
 
 use futarchy::amm;
-use futarchy::coin_escrow::{Self, TokenEscrow};
-use futarchy::fee::{Self, FeeManager};
+use futarchy::coin_escrow;
+use futarchy::fee::FeeManager;
+use futarchy::liquidity_interact;
 use futarchy::market_state::{Self, MarketState};
 use futarchy::proposal::{Self, Proposal};
 use sui::clock::{Self, Clock};
@@ -42,70 +43,7 @@ public struct MarketFinalizedEvent has copy, drop {
     timestamp_ms: u64,
 }
 
-public struct ProtocolFeesCollected has copy, drop {
-    proposal_id: ID,
-    winning_outcome: u64,
-    fee_amount: u64,
-    timestamp_ms: u64,
-}
-
 // === Public Functions ===
-public(package) fun collect_protocol_fees<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    fee_manager: &mut FeeManager,
-    clock: &Clock,
-) {
-    // Can only collect fees if the proposal is finalized
-    assert!(proposal::state(proposal) == STATE_FINALIZED, EINVALID_STATE);
-    assert!(proposal::is_winning_outcome_set(proposal), EINVALID_STATE);
-
-    assert!(
-        coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal),
-        EINVALID_STATE,
-    );
-
-    let winning_outcome = proposal::get_winning_outcome(proposal);
-    let winning_pool = proposal::get_pool_mut_by_outcome(proposal, (winning_outcome as u8));
-    let protocol_fee_amount = amm::get_protocol_fees(winning_pool);
-
-    if (protocol_fee_amount > 0) {
-        // Reset fees in the pool
-        amm::reset_protocol_fees(winning_pool);
-
-        // Extract the fees from escrow
-        let fee_balance = coin_escrow::extract_stable_fees<AssetType, StableType>(
-            escrow,
-            protocol_fee_amount,
-        );
-
-        // Deposit to fee manager
-        fee::deposit_stable_fees<StableType>(
-            fee_manager,
-            fee_balance,
-            proposal::get_id(proposal),
-            clock,
-        );
-
-        // Emit event
-        event::emit(ProtocolFeesCollected {
-            proposal_id: proposal::get_id(proposal),
-            winning_outcome,
-            fee_amount: protocol_fee_amount,
-            timestamp_ms: clock::timestamp_ms(clock),
-        });
-    }
-}
-
-public entry fun collect_protocol_fees_entry<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    fee_manager: &mut FeeManager,
-    clock: &Clock,
-) {
-    collect_protocol_fees(proposal, escrow, fee_manager, clock);
-}
-
 public(package) fun try_advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
@@ -173,7 +111,7 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
 
     // If the proposal is finalized, collect fees before anyone can call empty_all_amm_liquidity
     if (proposal::state(proposal) == STATE_FINALIZED) {
-        collect_protocol_fees(proposal, escrow, fee_manager, clock);
+        liquidity_interact::collect_protocol_fees(proposal, escrow, fee_manager, clock);
     }
 }
 

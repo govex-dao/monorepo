@@ -3,9 +3,10 @@ module futarchy::coin_escrow;
 use futarchy::conditional_token::{Self as token, ConditionalToken, Supply};
 use futarchy::market_state::{Self, MarketState};
 use sui::balance::{Self, Balance};
-use sui::clock::Clock;
+use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::event;
+use sui::types;
 
 // === Introduction ===
 // Tracks and stores coins
@@ -20,12 +21,15 @@ const EOUTCOME_OUT_OF_BOUNDS: u64 = 5;
 const EWRONG_OUTCOME: u64 = 6;
 const ENOT_ENOUGH: u64 = 7;
 const ENOT_ENOUGH_LIQUIDITY: u64 = 8;
-const EInsufficientAsset: u64 = 9;
-const EInsufficientStable: u64 = 10;
+const EINSUFFICIENT_ASSET: u64 = 9;
+const EINSUFFICIENT_STABLE: u64 = 10;
+const EMARKET_NOT_EXPIRED: u64 = 11;
+const EBAD_WITNESS: u64 = 12;
 
 // === Constants ===
 const TOKEN_TYPE_STABLE: u8 = 1;
 const TOKEN_TYPE_ASSET: u8 = 0;
+const MARKET_EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in ms
 
 // === Structs ===
 public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store {
@@ -37,14 +41,6 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     // Token supplies for tracking issuance
     outcome_asset_supplies: vector<Supply>,
     outcome_stable_supplies: vector<Supply>,
-}
-
-public struct EscrowBalanceData has copy, drop, store {
-    escrowed_asset: u64,
-    escrowed_stable: u64,
-    outcome_count: u64,
-    asset_supplies: vector<u64>,
-    stable_supplies: vector<u64>,
 }
 
 // === Events ===
@@ -68,7 +64,32 @@ public struct TokenRedemption has copy, drop {
     amount: u64,
 }
 
+public struct AdminEscrowSweep has copy, drop {
+    market_id: ID,
+    dao_id: ID,
+    asset_amount: u64,
+    stable_amount: u64,
+    admin: address,
+    timestamp: u64,
+}
+
 // === Public Functions ===
+public struct COIN_ESCROW has drop {}
+
+public struct EscrowAdminCap has key, store { id: UID }
+
+// Module initialization function that runs when the module is published
+fun init(witness: COIN_ESCROW, ctx: &mut TxContext) {
+    // Verify this is a genuine one-time witness
+    assert!(types::is_one_time_witness(&witness), EBAD_WITNESS);
+
+    // Create admin capability
+    let admin_cap = EscrowAdminCap {
+        id: object::new(ctx),
+    };
+    transfer::public_transfer(admin_cap, tx_context::sender(ctx));
+}
+
 public(package) fun new<AssetType, StableType>(
     market_state: MarketState,
     ctx: &mut TxContext,
@@ -128,8 +149,8 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
         i = i + 1;
     };
 
-    assert!(asset_amount == max_asset, EInsufficientAsset);
-    assert!(stable_amount == max_stable, EInsufficientStable);
+    assert!(asset_amount == max_asset, EINSUFFICIENT_ASSET);
+    assert!(stable_amount == max_stable, EINSUFFICIENT_STABLE);
 
     // 3. Mint differential tokens for each outcome
     i = 0;
@@ -179,46 +200,43 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     });
 }
 
-#[allow(lint(self_transfer))]
 public(package) fun remove_liquidity<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_amount: u64,
     stable_amount: u64,
     ctx: &mut TxContext,
-) {
-    let sender = tx_context::sender(ctx);
+): (Coin<AssetType>, Coin<StableType>) {
+    // Changed return type
 
     // Verify there's enough liquidity to withdraw
     assert!(balance::value(&escrow.escrowed_asset) >= asset_amount, ENOT_ENOUGH_LIQUIDITY);
     assert!(balance::value(&escrow.escrowed_stable) >= stable_amount, ENOT_ENOUGH_LIQUIDITY);
 
-    // Withdraw the liquidity
-    let asset_coin = coin::from_balance(
-        balance::split<AssetType>(&mut escrow.escrowed_asset, asset_amount),
-        ctx,
-    );
-    let stable_coin = coin::from_balance(
-        balance::split<StableType>(&mut escrow.escrowed_stable, stable_amount),
-        ctx,
-    );
+    // Withdraw the liquidity into balances
+    let asset_balance_out = balance::split<AssetType>(&mut escrow.escrowed_asset, asset_amount);
+    let stable_balance_out = balance::split<StableType>(&mut escrow.escrowed_stable, stable_amount);
 
-    // Transfer coins back to sender
-    transfer::public_transfer(asset_coin, sender);
-    transfer::public_transfer(stable_coin, sender);
+    // Convert balances to coins
+    let asset_coin_out = coin::from_balance(asset_balance_out, ctx);
+    let stable_coin_out = coin::from_balance(stable_balance_out, ctx);
 
-    // Emit event with withdrawal information
+    // Emit event with withdrawal information (reflects state *after* split)
     event::emit(LiquidityWithdrawal {
         escrowed_asset: balance::value(&escrow.escrowed_asset),
         escrowed_stable: balance::value(&escrow.escrowed_stable),
-        asset_amount: asset_amount,
-        stable_amount: stable_amount,
+        asset_amount: asset_amount, // Amount withdrawn
+        stable_amount: stable_amount, // Amount withdrawn
     });
+
+    // Return the coins instead of transferring
+    (asset_coin_out, stable_coin_out)
 }
 
 public(package) fun extract_stable_fees<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     amount: u64,
 ): Balance<StableType> {
+    market_state::is_finalized(&escrow.market_state);
     assert!(balance::value(&escrow.escrowed_stable) >= amount, ENOT_ENOUGH);
     balance::split(&mut escrow.escrowed_stable, amount)
 }
@@ -294,7 +312,7 @@ fun verify_token_set<AssetType, StableType>(
 }
 
 // Asset token redemption implementation
-public fun redeem_complete_set_asset<AssetType, StableType>(
+public(package) fun redeem_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
@@ -325,7 +343,7 @@ public fun redeem_complete_set_asset<AssetType, StableType>(
 }
 
 // Stable token redemption implementation
-public fun redeem_complete_set_stable<AssetType, StableType>(
+public(package) fun redeem_complete_set_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
@@ -353,30 +371,6 @@ public fun redeem_complete_set_stable<AssetType, StableType>(
     assert!(balance::value(&escrow.escrowed_stable) >= amount, EINSUFFICIENT_BALANCE);
     // Return the redeemed stable tokens
     balance::split(&mut escrow.escrowed_stable, amount)
-}
-
-// Entry function for asset redemption
-public entry fun redeem_complete_set_asset_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    tokens: vector<ConditionalToken>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let balance = redeem_complete_set_asset(escrow, tokens, clock, ctx);
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
-}
-
-// Entry function for stable redemption
-public entry fun redeem_complete_set_stable_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    tokens: vector<ConditionalToken>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let balance = redeem_complete_set_stable(escrow, tokens, clock, ctx);
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
 }
 
 // Asset token redemption for winning outcome
@@ -453,31 +447,7 @@ public(package) fun redeem_winning_tokens_stable<AssetType, StableType>(
     balance::split(&mut escrow.escrowed_stable, amount)
 }
 
-// Entry function for asset winning token redemption
-public entry fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    token: ConditionalToken,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let balance = redeem_winning_tokens_asset(escrow, token, clock, ctx);
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
-}
-
-// Entry function for stable winning token redemption
-public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    token: ConditionalToken,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let balance = redeem_winning_tokens_stable(escrow, token, clock, ctx);
-    let coin = coin::from_balance(balance, ctx);
-    transfer::public_transfer(coin, tx_context::sender(ctx));
-}
-
-public fun mint_complete_set_asset<AssetType, StableType>(
+public(package) fun mint_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     coin_in: Coin<AssetType>,
     clock: &Clock,
@@ -515,27 +485,9 @@ public fun mint_complete_set_asset<AssetType, StableType>(
     tokens
 }
 
-public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    coin_in: Coin<AssetType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let mut tokens = mint_complete_set_asset(escrow, coin_in, clock, ctx);
-    let recipient = tx_context::sender(ctx);
-    let tokens_count = vector::length(&tokens);
-    let mut i = 0;
-    while (i < tokens_count) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-        i = i + 1;
-    };
-    vector::destroy_empty(tokens);
-}
-
 /// Mint a complete set of stable tokens by depositing stable coins
 /// Returns the minted tokens instead of transferring them directly
-public fun mint_complete_set_stable<AssetType, StableType>(
+public(package) fun mint_complete_set_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     coin_in: Coin<StableType>,
     clock: &Clock,
@@ -571,27 +523,6 @@ public fun mint_complete_set_stable<AssetType, StableType>(
     };
 
     tokens
-}
-
-/// Entry function for minting stable tokens
-public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    coin_in: Coin<StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let mut tokens = mint_complete_set_stable(escrow, coin_in, clock, ctx);
-    let recipient = tx_context::sender(ctx);
-
-    let len = vector::length(&tokens);
-    let mut i = 0;
-    while (i < len) {
-        let token = vector::pop_back(&mut tokens);
-        transfer::public_transfer(token, recipient);
-        i = i + 1;
-    };
-
-    vector::destroy_empty(tokens);
 }
 
 /// ======= Swap Methods =========
@@ -659,55 +590,153 @@ public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     token
 }
 
+/// Allows anyone to burn a conditional token associated with this escrow
+/// if the market is finalized and the token's outcome is not the winning outcome.
+public(package) fun burn_unused_tokens<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    mut tokens_to_burn: vector<ConditionalToken>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // 1. Get Market State and verify it's finalized (check once)
+    let market_state = &escrow.market_state; // Read-only borrow is sufficient for checks
+    market_state::assert_market_finalized(market_state);
+    assert_supplies_initialized(escrow); // Check once
+
+    // 2. Get required information from market state (fetch once)
+    let escrow_market_id = market_state::market_id(market_state);
+    let winning_outcome = market_state::get_winning_outcome(market_state);
+    let outcome_count = market_state::outcome_count(market_state);
+
+    // 3. Iterate through the vector and burn eligible tokens
+    while (!vector::is_empty(&tokens_to_burn)) {
+        // Borrow mutably for pop_back
+        let token = vector::pop_back(&mut tokens_to_burn);
+
+        // a. Get token details
+        let token_market_id = token::market_id(&token);
+        let token_outcome = token::outcome(&token);
+        let token_type = token::asset_type(&token);
+        let outcome_idx = (token_outcome as u64); // Index for supply vectors
+
+        assert!(token_market_id == escrow_market_id, EWRONG_MARKET);
+        assert!(token_outcome != (winning_outcome as u8), EWRONG_OUTCOME);
+        assert!(outcome_idx < outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+
+        // c. Get the appropriate supply AND burn the token within the correct branch
+        if (token_type == TOKEN_TYPE_ASSET) {
+            let supply_ref = vector::borrow_mut(&mut escrow.outcome_asset_supplies, outcome_idx);
+            // token::burn consumes the token object
+            token::burn(supply_ref, token, clock, ctx);
+        } else if (token_type == TOKEN_TYPE_STABLE) {
+            let supply_ref = vector::borrow_mut(&mut escrow.outcome_stable_supplies, outcome_idx);
+            // token::burn consumes the token object
+            token::burn(supply_ref, token, clock, ctx);
+        } else {
+            abort EWRONG_TOKEN_TYPE
+        }
+    };
+    // 4. Destroy the now empty vector
+    vector::destroy_empty(tokens_to_burn);
+}
+
 // Entry function that gets and emits the current escrow balances and supply information as an event
-public entry fun get_escrow_balances_and_winning_supply<AssetType, StableType>(
+public entry fun get_escrow_balances_and_supply<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
-    winning_outcome: u64, // Added parameter
-    _ctx: &TxContext,
+    outcome: u64, // Added parameter
 ): (u64, u64, u64, u64) {
     // Changed return type to a tuple
     // Get current escrow balances
     let (escrowed_asset_balance, escrowed_stable_balance) = get_balances(escrow);
     let outcome_count = market_state::outcome_count(&escrow.market_state);
 
-    // Ensure the winning outcome index is valid
-    assert!(winning_outcome < outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+    // Ensure the outcome index is valid
+    assert!(outcome < outcome_count, EOUTCOME_OUT_OF_BOUNDS);
     // Ensure supplies were initialized
     assert_supplies_initialized(escrow);
 
-    // Get the supply counts for the *winning* outcome directly
-    let winning_asset_supply_cap = vector::borrow(&escrow.outcome_asset_supplies, winning_outcome);
-    let winning_stable_supply_cap = vector::borrow(
+    // Get the supply counts for the outcome directly
+    let asset_supply_cap = vector::borrow(&escrow.outcome_asset_supplies, outcome);
+    let stable_supply_cap = vector::borrow(
         &escrow.outcome_stable_supplies,
-        winning_outcome,
+        outcome,
     );
 
-    let winning_asset_total_supply = token::total_supply(winning_asset_supply_cap);
-    let winning_stable_total_supply = token::total_supply(winning_stable_supply_cap);
+    let asset_total_supply = token::total_supply(asset_supply_cap);
+    let stable_total_supply = token::total_supply(stable_supply_cap);
 
-    // Return the tuple: (escrow_asset, escrow_stable, winning_asset_supply, winning_stable_supply)
-    (
-        escrowed_asset_balance,
-        escrowed_stable_balance,
-        winning_asset_total_supply,
-        winning_stable_total_supply,
-    )
+    // Return the tuple: (escrow_asset, escrow_stable, asset_supply, stable_supply)
+    (escrowed_asset_balance, escrowed_stable_balance, asset_total_supply, stable_total_supply)
+}
+
+// == Admin Functions ==
+// Admin function to sweep funds from an escrow after MARKET_EXPIRY_PERIOD_MS from market creation
+public entry fun admin_sweep_escrow<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    _admin_cap: &EscrowAdminCap, // Assuming ownership check happens elsewhere or via admin signature
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // First extract all needed information from market_state
+    let market_id = market_state::market_id(&escrow.market_state);
+    let dao_id = market_state::dao_id(&escrow.market_state);
+    let creation_time = market_state::get_creation_time(&escrow.market_state);
+    let current_time = clock::timestamp_ms(clock);
+    let admin = tx_context::sender(ctx); // Admin is the sender calling this
+
+    // Check if expiry period has passed since market creation
+    assert!(current_time >= creation_time + MARKET_EXPIRY_PERIOD_MS, EMARKET_NOT_EXPIRED);
+
+    // Get current escrow balances
+    let (asset_amount, stable_amount) = get_balances(escrow);
+
+    // Only process if there are funds to sweep
+    if (asset_amount > 0 || stable_amount > 0) {
+        // Call the updated remove_liquidity function, which returns coins
+        let (asset_coin, stable_coin) = remove_liquidity(
+            escrow,
+            asset_amount,
+            stable_amount,
+            ctx,
+        );
+
+        // Transfer the returned coins to the admin (the caller)
+        transfer::public_transfer(asset_coin, admin);
+        transfer::public_transfer(stable_coin, admin);
+
+        // Emit event for the admin sweep (log the amounts swept)
+        event::emit(AdminEscrowSweep {
+            market_id: market_id,
+            dao_id: dao_id,
+            asset_amount: asset_amount, // Amount swept
+            stable_amount: stable_amount, // Amount swept
+            admin: admin,
+            timestamp: current_time,
+        });
+    }
+    // If balances are zero, do nothing.
+}
+
+public entry fun burn_admin_sweep_cap(admin_cap: EscrowAdminCap) {
+    // Destroy the admin cap by unpacking and deleting its ID
+    let EscrowAdminCap { id } = admin_cap;
+    object::delete(id);
 }
 
 // === Internal Helpers ===
-public fun get_balances<AssetType, StableType>(
+public(package) fun get_balances<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ): (u64, u64) {
     (balance::value(&escrow.escrowed_asset), balance::value(&escrow.escrowed_stable))
 }
 
-public fun get_market_state<AssetType, StableType>(
+public(package) fun get_market_state<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ): &MarketState {
     &escrow.market_state
 }
 
-public fun get_market_state_id<AssetType, StableType>(
+public(package) fun get_market_state_id<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ): ID {
     object::id(&escrow.market_state)

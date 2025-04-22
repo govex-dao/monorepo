@@ -186,6 +186,9 @@ public fun get_outcome_message(state: &MarketState, outcome_idx: u64): String {
     *vector::borrow(&state.outcome_messages, outcome_idx)
 }
 
+public fun get_creation_time(state: &MarketState): u64 {
+    state.creation_time
+}
 // === Test Functions ===
 #[test_only]
 public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
@@ -217,6 +220,11 @@ public fun init_trading_for_testing(state: &mut MarketState) {
     state.status.trading_started = true;
     state.trading_start = 0;
     state.trading_end = option::some(9999999999999);
+}
+#[test_only]
+public fun reset_state_for_testing(state: &mut MarketState) {
+    state.status.trading_started = false;
+    state.trading_start = 0;
 }
 
 #[test_only]

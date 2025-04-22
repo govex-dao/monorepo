@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { RedeemTokensButton } from "./RedeemTokensButton";
 
 interface TokenSectionProps {
+  proposalId: string;
   userTokens: {
     id: string;
     outcome: number;
@@ -30,6 +31,7 @@ interface GroupedToken {
 }
 
 const TokenSection: React.FC<TokenSectionProps> = ({
+  proposalId,
   userTokens,
   outcomeMessages,
   winning_outcome,
@@ -96,6 +98,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
       {groupedByOutcome.length > 0 ? (
         <>
           <RedeemTokensButton
+            proposalId={proposalId} 
             userTokens={userTokens}
             winning_outcome={winning_outcome}
             current_state={current_state}

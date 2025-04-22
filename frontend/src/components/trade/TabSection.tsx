@@ -77,6 +77,7 @@ const TabSection: React.FC<TabSectionProps> = ({
 
       {activeTab === "tokens" && (
         <TokenSection
+          proposalId={proposal.proposal_id}
           userTokens={userTokens}
           outcomeMessages={outcomeMessages}
           winning_outcome={proposal.winning_outcome}
