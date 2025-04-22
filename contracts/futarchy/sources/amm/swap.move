@@ -3,6 +3,7 @@ module futarchy::swap;
 use futarchy::amm;
 use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::conditional_token::{Self as token, ConditionalToken};
+use futarchy::liquidity_interact;
 use futarchy::market_state::{Self, MarketState};
 use futarchy::proposal::{Self, Proposal};
 use sui::clock::Clock;
@@ -75,6 +76,8 @@ public fun swap_asset_to_stable<AssetType, StableType>(
         clock,
         ctx,
     );
+
+    liquidity_interact::assert_all_reserves_consistency(proposal, escrow);
 
     stable_token
 }
@@ -153,6 +156,8 @@ public fun swap_stable_to_asset<AssetType, StableType>(
         clock,
         ctx,
     );
+
+    liquidity_interact::assert_all_reserves_consistency(proposal, escrow);
 
     asset_token
 }

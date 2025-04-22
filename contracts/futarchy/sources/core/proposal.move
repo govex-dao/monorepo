@@ -10,7 +10,6 @@ use std::string::String;
 use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
-use sui::dynamic_field;
 use sui::event;
 
 // === Introduction ===

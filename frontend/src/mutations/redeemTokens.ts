@@ -6,6 +6,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
 interface RedeemTokensParams {
+  proposalId: string;
   userTokens: {
     id: string;
     outcome: number;
@@ -39,6 +40,7 @@ export function useRedeemTokensMutation() {
 
   return useMutation({
     mutationFn: async ({
+      proposalId,
       userTokens,
       winning_outcome,
       escrow,
@@ -91,8 +93,9 @@ export function useRedeemTokensMutation() {
           }
 
           txb.moveCall({
-            target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_winning_tokens_asset_entry`,
+            target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_winning_tokens_asset_entry`,
             arguments: [
+              txb.object(proposalId),
               txb.object(escrow),
               txb.object(tokenToRedeem),
               txb.object("0x6"),
@@ -120,8 +123,9 @@ export function useRedeemTokensMutation() {
           }
 
           txb.moveCall({
-            target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_winning_tokens_stable_entry`,
+            target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_winning_tokens_stable_entry`,
             arguments: [
+              txb.object(proposalId),
               txb.object(escrow),
               txb.object(tokenToRedeem),
               txb.object("0x6"),
@@ -203,8 +207,9 @@ export function useRedeemTokensMutation() {
 
           if (completeSetTokens.length === parseInt(outcome_count, 10)) {
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_complete_set_asset_entry`,
+              target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_complete_set_asset_entry`,
               arguments: [
+                txb.object(proposalId),
                 txb.object(escrow),
                 txb.makeMoveVec({
                   elements: completeSetTokens.map((id) => txb.object(id)),
@@ -282,8 +287,9 @@ export function useRedeemTokensMutation() {
 
           if (completeSetTokens.length === parseInt(outcome_count, 10)) {
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::coin_escrow::redeem_complete_set_stable_entry`,
+              target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_complete_set_stable_entry`,
               arguments: [
+                txb.object(proposalId),
                 txb.object(escrow),
                 txb.makeMoveVec({
                   elements: completeSetTokens.map((id) => txb.object(id)),

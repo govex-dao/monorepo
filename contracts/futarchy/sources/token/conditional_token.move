@@ -182,7 +182,7 @@ public(package) fun merge_many(
     let mut total_merged_amount = 0;
     let mut token_ids = vector::empty();
     // Iterate by popping from the end - O(1) operation per element
-    while (!vector::is_empty(&mut tokens)) {
+    while (!vector::is_empty(&tokens)) {
         // Remove the last token from the vector
         let token = vector::pop_back(&mut tokens);
         // Verify token matches
@@ -336,4 +336,23 @@ public fun value(token: &ConditionalToken): u64 {
 
 public fun total_supply(supply: &Supply): u64 {
     supply.total_supply
+}
+
+#[test_only]
+/// Creates a ConditionalToken with specified values for testing purposes.
+/// This function bypasses normal validation checks and is only available in test code.
+public fun mint_for_testing(
+    market_id: ID,
+    asset_type: u8,
+    outcome: u8,
+    balance: u64,
+    ctx: &mut TxContext,
+): ConditionalToken {
+    ConditionalToken {
+        id: object::new(ctx),
+        market_id,
+        asset_type,
+        outcome,
+        balance,
+    }
 }

@@ -1,6 +1,7 @@
 import { useRedeemTokensMutation } from "@/mutations/redeemTokens";
 
 interface RedeemTokensButtonProps {
+  proposalId: string;
   userTokens: {
     id: string;
     outcome: number;
@@ -16,6 +17,7 @@ interface RedeemTokensButtonProps {
 }
 
 export function RedeemTokensButton({
+  proposalId,
   userTokens,
   winning_outcome,
   current_state,
@@ -60,6 +62,7 @@ export function RedeemTokensButton({
   const handleRedeem = async () => {
     try {
       await redeemTokens.mutateAsync({
+        proposalId,
         userTokens,
         winning_outcome,
         current_state,
