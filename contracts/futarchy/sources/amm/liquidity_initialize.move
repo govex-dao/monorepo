@@ -11,7 +11,7 @@ use sui::clock::Clock;
 // Method to initialize AMM liquidity
 
 // === Errors ===
-const E_INIT_ASSET_RESERVES_MISMATCH: u64 = 100; // Example error codes
+const E_INIT_ASSET_RESERVES_MISMATCH: u64 = 100;
 const E_INIT_STABLE_RESERVES_MISMATCH: u64 = 101;
 const E_INIT_POOL_COUNT_MISMATCH: u64 = 102;
 const E_INIT_POOL_OUTCOME_MISMATCH: u64 = 103;
@@ -100,43 +100,28 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
 }
 
 fun assert_initial_reserves_consistency<AssetType, StableType>(
-    escrow: &TokenEscrow<AssetType, StableType>, // Immutable borrow is sufficient
+    escrow: &TokenEscrow<AssetType, StableType>,
     amm_pools: &vector<LiquidityPool>,
-    // ctx: &TxContext // Likely not needed for read-only checks
 ) {
-    // Get outcome count from the escrow's market state
     let outcome_count = market_state::outcome_count(coin_escrow::get_market_state(escrow));
 
-    // Basic sanity check: does the number of pools match the expected outcome count?
     assert!(vector::length(amm_pools) == outcome_count, E_INIT_POOL_COUNT_MISMATCH);
 
-    // Get total escrow balances AFTER initial deposit
-    // These should reflect the total liquidity provided.
     let (escrow_asset, escrow_stable) = coin_escrow::get_balances(escrow);
 
-    // Check each outcome's pool against the escrow state
     let mut i = 0;
     while (i < outcome_count) {
-        // Get the pool for this outcome index `i`
         let pool = vector::borrow(amm_pools, i);
 
-        // Sanity check: Ensure the pool's outcome index matches the loop index
-        // Assumes pools vector is ordered 0..N-1
         assert!(amm::get_outcome_idx(pool) == (i as u8), E_INIT_POOL_OUTCOME_MISMATCH);
 
-        // Get reserves and fees from the pool *at initialization*
-        // Protocol fees should be 0 at this point.
         let (amm_asset, amm_stable) = amm::get_reserves(pool);
         let protocol_fees = amm::get_protocol_fees(pool);
         assert!(protocol_fees == 0, E_INIT_STABLE_RESERVES_MISMATCH); // Fees must be 0 initially
 
-        // Get token supplies *for this specific outcome i*
-        // Use the existing getter from coin_escrow which reads supply values.
-        // Note: This fetches escrow balances too, which is slightly redundant inside the loop,
-        // but it uses the available public interface from coin_escrow.
         let (
-            _fetched_escrow_asset, // Ignore these as we got them outside the loop
-            _fetched_escrow_stable, // Ignore these
+            _fetched_escrow_asset,
+            _fetched_escrow_stable,
             asset_total_supply,
             stable_total_supply,
         ) = coin_escrow::get_escrow_balances_and_supply(escrow, i);
