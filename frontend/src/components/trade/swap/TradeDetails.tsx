@@ -32,7 +32,7 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
     <div className="border-t pt-3 border-gray-700/50 mt-3 backdrop-blur-sm shadow-inner space-y-2">
       <div className="flex justify-between items-center">
         <span className="text-white text-xs font-medium whitespace-nowrap">
-          1 {assetSymbol} ≈ {swapDetails.averagePrice} {stableSymbol}
+          1 {assetSymbol} ≈ {swapDetails.averagePrice.toPrecision(6)} {stableSymbol}
         </span>
         <ShowMoreDetails
           show={showTradeDetails}
