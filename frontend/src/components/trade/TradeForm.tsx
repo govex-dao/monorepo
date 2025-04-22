@@ -85,7 +85,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const [selectedOutcome, setSelectedOutcome] = useState("0");
   const [isBuy, setIsBuy] = useState(true);
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
-  const [averagePrice, setAveragePrice] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorMessage>(null);
   const TOLERANCE = 0.01;
@@ -162,12 +161,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
       setSwapDetails(breakdown);
       // Format based on the *output* token's decimals
       setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
-      // Average price is In/Out, format appropriately
-      setAveragePrice(
-        breakdown.averagePrice > 0
-          ? breakdown.averagePrice.toPrecision(6)
-          : "N/A",
-      );
     } catch (error) {
       console.error("Swap calculation error:", error);
       setError(
@@ -178,38 +171,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
       // Don't reset averagePrice here on error
     }
   };
-
-  // Update the useEffect that sets the initial price
-  useEffect(() => {
-    // Calculate initial price whenever relevant state changes
-    const { asset, stable } = getStartingLiquidity();
-    if (asset > 0n && stable > 0n) {
-      // Check both reserves are non-zero
-      const A = Number(asset) / Number(assetScale);
-      const S = Number(stable) / Number(stableScale);
-
-      // Calculate the initial price (Stable per Asset) S/A
-      const initialPrice = S / A;
-      // Only set averagePrice if amount is empty, otherwise updateFromAmount handles it
-      if (!amount) {
-        setAveragePrice(initialPrice.toPrecision(6));
-      }
-    } else {
-      if (!amount) {
-        // Only clear if no amount is entered
-        setAveragePrice("N/A"); // Indicate no price if reserves are zero
-      }
-    }
-  }, [
-    selectedOutcome,
-    swapEvents, // Re-run if events change
-    // initial_outcome_amounts, // These should be reflected in swapEvents or initial state
-    // asset_value, stable_value, // These are fallbacks, covered by getStartingLiquidity
-    assetScale,
-    stableScale, // Include scales
-    amount, // Also re-run if amount changes (to reset initial price if amount is cleared)
-  ]);
-
   const filteredTokens = useMemo(() => {
     return tokens.filter(
       (t) =>
@@ -221,31 +182,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   // Reset error when inputs change
   useEffect(() => {
     setError(null);
-    if (!amount) setAveragePrice("");
   }, [amount, selectedOutcome, isBuy]);
-
-  useEffect(() => {
-    // Calculate average price whenever liquidity data changes
-    const { asset, stable } = getStartingLiquidity();
-    if (asset > 0n) {
-      // Calculate ratio of scaled stable to scaled asset
-      const A = Number(asset) / Number(assetScale);
-      const S = Number(stable) / Number(stableScale);
-
-      // Calculate the ratio and format to 6 significant figures
-      const ratio = S / A;
-      // Format to 6 significant figures
-      setAveragePrice(ratio.toPrecision(6));
-    } else {
-      setAveragePrice("");
-    }
-  }, [
-    selectedOutcome,
-    swapEvents,
-    initial_outcome_amounts,
-    asset_value,
-    stable_value,
-  ]);
 
   // Recalculate calculations when trade direction or outcome changes
   useEffect(() => {

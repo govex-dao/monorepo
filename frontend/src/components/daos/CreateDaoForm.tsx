@@ -45,8 +45,8 @@ const CreateDaoForm = () => {
     reviewPeriodMs: 3600000, // 1 hour in milliseconds
     tradingPeriodMs: 7200000, // 2 hours in milliseconds
     twapStartDelay: 60000,
-    twapInitialObservation: "1000000000",
-    twapStepMax: "5000000",
+    twapInitialObservation: "1000000000000",
+    twapStepMax: "5000000000",
     twapThreshold: 1,
   });
 

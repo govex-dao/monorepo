@@ -478,7 +478,8 @@ describe("calculateSwapBreakdown", () => {
     // --- State *before* second swap ---
     const reserveAsset_before_swap2 = reserveAsset;
     const reserveStable_before_swap2 = reserveStable;
-    const expectedStartPrice_swap2 = reserveAsset_before_swap2 / reserveStable_before_swap2; // Price: Asset per Stable
+    const expectedStartPrice_swap2 =
+      reserveAsset_before_swap2 / reserveStable_before_swap2; // Price: Asset per Stable
 
     // --- Second swap: Asset -> Stable ---
     const amountIn2 = 50.0; // Asset
