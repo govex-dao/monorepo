@@ -98,7 +98,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
       {groupedByOutcome.length > 0 ? (
         <>
           <RedeemTokensButton
-            proposalId={proposalId} 
+            proposalId={proposalId}
             userTokens={userTokens}
             winning_outcome={winning_outcome}
             current_state={current_state}
