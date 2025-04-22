@@ -72,17 +72,25 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Start Price</p>
             <p className="text-blue-400 font-medium">
-              {isBuy ? swapDetails.startPrice.toPrecision(6) : ( 1 / swapDetails.startPrice).toPrecision(6)}
+              {isBuy
+                ? swapDetails.startPrice.toPrecision(6)
+                : (1 / swapDetails.startPrice).toPrecision(6)}
             </p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Average Price</p>
-            <p className="text-blue-400 font-medium">{isBuy ? swapDetails.averagePrice.toPrecision(6): ( 1 / swapDetails.averagePrice).toPrecision(6)}</p>
+            <p className="text-blue-400 font-medium">
+              {isBuy
+                ? swapDetails.averagePrice.toPrecision(6)
+                : (1 / swapDetails.averagePrice).toPrecision(6)}
+            </p>
           </div>
           <div className="flex justify-between items-center">
             <p className="text-gray-400">Final Price</p>
             <p className="text-blue-400 font-medium">
-              {isBuy ? swapDetails.finalPrice.toPrecision(6): (1 / swapDetails.finalPrice).toPrecision(6)}
+              {isBuy
+                ? swapDetails.finalPrice.toPrecision(6)
+                : (1 / swapDetails.finalPrice).toPrecision(6)}
             </p>
           </div>
           <div className="flex justify-between items-center">

@@ -20,24 +20,30 @@ export interface SwapBreakdown {
 }
 
 export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
-  const { reserveIn, reserveOut, amountIn, slippageTolerance = 0.05, isStableToAsset } = params;
+  const {
+    reserveIn,
+    reserveOut,
+    amountIn,
+    slippageTolerance = 0.05,
+    isStableToAsset,
+  } = params;
 
   if (reserveIn <= 0 || reserveOut <= 0) {
     // Allow calculation even if reserves are low, but maybe return zero amounts?
     // Or keep the error, depends on desired UX. Let's keep the error for now.
-     throw new Error("Invalid pool state: reserves must be greater than zero");
+    throw new Error("Invalid pool state: reserves must be greater than zero");
   }
   if (amountIn <= 0) {
-     // Handle zero or negative input gracefully
-     return {
-        exactAmountOut: 0,
-        minAmountOut: 0,
-        ammFee: 0,
-        priceImpact: 0,
-        averagePrice: reserveIn / reserveOut, // Or startPrice
-        finalPrice: reserveIn / reserveOut,   // Or startPrice
-        startPrice: reserveIn / reserveOut,
-     };
+    // Handle zero or negative input gracefully
+    return {
+      exactAmountOut: 0,
+      minAmountOut: 0,
+      ammFee: 0,
+      priceImpact: 0,
+      averagePrice: reserveIn / reserveOut, // Or startPrice
+      finalPrice: reserveIn / reserveOut, // Or startPrice
+      startPrice: reserveIn / reserveOut,
+    };
   }
 
   const feeRate = SWAP_FEE_BPS / 10_000;
@@ -48,7 +54,8 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
   let amountInUsedForPoolUpdate: number;
   let amountOutUsedForPoolUpdate: number;
 
-  if (isStableToAsset) { // Backend: swap_stable_to_asset (Fee from Stable Input)
+  if (isStableToAsset) {
+    // Backend: swap_stable_to_asset (Fee from Stable Input)
     ammFee = amountIn * feeRate;
     // Handle potential minimal fee if needed, JS floats make this tricky.
     // Let's assume standard float math for now.
@@ -64,12 +71,12 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
     // Pool reserves update based on post-fee input and calculated output
     newReserveIn = reserveIn + amountInUsedForPoolUpdate;
     newReserveOut = reserveOut - amountOutUsedForPoolUpdate;
-
-  } else { // Backend: swap_asset_to_stable (Fee from Stable Output)
+  } else {
+    // Backend: swap_asset_to_stable (Fee from Stable Output)
     // Calculate output *before* fee, using full input amount
     const numerator = amountIn * reserveOut;
     const denominator = reserveIn + amountIn;
-     if (denominator === 0) throw new Error("Division by zero (Asset->Stable)"); // Safety check
+    if (denominator === 0) throw new Error("Division by zero (Asset->Stable)"); // Safety check
     const amountOutBeforeFee = numerator / denominator;
 
     ammFee = amountOutBeforeFee * feeRate;

@@ -139,10 +139,10 @@ const TradeForm: React.FC<TradeFormProps> = ({
     const { asset, stable } = getStartingLiquidity();
     // Ensure reserves are not zero before calculating
     if (asset === 0n || stable === 0n) {
-        setError("Pool has zero liquidity for this outcome.");
-        setSwapDetails(null);
-        setExpectedAmountOut("");
-        return;
+      setError("Pool has zero liquidity for this outcome.");
+      setSwapDetails(null);
+      setExpectedAmountOut("");
+      return;
     }
 
     // Use floating point numbers for calculation function
@@ -153,7 +153,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       // **** PASS isBuy AS isStableToAsset ****
       const breakdown = calculateSwapBreakdown({
         reserveIn: isBuy ? S : A, // If buying (Stable->Asset), reserveIn is Stable
-        reserveOut: isBuy ? A : S,// If buying (Stable->Asset), reserveOut is Asset
+        reserveOut: isBuy ? A : S, // If buying (Stable->Asset), reserveOut is Asset
         amountIn: x,
         slippageTolerance: TOLERANCE,
         isStableToAsset: isBuy, // Pass the direction flag
@@ -163,8 +163,11 @@ const TradeForm: React.FC<TradeFormProps> = ({
       // Format based on the *output* token's decimals
       setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
       // Average price is In/Out, format appropriately
-      setAveragePrice(breakdown.averagePrice > 0 ? breakdown.averagePrice.toPrecision(6) : "N/A");
-
+      setAveragePrice(
+        breakdown.averagePrice > 0
+          ? breakdown.averagePrice.toPrecision(6)
+          : "N/A",
+      );
     } catch (error) {
       console.error("Swap calculation error:", error);
       setError(
@@ -180,7 +183,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
   useEffect(() => {
     // Calculate initial price whenever relevant state changes
     const { asset, stable } = getStartingLiquidity();
-    if (asset > 0n && stable > 0n) { // Check both reserves are non-zero
+    if (asset > 0n && stable > 0n) {
+      // Check both reserves are non-zero
       const A = Number(asset) / Number(assetScale);
       const S = Number(stable) / Number(stableScale);
 
@@ -188,20 +192,22 @@ const TradeForm: React.FC<TradeFormProps> = ({
       const initialPrice = S / A;
       // Only set averagePrice if amount is empty, otherwise updateFromAmount handles it
       if (!amount) {
-         setAveragePrice(initialPrice.toPrecision(6));
+        setAveragePrice(initialPrice.toPrecision(6));
       }
     } else {
-       if (!amount) { // Only clear if no amount is entered
-          setAveragePrice("N/A"); // Indicate no price if reserves are zero
-       }
+      if (!amount) {
+        // Only clear if no amount is entered
+        setAveragePrice("N/A"); // Indicate no price if reserves are zero
+      }
     }
   }, [
     selectedOutcome,
     swapEvents, // Re-run if events change
     // initial_outcome_amounts, // These should be reflected in swapEvents or initial state
     // asset_value, stable_value, // These are fallbacks, covered by getStartingLiquidity
-    assetScale, stableScale, // Include scales
-    amount // Also re-run if amount changes (to reset initial price if amount is cleared)
+    assetScale,
+    stableScale, // Include scales
+    amount, // Also re-run if amount changes (to reset initial price if amount is cleared)
   ]);
 
   const filteredTokens = useMemo(() => {
