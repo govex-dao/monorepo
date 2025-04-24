@@ -18,3 +18,5 @@ Govex Bug Bounty-1
 - Unprofitable attacks which require a significant net loss of attacker funds will not be considered critical.
 
 Govex team reserves right to reject or deny any bug bounty claim, but will endeavour to be fair.
+---
+Known bug in oracle.move with timestamps
