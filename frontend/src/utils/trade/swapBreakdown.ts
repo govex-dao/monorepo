@@ -9,6 +9,7 @@ import { SwapParams, SwapBreakdown } from "./types";
 
 // Constants
 export const SWAP_FEE_BPS = 30; // 0.3% fee in basis points
+export const DEFAULT_SLIPPAGE_BPS = 50;
 const MAX_BPS = 10000;
 
 // Error messages
@@ -36,7 +37,13 @@ const ERRORS = {
  * @throws Error if the pool state is invalid or slippage tolerance is out of range
  */
 export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
-  const { reserveIn, reserveOut, amountIn, isBuy, slippageBps } = params;
+  const {
+    reserveIn,
+    reserveOut,
+    amountIn,
+    isBuy,
+    slippageBps = DEFAULT_SLIPPAGE_BPS,
+  } = params;
   const slippageBps_BI = BigInt(slippageBps);
 
   // Input validation
