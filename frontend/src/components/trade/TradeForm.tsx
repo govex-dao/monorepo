@@ -6,10 +6,7 @@ import { SuiClient } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
-import {
-  calculateSwapBreakdown,
-  SwapBreakdown,
-} from "@/utils/trade/calculateSwapBreakdown";
+import {calculateSwapBreakdown} from "@/utils/trade/swapBreakdown";
 import { SelectDropDown } from "@/components/SelectDropDown";
 import TradeInsight from "./swap/TradeInsight";
 import TradeDetails from "./swap/TradeDetails";
@@ -18,6 +15,9 @@ import TradeDirectionToggle, {
 } from "./swap/TradeDirectionToggle";
 import TokenInputField from "./swap/TokenInputField";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
+import { SwapBreakdown } from "@/utils/trade/types";
+
+const DEFAULT_SLIPPAGE_BPS = 50;
 
 interface SwapEvent {
   price: string;
@@ -87,7 +87,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<ErrorMessage>(null);
-  const TOLERANCE = 0.01;
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
   const { balance: assetBalance } = useTokenBalance({
@@ -154,8 +153,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
         reserveIn: isBuy ? S : A, // If buying (Stable->Asset), reserveIn is Stable
         reserveOut: isBuy ? A : S, // If buying (Stable->Asset), reserveOut is Asset
         amountIn: x,
-        slippageTolerance: TOLERANCE,
-        isStableToAsset: isBuy, // Pass the direction flag
+        slippageBps: DEFAULT_SLIPPAGE_BPS,
+        isBuy,
       });
 
       setSwapDetails(breakdown);
@@ -543,7 +542,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
           assetSymbol={asset_symbol}
           stableSymbol={stable_symbol}
           isBuy={isBuy}
-          tolerance={TOLERANCE}
+          tolerance={DEFAULT_SLIPPAGE_BPS}
         />
 
         {/* Action Button */}
