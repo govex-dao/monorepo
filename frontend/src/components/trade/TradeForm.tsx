@@ -6,7 +6,7 @@ import { SuiClient } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
 import { CONSTANTS } from "@/constants";
-import {calculateSwapBreakdown} from "@/utils/trade/swapBreakdown";
+import { calculateSwapBreakdown } from "@/utils/trade/swapBreakdown";
 import { SelectDropDown } from "@/components/SelectDropDown";
 import TradeInsight from "./swap/TradeInsight";
 import TradeDetails from "./swap/TradeDetails";

@@ -64,7 +64,7 @@ export interface SwapAmountsParams {
   reserveOut_BI: bigint;
   /** Whether the swap is from stable to asset */
   isStableToAsset: boolean;
-} 
+}
 
 /**
  * Result of swap amount calculations

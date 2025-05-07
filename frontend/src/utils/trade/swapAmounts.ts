@@ -6,15 +6,15 @@ import { SwapAmountsResult } from "./types";
 const ERRORS = {
   INSUFFICIENT_RESERVES: "Insufficient reserves for swap",
   INVALID_FEE: "Calculated fee exceeds input amount",
-}
+};
 
 /**
  * Calculates the amounts for a swap between tokens in an AMM pool.
- * 
+ *
  * Fee handling differs based on swap direction:
  * - Stable to Asset (buying asset): Fee is deducted from input amount BEFORE the swap calculation
  * - Asset to Stable (selling asset): Fee is deducted from output amount AFTER the swap calculation
- * 
+ *
  * @param amountIn The input amount in BigInt
  * @param reserveIn The input reserve in BigInt
  * @param reserveOut The output reserve in BigInt
@@ -26,11 +26,11 @@ export function calculateSwapAmounts(
   amountIn: bigint,
   reserveIn: bigint,
   reserveOut: bigint,
-  isBuy: boolean
+  isBuy: boolean,
 ): SwapAmountsResult {
   let ammFee = 0n;
   let amountInAfterFee = amountIn;
-  
+
   // if is buy, calculate fee before swap
   if (isBuy) {
     ammFee = calculateFee(amountIn);
@@ -40,7 +40,11 @@ export function calculateSwapAmounts(
 
   // Calculate output amount using AMM formula: dx * y / (x + dx)
   const denominator = reserveIn + amountInAfterFee;
-  let amountOutBeforeFee = mulDivFloor(amountInAfterFee, reserveOut, denominator);
+  let amountOutBeforeFee = mulDivFloor(
+    amountInAfterFee,
+    reserveOut,
+    denominator,
+  );
 
   // Cap output if it exceeds reserves
   if (amountOutBeforeFee > reserveOut) {
