@@ -94,9 +94,18 @@ Let $G_{abs} = |P - B|$ be the absolute gap between the current price $P$ and th
 Let $\Delta_M$ be the maximum allowed change per step (your $\Delta_{\max}$ or delta cap).
 
 The magnitude of the adjustment from $B$ for the $i$-th conceptual elapsed window (for $i=1, \dots, N_W$) is $\min(i \cdot \Delta_M, G_{abs})$.
-We want to calculate $V_{\text{sum\_prices}}$, the sum of effective prices over these $N_W$ windows. The effective price for window $i$ is $P'_i = B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, G_{abs})$.
-Thus, $V_{\text{sum\_prices}} = \sum_{i=1}^{N_W} (B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, G_{abs})) = N_W \cdot B + \text{sign}(P-B) \cdot \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs})$.
-Let $S_{dev\_mag} = \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs})$.
+We want to calculate $V_{\text{sum\_prices}}$, the sum of effective prices over these $N_W$ windows. The effective price for window $i$ is
+\[
+P'_i = B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, G_{\text{abs}}) .
+\]
+Thus,
+\[
+V_{\text{sum\_prices}}  = N_W \cdot B + \text{sign}(P-B) \cdot \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{\text{abs}}) .
+\]
+Let
+\[
+S_{\text{dev\_mag}} = \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{\text{abs}}) .
+\]
 
 To find a closed-form sum for $S_{dev\_mag}$, we first determine how many window contributions are dictated by the ramping term $i \cdot \Delta_M$ versus the cap $G_{abs}$.
 
