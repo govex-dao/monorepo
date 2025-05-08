@@ -88,27 +88,30 @@ We evaluate TWAP mechanisms based on their manipulation resistance and efficienc
 \section*{Derivation of Formula for Retroactive TWAP Step Cap Updates Over Multiple Windows}
 
 Let $N_W$ be the number of new windows available for adjustment (e.g., $w - w_{\text{prev}}$). We assume $N_W$ is a non-negative integer.
+Let $B$ be the current base price.
+Let $P$ be the current market price.
 Let $G_{abs} = |P - B|$ be the absolute gap between the current price $P$ and the base price $B$.
 Let $\Delta_M$ be the maximum allowed change per step (your $\Delta_{\max}$ or delta cap).
 
-The value contributed by window $i$ (for $i=1, \dots, N_W$) is $\min(i \cdot \Delta_M, G_{abs})$.
-We want to calculate the sum of these values:
-\[ V_{\text{total}} = \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs}) \]
+The magnitude of the adjustment from $B$ for the $i$-th conceptual elapsed window (for $i=1, \dots, N_W$) is $\min(i \cdot \Delta_M, G_{abs})$.
+We want to calculate $V_{\text{sum\_prices}}$, the sum of effective prices over these $N_W$ windows. The effective price for window $i$ is $P'_i = B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, G_{abs})$.
+Thus, $V_{\text{sum\_prices}} = \sum_{i=1}^{N_W} (B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, G_{abs})) = N_W \cdot B + \text{sign}(P-B) \cdot \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs})$.
+Let $S_{dev\_mag} = \sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs})$.
 
-To find a closed-form sum for $V_{\text{total}}$, we first determine how many window contributions are dictated by the ramping term $i \cdot \Delta_M$ versus the cap $G_{abs}$.
+To find a closed-form sum for $S_{dev\_mag}$, we first determine how many window contributions are dictated by the ramping term $i \cdot \Delta_M$ versus the cap $G_{abs}$.
 
-Let $k_{cap\_idx}$ be the index of the first window $i$ (if it exists within $G_{abs}/\Delta_M$) at which the potential unconstrained adjustment $i \cdot \Delta_M$ would meet or exceed $G_{abs}$:
+Let $k_{cap\_idx}$ be the index of the first window $i$ (if it exists within $G_{abs}/\Delta_M$) at which the potential unconstrained adjustment magnitude $i \cdot \Delta_M$ would meet or exceed $G_{abs}$:
 \[ k_{cap\_idx} = \left\lceil \frac{G_{abs}}{\Delta_M} \right\rceil \]
 If $G_{abs} = 0$, then $k_{cap\_idx} = 0$. Note that $k_{cap\_idx}$ can be 0 if $G_{abs}$ is 0, or 1 if $0 < G_{abs} \le \Delta_M$.
 
-The number of initial windows whose contribution $i \cdot \Delta_M$ is strictly less than $G_{abs}$ is $k_{ramp\_limit}$:
+The number of initial windows whose contribution magnitude $i \cdot \Delta_M$ is strictly less than $G_{abs}$ is $k_{ramp\_limit}$:
 \[ k_{ramp\_limit} = \max(0, k_{cap\_idx} - 1) \]
-This means that for $i=1, \dots, k_{ramp\_limit}$, the contribution is $i \cdot \Delta_M$. For all subsequent windows $i > k_{ramp\_limit}$, the contribution will be $G_{abs}$ (because $i \cdot \Delta_M \ge k_{cap\_idx} \cdot \Delta_M \ge G_{abs}$).
+This means that for $i=1, \dots, k_{ramp\_limit}$, the term in the sum $S_{dev\_mag}$ is $i \cdot \Delta_M$. For all subsequent windows $i > k_{ramp\_limit}$ (up to $N_W$), the term will be $G_{abs}$ (because $i \cdot \Delta_M \ge k_{cap\_idx} \cdot \Delta_M \ge G_{abs}$).
 
-Let $N_{ramp\_terms}$ be the actual number of windows that contribute to the ramp part of the sum. This is limited by both $N_W$ and $k_{ramp\_limit}$:
+Let $N_{ramp\_terms}$ be the actual number of windows that contribute to the ramp part of $S_{dev\_mag}$. This is limited by both $N_W$ and $k_{ramp\_limit}$:
 \[ N_{ramp\_terms} = \min(N_W, k_{ramp\_limit}) \]
 
-The total conceptual value, $V_{\text{total}}$, can be expressed as the sum of two components:
+The sum $S_{dev\_mag}$ can be expressed as the sum of two components:
 
 \subsection*{Ramp Accumulation ($V_{\text{ramp}}$)}
 This is the sum of $i \cdot \Delta_M$ for the first $N_{ramp\_terms}$ windows, as these are the windows where $i \cdot \Delta_M < G_{abs}$ and $i \le N_W$.
@@ -116,16 +119,17 @@ This is the sum of $i \cdot \Delta_M$ for the first $N_{ramp\_terms}$ windows, a
 If $N_{ramp\_terms}=0$ (e.g., if $G_{abs} \le \Delta_M$ making $k_{ramp\_limit}=0$, or if $N_W=0$), then $V_{\text{ramp}} = 0$.
 
 \subsection*{Flat Value Accumulation ($V_{\text{flat}}$)}
-The remaining $(N_W - N_{ramp\_terms})$ windows (if any) each contribute $G_{abs}$. This is because for these windows, either their index $i > k_{ramp\_limit}$ (meaning $i \cdot \Delta_M \ge G_{abs}$) or all $N_W$ windows fall into this category (if $k_{ramp\_limit}=0$).
+The remaining $(N_W - N_{ramp\_terms})$ windows (if any) each contribute $G_{abs}$ to $S_{dev\_mag}$. This is because for these windows, either their index $i > k_{ramp\_limit}$ (meaning $i \cdot \Delta_M \ge G_{abs}$) or all $N_W$ windows fall into this category (if $k_{ramp\_limit}=0$).
 The number of windows contributing the flat value is $(N_W - N_{ramp\_terms})$.
 \[ V_{\text{flat}} = G_{abs} \cdot (N_W - N_{ramp\_terms}) \]
 
-The total accumulated conceptual value is the sum of these components:
-\[ V_{\text{total}} = V_{\text{ramp}} + V_{\text{flat}} \]
+The total sum of allowed deviation magnitudes, $S_{dev\_mag}$, is:
+\[ S_{dev\_mag} = V_{\text{ramp}} + V_{\text{flat}} \]
 Substituting the definitions:
-\[ V_{\text{total}} = \Delta_M \cdot \frac{N_{ramp\_terms}(N_{ramp\_terms}+1)}{2} + G_{abs} \cdot (N_W - N_{ramp\_terms}) \]
-
-This revised formulation correctly calculates the sum $\sum_{i=1}^{N_W} \min(i \cdot \Delta_M, G_{abs})$ for integer $N_W$ and any non-negative $G_{abs}$ and $\Delta_M$.
+\[ S_{dev\_mag} = \Delta_M \cdot \frac{N_{ramp\_terms}(N_{ramp\_terms}+1)}{2} + G_{abs} \cdot (N_W - N_{ramp\_terms}) \]
+The total sum of effective prices, $V_{\text{sum\_prices}}$, is then:
+\[ V_{\text{sum\_prices}} = N_W \cdot B + \text{sign}(P-B) \cdot S_{dev\_mag} \]
+The effective price at the end of $N_W$ windows is $P'_{N_W} = B + \text{sign}(P-B) \cdot \min(N_W \cdot \Delta_M, G_{abs})$. This symmetrically applies the stepped cap to both increases and decreases in price relative to $B$.
 
 \subsection{Derivation of Formula for Intra-Step TWAP for Previous Window Base}
 This outlines the calculation of a custom Time-Weighted Average Price ($TWAP_{custom}$) for the current window, $W_k$. Live market prices are adjusted relative to the previous window's final TWAP, and these adjusted prices are time-weighted.
@@ -197,7 +201,7 @@ This method ensures removes race conditions for being the first to land a transa
 \end{figure}
 
 \section{Future work}
-The TWAPs proposed in this paper require an initial TWAP observation and a max TWAP step configs. Future investigation into whether the max TWAP step config can be derived as a fixed percent of the initial TWAP observation may be worthwhile to simplify the total number of configs required. Additionally, for governance markets that runs  regularly and have a short duration, deriving the initial TWAP observation from the last market's TWAP may automatically make the TWAP more responsive to rapid price movements.
+The TWAPs proposed in this paper require an initial TWAP observation and a max TWAP step configs. Future investigation into whether the max TWAP step config can be derived as a fixed percent of the initial TWAP observation may be worthwhile to simplify the total number of configs required. Additionally, for governance markets that run  regularly and have a short duration, deriving the initial TWAP observation from the last market's TWAP may make the TWAP more responsive to longer term price movements.
 
 \nocite{*}                % optional: list all entries
 \bibliographystyle{unsrt}% choose a style you like
