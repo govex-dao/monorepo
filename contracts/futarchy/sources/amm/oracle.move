@@ -119,10 +119,18 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
         oracle.last_window_end_cumulative_price = 0; // Assuming total_cumulative_price is also 0 initially
     };
 
-    let additional_time_to_include = timestamp - oracle.last_timestamp;
-
     // Avoid multiplying by 0 time. Also handles the very first observation case.
-    if (additional_time_to_include > 0) {
+    if ((timestamp - oracle.last_timestamp) > 0) {
+
+        twap_accumulate(oracle, timestamp, price);
+        // Update the timestamp of the last observation AFTER all calculations for the period are done.
+        oracle.last_timestamp = timestamp;
+    }
+    // If additional_time_to_include is 0, do nothing (avoid division by zero or unnecessary updates)
+}
+
+fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
+        let additional_time_to_include = timestamp - oracle.last_timestamp;
         // Check if one or more full windows have passed since the last window boundary
         let time_since_last_window_end = timestamp - oracle.last_window_end;
         if (time_since_last_window_end >= TWAP_PRICE_CAP_WINDOW) {
@@ -201,11 +209,6 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
             oracle.total_cumulative_price = oracle.total_cumulative_price + price_contribution;
             oracle.last_price = capped_price; // Update last observed (capped) price
         };
-
-        // Update the timestamp of the last observation AFTER all calculations for the period are done.
-        oracle.last_timestamp = timestamp;
-    }
-    // If additional_time_to_include is 0, do nothing (avoid division by zero or unnecessary updates)
 }
 
 public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
