@@ -313,6 +313,7 @@ fun test_twap_drift_towards_observation_price() {
 // This test intentionally drives the cumulative price near the maximum,
 // then triggers an overflow on the second observation.
 #[test]
+#[expected_failure(abort_code = oracle::EOVERFLOW_BASE_PRICE_SUM_FINAL)]
 fun test_cumulative_price_overflow() {
     // Set up an oracle with extreme parameters:
     // - twap_initialization_price = U64_MAX,
