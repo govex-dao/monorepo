@@ -2,7 +2,7 @@ Govex Bug Bounty-1
 
 - $1000 USDC per a bug.
 - Only bugs in non test .move files in /futarchy/sources/ count.
-- Maximum of 3 bugs in total, it can be 3 seperate bugs from same individual.
+- Maximum of 2 bugs in total, it can be 2 seperate bugs from same individual.
 - To be paid in $USDC on Sui.
 - All claims must be clear and written in English.
 - Only the first individual or organization to identify a given bug will win a bounty for that bug.
@@ -18,5 +18,4 @@ Govex Bug Bounty-1
 - Unprofitable attacks which require a significant net loss of attacker funds will not be considered critical.
 
 Govex team reserves right to reject or deny any bug bounty claim, but will endeavour to be fair.
----
-Known bug in oracle.move with timestamps
+
