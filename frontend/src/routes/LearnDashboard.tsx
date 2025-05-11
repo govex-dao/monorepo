@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Tabs, Text, Box } from "@radix-ui/themes";
 import { MintTestnetCoins } from "../components/learn/MintTestnetCoins";
+import { CONSTANTS } from "../constants"; // Make sure this path is correct
 
 export function LearnDashboard() {
-  const tabs = [
+  const tabsConfig = [
     {
       name: "Documentation",
-
       component: () => (
         <Box className="p-4">
           <Text size="5" weight="bold" className="mb-4 text-gray-400">
@@ -52,17 +52,24 @@ export function LearnDashboard() {
     },
     {
       name: "Tutorials",
-      component: () => (
-        <Box className="p-4">
-          <Text size="5" weight="bold" className="mb-4 text-gray-400">
-            Get Started with Test Coins
-          </Text>
-          <Text as="p" className="mb-4">
-            Click below to mint testnet coins that can be used to try out Govex:
-          </Text>
-          <MintTestnetCoins />
-        </Box>
-      ),
+      component: () => {
+        // Conditionally render content within the "Tutorials" tab
+        if (CONSTANTS.network === "testnet") {
+          return (
+            <Box className="p-4">
+              <Text size="5" weight="bold" className="mb-4 text-gray-400">
+                Get Started with Test Coins
+              </Text>
+              <Text as="p" className="mb-4">
+                Click below to mint testnet coins that can be used to try out Govex:
+              </Text>
+              <MintTestnetCoins />
+            </Box>
+          );
+        } else {
+          return null;
+        }
+      },
     },
     {
       name: "Social",
@@ -87,20 +94,20 @@ export function LearnDashboard() {
     },
   ];
 
-  const [tab, setTab] = useState(tabs[0].name);
+  const [currentTab, setCurrentTab] = useState(tabsConfig[0].name);
 
   return (
-    <Tabs.Root value={tab} onValueChange={setTab}>
+    <Tabs.Root value={currentTab} onValueChange={setCurrentTab}>
       <Tabs.List>
-        {tabs.map((tab, index) => (
-          <Tabs.Trigger key={index} value={tab.name} className="cursor-pointer">
-            {tab.name}
+        {tabsConfig.map((tabItem, index) => (
+          <Tabs.Trigger key={index} value={tabItem.name} className="cursor-pointer">
+            {tabItem.name}
           </Tabs.Trigger>
         ))}
       </Tabs.List>
-      {tabs.map((tab, index) => (
-        <Tabs.Content key={index} value={tab.name}>
-          {tab.component()}
+      {tabsConfig.map((tabItem, index) => (
+        <Tabs.Content key={index} value={tabItem.name}>
+          {tabItem.component()}
         </Tabs.Content>
       ))}
     </Tabs.Root>

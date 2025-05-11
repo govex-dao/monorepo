@@ -10,6 +10,7 @@ import TimeInput from "../TimeInput";
 
 const DEFAULT_ASSET_TYPE = CONSTANTS.assetType;
 const DEFAULT_STABLE_TYPE = CONSTANTS.stableType;
+const BASIS_POINTS_BIGINT = BigInt("1000000000000");
 
 interface FormData {
   assetType: string;
@@ -42,9 +43,9 @@ const CreateDaoForm = () => {
     minStableAmount: "1",
     daoName: "",
     imageUrl: "",
-    reviewPeriodMs: 3600000, // 1 hour in milliseconds
-    tradingPeriodMs: 7200000, // 2 hours in milliseconds
-    twapStartDelay: 60000,
+    reviewPeriodMs: 0, // 1 hour in milliseconds
+    tradingPeriodMs: 0, // 2 hours in milliseconds
+    twapStartDelay: 0,
     twapInitialObservation: "1000000000000",
     twapStepMax: "5000000000",
     twapThreshold: 1,
@@ -63,18 +64,82 @@ const CreateDaoForm = () => {
   const [previewImage, setPreviewImage] = useState<string>("");
   const [imageError, setImageError] = useState(false);
 
-  // Helper function to convert human readable amount to on-chain amount
   const getChainAmount = (amount: string, decimals: number): bigint => {
     try {
-      const cleanAmount = amount.replace(/,/g, "");
-      return BigInt(
-        Math.floor(parseFloat(cleanAmount) * Math.pow(10, decimals)),
-      );
+      const cleanAmount = amount.replace(/,/g, "").trim();
+      if (cleanAmount === "") {
+          return 0n; // Treat empty string as 0 for conversion
+      }
+      // Validate numeric format (allows for optional decimal point)
+      if (!/^\d*(\.\d*)?$/.test(cleanAmount) || cleanAmount === ".") {
+          throw new Error(`Invalid numeric string: ${amount}`);
+      }
+
+      const parts = cleanAmount.split(".");
+      const integerPartStr = parts[0] || "0"; // Handle cases like ".5" -> "0.5"
+      const fractionalPartStr = parts[1] || "";
+
+      let result = BigInt(integerPartStr) * (10n ** BigInt(decimals));
+
+      if (fractionalPartStr.length > 0 && decimals > 0) {
+        const relevantFractional = fractionalPartStr.slice(0, decimals);
+        if (relevantFractional.length > 0) {
+          const fractionalBigInt = BigInt(relevantFractional);
+          // Scale the fractional part by the remaining decimal places
+          // e.g., if decimals=5, relevantFractional="123" (length 3), scale by 10^(5-3)
+          result += fractionalBigInt * (10n ** BigInt(decimals - relevantFractional.length));
+        }
+      }
+      return result;
     } catch (error) {
-      throw new Error(`Invalid amount format: ${amount}`);
+      const e = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid amount format ("${amount}", dec: ${decimals}): ${e}`);
     }
   };
+ 
+  useEffect(() => {
+    if (assetMetadata?.decimals !== undefined && stableMetadata?.decimals !== undefined) {
+      try {
+        const assetAmountStr = formData.minAssetAmount; // This value comes from the input field
+        const stableAmountStr = formData.minStableAmount; // This value comes from the input field
 
+        // Quick validation: ensure amounts are parseable to positive numbers
+        // parseFloat is okay here for quick validation before robust BigInt conversion
+        const parsedAssetAmount = parseFloat(assetAmountStr.replace(/,/g, ""));
+        const parsedStableAmount = parseFloat(stableAmountStr.replace(/,/g, ""));
+
+        if (isNaN(parsedAssetAmount) || isNaN(parsedStableAmount) || parsedAssetAmount <= 0 || parsedStableAmount <= 0) {
+          // If amounts are invalid (e.g., empty, non-numeric, zero/negative), do not attempt calculation.
+          return;
+        }
+
+        const assetChainAmount = getChainAmount(assetAmountStr, assetMetadata.decimals);
+        const stableChainAmount = getChainAmount(stableAmountStr, stableMetadata.decimals);
+
+        // Ensure chain amounts are positive, as division by zero or non-positive initial values are problematic.
+        if (assetChainAmount <= 0n || stableChainAmount <= 0n) {
+          return;
+        }
+
+        // Calculate twapInitialObservation (scaled "raw price": stable per asset)
+        // This mirrors the AMM's logic: (atomic_stable_amount * BASIS_POINTS) / atomic_asset_amount
+        let calculatedInitialObservation = (stableChainAmount * BASIS_POINTS_BIGINT) / assetChainAmount;
+        if (calculatedInitialObservation < 1n) calculatedInitialObservation = 1n; // Min 1
+
+        // Calculate twapStepMax: 2% of twapInitialObservation
+        let calculatedStepMax = (calculatedInitialObservation * 2n) / 100n; // (value * 2 / 100) for 2%
+        if (calculatedStepMax < 1n) calculatedStepMax = 1n; // Min 1
+
+        setFormData(prev => ({
+          ...prev,
+          twapInitialObservation: calculatedInitialObservation.toString(),
+          twapStepMax: calculatedStepMax.toString(),
+        }));
+      } catch (error) {
+        console.error("Error auto-calculating TWAP parameters:", error);
+      }
+    }
+  }, [assetMetadata, stableMetadata, formData.minAssetAmount, formData.minStableAmount]);
   // Add this useEffect to handle image preview updates
   useEffect(() => {
     if (formData.imageUrl) {
