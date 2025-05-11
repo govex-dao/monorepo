@@ -61,7 +61,8 @@ export function LearnDashboard() {
                 Get Started with Test Coins
               </Text>
               <Text as="p" className="mb-4">
-                Click below to mint testnet coins that can be used to try out Govex:
+                Click below to mint testnet coins that can be used to try out
+                Govex:
               </Text>
               <MintTestnetCoins />
             </Box>
@@ -100,7 +101,11 @@ export function LearnDashboard() {
     <Tabs.Root value={currentTab} onValueChange={setCurrentTab}>
       <Tabs.List>
         {tabsConfig.map((tabItem, index) => (
-          <Tabs.Trigger key={index} value={tabItem.name} className="cursor-pointer">
+          <Tabs.Trigger
+            key={index}
+            value={tabItem.name}
+            className="cursor-pointer"
+          >
             {tabItem.name}
           </Tabs.Trigger>
         ))}
