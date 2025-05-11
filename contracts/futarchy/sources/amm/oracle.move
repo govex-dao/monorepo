@@ -146,8 +146,8 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
         time_since_last_update,
     );
 
-    if ( additional_time_to_include != 0) {
-        let timestamp_to_finish_last_window= oracle.last_timestamp + additional_time_to_include;
+    if (additional_time_to_include != 0) {
+        let timestamp_to_finish_last_window = oracle.last_timestamp + additional_time_to_include;
         intra_window_accumulation(
             oracle,
             price,
