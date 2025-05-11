@@ -29,7 +29,7 @@ export function useMintTestnetCoins() {
         target: `${CONSTANTS.assetPackage}::my_asset::mint`,
         arguments: [
           txb.object(CONSTANTS.assetTreasury),
-          txb.pure.u64(10000000),
+          txb.pure.u64(10000000000),
           txb.pure.address(account.address),
         ],
       });
@@ -39,7 +39,7 @@ export function useMintTestnetCoins() {
         target: `${CONSTANTS.stablePackage}::my_stable::mint`,
         arguments: [
           txb.object(CONSTANTS.stableTreasury),
-          txb.pure.u64(10000000),
+          txb.pure.u64(10000000000),
           txb.pure.address(account.address),
         ],
       });
