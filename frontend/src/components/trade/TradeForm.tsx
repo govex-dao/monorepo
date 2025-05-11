@@ -305,7 +305,8 @@ const TradeForm: React.FC<TradeFormProps> = ({
     });
 
     // Find and merge coins if needed
-    const amountBig = amount;
+// Find and merge coins if needed
+    const amountBig = amount; // Assuming 'amount' is already a bigint
     const sortedCoins = [...coins.data].sort((a, b) =>
       Number(BigInt(b.balance) - BigInt(a.balance)),
     );
@@ -314,32 +315,51 @@ const TradeForm: React.FC<TradeFormProps> = ({
       throw new Error(`No ${fromToken.symbol} coins available in wallet`);
     }
 
-    let coinToUse;
+    let coinToUseForSplit; // This will be the TransactionArgument for splitCoins
+
     if (BigInt(sortedCoins[0].balance) >= amountBig) {
-      coinToUse = sortedCoins[0].coinObjectId;
+      // If a single coin is sufficient, create a TransactionArgument for it.
+      coinToUseForSplit = txb.object(sortedCoins[0].coinObjectId);
     } else {
-      // Merge coins until we have enough
+      // We need to merge coins.
       let totalBalance = 0n;
-      const coinsToMerge = [];
+      const coinsToMergeObjectIds: string[] = []; // Store object IDs for merging
 
       for (const coin of sortedCoins) {
         totalBalance += BigInt(coin.balance);
-        coinsToMerge.push(coin.coinObjectId);
+        coinsToMergeObjectIds.push(coin.coinObjectId);
         if (totalBalance >= amountBig) break;
       }
 
       if (totalBalance < amountBig) {
-        throw new Error(`Insufficient ${fromToken.symbol} balance in wallet`);
+        throw new Error(
+          `Insufficient ${fromToken.symbol} balance. Need ${amountBig.toString()}, have ${totalBalance.toString()}`,
+        );
       }
 
-      coinToUse = txb.mergeCoins(
-        txb.object(coinsToMerge[0]),
-        coinsToMerge.slice(1).map((id) => txb.object(id)),
-      );
+      // The first coin in coinsToMergeObjectIds is the destination for the merge.
+      // Create a TransactionArgument for this destination coin.
+      const destinationCoinArg = txb.object(coinsToMergeObjectIds[0]);
+      const sourceCoinArgs = coinsToMergeObjectIds
+        .slice(1)
+        .map((id) => txb.object(id));
+
+      // Only call mergeCoins if there are actual source coins to merge into the destination.
+      if (sourceCoinArgs.length > 0) {
+        txb.mergeCoins(destinationCoinArg, sourceCoinArgs);
+        // This command schedules the merge. In the transaction plan, `destinationCoinArg`
+        // will represent the coin after merging.
+      }
+      
+      // The coin to use for splitting is this `destinationCoinArg`,
+      // which represents the coin that will have funds merged into it.
+      coinToUseForSplit = destinationCoinArg;
     }
 
-    // Split exact amount needed
-    const [splitCoin] = txb.splitCoins(txb.object(coinToUse), [
+    // Now, `coinToUseForSplit` is always a TransactionArgument.
+    // It correctly refers to either the single coin object or the
+    // destination coin object of a merge operation. This is what txb.splitCoins needs.
+    const [splitCoin] = txb.splitCoins(coinToUseForSplit, [
       txb.pure.u64(amountBig.toString()),
     ]);
 
