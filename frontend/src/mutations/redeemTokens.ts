@@ -191,7 +191,7 @@ export function useRedeemTokensMutation() {
                 0n,
               );
 
-              if (tokenBalance > commonAmount) {
+              if (tokenBalance > commonAmount && commonAmount > 0n) {
                 txb.moveCall({
                   target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
                   arguments: [
@@ -271,7 +271,7 @@ export function useRedeemTokensMutation() {
                 0n,
               );
 
-              if (tokenBalance > commonAmount) {
+              if (tokenBalance > commonAmount && commonAmount > 0n) {
                 txb.moveCall({
                   target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
                   arguments: [
