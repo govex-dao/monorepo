@@ -25,7 +25,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
     if (value === null) return "N/A";
     if (value === 0) return "0.0000"; // Always show 4 decimal places for zero
     const basisPoints = Math.pow(10, asset_decimals - stable_decimals);
-    const adjustedValue = value / (basisPoints * 10000 * 100000000);
+    const adjustedValue = value / (basisPoints * 1000000000000); 
     return adjustedValue.toFixed(5);
   };
 

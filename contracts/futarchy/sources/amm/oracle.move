@@ -119,17 +119,35 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 }
 
 fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
+    assert!(oracle.last_timestamp >= oracle.last_window_end, ETIMESTAMP_REGRESSION);
     // Close any partial window
+    let diff = oracle.last_timestamp - oracle.last_window_end;
+    let time_to_finish_last_window: u64;
 
-    let time_to_finish_last_window =
-        TWAP_PRICE_CAP_WINDOW - (oracle.last_timestamp - oracle.last_window_end);
+    if (diff == 0) {
+        // Case 1: oracle.last_timestamp is EXACTLY oracle.last_window_end.
+        // Stage 1 needs to process a full window duration (if time_since_last_update allows).
+        time_to_finish_last_window = TWAP_PRICE_CAP_WINDOW;
+    } else {
+        // Case 2: oracle.last_timestamp is AFTER oracle.last_window_end.
+        let remainder = diff % TWAP_PRICE_CAP_WINDOW;
+        if (remainder == 0) {
+            // Sub-case 2a: oracle.last_timestamp is on a SUBSEQUENT window boundary.
+            // The segment leading to *this* last_timestamp is complete. Stage 1 does 0 work.
+            time_to_finish_last_window = 0;
+        } else {
+            // Sub-case 2b: oracle.last_timestamp is partway through a segment after last_window_end.
+            time_to_finish_last_window = TWAP_PRICE_CAP_WINDOW - remainder;
+        }
+    };
     let time_since_last_update = timestamp - oracle.last_timestamp;
     let additional_time_to_include = std::u64::min(
         time_to_finish_last_window,
         time_since_last_update,
     );
-    if (additional_time_to_include < TWAP_PRICE_CAP_WINDOW) {
-        let timestamp_to_finish_last_window = oracle.last_timestamp  + additional_time_to_include;
+
+    if ( additional_time_to_include != 0) {
+        let timestamp_to_finish_last_window= oracle.last_timestamp + additional_time_to_include;
         intra_window_accumulation(
             oracle,
             price,

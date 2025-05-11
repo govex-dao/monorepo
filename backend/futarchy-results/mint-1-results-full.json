@@ -1,5 +1,5 @@
 {
-  "digest": "875k82r4BNASpZ1oUU4F8d4pBjv5iyo7xDCF695Qijy7",
+  "digest": "5bFrt6gGDb8DLQEz8Ehv5D1Z1q5nx4NM1A1pCZotHxf7",
   "effects": {
     "messageVersion": "v1",
     "status": {
@@ -15,30 +15,30 @@
     "modifiedAtVersions": [
       {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "sequenceNumber": "421122008"
+        "sequenceNumber": "421335969"
       },
       {
         "objectId": "0xf01d1649e8c6ba815e34b2d4395d2210b9910dc67661ee484038ac9bd4c1fc3c",
-        "sequenceNumber": "421122008"
+        "sequenceNumber": "421149567"
       }
     ],
     "sharedObjects": [
       {
         "objectId": "0xf01d1649e8c6ba815e34b2d4395d2210b9910dc67661ee484038ac9bd4c1fc3c",
-        "version": 421122008,
-        "digest": "FFEYBa1GTyvn6SVoSd2SC9KH6ptLDwLAeKqWPbqcNtjJ"
+        "version": 421149567,
+        "digest": "GDc5YnRpd6Ds8hLi13vQVGbC4pmgAU2bmgPFDNbfEKpo"
       }
     ],
-    "transactionDigest": "875k82r4BNASpZ1oUU4F8d4pBjv5iyo7xDCF695Qijy7",
+    "transactionDigest": "5bFrt6gGDb8DLQEz8Ehv5D1Z1q5nx4NM1A1pCZotHxf7",
     "created": [
       {
         "owner": {
           "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
         },
         "reference": {
-          "objectId": "0x07e3ff21c2b5171dcb346e199fc276148c6c31a34498bb8ae7a474fc5d8e4878",
-          "version": 421122009,
-          "digest": "5BUHz61hbyvXrpSWQcgEZFeeXudqExxjQA5KNywBpg99"
+          "objectId": "0x43329c6cbd6eda8afe95b6abf357b0a88e029ca33ea120d1438e4f94014e8aba",
+          "version": 421335970,
+          "digest": "2KaPZmS6Hqo9mqtzKzvGcy4HzCHjYuTWvPUTSnEG45hr"
         }
       }
     ],
@@ -49,8 +49,8 @@
         },
         "reference": {
           "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-          "version": 421122009,
-          "digest": "7GErBGqoidifCddzCh82Z2ow9qZRCXU9RgcxhdW3zj9W"
+          "version": 421335970,
+          "digest": "D3oUPTLz55tDBQoctJHQSv5HpTbEBjGJmLf4pc6zXnBq"
         }
       },
       {
@@ -61,8 +61,8 @@
         },
         "reference": {
           "objectId": "0xf01d1649e8c6ba815e34b2d4395d2210b9910dc67661ee484038ac9bd4c1fc3c",
-          "version": 421122009,
-          "digest": "Aj1u1cGtnJN5E1SPbmWiSXfiAMzwJLtBFdycxn3w5hMh"
+          "version": 421335970,
+          "digest": "3KxT4TzkWeP598nwsSmVygijNVKpey17FyNecfSmCpk2"
         }
       }
     ],
@@ -72,13 +72,14 @@
       },
       "reference": {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "version": 421122009,
-        "digest": "7GErBGqoidifCddzCh82Z2ow9qZRCXU9RgcxhdW3zj9W"
+        "version": 421335970,
+        "digest": "D3oUPTLz55tDBQoctJHQSv5HpTbEBjGJmLf4pc6zXnBq"
       }
     },
     "dependencies": [
+      "5DxaxoxVhodbEMjHN5uY1bn58tn2KL5g5gLW9gEt3j67",
       "6Lj8sQGJzDhMcjucGLCXjgecYhSDarh7k342uTsfiKT5",
-      "9EqQNZmLDHxEhU7JBUsjTVHPwanHsRHSHMYHw2juh33h"
+      "EJLdbmyKNY9WnjdH2XAt4aqMnwKGQFCWNEP3nt1bzPdD"
     ]
   },
   "objectChanges": [
@@ -90,9 +91,9 @@
       },
       "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
       "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-      "version": "421122009",
-      "previousVersion": "421122008",
-      "digest": "7GErBGqoidifCddzCh82Z2ow9qZRCXU9RgcxhdW3zj9W"
+      "version": "421335970",
+      "previousVersion": "421335969",
+      "digest": "D3oUPTLz55tDBQoctJHQSv5HpTbEBjGJmLf4pc6zXnBq"
     },
     {
       "type": "mutated",
@@ -104,9 +105,9 @@
       },
       "objectType": "0x2::coin::TreasuryCap<0xbaa063d1b0c53946783b948b815e18a1386936a16c9606e735a68018a78f1e04::my_asset::MY_ASSET>",
       "objectId": "0xf01d1649e8c6ba815e34b2d4395d2210b9910dc67661ee484038ac9bd4c1fc3c",
-      "version": "421122009",
-      "previousVersion": "421122008",
-      "digest": "Aj1u1cGtnJN5E1SPbmWiSXfiAMzwJLtBFdycxn3w5hMh"
+      "version": "421335970",
+      "previousVersion": "421149567",
+      "digest": "3KxT4TzkWeP598nwsSmVygijNVKpey17FyNecfSmCpk2"
     },
     {
       "type": "created",
@@ -115,9 +116,9 @@
         "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
       },
       "objectType": "0x2::coin::Coin<0xbaa063d1b0c53946783b948b815e18a1386936a16c9606e735a68018a78f1e04::my_asset::MY_ASSET>",
-      "objectId": "0x07e3ff21c2b5171dcb346e199fc276148c6c31a34498bb8ae7a474fc5d8e4878",
-      "version": "421122009",
-      "digest": "5BUHz61hbyvXrpSWQcgEZFeeXudqExxjQA5KNywBpg99"
+      "objectId": "0x43329c6cbd6eda8afe95b6abf357b0a88e029ca33ea120d1438e4f94014e8aba",
+      "version": "421335970",
+      "digest": "2KaPZmS6Hqo9mqtzKzvGcy4HzCHjYuTWvPUTSnEG45hr"
     }
   ],
   "confirmedLocalExecution": false
