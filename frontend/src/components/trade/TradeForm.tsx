@@ -305,7 +305,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
     });
 
     // Find and merge coins if needed
-// Find and merge coins if needed
+    // Find and merge coins if needed
     const amountBig = amount; // Assuming 'amount' is already a bigint
     const sortedCoins = [...coins.data].sort((a, b) =>
       Number(BigInt(b.balance) - BigInt(a.balance)),
@@ -350,7 +350,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
         // This command schedules the merge. In the transaction plan, `destinationCoinArg`
         // will represent the coin after merging.
       }
-      
+
       // The coin to use for splitting is this `destinationCoinArg`,
       // which represents the coin that will have funds merged into it.
       coinToUseForSplit = destinationCoinArg;

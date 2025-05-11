@@ -133,7 +133,7 @@ public(package) fun split(
     ctx: &mut TxContext,
 ) {
     assert!(amount > 0, EZERO_AMOUNT);
-    assert!(token.balance >= amount, EINSUFFICIENT_BALANCE);
+    assert!(token.balance > amount, EINSUFFICIENT_BALANCE);
 
     token.balance = token.balance - amount;
 
