@@ -32,7 +32,9 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
     // Note: Math.pow can be slow; direct multiplication/division might be marginally faster
     // if performance is critical, but clarity is good here.
 
-    const adjustedValue = (value / ON_CHAIN_PRICE_SCALING_FACTOR) * Math.pow(10, asset_decimals - stable_decimals);
+    const adjustedValue =
+      (value / ON_CHAIN_PRICE_SCALING_FACTOR) *
+      Math.pow(10, asset_decimals - stable_decimals);
 
     return adjustedValue.toFixed(5);
   };
