@@ -133,7 +133,6 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
     // This is a pre-condition check, assuming the state was valid before this call.
     assert!(oracle.last_timestamp >= oracle.last_window_end, ETIMESTAMP_REGRESSION);
 
-
     // --- Handle Edge Case: No time passed ---
     let time_since_last_update = timestamp - oracle.last_timestamp;
 
@@ -164,7 +163,6 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
         // If end_timestamp_stage1 hit a window boundary, oracle.last_window_end and TWAP state are also updated.
     };
 
-
     // --- Stage 2: Process all full windows that fit *after* Stage 1 ended ---
     // The starting point for these full windows is the current oracle.last_timestamp
     // (which is the end timestamp of the segment processed in Stage 1).
@@ -187,7 +185,6 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
         // After this call, oracle.last_timestamp and oracle.last_window_end are updated to end_timestamp_stage2.
         // The oracle's TWAP state (last_window_twap, cumulative_price) is also updated for these full windows.
     };
-
 
     // --- Stage 3: Process any remaining partial window after Stage 2 ended ---
     // The starting point is the current oracle.last_timestamp

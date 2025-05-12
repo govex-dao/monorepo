@@ -123,7 +123,10 @@ const MarketPriceChart = ({
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const seriesRefs = useRef<ISeriesApi<"Line">[]>([]);
   const [selectedRange, setSelectedRange] = useState("MAX");
-  const decimalAdjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
+  const decimalAdjustmentFactor = Math.pow(
+    10,
+    asset_decimals - stable_decimals,
+  );
   const handleRangeSelect = (range: string) => {
     setSelectedRange(range);
     if (!chartRef.current) return;
