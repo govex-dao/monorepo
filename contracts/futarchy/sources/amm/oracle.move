@@ -26,6 +26,7 @@ const EOVERFLOW_V_FLAT: u64 = 8;
 const EOVERFLOW_S_DEV_MAG: u64 = 9;
 const EOVERFLOW_BASE_PRICE_SUM_FINAL: u64 = 10;
 const EOVERFLOW_V_SUM_PRICES_ADD: u64 = 11;
+const EINTERNAL_TWAP_ERROR: u64 = 12;
 
 // ======== Configuration Struct ========
 public struct Oracle has key, store {
@@ -94,21 +95,27 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     // Sanity time checks
     assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
 
-    // Ensure the TWAP delay has finished.
     let delay_threshold = oracle.market_start_time + oracle.twap_start_delay;
+
+    // If current timestamp is before delay threshold, we cannot yet accumulate for TWAP.
+    // This observation is ignored for TWAP calculation purposes.
     if (timestamp < delay_threshold) {
-        // Do nothing if before TWAP start delay
-        return
+        return // Do nothing if before TWAP start delay
     };
 
-    // If this is the first observation after delay arrives and last_timestamp is still below the threshold,
-    // update it so that accumulation starts strictly at the end of the delay.
-    if (oracle.last_timestamp < delay_threshold) {
-        oracle.last_timestamp = delay_threshold;
-        // Initialize last_window_end to the delay threshold as well, so the first window starts here.
-        oracle.last_window_end = delay_threshold;
-        // Initialize last_window_end_cumulative_price - since no time elapsed yet at threshold, it's 0.
-        oracle.last_window_end_cumulative_price = 0; // Assuming total_cumulative_price is also 0 initially
+    // Now we know timestamp >= delay_threshold.
+    // Check if this is the first observation at or after the delay threshold where accumulation
+    // should begin. We use last_window_end == 0 as the flag because it's initialized to 0
+    // and only updated when accumulation starts from the delay threshold or crosses window boundaries *after* it.
+    let is_first_observation_after_delay = oracle.last_window_end == 0;
+
+    if (is_first_observation_after_delay) {
+        // This IS the transition point. Set the accumulation start points to the delay threshold.
+        // This ensures that accumulation logic begins from the correct time base.
+        oracle.last_timestamp = delay_threshold; // Start accumulating from the threshold
+        oracle.last_window_end = delay_threshold; // The first window boundary is at the threshold
+        oracle.last_window_end_cumulative_price = 0; // Cumulative price starts at 0 from this new boundary
+        // oracle.total_cumulative_price should already be 0 if we handled observations before delay correctly (by returning).
     };
 
     // Avoid multiplying by 0 time. Also handles the very first observation case.
@@ -119,69 +126,87 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 }
 
 fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
+    // --- Input Validation ---
+    // Ensure timestamp is not regressing
+    assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
+    // Ensure initial state is consistent (last_timestamp should not be before the window end it relates to)
+    // This is a pre-condition check, assuming the state was valid before this call.
     assert!(oracle.last_timestamp >= oracle.last_window_end, ETIMESTAMP_REGRESSION);
-    // Close any partial window
-    let diff = oracle.last_timestamp - oracle.last_window_end;
-    let time_to_finish_last_window: u64;
 
-    if (diff == 0) {
-        // Case 1: oracle.last_timestamp is EXACTLY oracle.last_window_end.
-        // Stage 1 needs to process a full window duration (if time_since_last_update allows).
-        time_to_finish_last_window = TWAP_PRICE_CAP_WINDOW;
-    } else {
-        // Case 2: oracle.last_timestamp is AFTER oracle.last_window_end.
-        let remainder = diff % TWAP_PRICE_CAP_WINDOW;
-        if (remainder == 0) {
-            // Sub-case 2a: oracle.last_timestamp is on a SUBSEQUENT window boundary.
-            // The segment leading to *this* last_timestamp is complete. Stage 1 does 0 work.
-            time_to_finish_last_window = 0;
-        } else {
-            // Sub-case 2b: oracle.last_timestamp is partway through a segment after last_window_end.
-            time_to_finish_last_window = TWAP_PRICE_CAP_WINDOW - remainder;
-        }
-    };
+
+    // --- Handle Edge Case: No time passed ---
     let time_since_last_update = timestamp - oracle.last_timestamp;
-    let additional_time_to_include = std::u64::min(
-        time_to_finish_last_window,
-        time_since_last_update,
+
+    // --- Stage 1: Accumulate for the initial partial window segment ---
+    // This segment starts at oracle.last_timestamp and ends at the first of:
+    // 1. The next window boundary (relative to oracle.last_window_end).
+    // 2. The final input timestamp.
+
+    let diff_from_last_boundary = oracle.last_timestamp - oracle.last_window_end;
+    let elapsed_in_current_segment = diff_from_last_boundary % TWAP_PRICE_CAP_WINDOW;
+
+    let time_to_next_boundary = TWAP_PRICE_CAP_WINDOW - elapsed_in_current_segment;
+
+    let duration_stage1 = std::u64::min(
+        time_to_next_boundary, // Limit by the time until the next window boundary
+        time_since_last_update, // Limit by the total time available until the target timestamp
     );
 
-    if (additional_time_to_include != 0) {
-        let timestamp_to_finish_last_window = oracle.last_timestamp + additional_time_to_include;
+    if (duration_stage1 > 0) {
+        let end_timestamp_stage1 = oracle.last_timestamp + duration_stage1;
         intra_window_accumulation(
-            oracle,
+            oracle, // Passes mutable reference, state will be updated
             price,
-            additional_time_to_include,
-            timestamp_to_finish_last_window,
+            duration_stage1,
+            end_timestamp_stage1, // This timestamp becomes the new oracle.last_timestamp
         );
+        // After this call, oracle.last_timestamp is updated to end_timestamp_stage1.
+        // If end_timestamp_stage1 hit a window boundary, oracle.last_window_end and TWAP state are also updated.
     };
 
-    // Process all full windows
-    if (timestamp > (oracle.last_window_end + TWAP_PRICE_CAP_WINDOW)) {
-        let time_since_last_window_end = timestamp - oracle.last_window_end;
-        let full_windows_since_last_window_end = (
-            (time_since_last_window_end as u128) / (TWAP_PRICE_CAP_WINDOW as u128),
+
+    // --- Stage 2: Process all full windows that fit *after* Stage 1 ended ---
+    // The starting point for these full windows is the current oracle.last_timestamp
+    // (which is the end timestamp of the segment processed in Stage 1).
+
+    let time_remaining_after_stage1 = timestamp - oracle.last_timestamp; // Use updated oracle.last_timestamp
+
+    if (time_remaining_after_stage1 >= TWAP_PRICE_CAP_WINDOW) {
+        let num_full_windows = time_remaining_after_stage1 / TWAP_PRICE_CAP_WINDOW;
+
+        // Calculate the end timestamp after processing these full windows.
+        // Start from the *current* oracle.last_timestamp (end of Stage 1 segment).
+        let end_timestamp_stage2 = oracle.last_timestamp + num_full_windows * TWAP_PRICE_CAP_WINDOW;
+
+        multi_full_window_accumulation(
+            oracle, // Passes mutable reference, state will be updated
+            price,
+            num_full_windows,
+            end_timestamp_stage2, // This timestamp becomes the new oracle.last_timestamp and oracle.last_window_end
         );
-        // Must be at least one full window
-        if (full_windows_since_last_window_end > 0) {
-            let last_full_window_end =
-                oracle.last_window_end + TWAP_PRICE_CAP_WINDOW * (full_windows_since_last_window_end as u64);
-            multi_full_window_accumulation(
-                oracle,
-                price,
-                (full_windows_since_last_window_end as u64),
-                last_full_window_end,
-            );
-        };
+        // After this call, oracle.last_timestamp and oracle.last_window_end are updated to end_timestamp_stage2.
+        // The oracle's TWAP state (last_window_twap, cumulative_price) is also updated for these full windows.
     };
 
-    // Process any remaining partial window
-    if (timestamp > oracle.last_window_end) {
-        let additional_time_to_include = timestamp - oracle.last_timestamp;
-        if (additional_time_to_include > 0) {
-            intra_window_accumulation(oracle, price, additional_time_to_include, timestamp);
-        }
+
+    // --- Stage 3: Process any remaining partial window after Stage 2 ended ---
+    // The starting point is the current oracle.last_timestamp
+    // (which is the end timestamp of the segment processed in Stage 2, or Stage 1 if Stage 2 was skipped).
+
+    let duration_stage3 = timestamp - oracle.last_timestamp; // Use updated oracle.last_timestamp
+
+    // If duration_stage3 > 0, there is time left to accumulate up to the final timestamp.
+    if (duration_stage3 > 0) {
+        intra_window_accumulation(
+            oracle, // Passes mutable reference, state will be updated
+            price,
+            duration_stage3,
+            timestamp, // The end timestamp for this final segment is the target timestamp
+        );
+        // After this call, oracle.last_timestamp is updated to the final input timestamp.
+        // If the final timestamp hits a window boundary, oracle.last_window_end and TWAP state are also updated.
     };
+    assert!(oracle.last_timestamp == timestamp, EINTERNAL_TWAP_ERROR); // Assuming an internal error code
 }
 
 fun intra_window_accumulation(

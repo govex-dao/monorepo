@@ -20,12 +20,20 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
 }) => {
   const outcomeCount = outcomeMessages.length;
 
-  // Format TWAP value consistently
   const formatTwap = (value: number | null): string => {
     if (value === null) return "N/A";
-    if (value === 0) return "0.0000"; // Always show 4 decimal places for zero
-    const basisPoints = Math.pow(10, asset_decimals - stable_decimals);
-    const adjustedValue = value / (basisPoints * 1000000000000);
+    if (value === 0) return "0.00000";
+
+    const ON_CHAIN_PRICE_SCALING_FACTOR = 1000000000000; // 1e12
+
+    // Combined calculation:
+    // (value / 1e12) * 10^(asset_decimals - stable_decimals)
+    // which is value * 10^(asset_decimals - stable_decimals - 12)
+    // Note: Math.pow can be slow; direct multiplication/division might be marginally faster
+    // if performance is critical, but clarity is good here.
+
+    const adjustedValue = (value / ON_CHAIN_PRICE_SCALING_FACTOR) * Math.pow(10, asset_decimals - stable_decimals);
+
     return adjustedValue.toFixed(5);
   };
 

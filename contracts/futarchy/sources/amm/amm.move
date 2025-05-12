@@ -397,7 +397,7 @@ public fun get_k(pool: &LiquidityPool): u128 {
 }
 
 public fun check_price_under_max(price: u128) {
-    let max_price = (u64::max_value!() as u128);
+    let max_price = (u64::max_value!() as u128) * (BASIS_POINTS as u128);
     assert!(price <= max_price, EPRICE_TOO_HIGH)
 }
 
