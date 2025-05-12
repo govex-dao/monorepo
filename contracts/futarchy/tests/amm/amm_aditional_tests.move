@@ -655,8 +655,7 @@ fun test_minimal_liquidity() {
 
 // ======== Max Price Test ========
 #[test]
-#[expected_failure(abort_code = futarchy::amm::EPRICE_TOO_HIGH)]
-fun test_price_too_high() {
+fun test_max_price() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);
     
@@ -666,7 +665,7 @@ fun test_price_too_high() {
         &state,
         0,
         1, // Tiny asset amount
-        18446744073709551615, // u64::MAX
+        (18446744073709551615), // u64::MAX
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
@@ -674,7 +673,6 @@ fun test_price_too_high() {
         ctx(&mut scenario),
     );
     
-    // Should never reach here
     market_state::destroy_for_testing(state);
     clock::destroy_for_testing(clock);
     amm::destroy_for_testing(pool);

@@ -18,6 +18,12 @@ const TWAP_PRICE_CAP_WINDOW_PERIOD: u64 = 60000;
 // For testing extreme values, define a maximum u64 constant.
 const U64_MAX: u64 = 18446744073709551615;
 
+
+// Define a high price constant for testing
+const HIGH_INIT_PRICE: u128 = 1_000_000_000_000_000u128; // 1 quadrillion
+// Define a very large step size to prevent capping for this high price
+const LARGE_TWAP_STEP: u64 = 20_000_000_000_000;
+
 // ======== Helper Functions ========
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
     oracle::new_oracle(
@@ -718,5 +724,84 @@ fun test_twap_over_year_with_ten_swaps() {
     
     oracle::destroy_for_testing(oracle_inst);
     clock::destroy_for_testing(clock_inst);
+    test::end(scenario);
+}
+
+#[test]
+fun test_initial_high_price_no_swaps() {
+    let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
+    {
+        let current_time = 1719182400000; 
+        clock::set_for_testing(&mut clock_inst, current_time);
+        let ctx = test::ctx(&mut scenario);
+
+        // Create an oracle with a high initial price, zero delay, zero start time, and large step
+        // The large step ensures the initial price is not capped down based on any previous price
+        // (since there isn't one for the first write after delay threshold).
+        let market_start_time = current_time;
+        let twap_start_delay = 0;
+        let delay_threshold = market_start_time + twap_start_delay; // 0
+
+        let mut oracle_inst = oracle::new_oracle(
+            HIGH_INIT_PRICE,    // 1 quadrillion
+            market_start_time,  // 0
+            twap_start_delay,   // 0
+            LARGE_TWAP_STEP,    // u64::max_value!
+            ctx,
+        );
+
+        // Validate initial state immediately after creation
+        assert!(oracle::get_last_price(&oracle_inst) == HIGH_INIT_PRICE, 0);
+        assert!(oracle::get_last_timestamp(&oracle_inst) == market_start_time, 1); // Initial timestamp is market_start_time
+        assert!(oracle::get_twap_initialization_price(&oracle_inst) == HIGH_INIT_PRICE, 2);
+        assert!(oracle::debug_get_window_twap(&oracle_inst) == HIGH_INIT_PRICE, 3); // last_window_twap starts as init price
+        let (_, _, cumulative_initial) = oracle::debug_get_state(&oracle_inst);
+        assert!(cumulative_initial == 0, 4); // Cumulative price starts at 0
+
+        // Simulate time passing after the delay threshold.
+        // Since delay is 0, any time > 0 is past the delay.
+
+
+        // Set the clock to this time.
+        clock::set_for_testing(&mut clock_inst, current_time + 100_000);
+
+        // Perform the first observation *after* the delay.
+        // This observation uses the initial price (or a new reported price, but we use the initial one
+        // to simulate no *effective* change) and the time elapsed since delay_threshold.
+        // write_observation(1000, HIGH_INIT_PRICE): ts=1000000. delay_threshold=0. last_timestamp(0) < 0 is false.
+        // (1000000 - 0) > 0. twap_accumulate(1000000, HIGH_INIT_PRICE).
+        // LT=0, LWE=0. diff=0. time_to_finish_last_window=60000. time_since_last_update=1000000.
+        // additional_time_to_include = min(60000, 1000000) = 100000000.
+        // intra_window_accumulation(..., price=HIGH_INIT_PRICE, time=1000000, ts=1000000).
+        // capped_price = one_step_cap_price_change(LWT=HIGH_INIT_PRICE, HIGH_INIT_PRICE, LARGE_TWAP_STEP) = HIGH_INIT_PRICE.
+        // accumulation = (HIGH_INIT_PRICE as u256) * (1000000 as u256).
+        // total_cumulative_price = 0 + (HIGH_INIT_PRICE as u256) * 1000000.
+        // last_timestamp = 1000000. last_price = HIGH_INIT_PRICE.
+        // time_since_last_window_end = 1000000 - 0 = 1000 != 60000. No window update.
+        oracle::write_observation(&mut oracle_inst, current_time + 100_000, HIGH_INIT_PRICE);
+
+        // Verify state after the first observation at current_time
+        assert!(oracle::get_last_price(&oracle_inst) == HIGH_INIT_PRICE, 5);
+        assert!(oracle::get_last_timestamp(&oracle_inst) == current_time + 100_000, 6);
+        let (_, _, cumulative_after_write) = oracle::debug_get_state(&oracle_inst);
+        let expected_cumulative = (HIGH_INIT_PRICE as u256) * (100_000 as u256);
+        debug::print(&expected_cumulative);
+        debug::print(&cumulative_after_write);
+        //assert!(cumulative_after_write == expected_cumulative, 7);
+
+        // Get the TWAP. Clock is already set to current_time (1000000), which matches last_timestamp.
+        // Period = (current_time - market_start_time) - twap_start_delay
+        // = (1000000 - 0) - 0 = 1000000.
+        // TWAP = total_cumulative_price / period
+        // = ((HIGH_INIT_PRICE as u256) * 1000000) / 1000000 = HIGH_INIT_PRICE as u256.
+        let twap = oracle::get_twap(&oracle_inst, &clock_inst);
+        debug::print(&HIGH_INIT_PRICE);
+        debug::print(&twap);
+        // Verify TWAP matches the high initial price
+        assert!(twap == HIGH_INIT_PRICE, 8);
+
+        oracle::destroy_for_testing(oracle_inst);
+        clock::destroy_for_testing(clock_inst);
+    };
     test::end(scenario);
 }

@@ -123,7 +123,7 @@ const MarketPriceChart = ({
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const seriesRefs = useRef<ISeriesApi<"Line">[]>([]);
   const [selectedRange, setSelectedRange] = useState("MAX");
-  const basisPoints = Math.pow(10, asset_decimals - stable_decimals);
+  const decimalAdjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
   const handleRangeSelect = (range: string) => {
     setSelectedRange(range);
     if (!chartRef.current) return;
@@ -204,8 +204,8 @@ const MarketPriceChart = ({
   // Calculate initial prices either from the provided amounts or fallback to default
   const getInitialPrices = () => {
     const numOutcomes = Number(outcome_count);
+    const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals); // Use it here
 
-    // If we have valid initial outcome amounts, calculate prices from them
     if (
       initial_outcome_amounts &&
       initial_outcome_amounts.length >= numOutcomes * 2
@@ -214,29 +214,25 @@ const MarketPriceChart = ({
         const assetAmount = BigInt(initial_outcome_amounts[i * 2] || "0");
         const stableAmount = BigInt(initial_outcome_amounts[i * 2 + 1] || "0");
 
-        // Check if we have valid amounts to calculate price
         if (assetAmount > 0n && stableAmount > 0n) {
-          const price = Number(stableAmount) / Number(assetAmount); // <-- Fixed here
-          return price;
+          const rawRatio = Number(stableAmount) / Number(assetAmount);
+          return rawRatio * adjustmentFactor; // Apply adjustment
         }
-        // Fallback to default price calculation if amounts are invalid
-        const fallbackPrice =
+        const fallbackRawRatio =
           BigInt(assetValue) === 0n
             ? 0
             : Number(BigInt(stableValue)) / Number(BigInt(assetValue));
-        return fallbackPrice;
+        return fallbackRawRatio * adjustmentFactor; // Apply adjustment
       });
-
       return prices;
     }
 
-    // Fallback to single default price for all outcomes
-    const defaultPrice =
+    const defaultRawRatio =
       BigInt(assetValue) === 0n
         ? 0
         : Number(BigInt(stableValue)) / Number(BigInt(assetValue));
-    const prices = Array(numOutcomes).fill(defaultPrice);
-    return prices;
+    const defaultPrice = defaultRawRatio * adjustmentFactor; // Apply adjustment
+    return Array(numOutcomes).fill(defaultPrice);
   };
 
   const initialPrices = getInitialPrices();
@@ -244,6 +240,7 @@ const MarketPriceChart = ({
   const chartData = React.useMemo(() => {
     if (!swapEvents || !tradingStart) return [];
 
+    const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
     // First, create an array of actual price updates with timestamps
     const priceUpdates = [
       {
@@ -256,12 +253,12 @@ const MarketPriceChart = ({
     [...swapEvents]
       .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
       .forEach((event) => {
+        const rawEventPriceOnChain = Number(BigInt(event.price));
+        const atomicRatio = rawEventPriceOnChain / 1e12;
         const time = Math.floor(
           new Date(Number(event.timestamp)).getTime() / 1000,
         );
-        const priceValue =
-          Number(BigInt(event.price)) /
-          (Number(BigInt(basisPoints)) * 1000000000000); //10^18
+        const priceValue = atomicRatio * adjustmentFactor;
 
         // Copy last known prices
         const lastPrices = [...priceUpdates[priceUpdates.length - 1].prices];
@@ -334,7 +331,7 @@ const MarketPriceChart = ({
     initialPrices,
     tradingStart,
     tradingEnd,
-    basisPoints,
+    decimalAdjustmentFactor,
     outcome_count,
     currentState,
   ]);
