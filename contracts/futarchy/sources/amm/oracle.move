@@ -27,6 +27,7 @@ const EOVERFLOW_S_DEV_MAG: u64 = 9;
 const EOVERFLOW_BASE_PRICE_SUM_FINAL: u64 = 10;
 const EOVERFLOW_V_SUM_PRICES_ADD: u64 = 11;
 const EINTERNAL_TWAP_ERROR: u64 = 12;
+const E_NONE_FULL_WIDOW_TWAP_DELAY: u64 = 12;
 
 // ======== Configuration Struct ========
 public struct Oracle has key, store {
@@ -62,6 +63,7 @@ public(package) fun new_oracle(
     assert!(twap_initialization_price > 0, EZERO_INITIALIZATION);
     assert!(twap_cap_step > 0, EZERO_STEP);
     assert!(twap_start_delay < ONE_WEEK_MS, ELONG_DELAY); // One week in milliseconds
+    assert!((twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY);
 
     Oracle {
         id: object::new(ctx), // Create a unique ID for the oracle
@@ -95,33 +97,20 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     // Sanity time checks
     assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
 
-    let delay_threshold = oracle.market_start_time + oracle.twap_start_delay;
+    let delay_period_end = oracle.market_start_time + oracle.twap_start_delay;
 
-    // If current timestamp is before delay threshold, we cannot yet accumulate for TWAP.
-    // This observation is ignored for TWAP calculation purposes.
-    if (timestamp < delay_threshold) {
-        return // Do nothing if before TWAP start delay
-    };
-
-    // Now we know timestamp >= delay_threshold.
-    // Check if this is the first observation at or after the delay threshold where accumulation
-    // should begin. We use last_window_end == 0 as the flag because it's initialized to 0
-    // and only updated when accumulation starts from the delay threshold or crosses window boundaries *after* it.
-    let is_first_observation_after_delay = oracle.last_window_end == 0;
-
-    if (is_first_observation_after_delay) {
-        // This IS the transition point. Set the accumulation start points to the delay threshold.
-        // This ensures that accumulation logic begins from the correct time base.
-        oracle.last_timestamp = delay_threshold; // Start accumulating from the threshold
-        oracle.last_window_end = delay_threshold; // The first window boundary is at the threshold
-        oracle.last_window_end_cumulative_price = 0; // Cumulative price starts at 0 from this new boundary
-        // oracle.total_cumulative_price should already be 0 if we handled observations before delay correctly (by returning).
-    };
-
-    // Avoid multiplying by 0 time. Also handles the very first observation case.
-    if ((timestamp - oracle.last_timestamp) > 0) {
+    if (timestamp < delay_period_end && oracle.twap_start_delay !=0) {
         twap_accumulate(oracle, timestamp, price);
-        // Update the timestamp of the last observation AFTER all calculations for the period are done.
+    };
+
+    if (timestamp > delay_period_end && oracle.last_timestamp < delay_period_end) {
+        twap_accumulate(oracle, delay_period_end, price);
+        oracle.total_cumulative_price = 0;
+        oracle.last_window_end_cumulative_price = 0;
+    };
+
+    if (timestamp > oracle.last_timestamp) {
+        twap_accumulate(oracle, timestamp, price);
     }
 }
 

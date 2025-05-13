@@ -40,6 +40,7 @@ const ETITLE_TOO_SHORT: u64 = 16;
 const ETITLE_TOO_LONG: u64 = 17;
 const EDETAILS_TOO_SHORT: u64 = 18;
 const EONE_OUTCOME: u64 = 19;
+const E_NONE_FULL_WIDOW_TWAP_DELAY: u64 = 20;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -157,7 +158,6 @@ public(package) fun create<AssetType, StableType>(
         min_asset_amount > MIN_AMM_SAFE_AMOUNT && min_stable_amount > MIN_AMM_SAFE_AMOUNT,
         EINVALID_MIN_AMOUNTS,
     );
-
     // checks that both types are for coins, but still allows regulated coins
     let _test_coin_asset = coin::zero<AssetType>(ctx);
     let _test_coin_stable = coin::zero<StableType>(ctx);
@@ -181,6 +181,8 @@ public(package) fun create<AssetType, StableType>(
 
     assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
     assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
+
+    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY); 
 
     let dao = DAO {
         id: object::new(ctx),
