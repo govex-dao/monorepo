@@ -98,43 +98,31 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
 
     let delay_threshold = oracle.market_start_time + oracle.twap_start_delay;
-    // --- Case 0: Price update at the same timestamp ---
+    // --- Case 0: No time has passed ---
     if (timestamp == oracle.last_timestamp) {
+        // If last_price update is not needed here, just return.
+        // twap_accumulate would also do nothing if called with 0 duration.
         return
     };
-
-    // --- At this point, we know timestamp > oracle.last_timestamp ---
 
     // --- Case 1: Current observation interval is entirely BEFORE delay_threshold ---
-    // (oracle.last_timestamp < delay_threshold AND timestamp <= delay_threshold)
     if (oracle.last_timestamp < delay_threshold && timestamp <= delay_threshold && oracle.twap_start_delay != 0) {
-        // Allow twap_accumulate to run. This will update last_window_twap, last_price, and last_timestamp.
-        // It will ALSO update total_cumulative_price. This accumulation is "temporary"
-        // and will be wiped if/when delay_threshold is crossed by a *future* observation.
-        // If get_twap is called (it shouldn't be if still in delay), it would see this temporary sum.
-        // The strong guards in get_twap (ETWAP_NOT_STARTED) are essential here.
         twap_accumulate(oracle, timestamp, price);
-        // oracle.last_timestamp is now `timestamp`.
         return
     };
 
-    // --- Case 2: Current observation interval CROSSES delay_threshold ---
-    // (oracle.last_timestamp < delay_threshold AND timestamp > delay_threshold)
+    // --- Case 2: Current observation interval CROSSES (or starts at and goes beyond) delay_threshold ---
+    // (oracle.last_timestamp <= delay_threshold AND timestamp > delay_threshold AND twap_start_delay != 0)
     if (oracle.last_timestamp <= delay_threshold && timestamp > delay_threshold && oracle.twap_start_delay != 0) {
-        // Part A: Process segment from oracle.last_timestamp up to delay_threshold.
-        // This call updates last_window_twap based on pre-delay segment.
-        // It also adds to total_cumulative_price, but this will be immediately reset.
-        if (delay_threshold > oracle.last_timestamp) { // Ensure there's a duration for this segment
+        // Part A: Process segment up to delay_threshold.
+        if (delay_threshold > oracle.last_timestamp) {
             twap_accumulate(oracle, delay_threshold, price);
         };
-        // After this, oracle.last_timestamp is delay_threshold.
-        // last_window_twap reflects evolution up to delay_threshold.
 
         // Part B: RESET accumulators and mark the true start of the accumulation period.
         oracle.total_cumulative_price = 0;
         oracle.last_window_end_cumulative_price = 0;
-        oracle.last_window_end = delay_threshold; // CRITICAL: Anchor for period calculation and twap_accumulate logic
-        // oracle.last_timestamp is already delay_threshold.
+        oracle.last_window_end = delay_threshold;
 
         // Part C: Process segment from delay_threshold to current `timestamp`.
         // This uses the fresh accumulators.
@@ -146,13 +134,16 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     };
 
     // --- Case 3: Current observation interval is entirely AT or AFTER delay_threshold ---
-    // (original_last_timestamp >= delay_threshold)
     // This also covers the twap_start_delay == 0 case.
-    if (oracle.last_timestamp > delay_threshold) {
-        // Now, perform accumulation for the interval [original_last_timestamp, timestamp].
-        // Since original_last_timestamp >= delay_threshold, and if initialization happened,
-        // this accumulation is part of the "true" TWAP.
+    // Condition: oracle.last_timestamp >= delay_threshold AND timestamp > oracle.last_timestamp (implicit from Case 0 check)
+    if (oracle.last_timestamp >= delay_threshold) {
+        if (oracle.last_window_end == 0) {
+            oracle.total_cumulative_price = 0;
+            oracle.last_window_end_cumulative_price = 0;
+            oracle.last_window_end = delay_threshold;
+        };
         twap_accumulate(oracle, timestamp, price);
+        return
     }
 }
 
