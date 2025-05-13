@@ -27,7 +27,7 @@ const EOVERFLOW_S_DEV_MAG: u64 = 9;
 const EOVERFLOW_BASE_PRICE_SUM_FINAL: u64 = 10;
 const EOVERFLOW_V_SUM_PRICES_ADD: u64 = 11;
 const EINTERNAL_TWAP_ERROR: u64 = 12;
-const E_NONE_FULL_WIDOW_TWAP_DELAY: u64 = 12;
+const E_NONE_FULL_WIDOW_TWAP_DELAY: u64 = 13;
 
 // ======== Configuration Struct ========
 public struct Oracle has key, store {

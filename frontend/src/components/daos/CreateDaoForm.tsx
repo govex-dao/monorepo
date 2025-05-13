@@ -218,7 +218,7 @@ const CreateDaoForm = () => {
       "The metadata object ID for the asset coin type selected above",
     stableMetadata:
       "The metadata object ID for the stable coin type selected above",
-    twapStartDelay: "Delay before TWAP calculations begin (in milliseconds)",
+    twapStartDelay: "Delay before TWAP calculations begin (in milliseconds). Must be integer number of minutes. Value will be rounded accordingly.",
     twapStepMax:
       "Maximum price change step size for TWAP price accumulation per a 60s window",
     twapThreshold:
@@ -498,9 +498,17 @@ const CreateDaoForm = () => {
             label="TWAP Start Delay"
             tooltip={tooltips.twapStartDelay}
             valueMs={formData.twapStartDelay}
-            onChange={(newValueMs) =>
-              setFormData((prev) => ({ ...prev, twapStartDelay: newValueMs }))
-            }
+            onChange={(newValueMs) => {
+              let adjustedValue = newValueMs;
+              // Ensure value is 0 or a multiple of 60000 (1 minute)
+              if (typeof newValueMs === 'number' && newValueMs !== 0) {
+                adjustedValue = Math.round(newValueMs / 60000) * 60000;
+              }
+              setFormData((prev) => ({
+                ...prev,
+                twapStartDelay: adjustedValue,
+              }));
+            }}
           />
           <TimeInput
             label="Trading Period"
