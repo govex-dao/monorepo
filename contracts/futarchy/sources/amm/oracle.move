@@ -71,7 +71,7 @@ public(package) fun new_oracle(
         last_timestamp: market_start_time,
         total_cumulative_price: 0,
         last_window_end_cumulative_price: 0,
-        last_window_end: 0,
+        last_window_end: market_start_time,
         last_window_twap: twap_initialization_price,
         twap_start_delay: twap_start_delay,
         twap_cap_step: twap_cap_step,
