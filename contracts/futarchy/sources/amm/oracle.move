@@ -126,7 +126,8 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 
         // Part C: Process segment from delay_threshold to current `timestamp`.
         // This uses the fresh accumulators.
-        if (timestamp > delay_threshold) { // Ensure there's a duration for this segment
+        if (timestamp > delay_threshold) {
+            // Ensure there's a duration for this segment
             // twap_accumulate will use oracle.last_timestamp (which is delay_threshold)
             twap_accumulate(oracle, timestamp, price);
         };
