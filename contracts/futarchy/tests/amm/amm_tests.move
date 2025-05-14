@@ -20,7 +20,7 @@ const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
 
 const BASIS_POINTS: u64 = 1_000_000_000_000;
-const TWAP_START_DELAY: u64 = 2000;
+const TWAP_START_DELAY: u64 = 60_000;
 const TWAP_STEP_MAX: u64 = 1000;
 const OUTCOME_COUNT: u64 = 2;
 
@@ -352,7 +352,7 @@ fun test_twap_updates() {
     let mut pool = setup_pool(&mut scenario, &state, &clock);
 
     // Get initial TWAP
-    clock::set_for_testing(&mut clock, 3000); // After TWAP_START_DELAY (2000)
+    clock::set_for_testing(&mut clock, 100_000); // After TWAP_START_DELAY (2000)
     let initial_twap = amm::get_twap(&mut pool, &clock);
 
     debug::print(&b"Initial TWAP:");
@@ -369,7 +369,7 @@ fun test_twap_updates() {
     );
 
     // Move time forward
-    clock::set_for_testing(&mut clock, 4000);
+    clock::increment_for_testing(&mut clock, 4000);
 
     // Get TWAP after price change
     let new_twap = amm::get_twap(&mut pool, &clock);

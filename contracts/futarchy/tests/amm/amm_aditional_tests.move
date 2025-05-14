@@ -24,7 +24,7 @@ const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
 
 const BASIS_POINTS: u64 = 1_000_000_000_000;
-const TWAP_START_DELAY: u64 = 2000;
+const TWAP_START_DELAY: u64 = 60_000;
 const TWAP_STEP_MAX: u64 = 1000;
 const OUTCOME_COUNT: u64 = 2;
 
@@ -477,7 +477,7 @@ fun test_twap_price_accuracy() {
     let mut pool = setup_pool(&mut scenario, &state, &clock);
     
     // Set initial time after TWAP_START_DELAY
-    clock::set_for_testing(&mut clock, 3000);
+    clock::set_for_testing(&mut clock, 100_000);
     
     // Get initial spot price and TWAP
     let initial_spot_price = amm::get_current_price(&pool);
@@ -513,7 +513,7 @@ fun test_twap_price_accuracy() {
     let new_spot_price = amm::get_current_price(&pool);
     
     // Move time forward a bit
-    clock::set_for_testing(&mut clock, 4000);
+    clock::increment_for_testing(&mut clock, 4000);
     
     // Get TWAP after price change but with minimal time elapsed
     let twap_short_time = amm::get_twap(&mut pool, &clock);
@@ -528,7 +528,7 @@ fun test_twap_price_accuracy() {
     assert!(twap_short_time > new_spot_price, 2);
     
     // Move time forward significantly
-    clock::set_for_testing(&mut clock, 10000); // Much later
+    clock::increment_for_testing(&mut clock, 10000); // Much later
     
     // Get TWAP after significant time has passed
     let twap_long_time = amm::get_twap(&mut pool, &clock);

@@ -22,3 +22,8 @@ cd ~
 
 # Run all setup steps in a new VM:
 # ./govex-deploy.sh all
+
+# Helper cmds
+```
+tree -I "node_modules" > repo_structure.txt
+```
