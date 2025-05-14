@@ -28,6 +28,7 @@ const ELONG_TRADING_TIME: u64 = 6;
 const ELONG_REVIEW_TIME: u64 = 7;
 const ELONG_TWAP_DELAY_TIME: u64 = 8;
 const ETWAP_INITIAL_TOO_LARGE: u64 = 9;
+const E_DELAY_NEAR_TOTAL_TRADING: u64 = 10;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1;
@@ -181,7 +182,7 @@ public entry fun create_dao<AssetType, StableType>(
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELONG_REVIEW_TIME);
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELONG_TRADING_TIME);
     assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELONG_TWAP_DELAY_TIME);
-    assert!((amm_twap_start_delay + 60_000) < MAX_TRADING_TIME); // Must have one full window of trading
+    assert!((amm_twap_start_delay + 60_000) < MAX_TRADING_TIME, E_DELAY_NEAR_TOTAL_TRADING); // Must have one full window of trading
     assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHIGH_TWAP_THRESHOLD);
     assert!(amm_twap_initial_observation <= (u64::max_value!() as u128), ETWAP_INITIAL_TOO_LARGE);
 
