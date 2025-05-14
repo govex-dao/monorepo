@@ -7,6 +7,7 @@ import { constructUrlSearchParams } from "@/utils/helpers";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import UnifiedSearch from "@/components/UnifiedSearch.tsx";
+import UnverifiedIcon from "@/components/icons/UnverifiedIcon";
 
 interface ApiProposal {
   id: number;
@@ -125,9 +126,9 @@ function ProposalCard({ proposal }: ProposalCardProps) {
             <span className="truncate font-medium text-gray-200">
               {proposal.dao_name}
             </span>
-            {proposal.dao_verified && (
+            {proposal.dao_verified ?
               <VerifiedIcon className="ml-1 flex-shrink-0" />
-            )}
+              : <UnverifiedIcon className="ml-1 flex-shrink-0" />}
           </div>
         </div>
       </div>

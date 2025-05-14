@@ -10,6 +10,7 @@ import TabSection from "../components/trade/TabSection";
 import { useTokenEvents } from "../hooks/useTokenEvents";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
+import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 
 interface StateHistory {
   id: number;
@@ -193,9 +194,11 @@ export function ProposalView() {
           <div className="w-9 h-9 rounded-full bg-gray-700 inline-block mr-2 border-2 border-gray-700" />
         )}
         <span className="text-gray-400">{proposal.dao_name}</span>
-        {proposal.dao_verified && (
+        {proposal.dao_verified ?
           <VerifiedIcon className="ml-1 -mt-1 inline-block" size={24} />
-        )}
+          :
+          <UnverifiedIcon className="ml-1 -mt-1 inline-block" size={24} />
+        }
         {": "}
         {proposal.title}
       </h1>
