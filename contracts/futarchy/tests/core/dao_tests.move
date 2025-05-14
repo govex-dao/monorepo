@@ -492,7 +492,7 @@ fun test_sign_result_entry() {
             stable_icon_url,
             std::ascii::string(ASSET_SYMBOL),
             std::ascii::string(STABLE_SYMBOL),
-            60_000,
+            DEFAULT_TWAP_START_DELAY,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,

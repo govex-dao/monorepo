@@ -106,14 +106,14 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     };
 
     // --- Case 1: Current observation interval is entirely BEFORE delay_threshold ---
-    if (oracle.last_timestamp < delay_threshold && timestamp <= delay_threshold && oracle.twap_start_delay != 0) {
+    if (oracle.last_timestamp < delay_threshold && timestamp < delay_threshold) {
         twap_accumulate(oracle, timestamp, price);
         return
     };
 
     // --- Case 2: Current observation interval CROSSES (or starts at and goes beyond) delay_threshold ---
     // (oracle.last_timestamp <= delay_threshold AND timestamp > delay_threshold AND twap_start_delay != 0)
-    if (oracle.last_timestamp <= delay_threshold && timestamp > delay_threshold && oracle.twap_start_delay != 0) {
+    if (oracle.last_timestamp < delay_threshold && timestamp >= delay_threshold) {
         // Part A: Process segment up to delay_threshold.
         if (delay_threshold > oracle.last_timestamp) {
             twap_accumulate(oracle, delay_threshold, price);
@@ -137,7 +137,7 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
     // This also covers the twap_start_delay == 0 case.
     // Condition: oracle.last_timestamp >= delay_threshold AND timestamp > oracle.last_timestamp (implicit from Case 0 check)
     if (oracle.last_timestamp >= delay_threshold) {
-        if (oracle.last_window_end == 0) {
+        if (oracle.last_timestamp == delay_threshold) {
             oracle.total_cumulative_price = 0;
             oracle.last_window_end_cumulative_price = 0;
             oracle.last_window_end = delay_threshold;
@@ -474,7 +474,7 @@ public fun test_oracle(ctx: &mut TxContext): Oracle {
     new_oracle(
         10000, // twap_initialization_price
         0, // market_start_time
-        2000, // twap_start_delay
+        60_000, // twap_start_delay
         1000, // max_bps_per_step
         ctx, // sixth argument (TxContext)
     )

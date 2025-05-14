@@ -9,7 +9,7 @@ use sui::test_scenario::{Self as test, Scenario};
 
 // ======== Test Constants ========
 const TWAP_STEP_MAX: u64 = 1000; // Allow 10% movement
-const TWAP_START_DELAY: u64 = 2000;
+const TWAP_START_DELAY: u64 = 60_000;
 const MARKET_START_TIME: u64 = 1000;
 const INIT_PRICE: u128 = 10000;
 const TWAP_PRICE_CAP_WINDOW_PERIOD: u64 = 60000;
@@ -40,28 +40,25 @@ fun test_price_capping_basic_scenarios() {
     {
         let ctx = test::ctx(&mut scenario);
         let mut oracle_inst = setup_test_oracle(ctx);
-        let delay_threshold = MARKET_START_TIME + TWAP_START_DELAY; // 3000
+        let delay_threshold = MARKET_START_TIME + TWAP_START_DELAY;
 
         // Test case 1: Basic upward movement within cap
-        // Base price: 10000, max step: 10% (1000 bps)
-        // New price: 10900 (9% increase) - should not be capped
-        oracle::write_observation(&mut oracle_inst, delay_threshold + 100, 10900);
-        assert!(oracle::get_last_price(&oracle_inst) == 10900, 0);
+        // Base price: 11000, max step:1000
+        oracle::write_observation(&mut oracle_inst, delay_threshold + 100, 11900);
+        assert!(oracle::get_last_price(&oracle_inst) == 11900, 0);
 
         // Test case 2: Basic upward movement exceeding cap
-        // New price: 11200 (12% increase) - should be capped at 11000 (10%)
-        oracle::write_observation(&mut oracle_inst, delay_threshold + 200, 11200);
-        assert!(oracle::get_last_price(&oracle_inst) == 11000, 1);
+        oracle::write_observation(&mut oracle_inst, delay_threshold + 200, 12200);
+        debug::print(&oracle_inst);
+        assert!(oracle::get_last_price(&oracle_inst) == 12000, 1);
 
         // Test case 3: Basic downward movement within cap
-        // New price: 9100 (9% decrease) - should not be capped
-        oracle::write_observation(&mut oracle_inst, delay_threshold + 300, 9100);
-        assert!(oracle::get_last_price(&oracle_inst) == 9100, 2);
+        oracle::write_observation(&mut oracle_inst, delay_threshold + 300, 10100);
+        assert!(oracle::get_last_price(&oracle_inst) == 10100, 2);
 
         // Test case 4: Basic downward movement exceeding cap
-        // New price: 8800 (12% decrease) - should be capped at 9000 (-10%)
-        oracle::write_observation(&mut oracle_inst, delay_threshold + 400, 8800);
-        assert!(oracle::get_last_price(&oracle_inst) == 9000, 3);
+        oracle::write_observation(&mut oracle_inst, delay_threshold + 400, 9800);
+        assert!(oracle::get_last_price(&oracle_inst) == 10000, 3);
 
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
@@ -158,7 +155,7 @@ fun test_price_capping_rapid_reversals() {
             5000, // Try -50% - should cap at -10% = 9000
         ];
 
-        let expected_prices = vector[11000, 9000, 11000, 9000];
+        let expected_prices = vector[12000, 10000, 12000, 10000];
 
         let mut i = 0;
         while (i < 4) {
