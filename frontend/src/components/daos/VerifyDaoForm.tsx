@@ -8,6 +8,7 @@ import DaoSearchInput from "./DaoSearchInput";
 import { CONSTANTS } from "../../constants";
 import { VerificationHistory } from "./VerificationHistory";
 import { VerifiedIcon } from "../icons/VerifiedIcon";
+import UnverifiedIcon from "../icons/UnverifiedIcon";
 
 interface DaoData {
   dao_id: string;
@@ -158,9 +159,9 @@ const VerifyDaoForm = () => {
               <div className="flex-grow min-w-0">
                 <div className="font-medium text-gray-200 truncate flex items-center">
                   {selectedDao.dao_name}
-                  {selectedDao.verification?.verified && (
+                  {selectedDao.verification?.verified ?
                     <VerifiedIcon className="ml-1 flex-shrink-0" />
-                  )}
+                    : <UnverifiedIcon className="ml-1 flex-shrink-0" />}
                 </div>
                 <div className="font-mono text-sm text-gray-400 flex items-center space-x-2">
                   <span className="truncate">
