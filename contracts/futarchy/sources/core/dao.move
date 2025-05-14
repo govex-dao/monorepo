@@ -182,7 +182,7 @@ public(package) fun create<AssetType, StableType>(
     assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
     assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
 
-    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY); 
+    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY);
 
     let dao = DAO {
         id: object::new(ctx),
