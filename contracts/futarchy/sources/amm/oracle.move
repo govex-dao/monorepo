@@ -502,17 +502,19 @@ public fun is_twap_valid(oracle: &Oracle, min_period: u64, clock: &Clock): bool 
 }
 
 #[test_only]
-public fun debug_get_full_state(oracle: &Oracle): (
+public fun debug_get_full_state(
+    oracle: &Oracle,
+): (
     u128, // last_price
-    u64,  // last_timestamp
+    u64, // last_timestamp
     u256, // total_cumulative_price
     u256, // last_window_end_cumulative_price
-    u64,  // last_window_end
+    u64, // last_window_end
     u128, // last_window_twap
-    u64,  // market_start_time
+    u64, // market_start_time
     u128, // twap_initialization_price
-    u64,  // twap_start_delay
-    u64   // twap_cap_step
+    u64, // twap_start_delay
+    u64, // twap_cap_step
 ) {
     (
         oracle.last_price,
@@ -524,7 +526,7 @@ public fun debug_get_full_state(oracle: &Oracle): (
         oracle.market_start_time,
         oracle.twap_initialization_price,
         oracle.twap_start_delay,
-        oracle.twap_cap_step
+        oracle.twap_cap_step,
     )
 }
 
@@ -547,7 +549,7 @@ public fun set_last_window_twap_for_testing(oracle: &mut Oracle, new_last_window
 public fun set_cumulative_prices_for_testing(
     oracle: &mut Oracle,
     total_cumulative_price: u256,
-    last_window_end_cumulative_price: u256
+    last_window_end_cumulative_price: u256,
 ) {
     oracle.total_cumulative_price = total_cumulative_price;
     oracle.last_window_end_cumulative_price = last_window_end_cumulative_price;
