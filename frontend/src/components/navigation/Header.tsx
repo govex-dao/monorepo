@@ -39,7 +39,7 @@ export function Header() {
           </Box>
 
           {/* Desktop Menu */}
-          <Box className="hidden md:flex gap-8 items-center h-full">
+          <Box className="hidden lg:flex gap-8 items-center h-full">
             {menu.map((item) => (
               <NavLink
                 key={item.link}
@@ -60,12 +60,12 @@ export function Header() {
 
           <Flex gap="4" align="center" justify="end" className="flex-1">
             {/* Desktop Mint and Connect */}
-            <Box className="hidden md:block">
+            <Box className="hidden lg:block">
               {CONSTANTS.network === "testnet" && wallets.length > 0 && (
                 <MintTestnetCoins />
               )}
             </Box>
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <ConnectButton
                 connectText="Connect Wallet"
                 className="!white !hover:bg-grey-100 !transition-colors"
@@ -73,7 +73,7 @@ export function Header() {
             </div>
 
             {/* Mobile Menu Button */}
-            <Box className="md:hidden">
+            <Box className="lg:hidden">
               <IconButton
                 className="bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
                 variant="ghost"
