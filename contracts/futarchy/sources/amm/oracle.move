@@ -271,8 +271,7 @@ fun multi_full_window_accumulation(
     if (g_abs == 0) {
         k_cap_idx_u128 = 0;
     } else {
-        k_cap_idx_u128 =
-            (g_abs + (oracle.twap_cap_step as u128) - 1) / (oracle.twap_cap_step as u128);
+        k_cap_idx_u128 = (g_abs - 1) / (oracle.twap_cap_step as u128) + 1;
     };
 
     let k_cap_idx: u64;
@@ -383,10 +382,10 @@ fun multi_full_window_accumulation(
     let deviation_for_p_n_w = std::u128::min(nw_times_delta_m, g_abs);
 
     if (price >= oracle.last_window_twap) {
-        p_n_w_effective = oracle.last_window_twap + deviation_for_p_n_w;
+        p_n_w_effective = math::saturating_add(oracle.last_window_twap, deviation_for_p_n_w);
     } else {
         // price < oracle.last_window_twap
-        p_n_w_effective = oracle.last_window_twap - deviation_for_p_n_w;
+        p_n_w_effective = math::saturating_sub(oracle.last_window_twap, deviation_for_p_n_w);
     };
 
     oracle.last_timestamp = timestamp;
