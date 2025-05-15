@@ -63,7 +63,7 @@ public(package) fun new_oracle(
     assert!(twap_initialization_price > 0, EZERO_INITIALIZATION);
     assert!(twap_cap_step > 0, EZERO_STEP);
     assert!(twap_start_delay < ONE_WEEK_MS, ELONG_DELAY); // One week in milliseconds
-    assert!((twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY);
+    assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY);
 
     Oracle {
         id: object::new(ctx), // Create a unique ID for the oracle
@@ -499,4 +499,106 @@ public fun debug_get_window_twap(oracle: &Oracle): u128 {
 public fun is_twap_valid(oracle: &Oracle, min_period: u64, clock: &Clock): bool {
     let current_time = clock::timestamp_ms(clock);
     current_time >= oracle.last_timestamp + min_period
+}
+
+#[test_only]
+public fun debug_get_full_state(oracle: &Oracle): (
+    u128, // last_price
+    u64,  // last_timestamp
+    u256, // total_cumulative_price
+    u256, // last_window_end_cumulative_price
+    u64,  // last_window_end
+    u128, // last_window_twap
+    u64,  // market_start_time
+    u128, // twap_initialization_price
+    u64,  // twap_start_delay
+    u64   // twap_cap_step
+) {
+    (
+        oracle.last_price,
+        oracle.last_timestamp,
+        oracle.total_cumulative_price,
+        oracle.last_window_end_cumulative_price,
+        oracle.last_window_end,
+        oracle.last_window_twap,
+        oracle.market_start_time,
+        oracle.twap_initialization_price,
+        oracle.twap_start_delay,
+        oracle.twap_cap_step
+    )
+}
+
+#[test_only]
+public fun set_last_timestamp_for_testing(oracle: &mut Oracle, new_last_timestamp: u64) {
+    oracle.last_timestamp = new_last_timestamp;
+}
+
+#[test_only]
+public fun set_last_window_end_for_testing(oracle: &mut Oracle, new_last_window_end: u64) {
+    oracle.last_window_end = new_last_window_end;
+}
+
+#[test_only]
+public fun set_last_window_twap_for_testing(oracle: &mut Oracle, new_last_window_twap: u128) {
+    oracle.last_window_twap = new_last_window_twap;
+}
+
+#[test_only]
+public fun set_cumulative_prices_for_testing(
+    oracle: &mut Oracle,
+    total_cumulative_price: u256,
+    last_window_end_cumulative_price: u256
+) {
+    oracle.total_cumulative_price = total_cumulative_price;
+    oracle.last_window_end_cumulative_price = last_window_end_cumulative_price;
+}
+
+#[test_only]
+public fun call_twap_accumulate_for_testing(oracle: &mut Oracle, timestamp: u64, price: u128) {
+    twap_accumulate(oracle, timestamp, price);
+}
+
+#[test_only]
+public fun get_last_window_end_cumulative_price_for_testing(oracle: &Oracle): u256 {
+    oracle.last_window_end_cumulative_price
+}
+
+#[test_only]
+public fun get_total_cumulative_price_for_testing(oracle: &Oracle): u256 {
+    oracle.total_cumulative_price
+}
+
+#[test_only]
+public fun get_last_window_end_for_testing(oracle: &Oracle): u64 {
+    oracle.last_window_end
+}
+
+#[test_only]
+public fun call_intra_window_accumulation_for_testing(
+    oracle: &mut Oracle,
+    price: u128,
+    additional_time_to_include: u64,
+    timestamp: u64,
+) {
+    intra_window_accumulation(
+        oracle,
+        price,
+        additional_time_to_include,
+        timestamp,
+    );
+}
+
+#[test_only]
+public fun call_multi_full_window_accumulation_for_testing(
+    oracle: &mut Oracle,
+    price: u128,
+    num_new_windows: u64,
+    timestamp: u64,
+) {
+    multi_full_window_accumulation(
+        oracle,
+        price,
+        num_new_windows,
+        timestamp,
+    );
 }
