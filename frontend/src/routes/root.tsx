@@ -1,8 +1,9 @@
 import { Toaster } from "react-hot-toast";
 import { Outlet, useLocation } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Header } from "@/components/Header";
+import { Header } from "@/components/navigation/Header";
 import { Container } from "@radix-ui/themes";
+import { Footer } from "@/components/navigation/Footer";
 
 type RouteMetadata = {
   title: string;
@@ -75,7 +76,7 @@ export function Root() {
   const { title, description, ogImage } = getRouteMetadata(location.pathname);
 
   return (
-    <div>
+    <div className="min-h-screen flex flex-col justify-start items-start">
       <Helmet>
         <title>{title}</title>
         <meta name="description" content={description} data-rh="true" />
@@ -87,10 +88,13 @@ export function Root() {
         <meta property="og:type" content="website" />
       </Helmet>
       <Toaster position="bottom-center" />
-      <Header />
-      <Container py="4" style={{ maxWidth: "100vw", width: "100vw" }}>
+      <div>
+        <Header />
+      </div>
+      <Container py="4" className="flex-grow flex flex-col justify-start w-screen h-full">
         <Outlet />
       </Container>
+      <Footer />
     </div>
   );
 }
