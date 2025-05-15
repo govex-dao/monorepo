@@ -10,12 +10,12 @@ import MintTestnetCoins from "../learn/MintTestnetCoins.tsx";
 const menu = [
   { title: "Trade", link: "/" },
   { title: "Create", link: "/create" },
-  { title: "Learn", link: "/learn"},
+  { title: "Learn", link: "/learn" },
 ];
 
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
-  const wallets = useWallets()
+  const wallets = useWallets();
 
   const handleClick = useCallback(() => {
     setIsOpen(!isOpen);
@@ -45,11 +45,12 @@ export function Header() {
                 key={item.link}
                 to={item.link}
                 className={({ isActive, isPending }) =>
-                  `h-full flex items-center gap-2 text-sm font-medium transition-colors ${isPending
-                    ? "text-gray-400"
-                    : isActive
-                      ? "text-blue-400 font-bold"
-                      : "text-gray-300 hover:text-white"
+                  `h-full flex items-center gap-2 text-sm font-medium transition-colors ${
+                    isPending
+                      ? "text-gray-400"
+                      : isActive
+                        ? "text-blue-400 font-bold"
+                        : "text-gray-300 hover:text-white"
                   }`
                 }
               >
@@ -88,30 +89,41 @@ export function Header() {
 
               {/* Dropdown overlay */}
               {isOpen && (
-                <Flex gap="2" py="4" px="2" direction="column" className="absolute right-0 top-full mt-2 w-48 bg-gray-800 rounded-lg shadow-xl py-2 z-50 border border-gray-700">
+                <Flex
+                  gap="2"
+                  py="4"
+                  px="2"
+                  direction="column"
+                  className="absolute right-0 top-full mt-2 w-48 bg-gray-800 rounded-lg shadow-xl py-2 z-50 border border-gray-700"
+                >
                   {menu.map((item) => (
                     <NavLink
                       key={item.link}
                       to={item.link}
                       onClick={() => setIsOpen(false)}
                       className={({ isActive, isPending }) =>
-                        `block px-4 py-2 -mx-2 hover:bg-gray-700 transition-colors ${isPending
-                          ? "text-gray-400"
-                          : isActive
-                            ? "text-blue-400 font-bold"
-                            : "text-gray-200"
+                        `block px-4 py-2 -mx-2 hover:bg-gray-700 transition-colors ${
+                          isPending
+                            ? "text-gray-400"
+                            : isActive
+                              ? "text-blue-400 font-bold"
+                              : "text-gray-200"
                         }`
                       }
                     >
-                      <Flex align="center" gap="2">{item.title}</Flex>
+                      <Flex align="center" gap="2">
+                        {item.title}
+                      </Flex>
                     </NavLink>
                   ))}
-                  <Separator size="4" color="gray" className="opacity-70 my-2" />
+                  <Separator
+                    size="4"
+                    color="gray"
+                    className="opacity-70 my-2"
+                  />
 
                   {/* Mint in mobile menu */}
-                  {CONSTANTS.network === "testnet" && (
-                    <MintTestnetCoins />
-                  )}
+                  {CONSTANTS.network === "testnet" && <MintTestnetCoins />}
 
                   <ConnectButton
                     connectText="Connect Wallet"

@@ -91,7 +91,10 @@ export function Root() {
       <div>
         <Header />
       </div>
-      <Container py="4" className="flex-grow flex flex-col justify-start w-screen h-full">
+      <Container
+        py="4"
+        className="flex-grow flex flex-col justify-start w-screen h-full"
+      >
         <Outlet />
       </Container>
       <Footer />

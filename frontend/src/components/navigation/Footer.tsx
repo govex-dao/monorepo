@@ -5,7 +5,6 @@ import { GitHubLogoIcon, DiscordLogoIcon } from "@radix-ui/react-icons";
 import { SuiSymbol } from "../icons/SuiSymbol.tsx";
 
 export function Footer() {
-  
   return (
     <Box className="border-t border-gray-800 mt-auto  text-white w-full">
       <Container className="max-w-7xl mx-auto">
@@ -25,41 +24,81 @@ export function Footer() {
               A distributed decision control system for digitally scarce assets.
             </Text>
           </Flex>
-          
+
           <Flex gap="8" wrap="wrap" className="mt-6 md:mt-0">
             <Flex direction="column" gap="3">
-              <Text weight="bold" size="3" className="text-blue-400 mb-1">Platform</Text>
-              <Link asChild size="2" className="text-gray-300 hover:text-white transition-colors">
+              <Text weight="bold" size="3" className="text-blue-400 mb-1">
+                Platform
+              </Text>
+              <Link
+                asChild
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
                 <NavLink to="/">Trade</NavLink>
               </Link>
-              <Link asChild size="2" className="text-gray-300 hover:text-white transition-colors">
+              <Link
+                asChild
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
                 <NavLink to="/create">Create</NavLink>
               </Link>
-              <Link asChild size="2" className="text-gray-300 hover:text-white transition-colors">
+              <Link
+                asChild
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors"
+              >
                 <NavLink to="/learn">Learn</NavLink>
               </Link>
             </Flex>
-            
+
             <Flex direction="column" gap="3">
-              <Text weight="bold" size="3" className="text-blue-400 mb-1">Resources</Text>
-              <Link href="https://docs.sui.io/" target="_blank" size="2" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
-                <SuiSymbol width={16} height={20} className="inline mr-1" /> Sui Docs
+              <Text weight="bold" size="3" className="text-blue-400 mb-1">
+                Resources
+              </Text>
+              <Link
+                href="https://docs.sui.io/"
+                target="_blank"
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+              >
+                <SuiSymbol width={16} height={20} className="inline mr-1" /> Sui
+                Docs
               </Link>
-              <Link href="https://github.com/govex-dao/monorepo" target="_blank" size="2" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+              <Link
+                href="https://github.com/govex-dao/monorepo"
+                target="_blank"
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+              >
                 <GitHubLogoIcon className="inline mr-1" /> GitHub
               </Link>
             </Flex>
-            
+
             <Flex direction="column" gap="3">
-              <Text weight="bold" size="3" className="text-blue-400 mb-1">Connect</Text>
-              <Link href="https://x.com/govexdotai" target="_blank" size="2" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+              <Text weight="bold" size="3" className="text-blue-400 mb-1">
+                Connect
+              </Text>
+              <Link
+                href="https://x.com/govexdotai"
+                target="_blank"
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+              >
                 <img
                   src="/images/x-logo.png"
                   alt="X logo"
                   className="w-4 h-4 mr-1"
-                /> govexdotai
+                />{" "}
+                govexdotai
               </Link>
-              <Link href="https://discord.gg/k3sjprgMD4" target="_blank" size="2" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+              <Link
+                href="https://discord.gg/k3sjprgMD4"
+                target="_blank"
+                size="2"
+                className="text-gray-300 hover:text-white transition-colors flex items-center gap-1"
+              >
                 <DiscordLogoIcon className="inline mr-1" /> Discord
               </Link>
             </Flex>

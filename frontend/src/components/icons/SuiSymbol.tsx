@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface SuiSymbolProps {
   width?: number;
@@ -10,8 +10,8 @@ interface SuiSymbolProps {
 export const SuiSymbol: React.FC<SuiSymbolProps> = ({
   width = 300,
   height = 384,
-  color = 'currentColor',
-  className = '',
+  color = "currentColor",
+  className = "",
 }) => {
   return (
     <svg
