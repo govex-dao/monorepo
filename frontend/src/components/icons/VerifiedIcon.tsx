@@ -15,9 +15,11 @@ export const VerifiedIcon = ({
         <div
           className="text-sm text-gray-100 max-w-xs backdrop-blur-sm"
           style={{
-            background: "linear-gradient(145deg, rgba(31, 41, 55, 0.9), rgba(31, 41, 55, 0.8))",
+            background:
+              "linear-gradient(145deg, rgba(31, 41, 55, 0.9), rgba(31, 41, 55, 0.8))",
             border: "1px solid rgba(55, 65, 81, 0.6)",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2), 0 0 2px rgba(34, 197, 94, 0.2)",
+            boxShadow:
+              "0 4px 12px rgba(0, 0, 0, 0.2), 0 0 2px rgba(34, 197, 94, 0.2)",
             padding: "10px 12px",
             borderRadius: "8px",
             outline: "none",
@@ -27,16 +29,16 @@ export const VerifiedIcon = ({
             <span className="text-green-400 font-semibold">Verified DAO</span>
             <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse"></div>
           </div>
-          <p>This DAO has been verified by our team and is safe to interact with.</p>
+          <p>
+            This DAO has been verified by our team and is safe to interact with.
+          </p>
         </div>
       }
       style={{
         outline: "none",
       }}
     >
-      <div
-        className={`inline-flex items-center justify-center ${className}`}
-      >
+      <div className={`inline-flex items-center justify-center ${className}`}>
         <svg
           width={size}
           height={size}

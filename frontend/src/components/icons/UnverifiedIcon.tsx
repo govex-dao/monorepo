@@ -27,9 +27,7 @@ export const UnverifiedIcon = ({
           }}
         >
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-amber-400 font-semibold">
-              Unverified DAO
-            </span>
+            <span className="text-amber-400 font-semibold">Unverified DAO</span>
             <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
           </div>
           <p>
@@ -52,13 +50,7 @@ export const UnverifiedIcon = ({
           strokeLinejoin="round"
         >
           <defs>
-            <filter
-              id="softGlow"
-              x="-50%"
-              y="-50%"
-              width="200%"
-              height="200%"
-            >
+            <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feDropShadow
                 dx="0"
                 dy="0"
