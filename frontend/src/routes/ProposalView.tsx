@@ -195,9 +195,9 @@ export function ProposalView() {
         )}
         <span className="text-gray-400">{proposal.dao_name}</span>
         {proposal.dao_verified ?
-          <VerifiedIcon className="ml-1 -mt-1 inline-block" size={24} />
+          <VerifiedIcon className="ml-1 inline-flex items-center align-middle" size={24} />
           :
-          <UnverifiedIcon className="ml-1 -mt-1 inline-block" size={24} />
+          <UnverifiedIcon className="ml-1 inline-flex items-center align-middle" size={24} />
         }
         {": "}
         {proposal.title}
