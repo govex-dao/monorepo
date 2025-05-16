@@ -126,9 +126,11 @@ function ProposalCard({ proposal }: ProposalCardProps) {
             <span className="truncate font-medium text-gray-200">
               {proposal.dao_name}
             </span>
-            {proposal.dao_verified ?
+            {proposal.dao_verified ? (
               <VerifiedIcon className="ml-1 flex-shrink-0" />
-              : <UnverifiedIcon className="ml-1 flex-shrink-0" />}
+            ) : (
+              <UnverifiedIcon className="ml-1 flex-shrink-0" />
+            )}
           </div>
         </div>
       </div>
