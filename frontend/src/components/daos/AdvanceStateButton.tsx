@@ -28,8 +28,14 @@ export function AdvanceStateButton({
         return "Finalize proposal";
       case 2:
         return "Execute proposal";
+      case 3:
+        return null;
     }
   };
+
+  if (getButtonText(proposalState) === null) {
+    return null;
+  }
 
   const getButtonStyle = (state: number) => {
     switch (state) {
