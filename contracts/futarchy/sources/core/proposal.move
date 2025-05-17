@@ -29,6 +29,7 @@ const EOUTCOME_OUT_OF_BOUNDS: u64 = 7;
 const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
+const STATE_EXECUTED: u8 = 3;
 
 // === Structs ===
 // Core proposal object that owns AMM pools

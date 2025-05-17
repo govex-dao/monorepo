@@ -352,11 +352,16 @@ public(package) fun sign_result(
     proposal_id: ID,
     market_state: &market_state::MarketState,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    _ctx: &mut TxContext, 
 ) {
     assert!(table::contains(&dao.proposals, proposal_id), EPROPOSAL_NOT_FOUND);
 
     let info = table::borrow_mut(&mut dao.proposals, proposal_id);
+
+    let old_state = proposal::state(info);
+    // Assert that the proposal is in STATE_FINALIZED before proceeding
+    assert!(old_state == STATE_FINALIZED, EPROPOSAL_NOT_IN_CORRECT_STATE_FOR_EXECUTION);
+    // Assert it hasn't been marked by the boolean 'executed' flag already
     assert!(!info.executed, EALREADY_EXECUTED);
 
     assert!(object::id(market_state) == info.market_state_id, EUNAUTHORIZED);
@@ -367,10 +372,13 @@ public(package) fun sign_result(
 
     let winning_outcome = market_state::get_winning_outcome(market_state);
     let message = market_state::get_outcome_message(market_state, winning_outcome);
+    let execution_timestamp = clock::timestamp_ms(clock); // Define and use this timestamp consistently
 
     option::fill(&mut info.result, message);
-    info.executed = true;
-    info.execution_time = option::some(clock::timestamp_ms(clock));
+    info.executed = true; 
+    info.execution_time = option::some(execution_timestamp);
+
+    proposal::set_state(info, STATE_EXECUTED);
 
     // Safely reduce active_proposal_count
     if (dao.active_proposal_count > 0) {
@@ -382,9 +390,17 @@ public(package) fun sign_result(
         proposal_id,
         outcome: message,
         winning_outcome: winning_outcome,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: execution_timestamp,
     });
-}
+    
+    if (old_state != proposal::state(info)) {
+        event::emit(ProposalStateChanged {
+            proposal_id,
+            old_state,
+            new_state: proposal::state(info),
+            timestamp: execution_timestamp,
+        });
+    }
 
 public entry fun sign_result_entry<AssetType, StableType>(
     dao: &mut DAO,
