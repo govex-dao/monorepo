@@ -18,7 +18,7 @@ export function AdvanceStateButton({
   stableType, // Default value, replace with your default
   daoId,
   proposalState,
-  winningOutcome
+  winningOutcome,
 }: AdvanceStateButtonProps) {
   const advanceState = useAdvanceStateMutation();
 
