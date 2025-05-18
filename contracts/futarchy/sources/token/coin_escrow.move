@@ -236,7 +236,7 @@ public(package) fun extract_stable_fees<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     amount: u64,
 ): Balance<StableType> {
-    market_state::is_finalized(&escrow.market_state);
+    market_state:: assert_market_finalized(&escrow.market_state);
     assert!(balance::value(&escrow.escrowed_stable) >= amount, ENOT_ENOUGH);
     balance::split(&mut escrow.escrowed_stable, amount)
 }

@@ -402,6 +402,11 @@ fun test_extract_stable_fees() {
     // Add stable coins to the escrow
     add_stable_balance(&mut escrow, 1000, &mut ctx);
 
+    // Get a mutable reference to the MarketState *inside* the escrow
+    let internal_market_state = coin_escrow::get_market_state_mut(&mut escrow);
+    // Finalize this internal MarketState
+    market_state::finalize_for_testing(internal_market_state);
+
     // Extract fees
     let fees = coin_escrow::extract_stable_fees(&mut escrow, 200);
 
@@ -654,6 +659,11 @@ fun test_extract_fees_insufficient_balance() {
 
     // Add stable coins to the escrow
     add_stable_balance(&mut escrow, 100, &mut ctx);
+
+    // Get a mutable reference to the MarketState *inside* the escrow
+    let internal_market_state = coin_escrow::get_market_state_mut(&mut escrow);
+    // Finalize this internal MarketState
+    market_state::finalize_for_testing(internal_market_state);
 
     // Try to extract more fees than available
     let fees = coin_escrow::extract_stable_fees(&mut escrow, 200);

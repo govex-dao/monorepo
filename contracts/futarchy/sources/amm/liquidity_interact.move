@@ -23,9 +23,6 @@ const EMARKET_ID_MISMATCH: u64 = 4;
 const EASSET_RESERVES_MISMATCH: u64 = 5;
 const ESTABLE_RESERVES_MISMATCH: u64 = 6;
 
-// ====== States ======
-const STATE_FINALIZED: u8 = 2;
-
 // === Events ===
 public struct ProtocolFeesCollected has copy, drop {
     proposal_id: ID,
@@ -38,11 +35,10 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
-    _clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert!(outcome_idx < proposal::outcome_count(proposal), EINVALID_OUTCOME);
-    assert!(proposal::get_state(proposal) == STATE_FINALIZED, EINVALID_STATE);
+    assert!(proposal::is_finalized(proposal), EINVALID_STATE);
     assert!(tx_context::sender(ctx) == proposal::proposer(proposal), EINVALID_LIQUIDITY_TRANSFER);
     assert!(outcome_idx == proposal::get_winning_outcome(proposal), EWRONG_OUTCOME);
 
@@ -411,7 +407,7 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
     clock: &Clock,
 ) {
     // Can only collect fees if the proposal is finalized
-    assert!(proposal::state(proposal) == STATE_FINALIZED, EINVALID_STATE);
+    assert!(proposal::is_finalized(proposal), EINVALID_STATE);
     assert!(proposal::is_winning_outcome_set(proposal), EINVALID_STATE);
 
     assert!(

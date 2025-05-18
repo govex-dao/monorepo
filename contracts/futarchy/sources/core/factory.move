@@ -23,7 +23,7 @@ const EPAUSED: u64 = 1;
 const EALREADY_VERIFIED: u64 = 2;
 const EBAD_WITNESS: u64 = 3;
 const ESTABLE_TYPE_NOT_ALLOWED: u64 = 4;
-const TWAP_TWAP_WINDOW_CAP: u64 = 5;
+const ELOW_TWAP_WINDOW_CAP: u64 = 5;
 const ELONG_TRADING_TIME: u64 = 6;
 const ELONG_REVIEW_TIME: u64 = 7;
 const ELONG_TWAP_DELAY_TIME: u64 = 8;
@@ -178,11 +178,11 @@ public entry fun create_dao<AssetType, StableType>(
     let asset_symbol = coin::get_symbol(asset_metadata);
     let stable_symbol = coin::get_symbol(stable_metadata);
 
-    assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, TWAP_TWAP_WINDOW_CAP);
+    assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELOW_TWAP_WINDOW_CAP);
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELONG_REVIEW_TIME);
     assert!(trading_period_ms <= MAX_TRADING_TIME, ELONG_TRADING_TIME);
     assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELONG_TWAP_DELAY_TIME);
-    assert!((amm_twap_start_delay + 60_000) < MAX_TRADING_TIME, E_DELAY_NEAR_TOTAL_TRADING); // Must have one full window of trading
+    assert!((amm_twap_start_delay + 60_000) < trading_period_ms, E_DELAY_NEAR_TOTAL_TRADING); // Must have one full window of trading
     assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHIGH_TWAP_THRESHOLD);
     assert!(
         amm_twap_initial_observation <= (u64::max_value!() as u128) * 1_000_000_000_000,
