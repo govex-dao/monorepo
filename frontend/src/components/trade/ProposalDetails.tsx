@@ -28,6 +28,7 @@ interface ApiProposal {
   stable_type: string;
   current_state: number;
   state_history: StateHistory[];
+  twap_threshold: string;
   winning_outcome: string | null;
 }
 
