@@ -185,7 +185,7 @@ public entry fun create_dao<AssetType, StableType>(
     assert!((amm_twap_start_delay + 60_000) < MAX_TRADING_TIME, E_DELAY_NEAR_TOTAL_TRADING); // Must have one full window of trading
     assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHIGH_TWAP_THRESHOLD);
     assert!(
-        amm_twap_initial_observation <= (u64::max_value!() as u128) * 1_000_000_000_00,
+        amm_twap_initial_observation <= (u64::max_value!() as u128) * 1_000_000_000_000,
         ETWAP_INITIAL_TOO_LARGE,
     );
 
