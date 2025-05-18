@@ -2,8 +2,8 @@ module futarchy::oracle;
 
 use futarchy::math;
 use std::debug;
-use std::u256;
 use std::u128;
+use std::u256;
 use std::u64;
 use sui::clock::{Self, Clock};
 

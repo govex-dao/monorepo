@@ -42,7 +42,7 @@ export function useWithdrawProposerLiquidityMutation() {
         arguments: [
           txb.object(proposalId),
           txb.object(escrowId),
-          txb.pure.u64(winning_outcome)
+          txb.pure.u64(winning_outcome),
         ],
         typeArguments: [`0x${assetType}`, `0x${stableType}`],
       });
