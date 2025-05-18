@@ -161,7 +161,6 @@ fun test_proposal_complete_happy_path() {
             &mut proposal,
             &mut escrow,
             winning_outcome,
-            &clock,
             ctx(&mut scenario),
         );
 
@@ -491,7 +490,6 @@ fun test_proposal_path_with_swaps() {
             &mut proposal,
             &mut escrow,
             winning_outcome,
-            &clock,
             ctx(&mut scenario),
         );
 

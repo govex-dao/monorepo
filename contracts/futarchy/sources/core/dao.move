@@ -40,7 +40,7 @@ const ETITLE_TOO_SHORT: u64 = 16;
 const ETITLE_TOO_LONG: u64 = 17;
 const EDETAILS_TOO_SHORT: u64 = 18;
 const EONE_OUTCOME: u64 = 19;
-const E_NONE_FULL_WIDOW_TWAP_DELAY: u64 = 20;
+const E_NONE_FULL_WINDOW_TWAP_DELAY: u64 = 20;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -182,7 +182,7 @@ public(package) fun create<AssetType, StableType>(
     assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
     assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
 
-    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WIDOW_TWAP_DELAY);
+    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WINDOW_TWAP_DELAY);
 
     let dao = DAO {
         id: object::new(ctx),
@@ -282,11 +282,11 @@ public entry fun create_proposal<AssetType, StableType>(
     let first_message = vector::borrow(&outcome_messages, 0);
     assert!(first_message == &reject_string, EINVALID_MESSAGES);
 
-    // For 2-outcome proposals, assert second outcome is "Approve"
+    // For 2-outcome proposals, assert second outcome is "Accept"
     if (outcome_count == 2) {
-        let approve_string = string::utf8(b"Accept");
+        let accept_string = string::utf8(b"Accept");
         let second_message = vector::borrow(&outcome_messages, 1);
-        assert!(second_message == &approve_string, EINVALID_MESSAGES);
+        assert!(second_message == &accept_string, EINVALID_MESSAGES);
     };
     assert!(
         vectors::check_valid_outcomes(outcome_messages, MAX_RESULT_LENGTH),
