@@ -12,26 +12,23 @@ public fun check_valid_outcomes(outcome: vector<String>, max_length: u64): bool 
     if (length == 0) return false;
 
     // Create a vec_set to track unique strings
-    let mut seen = vec_set::empty<vector<u8>>();
+    let mut seen = vec_set::empty<String>();
 
     let mut i = 0;
     while (i < length) {
-        let current_string = vector::borrow(&outcome, i);
+        let current_string_ref = vector::borrow(&outcome, i);
 
         // Check length constraint
-        let string_length = string::length(current_string);
+        let string_length = string::length(current_string_ref);
         if (string_length == 0 || string_length > max_length) {
             return false
         };
-
-        // Check uniqueness
-        let string_bytes = *string::as_bytes(current_string);
-        if (vec_set::contains(&seen, &string_bytes)) {
+        if (vec_set::contains(&seen, current_string_ref)) {
             return false
         };
 
         // Add to our set of seen strings
-        vec_set::insert(&mut seen, string_bytes);
+        vec_set::insert(&mut seen, *current_string_ref);
         i = i + 1;
     };
 

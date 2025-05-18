@@ -138,7 +138,7 @@ public(package) fun swap_asset_to_stable(
     pool.protocol_fees = pool.protocol_fees + fee_amount;
 
     assert!(amount_out >= min_amount_out, EEXCESSIVE_SLIPPAGE);
-    assert!(amount_out_before_fee <= pool.stable_reserve, EPOOL_EMPTY);
+    assert!(amount_out_before_fee < pool.stable_reserve, EPOOL_EMPTY);
 
     let price_impact = calculate_price_impact(
         amount_in,
@@ -218,7 +218,7 @@ public(package) fun swap_stable_to_asset(
     );
 
     assert!(amount_out >= min_amount_out, EEXCESSIVE_SLIPPAGE);
-    assert!(amount_out <= pool.asset_reserve, EPOOL_EMPTY);
+    assert!(amount_out < pool.asset_reserve, EPOOL_EMPTY);
 
     let price_impact = calculate_price_impact(
         amount_in_after_fee,

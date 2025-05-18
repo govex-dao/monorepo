@@ -189,6 +189,10 @@ public fun get_outcome_message(state: &MarketState, outcome_idx: u64): String {
 public fun get_creation_time(state: &MarketState): u64 {
     state.creation_time
 }
+
+public(package) fun get_trading_end_time(state: &MarketState): Option<u64> { // Renamed function
+    state.trading_end
+}
 // === Test Functions ===
 #[test_only]
 public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {

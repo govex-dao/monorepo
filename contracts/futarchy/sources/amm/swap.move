@@ -201,6 +201,7 @@ public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     );
     let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
+    assert!(outcome_idx < vector::length(&tokens), EINVALID_OUTCOME);
     let mut swap_token = vector::remove(&mut tokens, outcome_idx);
 
     // Merge existing token if present
@@ -284,6 +285,7 @@ public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     );
     let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
+    assert!(outcome_idx < vector::length(&tokens), EINVALID_OUTCOME);
     let mut swap_token = vector::remove(&mut tokens, outcome_idx);
 
     assert!(token::outcome(&existing_token) == (outcome_idx as u8), EWRONG_OUTCOME);
@@ -365,6 +367,7 @@ public fun create_and_swap_asset_to_stable<AssetType, StableType>(
     );
     let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
 
+    assert!(outcome_idx < vector::length(&tokens), EINVALID_OUTCOME);
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
 
     // Swap the selected token
@@ -432,6 +435,7 @@ public fun create_and_swap_stable_to_asset<AssetType, StableType>(
     );
     let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
 
+    assert!(outcome_idx < vector::length(&tokens), EINVALID_OUTCOME);
     let token_to_swap = vector::remove(&mut tokens, outcome_idx);
 
     // Swap the selected token

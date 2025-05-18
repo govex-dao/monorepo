@@ -15,12 +15,14 @@ use sui::event;
 // === Errors ===
 const EINVALID_STATE_TRANSITION: u64 = 0;
 const EINVALID_STATE: u64 = 1;
+const EIN_TRADIG_PERIOD: u64 = 2;
 
 // === Constants ===
 const TWAP_BASIS_POINTS: u256 = 100_000;
 const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
+
 
 // === Events ===
 public struct ProposalStateChanged has copy, drop {
@@ -56,18 +58,19 @@ public(package) fun try_advance_state<AssetType, StableType>(
     assert!(market_state::dao_id(state) == proposal::get_dao_id(proposal), EINVALID_STATE);
 
     let current_time = clock::timestamp_ms(clock);
-    let elapsed = current_time - proposal::get_created_at(proposal);
     let old_state = proposal::state(proposal);
 
     if (
-        proposal::state(proposal) == STATE_REVIEW && elapsed >= proposal::get_review_period_ms(proposal)
+        proposal::state(proposal) == STATE_REVIEW && 
+                current_time >= proposal::get_created_at(proposal) + proposal::get_review_period_ms(proposal)
     ) {
         proposal::set_state(proposal, STATE_TRADING);
         market_state::start_trading(state, proposal::get_trading_period_ms(proposal), clock);
     } else if (
-        proposal::state(proposal) == STATE_TRADING && 
-                elapsed >= (proposal::get_review_period_ms(proposal) + proposal::get_trading_period_ms(proposal))
+        proposal::state(proposal) == STATE_TRADING
     ) {
+        let configured_trading_end_option = market_state::get_trading_end_time(state);
+        assert!(current_time >= *option::borrow(&configured_trading_end_option), EIN_TRADIG_PERIOD);
         market_state::end_trading(state, clock);
 
         // Get oracle from first pool for validation
