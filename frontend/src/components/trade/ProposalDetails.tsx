@@ -28,7 +28,7 @@ interface ApiProposal {
   stable_type: string;
   current_state: number;
   state_history: StateHistory[];
-  twap_threshold: string;
+  winning_outcome: string | null;
 }
 
 interface ProposalDetailsProps {
@@ -66,6 +66,7 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                 stableType={proposal.stable_type}
                 daoId={proposal.dao_id}
                 proposalState={proposal.current_state}
+                winningOutcome={proposal.winning_outcome}
               />
             </div>
             <div className="flex justify-between">

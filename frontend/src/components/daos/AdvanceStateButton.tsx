@@ -8,6 +8,7 @@ interface AdvanceStateButtonProps {
   stableType: string;
   daoId: string;
   proposalState: number;
+  winningOutcome: string | null;
 }
 
 export function AdvanceStateButton({
@@ -17,6 +18,7 @@ export function AdvanceStateButton({
   stableType, // Default value, replace with your default
   daoId,
   proposalState,
+  winningOutcome
 }: AdvanceStateButtonProps) {
   const advanceState = useAdvanceStateMutation();
 
@@ -28,12 +30,10 @@ export function AdvanceStateButton({
         return "Finalize proposal";
       case 2:
         return "Execute proposal";
-      case 3:
-        return null;
     }
   };
 
-  if (getButtonText(proposalState) === null) {
+  if (winningOutcome !== null) {
     return null;
   }
 
