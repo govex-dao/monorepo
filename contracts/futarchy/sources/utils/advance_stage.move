@@ -23,7 +23,6 @@ const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
 
-
 // === Events ===
 public struct ProposalStateChanged has copy, drop {
     proposal_id: ID,
@@ -66,9 +65,7 @@ public(package) fun try_advance_state<AssetType, StableType>(
     ) {
         proposal::set_state(proposal, STATE_TRADING);
         market_state::start_trading(state, proposal::get_trading_period_ms(proposal), clock);
-    } else if (
-        proposal::state(proposal) == STATE_TRADING
-    ) {
+    } else if (proposal::state(proposal) == STATE_TRADING) {
         let configured_trading_end_option = market_state::get_trading_end_time(state);
         assert!(current_time >= *option::borrow(&configured_trading_end_option), EIN_TRADIG_PERIOD);
         market_state::end_trading(state, clock);

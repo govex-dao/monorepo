@@ -190,7 +190,7 @@ public fun get_creation_time(state: &MarketState): u64 {
     state.creation_time
 }
 
-public(package) fun get_trading_end_time(state: &MarketState): Option<u64> { // Renamed function
+public(package) fun get_trading_end_time(state: &MarketState): Option<u64> {
     state.trading_end
 }
 // === Test Functions ===
