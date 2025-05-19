@@ -18,6 +18,9 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
   asset_decimals,
   stable_decimals,
 }) => {
+  if (twaps === null) {
+    return null;
+  }
   const outcomeCount = outcomeMessages.length;
 
   const formatTwap = (value: number | null): string => {
@@ -67,7 +70,6 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
       color: defaultColors[index],
     };
   });
-
   // For outcome index 0, adjust its TWAP by multiplying it by (1 + threshold/100000)
   const effectiveSortValue = (item: {
     index: number;

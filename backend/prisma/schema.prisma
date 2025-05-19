@@ -88,7 +88,7 @@ model ProposalTWAP {
   id         String   @id @default(uuid())
   proposalId String
   outcome    Int
-  twap       BigInt
+  twap       BigInt?
   timestamp  BigInt
   oracle_id  String
   proposal   Proposal @relation(fields: [proposalId], references: [proposal_id])
