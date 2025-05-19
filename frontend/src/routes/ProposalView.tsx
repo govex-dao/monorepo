@@ -179,7 +179,7 @@ export function ProposalView() {
   const isInlineLayout = windowWidth >= inlineBreakpoint;
 
   return (
-    <Theme appearance="dark" className="flex flex-col min-h-screen">
+    <Theme appearance="dark" className="flex flex-col flex-1">
       <h1 className="text-3xl font-bold mt-4 pl-6 pr-6">
         {proposal.dao_icon ? (
           <img
