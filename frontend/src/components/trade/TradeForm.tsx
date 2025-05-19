@@ -89,16 +89,18 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const [error, setError] = useState<ErrorMessage>(null);
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
-  const { balance: assetBalance } = useTokenBalance({
-    type: assetType,
-    scale: assetScale,
-    network,
-  });
-  const { balance: stableBalance } = useTokenBalance({
-    type: stableType,
-    scale: stableScale,
-    network,
-  });
+  const { balance: assetBalance, refreshBalance: refreshAssetBalance } =
+    useTokenBalance({
+      type: assetType,
+      scale: assetScale,
+      network,
+    });
+  const { balance: stableBalance, refreshBalance: refreshStableBalance } =
+    useTokenBalance({
+      type: stableType,
+      scale: stableScale,
+      network,
+    });
 
   const tokenData = {
     stable: {
@@ -477,12 +479,21 @@ const TradeForm: React.FC<TradeFormProps> = ({
         });
       }
 
-      await signAndExecute({
-        transaction: txb,
-      });
-
-      setAmount("");
-      setExpectedAmountOut("");
+      signAndExecute(
+        {
+          transaction: txb,
+        },
+        {
+          onSettled: () => {
+            refreshAssetBalance();
+            refreshStableBalance();
+          },
+          onSuccess: () => {
+            setAmount("");
+            setExpectedAmountOut("");
+          },
+        },
+      );
     } catch (error) {
       console.error("Trade error:", error);
       setError(
