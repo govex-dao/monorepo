@@ -101,7 +101,7 @@ function formatProposalData(data: ProposalCreated): Prisma.ProposalCreateInput {
         twapHistory: {
             create: Array.from({ length: outcomeCount }, (_, i) => ({
                 outcome: i,
-                twap: 0n,
+                twap: null,
                 timestamp: safeBigInt(data.created_at),
                 oracle_id: data.oracle_ids[i]
             }))
