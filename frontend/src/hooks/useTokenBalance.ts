@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback} from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { SuiClient } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui/client";
@@ -18,7 +18,10 @@ const ITEM_TTL = 30000;
 
 // The actual cache store. Using a Map preserves insertion order,
 // which helps us identify the least recently used item.
-const _balanceCacheLRU = new Map<string, { balance: string; timestamp: number }>();
+const _balanceCacheLRU = new Map<
+  string,
+  { balance: string; timestamp: number }
+>();
 
 /**
  * Retrieves an item from the LRU cache.
@@ -26,7 +29,9 @@ const _balanceCacheLRU = new Map<string, { balance: string; timestamp: number }>
  * recently used (by re-inserting it) and returned.
  * Otherwise, it's removed from the cache and undefined is returned.
  */
-function getFromCache(key: string): { balance: string; timestamp: number } | undefined {
+function getFromCache(
+  key: string,
+): { balance: string; timestamp: number } | undefined {
   const item = _balanceCacheLRU.get(key);
   if (item) {
     if (Date.now() - item.timestamp > ITEM_TTL) {
@@ -46,8 +51,12 @@ function getFromCache(key: string): { balance: string; timestamp: number } | und
  * If the cache exceeds MAX_CACHE_SIZE, the least recently used item is evicted.
  * The new/updated item is marked as the most recently used.
  */
-function setToCache(key: string, value: { balance: string; timestamp: number }): void {
-  if (_balanceCacheLRU.has(key)) { // If key exists, delete to re-insert it at the end (MRU)
+function setToCache(
+  key: string,
+  value: { balance: string; timestamp: number },
+): void {
+  if (_balanceCacheLRU.has(key)) {
+    // If key exists, delete to re-insert it at the end (MRU)
     _balanceCacheLRU.delete(key);
   }
   _balanceCacheLRU.set(key, value);
@@ -87,7 +96,8 @@ export function useTokenBalance({
       // Check cache first if not forcing refresh
       if (!forceRefresh && cacheKey) {
         const cachedData = getFromCache(cacheKey); // getFromCache handles TTL and LRU update
-        if (cachedData) { // If data is returned, it's fresh enough
+        if (cachedData) {
+          // If data is returned, it's fresh enough
           setBalance(cachedData.balance);
           return;
         }
@@ -109,13 +119,18 @@ export function useTokenBalance({
         );
 
         const precisionFactor = BigInt(10 ** DECIMALS_TO_DISPLAY);
-        const valueWithPrecision = (totalBalance * precisionFactor) / BigInt(scale);
-        const numericValue = Number(valueWithPrecision) / Number(precisionFactor);
+        const valueWithPrecision =
+          (totalBalance * precisionFactor) / BigInt(scale);
+        const numericValue =
+          Number(valueWithPrecision) / Number(precisionFactor);
         const formattedBalance = numericValue.toFixed(DECIMALS_TO_DISPLAY);
         setBalance(formattedBalance);
         // Update cache
         if (cacheKey) {
-          setToCache(cacheKey, { balance: formattedBalance, timestamp: Date.now() });
+          setToCache(cacheKey, {
+            balance: formattedBalance,
+            timestamp: Date.now(),
+          });
         }
       } catch (error) {
         console.error("Error fetching balance:", error);
