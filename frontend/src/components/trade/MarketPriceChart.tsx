@@ -507,13 +507,15 @@ const MarketPriceChart = ({
     <div className="w-full py-0 my-0">
       {(tradingStart || tradingEnd) && !swapError && !stateError && (
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-2">
-          <TwapLegend
-            twaps={twaps}
-            twap_threshold={twap_threshold}
-            outcomeMessages={outcome_messages}
-            asset_decimals={asset_decimals}
-            stable_decimals={stable_decimals}
-          />
+          <div>
+            <TwapLegend
+              twaps={twaps}
+              twap_threshold={twap_threshold}
+              outcomeMessages={outcome_messages}
+              asset_decimals={asset_decimals}
+              stable_decimals={stable_decimals}
+            />
+          </div>
           <TimeRangeSelector
             selectedRange={selectedRange}
             onRangeSelect={handleRangeSelect}
