@@ -212,7 +212,7 @@ export function TradeDashboard() {
   }
 
   return (
-    <Theme appearance="dark" className="flex flex-col items-center">
+    <Theme appearance="dark" className="flex flex-col items-center flex-grow">
       <div className="w-full px-6 py-6 pb-6 pt-0 max-w-7xl">
         <div className="flex flex-col md:flex-row md:justify-end gap-4">
           <UnifiedSearch />

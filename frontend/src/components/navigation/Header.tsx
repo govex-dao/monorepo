@@ -22,7 +22,7 @@ export function Header() {
   }, [isOpen]);
 
   return (
-    <Box className="w-screen bg-gradient-to-b from-gray-950/30 to-black/30 border-b border-gray-800 ">
+    <Box className="w-screen bg-gradient-to-b from-gray-950/30 to-black/30 border-b border-gray-800">
       <Container className="mx-auto">
         <Flex
           position="sticky"

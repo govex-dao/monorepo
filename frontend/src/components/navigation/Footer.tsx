@@ -108,3 +108,93 @@ export function Footer() {
     </Box>
   );
 }
+
+export function MinimalFooter() {
+  return (
+    <footer className="bg-gradient-to-b from-gray-950/30 to-black/30 border-t border-gray-800 py-2 px-4 mt-auto w-full">
+      <Container className="mx-auto px-6">
+        <Flex
+          align="center"
+          justify={{ initial: "center", sm: "between" }}
+          gap="2"
+          className="text-xs"
+        >
+          <Flex align="center" gap="2" className="hidden sm:flex text-gray-400">
+            <Text size="1" className="flex items-center gap-1.5 font-medium">
+              <span className="">Govex.ai</span>
+              <span className="text-gray-500 text-xs opacity-80">•</span>
+              <span className="text-gray-400 opacity-80">
+                {new Date().getFullYear()}
+              </span>
+            </Text>
+          </Flex>
+
+          <Flex gap="6" justify="center" align="center" className="">
+            <Flex gap="3" className="hidden sm:flex flex-wrap justify-center">
+              <Link
+                asChild
+                size="1"
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <NavLink to="/">Trade</NavLink>
+              </Link>
+              <span className="text-gray-500 flex items-center">•</span>
+              <Link
+                asChild
+                size="1"
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <NavLink to="/create">Create</NavLink>
+              </Link>
+              <span className="text-gray-500 flex items-center">•</span>
+              <Link
+                asChild
+                size="1"
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <NavLink to="/learn">Learn</NavLink>
+              </Link>
+            </Flex>
+
+            <div className="hidden sm:block h-4 w-[1px] bg-gray-500/50"></div>
+
+            <Flex gap="3" justify="center">
+              <Link
+                href="https://docs.sui.io/"
+                target="_blank"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <SuiSymbol width={12} height={14} />
+              </Link>
+              <Link
+                href="https://github.com/govex-dao/monorepo"
+                target="_blank"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <GitHubLogoIcon width={14} height={14} />
+              </Link>
+              <Link
+                href="https://x.com/govexdotai"
+                target="_blank"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <img
+                  src="/images/x-logo.png"
+                  alt="X logo"
+                  className="w-3.5 h-3.5"
+                />
+              </Link>
+              <Link
+                href="https://discord.gg/k3sjprgMD4"
+                target="_blank"
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <DiscordLogoIcon width={14} height={14} />
+              </Link>
+            </Flex>
+          </Flex>
+        </Flex>
+      </Container>
+    </footer>
+  );
+}
