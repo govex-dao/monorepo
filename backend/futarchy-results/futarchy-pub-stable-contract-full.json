@@ -1,5 +1,5 @@
 {
-  "digest": "6GegKaKVaSy7Vg39agBH4eYGufw1NGLMa3tzRwX3jz9R",
+  "digest": "GUNvHs4qYbDB1ZCRX4THrSNRjR58rJjKL1AvqoSDuo8w",
   "effects": {
     "messageVersion": "v1",
     "status": {
@@ -9,31 +9,47 @@
     "gasUsed": {
       "computationCost": "1000000",
       "storageCost": "15534400",
-      "storageRebate": "978120",
-      "nonRefundableStorageFee": "9880"
+      "storageRebate": "1956240",
+      "nonRefundableStorageFee": "19760"
     },
     "modifiedAtVersions": [
       {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "sequenceNumber": "430900251"
+        "sequenceNumber": "430900253"
+      },
+      {
+        "objectId": "0xdf54174f8b04c1d1b5c0d64dff970ba723fb68ce7f836c4bdc5949184ee11c94",
+        "sequenceNumber": "349179545"
       }
     ],
-    "transactionDigest": "6GegKaKVaSy7Vg39agBH4eYGufw1NGLMa3tzRwX3jz9R",
+    "transactionDigest": "GUNvHs4qYbDB1ZCRX4THrSNRjR58rJjKL1AvqoSDuo8w",
     "created": [
       {
-        "owner": "Immutable",
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 430900254
+          }
+        },
         "reference": {
-          "objectId": "0x763db566e1b4697db640037e5847a4dbe5c45c5011529f9d9f2b7045b6e65946",
-          "version": 1,
-          "digest": "78cPtP5fyWSJzqao7CfKrQt2M6W2CLziS21kSLcpLLy6"
+          "objectId": "0x15464593b54736987eb5be75c2ba82f04dff1da5215ed422d834c6b4339fecfb",
+          "version": 430900254,
+          "digest": "8aT6xikb3RRHX5eJ7H68yQdVq92EZm4qiWARY3vgFxew"
         }
       },
       {
         "owner": "Immutable",
         "reference": {
-          "objectId": "0x965cc5daf32e6e4a087e38f510d79945fd118d56ee9b8874b364a61a4e018fdd",
-          "version": 430900252,
-          "digest": "FbZn6Fgu3kLP3gt9Hrz7vGBPf64CjJcio2PEM4PKJocy"
+          "objectId": "0x2ce401a477d0ab29421be04bdad22ac062e2a7775d9b65284295047ec608974e",
+          "version": 1,
+          "digest": "Ga9bt6BA51mgpnk84ZtDkkRj4xr4GridvhCr6j9op6AT"
+        }
+      },
+      {
+        "owner": "Immutable",
+        "reference": {
+          "objectId": "0xb9fd87f2b5ca560f86675ec29020dec3cff8b2b761775969219c3e74d85200d2",
+          "version": 430900254,
+          "digest": "6fqYs4SnXX1omGniVx5dpMEgGSNApXx5uBoNNL74yUkW"
         }
       },
       {
@@ -41,21 +57,9 @@
           "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
         },
         "reference": {
-          "objectId": "0xa0b6593fea92d57ceb7763b108a1ac5d5fc8123d0f871c4c24361cc01af55f28",
-          "version": 430900252,
-          "digest": "76iKNj1g3DxtANRY1Kudvbe9RnuaAB7aRMMpY8JMUNsz"
-        }
-      },
-      {
-        "owner": {
-          "Shared": {
-            "initial_shared_version": 430900252
-          }
-        },
-        "reference": {
-          "objectId": "0xa7fb51cd3d4c2226982798e4da2b4b2af7eacffcbdd40d57a4869d8945dc9970",
-          "version": 430900252,
-          "digest": "ydBLFpHQFSRhKszt1r9MecUW5H4yhsAG8h1s9BVfxqa"
+          "objectId": "0xddf7c3c83ff0ab9dc54c65cb9f24140816b00fde43fefe697d186100a840b757",
+          "version": 430900254,
+          "digest": "5T2AjYPcHf6aoBichFBTS9meu2MCzYQNU6aisPwRkczM"
         }
       }
     ],
@@ -66,9 +70,16 @@
         },
         "reference": {
           "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-          "version": 430900252,
-          "digest": "3344RHjtsY69BxNFygzyaBgrqP69zBgzPgKqDzd3Szb2"
+          "version": 430900254,
+          "digest": "2peS7qLWBacGmDnSCR1HVk3rvtX7hrszviYmN2yMQ2Bv"
         }
+      }
+    ],
+    "deleted": [
+      {
+        "objectId": "0xdf54174f8b04c1d1b5c0d64dff970ba723fb68ce7f836c4bdc5949184ee11c94",
+        "version": 430900254,
+        "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
       }
     ],
     "gasObject": {
@@ -77,13 +88,14 @@
       },
       "reference": {
         "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-        "version": 430900252,
-        "digest": "3344RHjtsY69BxNFygzyaBgrqP69zBgzPgKqDzd3Szb2"
+        "version": 430900254,
+        "digest": "2peS7qLWBacGmDnSCR1HVk3rvtX7hrszviYmN2yMQ2Bv"
       }
     },
     "dependencies": [
-      "5eB9pB7HfyEvAar5rundY7VgLkGC2mZ4twonpFMu8gJF",
-      "6pZ2bpkwLwnCH4qdHS1NcJypXLFUNvSHRKfKXhZvXQuo"
+      "Ezu8NfWcdhdRtUxpPVCBvCdJ5BE1294SPxuFmL8oETH",
+      "6pZ2bpkwLwnCH4qdHS1NcJypXLFUNvSHRKfKXhZvXQuo",
+      "FuffsEwK97WHyn2pteNghbatXRYo6BTmtnDTvz9jPPkf"
     ]
   },
   "objectChanges": [
@@ -95,15 +107,28 @@
       },
       "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
       "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
-      "version": "430900252",
-      "previousVersion": "430900251",
-      "digest": "3344RHjtsY69BxNFygzyaBgrqP69zBgzPgKqDzd3Szb2"
+      "version": "430900254",
+      "previousVersion": "430900253",
+      "digest": "2peS7qLWBacGmDnSCR1HVk3rvtX7hrszviYmN2yMQ2Bv"
+    },
+    {
+      "type": "created",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 430900254
+        }
+      },
+      "objectType": "0x2::coin::TreasuryCap<0x2ce401a477d0ab29421be04bdad22ac062e2a7775d9b65284295047ec608974e::my_stable::MY_STABLE>",
+      "objectId": "0x15464593b54736987eb5be75c2ba82f04dff1da5215ed422d834c6b4339fecfb",
+      "version": "430900254",
+      "digest": "8aT6xikb3RRHX5eJ7H68yQdVq92EZm4qiWARY3vgFxew"
     },
     {
       "type": "published",
-      "packageId": "0x763db566e1b4697db640037e5847a4dbe5c45c5011529f9d9f2b7045b6e65946",
+      "packageId": "0x2ce401a477d0ab29421be04bdad22ac062e2a7775d9b65284295047ec608974e",
       "version": "1",
-      "digest": "78cPtP5fyWSJzqao7CfKrQt2M6W2CLziS21kSLcpLLy6",
+      "digest": "Ga9bt6BA51mgpnk84ZtDkkRj4xr4GridvhCr6j9op6AT",
       "modules": [
         "my_stable"
       ]
@@ -112,10 +137,10 @@
       "type": "created",
       "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
       "owner": "Immutable",
-      "objectType": "0x2::coin::CoinMetadata<0x763db566e1b4697db640037e5847a4dbe5c45c5011529f9d9f2b7045b6e65946::my_stable::MY_STABLE>",
-      "objectId": "0x965cc5daf32e6e4a087e38f510d79945fd118d56ee9b8874b364a61a4e018fdd",
-      "version": "430900252",
-      "digest": "FbZn6Fgu3kLP3gt9Hrz7vGBPf64CjJcio2PEM4PKJocy"
+      "objectType": "0x2::coin::CoinMetadata<0x2ce401a477d0ab29421be04bdad22ac062e2a7775d9b65284295047ec608974e::my_stable::MY_STABLE>",
+      "objectId": "0xb9fd87f2b5ca560f86675ec29020dec3cff8b2b761775969219c3e74d85200d2",
+      "version": "430900254",
+      "digest": "6fqYs4SnXX1omGniVx5dpMEgGSNApXx5uBoNNL74yUkW"
     },
     {
       "type": "created",
@@ -124,22 +149,16 @@
         "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
       },
       "objectType": "0x2::package::UpgradeCap",
-      "objectId": "0xa0b6593fea92d57ceb7763b108a1ac5d5fc8123d0f871c4c24361cc01af55f28",
-      "version": "430900252",
-      "digest": "76iKNj1g3DxtANRY1Kudvbe9RnuaAB7aRMMpY8JMUNsz"
+      "objectId": "0xddf7c3c83ff0ab9dc54c65cb9f24140816b00fde43fefe697d186100a840b757",
+      "version": "430900254",
+      "digest": "5T2AjYPcHf6aoBichFBTS9meu2MCzYQNU6aisPwRkczM"
     },
     {
-      "type": "created",
+      "type": "deleted",
       "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
-      "owner": {
-        "Shared": {
-          "initial_shared_version": 430900252
-        }
-      },
-      "objectType": "0x2::coin::TreasuryCap<0x763db566e1b4697db640037e5847a4dbe5c45c5011529f9d9f2b7045b6e65946::my_stable::MY_STABLE>",
-      "objectId": "0xa7fb51cd3d4c2226982798e4da2b4b2af7eacffcbdd40d57a4869d8945dc9970",
-      "version": "430900252",
-      "digest": "ydBLFpHQFSRhKszt1r9MecUW5H4yhsAG8h1s9BVfxqa"
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0xdf54174f8b04c1d1b5c0d64dff970ba723fb68ce7f836c4bdc5949184ee11c94",
+      "version": "430900254"
     }
   ],
   "confirmedLocalExecution": false

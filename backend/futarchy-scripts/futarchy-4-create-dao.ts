@@ -50,8 +50,8 @@ const getCreateDaoParams = () => {
         minStableAmount: 5000,
         daoName: randomDaoName,
         image_url: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Retriever_in_water.jpg',
-        review_period_ms: 2000,    // 2 s in milliseconds
-        trading_period_ms: 2000,  // 2 s in milliseconds
+        review_period_ms: 2000,   
+        trading_period_ms: 180000,  
         asset_metadata: assetPub.metadataId,
         stable_metadata: stablePub.metadataId, 
         network: 'testnet' as Network
