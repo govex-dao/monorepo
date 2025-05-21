@@ -2,6 +2,7 @@
 module futarchy::math_tests;
 
 use futarchy::math;
+use std::u256;
 use std::u128;
 use std::u64;
 
@@ -141,3 +142,82 @@ public fun test_safe_u128_to_u64() {
 public fun test_safe_u128_to_u64_overflow() {
     math::safe_u128_to_u64((u64::max_value!() as u128) + 1);
 }
+
+#[test]
+public fun test_mul_div_mixed() {
+    let u128_max = u128::max_value!();
+    let u64_max = u64::max_value!();
+
+    // 1. Basic case
+    assert!(math::mul_div_mixed(500u128, 2000u64, 1000u128) == 1000u128, 0);
+
+    // 2. 'a' is large, 'b' and 'c' effectively cancel
+    assert!(math::mul_div_mixed(u128_max / 2, 2u64, 2u128) == u128_max / 2, 1);
+
+    // 3. 'b' is large (u64::max_value), result fits u128
+    // (10 * u64_max) / 5 = 2 * u64_max
+    assert!(math::mul_div_mixed(10u128, u64_max, 5u128) == (u64_max as u128) * 2, 2);
+
+    // 4. 'c' is very large, resulting in 0
+    assert!(math::mul_div_mixed(100u128, 2u64, u128_max) == 0u128, 3);
+
+    // 5. 'a' and 'c' are large and equal
+    assert!(math::mul_div_mixed(u128_max, 1u64, u128_max) == 1u128, 4);
+
+    // 6. 'a' is zero
+    assert!(math::mul_div_mixed(0u128, 1000u64, 1u128) == 0u128, 5);
+
+    // 7. 'b' is zero
+    assert!(math::mul_div_mixed(1000u128, 0u64, 1u128) == 0u128, 6);
+
+    // 8. Both 'a' and 'b' are zero
+    assert!(math::mul_div_mixed(0u128, 0u64, 1u128) == 0u128, 7);
+
+    // 9. Edge case: all ones
+    assert!(math::mul_div_mixed(1u128, 1u64, 1u128) == 1u128, 8);
+
+    // 10. 'a' is max u128, 'b' and 'c' are 1 (result is u128_max)
+    assert!(math::mul_div_mixed(u128_max, 1u64, 1u128) == u128_max, 9);
+
+    // 11. Truncation: (10 * 10) / 3 = 100 / 3 = 33
+    assert!(math::mul_div_mixed(10u128, 10u64, 3u128) == 33u128, 10);
+
+    // 12. Truncation: (7 * 7) / 2 = 49 / 2 = 24
+    assert!(math::mul_div_mixed(7u128, 7u64, 2u128) == 24u128, 11);
+
+    // 13. Intermediate product (a*b) would overflow u128, but u256 handles it. Final result fits u128.
+    // (u128_max * 2) / 2 = u128_max
+    assert!(math::mul_div_mixed(u128_max, 2u64, 2u128) == u128_max, 12);
+
+    // 14. Another intermediate overflow case where final result fits u128.
+    // a_val approx u128_max / 100. (a_val * 200) would overflow u128 if directly calculated in u128.
+    // (a_val * 200) / 100 = a_val * 2, which fits u128.
+    let a_val_intermediate_overflow = (u128_max / 100) + 1;
+    let b_val_intermediate_overflow = 200u64;
+    let c_val_intermediate_overflow = 100u128;
+    let expected_res_intermediate_overflow = a_val_intermediate_overflow * 2; // This u128 * literal is fine
+    assert!(math::mul_div_mixed(a_val_intermediate_overflow, b_val_intermediate_overflow, c_val_intermediate_overflow) == expected_res_intermediate_overflow, 13);
+
+    // 15. Max value interactions: (u128_max/2 * 2) / 1.
+    // u128_max is odd (2^128 - 1). u128_max / 2 (integer division) truncates to (2^127 - 1).
+    // (((2^128 - 1)/2) * 2) / 1 = ((2^127 - 1) * 2) / 1 = (2^128 - 2) / 1 = u128_max - 1. This fits u128.
+    assert!(math::mul_div_mixed(u128_max / 2, 2u64, 1u128) == u128_max - 1, 14);
+
+    // 16. Result is exactly u128_max, through different numbers than test #10
+    // (u128_max * 10) / 10 = u128_max
+    assert!(math::mul_div_mixed(u128_max, 10u64, 10u128) == u128_max, 15);
+}
+
+#[test]
+#[expected_failure(abort_code = math::EDIVIDE_BY_ZERO)]
+public fun test_mul_div_mixed_div_by_zero() {
+    math::mul_div_mixed(1u128, 1u64, 0u128);
+}
+
+#[test]
+#[expected_failure(abort_code = math::EOVERFLOW)]
+public fun test_mul_div_mixed_result_overflow() {
+    let u128_max = u128::max_value!();
+    math::mul_div_mixed(u128_max, 2u64, 1u128);
+}
+

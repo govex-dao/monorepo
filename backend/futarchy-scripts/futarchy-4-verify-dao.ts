@@ -29,9 +29,9 @@ const getVerifyDaoParams = () => {
     return {
         packageId: futarchyPub.packageId,
         validatorCap: futarchyPub.validatorAdminCapId,
-        dao: daoResults.daoId,
+        dao: '0x6773f4d9d870a7f3d6445812e170ecdc702e63b6769aeac9cb202e9ea4807db0',
         attestationUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Retriever_in_water.jpg',
-        verificationId: requestResults.verificationId,
+        verificationId: '0xc8c463dbb5a05d63cd541708792a04a0bbeca236a3df767b471db6d7bd70bee7',
         network: 'testnet' as Network
     };
 };
