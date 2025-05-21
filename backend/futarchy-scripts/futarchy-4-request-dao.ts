@@ -30,7 +30,7 @@ const getRequestDaoParams = () => {
         feeManager: futarchyPub.feeManagerId,
         factoryObjectId: futarchyPub.factoryId,
         paymentCoinId: payResults.splitCoinObjectId,
-        dao: daoResults.daoId,
+        dao: '0x6773f4d9d870a7f3d6445812e170ecdc702e63b6769aeac9cb202e9ea4807db0',
         attestationUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Retriever_in_water.jpg',
         network: 'testnet' as Network
     };

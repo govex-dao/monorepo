@@ -332,8 +332,8 @@ fun calculate_price_impact(
     amount_out: u64,
     reserve_out: u64,
 ): u128 {
-    let ideal_out = math::mul_div_to_64(amount_in, reserve_out, reserve_in);
-    math::mul_div_to_128(ideal_out - amount_out, FEE_SCALE, ideal_out)
+    let ideal_out = math::mul_div_to_128(amount_in, reserve_out, reserve_in);
+    math::mul_div_mixed(ideal_out - (amount_out as u128), FEE_SCALE, ideal_out)
 }
 
 // Update the LiquidityPool struct price calculation to use TWAP:
@@ -376,7 +376,9 @@ public(package) fun calculate_output(
 ): u64 {
     assert!(reserve_in > 0 && reserve_out > 0, EPOOL_EMPTY);
 
-    // Use standard AMM formula: dx * y / (x + dx)
+    let denominator = reserve_in + amount_in_with_fee;
+    assert!(denominator > 0, EDIV_BY_ZERO);
+    math::mul_div_to_64(amount_in_with_fee, reserve_out, denominator);
     let numerator = math::mul_div_to_64(amount_in_with_fee, reserve_out, 1);
     let denominator = reserve_in + amount_in_with_fee;
 
