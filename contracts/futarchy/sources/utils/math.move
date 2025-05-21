@@ -1,5 +1,6 @@
 module futarchy::math;
 
+use std::u256;
 use std::u128;
 use std::u64;
 
@@ -30,6 +31,16 @@ public fun mul_div_to_128(a: u64, b: u64, c: u64): u128 {
     let c_128 = (c as u128);
     let result = (a_128 * b_128) / c_128;
     result
+}
+
+public fun mul_div_mixed(a: u128, b: u64, c: u128): u128 {
+    assert!(c != 0, EDIVIDE_BY_ZERO);
+    let a_128 = (a as u256);
+    let b_128 = (b as u256);
+    let c_128 = (c as u256);
+    let result = (a_128 * b_128) / c_128;
+    assert!(result <= (u128::max_value!() as u256), EOVERFLOW); // Max u128
+    (result as u128)
 }
 
 /// Safely multiplies two u64 values and divides by a third, rounding up
