@@ -8,8 +8,10 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 // Convert to async function for better error handling
 async function deployContracts() {
     try {
-        // Deploy asset contract
-        const assetPath = path.resolve(__dirname + '/../../contracts/test_asset');
+        console.log('Starting contract deployment process...');
+
+        // --- Deploy asset contract ---
+        const assetPath = path.resolve(__dirname, '../../contracts/test_asset');
         
         // Remove the build directory if it exists
         const assetBuildPath = path.join(assetPath, 'build');
@@ -25,18 +27,18 @@ async function deployContracts() {
             console.log('Removed Move.lock file for asset');
         }
 
-        // Publish first contract
-        await publishPackage({
-            packagePath: __dirname + '/../../contracts/test_asset',
+        console.log('Publishing asset contract...');
+        const assetResults = await publishPackage({
+            packagePath: assetPath,
             network: 'testnet',
-            exportFileName: 'asset-contract',
+            exportFileName: 'asset-contract', // This will result in futarchy-pub-asset-contract-short.json etc.
         });
-
-        console.log('First package published. Waiting 10 seconds...');
+        console.log('Asset package published successfully. Transaction Digest:', assetResults.digest);
+        console.log('Waiting 10 seconds before publishing next package...');
         await delay(10000); // 10 second delay
 
-        // Deploy stable contract
-        const stablePath = path.resolve(__dirname + '/../../contracts/test_stable');
+        // --- Deploy stable contract ---
+        const stablePath = path.resolve(__dirname, '../../contracts/test_stable');
         
         // Remove the build directory if it exists
         const stableBuildPath = path.join(stablePath, 'build');
@@ -52,19 +54,24 @@ async function deployContracts() {
             console.log('Removed Move.lock file for stable');
         }
 
-        // Publish second contract
-        await publishPackage({
-            packagePath: __dirname + '/../../contracts/test_stable',
+        console.log('Publishing stable contract...');
+        const stableResults = await publishPackage({
+            packagePath: stablePath,
             network: 'testnet',
-            exportFileName: 'stable-contract',
+            exportFileName: 'stable-contract', // This will result in futarchy-pub-stable-contract-short.json etc.
         });
+        console.log('Stable package published successfully. Transaction Digest:', stableResults.digest);
+        console.log('All contracts deployed successfully.');
 
-        console.log('Second package published successfully.');
     } catch (error) {
         console.error('Error during contract deployment:', error);
-        throw error;
+        // Re-throw to ensure the promise is rejected and outer catch can handle it
+        throw error; 
     }
 }
 
-// Execute the deployment
-deployContracts().catch(console.error);
+// Execute the deployment and handle any uncaught errors
+deployContracts().catch(error => {
+    console.error('Deployment script failed:', error);
+    process.exit(1); // Exit with a non-zero code to indicate failure
+});

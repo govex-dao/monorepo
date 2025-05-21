@@ -1,28 +1,40 @@
 module my_asset::my_asset {
     use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::option;
-	use sui::url::{Self, Url};
+	use sui::url::{Self};
+    
+    const TOTAL_GVX_SUPPLY_TO_MINT: u64 = 500_000_000; // 500M govex
+    const DECIMALS: u8 = 9;
+    const SYMBOL: vector<u8> = b"GOVEX";
+    const NAME: vector<u8> = b"Govex";
+    const DESCRIPTION: vector<u8> = b"The native token for the Govex Protocol.";
+    const ICON_URL: vector<u8> = b"https://www.govex.ai/images/govex-icon.png";
 
     /// The type identifier of our coin
     public struct MY_ASSET has drop {}
 
     /// Initialize new coin type and make TreasuryCap shared
     fun init(witness: MY_ASSET, ctx: &mut TxContext) {
-        let (treasury, metadata) = coin::create_currency(
+        let (mut treasury_cap, metadata) = coin::create_currency<MY_ASSET>(
             witness,
-            9,                  // decimals
-            b"ASSET",       // symbol
-            b"test_asset",               // name
-            b"",              // description
-            option::some(url::new_unsafe_from_bytes(b"https://images.vexels.com/content/142810/preview/shield-emblem-logo-b04a88.png")),    // url
+            DECIMALS,
+            SYMBOL,
+            NAME,
+            DESCRIPTION,
+            option::some(url::new_unsafe_from_bytes(ICON_URL)),
             ctx
         );
-        // Freeze the metadata object
-        transfer::public_freeze_object(metadata);
-        // Make the treasury cap shared so anyone can mint
-        transfer::public_share_object(treasury);
+
+        let units_per_govex = 10u64.pow(DECIMALS);
+        let total_supply_to_mint = TOTAL_GVX_SUPPLY_TO_MINT * units_per_govex;
+
+        // Transfer and mint the total initial supply of GVX to the publisher.
+        coin::mint_and_transfer(&mut treasury_cap, total_supply_to_mint, ctx.sender(), ctx);
+
+        // Return the metadata object, to keep the token metadata mutable.
+        transfer::public_transfer(metadata, ctx.sender());
+
+        // Return the treasury cap to the publisher, to keep the token mintable.
+        transfer::public_transfer(treasury_cap, ctx.sender());
     }
 
     /// Mint new coins. Anyone can mint since TreasuryCap is shared.
