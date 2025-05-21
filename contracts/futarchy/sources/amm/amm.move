@@ -378,12 +378,9 @@ public(package) fun calculate_output(
 
     let denominator = reserve_in + amount_in_with_fee;
     assert!(denominator > 0, EDIV_BY_ZERO);
-    math::mul_div_to_64(amount_in_with_fee, reserve_out, denominator);
-    let numerator = math::mul_div_to_64(amount_in_with_fee, reserve_out, 1);
-    let denominator = reserve_in + amount_in_with_fee;
-
-    assert!(denominator > 0, EDIV_BY_ZERO);
-    math::mul_div_to_64(numerator, 1, denominator)
+    let numerator = math::mul_div_to_128(amount_in_with_fee, reserve_out, 1);
+    let output = math::mul_div_mixed(numerator, 1, (denominator as u128));
+    (output as u64)
 }
 
 public fun get_outcome_idx(pool: &LiquidityPool): u8 {
