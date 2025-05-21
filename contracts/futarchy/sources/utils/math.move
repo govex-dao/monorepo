@@ -1,7 +1,7 @@
 module futarchy::math;
 
-use std::u256;
 use std::u128;
+use std::u256;
 use std::u64;
 
 // === Introduction ===
