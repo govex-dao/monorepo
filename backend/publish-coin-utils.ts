@@ -2,14 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync } from 'fs';
-import { existsSync, unlinkSync} from 'fs';
+import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { 
+    getFullnodeUrl, 
+    SuiClient, 
+    SuiTransactionBlockResponse, 
+    SuiObjectChange 
+} from '@mysten/sui/client'; // Use client from @mysten/sui/client
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
-import { fromBase64 } from '@mysten/sui/utils';
+import { Transaction } from '@mysten/sui/transactions'; // Use Transaction from @mysten/sui/transactions
+import { fromBase64, isValidSuiAddress } from '@mysten/sui/utils'; // Added isValidSuiAddress
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 
@@ -28,109 +32,128 @@ interface CoinDeploymentResult {
 	upgradeCapId: string;
 	transactionDigest: string;
 	coinType: string; 
-  }
+}
   
-  interface ObjectChange {
-	type: string;
-	packageId?: string;
-	objectType?: string;
-	objectId?: string;
-	owner?: {
-	  Shared?: {
-		initial_shared_version: number;
-	  };
-	};
-  }
-  
-  function parseCoinDeploymentResults(results: any): CoinDeploymentResult {
+function parseCoinDeploymentResults(results: SuiTransactionBlockResponse): CoinDeploymentResult {
 	const objectChanges = results.objectChanges || [];
   
-	// Find published package
-	const published = objectChanges.find((change: ObjectChange) => 
-	  change.type === 'published'
+	let newPackageId: string | undefined;
+	let treasuryCapId: string | undefined;
+	let metadataId: string | undefined;
+	let upgradeCapId: string | undefined;
+	let actualCoinType: string | undefined; // Renamed for clarity
+	let actualModuleName: string | undefined;
+	let actualCoinName: string | undefined;
+
+	const publishedChange = objectChanges.find(
+	  (change): change is Extract<SuiObjectChange, { type: 'published' }> => 
+		change.type === 'published'
 	);
   
-	// Find treasury cap by checking for shared TreasuryCap type
-	const treasuryCap = objectChanges.find((change: ObjectChange) => 
-	  change.objectType?.includes('::coin::TreasuryCap') &&
-	  change.owner?.Shared !== undefined
-	);
+	if (!publishedChange || !publishedChange.packageId || !publishedChange.modules || publishedChange.modules.length === 0) {
+	  throw new Error('Published package ID or module name not found in deployment results.');
+	}
+	newPackageId = publishedChange.packageId;
+	actualModuleName = publishedChange.modules[0]; // Assuming one module defining the coin
   
-	// Find metadata by checking for CoinMetadata type
-	const metadata = objectChanges.find((change: ObjectChange) => 
-	  change.objectType?.includes('::coin::CoinMetadata')
-	);
+	// Find the TreasuryCap first to determine the actual coin name
+	objectChanges.forEach(change => {
+		if (change.type === 'created') {
+			if (change.objectType.startsWith(`0x2::coin::TreasuryCap<${newPackageId}::${actualModuleName}::`)) {
+				const match = change.objectType.match(/0x2::coin::TreasuryCap<([^:]+)::([^:]+)::([^>]+)>/);
+				if (match) {
+					actualCoinName = match[3];
+					actualCoinType = `${newPackageId}::${actualModuleName}::${actualCoinName}`;
+					treasuryCapId = change.objectId;
+				}
+			} else if (change.objectType === '0x2::package::UpgradeCap') {
+				upgradeCapId = change.objectId;
+			}
+		}
+	});
+
+	if (!actualCoinType || !actualCoinName) {
+		throw new Error(`Could not determine coin type for package ${newPackageId} and module ${actualModuleName}. TreasuryCap not found or malformed.`);
+	}
+
+	// Now find CoinMetadata using the determined actualCoinType
+	objectChanges.forEach(change => {
+		if (change.type === 'created') {
+			if (change.objectType === `0x2::coin::CoinMetadata<${actualCoinType}>`) {
+				metadataId = change.objectId;
+			}
+		}
+	});
   
-	// Find upgrade cap
-	const upgradeCap = objectChanges.find((change: ObjectChange) => 
-	  change.objectType === '0x2::package::UpgradeCap'
-	);
-  
-	// Extract coin type from TreasuryCap's objectType
-	const coinType = treasuryCap?.objectType?.match(/<(.+)>/)?.[1];
-  
-	// Add error checking for required fields
-	if (!published?.packageId) throw new Error('Package ID not found in deployment results');
-	if (!treasuryCap?.objectId) throw new Error('Treasury Cap ID not found in deployment results');
-	if (!metadata?.objectId) throw new Error('Metadata ID not found in deployment results');
-	if (!upgradeCap?.objectId) throw new Error('UpgradeCap ID not found in deployment results');
-	if (!results.digest) throw new Error('Transaction digest not found');
-	if (!coinType) throw new Error('Coin type not found in deployment results');
+	if (!treasuryCapId) {
+	  throw new Error(`Treasury Cap object (expected pattern: 0x2::coin::TreasuryCap<${newPackageId}::${actualModuleName}::COIN_NAME>) not found in created objects.`);
+	}
+	if (!metadataId) {
+	  throw new Error(`Coin Metadata object (type: 0x2::coin::CoinMetadata<${actualCoinType}>) not found in created objects.`);
+	}
+	if (!upgradeCapId) {
+	  throw new Error('UpgradeCap object (type: 0x2::package::UpgradeCap) not found in created objects.');
+	}
+	if (!results.digest) {
+	  throw new Error('Transaction digest not found in results.');
+	}
   
 	return {
-	  packageId: published.packageId,
-	  treasuryCapId: treasuryCap.objectId,
-	  metadataId: metadata.objectId,
-	  upgradeCapId: upgradeCap.objectId,
+	  packageId: newPackageId,
+	  treasuryCapId: treasuryCapId,
+	  metadataId: metadataId,
+	  upgradeCapId: upgradeCapId,
 	  transactionDigest: results.digest,
-	  coinType  // Added this field
+	  coinType: actualCoinType,
 	};
   }
 
-/** Returns a signer based on the active address of system's sui. */
-export const getSigner = () => {
+export const getSigner = (): Ed25519Keypair => {
 	const sender = getActiveAddress();
+	const keystorePath = path.join(homedir(), '.sui', 'sui_config', 'sui.keystore');
+    if (!existsSync(keystorePath)) {
+        throw new Error(`Keystore file not found at: ${keystorePath}. Please ensure the Sui CLI is configured.`);
+    }
+	const keystore = JSON.parse(readFileSync(keystorePath, 'utf8'));
 
-	const keystore = JSON.parse(
-		readFileSync(path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'), 'utf8'),
-	);
+	if (!Array.isArray(keystore)) {
+        throw new Error('Invalid keystore format. Expected an array of keys.');
+    }
 
 	for (const priv of keystore) {
+        if (typeof priv !== 'string') continue; // Ensure priv is a string
 		const raw = fromBase64(priv);
 		if (raw[0] !== 0) {
 			continue;
 		}
-
 		const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
 		if (pair.getPublicKey().toSuiAddress() === sender) {
 			return pair;
 		}
 	}
-
-	throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`Keypair not found for sender address: ${sender} in keystore. Make sure the active address has a corresponding key.`);
 };
 
-/** Get the client for the specified network. */
-export const getClient = (network: Network) => {
+export const getClient = (network: Network): SuiClient => {
 	return new SuiClient({ url: getFullnodeUrl(network) });
 };
 
-/** A helper to sign & execute a transaction. */
-export const signAndExecute = async (txb: Transaction, network: Network) => {
+// Reverted to signAndExecuteTransaction and adjusted parameters for older SDK
+export const signAndExecute = async (txb: Transaction, network: Network): Promise<SuiTransactionBlockResponse> => {
 	const client = getClient(network);
 	const signer = getSigner();
 
-	return client.signAndExecuteTransaction({
-		transaction: txb,
+	// For older SDKs that use signAndExecuteTransaction with Transaction objects
+	return client.signAndExecuteTransaction({ // Reverted to this method name
+		transaction: txb, // 'transaction' instead of 'transactionBlock'
 		signer,
 		options: {
 			showEffects: true,
-			showObjectChanges: true,
+			showObjectChanges: true, 
 		},
 	});
 };
 
-/** Publishes a package and saves the package id to a specified json file. */
 export const publishPackage = async ({
 	packagePath,
 	network,
@@ -139,7 +162,7 @@ export const publishPackage = async ({
 	packagePath: string;
 	network: Network;
 	exportFileName: string;
-}) => {
+}): Promise<SuiTransactionBlockResponse> => {
 	const txb = new Transaction();
 
 	const { modules, dependencies } = JSON.parse(
@@ -148,38 +171,42 @@ export const publishPackage = async ({
 		}),
 	);
 
-	txb.setGasBudget(200000000);
+	txb.setGasBudget(200000000); 
 	const cap = txb.publish({
 		modules,
 		dependencies,
 	});
 
-	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
 	txb.transferObjects([cap], getActiveAddress());
 
+
 	const results = await signAndExecute(txb, network);
-	console.log(results);	
-	// Single write operation that replaces your previous two writes
+	console.log(JSON.stringify(results, null, 2)); 
 
 	const resultsDir = 'futarchy-results';
+	if (!existsSync(resultsDir)) {
+		mkdirSync(resultsDir, { recursive: true });
+		console.log(`Created directory: ${resultsDir}`);
+	}
+	
+	const parsedDeploymentResults = parseCoinDeploymentResults(results); 
+	
 	const fileConfigs = [
-	  { path: path.join(resultsDir, `futarchy-pub-${exportFileName}-short.json`), content: parseCoinDeploymentResults(results) },
+	  { path: path.join(resultsDir, `futarchy-pub-${exportFileName}-short.json`), content: parsedDeploymentResults },
 	  { path: path.join(resultsDir, `futarchy-pub-${exportFileName}-full.json`), content: results },
-	  { path: `${exportFileName}.json`, content: parseCoinDeploymentResults(results) }
+	  { path: `${exportFileName}.json`, content: parsedDeploymentResults } 
 	];
 
-	// Delete existing files
 	fileConfigs.forEach(({ path: filePath }) => {
 	  if (existsSync(filePath)) {
 		unlinkSync(filePath);
 	  }
 	});
 	
-	// Write all files
 	fileConfigs.forEach(({ path: filePath, content }) => {
 	  writeFileSync(filePath, JSON.stringify(content, null, 2), { encoding: 'utf8', flag: 'w' });
+	  console.log(`Written results to: ${filePath}`);
 	});
 
 	return results;
-
 };

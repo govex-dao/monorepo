@@ -2,12 +2,12 @@ module govex::govex {
     use sui::coin;
     use sui::url;
 
-    const TOTAL_GVX_SUPPLY_TO_MINT: u64 = 1_000_000_000; // 1B GVX
+    const TOTAL_GVX_SUPPLY_TO_MINT: u64 = 500_000_000; // 500M govex
     const DECIMALS: u8 = 9;
-    const SYMBOL: vector<u8> = b"GVX";
+    const SYMBOL: vector<u8> = b"GOVEX";
     const NAME: vector<u8> = b"Govex";
     const DESCRIPTION: vector<u8> = b"The native token for the Govex Protocol.";
-    const ICON_URL: vector<u8> = b"https://www.govex.ai/images/gvx-icon.png";
+    const ICON_URL: vector<u8> = b"https://www.govex.ai/images/govex-icon.png";
 
     /// The type identifier of our coin
     public struct GOVEX has drop {}
@@ -20,7 +20,7 @@ module govex::govex {
             SYMBOL,
             NAME,
             DESCRIPTION,
-            option::some(url::new_unsafe_from_bytes(ICON_URL)),    // url
+            option::some(url::new_unsafe_from_bytes(ICON_URL)),
             ctx
         );
 
