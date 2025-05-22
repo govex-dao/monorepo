@@ -2,7 +2,7 @@ module govex::govex {
     use sui::coin;
     use sui::url;
 
-    const TOTAL_GVX_SUPPLY_TO_MINT: u64 = 500_000_000; // 500M govex
+    const TOTAL_GVX_SUPPLY_TO_MINT: u64 = 750_000_000; // 750M govex
     const DECIMALS: u8 = 9;
     const SYMBOL: vector<u8> = b"GOVEX";
     const NAME: vector<u8> = b"Govex";
