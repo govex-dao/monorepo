@@ -41,7 +41,7 @@ export async function createProposalTransaction(
 
     const txb = new Transaction();
 
-    const [paymentCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(10000)]);
+    const [paymentCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(10_000_000_000)]);
 
     // Helper to prepare coins
     async function prepareCoin(
@@ -154,7 +154,7 @@ export async function createProposalTransaction(
       ],
     });
 
-    txb.setGasBudget(1000000000);
+    txb.setGasBudget(11_000_000_000);
 
     return txb;
   } catch (error) {

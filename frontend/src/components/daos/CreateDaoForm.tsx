@@ -326,9 +326,9 @@ const CreateDaoForm = () => {
 
     try {
       const tx = new Transaction();
-      tx.setGasBudget(50000000);
+      tx.setGasBudget(20_500_000_000);
 
-      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10000)]);
+      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(20_000_000_000)]);
 
       const chainAdjustedTwapThreshold = formData.twapThreshold * 1000;
 
