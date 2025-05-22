@@ -6,6 +6,7 @@ use std::u128;
 use std::u256;
 use std::u64;
 use sui::clock::{Self, Clock};
+use sui::event;
 
 // === Introduction ===
 // Crankless Time Weighted Average Price (TWAP) Oracle
@@ -51,6 +52,11 @@ public struct Oracle has key, store {
     // Maximum absolute step size for TWAP calculations
     market_start_time: u64,
     twap_initialization_price: u128,
+}
+
+// === Events ===
+public struct PriceEvent has copy, drop {
+    last_price: u128,
 }
 
 // ======== Constructor ========
@@ -242,6 +248,11 @@ fun intra_window_accumulation(
     let time_since_last_window_end = timestamp - oracle.last_window_end;
     oracle.last_timestamp = timestamp;
     oracle.last_price = (scaled_price as u128);
+
+    event::emit(PriceEvent {
+        last_price: oracle.last_price,
+    });
+
     if (time_since_last_window_end == TWAP_PRICE_CAP_WINDOW) {
         // Update last window data on window boundary
         oracle.last_window_end = timestamp;
@@ -396,6 +407,11 @@ fun multi_full_window_accumulation(
         oracle.total_cumulative_price + cumulative_price_contribution;
     oracle.total_cumulative_price = oracle.total_cumulative_price + cumulative_price_contribution;
     oracle.last_price = p_n_w_effective;
+
+    event::emit(PriceEvent {
+        last_price: oracle.last_price,
+    });
+
     oracle.last_window_twap = p_n_w_effective;
 }
 
