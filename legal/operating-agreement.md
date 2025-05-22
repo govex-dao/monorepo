@@ -39,7 +39,7 @@ II.2 **Authority of the Company.** The Company shall have and exercise all of th
 
 **MEMBERS**
 
-III.1 **Member Eligibility.**  All Members shall at all times own their Membership Interests in their own right.  A person becomes a Member by obtaining at least 1 unit of $GVX Token(s) 0xf247780882cff3c36023fdc9f685effa678d82f83da3d2388fe85bb7c695c185::govex::GOVEX, created from and constricted by the parameters defined in the Smart Contract located at 0xf247780882cff3c36023fdc9f685effa678d82f83da3d2388fe85bb7c695c185 on the Sui Network (the “**Governance Token Smart Contract**”). 
+III.1 **Member Eligibility.** All Members shall at all times own their Membership Interests in their own right. A person becomes a Member by obtaining at least 1 unit of $GOVEX Token(s) 0x0f5a49f57d89b812eface201194381d5c81b462f39b90b220a024750737ea5d4::govex::GOVEX, created from and constricted by the parameters defined in the Smart Contract (module) published within the package 0x0f5a49f57d89b812eface201194381d5c81b462f39b90b220a024750737ea5d4 on the Sui Network (the “**Governance Token Smart Contract**”).
 
 III.2 **Initial Members.**  The names and addresses or Digital Ledger identifiers of the Initial Members and Managing Members are as reflected in “Exhibit A” attached hereto and made a part hereof as if set forth fully herein.	
 
@@ -63,14 +63,13 @@ IV.5 **Miscellaneous Obligations.** Each Member shall be duty-bound to act consi
 
 **MANAGEMENT**
 
-V.1 **Algorithmic** **Management.**   The ordinary and usual decisions concerning business affairs of the Company shall be made by the Members, with proposals submitted to and adjudicated by the Smart Contracts located on the Sui Network at the address 0x689501ab656d11bae3bea22d128fefee97ce83b1b71bded52f71f5939f4a1d23 and \[ADDRESS TO BE UPDATED LATER IN AN AMENDMENT \].
+V.1 **Algorithmic** **Management.**   The ordinary and usual decisions concerning business affairs of the Company shall be made by the Members, with proposals submitted to and adjudicated by the Smart Contract for market-governed proposals (the "DAO Contract") located at 0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c, which operates with package ID 0x112d0c1e539149e400428a00a05b4fd882548ab9b3aafdf3d8db74be73336cd2. 
 
-The decision-making of the Company shall be managed and made algorithmically as follows:
+The decision-making of the Company shall be managed and made algorithmically as follows: 
 
-1. In the case that one member owns every single unit of the token outlined in Article III.1, they can skip the proposal process and automatically pass proposals using messages in this governance contract 0x689501ab656d11bae3bea22d128fefee97ce83b1b71bded52f71f5939f4a1d23 to unilaterally make decisions for the company. 
+1. Proposals are to be submitted and markets observed and managed by the DAO Contract located on the Sui blockchain at address 0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c. 
 
-   2. In the case of multiple members, proposals are to be submitted and markets observed and managed by the Smart Contract located on the Sui blockchain at address \[ADDRESS TO BE UPDATED LATER IN AN AMENDMENT \]  
-   3. The proposal shall be implemented in the manner specified in the approved proposal. 
+2. The proposal shall be implemented in the manner specified in the approved proposal. 
 
 V.2 **Managing Members.** The Managing Members have the right but not the obligation to make the ordinary and usual decisions concerning the business affairs of the Company, only when:
 
@@ -146,7 +145,7 @@ X.4 **Distribution to interested parties on dissolution.** Upon a court order di
 
 **AMENDMENT** 
 
-XI.1 **Amendment or Modification.** This Agreement may be amended or modified from time to time as approved pursuant to Article V.  All proposed amendments must be submitted via the designated governance contract(s), with a Git-style diff that clearly delineates all changes to the Agreement. The diff shall be attached to the amendment proposal and will serve as sufficient notice of the proposed modifications. All amendments and related documentation must be drafted exclusively in English.
+XI.1 **Amendment or Modification.** This Agreement may be amended or modified from time to time as approved pursuant to Article V. All proposed amendments must be submitted via the designated governance contract(s), with a Git-style diff that clearly delineates all changes to the Agreement. This diff serves as sufficient notice of the proposed modifications. For clarity, this diff may be contained within the proposal details of an on-chain submission as outlined in Article V.1, provided the proposal title or primary description clearly indicates it is an upgrade or amendment proposal and the diff itself is not obfuscated or made unreasonably difficult to access. For the safety of members, any details or changes intended to amend this document that are presented solely through external links within the proposal shall be invalid for the purposes of amending this document and will not constitute sufficient notice as required herein. All amendments and related documentation must be drafted exclusively in English.
 
 **ARTICLE XII**
 
@@ -188,8 +187,7 @@ By: Greshams Code
 * Domain name and email: govex.ai and contact@govex.ai  
 * 20 $SUI on the Sui network.  
 * 2,000 $USDC on the Sui network.  
-* $GVX Metadata cap (for altering the $GVX token metadata)  0x3ff75be8d0d2acb6f7b1d7a18003964b90774a500a115bcd8db72dc949281009  
-* $GVX Token treasury cap (for minting new $GVX tokens) 0xb070dfec9c5e4d139ed0fd2b827844d4cc3337be83355c8bbaa4ef6990e457b0
+* $GOVEX Metadata cap (for altering the $GOVEX token metadata) 0x0e23f21e02d4bfccdcdf9a1ba9a5f55f0976f73c4279ed002511f384bf3f4e8b * $GOVEX Token treasury cap (for minting new $GOVEX tokens) 0xf045b7fedbdfe8be4d34a80b15125b0fc0b46eefc57f2d2f3674fbf45fc538f4
 
 
    

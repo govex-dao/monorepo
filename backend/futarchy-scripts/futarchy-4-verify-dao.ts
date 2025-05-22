@@ -29,10 +29,10 @@ const getVerifyDaoParams = () => {
     return {
         packageId: futarchyPub.packageId,
         validatorCap: futarchyPub.validatorAdminCapId,
-        dao: '0x6773f4d9d870a7f3d6445812e170ecdc702e63b6769aeac9cb202e9ea4807db0',
-        attestationUrl: 'https://upload.wikimedia.org/wikipedia/commons/d/d5/Retriever_in_water.jpg',
-        verificationId: '0xc8c463dbb5a05d63cd541708792a04a0bbeca236a3df767b471db6d7bd70bee7',
-        network: 'testnet' as Network
+        dao: '0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c',
+        attestationUrl: 'https://discord.com/channels/1314531947590193212/1314531948772720642/1375105404089929890',
+        verificationId: '0xf41cc798452fc30761ab4b980f1e7bc62900b124948f72a28589fb7106b12d34',
+        network: 'mainnet' as Network
     };
 };
 
