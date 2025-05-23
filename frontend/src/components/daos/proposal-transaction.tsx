@@ -41,7 +41,9 @@ export async function createProposalTransaction(
 
     const txb = new Transaction();
 
-    const [paymentCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(10_000_000_000)]);
+    const [paymentCoin] = txb.splitCoins(txb.gas, [
+      txb.pure.u64(10_000_000_000),
+    ]);
 
     // Helper to prepare coins
     async function prepareCoin(

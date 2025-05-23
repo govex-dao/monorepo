@@ -23,10 +23,10 @@ const ERRORS = {
  * @throws Error if input validation fails or swap calculation is invalid
  */
 export function calculateSwapAmounts(
-  amountIn: bigint,    // User's input amount
-  reserveIn: bigint,   // Reserve of the token being GIVEN by user
-  reserveOut: bigint,  // Reserve of the token being RECEIVED by user
-  isBuy: boolean,      // True if buying asset (Stable -> Asset), False if selling asset (Asset -> Stable)
+  amountIn: bigint, // User's input amount
+  reserveIn: bigint, // Reserve of the token being GIVEN by user
+  reserveOut: bigint, // Reserve of the token being RECEIVED by user
+  isBuy: boolean, // True if buying asset (Stable -> Asset), False if selling asset (Asset -> Stable)
 ): SwapAmountsResult {
   if (amountIn === 0n) throw new Error("Zero amount not allowed"); // Matches contract
 
@@ -34,7 +34,8 @@ export function calculateSwapAmounts(
   let amountInForSwapCalc_BI = amountIn; // This is the amount used in the x*y=k formula for the "dx" part
   let amountOutBeforeOutputFee_BI: bigint;
 
-  if (isBuy) { // Buying Asset (Stable -> Asset). Fee is on Stable INPUT.
+  if (isBuy) {
+    // Buying Asset (Stable -> Asset). Fee is on Stable INPUT.
     actualAmmFee_BI = calculateFee(amountIn); // Fee on stable input
     amountInForSwapCalc_BI = amountIn - actualAmmFee_BI;
 
@@ -48,35 +49,37 @@ export function calculateSwapAmounts(
 
     // Denominator for X*Y=K
     const denominator = reserveIn + amountInForSwapCalc_BI; // reserveIn is stableReserve
-    if (denominator === 0n && amountInForSwapCalc_BI > 0n) { // reserveIn is 0, but input is positive
-        amountOutBeforeOutputFee_BI = reserveOut; // Effectively, you'd take the whole output reserve, but this needs EPOOL_EMPTY check
-    } else if (denominator === 0n) { // reserveIn is 0, input is 0
-        amountOutBeforeOutputFee_BI = 0n;
+    if (denominator === 0n && amountInForSwapCalc_BI > 0n) {
+      // reserveIn is 0, but input is positive
+      amountOutBeforeOutputFee_BI = reserveOut; // Effectively, you'd take the whole output reserve, but this needs EPOOL_EMPTY check
+    } else if (denominator === 0n) {
+      // reserveIn is 0, input is 0
+      amountOutBeforeOutputFee_BI = 0n;
     } else {
-        amountOutBeforeOutputFee_BI = mulDivFloor(
-            amountInForSwapCalc_BI,
-            reserveOut, // assetReserve
-            denominator
-        );
+      amountOutBeforeOutputFee_BI = mulDivFloor(
+        amountInForSwapCalc_BI,
+        reserveOut, // assetReserve
+        denominator,
+      );
     }
     // For buys, amountOutBeforeOutputFee_BI is the final exactAmountOut_BI (asset)
     // No further fees on output for buys.
-
-  } else { // Selling Asset (Asset -> Stable). Fee is on Stable OUTPUT.
+  } else {
+    // Selling Asset (Asset -> Stable). Fee is on Stable OUTPUT.
     // amountInForSwapCalc_BI remains `amountIn` (asset amount)
     // actualAmmFee_BI will be calculated on the output.
 
     const denominator = reserveIn + amountInForSwapCalc_BI; // reserveIn is assetReserve
-     if (denominator === 0n && amountInForSwapCalc_BI > 0n) {
-        amountOutBeforeOutputFee_BI = reserveOut;
+    if (denominator === 0n && amountInForSwapCalc_BI > 0n) {
+      amountOutBeforeOutputFee_BI = reserveOut;
     } else if (denominator === 0n) {
-        amountOutBeforeOutputFee_BI = 0n;
+      amountOutBeforeOutputFee_BI = 0n;
     } else {
-        amountOutBeforeOutputFee_BI = mulDivFloor(
-            amountInForSwapCalc_BI, // asset_in
-            reserveOut, // stableReserve
-            denominator
-        );
+      amountOutBeforeOutputFee_BI = mulDivFloor(
+        amountInForSwapCalc_BI, // asset_in
+        reserveOut, // stableReserve
+        denominator,
+      );
     }
     // Now, calculate fee on this stable output
     actualAmmFee_BI = calculateFee(amountOutBeforeOutputFee_BI);
@@ -94,7 +97,8 @@ export function calculateSwapAmounts(
   let exactAmountOut_BI: bigint;
   if (isBuy) {
     exactAmountOut_BI = amountOutBeforeOutputFee_BI; // No output fee for buys
-  } else { // Selling Asset (Asset -> Stable)
+  } else {
+    // Selling Asset (Asset -> Stable)
     exactAmountOut_BI = amountOutBeforeOutputFee_BI - actualAmmFee_BI;
     if (exactAmountOut_BI < 0n) {
       // Fee was greater than calculated output. Result is 0.
@@ -110,22 +114,26 @@ export function calculateSwapAmounts(
 
   // For sells (!isBuy), contract deducts `amount_out_before_fee`
   // For buys (isBuy), contract deducts `amount_out` (which is asset_out)
-  const amountDeductedFromOutputReserve = isBuy ? exactAmountOut_BI : amountOutBeforeOutputFee_BI;
+  const amountDeductedFromOutputReserve = isBuy
+    ? exactAmountOut_BI
+    : amountOutBeforeOutputFee_BI;
   const newReserveOut_BI = reserveOut - amountDeductedFromOutputReserve;
 
   // Final check on reserves (should be caught by the EPOOL_EMPTY earlier, but good safeguard)
   // Contract ensures new reserves are > 0 implicitly.
-  if (newReserveOut_BI <= 0n && !(newReserveOut_BI === 0n && amountDeductedFromOutputReserve === reserveOut)) {
-      // This means we tried to take more than available, or exactly drained it but something is off.
-      // The contract's `X < Y_reserve` effectively means new_Y_reserve must be > 0.
-      // So if newReserveOut_BI is 0 or less, it's an issue unless it was a perfect drain.
-      // A simpler `if (newReserveOut_BI <= 0n)` to match the contract strictness that `new_reserve > 0` is needed.
-      // The condition amountOutBeforeOutputFee_BI >= reserveOut should have caught this.
-      // If newReserveOut_BI === 0n, it means the pool was perfectly drained of that token, which is allowed if the output was exactly reserveOut.
-      // But the contract's check `amount_out < pool.asset_reserve` means `new_reserve > 0`. So `newReserveOut_BI <= 0n` is the right proxy.
-      throw new Error(ERRORS.INSUFFICIENT_RESERVES);
+  if (
+    newReserveOut_BI <= 0n &&
+    !(newReserveOut_BI === 0n && amountDeductedFromOutputReserve === reserveOut)
+  ) {
+    // This means we tried to take more than available, or exactly drained it but something is off.
+    // The contract's `X < Y_reserve` effectively means new_Y_reserve must be > 0.
+    // So if newReserveOut_BI is 0 or less, it's an issue unless it was a perfect drain.
+    // A simpler `if (newReserveOut_BI <= 0n)` to match the contract strictness that `new_reserve > 0` is needed.
+    // The condition amountOutBeforeOutputFee_BI >= reserveOut should have caught this.
+    // If newReserveOut_BI === 0n, it means the pool was perfectly drained of that token, which is allowed if the output was exactly reserveOut.
+    // But the contract's check `amount_out < pool.asset_reserve` means `new_reserve > 0`. So `newReserveOut_BI <= 0n` is the right proxy.
+    throw new Error(ERRORS.INSUFFICIENT_RESERVES);
   }
-
 
   return {
     ammFee_BI: actualAmmFee_BI,
