@@ -1,14 +1,13 @@
 import { fromScaledBigInt, mulDivFloor, toScaledBigInt } from "../bigints";
 import {
   calculatePriceMetrics,
-  PRICE_SCALE,
-  PRICE_SCALE_BI,
 } from "./priceMetrics";
 import { calculateSwapAmounts } from "./swapAmounts";
 import { SwapParams, SwapBreakdown } from "./types";
 
 // Constants
 export const SWAP_FEE_BPS = 30; // 0.3% fee in basis points
+export const SWAP_FEE_BPS_BI = 30n; // 0.3% fee in basis points as BigInt
 export const DEFAULT_SLIPPAGE_BPS = 50;
 const MAX_BPS = 10000;
 
@@ -44,13 +43,12 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
     isBuy,
     slippageBps = DEFAULT_SLIPPAGE_BPS,
   } = params;
-  const slippageBps_BI = BigInt(slippageBps);
 
-  // Input validation
-  if (amountIn < 0) throw new Error(ERRORS.INVALID_AMOUNT);
+  // Input validation - match Move's behavior (reject zero amounts)
+  if (amountIn <= 0) throw new Error(ERRORS.INVALID_AMOUNT);
   if (reserveIn <= 0 || reserveOut <= 0)
     throw new Error(ERRORS.INVALID_POOL_STATE);
-  if (slippageBps_BI < 0n || slippageBps_BI >= BigInt(MAX_BPS))
+  if (slippageBps < 0 || slippageBps >= MAX_BPS)
     throw new Error(ERRORS.INVALID_SLIPPAGE);
 
   // Convert inputs to BigInt
@@ -60,36 +58,28 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
     toScaledBigInt(amountIn),
   ];
 
-  if (amountIn === 0) {
-    const price =
-      reserveIn_BI > 0n
-        ? Number(mulDivFloor(reserveOut_BI, PRICE_SCALE_BI, reserveIn_BI)) /
-          PRICE_SCALE
-        : 0;
-    return {
-      exactAmountOut: 0,
-      minAmountOut: 0,
-      ammFee: 0,
-      priceImpact: 0,
-      averagePrice: price,
-      finalPrice: price,
-      startPrice: price,
-      newReserveIn: reserveIn,
-      newReserveOut: reserveOut,
-    };
-  }
-
-  // Calculate swap amounts and price metrics
+  // Calculate swap amounts
   const swapAmounts = calculateSwapAmounts(
     amountIn_BI,
     reserveIn_BI,
     reserveOut_BI,
     isBuy,
   );
-  const { ammFee_BI, exactAmountOut_BI, newReserveIn_BI, newReserveOut_BI } =
-    swapAmounts;
+  const { 
+    ammFee_BI, 
+    exactAmountOut_BI, 
+    newReserveIn_BI, 
+    newReserveOut_BI,
+    amountInAfterFee_BI 
+  } = swapAmounts;
+
+  // Calculate amount out before fee for price metrics (matching Move's behavior)
+  const amountOutBeforeFee_BI = isBuy 
+    ? exactAmountOut_BI  // For buys, fee is on input so output is already "before fee"
+    : exactAmountOut_BI + ammFee_BI; // For sells, add back the fee to get before-fee amount
 
   // Calculate slippage-adjusted minimum output
+  const slippageBps_BI = BigInt(slippageBps);
   const slippageFactor_BI = BigInt(MAX_BPS) - slippageBps_BI;
   if (slippageFactor_BI < 0n) throw new Error(ERRORS.NEGATIVE_SLIPPAGE_FACTOR);
   const minAmountOut_BI = mulDivFloor(
@@ -99,9 +89,10 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
   );
 
   // Calculate price metrics in stable
+  // For sells: use amountOutBeforeFee to match Move's price_impact calculation
   const priceMetrics = calculatePriceMetrics(
-    isBuy ? amountIn_BI : exactAmountOut_BI,
-    isBuy ? exactAmountOut_BI : amountIn_BI,
+    isBuy ? amountInAfterFee_BI : amountOutBeforeFee_BI, // stable amount
+    isBuy ? exactAmountOut_BI : amountIn_BI, // asset amount
     isBuy ? reserveOut_BI : reserveIn_BI, // assetReserve
     isBuy ? reserveIn_BI : reserveOut_BI, // stableReserve
     isBuy ? newReserveOut_BI : newReserveIn_BI, // newAssetReserve

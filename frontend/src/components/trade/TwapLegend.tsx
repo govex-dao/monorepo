@@ -39,7 +39,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
       (value / ON_CHAIN_PRICE_SCALING_FACTOR) *
       Math.pow(10, asset_decimals - stable_decimals);
 
-    return adjustedValue.toFixed(5);
+    return adjustedValue.toFixed(7);
   };
 
   // Generate default colors if not provided

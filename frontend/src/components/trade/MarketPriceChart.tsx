@@ -438,8 +438,8 @@ const MarketPriceChart = ({
         priceLineVisible: false,
         priceFormat: {
           type: "price",
-          precision: 5,
-          minMove: 0.00001,
+          precision: 7,
+          minMove: 0.0000001,
         },
       });
 

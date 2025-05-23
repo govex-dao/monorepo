@@ -20,7 +20,7 @@ export function calculateFee(
   amount: bigint,
   feeBps: bigint = SWAP_FEE_BPS_BI,
 ): bigint {
-  if (amount <= 0n) return 1n;
+  if (amount <= 0n) throw new Error("Invalid amount"); // Match contract behavior
   const calculatedFee = mulDivFloor(amount, feeBps, 10000n);
   return calculatedFee === 0n ? 1n : calculatedFee;
 }
