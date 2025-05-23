@@ -397,6 +397,12 @@ export const handleDAOObjects = async (events: SuiEvent[], type: string) => {
                 continue;
             }
 
+            // Loading from same server creating issues os adding quick fix
+            if (data.icon_url === "https://www.govex.ai/images/govex-icon.png") {
+                data.icon_url = "https://raw.githubusercontent.com/govex-dao/monorepo/refs/heads/main/frontend/public/images/govex-icon.png";
+                console.log(`Replaced legacy govex-icon.png URL for DAO ID: ${data.dao_id} with new GitHub URL.`);
+            }
+
             let cachedImagePath = null;
             let finalIconUrl = data.icon_url;
             
