@@ -1,7 +1,5 @@
 import { fromScaledBigInt, mulDivFloor, toScaledBigInt } from "../bigints";
-import {
-  calculatePriceMetrics,
-} from "./priceMetrics";
+import { calculatePriceMetrics } from "./priceMetrics";
 import { calculateSwapAmounts } from "./swapAmounts";
 import { SwapParams, SwapBreakdown } from "./types";
 
@@ -65,17 +63,17 @@ export function calculateSwapBreakdown(params: SwapParams): SwapBreakdown {
     reserveOut_BI,
     isBuy,
   );
-  const { 
-    ammFee_BI, 
-    exactAmountOut_BI, 
-    newReserveIn_BI, 
+  const {
+    ammFee_BI,
+    exactAmountOut_BI,
+    newReserveIn_BI,
     newReserveOut_BI,
-    amountInAfterFee_BI 
+    amountInAfterFee_BI,
   } = swapAmounts;
 
   // Calculate amount out before fee for price metrics (matching Move's behavior)
-  const amountOutBeforeFee_BI = isBuy 
-    ? exactAmountOut_BI  // For buys, fee is on input so output is already "before fee"
+  const amountOutBeforeFee_BI = isBuy
+    ? exactAmountOut_BI // For buys, fee is on input so output is already "before fee"
     : exactAmountOut_BI + ammFee_BI; // For sells, add back the fee to get before-fee amount
 
   // Calculate slippage-adjusted minimum output
