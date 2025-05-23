@@ -6,7 +6,10 @@ contracts/test_asset/build/
 contracts/futarchy/node_modules/
 
 # Backend
-backend/public/
+backend/public/*
+!backend/public/dao-images/
+backend/public/dao-images/*
+!backend/public/dao-images/0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c-390a4821b921.png
 backend/node_modules/
 backend/.env
 backend/dev.db
