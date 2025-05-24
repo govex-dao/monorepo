@@ -5,6 +5,7 @@ import {
   ISeriesApi,
   Time,
   ColorType,
+  TickMarkType,
   PriceScaleMode,
 } from "lightweight-charts";
 import { CONSTANTS } from "@/constants";
@@ -412,6 +413,29 @@ const MarketPriceChart = ({
         fixLeftEdge: true,
         fixRightEdge: true,
         rightBarStaysOnScroll: true,
+        // VVV tickMarkFormatter REMAINS HERE VVV - This converts UTC to the USER'S LOCAL TIMEZONE for display
+        tickMarkFormatter: (time: Time, tickType: TickMarkType, locale: string) => {
+          const date = new Date((time as number) * 1000); // time is UTC epoch seconds
+
+          // Determine the user's actual IANA timezone
+          const userTimeZone = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC';
+          // 'locale' comes from chart.options.localization.locale (navigator.language)
+          // 'userTimeZone' dictates the actual time offset.
+          switch (tickType) {
+            case TickMarkType.Year:
+              return date.toLocaleDateString(locale, { year: 'numeric', timeZone: userTimeZone });
+            case TickMarkType.Month:
+              return date.toLocaleDateString(locale, { month: 'short', timeZone: userTimeZone });
+            case TickMarkType.DayOfMonth:
+              return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: userTimeZone });
+            case TickMarkType.Time: // Chart uses this if secondsVisible is false or zoomed out
+              return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: userTimeZone, hour12: false });
+            case TickMarkType.TimeWithSeconds: // Chart uses this if secondsVisible is true and zoomed in
+              return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: userTimeZone, hour12: false });
+            default: // Fallback
+              return date.toLocaleString(locale, { timeZone: userTimeZone, hour12: false });
+          }
+        },
       },
       rightPriceScale: {
         borderColor: "transparent",
