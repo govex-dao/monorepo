@@ -193,6 +193,10 @@ public fun get_creation_time(state: &MarketState): u64 {
 public(package) fun get_trading_end_time(state: &MarketState): Option<u64> {
     state.trading_end
 }
+
+public fun get_trading_start(state: &MarketState): u64 {
+    state.trading_start
+}
 // === Test Functions ===
 #[test_only]
 public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {

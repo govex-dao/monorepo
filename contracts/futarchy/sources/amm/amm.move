@@ -76,17 +76,12 @@ public(package) fun new_pool(
     check_price_under_max(twap_initialization_price);
 
     // Initialize oracle
-    let mut oracle = oracle::new_oracle(
+    let oracle = oracle::new_oracle(
         twap_initialization_price,
         start_time,
         twap_start_delay,
         twap_step_max,
         ctx, // Add ctx parameter here
-    );
-    oracle::write_observation(
-        &mut oracle,
-        start_time,
-        initial_price,
     );
 
     // Create pool object as usual
@@ -286,6 +281,11 @@ fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     oracle::write_observation(oracle, timestamp, price)
 }
 
+public(package) fun write_current_price_observation(pool: &mut LiquidityPool, timestamp: u64) {
+    let current_price = get_current_price(pool);
+    oracle::write_observation(&mut pool.oracle, timestamp, current_price);
+}
+
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
     &pool.oracle
 }
@@ -354,6 +354,11 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
     let current_price = get_current_price(pool);
     // Use the sum of reserves as a liquidity measure
     oracle::write_observation(&mut pool.oracle, timestamp, current_price);
+}
+
+
+public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, market_start_time: u64) {
+    oracle::set_oracle_start_time(&mut pool.oracle, market_start_time);
 }
 
 // ======== Internal Functions ========
