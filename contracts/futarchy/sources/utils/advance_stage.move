@@ -129,7 +129,7 @@ fun initialize_oracles_for_trading<AssetType, StableType>(
         amm::set_oracle_start_time(pool, trading_start);
         // Write the first observation at trading start
         // Then write a fresh observation at the trading start time
-        amm::write_current_price_observation(pool, clock);
+        amm::write_initial_price_observation(pool, clock, state);
         i = i + 1;
     };
 }
