@@ -19,6 +19,7 @@ const EZERO_LIQUIDITY: u64 = 4;
 const EPRICE_TOO_HIGH: u64 = 5;
 const EZERO_AMOUNT: u64 = 6;
 const EMARKET_ID_MISMATCH: u64 = 7;
+const EOBSERVATION_NOT_AT_START: u64 = 8;
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -281,9 +282,14 @@ fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     oracle::write_observation(oracle, timestamp, price)
 }
 
-public(package) fun write_current_price_observation(pool: &mut LiquidityPool, clock: &Clock) {
+public(package) fun write_initial_price_observation(pool: &mut LiquidityPool, clock: &Clock, ms: &MarketState) {
+    let current_time = clock::timestamp_ms(clock);
+    let trading_start = market_state::get_trading_start(ms);
+    
+    // Ensure this function is only called at the exact moment trading starts
+    assert!(current_time == trading_start, EOBSERVATION_NOT_AT_START);
     let current_price = get_current_price(pool);
-    oracle::write_observation(&mut pool.oracle, clock::timestamp_ms(clock), current_price);
+    oracle::write_observation(&mut pool.oracle, current_time, current_price);
 }
 
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
