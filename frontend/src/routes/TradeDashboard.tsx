@@ -123,9 +123,13 @@ function ProposalCard({ proposal }: ProposalCardProps) {
             ) : (
               <div className="w-6 h-6 rounded-full bg-gray-700 mr-2 flex-shrink-0" />
             )}
-            <span className="truncate font-medium text-gray-200">
+            <a
+              href={`/dao/${proposal.dao_id}`}
+              className="truncate font-medium text-gray-200 hover:text-white hover:underline transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
               {proposal.dao_name}
-            </span>
+            </a>
             {proposal.dao_verified ? (
               <VerifiedIcon className="ml-1 flex-shrink-0" />
             ) : (

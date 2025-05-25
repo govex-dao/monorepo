@@ -4,6 +4,7 @@ import { CreateDashboard } from "@/routes/CreateDashboard";
 import { LearnDashboard } from "@/routes/LearnDashboard";
 import { TradeDashboard } from "@/routes/TradeDashboard";
 import { ProposalView } from "@/routes/ProposalView";
+import { DaoView } from "@/routes/DaoView";
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +26,10 @@ export const router = createBrowserRouter([
       {
         path: "trade/:proposalId",
         element: <ProposalView />,
+      },
+      {
+        path: "dao/:daoId",
+        element: <DaoView />,
       },
     ],
   },
