@@ -75,14 +75,14 @@ public(package) fun new_oracle(
     Oracle {
         id: object::new(ctx), // Create a unique ID for the oracle
         last_price: twap_initialization_price,
-        last_timestamp: market_start_time,
+        last_timestamp: 0, // set to current time when trading starts
         total_cumulative_price: 0,
         last_window_end_cumulative_price: 0,
-        last_window_end: market_start_time,
+        last_window_end: 0, // set to current time when trading starts
         last_window_twap: twap_initialization_price,
         twap_start_delay: twap_start_delay,
         twap_cap_step: twap_cap_step,
-        market_start_time: market_start_time,
+        market_start_time: 0, // set to current time when trading starts
         twap_initialization_price: twap_initialization_price,
     }
 }
@@ -436,6 +436,12 @@ public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
     let twap = (oracle.total_cumulative_price) / (period as u256);
 
     (twap as u128)
+}
+
+public(package) fun set_oracle_start_time(oracle: &mut Oracle, market_start_time: u64) {
+    oracle.market_start_time = market_start_time;
+    oracle.last_window_end = market_start_time;
+    oracle.last_timestamp = market_start_time;
 }
 
 // ======== Getters ========
