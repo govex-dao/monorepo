@@ -80,6 +80,7 @@ export function DaoView() {
       return data.data[0];
     },
     enabled: !!daoId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const { data: proposals, isLoading: isLoadingProposals } = useQuery<
@@ -96,6 +97,7 @@ export function DaoView() {
       return data.data;
     },
     enabled: !!daoId,
+    staleTime: 2 * 60 * 1000,
   });
 
   if (isLoading) {
