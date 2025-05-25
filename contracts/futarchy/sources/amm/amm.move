@@ -281,9 +281,9 @@ fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     oracle::write_observation(oracle, timestamp, price)
 }
 
-public(package) fun write_current_price_observation(pool: &mut LiquidityPool, timestamp: u64) {
+public(package) fun write_current_price_observation(pool: &mut LiquidityPool, clock: &Clock) {
     let current_price = get_current_price(pool);
-    oracle::write_observation(&mut pool.oracle, timestamp, current_price);
+    oracle::write_observation(&mut pool.oracle, clock::timestamp_ms(clock), current_price);
 }
 
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
