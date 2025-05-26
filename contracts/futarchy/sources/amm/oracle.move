@@ -465,6 +465,10 @@ public fun get_twap_initialization_price(oracle: &Oracle): u128 {
     oracle.twap_initialization_price // Access through config
 }
 
+public fun get_total_cumulative_price(oracle: &Oracle): u256 {
+    oracle.total_cumulative_price
+}
+
 public fun get_id(o: &Oracle): &UID {
     &o.id
 }
