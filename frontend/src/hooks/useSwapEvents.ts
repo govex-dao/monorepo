@@ -10,6 +10,7 @@ export interface SwapEvent {
   outcome: number;
   asset_reserve: string;
   stable_reserve: string;
+  sender: string;
 }
 
 type UseSwapEventsOptions = Omit<
@@ -21,6 +22,7 @@ export const useSwapEvents = (
   proposalId: string,
   options?: UseSwapEventsOptions,
 ) => {
+
   return useQuery<SwapEvent[], Error>({
     queryKey: ["swaps", proposalId],
     queryFn: async () => {
@@ -28,6 +30,7 @@ export const useSwapEvents = (
         `${CONSTANTS.apiEndpoint}swaps?market_id=${proposalId}`,
       );
       if (!response.ok) {
+        console.error("Failed to fetch swap events:", response.statusText);
         throw new Error("Failed to fetch swap events");
       }
       const data = await response.json();
