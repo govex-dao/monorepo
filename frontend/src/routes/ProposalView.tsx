@@ -14,6 +14,7 @@ import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
 import TradeHistory from "@/components/trade/TradeHistory.tsx";
+import { getOutcomeColors } from "@/utils/outcomeColors.ts";
 
 interface StateHistory {
   id: number;
