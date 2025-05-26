@@ -14,6 +14,7 @@ import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
 import { getOutcomeColors } from "@/utils/outcomeColors";
+import TradeHistory from "@/components/trade/TradeHistory.tsx";
 
 interface StateHistory {
   id: number;
@@ -324,6 +325,15 @@ export function ProposalView() {
           groupedTokens={groupedTokens}
           isLoading={tokensLoading}
           error={tokensError}
+        />
+        <TradeHistory
+          swapEvents={swapEvents}
+          assetSymbol={proposal.dao.asset_symbol}
+          stableSymbol={proposal.dao.stable_symbol}
+          outcomeMessages={proposal.outcome_messages}
+          assetScale={Math.pow(10, proposal.dao.asset_decimals)}
+          stableScale={Math.pow(10, proposal.dao.stable_decimals)}
+          hasStarted={proposal.current_state >= 1}
         />
       </div>
     </Theme>
