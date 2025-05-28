@@ -194,7 +194,7 @@ export function ProposalView() {
         ) : (
           <div className="w-9 h-9 rounded-full bg-gray-700 inline-block mr-2 border-2 border-gray-700" />
         )}
-        <span className="text-gray-400">{proposal.dao_name}</span>
+        <a href={`/dao/${proposal.dao_id}`} className="text-gray-400 hover:text-white hover:underline">{proposal.dao_name}</a>
         {proposal.dao_verified ? (
           <VerifiedIcon
             className="ml-1 inline-flex items-center align-middle"
