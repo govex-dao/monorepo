@@ -139,72 +139,75 @@ export function DaoView() {
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header Section */}
-      <div className="relative mb-8">
-        <div className="h-48 w-full rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden">
-          <div className="absolute inset-0 bg-[url('/dao-pattern.svg')] opacity-10"></div>
-        </div>
+      <div className="relative flex flex-wrap items-end justify-between w-full mt-24">
+        <div className="h-48 w-full absolute -z-20 -top-32 rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden" />
+        <div className="sm:ml-4 flex items-end flex-wrap">
+          <div className="w-28 h-28 flex sm:w-32 sm:h-32 rounded-xl overflow-hidden border-4 border-[#111113] shadow-lg bg-black">
+            {dao.dao_icon ? <img
+              src={dao.dao_icon}
+              alt={dao.dao_name}
+              className="w-full h-full object-cover"
+            /> :
+              <Flex className="m-5 rounded-md overflow-hidden grow" gap="1">
+                <div className="bg-white/10 grow"/>
+                <Flex direction="column" gap="1" className="grow">
+                  <div className="bg-white/20 grow"/>
+                  <div className="bg-white/5 grow"/>
+                </Flex>
+              </Flex>
+            }
+          </div>
 
-        <div className="absolute -bottom-16 left-8 flex items-end justify-between w-full pr-8">
-          <div className="flex items-end">
-            <div className="w-32 h-32 rounded-xl overflow-hidden border-4 border-[#111113] shadow-lg">
-              <img
-                src={dao.dao_icon || "/curved-4.png"}
-                alt={dao.dao_name}
-                className="w-full h-full object-cover"
-              />
-            </div>
+          <div className="ml-6 mb-4">
+            <Flex align="center" gap="2">
+              <div>
 
-            <div className="ml-6 mb-4">
-              <Flex align="center" gap="2">
                 <Heading size="7" className="text-gray-100">
                   {dao.dao_name}
                 </Heading>
-                {dao.verification?.verified ? (
-                  <Badge color="blue" className="flex items-center gap-1">
-                    <VerifiedIcon className="w-4 h-4" />
-                    <Text size="1">Verified</Text>
-                  </Badge>
-                ) : (
-                  <Button
-                    size="1"
-                    variant="outline"
-                    className="border-blue-700 text-blue-300 hover:bg-blue-900/20 cursor-pointer"
-                    onClick={() => setShowVerifyDao(true)}
-                  >
-                    Get Verified
-                  </Button>
-                )}
-                {isAdmin && (
-                  <Badge color="amber" variant="soft">
-                    Admin
-                  </Badge>
-                )}
-              </Flex>
-              <Text size="2" className="text-gray-400 mt-1">
-                Created{" "}
-                {new Date(Number(dao.timestamp)).toLocaleDateString(undefined, {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </Text>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <Button
-              size="3"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer"
-              onClick={() => setShowCreateProposal(true)}
-            >
-              Create Proposal
-            </Button>
+              </div>
+              {dao.verification?.verified ? (
+                <Badge color="blue" className="flex items-center gap-1">
+                  <VerifiedIcon className="w-4 h-4" />
+                  <Text size="1">Verified</Text>
+                </Badge>
+              ) : (
+                <Button
+                  size="1"
+                  variant="outline"
+                  className="border-blue-700 text-blue-300 hover:bg-blue-900/20 cursor-pointer"
+                  onClick={() => setShowVerifyDao(true)}
+                >
+                  Get Verified
+                </Button>
+              )}
+              {isAdmin && (
+                <Badge color="amber" variant="soft">
+                  Admin
+                </Badge>
+              )}
+            </Flex>
+            <Text size="2" className="text-gray-400">
+              Created{" "}
+              {new Date(Number(dao.timestamp)).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </Text>
           </div>
         </div>
+        <Button
+          size="3"
+          className="bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer w-full sm:w-fit my-4"
+          onClick={() => setShowCreateProposal(true)}
+        >
+          Create Proposal
+        </Button>
       </div>
 
       {/* Main Content */}
-      <div className="mt-20 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column */}
         <div className="lg:col-span-1 space-y-6">
           <Card className="p-5 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
