@@ -280,20 +280,6 @@ fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     oracle::write_observation(oracle, timestamp, price)
 }
 
-public(package) fun write_initial_price_observation(
-    pool: &mut LiquidityPool,
-    clock: &Clock,
-    ms: &MarketState,
-) {
-    let current_time = clock::timestamp_ms(clock);
-    let trading_start = market_state::get_trading_start(ms);
-
-    // Ensure this function is only called at the exact moment trading starts
-    assert!(current_time == trading_start, EOBSERVATION_NOT_AT_START);
-    let current_price = get_current_price(pool);
-    oracle::write_observation(&mut pool.oracle, current_time, current_price);
-}
-
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
     &pool.oracle
 }
