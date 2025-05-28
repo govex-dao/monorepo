@@ -72,7 +72,6 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(clock),
         ctx(scenario),
     )
 }
@@ -233,7 +232,6 @@ fun test_price_calculation_accuracy() {
             (BASIS_POINTS as u128),
             TWAP_START_DELAY,
             TWAP_STEP_MAX,
-            clock::timestamp_ms(&clock),
             ctx(&mut scenario),
         );
         
@@ -259,7 +257,6 @@ fun test_price_calculation_accuracy() {
             (BASIS_POINTS as u128),
             TWAP_START_DELAY,
             TWAP_STEP_MAX,
-            clock::timestamp_ms(&clock),
             ctx(&mut scenario),
         );
         
@@ -569,7 +566,6 @@ fun test_pool_id_and_outcome() {
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(&clock),
         ctx(&mut scenario),
     );
     
@@ -581,7 +577,6 @@ fun test_pool_id_and_outcome() {
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(&clock),
         ctx(&mut scenario),
     );
     
@@ -625,7 +620,6 @@ fun test_minimal_liquidity() {
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(&clock),
         ctx(&mut scenario),
     );
     
@@ -669,7 +663,6 @@ fun test_max_price() {
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(&clock),
         ctx(&mut scenario),
     );
     
@@ -735,7 +728,6 @@ fun test_min_liquidity_requirement() {
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(&clock),
         ctx(&mut scenario),
     );
     

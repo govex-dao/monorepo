@@ -62,7 +62,6 @@ public struct PriceEvent has copy, drop {
 // ======== Constructor ========
 public(package) fun new_oracle(
     twap_initialization_price: u128,
-    market_start_time: u64,
     twap_start_delay: u64,
     twap_cap_step: u64,
     ctx: &mut TxContext,
@@ -492,7 +491,6 @@ public fun debug_get_state(oracle: &Oracle): (u128, u64, u256) {
 public fun test_oracle(ctx: &mut TxContext): Oracle {
     new_oracle(
         10000, // twap_initialization_price
-        0, // market_start_time
         60_000, // twap_start_delay
         1000, // max_bps_per_step
         ctx, // sixth argument (TxContext)

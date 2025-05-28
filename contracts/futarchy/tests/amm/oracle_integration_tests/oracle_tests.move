@@ -26,13 +26,15 @@ const LARGE_TWAP_STEP: u64 = 20_000_000_000_000;
 
 // ======== Helper Functions ========
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
-    oracle::new_oracle(
+    let mut oracle_inst = oracle::new_oracle(
         INIT_PRICE,
-        MARKET_START_TIME,
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
         ctx,
-    )
+    );
+    // Explicitly set the market start time using the dedicated function
+    oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME);
+    oracle_inst
 }
 
 fun setup_scenario_and_clock(): (Scenario, clock::Clock) {
@@ -339,7 +341,7 @@ fun test_cumulative_price_overflow() {
     let mut scenario = test::begin(@0x1);
     test::next_tx(&mut scenario, @0x1);
     let ctx = test::ctx(&mut scenario);
-    let mut extreme_oracle = oracle::new_oracle(u128::max_value!(), 0, 0, U64_MAX, ctx);
+    let mut extreme_oracle = oracle::new_oracle(u128::max_value!(), 0, U64_MAX, ctx);
 
     // First observation: timestamp = U64_MAX / 2.
     let half_max: u64 = U64_MAX / 2;
@@ -519,12 +521,11 @@ fun test_twap_delay_zero() {
     let ctx = test::ctx(&mut scenario);
     let mut oracle_inst = oracle::new_oracle(
         INIT_PRICE, // twap_initialization_price = 10000
-        MARKET_START_TIME, // market_start_time = 1000
         0, // twap_start_delay = 0
         TWAP_STEP_MAX, // max_bps_per_step = 1000
         ctx,
     );
-
+    oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME);
     // First observation at time = MARKET_START_TIME + 500 = 1500.
     let first_obs_time = MARKET_START_TIME + 500; // 1500
     // Observed price 15000 is capped upward by one step (max allowed = 10000 * 1000 / 10000 = 1000),
@@ -730,11 +731,11 @@ fun test_initial_high_price_no_swaps() {
 
         let mut oracle_inst = oracle::new_oracle(
             HIGH_INIT_PRICE,    // 1 quadrillion
-            market_start_time,  // 0
             twap_start_delay,   // 0
             LARGE_TWAP_STEP,    // u64::max_value!
             ctx,
         );
+        oracle::set_oracle_start_time(&mut oracle_inst, market_start_time);
 
         // Validate initial state immediately after creation
         assert!(oracle::get_last_price(&oracle_inst) == HIGH_INIT_PRICE, 0);

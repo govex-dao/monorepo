@@ -31,7 +31,6 @@ module futarchy::oracle_twap_accumulate_tests {
         // as write_observation's delay logic is not the focus.
         oracle::new_oracle(
             INIT_PRICE,
-            MARKET_START_TIME,
             0, // twap_start_delay
             TWAP_CAP_STEP,
             test_ctx

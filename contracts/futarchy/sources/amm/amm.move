@@ -63,7 +63,6 @@ public(package) fun new_pool(
     twap_initial_observation: u128,
     twap_start_delay: u64,
     twap_step_max: u64,
-    start_time: u64,
     ctx: &mut TxContext,
 ): LiquidityPool {
     assert!(initial_asset > 0 && initial_stable > 0, EZERO_AMOUNT);
@@ -79,7 +78,6 @@ public(package) fun new_pool(
     // Initialize oracle
     let oracle = oracle::new_oracle(
         twap_initialization_price,
-        start_time,
         twap_start_delay,
         twap_step_max,
         ctx, // Add ctx parameter here
@@ -440,7 +438,6 @@ public fun create_test_pool(
         fee_percent: DEFAULT_FEE,
         oracle: oracle::new_oracle(
             math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
-            0, // market start time
             2_000,
             1_000,
             ctx, // Add ctx parameter here

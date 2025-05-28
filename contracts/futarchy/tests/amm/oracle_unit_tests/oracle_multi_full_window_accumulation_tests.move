@@ -34,7 +34,6 @@ module futarchy::oracle_multi_window_tests {
     ): Oracle {
         let mut oracle_inst = oracle::new_oracle(
             DEFAULT_INIT_PRICE,
-            MARKET_START_TIME_FOR_TESTS,
             0, // twap_start_delay, keep simple for these tests
             cap_step_val,
             ctx(scenario),
