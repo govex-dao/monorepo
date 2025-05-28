@@ -127,9 +127,6 @@ fun initialize_oracles_for_trading<AssetType, StableType>(
     while (i < pools_count) {
         let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
         amm::set_oracle_start_time(pool, trading_start);
-        // Write the first observation at trading start
-        // Then write a fresh observation at the trading start time
-        amm::write_initial_price_observation(pool, clock, state);
         i = i + 1;
     };
 }
