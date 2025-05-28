@@ -32,7 +32,6 @@ module futarchy::oracle_intra_accum_tests {
     fun setup_default_oracle(test_ctx: &mut TxContext): Oracle {
         oracle::new_oracle(
             DEFAULT_INIT_PRICE,
-            DEFAULT_MARKET_START_TIME,
             DEFAULT_TWAP_START_DELAY, // This delay is also the window size
             DEFAULT_TWAP_CAP_STEP,
             test_ctx,
@@ -257,7 +256,7 @@ module futarchy::oracle_intra_accum_tests {
         let test_ctx = ctx(&mut scenario);
         // Create oracle with a large cap step to ensure price isn't capped *beyond a single step from base* for this test
         let mut oracle_inst = oracle::new_oracle(
-            DEFAULT_INIT_PRICE, DEFAULT_MARKET_START_TIME, DEFAULT_TWAP_START_DELAY,
+            DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
             u64::max_value!(), // Very large cap step
             test_ctx
         );

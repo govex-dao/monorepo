@@ -22,7 +22,6 @@ const U64_MAX: u64 = 18446744073709551615;
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
     oracle::new_oracle(
         INIT_PRICE,
-        MARKET_START_TIME,
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
         ctx,

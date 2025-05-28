@@ -196,7 +196,6 @@ public(package) fun create<AssetType, StableType>(
         twap_start_delay,
         twap_initial_observation,
         twap_step_max,
-        clock::timestamp_ms(clock),
         initial_asset,
         initial_stable,
         clock,

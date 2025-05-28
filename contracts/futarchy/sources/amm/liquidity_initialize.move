@@ -25,7 +25,6 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    creation_time: u64,
     initial_asset: Balance<AssetType>,
     initial_stable: Balance<StableType>,
     clock: &Clock,
@@ -85,7 +84,6 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
                 twap_initial_observation,
                 twap_start_delay,
                 twap_step_max,
-                creation_time,
                 ctx,
             );
             vector::push_back(&mut amm_pools, pool);

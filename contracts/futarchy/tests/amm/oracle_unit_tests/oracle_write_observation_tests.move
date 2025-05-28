@@ -23,24 +23,23 @@ module futarchy::oracle_write_observation_tests {
 
     // ======== Helper Functions ========
     fun setup_test_oracle_custom(
-        market_start_time: u64,
         twap_start_delay: u64,
         init_price: u128,
         twap_cap_step: u64,
         ctx: &mut TxContext
     ): Oracle {
-        oracle::new_oracle(
+        let mut oracle_inst = oracle::new_oracle(
             init_price,
-            market_start_time,
             twap_start_delay,
             twap_cap_step,
             ctx,
-        )
+        );
+        oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME);
+        oracle_inst
     }
 
     fun default_setup_test_oracle(ctx: &mut TxContext): Oracle {
         setup_test_oracle_custom(
-            MARKET_START_TIME,
             TWAP_START_DELAY,
             INIT_PRICE,
             TWAP_STEP_MAX,
@@ -471,7 +470,6 @@ module futarchy::oracle_write_observation_tests {
         let test_ctx = ctx(&mut scenario);
         // twap_start_delay = 0 means DELAY_THRESHOLD == MARKET_START_TIME
         let mut oracle_inst = setup_test_oracle_custom(
-            MARKET_START_TIME, // 100k
             0,                 // twap_start_delay
             INIT_PRICE,        // 10k
             TWAP_STEP_MAX,     // 1k

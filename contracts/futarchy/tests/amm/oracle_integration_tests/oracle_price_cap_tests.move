@@ -16,13 +16,15 @@ const TWAP_PRICE_CAP_WINDOW_PERIOD: u64 = 60000;
 
 // ======== Helper Functions ========
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
-    oracle::new_oracle(
+    let mut oracle_inst = oracle::new_oracle(
         INIT_PRICE,
-        MARKET_START_TIME,
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
         ctx,
-    )
+    );
+    // Explicitly set the market start time using the dedicated function
+    oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME);
+    oracle_inst
 }
 
 fun setup_scenario_and_clock(): (Scenario, clock::Clock) {

@@ -67,7 +67,6 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         (BASIS_POINTS as u128),
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
-        clock::timestamp_ms(clock),
         ctx(scenario),
     )
 }
