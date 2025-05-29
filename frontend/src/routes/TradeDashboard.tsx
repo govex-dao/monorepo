@@ -8,6 +8,7 @@ import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
 import UnifiedSearch from "@/components/UnifiedSearch.tsx";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon";
+import { DaoIcon } from "@/components/DaoIcon";
 
 interface ApiProposal {
   id: number;
@@ -107,29 +108,11 @@ function ProposalCard({ proposal }: ProposalCardProps) {
         </div>
 
         <div className="flex flex-col">
-          <div className="flex items-center">
-            {proposal.dao_icon ? (
-              <div className="w-7 h-7 rounded-full overflow-hidden mr-2 flex-shrink-0 bg-gray-700 aspect-square">
-                <img
-                  src={proposal.dao_icon}
-                  style={{ objectPosition: "center" }}
-                  alt={`${proposal.dao_name} icon`}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "/fallback-icon.png";
-                  }}
-                />
-              </div>
-            ) : (
-              <div className="w-6 h-6 rounded-full bg-gray-700 mr-2 flex-shrink-0" />
-            )}
-            <a
-              href={`/dao/${proposal.dao_id}`}
-              className="truncate font-medium text-gray-200 hover:text-white hover:underline transition-colors"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {proposal.dao_name}
-            </a>
+          <div className="flex items-center gap-2">
+            <Link to={`/dao/${proposal.dao_id}`} className="hover:opacity-80 group flex items-center gap-1">
+              <DaoIcon icon={proposal.dao_icon} name={proposal.dao_name} size="md"/>
+              <span className="text-gray-200 group-hover:text-white group-hover:underline truncate font-medium transition-colors">{proposal.dao_name}</span>
+            </Link>
             {proposal.dao_verified ? (
               <VerifiedIcon className="ml-1 flex-shrink-0" />
             ) : (

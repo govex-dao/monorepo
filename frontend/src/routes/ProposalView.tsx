@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useState, useEffect } from "react";
@@ -12,6 +12,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
+import { DaoIcon } from "@/components/DaoIcon.tsx";
 
 interface StateHistory {
   id: number;
@@ -181,20 +182,11 @@ export function ProposalView() {
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
-      <h1 className="text-3xl font-bold mt-4 pl-6 pr-6">
-        {proposal.dao_icon ? (
-          <img
-            src={proposal.dao_icon}
-            alt={`${proposal.dao_name} icon`}
-            className="w-9 h-9 -mt-1 rounded-full inline-block mr-2 object-cover border-2 border-gray-700"
-            onError={(e) => {
-              e.currentTarget.src = "/fallback-icon.png";
-            }}
-          />
-        ) : (
-          <div className="w-9 h-9 rounded-full bg-gray-700 inline-block mr-2 border-2 border-gray-700" />
-        )}
-        <a href={`/dao/${proposal.dao_id}`} className="text-gray-400 hover:text-white hover:underline">{proposal.dao_name}</a>
+      <h1 className="text-3xl font-bold mt-4 pl-6 pr-6 flex flex-row items-center gap-2 ">
+        <Link to={`/dao/${proposal.dao_id}`} className="hover:opacity-80 group flex items-center gap-2">
+          <DaoIcon icon={proposal.dao_icon} name={proposal.dao_name} size="lg"/>
+          <span className="text-gray-400 group-hover:text-white group-hover:underline">{proposal.dao_name}</span>
+        </Link>
         {proposal.dao_verified ? (
           <VerifiedIcon
             className="ml-1 inline-flex items-center align-middle"

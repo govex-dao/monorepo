@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS } from "@/constants";
 import {
@@ -16,6 +16,7 @@ import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import CreateProposalForm from "@/components/daos/CreateProposalForm";
 import VerifyDaoForm from "@/components/daos/VerifyDaoForm";
 import { useState } from "react";
+import { DaoIcon } from "@/components/DaoIcon";
 
 interface DaoData {
   dao_id: string;
@@ -142,22 +143,7 @@ export function DaoView() {
       <div className="relative flex flex-wrap items-end justify-between w-full mt-24">
         <div className="h-48 w-full absolute -z-20 -top-32 rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden" />
         <div className="sm:ml-4 flex items-end flex-wrap">
-          <div className="w-28 h-28 flex sm:w-32 sm:h-32 rounded-xl overflow-hidden border-4 border-[#111113] shadow-lg bg-black">
-            {dao.dao_icon ? <img
-              src={dao.dao_icon}
-              alt={dao.dao_name}
-              className="w-full h-full object-cover"
-            /> :
-              <Flex className="m-5 rounded-md overflow-hidden grow" gap="1">
-                <div className="bg-white/10 grow"/>
-                <Flex direction="column" gap="1" className="grow">
-                  <div className="bg-white/20 grow"/>
-                  <div className="bg-white/5 grow"/>
-                </Flex>
-              </Flex>
-            }
-          </div>
-
+          <DaoIcon className="flex rounded-xl overflow-hidden border-4 shadow-lg " size="xl" icon={dao.icon_url} name={dao.dao_name} />
           <div className="ml-6 mb-4">
             <Flex align="center" gap="2">
               <div>
@@ -429,12 +415,10 @@ export function DaoView() {
             ) : proposals && proposals.length > 0 ? (
               <div className="space-y-4">
                 {proposals.slice(0, 5).map((proposal) => (
-                  <div
+                  <Link
+                    to={`/trade/${proposal.proposal_id}`}
                     key={proposal.proposal_id}
-                    className="p-4 bg-gray-800/70 hover:bg-gray-800 rounded-lg border border-gray-700/50 hover:border-indigo-600/30 transition-all cursor-pointer"
-                    onClick={() => {
-                      window.location.href = `/trade/${proposal.proposal_id}`;
-                    }}
+                    className="block p-4 bg-gray-800/70 hover:bg-gray-800 rounded-lg border border-gray-700/50 hover:border-indigo-600/30 transition-all"
                   >
                     <Flex justify="between" align="start">
                       <div className="flex-1">
@@ -472,7 +456,7 @@ export function DaoView() {
                         </Flex>
                       </div>
                     </Flex>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : (
