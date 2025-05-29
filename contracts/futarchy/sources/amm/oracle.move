@@ -450,7 +450,7 @@ public(package) fun set_oracle_start_time(oracle: &mut Oracle, market_start_time
     oracle.market_start_time = option::some(market_start_time_param);
     oracle.last_window_end = market_start_time_param;
     oracle.last_timestamp = market_start_time_param;
- }
+}
 
 // ======== Getters ========
 public fun get_last_price(oracle: &Oracle): u128 {
