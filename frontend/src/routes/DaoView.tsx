@@ -17,6 +17,7 @@ import CreateProposalForm from "@/components/daos/CreateProposalForm";
 import VerifyDaoForm from "@/components/daos/VerifyDaoForm";
 import { useState } from "react";
 import { DaoIcon } from "@/components/DaoIcon";
+import { ProposalStatus } from "@/components/ProposalStatus";
 
 interface DaoData {
   dao_id: string;
@@ -57,6 +58,7 @@ interface Proposal {
   proposer: string;
   outcome_count: string;
   outcome_messages: string[];
+  winning_outcome: string;
 }
 
 export function DaoView() {
@@ -432,22 +434,11 @@ export function DaoView() {
                           {proposal.details}
                         </Text>
                         <Flex gap="2" className="mt-2">
-                          <Badge
-                            color={
-                              proposal.current_state === 0
-                                ? "blue"
-                                : proposal.current_state === 1
-                                  ? "green"
-                                  : "gray"
-                            }
+                          <ProposalStatus 
+                            state={proposal.current_state} 
+                            winningOutcome={proposal.winning_outcome}
                             variant="soft"
-                          >
-                            {proposal.current_state === 0
-                              ? "Review"
-                              : proposal.current_state === 1
-                                ? "Trading"
-                                : "Finalized"}
-                          </Badge>
+                          />
                           <Text size="1" className="text-gray-500">
                             {new Date(
                               Number(proposal.created_at),
@@ -474,11 +465,8 @@ export function DaoView() {
       >
         <Dialog.Content className="max-w-4xl bg-gray-900 border border-gray-800">
           <Dialog.Title className="text-gray-200">
-            Create New Proposal
+            Create New Proposal for {dao?.dao_name}
           </Dialog.Title>
-          <Dialog.Description className="text-gray-400">
-            Create a new proposal for {dao?.dao_name}
-          </Dialog.Description>
           <div className="mt-4">
             <CreateProposalForm
               walletAddress={account?.address ?? ""}

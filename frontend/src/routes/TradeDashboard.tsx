@@ -9,6 +9,7 @@ import { ChevronDownIcon } from "@radix-ui/react-icons";
 import UnifiedSearch from "@/components/UnifiedSearch.tsx";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon";
 import { DaoIcon } from "@/components/DaoIcon";
+import { ProposalStatus } from "@/components/ProposalStatus";
 
 interface ApiProposal {
   id: number;
@@ -27,6 +28,7 @@ interface ApiProposal {
   asset_value: string;
   stable_value: string;
   dao_verified: boolean;
+  winning_outcome: string | null;
 }
 
 const stateOptions = [
@@ -66,9 +68,6 @@ interface ProposalCardProps {
 }
 
 function ProposalCard({ proposal }: ProposalCardProps) {
-  const stateLabel = getStateLabel(proposal.current_state);
-  const stateColor = getStateColor(proposal.current_state);
-
   return (
     <Link to={`/trade/${proposal.market_state_id}`} className="block">
       <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-5 hover:shadow-md transition-shadow">
@@ -100,11 +99,7 @@ function ProposalCard({ proposal }: ProposalCardProps) {
               {proposal.title}
             </h3>
           </Tooltip>
-          <span
-            className={`px-3 py-1 text-sm rounded-full whitespace-nowrap ${stateColor}`}
-          >
-            {stateLabel}
-          </span>
+          <ProposalStatus state={proposal.current_state} winningOutcome={proposal.winning_outcome} />
         </div>
 
         <div className="flex flex-col">
