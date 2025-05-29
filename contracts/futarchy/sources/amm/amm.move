@@ -19,7 +19,6 @@ const EZERO_LIQUIDITY: u64 = 4;
 const EPRICE_TOO_HIGH: u64 = 5;
 const EZERO_AMOUNT: u64 = 6;
 const EMARKET_ID_MISMATCH: u64 = 7;
-const EOBSERVATION_NOT_AT_START: u64 = 8;
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;

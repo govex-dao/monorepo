@@ -849,3 +849,36 @@ fun test_get_twap_without_market_start_time_fails() {
     };
     test::end(scenario);
 }
+
+#[test]
+#[expected_failure(abort_code = futarchy::oracle::E_MARKET_ALREADY_STARTED)]
+fun test_set_oracle_start_time_when_already_started_fails() {
+    // This test verifies that calling `set_oracle_start_time` on an oracle
+    // that already has its market_start_time set will result in an
+    // E_MARKET_ALREADY_STARTED error.
+
+    let (mut scenario, clock_inst) = setup_scenario_and_clock();
+    {
+        let ctx = test::ctx(&mut scenario);
+        let mut oracle_inst = oracle::new_oracle(
+            INIT_PRICE,
+            TWAP_START_DELAY,
+            TWAP_STEP_MAX,
+            ctx,
+        );
+
+        // First call to set_oracle_start_time: This should succeed as market_start_time is None.
+        oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME);
+
+        // At this point, oracle_inst.market_start_time is Some(MARKET_START_TIME).
+
+        // Second call to set_oracle_start_time: This should fail because market_start_time is already Some.
+        // The exact time passed here doesn't matter for triggering the error, only that it's called again.
+        oracle::set_oracle_start_time(&mut oracle_inst, MARKET_START_TIME + 1000);
+
+        // The following lines will not be reached if the test behaves as expected (due to abort).
+        oracle::destroy_for_testing(oracle_inst);
+    };
+    clock::destroy_for_testing(clock_inst); // Clean up clock if scenario doesn't auto-clean
+    test::end(scenario);
+}
