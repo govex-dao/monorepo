@@ -31,7 +31,7 @@ const EOVERFLOW_V_SUM_PRICES_ADD: u64 = 11;
 const EINTERNAL_TWAP_ERROR: u64 = 12;
 const E_NONE_FULL_WINDOW_TWAP_DELAY: u64 = 13;
 const E_MARKET_NOT_STARTED: u64 = 14;
-const E_MARKET_ALREADY_STARTED: u64 = 14;
+const E_MARKET_ALREADY_STARTED: u64 = 15;
 
 // ======== Configuration Struct ========
 public struct Oracle has key, store {
