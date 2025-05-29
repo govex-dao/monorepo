@@ -349,8 +349,10 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
     oracle::write_observation(&mut pool.oracle, timestamp, current_price);
 }
 
-public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, market_start_time: u64) {
-    oracle::set_oracle_start_time(&mut pool.oracle, market_start_time);
+public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, state: &MarketState) {
+    assert!(get_ms_id(pool) == market_state::market_id(state), EMARKET_ID_MISMATCH);
+    let trading_start_time = market_state::get_trading_start(state);
+    oracle::set_oracle_start_time(&mut pool.oracle, trading_start_time);
 }
 
 // ======== Internal Functions ========
@@ -399,6 +401,10 @@ public fun check_price_under_max(price: u128) {
 
 public(package) fun get_protocol_fees(pool: &LiquidityPool): u64 {
     pool.protocol_fees
+}
+
+public(package) fun get_ms_id(pool: &LiquidityPool): ID {
+    pool.market_id
 }
 
 public(package) fun reset_protocol_fees(pool: &mut LiquidityPool) {

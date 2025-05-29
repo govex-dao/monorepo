@@ -65,7 +65,7 @@ public(package) fun try_advance_state<AssetType, StableType>(
     ) {
         proposal::set_state(proposal, STATE_TRADING);
         market_state::start_trading(state, proposal::get_trading_period_ms(proposal), clock);
-        initialize_oracles_for_trading(proposal, state, clock);
+        initialize_oracles_for_trading(proposal, state);
     } else if (proposal::state(proposal) == STATE_TRADING) {
         let configured_trading_end_option = market_state::get_trading_end_time(state);
         assert!(current_time >= *option::borrow(&configured_trading_end_option), EIN_TRADIG_PERIOD);
@@ -119,14 +119,12 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
 fun initialize_oracles_for_trading<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &MarketState,
-    clock: &Clock,
 ) {
-    let trading_start = market_state::get_trading_start(state);
     let pools_count = vector::length(proposal::get_amm_pools(proposal));
     let mut i = 0;
     while (i < pools_count) {
         let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
-        amm::set_oracle_start_time(pool, trading_start);
+        amm::set_oracle_start_time(pool, state);
         i = i + 1;
     };
 }
