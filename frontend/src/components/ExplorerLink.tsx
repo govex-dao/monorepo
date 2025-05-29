@@ -48,7 +48,7 @@ export function ExplorerLink({
       )}
 
       <a href={link} target="_blank" rel="noreferrer">
-        {formatAddress(id)}
+        {formatAddress(id || "")}
       </a>
     </span>
   );
