@@ -64,7 +64,7 @@ fun setup_market(scenario: &mut Scenario, clock: &Clock): (MarketState) {
 }
 
 fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): LiquidityPool {
-    amm::new_pool(
+    let mut pool_inst = amm::new_pool(
         state,
         0, // outcome_idx
         INITIAL_ASSET,
@@ -73,7 +73,10 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         TWAP_START_DELAY,
         TWAP_STEP_MAX,
         ctx(scenario),
-    )
+    );
+
+    amm::set_oracle_start_time(&mut  pool_inst, clock::timestamp_ms(clock));
+    pool_inst
 }
 
 // ======== K-Invariant Tests ========

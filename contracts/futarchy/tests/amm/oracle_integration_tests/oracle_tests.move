@@ -344,6 +344,8 @@ fun test_cumulative_price_overflow() {
     let ctx = test::ctx(&mut scenario);
     let mut extreme_oracle = oracle::new_oracle(u128::max_value!(), 0, U64_MAX, ctx);
 
+    oracle::set_oracle_start_time(&mut extreme_oracle, MARKET_START_TIME);
+
     // First observation: timestamp = U64_MAX / 2.
     let half_max: u64 = U64_MAX / 2;
     oracle::write_observation(&mut extreme_oracle, half_max, u128::max_value!());
