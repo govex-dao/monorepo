@@ -75,7 +75,7 @@ fun setup_pool(scenario: &mut Scenario, state: &MarketState, clock: &Clock): Liq
         ctx(scenario),
     );
 
-    amm::set_oracle_start_time(&mut  pool_inst, clock::timestamp_ms(clock));
+    amm::set_oracle_start_time(&mut  pool_inst, state);
     pool_inst
 }
 
