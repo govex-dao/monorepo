@@ -59,7 +59,8 @@ fun test_new_oracle() {
         let (delay, step) = oracle::get_config(&oracle_inst);
         assert!(delay == TWAP_START_DELAY, 3);
         assert!(step == TWAP_STEP_MAX, 4);
-        assert!(oracle::get_market_start_time(&oracle_inst) == MARKET_START_TIME, 5);
+        assert!(step == TWAP_STEP_MAX, 4); // Error code 4 for this line
+        assert!(oracle::get_market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 5);
         assert!(oracle::get_twap_initialization_price(&oracle_inst) == INIT_PRICE, 6);
         oracle::destroy_for_testing(oracle_inst);
     };
@@ -157,7 +158,7 @@ fun test_getters() {
         let oracle_inst = setup_test_oracle(ctx);
         assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 0);
         assert!(oracle::get_last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
-        assert!(oracle::get_market_start_time(&oracle_inst) == MARKET_START_TIME, 4);
+        assert!(oracle::get_market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 4);
         assert!(oracle::get_twap_initialization_price(&oracle_inst) == INIT_PRICE, 5);
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
@@ -787,6 +788,60 @@ fun test_initial_high_price_no_swaps() {
         // Verify TWAP matches the high initial price
         assert!(twap == HIGH_INIT_PRICE, 8);
 
+        oracle::destroy_for_testing(oracle_inst);
+        clock::destroy_for_testing(clock_inst);
+    };
+    test::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::oracle::E_MARKET_NOT_STARTED)]
+fun test_write_observation_without_market_start_time_fails() {
+    // Test that write_observation fails if market_start_time is not set.
+    let (mut scenario, clock_inst) = setup_scenario_and_clock(); // clock_inst not strictly needed but setup provides it
+    {
+        let ctx = test::ctx(&mut scenario);
+        // Create oracle BUT DO NOT set market_start_time
+        let mut oracle_inst = oracle::new_oracle(
+            INIT_PRICE,
+            TWAP_START_DELAY,
+            TWAP_STEP_MAX,
+            ctx,
+        );
+
+        // Attempt to write an observation - this should fail
+        oracle::write_observation(&mut oracle_inst, MARKET_START_TIME + 100, INIT_PRICE + 100);
+
+        // Clean up (though this part won't be reached if the test passes due to expected failure)
+        oracle::destroy_for_testing(oracle_inst);
+        // clock::destroy_for_testing(clock_inst) is not needed as we only used the scenario's ctx
+    };
+    clock::destroy_for_testing(clock_inst);
+    test::end(scenario); // clock_inst is destroyed with scenario if it was created inside
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::oracle::E_MARKET_NOT_STARTED)]
+fun test_get_twap_without_market_start_time_fails() {
+    // Test that get_twap fails if market_start_time is not set.
+    let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
+    {
+        let ctx = test::ctx(&mut scenario);
+        // Create oracle BUT DO NOT set market_start_time
+        let oracle_inst = oracle::new_oracle(
+            INIT_PRICE,
+            TWAP_START_DELAY,
+            TWAP_STEP_MAX,
+            ctx,
+        );
+
+        // Set clock to some time, although it shouldn't matter as the check for market_start_time comes first
+        clock::set_for_testing(&mut clock_inst, MARKET_START_TIME + TWAP_START_DELAY + 1000);
+
+        // Attempt to get TWAP - this should fail
+        let _twap = oracle::get_twap(&oracle_inst, &clock_inst);
+
+        // Clean up (though this part won't be reached if the test passes due to expected failure)
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
     };
