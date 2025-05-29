@@ -83,7 +83,7 @@ public(package) fun new_oracle(
         last_window_twap: twap_initialization_price,
         twap_start_delay: twap_start_delay,
         twap_cap_step: twap_cap_step,
-        market_start_time: option::none(), // should proably be nullable
+        market_start_time: option::none(), // nullable so that TWAP is not valid if not properly initialized
         twap_initialization_price: twap_initialization_price,
     }
 }
