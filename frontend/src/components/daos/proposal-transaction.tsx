@@ -40,9 +40,13 @@ export async function createProposalTransaction(
     ]);
 
     const txb = new Transaction();
+    const isMainnet = CONSTANTS.network === "mainnet";
+    const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
+    const gasBudget = isMainnet ? 20_500_000_000 : 1_000_000_000;
+    txb.setGasBudget(gasBudget);
 
     const [paymentCoin] = txb.splitCoins(txb.gas, [
-      txb.pure.u64(10_000_000_000),
+      txb.pure.u64(splitAmount),
     ]);
 
     // Helper to prepare coins
@@ -155,8 +159,6 @@ export async function createProposalTransaction(
         txb.object("0x6"),
       ],
     });
-
-    txb.setGasBudget(11_000_000_000);
 
     return txb;
   } catch (error) {

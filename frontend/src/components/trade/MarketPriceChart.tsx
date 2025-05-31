@@ -7,6 +7,7 @@ import {
   ColorType,
   TickMarkType,
   PriceScaleMode,
+  LineSeries, // Added: Import LineSeries for v5
 } from "lightweight-charts";
 import { CONSTANTS } from "@/constants";
 import TimeRangeSelector from "./TimeRangeSelector";
@@ -122,28 +123,70 @@ const MarketPriceChart = ({
 }: MarketPriceChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
-  const seriesRefs = useRef<ISeriesApi<"Line">[]>([]);
+  const seriesRefs = useRef<ISeriesApi<"Line">[]>([]); // Type ISeriesApi<"Line"> remains appropriate
   const [selectedRange, setSelectedRange] = useState("MAX");
+
+  const userTimezoneOffsetSeconds = new Date().getTimezoneOffset() * 60;
+
   const decimalAdjustmentFactor = Math.pow(
     10,
     asset_decimals - stable_decimals,
   );
+
+  const { data: stateChanges, error: stateError } =
+    useQuery<StateHistoryResponse>({
+      queryKey: ["stateHistory", proposalId],
+      queryFn: async () => {
+        const response = await fetch(
+          `${CONSTANTS.apiEndpoint}proposals/${proposalId}/state-history`,
+        );
+        if (!response.ok) throw new Error("Failed to fetch state history");
+        return response.json();
+      },
+    });
+
+  const tradingStart = stateChanges?.data?.find(
+    (change) => change.old_state === 0 && change.new_state === 1,
+  )?.timestamp;
+
+  const tradingEnd = stateChanges?.data?.find(
+    (change) => change.old_state === 1 && change.new_state === 2,
+  )?.timestamp;
+
+  const getTimeRangeStart = (range: string, endTime: number): number => {
+    const originalTradingStartUTC = tradingStart ? Math.floor(new Date(Number(tradingStart)).getTime() / 1000) : 0;
+    const adjustedTradingStart = originalTradingStartUTC ? originalTradingStartUTC - userTimezoneOffsetSeconds : endTime;
+
+    switch (range) {
+      case "1H":
+        return endTime - 3600;
+      case "4H":
+        return endTime - 4 * 3600;
+      case "1D":
+        return endTime - 24 * 3600;
+      case "MAX":
+      default:
+        return adjustedTradingStart;
+    }
+  };
+
   const handleRangeSelect = (range: string) => {
     setSelectedRange(range);
     if (!chartRef.current) return;
 
-    const endTime =
+    const originalUTCEndTime =
       currentState === 1
         ? Math.floor(Date.now() / 1000)
         : Math.floor(
             new Date(Number(tradingEnd || Date.now())).getTime() / 1000,
           );
 
-    const startTime = getTimeRangeStart(range, endTime);
+    const adjustedEndTime = originalUTCEndTime - userTimezoneOffsetSeconds;
+    const adjustedStartTime = getTimeRangeStart(range, adjustedEndTime);
 
     chartRef.current.timeScale().setVisibleRange({
-      from: startTime as Time,
-      to: endTime as Time,
+      from: adjustedStartTime as Time,
+      to: adjustedEndTime as Time,
     });
   };
 
@@ -160,7 +203,6 @@ const MarketPriceChart = ({
       }
     };
 
-    // Create ResizeObserver for container size changes (including zoom)
     const resizeObserver = new ResizeObserver((entries) => {
       const { width } = entries[0].contentRect;
       if (chartRef.current) {
@@ -169,46 +211,28 @@ const MarketPriceChart = ({
       }
     });
 
-    // Observe the container
-    resizeObserver.observe(chartContainerRef.current);
-
+    if (chartContainerRef.current) {
+        resizeObserver.observe(chartContainerRef.current);
+    }
+    
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
-      resizeObserver.disconnect();
+      if (chartContainerRef.current) { // Ensure current is not null before disconnecting
+        resizeObserver.disconnect();
+      }
     };
   }, []);
 
-  // Fetch state changes
-  const { data: stateChanges, error: stateError } =
-    useQuery<StateHistoryResponse>({
-      queryKey: ["stateHistory", proposalId],
-      queryFn: async () => {
-        const response = await fetch(
-          `${CONSTANTS.apiEndpoint}proposals/${proposalId}/state-history`,
-        );
-        if (!response.ok) throw new Error("Failed to fetch state history");
-        return response.json();
-      },
-    });
 
   interface ChartDataPoint {
     time: number;
-    [key: `market${number}`]: number; // This allows for dynamic market0, market1, etc keys
+    [key: `market${number}`]: number;
   }
 
-  const tradingStart = stateChanges?.data?.find(
-    (change) => change.old_state === 0 && change.new_state === 1,
-  )?.timestamp;
-
-  const tradingEnd = stateChanges?.data?.find(
-    (change) => change.old_state === 1 && change.new_state === 2,
-  )?.timestamp;
-
-  // Calculate initial prices either from the provided amounts or fallback to default
   const getInitialPrices = () => {
     const numOutcomes = Number(outcome_count);
-    const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals); // Use it here
+    const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
 
     if (
       initial_outcome_amounts &&
@@ -220,13 +244,13 @@ const MarketPriceChart = ({
 
         if (assetAmount > 0n && stableAmount > 0n) {
           const rawRatio = Number(stableAmount) / Number(assetAmount);
-          return rawRatio * adjustmentFactor; // Apply adjustment
+          return rawRatio * adjustmentFactor;
         }
         const fallbackRawRatio =
           BigInt(assetValue) === 0n
             ? 0
             : Number(BigInt(stableValue)) / Number(BigInt(assetValue));
-        return fallbackRawRatio * adjustmentFactor; // Apply adjustment
+        return fallbackRawRatio * adjustmentFactor;
       });
       return prices;
     }
@@ -235,132 +259,163 @@ const MarketPriceChart = ({
       BigInt(assetValue) === 0n
         ? 0
         : Number(BigInt(stableValue)) / Number(BigInt(assetValue));
-    const defaultPrice = defaultRawRatio * adjustmentFactor; // Apply adjustment
+    const defaultPrice = defaultRawRatio * adjustmentFactor;
     return Array(numOutcomes).fill(defaultPrice);
   };
 
   const initialPrices = getInitialPrices();
 
-  const chartData = React.useMemo(() => {
-    if (!swapEvents || !tradingStart) return [];
+const chartData = React.useMemo(() => {
+    if (!tradingStart) return []; 
+
+    const getAdjustedTime = (utcSeconds: number): number => utcSeconds - userTimezoneOffsetSeconds;
 
     const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
-    // First, create an array of actual price updates with timestamps
-    const priceUpdates = [
-      {
-        time: Math.floor(new Date(Number(tradingStart)).getTime() / 1000),
+    const originalTradingStartUTC = Math.floor(new Date(Number(tradingStart)).getTime() / 1000);
+
+    const priceUpdatesAtEventTime: { time: number; prices: number[] }[] = [];
+
+    if (initialPrices) {
+      priceUpdatesAtEventTime.push({
+        time: getAdjustedTime(originalTradingStartUTC),
         prices: initialPrices,
-      },
-    ];
-
-    // Add all price updates from events
-    [...swapEvents]
-      .sort((a, b) => Number(a.timestamp) - Number(b.timestamp))
-      .forEach((event) => {
-        const rawEventPriceOnChain = Number(BigInt(event.price));
-        const atomicRatio = rawEventPriceOnChain / 1e12;
-        const time = Math.floor(
-          new Date(Number(event.timestamp)).getTime() / 1000,
-        );
-        const priceValue = atomicRatio * adjustmentFactor;
-
-        // Copy last known prices
-        const lastPrices = [...priceUpdates[priceUpdates.length - 1].prices];
-        // Update the specific outcome's price
-        lastPrices[event.outcome] = priceValue;
-
-        priceUpdates.push({ time, prices: lastPrices });
       });
+    }
 
-    // Calculate time range
-    const startTime = Math.floor(
-      new Date(Number(tradingStart)).getTime() / 1000,
-    );
-    const endTime =
+    const sortedSwapEvents = swapEvents ? [...swapEvents].sort((a, b) => Number(a.timestamp) - Number(b.timestamp)) : [];
+    let lastKnownPricesFromEvents = initialPrices ? [...initialPrices] : Array(Number(outcome_count)).fill(0);
+
+    sortedSwapEvents.forEach((event) => {
+      const rawEventPriceOnChain = Number(BigInt(event.price));
+      const atomicRatio = rawEventPriceOnChain / 1e12;
+      const originalEventTimeUTC = Math.floor(new Date(Number(event.timestamp)).getTime() / 1000);
+      const priceValue = atomicRatio * adjustmentFactor;
+
+      const currentEventPrices = [...lastKnownPricesFromEvents];
+      currentEventPrices[event.outcome] = priceValue;
+      lastKnownPricesFromEvents = currentEventPrices;
+
+      priceUpdatesAtEventTime.push({
+        time: getAdjustedTime(originalEventTimeUTC),
+        prices: currentEventPrices,
+      });
+    });
+    
+    priceUpdatesAtEventTime.sort((a,b) => a.time - b.time);
+
+    const seriesAdjustedStartTime = getAdjustedTime(originalTradingStartUTC);
+    const seriesAdjustedEndTime = getAdjustedTime(
       currentState === 1
-        ? Math.floor(Date.now() / 1000) // Use current time if still trading
+        ? Math.floor(Date.now() / 1000)
         : tradingEnd
           ? Math.floor(new Date(Number(tradingEnd)).getTime() / 1000)
-          : Math.floor(
-              new Date(
-                Number(
-                  swapEvents[swapEvents.length - 1]?.timestamp || tradingStart,
-                ),
-              ).getTime() / 1000,
-            );
+          : priceUpdatesAtEventTime.length > 0 
+            ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].time 
+            : seriesAdjustedStartTime 
+    );
 
-    const FIVE_MIN = 300; // 5 minutes in seconds
-    const sampledData: ChartDataPoint[] = [];
+    const FIVE_MIN_SECONDS = 300;
+    const finalSampledData: ChartDataPoint[] = [];
 
-    // Generate a point every 5 minutes for the entire range
-    for (let time = startTime; time <= endTime; time += FIVE_MIN) {
-      // Find the last price update before or at this time
-      const lastUpdate = priceUpdates
-        .filter((update) => update.time <= time)
-        .pop();
+    if (priceUpdatesAtEventTime.length > 0 && priceUpdatesAtEventTime[0].time === seriesAdjustedStartTime) {
+        finalSampledData.push({
+            time: seriesAdjustedStartTime,
+            ...Object.fromEntries(
+                priceUpdatesAtEventTime[0].prices.map((price, i) => [`market${i}`, price])
+            ),
+        } as ChartDataPoint);
+    } else if (initialPrices) { 
+         finalSampledData.push({
+            time: seriesAdjustedStartTime,
+            ...Object.fromEntries(
+                initialPrices.map((price, i) => [`market${i}`, price])
+            ),
+        } as ChartDataPoint);
+    }
 
-      if (lastUpdate) {
-        sampledData.push({
-          time,
-          ...Object.fromEntries(
-            lastUpdate.prices.map((price, i) => [`market${i}`, price]),
+    let nextSampleTime = Math.ceil(seriesAdjustedStartTime / FIVE_MIN_SECONDS) * FIVE_MIN_SECONDS;
+    if (nextSampleTime < seriesAdjustedStartTime) { 
+        nextSampleTime += FIVE_MIN_SECONDS;
+    }
+    if (finalSampledData.length > 0 && nextSampleTime === finalSampledData[0].time) {
+        nextSampleTime += FIVE_MIN_SECONDS;
+    }
+    
+    for (let currentTime = nextSampleTime; currentTime < seriesAdjustedEndTime; currentTime += FIVE_MIN_SECONDS) {
+      const relevantPriceUpdate = [...priceUpdatesAtEventTime]
+        .reverse()
+        .find(update => update.time <= currentTime);
+
+      if (relevantPriceUpdate) {
+        finalSampledData.push({
+          time: currentTime, 
+          ...Object.fromEntries( 
+            relevantPriceUpdate.prices.map((price, i) => [`market${i}`, price])
           ),
         } as ChartDataPoint);
+      } else if (finalSampledData.length > 0) { 
+        finalSampledData.push({
+          time: currentTime,
+           ...Object.fromEntries(
+            Object.keys(finalSampledData[finalSampledData.length-1])
+                .filter(k => k.startsWith("market"))
+                .map(k => [k, finalSampledData[finalSampledData.length-1][k as keyof ChartDataPoint]])
+          ),
+        });
       }
     }
 
-    // Ensure we have the exact start and end points
-    if (sampledData[0]?.time !== startTime) {
-      sampledData.unshift({
-        time: startTime,
-        ...Object.fromEntries(
-          priceUpdates[0].prices.map((price, i) => [`market${i}`, price]),
-        ),
-      } as ChartDataPoint);
-    }
+    const pricesForFinalPoint = 
+      priceUpdatesAtEventTime.length > 0 
+        ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].prices 
+        : initialPrices 
+          ? initialPrices 
+          : Array(Number(outcome_count)).fill(0);
 
-    const lastKnownPrices = priceUpdates[priceUpdates.length - 1].prices;
-    if (sampledData[sampledData.length - 1]?.time !== endTime) {
-      sampledData.push({
-        time: endTime,
+    const finalPoint: ChartDataPoint = {
+        time: seriesAdjustedEndTime,
         ...Object.fromEntries(
-          lastKnownPrices.map((price, i) => [`market${i}`, price]),
+            pricesForFinalPoint.map((price, i) => [`market${i}`, price])
         ),
-      } as ChartDataPoint);
-    }
+    };
 
-    return sampledData;
+    if (finalSampledData.length === 0 || finalSampledData[finalSampledData.length - 1].time < seriesAdjustedEndTime) {
+        finalSampledData.push(finalPoint);
+    } else if (finalSampledData[finalSampledData.length - 1].time === seriesAdjustedEndTime) {
+        finalSampledData[finalSampledData.length - 1] = finalPoint;
+    }
+    
+    const timeMap = new Map<number, ChartDataPoint>();
+    finalSampledData.forEach(point => timeMap.set(point.time, point));
+    const uniqueSortedData = Array.from(timeMap.values()).sort((a,b) => a.time - b.time);
+
+    return uniqueSortedData;
   }, [
     swapEvents,
     initialPrices,
     tradingStart,
     tradingEnd,
-    decimalAdjustmentFactor,
+    decimalAdjustmentFactor, // This was missing in the original dependencies array, added it.
+    asset_decimals, // Added for completeness, as it's used in adjustmentFactor
+    stable_decimals, // Added for completeness, as it's used in adjustmentFactor
     outcome_count,
     currentState,
+    userTimezoneOffsetSeconds,
   ]);
 
   const colors = React.useMemo(() => {
     const outcomeCount = Number(outcome_count);
-
-    if (outcomeCount === 1) {
-      return ["#ef4444"];
-    }
-    if (outcomeCount === 2) {
-      return ["#ef4444", "#22c55e"];
-    }
-
+    if (outcomeCount === 1) return ["#ef4444"];
+    if (outcomeCount === 2) return ["#ef4444", "#22c55e"];
     const generateDistantColors = (count: number) => {
       const startHue = 120;
       const endHue = 300;
       const step = (endHue - startHue) / (count - 1);
-
       return Array.from({ length: count - 1 }, (_, i) => {
         const hue = startHue + i * step;
         return hslToHex(hue, 100, 50);
       });
     };
-
     const additionalColors = generateDistantColors(outcomeCount);
     return ["#ef4444", ...additionalColors];
   }, [outcome_count]);
@@ -374,23 +429,21 @@ const MarketPriceChart = ({
     [colors, outcome_messages],
   );
 
-  const getTimeRangeStart = (range: string, endTime: number) => {
-    switch (range) {
-      case "1H":
-        return endTime - 3600;
-      case "4H":
-        return endTime - 4 * 3600;
-      case "1D":
-        return endTime - 24 * 3600;
-      case "MAX":
-      default:
-        return Math.floor(new Date(Number(tradingStart)).getTime() / 1000);
-    }
-  };
-
   useEffect(() => {
     if (!chartContainerRef.current || !chartData.length) {
+      // If chartData is empty, and we have a chart instance, remove it.
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
       return;
+    }
+    
+    // If a chart instance already exists, remove it before creating a new one
+    // This can happen if chartData becomes available after an initial empty state
+    if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
     }
 
     const chart = createChart(chartContainerRef.current, {
@@ -413,64 +466,36 @@ const MarketPriceChart = ({
         fixLeftEdge: true,
         fixRightEdge: true,
         rightBarStaysOnScroll: true,
-        // VVV tickMarkFormatter REMAINS HERE VVV - This converts UTC to the USER'S LOCAL TIMEZONE for display
         tickMarkFormatter: (
           time: Time,
           tickType: TickMarkType,
           locale: string,
         ) => {
-          const date = new Date((time as number) * 1000); // time is UTC epoch seconds
+          const date = new Date((time as number) * 1000);
+          const hours = date.getUTCHours().toString().padStart(2, '0');
+          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+          const seconds = date.getUTCSeconds().toString().padStart(2, '0');
+          const dayMonthYearDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 
-          // Determine the user's actual IANA timezone
-          const userTimeZone =
-            typeof Intl !== "undefined"
-              ? Intl.DateTimeFormat().resolvedOptions().timeZone
-              : "UTC";
-          // 'locale' comes from chart.options.localization.locale (navigator.language)
-          // 'userTimeZone' dictates the actual time offset.
           switch (tickType) {
             case TickMarkType.Year:
-              return date.toLocaleDateString(locale, {
-                year: "numeric",
-                timeZone: userTimeZone,
-              });
+              return dayMonthYearDate.toLocaleDateString(locale, { year: 'numeric', timeZone: 'UTC' });
             case TickMarkType.Month:
-              return date.toLocaleDateString(locale, {
-                month: "short",
-                timeZone: userTimeZone,
-              });
+              return dayMonthYearDate.toLocaleDateString(locale, { month: 'short', timeZone: 'UTC' });
             case TickMarkType.DayOfMonth:
-              return date.toLocaleDateString(locale, {
-                day: "numeric",
-                month: "short",
-                timeZone: userTimeZone,
-              });
-            case TickMarkType.Time: // Chart uses this if secondsVisible is false or zoomed out
-              return date.toLocaleTimeString(locale, {
-                hour: "2-digit",
-                minute: "2-digit",
-                timeZone: userTimeZone,
-                hour12: false,
-              });
-            case TickMarkType.TimeWithSeconds: // Chart uses this if secondsVisible is true and zoomed in
-              return date.toLocaleTimeString(locale, {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-                timeZone: userTimeZone,
-                hour12: false,
-              });
-            default: // Fallback
-              return date.toLocaleString(locale, {
-                timeZone: userTimeZone,
-                hour12: false,
-              });
+              return dayMonthYearDate.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+            case TickMarkType.Time:
+              return `${hours}:${minutes}`;
+            case TickMarkType.TimeWithSeconds:
+              return `${hours}:${minutes}:${seconds}`;
+            default:
+              return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${hours}:${minutes}`;
           }
         },
       },
       rightPriceScale: {
         borderColor: "transparent",
-        autoScale: false,
+        autoScale: true,
         mode: PriceScaleMode.Normal,
         minimumWidth: 50,
         scaleMargins: {
@@ -485,8 +510,9 @@ const MarketPriceChart = ({
     chartRef.current = chart;
 
     const numOutcomes = Number(outcome_count);
-    const series = Array.from({ length: numOutcomes }, (_, i) => {
-      const lineSeries = chart.addLineSeries({
+    seriesRefs.current = Array.from({ length: numOutcomes }, (_, i) => {
+      // Updated: Use addSeries with LineSeries type
+      const lineSeries = chart.addSeries(LineSeries, {
         color: colors[i],
         lineWidth: 2,
         title: outcome_messages[i],
@@ -497,35 +523,35 @@ const MarketPriceChart = ({
           minMove: 0.0000001,
         },
       });
-
       lineSeries.setData(
         chartData.map((point) => ({
           time: point.time as Time,
           value: point[`market${i}`],
         })),
       );
-
       return lineSeries;
     });
 
-    seriesRefs.current = series;
-
-    const endTime =
+    const originalUTCEndTime =
       currentState === 1
         ? Math.floor(Date.now() / 1000)
         : Math.floor(
             new Date(Number(tradingEnd || Date.now())).getTime() / 1000,
           );
 
-    const startTime = getTimeRangeStart(selectedRange, endTime);
+    const adjustedEndTime = originalUTCEndTime - userTimezoneOffsetSeconds;
+    const adjustedStartTime = getTimeRangeStart(selectedRange, adjustedEndTime);
 
     chart.timeScale().setVisibleRange({
-      from: startTime as Time,
-      to: endTime as Time,
+      from: adjustedStartTime as Time,
+      to: adjustedEndTime as Time,
     });
 
     return () => {
-      chart.remove();
+      if (chartRef.current) {
+        chartRef.current.remove();
+        chartRef.current = null;
+      }
     };
   }, [
     chartData,
@@ -534,30 +560,35 @@ const MarketPriceChart = ({
     colors,
     selectedRange,
     currentState,
-    tradingEnd,
+    tradingEnd, // Added tradingEnd to dependency array
+    userTimezoneOffsetSeconds, // Added userTimezoneOffsetSeconds to dependency array
+    // getTimeRangeStart is defined outside, but depends on tradingStart and userTimezoneOffsetSeconds.
+    // Consider if tradingStart needs to be a dep if getTimeRangeStart is memoized or part of this effect.
+    // For now, assuming tradingStart doesn't change often enough to warrant re-running this whole effect,
+    // as chartData already depends on it.
   ]);
 
   const statusMessage = React.useMemo(() => {
     if (swapError) return `Error loading swap data: ${swapError.message}`;
     if (stateError) return `Error loading state data: ${stateError.message}`;
-
-    if (currentState === 0 || !tradingStart)
-      return "Trading period not started";
+    if (currentState === 0 || !tradingStart) return "Trading period not started";
     if (currentState === 2 || (tradingEnd && winning_outcome != null))
       return winning_outcome
         ? `Trading period finished, winning outcome is: ${outcome_messages[Number(winning_outcome)]}`
         : "Trading period finished";
-    if (currentState === 1 && chartData.length <= 1)
-      return "No trading activity yet";
+    if (currentState === 1 && chartData.length <= 1) return "No trading activity yet"; // <=1 because initial point might exist
     return "";
   }, [
     currentState,
     tradingStart,
     tradingEnd,
-    chartData,
+    chartData, // chartData.length dependency
     swapError,
     stateError,
+    winning_outcome, // Added winning_outcome
+    outcome_messages // Added outcome_messages
   ]);
+
   return (
     <div className="w-full py-0 my-0">
       {(tradingStart || tradingEnd) && !swapError && !stateError && (
@@ -582,7 +613,7 @@ const MarketPriceChart = ({
           <div className="h-full flex items-center justify-center text-red-500">
             {statusMessage}
           </div>
-        ) : chartData.length > 1 ? (
+        ) : chartData.length > 1 || (chartData.length === 1 && tradingStart) ? ( // Show chart if there's at least one data point and trading has started
           <div
             ref={chartContainerRef}
             style={{ width: "100%", height: "100%" }}
@@ -596,7 +627,7 @@ const MarketPriceChart = ({
       {(tradingStart || tradingEnd) && !swapError && !stateError && (
         <CustomLegend payload={legendPayload} />
       )}
-      {statusMessage && chartData.length > 1 && !swapError && !stateError && (
+      {statusMessage && (chartData.length > 1 || (chartData.length === 1 && tradingStart)) && !swapError && !stateError && (
         <div className="text-center mt-2 ">{statusMessage}</div>
       )}
     </div>

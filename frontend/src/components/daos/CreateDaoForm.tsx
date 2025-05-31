@@ -295,16 +295,6 @@ const CreateDaoForm = () => {
         stableMetadata.decimals,
       );
 
-      // Add detailed logging
-      console.log("=== Debug Info ===");
-      console.log("Input values:", {
-        minAssetAmount: formData.minAssetAmount,
-        minStableAmount: formData.minStableAmount,
-      });
-      console.log("Calculated chain amounts:", {
-        chainAssetAmount: chainAssetAmount.toString(),
-        chainStableAmount: chainStableAmount.toString(),
-      });
     } catch (error) {
       setError("Invalid amount format. Please enter valid numbers.");
       console.error("Chain amount calculation error:", error);
@@ -326,10 +316,11 @@ const CreateDaoForm = () => {
 
     try {
       const tx = new Transaction();
-      tx.setGasBudget(20_500_000_000);
-
-      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(20_000_000_000)]);
-
+      const isMainnet = CONSTANTS.network === "mainnet";
+      const gasBudget = isMainnet ? 20_500_000_000 : 1_000_000_000;
+      const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
+      tx.setGasBudget(gasBudget);
+      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(splitAmount)]);
       const chainAdjustedTwapThreshold = formData.twapThreshold * 1000;
 
       tx.moveCall({

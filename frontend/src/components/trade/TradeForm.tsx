@@ -371,7 +371,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const handleTrade = async () => {
     if (!account?.address || !amount || !expectedAmountOut) return;
 
-    console.log("trade-amounts (human readable)", amount, expectedAmountOut);
     // Clear any previous errors
     setError(null);
     // Validate inputs are positive numbers
@@ -390,11 +389,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
         Math.floor(parseFloat(expectedAmountOut) * Number(toToken.scale)),
       );
 
-      console.log(
-        "trade-amounts (scaled)",
-        amountScaled.toString(),
-        expectedAmountOutScaled.toString(),
-      );
       const txb = new Transaction();
       txb.setGasBudget(100000000);
 
