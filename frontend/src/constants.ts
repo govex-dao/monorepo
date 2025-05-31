@@ -33,5 +33,5 @@ export const CONSTANTS = {
   stableTreasury: stablePackage.treasuryCapId,
   stableMetaData: stablePackage.metadataId,
   stableType: stablePackage.coinType,
-  network: "mainnet" as Network,
+  network: "testnet" as Network,
 };
