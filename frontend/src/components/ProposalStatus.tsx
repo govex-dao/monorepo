@@ -20,12 +20,12 @@ export const getStateLabel = (state: number | null, winningOutcome?: string | nu
   }
 };
 
-export const getStateColor = (state: number | null, winningOutcome?: string | null): "blue" | "green" | "red" | "gray" => {
+export const getStateColor = (state: number | null, winningOutcome?: string | null): "purple" | "blue" | "green" | "red" | "gray" => {
   switch (state) {
     case 0:
-      return "blue";
+      return "purple";
     case 1:
-      return "green";
+      return "blue";
     case 2:
       return winningOutcome !== null ? "green" : "red";
     default:

@@ -15,9 +15,9 @@ import { ExplorerLink } from "@/components/ExplorerLink";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import CreateProposalForm from "@/components/daos/CreateProposalForm";
 import VerifyDaoForm from "@/components/daos/VerifyDaoForm";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DaoIcon } from "@/components/DaoIcon";
-import { ProposalStatus } from "@/components/ProposalStatus";
+import { ProposalCard } from "@/components/daos/ProposalCard";
 
 interface DaoData {
   dao_id: string;
@@ -402,8 +402,8 @@ export function DaoView() {
         {/* Right Column */}
         <div className="lg:col-span-2 space-y-6">
           <Flex className="" direction="column">
-            <Flex justify="between" align="center" className="mb-4">
-              <Heading size="3" className="text-gray-200">
+            <Flex justify="between" align="center" className="mb-6">
+              <Heading size="4" className="text-gray-200">
                 Proposals
               </Heading>
               <Text size="2" className="text-gray-400">
@@ -415,44 +415,49 @@ export function DaoView() {
                 <Text size="2">Loading proposals...</Text>
               </div>
             ) : proposals && proposals.length > 0 ? (
-              <div className="space-y-4">
-                {proposals.slice(0, 5).map((proposal) => (
-                  <Link
-                    to={`/trade/${proposal.proposal_id}`}
+              <div className="space-y-3">
+                {proposals.map((proposal) => (
+                  <ProposalCard
                     key={proposal.proposal_id}
-                    className="block p-4 bg-gray-800/70 hover:bg-gray-800 rounded-lg border border-gray-700/50 hover:border-indigo-600/30 transition-all"
-                  >
-                    <Flex justify="between" align="start">
-                      <div className="flex-1">
-                        <Text weight="bold" size="3" className="text-gray-200">
-                          {proposal.title}
-                        </Text>
-                        <Text
-                          size="2"
-                          className="text-gray-400 mt-1 line-clamp-2"
-                        >
-                          {proposal.details}
-                        </Text>
-                        <Flex gap="2" className="mt-2">
-                          <ProposalStatus 
-                            state={proposal.current_state} 
-                            winningOutcome={proposal.winning_outcome}
-                            variant="soft"
-                          />
-                          <Text size="1" className="text-gray-500">
-                            {new Date(
-                              Number(proposal.created_at),
-                            ).toLocaleDateString()}
-                          </Text>
-                        </Flex>
-                      </div>
-                    </Flex>
-                  </Link>
+                    proposal={proposal}
+                    variant={proposal.current_state === 2 ? "finalized" : "active"}
+                  />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8 text-gray-400">
-                <Text size="2">No proposals found</Text>
+              <div className="bg-gray-800/30 rounded-lg border border-gray-700/20 p-8">
+                <Flex direction="column" align="center" gap="4" className="text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-800/50 border border-gray-700/50 flex items-center justify-center">
+                    <svg
+                      className="w-6 h-6 text-gray-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <Text size="3" weight="medium" className="text-gray-200">
+                    No proposals yet
+                  </Text>
+                  <Text size="2" className="text-gray-400 max-w-md">
+                    This DAO hasn't created any proposals yet. Be the first to start a discussion and shape the future of this community.
+                  </Text>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    color="blue"
+                    className="mt-2 cursor-pointer"
+                    onClick={() => setShowCreateProposal(true)}
+                  >
+                    Create First Proposal
+                  </Button>
+                </Flex>
               </div>
             )}
           </Flex>
