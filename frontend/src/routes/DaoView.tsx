@@ -68,6 +68,99 @@ interface Proposal {
   winning_outcome: string;
 }
 
+const DaoInfoCards = ({
+  dao,
+  daoInformations,
+  twapInformations,
+}: {
+  dao: DaoData;
+  daoInformations: Array<{ label: string; value: React.ReactNode }>;
+  twapInformations: Array<{
+    label: string;
+    value: React.ReactNode;
+    description: string;
+  }>;
+}) => (
+  <div className="space-y-4">
+    <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
+      <Heading size="2" className="mb-3 text-gray-200">
+        Basic Information
+      </Heading>
+      <Flex direction="column" gap="2" className="text-gray-100">
+        {daoInformations.map(
+          ({ label, value }) =>
+            value && (
+              <Flex
+                key={label}
+                align="center"
+                justify="between"
+                className="py-1 border-b border-gray-800/50"
+              >
+                <Text weight="bold" size="2" className="text-gray-400">
+                  {label}
+                </Text>
+                {value}
+              </Flex>
+            ),
+        )}
+      </Flex>
+    </Card>
+
+    <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
+      <Heading size="2" className="mb-3 text-gray-200">
+        TWAP Configuration
+      </Heading>
+      <Flex direction="column" gap="2" className="text-gray-100">
+        {twapInformations.map(({ label, value, description }) => (
+          <Tooltip key={label} content={description}>
+            <Flex
+              align="center"
+              justify="between"
+              className="py-1 border-b border-gray-800/50"
+            >
+              <Text weight="bold" size="2" className="text-gray-400">
+                {label}
+              </Text>
+              {value}
+            </Flex>
+          </Tooltip>
+        ))}
+      </Flex>
+    </Card>
+
+    <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
+      <Heading size="2" className="mb-3 text-gray-200">
+        Tokens
+      </Heading>
+      <Flex className="" gap="3">
+        <div className="flex-1">
+          <TokenCard
+            name={dao.asset_name}
+            symbol={dao.asset_symbol}
+            type="asset"
+            iconUrl={dao.asset_icon_url}
+            decimals={dao.asset_decimals}
+            minAmount={dao.minAssetAmount}
+            tokenType={dao.assetType}
+          />
+        </div>
+
+        <div className="flex-1">
+          <TokenCard
+            name={dao.stable_name}
+            symbol={dao.stable_symbol}
+            type="stable"
+            iconUrl={dao.stable_icon_url}
+            decimals={dao.stable_decimals}
+            minAmount={dao.minStableAmount}
+            tokenType={dao.stableType}
+          />
+        </div>
+      </Flex>
+    </Card>
+  </div>
+);
+
 export function DaoView() {
   const { daoId } = useParams();
   const account = useCurrentAccount();
@@ -257,173 +350,21 @@ export function DaoView() {
             <div
               className={`overflow-hidden transition-all duration-200 ${showInfo ? "max-h-[2000px] mt-2" : "max-h-0"}`}
             >
-              <div className="space-y-4">
-                <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-                  <Heading size="2" className="mb-3 text-gray-200">
-                    Basic Information
-                  </Heading>
-                  <Flex direction="column" gap="2" className="text-gray-100">
-                    {daoInformations.map(
-                      ({ label, value }) =>
-                        value && (
-                          <Flex
-                            key={label}
-                            align="center"
-                            justify="between"
-                            className="py-1 border-b border-gray-800/50"
-                          >
-                            <Text
-                              weight="bold"
-                              size="2"
-                              className="text-gray-400"
-                            >
-                              {label}
-                            </Text>
-                            {value}
-                          </Flex>
-                        ),
-                    )}
-                  </Flex>
-                </Card>
-
-                <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-                  <Heading size="2" className="mb-3 text-gray-200">
-                    TWAP Configuration
-                  </Heading>
-                  <Flex direction="column" gap="2" className="text-gray-100">
-                    {twapInformations.map(({ label, value, description }) => (
-                      <Tooltip key={label} content={description}>
-                        <Flex
-                          align="center"
-                          justify="between"
-                          className="py-1 border-b border-gray-800/50"
-                        >
-                          <Text
-                            weight="bold"
-                            size="2"
-                            className="text-gray-400"
-                          >
-                            {label}
-                          </Text>
-                          {value}
-                        </Flex>
-                      </Tooltip>
-                    ))}
-                  </Flex>
-                </Card>
-
-                <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-                  <Heading size="2" className="mb-3 text-gray-200">
-                    Tokens
-                  </Heading>
-                  <Flex className="" gap="3">
-                    <div className="flex-1">
-                      <TokenCard
-                        name={dao.asset_name}
-                        symbol={dao.asset_symbol}
-                        type="asset"
-                        iconUrl={dao.asset_icon_url}
-                        decimals={dao.asset_decimals}
-                        minAmount={dao.minAssetAmount}
-                        tokenType={dao.assetType}
-                      />
-                    </div>
-
-                    <div className="flex-1">
-                      <TokenCard
-                        name={dao.stable_name}
-                        symbol={dao.stable_symbol}
-                        type="stable"
-                        iconUrl={dao.stable_icon_url}
-                        decimals={dao.stable_decimals}
-                        minAmount={dao.minStableAmount}
-                        tokenType={dao.stableType}
-                      />
-                    </div>
-                  </Flex>
-                </Card>
-              </div>
+              <DaoInfoCards
+                dao={dao}
+                daoInformations={daoInformations}
+                twapInformations={twapInformations}
+              />
             </div>
           </div>
 
           {/* Desktop Sections */}
           <div className="hidden lg:block space-y-3">
-            <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-              <Heading size="3" className="mb-3 text-gray-200">
-                DAO Informations
-              </Heading>
-              <Flex direction="column" gap="2" className="text-gray-100">
-                {daoInformations.map(
-                  ({ label, value }) =>
-                    value && (
-                      <Flex
-                        key={label}
-                        align="center"
-                        justify="between"
-                        className="py-1 border-b border-gray-800/50"
-                      >
-                        <Text weight="bold" size="2" className="text-gray-400">
-                          {label}
-                        </Text>
-                        {value}
-                      </Flex>
-                    ),
-                )}
-              </Flex>
-            </Card>
-
-            <Card className="p-4 overflow-visible bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-              <Heading size="2" className="mb-3 text-gray-200">
-                TWAP Configuration
-              </Heading>
-              <Flex direction="column" gap="2" className="text-gray-100">
-                {twapInformations.map(({ label, value, description }) => (
-                  <Tooltip key={label} content={description}>
-                    <Flex
-                      align="center"
-                      justify="between"
-                      className="py-1 border-b border-gray-800/50"
-                    >
-                      <Text weight="bold" size="2" className="text-gray-400">
-                        {label}
-                      </Text>
-                      {value}
-                    </Flex>
-                  </Tooltip>
-                ))}
-              </Flex>
-            </Card>
-
-            <Card className="p-4 overflow-visible bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
-              <Heading size="2" className="mb-3 text-gray-200">
-                Tokens
-              </Heading>
-              <Flex className="" gap="3">
-                <div className="flex-1">
-                  <TokenCard
-                    name={dao.asset_name}
-                    symbol={dao.asset_symbol}
-                    type="asset"
-                    iconUrl={dao.asset_icon_url}
-                    decimals={dao.asset_decimals}
-                    minAmount={dao.minAssetAmount}
-                    tokenType={dao.assetType}
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <TokenCard
-                    name={dao.stable_name}
-                    symbol={dao.stable_symbol}
-                    type="stable"
-                    iconUrl={dao.stable_icon_url}
-                    decimals={dao.stable_decimals}
-                    minAmount={dao.minStableAmount}
-                    tokenType={dao.stableType}
-                  />
-                </div>
-              </Flex>
-            </Card>
+            <DaoInfoCards
+              dao={dao}
+              daoInformations={daoInformations}
+              twapInformations={twapInformations}
+            />
           </div>
         </div>
 
