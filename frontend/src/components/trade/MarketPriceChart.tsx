@@ -630,10 +630,6 @@ const MarketPriceChart = ({
     if (swapError) return `Error loading swap data: ${swapError.message}`;
     if (stateError) return `Error loading state data: ${stateError.message}`;
     if (currentState === 0 || !tradingStart) return null;
-    if (currentState === 2 || (tradingEnd && winning_outcome != null))
-      return winning_outcome
-        ? `Trading period finished, winning outcome is: ${outcome_messages[Number(winning_outcome)]}`
-        : "Trading period finished";
     if (currentState === 1 && chartData.length <= 1)
       return "No trading activity yet"; // <=1 because initial point might exist
     return "";
