@@ -30,13 +30,7 @@ export function TokenCard({
   const tooltipContent = (
     <div className="space-y-1">
       <Flex justify="between" className="text-gray-300" gap="1">
-        <Text size="1">Decimals</Text>
-        <Text size="1" weight="bold">
-          {decimals}
-        </Text>
-      </Flex>
-      <Flex justify="between" className="text-gray-300" gap="1">
-        <Text size="1">Min Amount</Text>
+        <Text size="1">Minimum AMM Amount</Text>
         <Text size="1" weight="bold">
           {parseFloat(minAmount) / Math.pow(10, decimals || 0)} {symbol}
         </Text>
@@ -45,7 +39,7 @@ export function TokenCard({
         <Text size="1" className="text-gray-400 mb-1">
           Address
         </Text>
-        <ExplorerLink id={tokenType} isAddress={false} />
+        <ExplorerLink id={tokenType} type="coin" />
       </div>
     </div>
   );
