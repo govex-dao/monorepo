@@ -18,4 +18,4 @@ export function Tooltip({ content, children }: TooltipProps) {
       {children}
     </RadixTooltip>
   );
-} 
+}

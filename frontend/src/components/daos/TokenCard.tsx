@@ -42,7 +42,9 @@ export function TokenCard({
         </Text>
       </Flex>
       <div className="pt-1 border-t border-gray-700">
-        <Text size="1" className="text-gray-400 mb-1">Address</Text>
+        <Text size="1" className="text-gray-400 mb-1">
+          Address
+        </Text>
         <ExplorerLink id={tokenType} isAddress={false} />
       </div>
     </div>
@@ -51,7 +53,9 @@ export function TokenCard({
   return (
     <div className="p-3 bg-gray-800/70 rounded-lg border border-gray-700/50">
       <Flex align="center" gap="3">
-        <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientClasses} flex items-center justify-center shadow-md overflow-hidden flex-shrink-0`}>
+        <div
+          className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientClasses} flex items-center justify-center shadow-md overflow-hidden flex-shrink-0`}
+        >
           {iconUrl ? (
             <img
               src={iconUrl}
@@ -59,7 +63,8 @@ export function TokenCard({
               className="w-full h-full object-cover"
               onError={(e) => {
                 e.currentTarget.style.display = "none";
-                const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                const fallback = e.currentTarget
+                  .nextElementSibling as HTMLElement;
                 if (fallback) fallback.style.display = "flex";
               }}
             />
@@ -91,4 +96,4 @@ export function TokenCard({
       </Flex>
     </div>
   );
-} 
+}

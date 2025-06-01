@@ -99,14 +99,26 @@ function ProposalCard({ proposal }: ProposalCardProps) {
               {proposal.title}
             </h3>
           </Tooltip>
-          <ProposalStatus state={proposal.current_state} winningOutcome={proposal.winning_outcome} />
+          <ProposalStatus
+            state={proposal.current_state}
+            winningOutcome={proposal.winning_outcome}
+          />
         </div>
 
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <Link to={`/dao/${proposal.dao_id}`} className="hover:opacity-80 group flex items-center gap-1">
-              <DaoIcon icon={proposal.dao_icon} name={proposal.dao_name} size="md"/>
-              <span className="text-gray-200 group-hover:text-white group-hover:underline truncate font-medium transition-colors">{proposal.dao_name}</span>
+            <Link
+              to={`/dao/${proposal.dao_id}`}
+              className="hover:opacity-80 group flex items-center gap-1"
+            >
+              <DaoIcon
+                icon={proposal.dao_icon}
+                name={proposal.dao_name}
+                size="md"
+              />
+              <span className="text-gray-200 group-hover:text-white group-hover:underline truncate font-medium transition-colors">
+                {proposal.dao_name}
+              </span>
             </Link>
             {proposal.dao_verified ? (
               <VerifiedIcon className="ml-1 flex-shrink-0" />

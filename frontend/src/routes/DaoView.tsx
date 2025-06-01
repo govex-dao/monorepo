@@ -136,31 +136,40 @@ export function DaoView() {
 
   const daoInformations = [
     { label: "DAO ID", value: <ExplorerLink id={dao.dao_id} /> },
-    { label: "Admin", value: dao.admin ? <ExplorerLink id={dao.admin} isAddress /> : null },
-    { label: "Review Period", value: <Text size="2">{formattedReviewPeriod}</Text> },
-    { label: "Trading Period", value: <Text size="2">{formattedTradingPeriod}</Text> },
+    {
+      label: "Admin",
+      value: dao.admin ? <ExplorerLink id={dao.admin} isAddress /> : null,
+    },
+    {
+      label: "Review Period",
+      value: <Text size="2">{formattedReviewPeriod}</Text>,
+    },
+    {
+      label: "Trading Period",
+      value: <Text size="2">{formattedTradingPeriod}</Text>,
+    },
   ].filter(Boolean);
 
   const twapInformations = [
     {
       label: "Initial Price Observation",
       value: <Text size="2">{dao.amm_twap_initial_observation}</Text>,
-      description: "Starting price point for TWAP calculations"
+      description: "Starting price point for TWAP calculations",
     },
     {
       label: "Start Delay",
       value: <Text size="2">{formatPeriod(dao.amm_twap_start_delay)}</Text>,
-      description: "Delay before TWAP tracking begins"
+      description: "Delay before TWAP tracking begins",
     },
     {
       label: "Max Step Interval",
       value: <Text size="2">{formatPeriod(dao.amm_twap_step_max)}</Text>,
-      description: "Maximum time between price observations"
+      description: "Maximum time between price observations",
     },
     {
       label: "TWAP Threshold",
       value: <Text size="2">{dao.twap_threshold}</Text>,
-      description: "Threshold for the TWAP to be executed"
+      description: "Threshold for the TWAP to be executed",
     },
   ].filter(Boolean);
 
@@ -170,11 +179,15 @@ export function DaoView() {
       <div className="relative flex flex-wrap items-end justify-between w-full mt-24">
         <div className="h-48 w-full absolute -z-20 -top-32 rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden" />
         <div className="sm:ml-4 flex items-end flex-wrap">
-          <DaoIcon className="flex rounded-xl overflow-hidden border-4 shadow-lg " size="xl" icon={dao.icon_url} name={dao.dao_name} />
+          <DaoIcon
+            className="flex rounded-xl overflow-hidden border-4 shadow-lg "
+            size="xl"
+            icon={dao.icon_url}
+            name={dao.dao_name}
+          />
           <div className="ml-6 mb-4">
             <Flex align="center" gap="2">
               <div>
-
                 <Heading size="7" className="text-gray-100">
                   {dao.dao_name}
                 </Heading>
@@ -225,39 +238,51 @@ export function DaoView() {
         <div className="lg:col-span-4">
           {/* Mobile Collapsible Section */}
           <div className="lg:hidden">
-            <button 
+            <button
               onClick={() => setShowInfo(!showInfo)}
               className="w-full py-2 -my-2 transition-all duration-200 shadow-sm hover:shadow-md transform"
             >
               <Flex justify="between" align="center">
-              <Heading size="4" className="text-gray-200">
+                <Heading size="4" className="text-gray-200">
                   DAO Informations
                 </Heading>
-                <Text size="2" className={`text-gray-400 transition-transform duration-200 ${showInfo ? 'rotate-180' : ''}`}>
+                <Text
+                  size="2"
+                  className={`text-gray-400 transition-transform duration-200 ${showInfo ? "rotate-180" : ""}`}
+                >
                   ▼
                 </Text>
               </Flex>
             </button>
-            <div className={`overflow-hidden transition-all duration-200 ${showInfo ? 'max-h-[2000px] mt-2' : 'max-h-0'}`}>
+            <div
+              className={`overflow-hidden transition-all duration-200 ${showInfo ? "max-h-[2000px] mt-2" : "max-h-0"}`}
+            >
               <div className="space-y-4">
                 <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
                   <Heading size="2" className="mb-3 text-gray-200">
                     Basic Information
                   </Heading>
                   <Flex direction="column" gap="2" className="text-gray-100">
-                    {daoInformations.map(({ label, value }) => (
-                      value && <Flex
-                        key={label}
-                        align="center"
-                        justify="between"
-                        className="py-1 border-b border-gray-800/50"
-                      >
-                        <Text weight="bold" size="2" className="text-gray-400">
-                          {label}
-                        </Text>
-                        {value}
-                      </Flex>
-                    ))}
+                    {daoInformations.map(
+                      ({ label, value }) =>
+                        value && (
+                          <Flex
+                            key={label}
+                            align="center"
+                            justify="between"
+                            className="py-1 border-b border-gray-800/50"
+                          >
+                            <Text
+                              weight="bold"
+                              size="2"
+                              className="text-gray-400"
+                            >
+                              {label}
+                            </Text>
+                            {value}
+                          </Flex>
+                        ),
+                    )}
                   </Flex>
                 </Card>
 
@@ -273,7 +298,11 @@ export function DaoView() {
                           justify="between"
                           className="py-1 border-b border-gray-800/50"
                         >
-                          <Text weight="bold" size="2" className="text-gray-400">
+                          <Text
+                            weight="bold"
+                            size="2"
+                            className="text-gray-400"
+                          >
                             {label}
                           </Text>
                           {value}
@@ -324,19 +353,22 @@ export function DaoView() {
                 DAO Informations
               </Heading>
               <Flex direction="column" gap="2" className="text-gray-100">
-                {daoInformations.map(({ label, value }) => (
-                  value && <Flex
-                    key={label}
-                    align="center"
-                    justify="between"
-                    className="py-1 border-b border-gray-800/50"
-                  >
-                    <Text weight="bold" size="2" className="text-gray-400">
-                      {label}
-                    </Text>
-                    {value}
-                  </Flex>
-                ))}
+                {daoInformations.map(
+                  ({ label, value }) =>
+                    value && (
+                      <Flex
+                        key={label}
+                        align="center"
+                        justify="between"
+                        className="py-1 border-b border-gray-800/50"
+                      >
+                        <Text weight="bold" size="2" className="text-gray-400">
+                          {label}
+                        </Text>
+                        {value}
+                      </Flex>
+                    ),
+                )}
               </Flex>
             </Card>
 
@@ -416,13 +448,20 @@ export function DaoView() {
                   <ProposalCard
                     key={proposal.proposal_id}
                     proposal={proposal}
-                    variant={proposal.current_state === 2 ? "finalized" : "active"}
+                    variant={
+                      proposal.current_state === 2 ? "finalized" : "active"
+                    }
                   />
                 ))}
               </div>
             ) : (
               <div className="bg-gray-800/30 rounded-lg border border-gray-700/20 p-8">
-                <Flex direction="column" align="center" gap="4" className="text-center">
+                <Flex
+                  direction="column"
+                  align="center"
+                  gap="4"
+                  className="text-center"
+                >
                   <div className="w-12 h-12 rounded-full bg-gray-800/50 border border-gray-700/50 flex items-center justify-center">
                     <svg
                       className="w-6 h-6 text-gray-500"
@@ -442,7 +481,8 @@ export function DaoView() {
                     No proposals yet
                   </Text>
                   <Text size="2" className="text-gray-400 max-w-md">
-                    This DAO hasn't created any proposals yet. Be the first to start a discussion and shape the future of this community.
+                    This DAO hasn't created any proposals yet. Be the first to
+                    start a discussion and shape the future of this community.
                   </Text>
                   <Button
                     size="2"
@@ -466,14 +506,19 @@ export function DaoView() {
           open: showCreateProposal,
           onOpenChange: setShowCreateProposal,
           title: `Create New Proposal for ${dao?.dao_name}`,
-          content: <CreateProposalForm walletAddress={account?.address ?? ""} daoIdFromUrl={daoId} />
+          content: (
+            <CreateProposalForm
+              walletAddress={account?.address ?? ""}
+              daoIdFromUrl={daoId}
+            />
+          ),
         },
         {
           open: showVerifyDao,
           onOpenChange: setShowVerifyDao,
           title: "Get DAO Verified",
-          content: <VerifyDaoForm />
-        }
+          content: <VerifyDaoForm />,
+        },
       ].map(({ open, onOpenChange, title, content }, index) => (
         <Dialog.Root key={index} open={open} onOpenChange={onOpenChange}>
           <Dialog.Content className="max-w-4xl bg-gray-900 border border-gray-800">
