@@ -51,7 +51,9 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
       defaultColors = ["#ef4444"];
     } else if (outcomeCount === 2) {
       defaultColors = ["#ef4444", "#22c55e"];
-    } else {
+    } else if (outcomeCount === 3) {
+      defaultColors = ["#ef4444", "#22c55e", "#0080ff"];
+    } else { // outcomeCount > 3
       defaultColors = Array.from({ length: outcomeCount }, (_, i) => {
         const hue = (i * (360 / outcomeCount)) % 360;
         return `hsl(${hue}, 100%, 50%)`;
@@ -94,7 +96,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           <span className="text-base font-bold text-gray-300">
             Winning TWAP
           </span>
-          <div className="relative group ml-1 mr-0.5">
+          <div className="relative group ml-1 mr-0.5 shrink-0">
             <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
             <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
               The time average weighted price for the {outcomeMessages[0]}{" "}
@@ -108,7 +110,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
         {items.slice(0, 1).map((item) => (
           <div key={item.index} className="flex items-center relative">
             <div className="flex items-center">
-              <svg width="8" height="8">
+              <svg width="8" height="8" className="shrink-0">
                 <circle cx="4" cy="4" r="4" fill={item.color} />
               </svg>
               <span className="text-gray-300 text-base ml-2 whitespace-nowrap">
@@ -125,7 +127,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           <span className="text-base font-bold text-gray-300">
             Failing TWAP{pluralSuffix}
           </span>
-          <div className="relative group ml-1 mr-0.5">
+          <div className="relative group ml-1 mr-0.5 shrink-0">
             <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
             <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
               The time average weighted price for the failing market
@@ -141,7 +143,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           {items.slice(1).map((item) => (
             <div key={item.index} className="flex items-center relative">
               <div className="flex items-center">
-                <svg width="8" height="8">
+                <svg width="8" height="8" className="shrink-0">
                   <circle cx="4" cy="4" r="4" fill={item.color} />
                 </svg>
                 <span className="text-gray-300 text-base ml-2 whitespace-nowrap">

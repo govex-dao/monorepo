@@ -29,6 +29,7 @@ interface ApiProposal {
   current_state: number;
   state_history: StateHistory[];
   twap_threshold: string;
+  twap_start_delay: string;
   winning_outcome: string | null;
 }
 
@@ -48,6 +49,54 @@ const getStateLabel = (state: number | null): string => {
     default:
       return "Pre-market";
   }
+};
+
+const formatDuration = (msString: string): string => {
+  const totalMilliseconds = Number(msString);
+  if (isNaN(totalMilliseconds) || totalMilliseconds < 0) {
+    return "Invalid duration";
+  }
+
+  if (totalMilliseconds === 0) {
+    return "0 ms";
+  }
+
+  const msInSecond = 1000;
+  const msInMinute = msInSecond * 60;
+  const msInHour = msInMinute * 60;
+  const msInDay = msInHour * 24;
+  const msInYear = msInDay * 365; // Approximation
+
+  let remainingMs = totalMilliseconds;
+
+  const years = Math.floor(remainingMs / msInYear);
+  remainingMs %= msInYear;
+
+  const days = Math.floor(remainingMs / msInDay);
+  remainingMs %= msInDay;
+
+  const hours = Math.floor(remainingMs / msInHour); // Corrected line
+  remainingMs %= msInHour;
+
+  const minutes = Math.floor(remainingMs / msInMinute);
+  remainingMs %= msInMinute;
+
+  const seconds = Math.floor(remainingMs / msInSecond);
+  const milliseconds = remainingMs % msInSecond;
+
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} year${years > 1 ? 's' : ''}`);
+  if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
+  if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
+  if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
+  if (seconds > 0) parts.push(`${seconds} second${seconds > 1 ? 's' : ''}`);
+  // Always show milliseconds if it's non-zero, or if it's the only unit (e.g., duration < 1s)
+  // or if the total duration was non-zero and all larger units were zero.
+  if (milliseconds > 0 || (totalMilliseconds > 0 && parts.length === 0)) {
+    parts.push(`${milliseconds} ms`);
+  }
+
+  return parts.length > 0 ? parts.join(", ") : "0 ms"; // Ensure "0 ms" if totalMilliseconds was 0 and handled above, or if parts is empty
 };
 
 const ProposalDetails: React.FC<ProposalDetailsProps> = ({
@@ -144,6 +193,12 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                     <span>Outcome Count </span>
                     <span className="font-medium text-gray-200">
                       {proposal.outcome_count}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>TWAP Start Delay</span>
+                    <span className="font-medium text-gray-200">
+                      {formatDuration(proposal.twap_start_delay)}
                     </span>
                   </div>
                 </div>
