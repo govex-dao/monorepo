@@ -183,9 +183,18 @@ export function ProposalView() {
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
       <h1 className="text-3xl font-bold mt-4 pl-6 pr-6 flex flex-row items-center gap-2 ">
-        <Link to={`/dao/${proposal.dao_id}`} className="hover:opacity-80 group flex items-center gap-2">
-          <DaoIcon icon={proposal.dao_icon} name={proposal.dao_name} size="lg"/>
-          <span className="text-gray-400 group-hover:text-white group-hover:underline">{proposal.dao_name}</span>
+        <Link
+          to={`/dao/${proposal.dao_id}`}
+          className="hover:opacity-80 group flex items-center gap-2"
+        >
+          <DaoIcon
+            icon={proposal.dao_icon}
+            name={proposal.dao_name}
+            size="lg"
+          />
+          <span className="text-gray-400 group-hover:text-white group-hover:underline">
+            {proposal.dao_name}
+          </span>
         </Link>
         {proposal.dao_verified ? (
           <VerifiedIcon

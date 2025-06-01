@@ -7,7 +7,10 @@ interface ProposalStatusProps {
   winningOutcome?: string | null;
 }
 
-export const getStateLabel = (state: number | null, winningOutcome?: string | null): string => {
+export const getStateLabel = (
+  state: number | null,
+  winningOutcome?: string | null,
+): string => {
   switch (state) {
     case 0:
       return "Pre-market";
@@ -20,7 +23,10 @@ export const getStateLabel = (state: number | null, winningOutcome?: string | nu
   }
 };
 
-export const getStateColor = (state: number | null, winningOutcome?: string | null): "purple" | "blue" | "green" | "red" | "gray" => {
+export const getStateColor = (
+  state: number | null,
+  winningOutcome?: string | null,
+): "purple" | "blue" | "green" | "red" | "gray" => {
   switch (state) {
     case 0:
       return "purple";
@@ -33,7 +39,12 @@ export const getStateColor = (state: number | null, winningOutcome?: string | nu
   }
 };
 
-export function ProposalStatus({ state, variant = "soft", className = "", winningOutcome }: ProposalStatusProps) {
+export function ProposalStatus({
+  state,
+  variant = "soft",
+  className = "",
+  winningOutcome,
+}: ProposalStatusProps) {
   const stateLabel = getStateLabel(state, winningOutcome);
   const stateColor = getStateColor(state, winningOutcome);
 
@@ -42,4 +53,4 @@ export function ProposalStatus({ state, variant = "soft", className = "", winnin
       {stateLabel}
     </Badge>
   );
-} 
+}
