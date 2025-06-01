@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS } from "@/constants";
 import {
@@ -68,6 +68,8 @@ interface Proposal {
   winning_outcome: string;
 }
 
+const TWAP_BASIS_POINTS = 100_000;
+
 const DaoInfoCards = ({
   dao,
   daoInformations,
@@ -84,7 +86,7 @@ const DaoInfoCards = ({
   <div className="space-y-4">
     <Card className="p-4 bg-gray-900/50 border border-gray-800/50 shadow-lg rounded-xl">
       <Heading size="2" className="mb-3 text-gray-200">
-        Basic Information
+        Infos
       </Heading>
       <Flex direction="column" gap="2" className="text-gray-100">
         {daoInformations.map(
@@ -160,6 +162,17 @@ const DaoInfoCards = ({
     </Card>
   </div>
 );
+
+const adjustPriceValue = (
+  value: number,
+  asset_decimals: number,
+  stable_decimals: number,
+): string => {
+  const adjustedValue =
+    (value / 1_000_000_000_000) *
+    Math.pow(10, asset_decimals - stable_decimals);
+  return adjustedValue.toFixed(10).replace(/\.?0+$/, "");
+};
 
 export function DaoView() {
   const { daoId } = useParams();
@@ -246,7 +259,16 @@ export function DaoView() {
   const twapInformations = [
     {
       label: "Initial Price Observation",
-      value: <Text size="2">{dao.amm_twap_initial_observation}</Text>,
+      value: (
+        <Text size="2">
+          $
+          {adjustPriceValue(
+            Number(dao.amm_twap_initial_observation),
+            dao.asset_decimals,
+            dao.stable_decimals,
+          )}
+        </Text>
+      ),
       description: "Starting price point for TWAP calculations",
     },
     {
@@ -256,12 +278,28 @@ export function DaoView() {
     },
     {
       label: "Max Step Interval",
-      value: <Text size="2">{formatPeriod(dao.amm_twap_step_max)}</Text>,
+      value: (
+        <Text size="2">
+          $
+          {adjustPriceValue(
+            Number(dao.amm_twap_step_max),
+            dao.asset_decimals,
+            dao.stable_decimals,
+          )}
+        </Text>
+      ),
       description: "Maximum time between price observations",
     },
     {
       label: "TWAP Threshold",
-      value: <Text size="2">{dao.twap_threshold}</Text>,
+      value: (
+        <Text size="2">
+          {Number(
+            BigInt(dao.twap_threshold || 0) / BigInt(TWAP_BASIS_POINTS / 100),
+          ).toFixed(2)}
+          %
+        </Text>
+      ),
       description: "Threshold for the TWAP to be executed",
     },
   ].filter(Boolean);
