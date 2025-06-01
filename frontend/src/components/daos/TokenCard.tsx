@@ -1,5 +1,6 @@
 import { Flex, Text } from "@radix-ui/themes";
 import { ExplorerLink } from "@/components/ExplorerLink";
+import { Tooltip } from "@/components/Tooltip";
 
 interface TokenCardProps {
   name: string;
@@ -26,6 +27,27 @@ export function TokenCard({
     : "from-green-500/40 to-green-700/40";
   const textColor = isAsset ? "text-blue-300" : "text-green-300";
 
+  const tooltipContent = (
+    <div className="space-y-1">
+      <Flex justify="between" className="text-gray-300" gap="1">
+        <Text size="1">Decimals</Text>
+        <Text size="1" weight="bold">
+          {decimals}
+        </Text>
+      </Flex>
+      <Flex justify="between" className="text-gray-300" gap="1">
+        <Text size="1">Min Amount</Text>
+        <Text size="1" weight="bold">
+          {parseFloat(minAmount) / Math.pow(10, decimals || 0)} {symbol}
+        </Text>
+      </Flex>
+      <div className="pt-1 border-t border-gray-700">
+        <Text size="1" className="text-gray-400 mb-1">Address</Text>
+        <ExplorerLink id={tokenType} isAddress={false} />
+      </div>
+    </div>
+  );
+
   return (
     <div className="p-3 bg-gray-800/70 rounded-lg border border-gray-700/50">
       <Flex align="center" gap="3">
@@ -51,40 +73,21 @@ export function TokenCard({
             </Text>
           </div>
         </div>
-        <div className="flex-1 min-w-0">
+        <Flex className="flex-1 min-w-0" direction="column">
           <Text weight="bold" size="2" className="text-gray-200">
-            {name || symbol}
+            {symbol || name}
           </Text>
           <Text size="1" className="text-gray-400">
-            • {isAsset ? "Asset" : "Stable"} Token
+            {isAsset ? "Asset" : "Stable"}
           </Text>
-          <div className="mt-1">
-            <ExplorerLink id={tokenType} isAddress={false} />
-          </div>
-        </div>
-        <div className="relative group flex-shrink-0">
-          <div className="w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center cursor-help transition-colors">
-            <Text size="1" className="text-gray-300">
+        </Flex>
+        <Tooltip content={tooltipContent}>
+          <div className="w-5 h-5 rounded-full bg-gray-700 hover:bg-gray-600 flex items-center justify-center transition-colors">
+            <Text size="1" className="text-gray-300 select-none">
               i
             </Text>
           </div>
-          <div className="absolute right-0 w-48 p-2 bg-gray-800/95 rounded-md shadow-xl border border-gray-700 hidden group-hover:block z-10 text-sm backdrop-blur-sm">
-            <div className="space-y-1">
-              <Flex justify="between" className="text-gray-300">
-                <Text size="1">Decimals</Text>
-                <Text size="1" weight="bold">
-                  {decimals}
-                </Text>
-              </Flex>
-              <Flex justify="between" className="text-gray-300">
-                <Text size="1">Min Amount</Text>
-                <Text size="1" weight="bold">
-                  {parseFloat(minAmount) / Math.pow(10, decimals || 0)} {symbol}
-                </Text>
-              </Flex>
-            </div>
-          </div>
-        </div>
+        </Tooltip>
       </Flex>
     </div>
   );

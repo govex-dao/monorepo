@@ -1,12 +1,14 @@
-  // Format periods from milliseconds to hours and minutes
+  // Format periods from milliseconds to hours, minutes, and seconds
   export const formatPeriod = (periodMs: string) => {
-    const totalMinutes = Number(periodMs) / 1000 / 60;
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = Math.floor(totalMinutes % 60);
+    const totalSeconds = Number(periodMs) / 1000;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
 
-    if (hours > 0) {
-      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-    } else {
-      return `${minutes}m`;
-    }
+    const parts = [];
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    if (seconds > 0) parts.push(`${seconds}s`);
+
+    return parts.length > 0 ? parts.join(' ') : '0s';
   };
