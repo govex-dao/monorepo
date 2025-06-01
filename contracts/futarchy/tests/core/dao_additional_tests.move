@@ -96,6 +96,7 @@ fun test_create_dao_with_invalid_decimals_diff() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -141,6 +142,7 @@ fun test_create_dao_with_large_decimals() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -183,6 +185,7 @@ fun test_create_proposal_with_title_too_long() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -263,6 +266,7 @@ fun test_create_proposal_with_metadata_too_long() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -343,6 +347,7 @@ fun test_create_proposal_with_empty_title() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -417,6 +422,7 @@ fun test_create_proposal_with_wrong_asset_type() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -498,6 +504,7 @@ fun test_create_proposal_with_wrong_stable_type() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -579,6 +586,7 @@ fun test_create_proposal_when_disabled() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -660,6 +668,7 @@ fun test_sign_result_nonexistent_proposal() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -757,6 +766,7 @@ fun test_sign_result_already_executed() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -907,6 +917,7 @@ fun test_verification_functions() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -969,6 +980,7 @@ fun test_create_proposal_with_insufficient_amounts() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -1047,6 +1059,7 @@ fun test_create_proposal_with_invalid_outcome_count() {
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
             &clock,
             test_scenario::ctx(&mut scenario),
         );

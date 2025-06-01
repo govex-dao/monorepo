@@ -341,6 +341,7 @@ const CreateDaoForm = () => {
           tx.pure.u64(chainTwapStepMax),
           tx.pure.u128(chainTwapInitialObservation),
           tx.pure.u64(chainAdjustedTwapThreshold),
+          tx.pure.string(""),
           tx.object("0x6"),
         ],
       });

@@ -135,6 +135,7 @@ app.get('/daos', async (req, res) => {
                 stable_icon_url: true,
                 asset_symbol: true,
                 stable_symbol: true,
+                description:true,
                 verification: {
                         select: {
                             verified: true

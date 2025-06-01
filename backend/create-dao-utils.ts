@@ -168,6 +168,7 @@ export const createDao = async ({
                 txb.pure.u64(10000),  //  amm_twap_step_max
                 txb.pure.u128(10000000), // twap initial observation
                 txb.pure.u64(50), //twap_threshold
+                txb.pure.string("dao-description"),
                 txb.object('0x6')        // <CLOCK_OBJECT_ID>
             ],
         });

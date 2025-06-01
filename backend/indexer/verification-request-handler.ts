@@ -141,7 +141,8 @@ export const handleVerificationRequests = async (events: SuiEvent[], type: strin
                                 amm_twap_start_delay: 0n,
                                 amm_twap_initial_observation: 0n,
                                 amm_twap_step_max: 0n,
-                                twap_threshold: 0n
+                                twap_threshold: 0n,
+                                description: "pending"
                             },
                             update: {} // Don't update existing DAOs
                         });

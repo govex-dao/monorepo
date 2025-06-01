@@ -40,6 +40,7 @@ interface DAOCreated {
     amm_twap_step_max: string;
     amm_twap_initial_observation: string;
     twap_threshold: string;
+    description: string;
 }
 
 async function validateAndSanitizeUrl(url: string): Promise<URL> {
@@ -367,10 +368,12 @@ function validateDAOData(data: any): data is DAOCreated {
         'amm_twap_start_delay',
         'amm_twap_step_max',
         'amm_twap_initial_observation',
-        'twap_threshold'
+        'twap_threshold',
+        'description'
     ];
 
-    const missingFields = requiredFields.filter(field => !data[field]);
+    const missingFields = requiredFields.filter(field => !(field in data));
+
     if (missingFields.length > 0) {
         console.error('Missing required fields:', missingFields);
         return false;
@@ -435,7 +438,8 @@ export const handleDAOObjects = async (events: SuiEvent[], type: string) => {
                 amm_twap_start_delay: safeBigInt(data.amm_twap_start_delay),
                 amm_twap_step_max: safeBigInt(data.amm_twap_step_max),
                 amm_twap_initial_observation: safeBigInt(data.amm_twap_initial_observation),
-                twap_threshold: safeBigInt(data.twap_threshold)
+                twap_threshold: safeBigInt(data.twap_threshold),
+                description: data.description
             });
         } catch (error) {
             console.error('Error processing event:', error);

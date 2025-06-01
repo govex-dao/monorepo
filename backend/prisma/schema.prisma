@@ -45,6 +45,7 @@ model Dao {
   amm_twap_step_max BigInt
   amm_twap_initial_observation BigInt
   twap_threshold BigInt
+  description String
   proposals Proposal[]
   verificationRequests DaoVerificationRequest[]
   verification DaoVerification?  // Changed to optional one-to-one

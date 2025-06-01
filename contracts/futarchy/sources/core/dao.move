@@ -41,6 +41,7 @@ const ETITLE_TOO_LONG: u64 = 17;
 const EDETAILS_TOO_SHORT: u64 = 18;
 const EONE_OUTCOME: u64 = 19;
 const E_NONE_FULL_WINDOW_TWAP_DELAY: u64 = 20;
+const E_DAO_DESCRIPTION_TOO_LONG: u64 = 21;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -51,6 +52,7 @@ const MAX_OUTCOMES: u64 = 3;
 const MAX_RESULT_LENGTH: u64 = 1024;
 const MIN_AMM_SAFE_AMOUNT: u64 = 1000; // under 50 swap will have significant slippage
 const MAX_DECIMALS: u8 = 21; // Common max for most token pairs
+const DAO_DESCRIPTION_MAX_LENGTH: u64 = 1024;
 
 // === Structs ===
 public struct DAO has key, store {
@@ -83,6 +85,7 @@ public struct DAO has key, store {
     verification_pending: bool,
     verified: bool,
     proposal_creation_enabled: bool,
+    description: String,
 }
 
 public struct ProposalInfo has store {
@@ -121,6 +124,7 @@ public struct DAOCreated has copy, drop {
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
+    description: String,
 }
 
 public struct ResultSigned has copy, drop {
@@ -151,6 +155,7 @@ public(package) fun create<AssetType, StableType>(
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
+    description: String,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -184,6 +189,8 @@ public(package) fun create<AssetType, StableType>(
 
     assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WINDOW_TWAP_DELAY);
 
+    assert!(description.length() <= DAO_DESCRIPTION_MAX_LENGTH, E_DAO_DESCRIPTION_TOO_LONG);
+
     let dao = DAO {
         id: object::new(ctx),
         asset_type: type_name::into_string(type_name::get<AssetType>()),
@@ -214,6 +221,7 @@ public(package) fun create<AssetType, StableType>(
         verification_pending: false,
         verified: false,
         proposal_creation_enabled: true,
+        description: description,
     };
 
     event::emit(DAOCreated {
@@ -239,6 +247,7 @@ public(package) fun create<AssetType, StableType>(
         amm_twap_step_max,
         amm_twap_initial_observation,
         twap_threshold,
+        description,
     });
 
     // Transfer objects
