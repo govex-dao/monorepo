@@ -13,7 +13,7 @@ export function Dao({ dao }: { dao: ApiDaoObject }) {
       <div className="flex justify-between items-center">
         <div>
           <p className="text-sm">Admin: {formatAddress(dao.admin)}</p>
-          <ExplorerLink id={dao.objectId} />
+          <ExplorerLink id={dao.objectId} type="object" />
           {dao.feePaid && (
             <p className="text-sm text-gray-600">Fee Paid: {dao.feePaid}</p>
           )}

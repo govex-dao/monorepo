@@ -11,19 +11,66 @@ import toast from "react-hot-toast";
  * A re-usable component for explorer links that offers
  * a copy to clipboard functionality.
  */
-export function ExplorerLink({
-  id,
-  isAddress,
-}: {
+export type ExplorerLinkType =
+  | "object"
+  | "address" // Addresses are technically objects, but SuiScan supports /address/ path
+  | "transaction"
+  | "package"
+  | "coin" // This usually refers to a coin *type*, e.g., 0x2::sui::SUI
+  | "validator";
+// Add more types as needed, e.g., "checkpoint", "epoch"
+
+interface ExplorerLinkProps {
   id: string;
-  isAddress?: boolean;
-}) {
+  type: ExplorerLinkType;
+}
+
+/**
+ * A re-usable component for explorer links that offers
+ * a copy to clipboard functionality.
+ * It uses a switch statement to construct the correct URL based on the entity type.
+ */
+export function ExplorerLink({ id, type }: ExplorerLinkProps) {
   const [copied, setCopied] = useState(false);
   const { network } = useSuiClientContext();
 
-  const link = `https://suiscan.xyz/${network}/${
-    isAddress ? "account" : "object"
-  }/${id}`;
+  let pathSegment = "";
+
+  // The base URL structure is: https://suiscan.xyz/[NETWORK]/[TYPE]/[ID]
+  // We only need to determine the [TYPE] part based on the prop.
+  switch (type) {
+    case "address":
+      pathSegment = `address/${id}`;
+      // Note: SuiScan often redirects /address/ to /object/ for actual address IDs
+      break;
+    case "object":
+      pathSegment = `object/${id}/fields`;
+      break;
+    case "transaction":
+      pathSegment = `tx/${id}`; // SuiScan uses 'tx' for transactions
+      break;
+    case "package":
+      pathSegment = `package/${id}`;
+      break;
+    case "coin":
+      pathSegment = `coin/0x${id}`;
+      break;
+    case "validator":
+      pathSegment = `validator/${id}`;
+      break;
+    // Add more cases for other types as needed
+    // e.g., case "checkpoint": pathSegment = `checkpoint/${id}`; break;
+    default:
+      // Fallback or error handling for unknown types
+      // For robustness, you might want to default to 'object' or log an error
+      console.warn(
+        `ExplorerLink: Unknown type "${type}" provided for ID "${id}". Defaulting to object path.`,
+      );
+      pathSegment = `object/${id}`; // A sensible fallback
+      break;
+  }
+
+  const link = `https://suiscan.xyz/${network}/${pathSegment}`;
 
   const copy = () => {
     navigator.clipboard.writeText(id);
@@ -48,6 +95,8 @@ export function ExplorerLink({
       )}
 
       <a href={link} target="_blank" rel="noreferrer">
+        {/* formatAddress works well for most IDs (addresses, object IDs)
+            For transaction digests, it will also shorten them, which is usually fine. */}
         {formatAddress(id || "")}
       </a>
     </span>

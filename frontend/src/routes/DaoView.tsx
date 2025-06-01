@@ -43,7 +43,6 @@ interface DaoData {
   asset_name: string;
   stable_icon_url: string;
   stable_name: string;
-  admin: string;
   verification?: {
     verified: boolean;
   };
@@ -235,17 +234,11 @@ export function DaoView() {
     );
   }
 
-  const isAdmin = account?.address === dao.admin;
-
   const formattedReviewPeriod = formatPeriod(dao.review_period_ms);
   const formattedTradingPeriod = formatPeriod(dao.trading_period_ms);
 
   const daoInformations = [
-    { label: "DAO ID", value: <ExplorerLink id={dao.dao_id} /> },
-    {
-      label: "Admin",
-      value: dao.admin ? <ExplorerLink id={dao.admin} isAddress /> : null,
-    },
+    { label: "DAO ID", value: <ExplorerLink id={dao.dao_id} type="object" /> },
     {
       label: "Review Period",
       value: <Text size="2">{formattedReviewPeriod}</Text>,
@@ -316,7 +309,7 @@ export function DaoView() {
             icon={dao.icon_url}
             name={dao.dao_name}
           />
-          <div className="ml-6 mb-4">
+          <div className="ml-6 mb-1">
             <Flex align="center" gap="2">
               <div>
                 <Heading size="7" className="text-gray-100">
@@ -337,11 +330,6 @@ export function DaoView() {
                 >
                   Get Verified
                 </Button>
-              )}
-              {isAdmin && (
-                <Badge color="amber" variant="soft">
-                  Admin
-                </Badge>
               )}
             </Flex>
             <Text size="2" className="text-gray-400">
