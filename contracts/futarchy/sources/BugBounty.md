@@ -9,7 +9,7 @@ Govex Bug Bounty-1
 - Bugs in test only logic do not count.
 - OFAC or OFSI sanctioned organizations or individuals or those from sanctioned countries will not be awarded.
 - This bug bounty expires on 01/06/2025 or earlier if this file is removed.
-- Only the commit at the head of the main branch this repo is eligable for a bounty.
+- Only the latest tagged realise on the main branch this repo is eligable for a bounty.
 - Bounty reports must be made with following responsible disclosure practises, only submit the bug report via direct message to @greshamscode on Discord.
 - Include a brief description of the bug and a suggested fix to claim
 - The entire report must be in plain text, no PDFs or files or external links are alowed in the report.
