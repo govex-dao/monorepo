@@ -53,7 +53,8 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
       defaultColors = ["#ef4444", "#22c55e"];
     } else if (outcomeCount === 3) {
       defaultColors = ["#ef4444", "#22c55e", "#0080ff"];
-    } else { // outcomeCount > 3
+    } else {
+      // outcomeCount > 3
       defaultColors = Array.from({ length: outcomeCount }, (_, i) => {
         const hue = (i * (360 / outcomeCount)) % 360;
         return `hsl(${hue}, 100%, 50%)`;

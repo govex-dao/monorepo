@@ -85,11 +85,11 @@ const formatDuration = (msString: string): string => {
   const milliseconds = remainingMs % msInSecond;
 
   const parts: string[] = [];
-  if (years > 0) parts.push(`${years} year${years > 1 ? 's' : ''}`);
-  if (days > 0) parts.push(`${days} day${days > 1 ? 's' : ''}`);
-  if (hours > 0) parts.push(`${hours} hour${hours > 1 ? 's' : ''}`);
-  if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? 's' : ''}`);
-  if (seconds > 0) parts.push(`${seconds} second${seconds > 1 ? 's' : ''}`);
+  if (years > 0) parts.push(`${years} year${years > 1 ? "s" : ""}`);
+  if (days > 0) parts.push(`${days} day${days > 1 ? "s" : ""}`);
+  if (hours > 0) parts.push(`${hours} hour${hours > 1 ? "s" : ""}`);
+  if (minutes > 0) parts.push(`${minutes} minute${minutes > 1 ? "s" : ""}`);
+  if (seconds > 0) parts.push(`${seconds} second${seconds > 1 ? "s" : ""}`);
   // Always show milliseconds if it's non-zero, or if it's the only unit (e.g., duration < 1s)
   // or if the total duration was non-zero and all larger units were zero.
   if (milliseconds > 0 || (totalMilliseconds > 0 && parts.length === 0)) {

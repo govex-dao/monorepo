@@ -154,8 +154,12 @@ const MarketPriceChart = ({
   )?.timestamp;
 
   const getTimeRangeStart = (range: string, endTime: number): number => {
-    const originalTradingStartUTC = tradingStart ? Math.floor(new Date(Number(tradingStart)).getTime() / 1000) : 0;
-    const adjustedTradingStart = originalTradingStartUTC ? originalTradingStartUTC - userTimezoneOffsetSeconds : endTime;
+    const originalTradingStartUTC = tradingStart
+      ? Math.floor(new Date(Number(tradingStart)).getTime() / 1000)
+      : 0;
+    const adjustedTradingStart = originalTradingStartUTC
+      ? originalTradingStartUTC - userTimezoneOffsetSeconds
+      : endTime;
 
     switch (range) {
       case "1H":
@@ -212,18 +216,18 @@ const MarketPriceChart = ({
     });
 
     if (chartContainerRef.current) {
-        resizeObserver.observe(chartContainerRef.current);
+      resizeObserver.observe(chartContainerRef.current);
     }
-    
+
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
-      if (chartContainerRef.current) { // Ensure current is not null before disconnecting
+      if (chartContainerRef.current) {
+        // Ensure current is not null before disconnecting
         resizeObserver.disconnect();
       }
     };
   }, []);
-
 
   interface ChartDataPoint {
     time: number;
@@ -265,13 +269,16 @@ const MarketPriceChart = ({
 
   const initialPrices = getInitialPrices();
 
-const chartData = React.useMemo(() => {
-    if (!tradingStart) return []; 
+  const chartData = React.useMemo(() => {
+    if (!tradingStart) return [];
 
-    const getAdjustedTime = (utcSeconds: number): number => utcSeconds - userTimezoneOffsetSeconds;
+    const getAdjustedTime = (utcSeconds: number): number =>
+      utcSeconds - userTimezoneOffsetSeconds;
 
     const adjustmentFactor = Math.pow(10, asset_decimals - stable_decimals);
-    const originalTradingStartUTC = Math.floor(new Date(Number(tradingStart)).getTime() / 1000);
+    const originalTradingStartUTC = Math.floor(
+      new Date(Number(tradingStart)).getTime() / 1000,
+    );
 
     const priceUpdatesAtEventTime: { time: number; prices: number[] }[] = [];
 
@@ -282,13 +289,21 @@ const chartData = React.useMemo(() => {
       });
     }
 
-    const sortedSwapEvents = swapEvents ? [...swapEvents].sort((a, b) => Number(a.timestamp) - Number(b.timestamp)) : [];
-    let lastKnownPricesFromEvents = initialPrices ? [...initialPrices] : Array(Number(outcome_count)).fill(0);
+    const sortedSwapEvents = swapEvents
+      ? [...swapEvents].sort(
+          (a, b) => Number(a.timestamp) - Number(b.timestamp),
+        )
+      : [];
+    let lastKnownPricesFromEvents = initialPrices
+      ? [...initialPrices]
+      : Array(Number(outcome_count)).fill(0);
 
     sortedSwapEvents.forEach((event) => {
       const rawEventPriceOnChain = Number(BigInt(event.price));
       const atomicRatio = rawEventPriceOnChain / 1e12;
-      const originalEventTimeUTC = Math.floor(new Date(Number(event.timestamp)).getTime() / 1000);
+      const originalEventTimeUTC = Math.floor(
+        new Date(Number(event.timestamp)).getTime() / 1000,
+      );
       const priceValue = atomicRatio * adjustmentFactor;
 
       const currentEventPrices = [...lastKnownPricesFromEvents];
@@ -300,8 +315,8 @@ const chartData = React.useMemo(() => {
         prices: currentEventPrices,
       });
     });
-    
-    priceUpdatesAtEventTime.sort((a,b) => a.time - b.time);
+
+    priceUpdatesAtEventTime.sort((a, b) => a.time - b.time);
 
     const seriesAdjustedStartTime = getAdjustedTime(originalTradingStartUTC);
     const seriesAdjustedEndTime = getAdjustedTime(
@@ -309,85 +324,112 @@ const chartData = React.useMemo(() => {
         ? Math.floor(Date.now() / 1000)
         : tradingEnd
           ? Math.floor(new Date(Number(tradingEnd)).getTime() / 1000)
-          : priceUpdatesAtEventTime.length > 0 
-            ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].time 
-            : seriesAdjustedStartTime 
+          : priceUpdatesAtEventTime.length > 0
+            ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].time
+            : seriesAdjustedStartTime,
     );
 
     const FIVE_MIN_SECONDS = 300;
     const finalSampledData: ChartDataPoint[] = [];
 
-    if (priceUpdatesAtEventTime.length > 0 && priceUpdatesAtEventTime[0].time === seriesAdjustedStartTime) {
-        finalSampledData.push({
-            time: seriesAdjustedStartTime,
-            ...Object.fromEntries(
-                priceUpdatesAtEventTime[0].prices.map((price, i) => [`market${i}`, price])
-            ),
-        } as ChartDataPoint);
-    } else if (initialPrices) { 
-         finalSampledData.push({
-            time: seriesAdjustedStartTime,
-            ...Object.fromEntries(
-                initialPrices.map((price, i) => [`market${i}`, price])
-            ),
-        } as ChartDataPoint);
+    if (
+      priceUpdatesAtEventTime.length > 0 &&
+      priceUpdatesAtEventTime[0].time === seriesAdjustedStartTime
+    ) {
+      finalSampledData.push({
+        time: seriesAdjustedStartTime,
+        ...Object.fromEntries(
+          priceUpdatesAtEventTime[0].prices.map((price, i) => [
+            `market${i}`,
+            price,
+          ]),
+        ),
+      } as ChartDataPoint);
+    } else if (initialPrices) {
+      finalSampledData.push({
+        time: seriesAdjustedStartTime,
+        ...Object.fromEntries(
+          initialPrices.map((price, i) => [`market${i}`, price]),
+        ),
+      } as ChartDataPoint);
     }
 
-    let nextSampleTime = Math.ceil(seriesAdjustedStartTime / FIVE_MIN_SECONDS) * FIVE_MIN_SECONDS;
-    if (nextSampleTime < seriesAdjustedStartTime) { 
-        nextSampleTime += FIVE_MIN_SECONDS;
+    let nextSampleTime =
+      Math.ceil(seriesAdjustedStartTime / FIVE_MIN_SECONDS) * FIVE_MIN_SECONDS;
+    if (nextSampleTime < seriesAdjustedStartTime) {
+      nextSampleTime += FIVE_MIN_SECONDS;
     }
-    if (finalSampledData.length > 0 && nextSampleTime === finalSampledData[0].time) {
-        nextSampleTime += FIVE_MIN_SECONDS;
+    if (
+      finalSampledData.length > 0 &&
+      nextSampleTime === finalSampledData[0].time
+    ) {
+      nextSampleTime += FIVE_MIN_SECONDS;
     }
-    
-    for (let currentTime = nextSampleTime; currentTime < seriesAdjustedEndTime; currentTime += FIVE_MIN_SECONDS) {
+
+    for (
+      let currentTime = nextSampleTime;
+      currentTime < seriesAdjustedEndTime;
+      currentTime += FIVE_MIN_SECONDS
+    ) {
       const relevantPriceUpdate = [...priceUpdatesAtEventTime]
         .reverse()
-        .find(update => update.time <= currentTime);
+        .find((update) => update.time <= currentTime);
 
       if (relevantPriceUpdate) {
         finalSampledData.push({
-          time: currentTime, 
-          ...Object.fromEntries( 
-            relevantPriceUpdate.prices.map((price, i) => [`market${i}`, price])
+          time: currentTime,
+          ...Object.fromEntries(
+            relevantPriceUpdate.prices.map((price, i) => [`market${i}`, price]),
           ),
         } as ChartDataPoint);
-      } else if (finalSampledData.length > 0) { 
+      } else if (finalSampledData.length > 0) {
         finalSampledData.push({
           time: currentTime,
-           ...Object.fromEntries(
-            Object.keys(finalSampledData[finalSampledData.length-1])
-                .filter(k => k.startsWith("market"))
-                .map(k => [k, finalSampledData[finalSampledData.length-1][k as keyof ChartDataPoint]])
+          ...Object.fromEntries(
+            Object.keys(finalSampledData[finalSampledData.length - 1])
+              .filter((k) => k.startsWith("market"))
+              .map((k) => [
+                k,
+                finalSampledData[finalSampledData.length - 1][
+                  k as keyof ChartDataPoint
+                ],
+              ]),
           ),
         });
       }
     }
 
-    const pricesForFinalPoint = 
-      priceUpdatesAtEventTime.length > 0 
-        ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].prices 
-        : initialPrices 
-          ? initialPrices 
+    const pricesForFinalPoint =
+      priceUpdatesAtEventTime.length > 0
+        ? priceUpdatesAtEventTime[priceUpdatesAtEventTime.length - 1].prices
+        : initialPrices
+          ? initialPrices
           : Array(Number(outcome_count)).fill(0);
 
     const finalPoint: ChartDataPoint = {
-        time: seriesAdjustedEndTime,
-        ...Object.fromEntries(
-            pricesForFinalPoint.map((price, i) => [`market${i}`, price])
-        ),
+      time: seriesAdjustedEndTime,
+      ...Object.fromEntries(
+        pricesForFinalPoint.map((price, i) => [`market${i}`, price]),
+      ),
     };
 
-    if (finalSampledData.length === 0 || finalSampledData[finalSampledData.length - 1].time < seriesAdjustedEndTime) {
-        finalSampledData.push(finalPoint);
-    } else if (finalSampledData[finalSampledData.length - 1].time === seriesAdjustedEndTime) {
-        finalSampledData[finalSampledData.length - 1] = finalPoint;
+    if (
+      finalSampledData.length === 0 ||
+      finalSampledData[finalSampledData.length - 1].time < seriesAdjustedEndTime
+    ) {
+      finalSampledData.push(finalPoint);
+    } else if (
+      finalSampledData[finalSampledData.length - 1].time ===
+      seriesAdjustedEndTime
+    ) {
+      finalSampledData[finalSampledData.length - 1] = finalPoint;
     }
-    
+
     const timeMap = new Map<number, ChartDataPoint>();
-    finalSampledData.forEach(point => timeMap.set(point.time, point));
-    const uniqueSortedData = Array.from(timeMap.values()).sort((a,b) => a.time - b.time);
+    finalSampledData.forEach((point) => timeMap.set(point.time, point));
+    const uniqueSortedData = Array.from(timeMap.values()).sort(
+      (a, b) => a.time - b.time,
+    );
 
     return uniqueSortedData;
   }, [
@@ -438,12 +480,12 @@ const chartData = React.useMemo(() => {
       }
       return;
     }
-    
+
     // If a chart instance already exists, remove it before creating a new one
     // This can happen if chartData becomes available after an initial empty state
     if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
+      chartRef.current.remove();
+      chartRef.current = null;
     }
 
     const chart = createChart(chartContainerRef.current, {
@@ -472,24 +514,40 @@ const chartData = React.useMemo(() => {
           locale: string,
         ) => {
           const date = new Date((time as number) * 1000);
-          const hours = date.getUTCHours().toString().padStart(2, '0');
-          const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-          const seconds = date.getUTCSeconds().toString().padStart(2, '0');
-          const dayMonthYearDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+          const hours = date.getUTCHours().toString().padStart(2, "0");
+          const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+          const seconds = date.getUTCSeconds().toString().padStart(2, "0");
+          const dayMonthYearDate = new Date(
+            Date.UTC(
+              date.getUTCFullYear(),
+              date.getUTCMonth(),
+              date.getUTCDate(),
+            ),
+          );
 
           switch (tickType) {
             case TickMarkType.Year:
-              return dayMonthYearDate.toLocaleDateString(locale, { year: 'numeric', timeZone: 'UTC' });
+              return dayMonthYearDate.toLocaleDateString(locale, {
+                year: "numeric",
+                timeZone: "UTC",
+              });
             case TickMarkType.Month:
-              return dayMonthYearDate.toLocaleDateString(locale, { month: 'short', timeZone: 'UTC' });
+              return dayMonthYearDate.toLocaleDateString(locale, {
+                month: "short",
+                timeZone: "UTC",
+              });
             case TickMarkType.DayOfMonth:
-              return dayMonthYearDate.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' });
+              return dayMonthYearDate.toLocaleDateString(locale, {
+                day: "numeric",
+                month: "short",
+                timeZone: "UTC",
+              });
             case TickMarkType.Time:
               return `${hours}:${minutes}`;
             case TickMarkType.TimeWithSeconds:
               return `${hours}:${minutes}:${seconds}`;
             default:
-              return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, '0')}-${date.getUTCDate().toString().padStart(2, '0')} ${hours}:${minutes}`;
+              return `${date.getUTCFullYear()}-${(date.getUTCMonth() + 1).toString().padStart(2, "0")}-${date.getUTCDate().toString().padStart(2, "0")} ${hours}:${minutes}`;
           }
         },
       },
@@ -576,7 +634,8 @@ const chartData = React.useMemo(() => {
       return winning_outcome
         ? `Trading period finished, winning outcome is: ${outcome_messages[Number(winning_outcome)]}`
         : "Trading period finished";
-    if (currentState === 1 && chartData.length <= 1) return "No trading activity yet"; // <=1 because initial point might exist
+    if (currentState === 1 && chartData.length <= 1)
+      return "No trading activity yet"; // <=1 because initial point might exist
     return "";
   }, [
     currentState,
@@ -586,7 +645,7 @@ const chartData = React.useMemo(() => {
     swapError,
     stateError,
     winning_outcome, // Added winning_outcome
-    outcome_messages // Added outcome_messages
+    outcome_messages, // Added outcome_messages
   ]);
 
   return (
@@ -627,9 +686,10 @@ const chartData = React.useMemo(() => {
       {(tradingStart || tradingEnd) && !swapError && !stateError && (
         <CustomLegend payload={legendPayload} />
       )}
-      {statusMessage && (chartData.length > 1 || (chartData.length === 1 && tradingStart)) && !swapError && !stateError && (
-        <div className="text-center mt-2 ">{statusMessage}</div>
-      )}
+      {statusMessage &&
+        (chartData.length > 1 || (chartData.length === 1 && tradingStart)) &&
+        !swapError &&
+        !stateError && <div className="text-center mt-2 ">{statusMessage}</div>}
     </div>
   );
 };

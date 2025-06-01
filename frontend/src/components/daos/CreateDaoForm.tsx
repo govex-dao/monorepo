@@ -294,7 +294,6 @@ const CreateDaoForm = () => {
         formData.minStableAmount,
         stableMetadata.decimals,
       );
-
     } catch (error) {
       setError("Invalid amount format. Please enter valid numbers.");
       console.error("Chain amount calculation error:", error);
