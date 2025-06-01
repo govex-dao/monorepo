@@ -571,7 +571,7 @@ const chartData = React.useMemo(() => {
   const statusMessage = React.useMemo(() => {
     if (swapError) return `Error loading swap data: ${swapError.message}`;
     if (stateError) return `Error loading state data: ${stateError.message}`;
-    if (currentState === 0 || !tradingStart) return "Trading period not started";
+    if (currentState === 0 || !tradingStart) return null;
     if (currentState === 2 || (tradingEnd && winning_outcome != null))
       return winning_outcome
         ? `Trading period finished, winning outcome is: ${outcome_messages[Number(winning_outcome)]}`

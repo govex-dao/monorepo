@@ -11,6 +11,7 @@ import { useTokenEvents } from "../hooks/useTokenEvents";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
+import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
 
 interface StateHistory {
   id: number;
@@ -208,6 +209,15 @@ export function ProposalView() {
         {": "}
         {proposal.title}
       </h1>
+    <div className="px-4 sm:px-6 mt-3 mb-2"> {/* Added responsive padding and adjusted margins */}
+      <ProposalCountdownTimer
+        currentState={proposal.current_state}
+        createdAt={proposal.created_at}
+        reviewPeriodMs={proposal.review_period_ms}
+        tradingPeriodMs={proposal.trading_period_ms} // Pass directly, component handles if undefined
+        stateHistory={proposal.state_history || []} // Ensure stateHistory is always an array
+      />
+    </div>
       <div className="flex-1 overflow-hidden p-4">
         <div
           className={
@@ -260,7 +270,7 @@ export function ProposalView() {
               <div className="flex flex-col items-center justify-center h-full">
                 <h1 className="text-center text-1xl font-bold">
                   {proposal.current_state === 0
-                    ? "Trading not started"
+                    ? null
                     : proposal.current_state === 2
                       ? "Trading finished"
                       : ""}
