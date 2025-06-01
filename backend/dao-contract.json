@@ -1,10 +1,10 @@
 {
-  "packageId": "0xbd89923a3e6933797070a06f19c6977a87bd563e46b1b5137c19c6c7dde451be",
-  "upgradeCapId": "0x9e847f3d7cad4eb0b217a73d1d34c179886262bb37c480440bb2723505aa4f51",
-  "factoryId": "0x426cb26dd15e35d259d1f2e9a8237ba4e291672c25bbe24e448c5c1df22d2e35",
-  "factoryOwnerCapId": "0x8fc15565662aa797f4b9bbaae306d9adcd23899f4bb5f9deea19c8fcced5d9c0",
-  "validatorAdminCapId": "0x3a593b8f66deade98c2326f8c0e45687f45c891534ddc1bd32bd763a8fe8419d",
-  "feeAdminCapId": "0x3d0c39103c25d384ced290f99a7ba5718e24dff228a5f465ec4bb6d685150a70",
-  "feeManagerId": "0x8c261c4a15a79c84e9ceda2f1588ddbca91415f05d335fa29de06ece4c17b8f7",
-  "transactionDigest": "HrbBN1KAazUmX8XCp3hcgtLeJh8fgQVPWMd8HhwJ9w1o"
+  "packageId": "0xf57e95759e4898b0bff79572c2c3bade2c723e5b34c6f9e5a1e0e3bdd0610deb",
+  "upgradeCapId": "0x29818aa47d6783f6746d07761cced93951c36297cc8ff6ae39ad8a6a97fedb64",
+  "factoryId": "0x35c3fd9e4fa5419fe7f2173bf30b7ce9d2de405559a3ed7aeb8136ed5ec58477",
+  "factoryOwnerCapId": "0x874e9ec196c3be9c9b9fcd19f7e9da716f60de8435219853a055a29e1e456406",
+  "validatorAdminCapId": "0xd6f1467e3ef86c3bf313737f355e71ae07c18a53cdcdf3cc725dede8289b2b45",
+  "feeAdminCapId": "0xb85824e05f2a74552f257f8419028789435985047e15d6c0d69773a3d6f4db8e",
+  "feeManagerId": "0x635c43441a7222fdfa8ad02abec1cda9628da0a77661b78d5b43e6244518e110",
+  "transactionDigest": "AESDRjqUVJj5mdhuWuc8F5ccejysEoGBSn6MBXBvBxJM"
 }

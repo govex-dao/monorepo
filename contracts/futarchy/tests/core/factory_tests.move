@@ -23,7 +23,7 @@ module futarchy::factory_tests {
     use futarchy::factory::{Self, Factory, FactoryOwnerCap, ValidatorAdminCap};
     use futarchy::fee::{Self, FeeManager};
     use futarchy::stable_coin::{Self, STABLE_COIN};
-    use std::string;
+    use std::string::{Self, String};
     use sui::clock;
     use sui::coin::{Self, CoinMetadata, Coin};
     use sui::sui::SUI;
@@ -145,6 +145,7 @@ module futarchy::factory_tests {
                 300_000,
                 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 clock,
                 ctx(scenario),
             );
@@ -412,6 +413,7 @@ module futarchy::factory_tests {
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -479,6 +481,7 @@ TWAP_INITIAL_OBSERVATION,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -606,6 +609,7 @@ TWAP_INITIAL_OBSERVATION,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -653,6 +657,7 @@ TWAP_INITIAL_OBSERVATION,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -699,6 +704,7 @@ TWAP_INITIAL_OBSERVATION,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -752,6 +758,7 @@ TWAP_INITIAL_OBSERVATION,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
+                string::utf8(b"DAO description"),
                 &clock,
                 ctx(&mut scenario),
             );
