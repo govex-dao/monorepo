@@ -31,10 +31,10 @@ module my_asset::my_asset {
         coin::mint_and_transfer(&mut treasury_cap, total_supply_to_mint, ctx.sender(), ctx);
 
         // Return the metadata object, to keep the token metadata mutable.
-        transfer::public_transfer(metadata, ctx.sender());
+        transfer::public_freeze_object(metadata);
 
         // Return the treasury cap to the publisher, to keep the token mintable.
-        transfer::public_transfer(treasury_cap, ctx.sender());
+        transfer::public_share_object(treasury_cap);
     }
 
     /// Mint new coins. Anyone can mint since TreasuryCap is shared.
