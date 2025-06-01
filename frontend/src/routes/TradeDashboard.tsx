@@ -50,19 +50,6 @@ const getStateLabel = (state: number | null): string => {
   }
 };
 
-const getStateColor = (state: number | null): string => {
-  switch (state) {
-    case 0:
-      return "bg-yellow-700 text-yellow-100";
-    case 1:
-      return "bg-green-700 text-green-100";
-    case 2:
-      return "bg-red-800 text-red-100";
-    default:
-      return "bg-gray-700 text-gray-100";
-  }
-};
-
 interface ProposalCardProps {
   proposal: ApiProposal;
 }
