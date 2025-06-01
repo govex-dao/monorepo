@@ -136,6 +136,11 @@ app.get('/daos', async (req, res) => {
                 asset_symbol: true,
                 stable_symbol: true,
                 description:true,
+                amm_twap_initial_observation: true,
+                amm_twap_start_delay: true,
+                amm_twap_step_max: true,
+                twap_threshold:true,
+                verificationRequests: true,
                 verification: {
                         select: {
                             verified: true
@@ -165,7 +170,11 @@ app.get('/daos', async (req, res) => {
             minStableAmount: dao.minStableAmount.toString(),
             timestamp: dao.timestamp.toString(),
             review_period_ms: dao.review_period_ms.toString(),
-            trading_period_ms: dao.trading_period_ms.toString()
+            trading_period_ms: dao.trading_period_ms.toString(),
+            amm_twap_initial_observation: dao.amm_twap_initial_observation.toString(),
+            amm_twap_start_delay: dao.amm_twap_start_delay.toString(),
+            amm_twap_step_max: dao.amm_twap_step_max.toString(),
+            twap_threshold: dao.twap_threshold.toString(),
             };
         }));
 
