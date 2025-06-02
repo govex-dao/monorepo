@@ -305,19 +305,16 @@ export function useRedeemTokensMutation() {
       toast.loading("Redeeming tokens...", { id: loadingToast });
       try {
         const result = await executeTransaction(txb);
-        if (
-          result &&
-          result.digest &&
-          "effects" in result &&
-          result.effects?.status?.status === "success"
-        ) {
-          queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
-        }
+        queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
         return result;
       } catch (error: any) {
-        console.error(
-          error instanceof Error ? error.message : "Transaction failed",
-        );
+        if (error.message?.includes('Rejected from user')) {
+          toast.error('Transaction cancelled by user');
+        } else if (error.message?.includes('Insufficient gas')) {
+          toast.error('Insufficient SUI for gas fees');
+        } else {
+          toast.error(`Transaction failed: ${error.message}`);
+        }
       } finally {
         toast.dismiss(loadingToast);
         clearTimeout(walletApprovalTimeout);
