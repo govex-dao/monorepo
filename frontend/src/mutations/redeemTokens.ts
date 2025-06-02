@@ -308,10 +308,10 @@ export function useRedeemTokensMutation() {
         queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
         return result;
       } catch (error: any) {
-        if (error.message?.includes('Rejected from user')) {
-          toast.error('Transaction cancelled by user');
-        } else if (error.message?.includes('Insufficient gas')) {
-          toast.error('Insufficient SUI for gas fees');
+        if (error.message?.includes("Rejected from user")) {
+          toast.error("Transaction cancelled by user");
+        } else if (error.message?.includes("Insufficient gas")) {
+          toast.error("Insufficient SUI for gas fees");
         } else {
           toast.error(`Transaction failed: ${error.message}`);
         }
