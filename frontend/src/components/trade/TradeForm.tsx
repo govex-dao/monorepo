@@ -175,7 +175,9 @@ const TradeForm: React.FC<TradeFormProps> = ({
       setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
     } catch (error) {
       console.error("Swap calculation error:", error);
-      toast.error(error instanceof Error ? error.message : "Failed to calculate swap");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to calculate swap",
+      );
       setSwapDetails(null);
       setExpectedAmountOut("");
       // Don't reset averagePrice here on error
@@ -477,90 +479,96 @@ const TradeForm: React.FC<TradeFormProps> = ({
       }
 
       signAndExecute(
-      { transaction: txb },
-      {
-        onSettled: () => {
-          toast.dismiss(loadingToast);
-          refreshAssetBalance();
-          refreshStableBalance();
-        },
-        onSuccess: (result) => {
-        if (result.effects?.status.status === 'success') {
-          toast.success(
-            <div>
-              Swap successful!
-              <a 
-                href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline ml-2"
-              >
-                View transaction
-              </a>
-            </div>,
-            { duration: 5000 }
-          );
-          setAmount("");
-          setExpectedAmountOut("");
-        } else {
-          // Transaction was submitted but failed/aborted during execution
-          const errorMessage = result.effects?.status.error || 'Transaction failed during execution';
-          
-          // Check if it's a Move abort
-          let displayError = errorMessage;
-          if (errorMessage.includes('Move abort') || errorMessage.includes('MOVE_ABORT')) {
-            const abortCodeMatch = errorMessage.match(/abort code (\d+)/);
-            const locationMatch = errorMessage.match(/in ([^(]+)/);
-            
-            if (abortCodeMatch) {
-              displayError = `Transaction aborted with code ${abortCodeMatch[1]}`;
-              if (locationMatch) {
-                displayError += ` in ${locationMatch[1].trim()}`;
+        { transaction: txb },
+        {
+          onSettled: () => {
+            toast.dismiss(loadingToast);
+            refreshAssetBalance();
+            refreshStableBalance();
+          },
+          onSuccess: (result) => {
+            if (result.effects?.status.status === "success") {
+              toast.success(
+                <div>
+                  Swap successful!
+                  <a
+                    href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline ml-2"
+                  >
+                    View transaction
+                  </a>
+                </div>,
+                { duration: 5000 },
+              );
+              setAmount("");
+              setExpectedAmountOut("");
+            } else {
+              // Transaction was submitted but failed/aborted during execution
+              const errorMessage =
+                result.effects?.status.error ||
+                "Transaction failed during execution";
+
+              // Check if it's a Move abort
+              let displayError = errorMessage;
+              if (
+                errorMessage.includes("Move abort") ||
+                errorMessage.includes("MOVE_ABORT")
+              ) {
+                const abortCodeMatch = errorMessage.match(/abort code (\d+)/);
+                const locationMatch = errorMessage.match(/in ([^(]+)/);
+
+                if (abortCodeMatch) {
+                  displayError = `Transaction aborted with code ${abortCodeMatch[1]}`;
+                  if (locationMatch) {
+                    displayError += ` in ${locationMatch[1].trim()}`;
+                  }
+                }
               }
+
+              toast.error(
+                <div>
+                  {displayError}
+                  <a
+                    href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline ml-2"
+                  >
+                    View details
+                  </a>
+                </div>,
+                { duration: 5000 },
+              );
             }
-          }
-          
-          toast.error(
-            <div>
-              {displayError}
-              <a 
-                href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline ml-2"
-              >
-                View details
-              </a>
-            </div>,
-            { duration: 5000 }
-          );
-        }
+          },
+          onError: (error) => {
+            let errorMsg = "Swap failed";
+
+            if (error.message?.includes("Rejected from user")) {
+              errorMsg = "Transaction cancelled";
+            } else if (error.message?.includes("Insufficient gas")) {
+              errorMsg = "Insufficient SUI for gas fees";
+            } else if (error.message?.includes("InsufficientBalance")) {
+              errorMsg = `Insufficient ${fromToken.symbol} balance`;
+            } else if (error.message) {
+              errorMsg = error.message;
+            }
+
+            toast.error(errorMsg);
+          },
         },
-        onError: (error) => {
-          let errorMsg = "Swap failed";
-          
-          if (error.message?.includes('Rejected from user')) {
-            errorMsg = "Transaction cancelled";
-          } else if (error.message?.includes('Insufficient gas')) {
-            errorMsg = "Insufficient SUI for gas fees";
-          } else if (error.message?.includes('InsufficientBalance')) {
-            errorMsg = `Insufficient ${fromToken.symbol} balance`;
-          } else if (error.message) {
-            errorMsg = error.message;
-          }
-          
-          toast.error(errorMsg);
-        }
-      }
-    );
-  } catch (error) {
-    toast.dismiss(loadingToast);
-    const errorMsg = error instanceof Error ? error.message : "An unknown error occurred";
-    toast.error(errorMsg);
-  } finally {
-    setIsLoading(false);
-  }
-};
+      );
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      const errorMsg =
+        error instanceof Error ? error.message : "An unknown error occurred";
+      toast.error(errorMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="rounded-lg bg-gray-900 shadow-xl border border-gray-800">

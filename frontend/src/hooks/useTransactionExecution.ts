@@ -15,30 +15,30 @@ export function useTransactionExecution() {
   const client = useSuiClient();
   const { mutateAsync: signTransactionBlock } = useSignTransaction();
 
-const executeTransaction = async (
-  txb: Transaction,
-): Promise<SuiTransactionBlockResponse> => {
-  try {
-    const signature = await signTransactionBlock({
-      transaction: txb,
-    });
+  const executeTransaction = async (
+    txb: Transaction,
+  ): Promise<SuiTransactionBlockResponse> => {
+    try {
+      const signature = await signTransactionBlock({
+        transaction: txb,
+      });
 
-    const res = await client.executeTransactionBlock({
-      transactionBlock: signature.bytes,
-      signature: signature.signature,
-      options: {
-        showEffects: true,
-        showObjectChanges: true,
-      },
-    });
+      const res = await client.executeTransactionBlock({
+        transactionBlock: signature.bytes,
+        signature: signature.signature,
+        options: {
+          showEffects: true,
+          showObjectChanges: true,
+        },
+      });
 
-    toast.success("Successfully executed transaction!");
-    return res;
-  } catch (e: any) {
-    toast.error(`Failed to execute transaction: ${e.message as string}`);
-    throw e; // Re-throw the error so calling code can handle it
-  }
-};
+      toast.success("Successfully executed transaction!");
+      return res;
+    } catch (e: any) {
+      toast.error(`Failed to execute transaction: ${e.message as string}`);
+      throw e; // Re-throw the error so calling code can handle it
+    }
+  };
 
   return executeTransaction;
 }
