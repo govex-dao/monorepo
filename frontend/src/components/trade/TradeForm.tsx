@@ -57,7 +57,6 @@ export interface TokenInfo {
   asset_type: number;
 }
 
-type ErrorMessage = string | null;
 const TradeForm: React.FC<TradeFormProps> = ({
   proposalId,
   escrowId,
