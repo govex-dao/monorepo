@@ -22,7 +22,6 @@ export const useSwapEvents = (
   proposalId: string,
   options?: UseSwapEventsOptions,
 ) => {
-
   return useQuery<SwapEvent[], Error>({
     queryKey: ["swaps", proposalId],
     queryFn: async () => {
