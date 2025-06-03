@@ -271,7 +271,7 @@ function TableRow({
         <span className="text-gray-400 text-xs ml-1">of reserves</span>
       </td>
       <td className="py-3.5 px-4" role="cell">
-        <ExplorerLink isAddress id={event.sender} />
+        <ExplorerLink id={event.sender} type="address" />
         {isMyTrade && (
           <span className="text-blue-400 font-medium px-1.5 py-0.5 bg-blue-900/30 rounded-sm">
             You
