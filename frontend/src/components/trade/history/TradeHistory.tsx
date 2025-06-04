@@ -7,6 +7,7 @@ import {
   calculateAmountInAsset,
   calculatePriceImpact,
 } from "./tradeCalculations";
+import { Flex } from "@radix-ui/themes";
 
 interface SwapEvent {
   price: string;
@@ -199,10 +200,18 @@ export function TradeHistory({
   ].filter(Boolean).length;
 
   return (
-    <div className="space-y-4 p-6" role="region" aria-label="Trade History">
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div
+      className="space-y-4 -mx-2 sm:mx-0 pt-4 sm:p-6"
+      role="region"
+      aria-label="Trade History"
+    >
+      <Flex direction="column" className=" gap-4">
+        <Flex
+          direction="column"
+          align="start"
+          className="sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <Flex align="center" className="gap-3">
             <h3 className="text-sm font-semibold uppercase text-gray-300">
               Recent Trades
             </h3>
@@ -218,9 +227,9 @@ export function TradeHistory({
                 Clear filters
               </button>
             )}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
+          </Flex>
+          <Flex className="gap-3 w-full sm:w-80" align="center">
+            <div className="relative flex-1">
               <input
                 type="text"
                 value={filters.searchQuery}
@@ -258,15 +267,20 @@ export function TradeHistory({
                 </button>
               )}
             </div>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-gray-500 whitespace-nowrap">
               {sortedEvents.length} trades
             </span>
-          </div>
-        </div>
+          </Flex>
+        </Flex>
 
-        <div className="flex flex-wrap items-center gap-4 p-3 bg-gray-900/50 border border-gray-800/50 rounded-lg">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-300">Account</label>
+        <Flex
+          direction="column"
+          className="sm:flex-row flex-wrap items-start sm:items-center gap-4 p-3 bg-gray-900/50 border border-gray-800/50 rounded-lg"
+        >
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs font-medium text-gray-300 whitespace-nowrap">
+              Account
+            </label>
             <div
               className="flex items-center gap-1.5"
               role="radiogroup"
@@ -305,10 +319,13 @@ export function TradeHistory({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-300">Outcome</label>
-            <div
-              className="flex items-center gap-1.5"
+          <Flex className="gap-2 w-full sm:w-auto" align="center">
+            <label className="text-xs font-medium text-gray-300 whitespace-nowrap">
+              Outcome
+            </label>
+            <Flex
+              className="flex-wrap gap-1.5"
+              align="center"
               role="radiogroup"
               aria-label="Filter by outcome"
             >
@@ -350,13 +367,16 @@ export function TradeHistory({
                   </button>
                 );
               })}
-            </div>
-          </div>
+            </Flex>
+          </Flex>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-300">Type</label>
-            <div
-              className="flex items-center gap-1.5"
+          <Flex className="gap-2 w-full sm:w-auto" align="center">
+            <label className="text-xs font-medium text-gray-300 whitespace-nowrap">
+              Type
+            </label>
+            <Flex
+              align="center"
+              className="gap-1.5"
               role="radiogroup"
               aria-label="Filter by trade type"
             >
@@ -410,32 +430,35 @@ export function TradeHistory({
               >
                 Sell
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
+            </Flex>
+          </Flex>
+        </Flex>
+      </Flex>
 
-      <div className="overflow-x-auto rounded-lg min-h-[200px]">
-        <table className="w-full" role="grid">
-          <TableHeader onSort={handleSort} sortConfig={sortConfig} />
-          <tbody>
-            {sortedEvents.map((event, index) => (
-              <TableRow
-                key={`${event.timestamp}-${index}`}
-                event={event}
-                isMyTrade={event.sender === account?.address}
-                outcomeMessages={outcomeMessages}
-                assetSymbol={assetSymbol}
-                stableSymbol={stableSymbol}
-              />
-            ))}
-          </tbody>
-        </table>
-        {filteredEvents.length === 0 && (
-          <div className="text-gray-400 p-8 text-center bg-gray-900/50 border border-gray-800/50 rounded-b-lg shadow-md">
-            <p className="text-sm">No trades match the current filters</p>
-          </div>
-        )}
+      <div className="overflow-x-auto rounded-lg min-h-[200px] -mx-2 sm:mx-0">
+        <div className="w-full sm:min-w-[800px]">
+          {filteredEvents.length === 0 ? (
+            <div className="text-gray-400 p-8 text-center bg-gray-900/50 border border-gray-800/50 rounded-b-lg shadow-md">
+              <p className="text-sm">No trades match the current filters</p>
+            </div>
+          ) : (
+            <table className="w-full" role="grid">
+              <TableHeader onSort={handleSort} sortConfig={sortConfig} />
+              <tbody>
+                {sortedEvents.map((event, index) => (
+                  <TableRow
+                    key={`${event.timestamp}-${index}`}
+                    event={event}
+                    isMyTrade={event.sender === account?.address}
+                    outcomeMessages={outcomeMessages}
+                    assetSymbol={assetSymbol}
+                    stableSymbol={stableSymbol}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       </div>
     </div>
   );

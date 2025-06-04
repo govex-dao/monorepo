@@ -8,87 +8,75 @@ export interface SortConfig {
 
 const getSortIndicator = (field: SortField, config: SortConfig) => {
   const isActive = config.field === field;
+  const symbol = isActive && config.direction === "ascending" ? "↑" : "↓";
+
   return (
     <span
-      className={`transition-colors ${isActive ? "text-gray-200" : "text-gray-600 hover:text-gray-200"}`}
+      className={
+        isActive ? "text-gray-200" : "text-gray-600 hover:text-gray-200"
+      }
       aria-hidden="true"
     >
-      {isActive ? (config.direction === "descending" ? "↓" : "↑") : "↓"}
+      {symbol}
     </span>
   );
 };
 
-export function TableHeader({
-  onSort,
-  sortConfig,
-}: {
+type TableHeaderProps = {
   onSort: (field: SortField) => void;
   sortConfig: SortConfig;
-}) {
+};
+
+export function TableHeader(props: TableHeaderProps) {
+  const { onSort, sortConfig } = props;
+
+  const SortableHeader = ({
+    field,
+    align = "left",
+  }: {
+    field: SortField;
+    align?: "left" | "right";
+  }) => (
+    <th
+      className={`text-${align} py-2.5 sm:py-3.5 px-2 sm:px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors`}
+      onClick={() => onSort(field)}
+      role="columnheader"
+      aria-sort={sortConfig.field === field ? sortConfig.direction : undefined}
+    >
+      <div
+        className={`flex items-center gap-1.5 ${align === "right" ? "justify-end" : ""}`}
+      >
+        {field}
+        {getSortIndicator(field, sortConfig)}
+      </div>
+    </th>
+  );
+
+  const StaticHeader = ({
+    field,
+    align = "left",
+  }: {
+    field: string;
+    align?: "left" | "right";
+  }) => (
+    <th
+      className={`text-${align} capitalize py-2.5 sm:py-3.5 px-2 sm:px-4 font-medium`}
+      role="columnheader"
+    >
+      {field}
+    </th>
+  );
+
   return (
     <thead className="select-none">
       <tr className="text-xs text-gray-400 border-b border-gray-800 bg-gray-900/70">
-        <th
-          className="text-left py-3.5 px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors"
-          onClick={() => onSort("time")}
-          role="columnheader"
-          aria-sort={
-            sortConfig.field === "time" ? sortConfig.direction : undefined
-          }
-        >
-          <div className="flex items-center gap-1.5">
-            Time
-            {getSortIndicator("time", sortConfig)}
-          </div>
-        </th>
-        <th className="text-left py-3.5 px-4 font-medium" role="columnheader">
-          Type
-        </th>
-        <th className="text-left py-3.5 px-4 font-medium" role="columnheader">
-          Outcome
-        </th>
-        <th
-          className="text-right py-3.5 px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors"
-          onClick={() => onSort("price")}
-          role="columnheader"
-          aria-sort={
-            sortConfig.field === "price" ? sortConfig.direction : undefined
-          }
-        >
-          <div className="flex items-center justify-end gap-1.5">
-            Price
-            {getSortIndicator("price", sortConfig)}
-          </div>
-        </th>
-        <th
-          className="text-right py-3.5 px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors"
-          onClick={() => onSort("amount")}
-          role="columnheader"
-          aria-sort={
-            sortConfig.field === "amount" ? sortConfig.direction : undefined
-          }
-        >
-          <div className="flex items-center justify-end gap-1.5">
-            Amount
-            {getSortIndicator("amount", sortConfig)}
-          </div>
-        </th>
-        <th
-          className="text-right py-3.5 px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors"
-          onClick={() => onSort("impact")}
-          role="columnheader"
-          aria-sort={
-            sortConfig.field === "impact" ? sortConfig.direction : undefined
-          }
-        >
-          <div className="flex items-center justify-end gap-1.5">
-            Impact
-            {getSortIndicator("impact", sortConfig)}
-          </div>
-        </th>
-        <th className="text-left py-3.5 px-4 font-medium" role="columnheader">
-          Trader
-        </th>
+        <SortableHeader field="time" />
+        <StaticHeader field="type" />
+        <StaticHeader field="outcome" />
+        <SortableHeader field="price" align="right" />
+        <SortableHeader field="amount" align="right" />
+        <SortableHeader field="impact" align="right" />
+        <StaticHeader field="trader" />
       </tr>
     </thead>
   );
