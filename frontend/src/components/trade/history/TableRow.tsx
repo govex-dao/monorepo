@@ -63,45 +63,52 @@ export function TableRow({
 
   const outcomeColor = getOutcomeColor(event.outcome);
 
+  // Common class patterns
+  const cellClass = "py-3.5 px-4";
+  const badgeClass = "px-2.5 py-1 rounded text-xs font-medium border";
+  const rightAlignedCellClass = `${cellClass} text-right text-gray-200`;
+  const valueClass = "font-medium";
+  const unitClass = "text-gray-400 text-xs ml-1";
+
   return (
     <tr
       className={`text-sm border-b border-gray-800/70 hover:bg-gray-800/50 transition-colors ${isMyTrade ? "bg-blue-900/10" : ""}`}
       role="row"
     >
-      <td className="py-3.5 px-4 text-gray-400" role="cell">
+      <td className={`${cellClass} text-gray-400`} role="cell">
         {formattedDate}
       </td>
-      <td className="py-3.5 px-4" role="cell">
+      <td className={cellClass} role="cell">
         <span
-          className={`px-2.5 py-1 rounded text-xs font-medium ${
+          className={`${badgeClass} ${
             event.is_buy
-              ? "bg-green-900/30 text-green-400 border border-green-700/30"
-              : "bg-red-900/30 text-red-400 border border-red-700/30"
+              ? "bg-green-900/30 text-green-400 border-green-700/30"
+              : "bg-red-900/30 text-red-400 border-red-700/30"
           }`}
         >
           {event.is_buy ? "Buy" : "Sell"}
         </span>
       </td>
-      <td className="py-3.5 px-4" role="cell">
+      <td className={cellClass} role="cell">
         <span
-          className={`px-2.5 py-1 rounded text-xs font-medium border ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border}`}
+          className={`${badgeClass} ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border}`}
         >
           {outcomeMessages[event.outcome] || `Outcome ${event.outcome}`}
         </span>
       </td>
-      <td className="py-3.5 px-4 text-right text-gray-200" role="cell">
-        <span className="font-medium">{formatNumber(event.price)}</span>
-        <span className="text-gray-400 text-xs ml-1">{stableSymbol}</span>
+      <td className={rightAlignedCellClass} role="cell">
+        <span className={valueClass}>{formatNumber(event.price)}</span>
+        <span className={unitClass}>{stableSymbol}</span>
       </td>
-      <td className="py-3.5 px-4 text-right text-gray-200" role="cell">
-        <span className="font-medium">{formatNumber(event.amount)}</span>
-        <span className="text-gray-400 text-xs ml-1">{assetSymbol}</span>
+      <td className={rightAlignedCellClass} role="cell">
+        <span className={valueClass}>{formatNumber(event.amount)}</span>
+        <span className={unitClass}>{assetSymbol}</span>
       </td>
-      <td className="py-3.5 px-4 text-right text-gray-200" role="cell">
-        <span className="font-medium">{formatNumber(event.impact)}%</span>
-        <span className="text-gray-400 text-xs ml-1">of reserves</span>
+      <td className={rightAlignedCellClass} role="cell">
+        <span className={valueClass}>{formatNumber(event.impact)}%</span>
+        <span className={unitClass}>of reserves</span>
       </td>
-      <td className="py-3.5 px-4" role="cell">
+      <td className={cellClass} role="cell">
         <ExplorerLink id={event.sender} type="address" />
         {isMyTrade && (
           <span className="text-blue-400 font-medium px-1.5 py-0.5 bg-blue-900/30 rounded-sm">
