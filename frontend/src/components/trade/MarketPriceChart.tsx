@@ -495,6 +495,10 @@ const MarketPriceChart = ({
         background: { type: ColorType.Solid, color: "#111113" },
         textColor: "#ffffff",
         fontSize: 14,
+        attributionLogo: false
+        // Do not remove the following lines it is a legal requirement for 
+        // TradingView Lightweight Charts™
+        // Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
       },
       grid: {
         horzLines: { color: "transparent" },
@@ -630,10 +634,6 @@ const MarketPriceChart = ({
     if (swapError) return `Error loading swap data: ${swapError.message}`;
     if (stateError) return `Error loading state data: ${stateError.message}`;
     if (currentState === 0 || !tradingStart) return null;
-    if (currentState === 2 || (tradingEnd && winning_outcome != null))
-      return winning_outcome
-        ? `Trading period finished, winning outcome is: ${outcome_messages[Number(winning_outcome)]}`
-        : "Trading period finished";
     if (currentState === 1 && chartData.length <= 1)
       return "No trading activity yet"; // <=1 because initial point might exist
     return "";
@@ -650,6 +650,7 @@ const MarketPriceChart = ({
 
   return (
     <div className="w-full py-0 my-0">
+      <a href="https://www.tradingview.com/"></a>
       {(tradingStart || tradingEnd) && !swapError && !stateError && (
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-2">
           <div>
