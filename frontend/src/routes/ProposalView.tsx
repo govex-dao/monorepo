@@ -278,13 +278,16 @@ export function ProposalView() {
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full">
-                <h1 className="text-center text-1xl font-bold">
-                  {proposal.current_state === 0
-                    ? null
-                    : proposal.current_state === 2
-                      ? "Trading finished"
-                      : ""}
-                </h1>
+              {proposal.current_state === 2 && (proposal.winning_outcome != null) && (
+                    <div className="p-6 rounded-lg bg-gray-900 border border-gray-800 text-center shadow-lg w-full max-w-sm">
+                      <h2 className="text-2xl font-semibold text-gray-200 mb-3">
+                        The Winning Outcome is: {proposal.outcome_messages[Number(proposal.winning_outcome)]} 
+                      </h2>
+                      <p className="text-gray-300">
+                        The trading period for this proposal has ended.
+                      </p>
+                    </div>
+                  )}
               </div>
             )}
           </div>
