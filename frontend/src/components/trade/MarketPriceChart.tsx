@@ -495,8 +495,8 @@ const MarketPriceChart = ({
         background: { type: ColorType.Solid, color: "#111113" },
         textColor: "#ffffff",
         fontSize: 14,
-        attributionLogo: false
-        // Do not remove the following lines it is a legal requirement for 
+        attributionLogo: false,
+        // Do not remove the following lines it is a legal requirement for
         // TradingView Lightweight Charts™
         // Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
       },

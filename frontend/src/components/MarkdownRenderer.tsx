@@ -18,11 +18,16 @@ interface Section {
   endIndex: number;
 }
 
-const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = "" }) => {
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+  content,
+  className = "",
+}) => {
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Validate that content is a string
-  if (typeof content !== 'string') {
+  if (typeof content !== "string") {
     return (
       <div className="px-6 py-4 text-red-400">
         <p>Unable to display content. Invalid format.</p>
@@ -33,15 +38,15 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
   // Parse the content to identify sections
   const sections = useMemo(() => {
     const sectionList: Section[] = [];
-    const lines = content.split('\n');
-    
+    const lines = content.split("\n");
+
     lines.forEach((line, index) => {
       const match = line.match(/^(#{1,6})\s+(.+)/);
       if (match) {
         const level = match[1].length;
         const title = match[2];
-        const id = title.toLowerCase().replace(/\s+/g, '-');
-        
+        const id = title.toLowerCase().replace(/\s+/g, "-");
+
         // Find the end of this section (next heading of same or higher level)
         let endIndex = lines.length;
         for (let i = index + 1; i < lines.length; i++) {
@@ -51,39 +56,44 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
             break;
           }
         }
-        
+
         sectionList.push({
           id,
           level,
           title,
           startIndex: index,
-          endIndex
+          endIndex,
         });
       }
     });
-    
+
     return sectionList;
   }, [content]);
 
   // Filter content based on collapsed sections
   const filteredContent = useMemo(() => {
-    const lines = content.split('\n');
+    const lines = content.split("\n");
     const collapsedRanges: Array<[number, number]> = [];
-    
-    sections.forEach(section => {
+
+    sections.forEach((section) => {
       if (collapsedSections.has(section.id)) {
         collapsedRanges.push([section.startIndex + 1, section.endIndex]);
       }
     });
-    
-    return lines.map((line, index) => {
-      const isCollapsed = collapsedRanges.some(([start, end]) => index >= start && index < end);
-      return isCollapsed ? null : line;
-    }).filter(line => line !== null).join('\n');
+
+    return lines
+      .map((line, index) => {
+        const isCollapsed = collapsedRanges.some(
+          ([start, end]) => index >= start && index < end,
+        );
+        return isCollapsed ? null : line;
+      })
+      .filter((line) => line !== null)
+      .join("\n");
   }, [content, sections, collapsedSections]);
 
   const toggleSection = (sectionId: string) => {
-    setCollapsedSections(prev => {
+    setCollapsedSections((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(sectionId)) {
         newSet.delete(sectionId);
@@ -95,7 +105,8 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
   };
 
   return (
-    <div className={`prose prose-sm max-w-none px-6 
+    <div
+      className={`prose prose-sm max-w-none px-6 
       prose-invert
       prose-headings:font-bold prose-headings:text-gray-100
       prose-h1:text-4xl prose-h1:my-4
@@ -117,24 +128,25 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
       prose-img:max-w-full prose-img:h-auto
       prose-a:text-blue-400 prose-a:underline hover:prose-a:text-blue-300
       prose-strong:text-gray-100
-      prose-em:text-gray-200 ${className}`}>
-      <ReactMarkdown 
+      prose-em:text-gray-200 ${className}`}
+    >
+      <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children, ...props }) => {
             const headingText = String(children);
-            const headingId = headingText.toLowerCase().replace(/\s+/g, '-');
+            const headingId = headingText.toLowerCase().replace(/\s+/g, "-");
             const isCollapsed = collapsedSections.has(headingId);
-            
+
             return (
-              <h1 
-                {...props} 
+              <h1
+                {...props}
                 className="flex items-center gap-2 cursor-pointer hover:text-gray-200 transition-colors"
                 onClick={() => toggleSection(headingId)}
               >
-                <ChevronIcon 
-                  className="w-5 h-5 text-gray-400" 
-                  direction={isCollapsed ? "down" : "up"} 
+                <ChevronIcon
+                  className="w-5 h-5 text-gray-400"
+                  direction={isCollapsed ? "down" : "up"}
                 />
                 {children}
               </h1>
@@ -142,18 +154,18 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           },
           h2: ({ children, ...props }) => {
             const headingText = String(children);
-            const headingId = headingText.toLowerCase().replace(/\s+/g, '-');
+            const headingId = headingText.toLowerCase().replace(/\s+/g, "-");
             const isCollapsed = collapsedSections.has(headingId);
-            
+
             return (
-              <h2 
-                {...props} 
+              <h2
+                {...props}
                 className="flex items-center gap-2 cursor-pointer hover:text-gray-200 transition-colors"
                 onClick={() => toggleSection(headingId)}
               >
-                <ChevronIcon 
-                  className="w-5 h-5 text-gray-400" 
-                  direction={isCollapsed ? "down" : "up"} 
+                <ChevronIcon
+                  className="w-5 h-5 text-gray-400"
+                  direction={isCollapsed ? "down" : "up"}
                 />
                 {children}
               </h2>
@@ -161,28 +173,28 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           },
           h3: ({ children, ...props }) => {
             const headingText = String(children);
-            const headingId = headingText.toLowerCase().replace(/\s+/g, '-');
+            const headingId = headingText.toLowerCase().replace(/\s+/g, "-");
             const isCollapsed = collapsedSections.has(headingId);
-            
+
             return (
-              <h3 
-                {...props} 
+              <h3
+                {...props}
                 className="flex items-center gap-2 cursor-pointer hover:text-gray-200 transition-colors"
                 onClick={() => toggleSection(headingId)}
               >
-                <ChevronIcon 
-                  className="w-4 h-4 text-gray-400" 
-                  direction={isCollapsed ? "down" : "up"} 
+                <ChevronIcon
+                  className="w-4 h-4 text-gray-400"
+                  direction={isCollapsed ? "down" : "up"}
                 />
                 {children}
               </h3>
             );
           },
           code(props) {
-            const {node, className, children, ...rest} = props as any;
-            const match = /language-(\w+)/.exec(className || '');
+            const { node, className, children, ...rest } = props as any;
+            const match = /language-(\w+)/.exec(className || "");
             const inline = !match;
-            
+
             try {
               return !inline ? (
                 <SyntaxHighlighter
@@ -190,7 +202,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                   language={match[1]}
                   PreTag="div"
                 >
-                  {String(children).replace(/\n$/, '')}
+                  {String(children).replace(/\n$/, "")}
                 </SyntaxHighlighter>
               ) : (
                 <code className={className} {...rest}>
@@ -205,7 +217,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                 </pre>
               );
             }
-          }
+          },
         }}
       >
         {filteredContent}
