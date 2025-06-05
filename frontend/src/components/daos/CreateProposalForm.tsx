@@ -586,6 +586,16 @@ const CreateProposalForm = ({
     }
   }, [proposalSections]);
 
+  // Auto-resize textareas on mount and when content changes
+  useEffect(() => {
+    const textareas = document.querySelectorAll('textarea[style*="height"]');
+    textareas.forEach((textarea) => {
+      const target = textarea as HTMLTextAreaElement;
+      target.style.height = 'auto';
+      target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+    });
+  }, [proposalSections, previewMarkdown]);
+
   // Add this query to fetch DAO data when loading from URL
   const { data: daoData } = useQuery({
     queryKey: ["dao", daoIdFromUrl],
@@ -931,7 +941,7 @@ const CreateProposalForm = ({
           </div>
           
           {previewMarkdown ? (
-            <div className="border border-blue-500 p-4 rounded bg-gray-900">
+            <div className="border border-blue-500 p-4 rounded bg-gray-900 min-h-[400px]">
               <MarkdownRenderer content={formData.description} />
             </div>
           ) : (
@@ -947,8 +957,18 @@ const CreateProposalForm = ({
                   setProposalSections(newSections);
                   updateFormDataDescription(newSections);
                 }}
-                className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[100px] text-gray-100"
+                className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[100px] max-h-[500px] text-gray-100 resize-none overflow-y-auto"
                 placeholder="Briefly introduce what you're proposing and why it matters to the DAO."
+                style={{
+                  height: 'auto',
+                  minHeight: '100px',
+                  maxHeight: '500px'
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+                }}
               />
               
               {/* Static Binary/Multioption Text */}
@@ -981,8 +1001,18 @@ const CreateProposalForm = ({
                       setProposalSections(newSections);
                       updateFormDataDescription(newSections);
                     }}
-                    className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[150px] text-gray-100"
+                    className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[150px] max-h-[500px] text-gray-100 resize-none overflow-y-auto"
                     placeholder="Describe what happens if this outcome wins..."
+                    style={{
+                      height: 'auto',
+                      minHeight: '150px',
+                      maxHeight: '500px'
+                    }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = 'auto';
+                      target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+                    }}
                   />
                 </div>
               ))}
