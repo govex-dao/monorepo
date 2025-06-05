@@ -18,7 +18,7 @@ import TokenInputField from "./swap/TokenInputField";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { SwapBreakdown } from "@/utils/trade/types";
 
-const DEFAULT_SLIPPAGE_BPS = 50;
+const DEFAULT_SLIPPAGE_BPS = 200;
 
 interface SwapEvent {
   price: string;
