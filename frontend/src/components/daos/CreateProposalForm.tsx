@@ -34,12 +34,6 @@ interface DaoData {
   };
 }
 
-const generateProposalMarkdown = (outcomes: string[]) => {
-  // This function is no longer needed since we're generating the markdown dynamically
-  // Return empty string as default
-  return "";
-};
-
 const DEFAULT_FORM_DATA: CreateProposalData = {
   title: "",
   description: "",
@@ -102,11 +96,6 @@ const truncateAddress = (address: string) => {
   return `${address.slice(0, 10)}...${address.slice(-10)}`;
 };
 
-// Helper function to get default content for new outcomes
-const getDefaultOutcomeContent = (outcome: string) => {
-  return "";
-};
-
 const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
   value,
   onChange,
@@ -147,11 +136,6 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
 
   const MAX_OUTCOMES = 10;
 
-  const updateIntroForOutcomes = (outcomesList: string[]) => {
-    // No longer need to update intro with outcomes since it's displayed as static text
-    return proposalSections.intro;
-  };
-
   const addOutcome = () => {
     if (outcomes.length >= MAX_OUTCOMES) return;
 
@@ -174,11 +158,11 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       const acceptContent = proposalSections.outcomes["Accept"] || "";
       const newSections = {
         ...proposalSections,
-        intro: updateIntroForOutcomes(newOutcomes),
+        intro: proposalSections.intro,
         outcomes: {
           ...proposalSections.outcomes,
           "Option 2": acceptContent.replace(/Accept/g, "Option 2"),
-          "Option 3": getDefaultOutcomeContent("Option 3"),
+          "Option 3": "",
         } as Record<string, string>
       };
       delete newSections.outcomes["Accept"];
@@ -193,10 +177,10 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       // Add new outcome section
       const newSections = {
         ...proposalSections,
-        intro: updateIntroForOutcomes(newOutcomes),
+        intro: proposalSections.intro,
         outcomes: {
           ...proposalSections.outcomes,
-          [newOption]: getDefaultOutcomeContent(newOption)
+          [newOption]: ""
         }
       };
       setProposalSections(newSections);
@@ -233,7 +217,7 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       const option2Content = proposalSections.outcomes["Option 2"] || "";
       const newSections = {
         ...proposalSections,
-        intro: updateIntroForOutcomes(newOutcomes),
+        intro: proposalSections.intro,
         outcomes: {
           "Reject": proposalSections.outcomes["Reject"],
           "Accept": option2Content.replace(/Option 2/g, "Accept") || DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"]
@@ -256,7 +240,7 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       // Update proposal sections - remove the deleted outcome and renumber others
       const newSections = { 
         ...proposalSections, 
-        intro: updateIntroForOutcomes(newOutcomes),
+        intro: proposalSections.intro,
         outcomes: {} as Record<string, string> 
       };
       let optionCounter = 2;
@@ -1040,7 +1024,7 @@ const CreateProposalForm = ({
                     newSections.outcomes["Accept"] = DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"];
                   } else {
                     // For custom outcomes
-                    newSections.outcomes[outcome] = getDefaultOutcomeContent(outcome);
+                    newSections.outcomes[outcome] = "";
                   }
                 });
                 
