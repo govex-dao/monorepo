@@ -1,4 +1,4 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
@@ -55,6 +55,8 @@ interface ProposalCardProps {
 }
 
 function ProposalCard({ proposal }: ProposalCardProps) {
+  const navigate = useNavigate();
+
   return (
     <Link to={`/trade/${proposal.market_state_id}`} className="block">
       <div className="bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-5 hover:shadow-md transition-shadow">
@@ -94,9 +96,13 @@ function ProposalCard({ proposal }: ProposalCardProps) {
 
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <Link
-              to={`/dao/${proposal.dao_id}`}
-              className="hover:opacity-80 group flex items-center gap-1"
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                navigate(`/dao/${proposal.dao_id}`);
+              }}
+              className="hover:opacity-80 group flex items-center gap-1 cursor-pointer"
             >
               <DaoIcon
                 icon={proposal.dao_icon}
@@ -106,7 +112,7 @@ function ProposalCard({ proposal }: ProposalCardProps) {
               <span className="text-gray-200 group-hover:text-white group-hover:underline truncate font-medium transition-colors">
                 {proposal.dao_name}
               </span>
-            </Link>
+            </div>
             {proposal.dao_verified ? (
               <VerifiedIcon className="ml-1 flex-shrink-0" />
             ) : (
