@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useCurrentAccount } from "@mysten/dapp-kit";
@@ -12,7 +12,7 @@ import {
 } from "./proposal-transaction";
 import { CONSTANTS } from "../../constants";
 import { VerifiedIcon } from "../icons/VerifiedIcon";
-import ReactMarkdown from "markdown-to-jsx";
+import MarkdownRenderer from "../MarkdownRenderer";
 
 interface DaoData {
   dao_id: string;
@@ -34,10 +34,46 @@ interface DaoData {
   };
 }
 
+const generateProposalMarkdown = (outcomes: string[]) => {
+  const hasMultipleOutcomes = outcomes.length > 2;
+  
+  let proposalSummary = "# 🎯 Full Proposal title\n\nBriefly introduce what you're proposing and why it matters to the DAO.";
+  
+  if (hasMultipleOutcomes) {
+    proposalSummary += `\n\n## 📊 Proposal Summary\n\nThis proposal has ${outcomes.length} outcomes:\n`;
+    outcomes.forEach((outcome) => {
+      proposalSummary += `- ${outcome}\n`;
+    });
+  }
+
+  let detailedPlan = "\n\n#### 💡 Background & Motivation\n\nProvide context about the current situation and why this proposal is needed now.\n\n";
+  
+  if (hasMultipleOutcomes) {
+    outcomes.forEach((outcome, index) => {
+      if (index > 0) { // Skip "Reject" outcome
+        detailedPlan += `# ${outcome}\n\n*If ${outcome} is the winning outcome...*\n\n`;
+        detailedPlan += `#### 📋 Implementation Plan\n\nDescribe the specific implementation plan for this outcome.\n\n`;
+        detailedPlan += `#### Implementation Steps\n1. **Phase 1**: Initial setup and preparation\n2. **Phase 2**: Core implementation\n3. **Phase 3**: Testing and refinement\n4. **Phase 4**: Launch and monitoring\n\n`;
+        detailedPlan += `#### Timeline\n- **Week 1-2**: Research and planning\n- **Week 3-4**: Development\n- **Week 5**: Testing and feedback\n- **Week 6**: Deployment\n\n`;
+        detailedPlan += `#### 💰 Budget & Resources\n\n| Item | Cost (SUI) | Purpose |\n|------|------------|----------|\n| Development | 1,000 | Smart contract work |\n| Audit | 500 | Security review |\n| Marketing | 300 | Community outreach |\n| **Total** | **1,800** | |\n\n`;
+        detailedPlan += `#### 📊 Success Metrics\n\n- **Metric 1**: Specific measurable outcome\n- **Metric 2**: User adoption target\n- **Metric 3**: Performance benchmark\n\n`;
+        detailedPlan += `#### ⚠️ Risks & Mitigation\n\n**Risk 1**: Potential technical challenges\n- *Mitigation*: Have backup implementation plan\n\n**Risk 2**: Timeline delays\n- *Mitigation*: Built-in buffer time\n\n`;
+      }
+    });
+    detailedPlan += `## 🔗 Additional Resources\n\n- [Link to detailed documentation]()\n- [Link to community discussion]()\n- [Link to similar successful proposals]()\n\n`;
+  } else {
+    detailedPlan += "#### 📋 Detailed Plan\n\n#### Implementation Steps\n1. **Phase 1**: Initial setup and preparation\n2. **Phase 2**: Core implementation\n3. **Phase 3**: Testing and refinement\n4. **Phase 4**: Launch and monitoring\n\n#### Timeline\n- **Week 1-2**: Research and planning\n- **Week 3-4**: Development\n- **Week 5**: Testing and feedback\n- **Week 6**: Deployment\n\n";
+    detailedPlan += "#### 💰 Budget & Resources\n\n| Item | Cost (SUI) | Purpose |\n|------|------------|----------|\n| Development | 1,000 | Smart contract work |\n| Audit | 500 | Security review |\n| Marketing | 300 | Community outreach |\n| **Total** | **1,800** | |\n\n#### 📊 Success Metrics\n\n- **Metric 1**: Specific measurable outcome\n- **Metric 2**: User adoption target\n- **Metric 3**: Performance benchmark\n\n#### ⚠️ Risks & Mitigation\n\n**Risk 1**: Potential technical challenges\n- *Mitigation*: Have backup implementation plan\n\n**Risk 2**: Timeline delays\n- *Mitigation*: Built-in buffer time\n\n#### 🔗 Additional Resources\n\n- [Link to detailed documentation]()\n- [Link to community discussion]()\n- [Link to similar successful proposals]()\n\n";
+  }
+  const reject = `## ❌ If Rejected\n\n Don't take the action. Listen to community feedback and recreate the proposal with alterations if suitable.\n\n`;
+  const footer = "---\n\n*💭 Remember: The market will evaluate your proposal based on its potential impact. Be clear, specific, and data-driven in your arguments.*";
+
+  return proposalSummary + detailedPlan + reject + footer;
+};
+
 const DEFAULT_FORM_DATA: CreateProposalData = {
   title: "",
-  description:
-    "# Intro\n\nWalk **all** the dogs twice a day because they have been good.\n\n![Dog](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Black_Labrador_Retriever_-_Male_IMG_3323.jpg/1280px-Black_Labrador_Retriever_-_Male_IMG_3323.jpg)\n\n# Details\n\n• Walk 4+ KM\n\n• Bring treats\n\n• Bring lead",
+  description: generateProposalMarkdown(["Reject", "Accept"]),
   metadata: "test",
   outcomeMessages: ["Reject", "Accept"],
   daoObjectId: "",
@@ -269,16 +305,124 @@ const CreateProposalForm = ({
   walletAddress,
   daoIdFromUrl,
 }: CreateProposalFormProps) => {
+  // Helper function to get saved form data from localStorage
+  const getSavedFormData = (): CreateProposalData | null => {
+    const saved = localStorage.getItem('proposalFormData');
+    if (!saved) return null;
+    
+    try {
+      const parsed = JSON.parse(saved);
+      const savedTime = parsed.timestamp;
+      const currentTime = Date.now();
+      
+      // Check if data is older than 30 minutes (30 * 60 * 1000 milliseconds)
+      if (currentTime - savedTime > 30 * 60 * 1000) {
+        localStorage.removeItem('proposalFormData');
+        return null;
+      }
+      
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  };
+  
+  // Helper function to save just the description/memo
+  const saveDescription = (description: string) => {
+    const saved = {
+      description,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem('proposalDescription', JSON.stringify(saved));
+  };
+  
+  // Helper function to get saved description
+  const getSavedDescription = (): string | null => {
+    const saved = localStorage.getItem('proposalDescription');
+    if (!saved) return null;
+    
+    try {
+      const parsed = JSON.parse(saved);
+      const savedTime = parsed.timestamp;
+      const currentTime = Date.now();
+      
+      // Check if data is older than 2 hours
+      if (currentTime - savedTime > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem('proposalDescription');
+        return null;
+      }
+      
+      return parsed.description;
+    } catch {
+      return null;
+    }
+  };
+
   // Initialize form data with wallet address
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [previewMarkdown, setPreviewMarkdown] = useState(false);
   const [customAmounts, setCustomAmounts] = useState<number[]>([]);
-  const [formData, setFormData] = useState<CreateProposalData>(() => ({
-    ...DEFAULT_FORM_DATA,
-    senderAddress: walletAddress, // Set initial value
-  }));
+  const [formData, setFormData] = useState<CreateProposalData>(() => {
+    const savedData = getSavedFormData();
+    const savedDescription = getSavedDescription();
+    
+    if (savedData && savedData.daoObjectId === daoIdFromUrl) {
+      return {
+        ...savedData,
+        // Use saved description if available, otherwise use saved data's description
+        description: savedDescription || savedData.description,
+        senderAddress: walletAddress, // Always use current wallet address
+      };
+    }
+    
+    // Even if no saved data, check for saved description
+    if (savedDescription) {
+      return {
+        ...DEFAULT_FORM_DATA,
+        description: savedDescription,
+        senderAddress: walletAddress,
+      };
+    }
+    
+    return {
+      ...DEFAULT_FORM_DATA,
+      senderAddress: walletAddress, // Set initial value
+    };
+  });
   const currentAccount = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
+  const descriptionSaveTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Auto-save form data to localStorage
+  useEffect(() => {
+    const saveData = {
+      data: formData,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem('proposalFormData', JSON.stringify(saveData));
+  }, [formData]);
+  
+  // Debounced save for description field
+  useEffect(() => {
+    if (formData.description) {
+      // Clear existing timeout
+      if (descriptionSaveTimeoutRef.current) {
+        clearTimeout(descriptionSaveTimeoutRef.current);
+      }
+      
+      // Set new timeout for saving description
+      descriptionSaveTimeoutRef.current = setTimeout(() => {
+        saveDescription(formData.description);
+      }, 500); // Save after 500ms of no changes
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (descriptionSaveTimeoutRef.current) {
+        clearTimeout(descriptionSaveTimeoutRef.current);
+      }
+    };
+  }, [formData.description]);
 
   // Add this query to fetch DAO data when loading from URL
   const { data: daoData } = useQuery({
@@ -354,19 +498,142 @@ const CreateProposalForm = ({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to append new outcome sections to existing description
+  const appendNewOutcomeToDescription = (description: string, newOutcome: string) => {
+    // Find where to insert the new outcome section
+    const additionalResourcesIndex = description.indexOf("## 🔗 Additional Resources");
+    const rejectIndex = description.indexOf("## ❌ If Rejected");
+    
+    let insertIndex = -1;
+    if (additionalResourcesIndex !== -1) {
+      insertIndex = additionalResourcesIndex;
+    } else if (rejectIndex !== -1) {
+      insertIndex = rejectIndex;
+    }
+    
+    if (insertIndex === -1) {
+      // If we can't find where to insert, just append at the end
+      return description + `\n# ${newOutcome}\n\n*If ${newOutcome} is the winning outcome...*\n\n` +
+        `#### 📋 Implementation Plan\n\nDescribe the specific implementation plan for this outcome.\n\n` +
+        `#### Implementation Steps\n1. **Phase 1**: Initial setup and preparation\n2. **Phase 2**: Core implementation\n3. **Phase 3**: Testing and refinement\n4. **Phase 4**: Launch and monitoring\n\n` +
+        `#### Timeline\n- **Week 1-2**: Research and planning\n- **Week 3-4**: Development\n- **Week 5**: Testing and feedback\n- **Week 6**: Deployment\n\n` +
+        `#### 💰 Budget & Resources\n\n| Item | Cost (SUI) | Purpose |\n|------|------------|----------|\n| Development | 1,000 | Smart contract work |\n| Audit | 500 | Security review |\n| Marketing | 300 | Community outreach |\n| **Total** | **1,800** | |\n\n` +
+        `#### 📊 Success Metrics\n\n- **Metric 1**: Specific measurable outcome\n- **Metric 2**: User adoption target\n- **Metric 3**: Performance benchmark\n\n` +
+        `#### ⚠️ Risks & Mitigation\n\n**Risk 1**: Potential technical challenges\n- *Mitigation*: Have backup implementation plan\n\n**Risk 2**: Timeline delays\n- *Mitigation*: Built-in buffer time\n\n`;
+    }
+    
+    const newSection = `# ${newOutcome}\n\n*If ${newOutcome} is the winning outcome...*\n\n` +
+      `#### 📋 Implementation Plan\n\nDescribe the specific implementation plan for this outcome.\n\n` +
+      `#### Implementation Steps\n1. **Phase 1**: Initial setup and preparation\n2. **Phase 2**: Core implementation\n3. **Phase 3**: Testing and refinement\n4. **Phase 4**: Launch and monitoring\n\n` +
+      `#### Timeline\n- **Week 1-2**: Research and planning\n- **Week 3-4**: Development\n- **Week 5**: Testing and feedback\n- **Week 6**: Deployment\n\n` +
+      `#### 💰 Budget & Resources\n\n| Item | Cost (SUI) | Purpose |\n|------|------------|----------|\n| Development | 1,000 | Smart contract work |\n| Audit | 500 | Security review |\n| Marketing | 300 | Community outreach |\n| **Total** | **1,800** | |\n\n` +
+      `#### 📊 Success Metrics\n\n- **Metric 1**: Specific measurable outcome\n- **Metric 2**: User adoption target\n- **Metric 3**: Performance benchmark\n\n` +
+      `#### ⚠️ Risks & Mitigation\n\n**Risk 1**: Potential technical challenges\n- *Mitigation*: Have backup implementation plan\n\n**Risk 2**: Timeline delays\n- *Mitigation*: Built-in buffer time\n\n\n`;
+    
+    return description.slice(0, insertIndex) + newSection + description.slice(insertIndex);
+  };
+
+  // Helper function to remove an outcome section from the description
+  const removeOutcomeFromDescription = (description: string, outcomeToRemove: string) => {
+    // Find the start of the outcome section
+    const outcomeHeaderRegex = new RegExp(`^# ${outcomeToRemove.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'gm');
+    const outcomeMatch = outcomeHeaderRegex.exec(description);
+    
+    if (!outcomeMatch) {
+      return description; // Outcome not found, return unchanged
+    }
+    
+    const startIndex = outcomeMatch.index;
+    
+    // Find the next major section (another outcome or a different section)
+    const remainingText = description.slice(startIndex + outcomeMatch[0].length);
+    const nextSectionMatch = remainingText.match(/^(# [^#\n]+|## [🔗❌])/m);
+    
+    let endIndex;
+    if (nextSectionMatch && nextSectionMatch.index !== undefined) {
+      endIndex = startIndex + outcomeMatch[0].length + nextSectionMatch.index;
+    } else {
+      // No next section found, remove to the end
+      endIndex = description.length;
+    }
+    
+    // Remove the outcome section
+    return description.slice(0, startIndex) + description.slice(endIndex);
+  };
+
+  // Helper function to update proposal summary with new outcome count
+  const updateProposalSummary = (description: string, outcomes: string[]) => {
+    const summaryRegex = /## 📊 Proposal Summary\n\nThis proposal has \d+ outcomes:\n(- .+\n)+/;
+    const summaryMatch = summaryRegex.exec(description);
+    
+    if (outcomes.length <= 2) {
+      // Remove the summary section if we're back to 2 outcomes
+      if (summaryMatch) {
+        return description.replace(summaryRegex, '');
+      }
+      return description;
+    }
+    
+    const newSummary = `## 📊 Proposal Summary\n\nThis proposal has ${outcomes.length} outcomes:\n${outcomes.map(o => `- ${o}`).join('\n')}\n`;
+    
+    if (summaryMatch) {
+      // Update existing summary
+      return description.replace(summaryRegex, newSummary);
+    } else {
+      // Add summary after main title and intro
+      const backgroundIndex = description.indexOf("#### 💡 Background & Motivation");
+      if (backgroundIndex !== -1) {
+        return description.slice(0, backgroundIndex) + newSummary + '\n' + description.slice(backgroundIndex);
+      }
+    }
+    
+    return description;
+  };
+
   // Rest of your code stays the same
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        name === "outcomeMessages"
-          ? value.split(",").map((msg) => msg.trim())
-          : value,
-      senderAddress: walletAddress, // Maintain wallet address during input changes
-    }));
+    
+    if (name === "outcomeMessages") {
+      const newOutcomes = value.split(",").map((msg) => msg.trim());
+      setFormData((prev) => {
+        let updatedDescription = prev.description;
+        
+        // If we're adding a new outcome (more outcomes than before)
+        if (newOutcomes.length > prev.outcomeMessages.length) {
+          const newOutcome = newOutcomes[newOutcomes.length - 1];
+          updatedDescription = appendNewOutcomeToDescription(updatedDescription, newOutcome);
+          updatedDescription = updateProposalSummary(updatedDescription, newOutcomes);
+        } 
+        // If we're removing an outcome
+        else if (newOutcomes.length < prev.outcomeMessages.length) {
+          // Find which outcome was removed
+          const removedOutcome = prev.outcomeMessages.find(
+            outcome => !newOutcomes.includes(outcome)
+          );
+          if (removedOutcome) {
+            updatedDescription = removeOutcomeFromDescription(updatedDescription, removedOutcome);
+            updatedDescription = updateProposalSummary(updatedDescription, newOutcomes);
+          }
+        }
+        // If just renaming (same length), don't change the description
+        
+        return {
+          ...prev,
+          outcomeMessages: newOutcomes,
+          description: updatedDescription,
+          senderAddress: walletAddress,
+        };
+      });
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        senderAddress: walletAddress, // Maintain wallet address during input changes
+      }));
+    }
   };
 
   const navigate = useNavigate();
@@ -518,6 +785,9 @@ const CreateProposalForm = ({
         "effects" in response &&
         response.effects?.status?.status === "success"
       ) {
+        // Clear localStorage on successful submission
+        localStorage.removeItem('proposalFormData');
+        localStorage.removeItem('proposalDescription');
         setFormData((prev) => ({
           ...DEFAULT_FORM_DATA,
           senderAddress: prev.senderAddress,
@@ -608,39 +878,8 @@ const CreateProposalForm = ({
             <label className="block text-sm font-medium">Description</label>
           </div>
           {previewMarkdown ? (
-            <div className="prose px-6 border p-2 rounded bg-gray-900">
-              <ReactMarkdown
-                options={{
-                  overrides: {
-                    h1: {
-                      component: "h1",
-                      props: { className: "text-4xl font-bold my-4" },
-                    },
-                    h2: {
-                      component: "h2",
-                      props: { className: "text-3xl font-bold my-4" },
-                    },
-                    h3: {
-                      component: "h3",
-                      props: { className: "text-2xl font-bold my-3" },
-                    },
-                    h4: {
-                      component: "h4",
-                      props: { className: "text-xl font-bold my-2" },
-                    },
-                    h5: {
-                      component: "h5",
-                      props: { className: "text-lg font-bold my-2" },
-                    },
-                    h6: {
-                      component: "h6",
-                      props: { className: "text-base font-bold my-2" },
-                    },
-                  },
-                }}
-              >
-                {formData.description}
-              </ReactMarkdown>
+            <div className="border p-2 rounded bg-gray-900">
+              <MarkdownRenderer content={formData.description} />
             </div>
           ) : (
             <textarea
