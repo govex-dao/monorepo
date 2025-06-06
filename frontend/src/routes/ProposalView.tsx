@@ -13,6 +13,7 @@ import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
+import { TradeHistory } from "@/components/trade/history/TradeHistory.tsx";
 
 interface StateHistory {
   id: number;
@@ -133,9 +134,8 @@ export function ProposalView() {
     },
   });
 
-  // Wait for proposal to load before fetching tokens.
   const { tokens } = useTokenEvents({
-    proposalId: proposal?.proposal_id ?? "",
+    proposalId: proposalId || "",
     address: account?.address,
     assetType: null,
     enabled: !!account?.address && !!proposal?.proposal_id,
@@ -300,6 +300,15 @@ export function ProposalView() {
           stable_symbol={proposal.dao.stable_symbol}
           asset_decimals={proposal.dao.asset_decimals}
           stable_decimals={proposal.dao.stable_decimals}
+        />
+        <TradeHistory
+          swapEvents={swapEvents}
+          assetSymbol={proposal.dao.asset_symbol}
+          stableSymbol={proposal.dao.stable_symbol}
+          outcomeMessages={proposal.outcome_messages}
+          assetScale={Math.pow(10, proposal.dao.asset_decimals)}
+          stableScale={Math.pow(10, proposal.dao.stable_decimals)}
+          hasStarted={proposal.current_state >= 1}
         />
       </div>
     </Theme>
