@@ -78,7 +78,7 @@ export function TableRow({
       <td className={`${cellClass} text-gray-400`} role="cell">
         {formattedDate}
       </td>
-      <td className={cellClass} role="cell">
+      <td className={cellClass + " text-center"} role="cell">
         <span
           className={`${badgeClass} ${
             event.is_buy
@@ -89,7 +89,7 @@ export function TableRow({
           {event.is_buy ? "Buy" : "Sell"}
         </span>
       </td>
-      <td className={cellClass} role="cell">
+      <td className={cellClass + " text-center"} role="cell">
         <span
           className={`${badgeClass} ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border}`}
         >
@@ -108,10 +108,11 @@ export function TableRow({
         <span className={valueClass}>{formatNumber(event.impact)}%</span>
         <span className={unitClass}>of reserves</span>
       </td>
-      <td className={cellClass} role="cell">
+      <td className={rightAlignedCellClass + " flex flex-row"} role="cell">
+        <div className="flex-1"></div>
         <ExplorerLink id={event.sender} type="address" />
         {isMyTrade && (
-          <span className="text-blue-400 font-medium px-1.5 py-0.5 bg-blue-900/30 rounded-sm">
+          <span className="text-blue-400 font-medium px-1.5 py-0.5 bg-blue-900/30 rounded-sm text-right">
             You
           </span>
         )}

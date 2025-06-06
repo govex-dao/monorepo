@@ -44,7 +44,7 @@ export function TableHeader(props: TableHeaderProps) {
       aria-sort={sortConfig.field === field ? sortConfig.direction : undefined}
     >
       <div
-        className={`flex items-center gap-1.5 ${align === "right" ? "justify-end" : ""}`}
+        className={`flex items-center capitalize gap-1.5 ${align === "right" ? "justify-end" : ""}`}
       >
         {field}
         {getSortIndicator(field, sortConfig)}
@@ -76,7 +76,7 @@ export function TableHeader(props: TableHeaderProps) {
         <SortableHeader field="price" align="right" />
         <SortableHeader field="amount" align="right" />
         <SortableHeader field="impact" align="right" />
-        <StaticHeader field="trader" />
+        <StaticHeader field="trader" align="right" />
       </tr>
     </thead>
   );
