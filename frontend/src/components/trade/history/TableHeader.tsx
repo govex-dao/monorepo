@@ -33,9 +33,11 @@ export function TableHeader(props: TableHeaderProps) {
   const SortableHeader = ({
     field,
     align = "left",
+    label,
   }: {
     field: SortField;
     align?: "left" | "right";
+    label?: string;
   }) => (
     <th
       className={`text-${align} py-2.5 sm:py-3.5 px-2 sm:px-4 font-medium cursor-pointer hover:text-gray-300 transition-colors`}
@@ -46,7 +48,7 @@ export function TableHeader(props: TableHeaderProps) {
       <div
         className={`flex items-center capitalize gap-1.5 ${align === "right" ? "justify-end" : ""}`}
       >
-        {field}
+        {label || field}
         {getSortIndicator(field, sortConfig)}
       </div>
     </th>
@@ -75,7 +77,7 @@ export function TableHeader(props: TableHeaderProps) {
         <StaticHeader field="outcome" />
         <SortableHeader field="price" align="right" />
         <SortableHeader field="amount" align="right" />
-        <SortableHeader field="impact" align="right" />
+        <SortableHeader field="impact" align="right" label="Reserves impact" />
         <StaticHeader field="trader" align="right" />
       </tr>
     </thead>
