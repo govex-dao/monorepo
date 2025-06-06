@@ -1,9 +1,7 @@
 import React from "react";
 import { WithdrawProposerLiquidityButton } from "./WithdrawProposerLiquidityButton";
-import { TokenInfo } from "./TradeForm";
 
 interface LiquidityProps {
-  userTokens: TokenInfo[];
   winning_outcome: number | null;
   current_state: number;
   escrow: string;
