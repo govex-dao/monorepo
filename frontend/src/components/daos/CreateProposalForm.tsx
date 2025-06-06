@@ -21,6 +21,7 @@ interface DaoData {
   assetType: string;
   stableType: string;
   dao_name: string;
+  dao_icon: string;
   icon_url: string;
   icon_cache_path: string | null;
   review_period_ms: string;
@@ -884,7 +885,7 @@ const CreateProposalForm = ({
             <div className="flex items-center space-x-3 mb-2">
               <div className="w-10 h-10 flex-shrink-0">
                 <img
-                  src={daoData?.icon_url || "/placeholder-dao.png"}
+                  src={daoData?.dao_icon || "/placeholder-dao.png"}
                   alt={daoData?.dao_name}
                   className="w-full h-full rounded-full object-cover"
                   onError={(e) => {
