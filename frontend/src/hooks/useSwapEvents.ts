@@ -34,6 +34,8 @@ export const useSwapEvents = (
       return data.data as SwapEvent[];
     },
     enabled: !!proposalId,
+    refetchInterval: 1000, // Poll every second
+    refetchIntervalInBackground: false, // Continue polling when tab is not active
     ...options,
   });
 };
