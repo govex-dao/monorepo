@@ -1,4 +1,6 @@
 import { useRedeemTokensMutation } from "@/mutations/redeemTokens";
+import { useQueryClient } from "@tanstack/react-query";
+import { QueryKey } from "@/constants";
 
 interface RedeemTokensButtonProps {
   proposalId: string;
@@ -27,6 +29,7 @@ export function RedeemTokensButton({
   outcome_count,
 }: RedeemTokensButtonProps) {
   const redeemTokens = useRedeemTokensMutation();
+  const queryClient = useQueryClient();
   const buttonStyle =
     "px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors";
 
@@ -54,6 +57,10 @@ export function RedeemTokensButton({
         asset_type,
         stable_type,
         outcome_count,
+      });
+      // Invalidate token queries after successful redemption
+      queryClient.invalidateQueries({
+        queryKey: [QueryKey.Tokens, proposalId],
       });
     } catch (error) {
       console.error("Error redeeming tokens:", error);

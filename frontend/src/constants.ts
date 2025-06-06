@@ -18,6 +18,7 @@ export enum QueryKey {
   Proposals = "proposals",
   ProposalDetail = "",
   VerificationHistory = "verification-history",
+  Tokens = "tokens",
 }
 
 export const CONSTANTS = {

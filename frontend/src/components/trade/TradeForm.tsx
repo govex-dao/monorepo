@@ -5,7 +5,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { SuiClient } from "@mysten/sui/client";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import { ConnectButton } from "@mysten/dapp-kit";
-import { CONSTANTS } from "@/constants";
+import { CONSTANTS, QueryKey } from "@/constants";
 import { calculateSwapBreakdown } from "@/utils/trade/swapBreakdown";
 import { SelectDropDown } from "@/components/SelectDropDown";
 import TradeInsight from "./swap/TradeInsight";
@@ -17,6 +17,7 @@ import TradeDirectionToggle, {
 import TokenInputField from "./swap/TokenInputField";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { SwapBreakdown } from "@/utils/trade/types";
+import { useQueryClient } from "@tanstack/react-query";
 
 const DEFAULT_SLIPPAGE_BPS = 200;
 
@@ -48,7 +49,6 @@ interface TradeFormProps {
   stable_decimals: number;
   swapEvents?: SwapEvent[];
   tokens: TokenInfo[];
-  refreshTokens: () => void;
 }
 
 export interface TokenInfo {
@@ -76,7 +76,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
   stable_decimals,
   swapEvents,
   tokens,
-  refreshTokens,
 }) => {
   const [assetScale, stableScale] = useMemo(
     () => [10 ** asset_decimals, 10 ** stable_decimals],
@@ -89,6 +88,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const client = useSuiClient();
+  const queryClient = useQueryClient();
   const { mutate: signAndExecute } = useSignAndExecuteTransaction({
     execute: async ({ bytes, signature }) =>
       await client.executeTransactionBlock({
@@ -486,7 +486,10 @@ const TradeForm: React.FC<TradeFormProps> = ({
             toast.dismiss(loadingToast);
             refreshAssetBalance();
             refreshStableBalance();
-            refreshTokens();
+            // Invalidate token queries to refresh token balances
+            queryClient.invalidateQueries({
+              queryKey: [QueryKey.Tokens, proposalId],
+            });
           },
           onSuccess: (result) => {
             if (result.effects?.status.status === "success") {

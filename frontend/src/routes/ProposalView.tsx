@@ -7,7 +7,7 @@ import MarketPriceChart from "../components/trade/MarketPriceChart.tsx";
 import TradeForm from "../components/trade/TradeForm.tsx";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon.tsx";
 import TabSection from "../components/trade/TabSection";
-import { useTokenEvents } from "@/hooks/useTokenEvents.ts";
+import { useTokenEventsQuery } from "@/hooks/useTokenEventsQuery";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
@@ -137,8 +137,7 @@ export function ProposalView() {
     groupedTokens,
     isLoading: tokensLoading,
     error: tokensError,
-    refreshTokens,
-  } = useTokenEvents({
+  } = useTokenEventsQuery({
     proposalId: proposalId || "",
     address: account?.address,
     assetType: null,
@@ -274,7 +273,6 @@ export function ProposalView() {
                 stable_decimals={proposal.dao.stable_decimals}
                 swapEvents={swapEvents}
                 tokens={tokens}
-                refreshTokens={refreshTokens}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full">
