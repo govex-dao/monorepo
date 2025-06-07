@@ -609,7 +609,7 @@ const MarketPriceChart = ({
             return `
             <div style="display: flex; align-items: center; margin-bottom: 4px; font-size: 16px;">
                 <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background-color: ${entry.color}; margin-right: 8px;"></span>
-                <span style="color: white; font-weight: 500; margin-right: 8px;">${formattedPrice}</span>
+                <span style="color: white; font-weight: 500; margin-right: 8px;">$${formattedPrice}</span>
                 <span style="color: #D1D5DB;">${entry.title}</span>
             </div>
           `;
