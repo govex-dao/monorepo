@@ -16,6 +16,12 @@ import {
 	WhereParam,
 	WhereParamTypes,
 } from './utils/api-queries';
+import { swapCache, SWAP_CACHE_TTL, cleanupExpiredCache, getCacheStats } from './cache-utils';
+
+// Clean up expired cache entries every minute
+setInterval(() => {
+    cleanupExpiredCache();
+}, 10000); 
 
 const app = express();
 app.use(cors());
@@ -24,6 +30,15 @@ app.use(express.json());
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
+});
+
+app.get('/cache-stats', async (req, res) => {
+	const stats = getCacheStats();
+	res.send({
+		cache: {
+			swap: stats
+		}
+	});
 });
 
 function serializeAllBigInts(obj: any): any {  
@@ -675,7 +690,7 @@ app.get('/proposals/:proposalId/state-history', async (req, res) => {
         res.send(formatPaginatedResponse(transformedHistory));
     } catch (e) {
         console.error('Error fetching state history:', e);
-        res.status(400).send({
+        res.status(400).json({
             error: e instanceof Error ? e.message : 'Unknown error'
         });
     }
@@ -703,6 +718,23 @@ app.get('/swaps', async (req, res) => {
     ];
 
     try {
+        // Create cache key based on query parameters
+        const marketId = req.query.market_id as string;
+        
+        // Only cache if we have a market_id (proposal-level caching)
+        if (marketId) {
+            const cacheKey = `swaps:${marketId}:${JSON.stringify(req.query)}`;
+            const cached = swapCache.get(cacheKey);
+            
+            // Check if cache is valid (within 5 seconds)
+            if (cached && (Date.now() - cached.timestamp < SWAP_CACHE_TTL)) {
+                console.log(`Cache hit for proposal ${marketId}`);
+                res.send(cached.data);
+                return;
+            }
+        }
+
+        // Cache miss or no market_id - fetch from database
         const pagination = parsePaginationForQuery(req.query);
         const swaps = await prisma.swapEvent.findMany({
             where: parseWhereStatement(req.query, acceptedQueries)!,
@@ -725,10 +757,24 @@ app.get('/swaps', async (req, res) => {
             stable_reserve: swap.stable_reserve.toString()   // Added
         }));
 
-        res.send(formatPaginatedResponse(serializedSwaps));
+        const response = formatPaginatedResponse(serializedSwaps);
+        
+        // Cache the response if we have a market_id
+        if (marketId) {
+            const cacheKey = `swaps:${marketId}:${JSON.stringify(req.query)}`;
+            swapCache.set(cacheKey, {
+                data: response,
+                timestamp: Date.now()
+            });
+            console.log(`Cache set for proposal ${marketId}`);
+        }
+
+        res.send(response);
     } catch (e) {
-        console.error(e);
-        res.status(400).send(e);
+        console.error('Error fetching swaps:', e);
+        res.status(400).json({
+            error: e instanceof Error ? e.message : 'Unknown error'
+        });
     }
 });
 
@@ -756,4 +802,4 @@ app.get('/results/:proposalId', async (req, res) => {
     }
 });
 
-app.listen(3000, () => console.log(`🚀 Server ready at: http://localhost:3000`));
+const server = app.listen(3000, () => console.log(`🚀 Server ready at: http://localhost:3000`));

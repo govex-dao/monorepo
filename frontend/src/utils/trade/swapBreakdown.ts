@@ -6,7 +6,7 @@ import { SwapParams, SwapBreakdown } from "./types";
 // Constants
 export const SWAP_FEE_BPS = 30; // 0.3% fee in basis points
 export const SWAP_FEE_BPS_BI = 30n; // 0.3% fee in basis points as BigInt
-export const DEFAULT_SLIPPAGE_BPS = 50;
+export const DEFAULT_SLIPPAGE_BPS = 200;
 const MAX_BPS = 10000;
 
 // Error messages

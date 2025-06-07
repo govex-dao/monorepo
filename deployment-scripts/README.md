@@ -8,6 +8,10 @@ export ADMIN_EMAIL=your.email@example.com
 # Run full deployment (removes existing repo, clones fresh, deploys both backend and frontend)
 ./govex-deploy.sh deploy
 
+# Frontend only
+chmod +x redeploy-frontend-only.sh
+./redeploy-frontend-only.sh
+
 # Optional: For manually building and serving the frontend statically
 cd /root/monorepo/frontend
 pnpm vite build

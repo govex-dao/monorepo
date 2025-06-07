@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import { InfoCircledIcon } from "@radix-ui/react-icons";
+import { InfoCircledIcon, ReloadIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
 import {
@@ -12,7 +12,7 @@ import {
 } from "./proposal-transaction";
 import { CONSTANTS } from "../../constants";
 import { VerifiedIcon } from "../icons/VerifiedIcon";
-import ReactMarkdown from "markdown-to-jsx";
+import MarkdownRenderer from "../MarkdownRenderer";
 
 interface DaoData {
   dao_id: string;
@@ -21,6 +21,7 @@ interface DaoData {
   assetType: string;
   stableType: string;
   dao_name: string;
+  dao_icon: string;
   icon_url: string;
   icon_cache_path: string | null;
   review_period_ms: string;
@@ -36,8 +37,7 @@ interface DaoData {
 
 const DEFAULT_FORM_DATA: CreateProposalData = {
   title: "",
-  description:
-    "# Intro\n\nWalk **all** the dogs twice a day because they have been good.\n\n![Dog](https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Black_Labrador_Retriever_-_Male_IMG_3323.jpg/1280px-Black_Labrador_Retriever_-_Male_IMG_3323.jpg)\n\n# Details\n\n• Walk 4+ KM\n\n• Bring treats\n\n• Bring lead",
+  description: "",
   metadata: "test",
   outcomeMessages: ["Reject", "Accept"],
   daoObjectId: "",
@@ -46,6 +46,15 @@ const DEFAULT_FORM_DATA: CreateProposalData = {
   minAssetAmount: "0",
   minStableAmount: "0",
   senderAddress: "",
+};
+
+const DEFAULT_PROPOSAL_SECTIONS = {
+  intro: "",
+  outcomes: {
+    Accept: "",
+    Reject: "",
+  },
+  footer: "",
 };
 
 const tooltips = {
@@ -71,6 +80,16 @@ interface OutcomeMessagesProps {
   customAmounts: number[];
   setCustomAmounts: (amounts: number[]) => void;
   daoData: DaoData | null;
+  proposalSections: {
+    intro: string;
+    outcomes: Record<string, string>;
+    footer: string;
+  };
+  setProposalSections: (sections: {
+    intro: string;
+    outcomes: Record<string, string>;
+    footer: string;
+  }) => void;
 }
 
 const truncateAddress = (address: string) => {
@@ -85,6 +104,8 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
   customAmounts,
   setCustomAmounts,
   daoData,
+  proposalSections,
+  setProposalSections,
 }) => {
   const [outcomes, setOutcomes] = useState<string[]>(() => {
     const initialOutcomes = value.split(",").map((o: string) => o.trim());
@@ -133,11 +154,37 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       newCustomAmounts[3] = minStableAmount;
       newCustomAmounts.push(minAssetAmount);
       newCustomAmounts.push(minStableAmount);
+
+      // Update proposal sections - rename Accept to Option 2 and add Option 3
+      const acceptContent = proposalSections.outcomes["Accept"] || "";
+      const newSections = {
+        ...proposalSections,
+        intro: proposalSections.intro,
+        outcomes: {
+          ...proposalSections.outcomes,
+          "Option 2": acceptContent.replace(/Accept/g, "Option 2"),
+          "Option 3": "",
+        } as Record<string, string>,
+      };
+      delete newSections.outcomes["Accept"];
+      setProposalSections(newSections);
     } else {
       // For subsequent additions, add the next option number (starting from where we left off)
-      newOutcomes.push(`Option ${outcomes.length + 1}`);
+      const newOption = `Option ${outcomes.length + 1}`;
+      newOutcomes.push(newOption);
       newCustomAmounts.push(minAssetAmount);
       newCustomAmounts.push(minStableAmount);
+
+      // Add new outcome section
+      const newSections = {
+        ...proposalSections,
+        intro: proposalSections.intro,
+        outcomes: {
+          ...proposalSections.outcomes,
+          [newOption]: "",
+        },
+      };
+      setProposalSections(newSections);
     }
 
     setCustomAmounts(newCustomAmounts);
@@ -166,6 +213,20 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
         minAssetAmount,
         minStableAmount,
       ];
+
+      // Update proposal sections - restore Accept and remove Options
+      const option2Content = proposalSections.outcomes["Option 2"] || "";
+      const newSections = {
+        ...proposalSections,
+        intro: proposalSections.intro,
+        outcomes: {
+          Reject: proposalSections.outcomes["Reject"],
+          Accept:
+            option2Content.replace(/Option 2/g, "Accept") ||
+            DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"],
+        },
+      };
+      setProposalSections(newSections);
     } else {
       newOutcomes = [...outcomes.slice(0, index), ...outcomes.slice(index + 1)];
       // Remove the corresponding amounts for the deleted outcome
@@ -178,6 +239,31 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       newOutcomes = newOutcomes.map((_, i) =>
         i === 0 ? "Reject" : `Option ${i + 1}`,
       );
+
+      // Update proposal sections - remove the deleted outcome and renumber others
+      const newSections = {
+        ...proposalSections,
+        intro: proposalSections.intro,
+        outcomes: {} as Record<string, string>,
+      };
+      let optionCounter = 2;
+      outcomes.forEach((outcome, i) => {
+        if (i !== index) {
+          if (outcome === "Reject") {
+            newSections.outcomes["Reject"] =
+              proposalSections.outcomes["Reject"] || "";
+          } else {
+            const newName = `Option ${optionCounter}`;
+            const oldContent = proposalSections.outcomes[outcome] || "";
+            newSections.outcomes[newName] = oldContent.replace(
+              new RegExp(outcome, "g"),
+              newName,
+            );
+            optionCounter++;
+          }
+        }
+      });
+      setProposalSections(newSections);
     }
 
     setCustomAmounts(newCustomAmounts);
@@ -186,7 +272,9 @@ const OutcomeMessages: React.FC<OutcomeMessagesProps> = ({
       target: {
         name: "outcomeMessages",
         value: newOutcomes.join(", "),
-      },
+        // Pass the old outcomes so handleInputChange knows what was removed
+        oldOutcomes: outcomes,
+      } as any,
     } as React.ChangeEvent<HTMLInputElement>);
   };
 
@@ -269,16 +357,248 @@ const CreateProposalForm = ({
   walletAddress,
   daoIdFromUrl,
 }: CreateProposalFormProps) => {
+  // Helper function to get saved form data from localStorage
+  const getSavedFormData = (): CreateProposalData | null => {
+    const saved = localStorage.getItem("proposalFormData");
+    if (!saved) return null;
+
+    try {
+      const parsed = JSON.parse(saved);
+      const savedTime = parsed.timestamp;
+      const currentTime = Date.now();
+
+      // Check if data is older than 30 minutes (30 * 60 * 1000 milliseconds)
+      if (currentTime - savedTime > 30 * 60 * 1000) {
+        localStorage.removeItem("proposalFormData");
+        return null;
+      }
+
+      return parsed.data;
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper function to save just the description/memo
+  const saveDescription = (description: string) => {
+    const saved = {
+      description,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem("proposalDescription", JSON.stringify(saved));
+  };
+
+  // Helper function to get saved description
+  const getSavedDescription = (): string | null => {
+    const saved = localStorage.getItem("proposalDescription");
+    if (!saved) return null;
+
+    try {
+      const parsed = JSON.parse(saved);
+      const savedTime = parsed.timestamp;
+      const currentTime = Date.now();
+
+      // Check if data is older than 2 hours
+      if (currentTime - savedTime > 2 * 60 * 60 * 1000) {
+        localStorage.removeItem("proposalDescription");
+        return null;
+      }
+
+      return parsed.description;
+    } catch {
+      return null;
+    }
+  };
+
   // Initialize form data with wallet address
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [previewMarkdown, setPreviewMarkdown] = useState(false);
   const [customAmounts, setCustomAmounts] = useState<number[]>([]);
-  const [formData, setFormData] = useState<CreateProposalData>(() => ({
-    ...DEFAULT_FORM_DATA,
-    senderAddress: walletAddress, // Set initial value
-  }));
+
+  // Initialize proposal sections state
+  const [proposalSections, setProposalSections] = useState<{
+    intro: string;
+    outcomes: Record<string, string>;
+    footer: string;
+  }>(() => {
+    const savedDescription = getSavedDescription();
+    if (savedDescription) {
+      // Try to parse saved description back into sections
+      const sections = {
+        intro: "",
+        outcomes: {} as Record<string, string>,
+        footer: DEFAULT_PROPOSAL_SECTIONS.footer,
+      };
+
+      // Extract intro section (from start to background)
+      const bgIndex = savedDescription.indexOf(
+        "#### 💡 Background & Motivation",
+      );
+      if (bgIndex > 0) {
+        sections.intro = savedDescription.substring(0, bgIndex).trim();
+      }
+
+      // Extract background section and append to intro if found
+      const bgMatch = savedDescription.match(
+        /#### 💡 Background & Motivation[\s\S]*?(?=##|$)/,
+      );
+      if (bgMatch) {
+        sections.intro = sections.intro + "\n\n" + bgMatch[0].trim();
+      }
+
+      // Extract outcome sections
+      const acceptMatch = savedDescription.match(
+        /## ✅ If Accepted[\s\S]*?(?=## ❌|---|\n## |$)/,
+      );
+      if (acceptMatch) {
+        sections.outcomes["Accept"] = acceptMatch[0].trim();
+      }
+
+      const rejectMatch = savedDescription.match(
+        /## ❌ If Rejected[\s\S]*?(?=---|$)/,
+      );
+      if (rejectMatch) {
+        sections.outcomes["Reject"] = rejectMatch[0].trim();
+      }
+
+      // Extract footer
+      const footerMatch = savedDescription.match(/---[\s\S]*$/);
+      if (footerMatch) {
+        sections.footer = footerMatch[0].trim();
+      }
+
+      return sections;
+    }
+
+    return {
+      ...DEFAULT_PROPOSAL_SECTIONS,
+      outcomes: { ...DEFAULT_PROPOSAL_SECTIONS.outcomes },
+    };
+  });
+
+  const [formData, setFormData] = useState<CreateProposalData>(() => {
+    const savedData = getSavedFormData();
+    const savedDescription = getSavedDescription();
+
+    if (savedData && savedData.daoObjectId === daoIdFromUrl) {
+      return {
+        ...savedData,
+        // Use saved description if available, otherwise use saved data's description
+        description: savedDescription || savedData.description,
+        senderAddress: walletAddress, // Always use current wallet address
+      };
+    }
+
+    // Even if no saved data, check for saved description
+    if (savedDescription) {
+      return {
+        ...DEFAULT_FORM_DATA,
+        description: savedDescription,
+        senderAddress: walletAddress,
+      };
+    }
+
+    return {
+      ...DEFAULT_FORM_DATA,
+      senderAddress: walletAddress, // Set initial value
+    };
+  });
   const currentAccount = useCurrentAccount();
   const executeTransaction = useTransactionExecution();
+  const descriptionSaveTimeoutRef = useRef<NodeJS.Timeout>();
+
+  // Helper function to combine sections into full description
+  const updateFormDataDescription = (sections: typeof proposalSections) => {
+    let fullDescription = "# Introduction\n\n";
+
+    // Add user intro content
+    if (sections.intro) {
+      fullDescription += sections.intro + "\n\n";
+    }
+
+    // Add binary/multioption text
+    if (
+      formData.outcomeMessages.length === 2 &&
+      formData.outcomeMessages[0] === "Reject" &&
+      formData.outcomeMessages[1] === "Accept"
+    ) {
+      fullDescription +=
+        "This is a binary proposal with 2 outcomes:\n- Reject\n- Accept";
+    } else {
+      fullDescription += `This is a multioption proposal with ${formData.outcomeMessages.length} outcomes:\n`;
+      formData.outcomeMessages.forEach((outcome) => {
+        fullDescription += `- ${outcome}\n`;
+      });
+    }
+
+    // Add outcome sections with headers
+    if (formData.outcomeMessages) {
+      formData.outcomeMessages.forEach((outcome) => {
+        fullDescription += `\n\n# If ${outcome} is the winning outcome:\n\n`;
+        if (sections.outcomes[outcome]) {
+          fullDescription += sections.outcomes[outcome];
+        }
+      });
+    }
+
+    // Add footer if it exists
+    if (sections.footer) {
+      fullDescription += "\n\n" + sections.footer;
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      description: fullDescription,
+    }));
+  };
+
+  // Auto-save form data to localStorage
+  useEffect(() => {
+    const saveData = {
+      data: formData,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem("proposalFormData", JSON.stringify(saveData));
+  }, [formData]);
+
+  // Debounced save for description field
+  useEffect(() => {
+    if (formData.description) {
+      // Clear existing timeout
+      if (descriptionSaveTimeoutRef.current) {
+        clearTimeout(descriptionSaveTimeoutRef.current);
+      }
+
+      // Set new timeout for saving description
+      descriptionSaveTimeoutRef.current = setTimeout(() => {
+        saveDescription(formData.description);
+      }, 500); // Save after 500ms of no changes
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (descriptionSaveTimeoutRef.current) {
+        clearTimeout(descriptionSaveTimeoutRef.current);
+      }
+    };
+  }, [formData.description]);
+
+  // Update description when proposal sections change
+  useEffect(() => {
+    if (proposalSections && formData.outcomeMessages) {
+      updateFormDataDescription(proposalSections);
+    }
+  }, [proposalSections]);
+
+  // Auto-resize textareas on mount and when content changes
+  useEffect(() => {
+    const textareas = document.querySelectorAll('textarea[style*="height"]');
+    textareas.forEach((textarea) => {
+      const target = textarea as HTMLTextAreaElement;
+      target.style.height = "auto";
+      target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+    });
+  }, [proposalSections, previewMarkdown]);
 
   // Add this query to fetch DAO data when loading from URL
   const { data: daoData } = useQuery({
@@ -354,19 +674,32 @@ const CreateProposalForm = ({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Rest of your code stays the same
+  // We no longer need these helper functions since we're managing description through sections
+
+  // Simplified handleInputChange since description is now managed by sections
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        name === "outcomeMessages"
-          ? value.split(",").map((msg) => msg.trim())
-          : value,
-      senderAddress: walletAddress, // Maintain wallet address during input changes
-    }));
+
+    if (name === "outcomeMessages") {
+      const newOutcomes = value.split(",").map((msg) => msg.trim());
+      setFormData((prev) => {
+        // Update the form data and let the sections handle the description
+        updateFormDataDescription(proposalSections);
+        return {
+          ...prev,
+          outcomeMessages: newOutcomes,
+          senderAddress: walletAddress,
+        };
+      });
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        senderAddress: walletAddress, // Maintain wallet address during input changes
+      }));
+    }
   };
 
   const navigate = useNavigate();
@@ -518,6 +851,9 @@ const CreateProposalForm = ({
         "effects" in response &&
         response.effects?.status?.status === "success"
       ) {
+        // Clear localStorage on successful submission
+        localStorage.removeItem("proposalFormData");
+        localStorage.removeItem("proposalDescription");
         setFormData((prev) => ({
           ...DEFAULT_FORM_DATA,
           senderAddress: prev.senderAddress,
@@ -549,7 +885,7 @@ const CreateProposalForm = ({
             <div className="flex items-center space-x-3 mb-2">
               <div className="w-10 h-10 flex-shrink-0">
                 <img
-                  src={daoData?.icon_url || "/placeholder-dao.png"}
+                  src={daoData?.dao_icon || "/placeholder-dao.png"}
                   alt={daoData?.dao_name}
                   className="w-full h-full rounded-full object-cover"
                   onError={(e) => {
@@ -603,62 +939,140 @@ const CreateProposalForm = ({
           placeholder=""
         />
 
-        <div className="space-y-2">
-          <div>
-            <label className="block text-sm font-medium">Description</label>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium">
+              Proposal Content
+            </label>
           </div>
+
           {previewMarkdown ? (
-            <div className="prose px-6 border p-2 rounded bg-gray-900">
-              <ReactMarkdown
-                options={{
-                  overrides: {
-                    h1: {
-                      component: "h1",
-                      props: { className: "text-4xl font-bold my-4" },
-                    },
-                    h2: {
-                      component: "h2",
-                      props: { className: "text-3xl font-bold my-4" },
-                    },
-                    h3: {
-                      component: "h3",
-                      props: { className: "text-2xl font-bold my-3" },
-                    },
-                    h4: {
-                      component: "h4",
-                      props: { className: "text-xl font-bold my-2" },
-                    },
-                    h5: {
-                      component: "h5",
-                      props: { className: "text-lg font-bold my-2" },
-                    },
-                    h6: {
-                      component: "h6",
-                      props: { className: "text-base font-bold my-2" },
-                    },
-                  },
-                }}
-              >
-                {formData.description}
-              </ReactMarkdown>
+            <div className="border border-blue-500 p-4 rounded bg-gray-900 min-h-[400px]">
+              <MarkdownRenderer content={formData.description} />
             </div>
           ) : (
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 min-h-[300px]"
-              placeholder=""
-              required
-            />
+            <div className="space-y-4">
+              {/* Static Introduction Header */}
+              <div className="text-lg font-bold text-gray-200">
+                # Introduction
+              </div>
+
+              {/* User Introduction Input */}
+              <textarea
+                value={proposalSections.intro}
+                onChange={(e) => {
+                  const newSections = {
+                    ...proposalSections,
+                    intro: e.target.value,
+                  };
+                  setProposalSections(newSections);
+                  updateFormDataDescription(newSections);
+                }}
+                className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[100px] max-h-[500px] text-gray-100 resize-none overflow-y-auto"
+                placeholder="Briefly introduce what you're proposing and why it matters to the DAO."
+                style={{
+                  height: "auto",
+                  minHeight: "100px",
+                  maxHeight: "500px",
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = "auto";
+                  target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+                }}
+              />
+
+              {/* Static Binary/Multioption Text */}
+              <div className="text-gray-300 whitespace-pre-line">
+                {formData.outcomeMessages.length === 2 &&
+                formData.outcomeMessages[0] === "Reject" &&
+                formData.outcomeMessages[1] === "Accept"
+                  ? "This is a binary proposal with 2 outcomes:\n- Reject\n- Accept"
+                  : `This is a multioption proposal with ${formData.outcomeMessages.length} outcomes:\n${formData.outcomeMessages.map((o) => `- ${o}`).join("\n")}`}
+              </div>
+
+              {/* Outcome Sections */}
+              {formData.outcomeMessages.map((outcome) => (
+                <div key={outcome} className="space-y-2">
+                  {/* Static Outcome Header */}
+                  <div className="text-lg font-bold text-gray-200">
+                    # If {outcome} is the winning outcome:
+                  </div>
+
+                  {/* User Outcome Input */}
+                  <textarea
+                    value={proposalSections.outcomes[outcome] || ""}
+                    onChange={(e) => {
+                      const newSections = {
+                        ...proposalSections,
+                        outcomes: {
+                          ...proposalSections.outcomes,
+                          [outcome]: e.target.value,
+                        },
+                      };
+                      setProposalSections(newSections);
+                      updateFormDataDescription(newSections);
+                    }}
+                    className="w-full p-3 bg-black border border-blue-500 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[150px] max-h-[500px] text-gray-100 resize-none overflow-y-auto"
+                    placeholder="Describe what happens if this outcome wins..."
+                    style={{
+                      height: "auto",
+                      minHeight: "150px",
+                      maxHeight: "500px",
+                    }}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = "auto";
+                      target.style.height = `${Math.min(target.scrollHeight, 500)}px`;
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           )}
-          <div className="flex justify-end">
+
+          {/* Bottom controls */}
+          <div className="flex items-center justify-between mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                // Reset all sections to default
+                const outcomes = formData.outcomeMessages;
+                const newSections = {
+                  intro: DEFAULT_PROPOSAL_SECTIONS.intro,
+                  outcomes: {} as Record<string, string>,
+                  footer: DEFAULT_PROPOSAL_SECTIONS.footer,
+                };
+
+                // Set default content for each outcome
+                outcomes.forEach((outcome) => {
+                  if (outcome === "Reject") {
+                    newSections.outcomes["Reject"] =
+                      DEFAULT_PROPOSAL_SECTIONS.outcomes["Reject"];
+                  } else if (outcomes.length === 2 && outcome === "Accept") {
+                    newSections.outcomes["Accept"] =
+                      DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"];
+                  } else {
+                    // For custom outcomes
+                    newSections.outcomes[outcome] = "";
+                  }
+                });
+
+                setProposalSections(newSections);
+                updateFormDataDescription(newSections);
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-gray-400 hover:text-gray-200 text-sm transition-colors"
+            >
+              <ReloadIcon className="w-4 h-4" />
+              <span>Reset All</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setPreviewMarkdown(!previewMarkdown)}
-              className="text-blue-500 text-sm"
+              className="px-4 py-1.5 bg-blue-500 text-white text-sm rounded hover:bg-blue-600 transition-colors"
             >
-              {previewMarkdown ? "Edit" : "Preview"}
+              {previewMarkdown ? "Edit" : "Preview All"}
             </button>
           </div>
         </div>
@@ -670,6 +1084,8 @@ const CreateProposalForm = ({
           setCustomAmounts={setCustomAmounts}
           daoData={daoData}
           tooltip={tooltips.outcomeMessages}
+          proposalSections={proposalSections}
+          setProposalSections={setProposalSections}
         />
 
         <div className="mt-6 pt-6">
