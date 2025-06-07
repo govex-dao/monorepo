@@ -569,6 +569,66 @@ const MarketPriceChart = ({
       handleScale: false,
     });
 
+    const toolTip = document.createElement("div");
+    toolTip.style.position = "absolute";
+    toolTip.style.display = "none";
+    toolTip.style.padding = "8px";
+    toolTip.style.boxSizing = "border-box";
+    toolTip.style.fontSize = "12px";
+    toolTip.style.textAlign = "left";
+    toolTip.style.zIndex = "1000";
+    toolTip.style.top = "12px";
+    toolTip.style.left = "12px";
+    toolTip.style.pointerEvents = "none";
+    toolTip.style.fontFamily = "inherit";
+
+    toolTip.style.backgroundColor = "rgba(17, 17, 19, 0.96)";
+    toolTip.style.border = "1px solid #444"; // Darker gray outline
+    toolTip.style.borderRadius = "8px"; // Much rounder corners
+    toolTip.style.color = "rgb(209, 213, 219)";
+
+    chartContainerRef.current.appendChild(toolTip);
+
+    chart.subscribeCrosshairMove((param) => {
+      if (
+        param.point === undefined ||
+        !param.time ||
+        param.point.x < 0 ||
+        param.point.x > (chartContainerRef.current?.clientWidth ?? 0) ||
+        param.point.y < 0 ||
+        param.point.y > (chartContainerRef.current?.clientHeight ?? 0)
+      ) {
+        toolTip.style.display = "none";
+      } else {
+        toolTip.style.display = "block";
+        let toolTipHtml = "";
+
+        param.seriesData.forEach((dataPoint, seriesApi) => {
+          const lineSeriesApi = seriesApi as ISeriesApi<"Line">;
+          const seriesIndex = seriesRefs.current.indexOf(lineSeriesApi);
+
+          if (seriesIndex > -1 && dataPoint && "value" in dataPoint) {
+            const price = lineSeriesApi.priceFormatter().format(dataPoint.value);
+            
+            const color = colors[seriesIndex];
+            const title = outcome_messages[seriesIndex];
+
+            toolTipHtml += `
+              <div style="display: flex; align-items: center; margin-bottom: 4px; font-size: 16px;">
+                  <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background-color: ${color}; margin-right: 8px;"></span>
+                  <span style="color: white; font-weight: 500; margin-right: 8px;">${price}</span>
+                  <span style="color: #D1D5DB;">${title}</span>
+              </div>
+            `;
+          }
+        });
+
+        toolTip.innerHTML = toolTipHtml;
+        toolTip.style.left = param.point.x + 15 + "px";
+        toolTip.style.top = param.point.y + 15 + "px";
+      }
+    });
+    
     chartRef.current = chart;
 
     const numOutcomes = Number(outcome_count);
@@ -577,7 +637,6 @@ const MarketPriceChart = ({
       const lineSeries = chart.addSeries(LineSeries, {
         color: colors[i],
         lineWidth: 2,
-        title: outcome_messages[i],
         priceLineVisible: false,
         priceFormat: {
           type: "price",
