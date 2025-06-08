@@ -126,17 +126,17 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             </div>
             <div className="flex justify-between">
               <span>Proposal ID</span>
-              <ExplorerLink id={proposal.proposal_id} type="address" />
+              <ExplorerLink id={proposal.proposal_id} />
             </div>
             <div>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span>DAO ID</span>
-                  <ExplorerLink id={proposal.dao_id} type="address" />
+                  <ExplorerLink id={proposal.dao_id} />
                 </div>
                 <div className="flex justify-between">
                   <span>Proposer</span>
-                  <ExplorerLink id={proposal.proposer} type="address" />
+                  <ExplorerLink id={proposal.proposer} isAddress />
                 </div>
                 <div className="flex justify-between">
                   <span>Created At</span>
