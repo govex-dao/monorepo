@@ -290,7 +290,11 @@ export function ProposalView() {
                               outcomeColors[Number(proposal.winning_outcome)],
                           }}
                         >
-                          {proposal.outcome_messages[Number(proposal.winning_outcome)]}
+                          {
+                            proposal.outcome_messages[
+                              Number(proposal.winning_outcome)
+                            ]
+                          }
                         </span>
                         is the Winning Outcome.
                       </h2>

@@ -75,16 +75,28 @@ const CustomLegend = ({ payload }: { payload?: any[] }) => (
         }}
       >
         <svg width="16" height="16" style={{ marginRight: "8px" }}>
-          <rect x="0" y="0" width="16" height="16" rx="4" ry="4" fill={entry.color} />
+          <rect
+            x="0"
+            y="0"
+            width="16"
+            height="16"
+            rx="4"
+            ry="4"
+            fill={entry.color}
+          />
         </svg>
-        <span style={{ color: "rgb(209, 213, 219)", fontWeight: entry.fontWeight || "normal" }}>
+        <span
+          style={{
+            color: "rgb(209, 213, 219)",
+            fontWeight: entry.fontWeight || "normal",
+          }}
+        >
           {entry.value}
         </span>
       </div>
     ))}
   </div>
 );
- 
 
 const MarketPriceChart = ({
   proposalId,
@@ -470,7 +482,8 @@ const MarketPriceChart = ({
         horzLines: { color: "transparent" },
         vertLines: { color: "transparent" },
       },
-      crosshair: { // This block controls the crosshair lines and labels
+      crosshair: {
+        // This block controls the crosshair lines and labels
         // Settings for the HORIZONTAL line
         horzLine: {
           visible: false, // Keep the horizontal line visible
@@ -481,7 +494,7 @@ const MarketPriceChart = ({
           labelVisible: false, // Hide the time label on the bottom axis
           style: 0,
         },
-       },
+      },
       timeScale: {
         timeVisible: true,
         secondsVisible: true,
@@ -578,7 +591,10 @@ const MarketPriceChart = ({
             if (seriesIndex > -1 && dataPoint && "value" in dataPoint) {
               const isResolved = winningOutcomeIndex !== null;
               const isWinningLine = seriesIndex === winningOutcomeIndex;
-              const finalColor = isResolved && !isWinningLine ? `${colors[seriesIndex]}80` : colors[seriesIndex];
+              const finalColor =
+                isResolved && !isWinningLine
+                  ? `${colors[seriesIndex]}80`
+                  : colors[seriesIndex];
               const finalFontWeight = "500";
               tooltipEntries.push({
                 value: dataPoint.value,
@@ -642,9 +658,9 @@ const MarketPriceChart = ({
         const isResolved = winningOutcomeIndex !== null;
         const isWinningLine = i === winningOutcomeIndex;
         const seriesOptions: LineSeriesPartialOptions = {
-           lineWidth: isResolved ? (isWinningLine ? 4 : 2) : 2,
-           priceLineVisible: false,
-           priceFormat: { type: "price", precision: 7, minMove: 0.0000001 },
+          lineWidth: isResolved ? (isWinningLine ? 4 : 2) : 2,
+          priceLineVisible: false,
+          priceFormat: { type: "price", precision: 7, minMove: 0.0000001 },
           color: colors[i],
         };
         if (isResolved && !isWinningLine) {
@@ -653,9 +669,12 @@ const MarketPriceChart = ({
           // And provide a solid, dimmed color for the price axis label via priceLineColor,
           // as the label does not respect the alpha channel from the main `color` option.
           const hex = colors[i];
-          const f = parseInt(hex.slice(1), 16), r = f >> 16, g = (f >> 8) & 0x00ff, b = f & 0x0000ff;
+          const f = parseInt(hex.slice(1), 16),
+            r = f >> 16,
+            g = (f >> 8) & 0x00ff,
+            b = f & 0x0000ff;
           const dim = (c: number) => Math.floor(c * 0.5); // 50% darker
-          const toHex = (c: number) => ('0' + c.toString(16)).slice(-2);
+          const toHex = (c: number) => ("0" + c.toString(16)).slice(-2);
           seriesOptions.priceLineColor = `#${toHex(dim(r))}${toHex(dim(g))}${toHex(dim(b))}`;
         }
 
