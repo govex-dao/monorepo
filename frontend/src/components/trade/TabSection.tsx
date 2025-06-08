@@ -11,6 +11,8 @@ interface TabSectionProps {
   details: string;
   asset_symbol?: string;
   stable_symbol?: string;
+  asset_decimals?: number;
+  stable_decimals?: number;
   tokens: TokenInfo[];
   groupedTokens: any[];
   isLoading: boolean;
@@ -23,6 +25,8 @@ const TabSection: React.FC<TabSectionProps> = ({
   details,
   asset_symbol = "Asset",
   stable_symbol = "Stable",
+  asset_decimals = 9,
+  stable_decimals = 9,
   tokens,
   groupedTokens,
   isLoading,
