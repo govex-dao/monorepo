@@ -87,10 +87,9 @@ export function useTokenEvents({
       try {
         const tokenType = `${packageId}::conditional_token::ConditionalToken`;
         let allTokens: TokenInfo[] = [];
-        let hasNextPage = true;
         let cursor: string | null = null;
 
-        while (hasNextPage) {
+        do {
           const objects = await client.getOwnedObjects({
             owner: address,
             cursor,
@@ -121,11 +120,10 @@ export function useTokenEvents({
                 asset_type: content.fields.asset_type,
               };
             });
-          hasNextPage = objects.hasNextPage;
+
           allTokens = [...allTokens, ...pageTokens];
           cursor = objects.nextCursor ?? null;
-          if (!hasNextPage || !cursor) break;
-        }
+        } while (cursor);
 
         const dedupedTokens = Array.from(
           new Map(allTokens.map((token) => [token.id, token])).values(),
