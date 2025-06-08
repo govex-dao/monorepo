@@ -12,8 +12,6 @@ interface TokenSectionProps {
   asset_type: string;
   stable_type: string;
   outcome_count: string;
-  asset_decimals: number;
-  stable_decimals: number;
   asset_symbol: string;
   stable_symbol: string;
   tokens: TokenInfo[];
@@ -31,8 +29,6 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   asset_type,
   stable_type,
   outcome_count,
-  asset_decimals,
-  stable_decimals,
   asset_symbol,
   stable_symbol,
   tokens,
