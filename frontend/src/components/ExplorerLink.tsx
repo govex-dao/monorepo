@@ -1,7 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-// Modified by Govex.ai, 2025
-
 import { useSuiClientContext } from "@mysten/dapp-kit";
 import { formatAddress } from "@mysten/sui/utils";
 import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
