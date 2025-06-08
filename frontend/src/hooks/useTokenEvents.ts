@@ -7,48 +7,25 @@ import { TokenInfo } from "@/components/trade/TradeForm";
 const packageId = CONSTANTS.futarchyPackage;
 const client = new SuiClient({ url: getFullnodeUrl(CONSTANTS.network) });
 
-// Cache configuration
-const MAX_CACHE_SIZE = 50;
-const ITEM_TTL = 30000; // 30 seconds
+interface CacheEntry {
+  tokens: TokenInfo[];
+  timestamp: number;
+}
 
-// Cache store
-const _tokenCacheLRU = new Map<
-  string,
-  { tokens: TokenInfo[]; timestamp: number }
->();
+const tokenCache = new Map<string, CacheEntry>();
 
-function getFromCache(
-  key: string,
-): { tokens: TokenInfo[]; timestamp: number } | undefined {
-  const item = _tokenCacheLRU.get(key);
-  if (item) {
-    if (Date.now() - item.timestamp > ITEM_TTL) {
-      _tokenCacheLRU.delete(key);
-      return undefined;
-    }
-    // Mark as recently used
-    _tokenCacheLRU.delete(key);
-    _tokenCacheLRU.set(key, item);
-    return item;
+const CACHE_TTL = 30000; // 30 seconds
+
+function getFromCache(key: string): TokenInfo[] | undefined {
+  const entry = tokenCache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.tokens;
   }
   return undefined;
 }
 
-function setToCache(
-  key: string,
-  value: { tokens: TokenInfo[]; timestamp: number },
-): void {
-  if (_tokenCacheLRU.has(key)) {
-    _tokenCacheLRU.delete(key);
-  }
-  _tokenCacheLRU.set(key, value);
-
-  if (_tokenCacheLRU.size > MAX_CACHE_SIZE) {
-    const oldestKey = _tokenCacheLRU.keys().next().value;
-    if (oldestKey) {
-      _tokenCacheLRU.delete(oldestKey);
-    }
-  }
+function setToCache(key: string, tokens: TokenInfo[]): void {
+  tokenCache.set(key, { tokens, timestamp: Date.now() });
 }
 
 interface UseTokenEventsOptions {
@@ -85,20 +62,22 @@ export function useTokenEvents({
     [asset_decimals, stable_decimals],
   );
 
-  const cacheKey =
-    address && proposalId
-      ? `${address}-${proposalId}-${assetType ?? "all"}`
-      : undefined;
+  const cacheKey = useMemo(
+    () =>
+      address && proposalId
+        ? `${address}-${proposalId}-${assetType ?? "all"}`
+        : undefined,
+    [address, proposalId, assetType],
+  );
 
   const fetchTokens = useCallback(
     async (forceRefresh = false) => {
       if (!address || !proposalId) return;
 
-      // Check cache first if not forcing refresh
       if (!forceRefresh && cacheKey) {
         const cachedData = getFromCache(cacheKey);
         if (cachedData) {
-          setTokens(cachedData.tokens);
+          setTokens(cachedData);
           return;
         }
       }
@@ -108,22 +87,15 @@ export function useTokenEvents({
       try {
         const tokenType = `${packageId}::conditional_token::ConditionalToken`;
         let allTokens: TokenInfo[] = [];
-        let hasNextPage = true;
         let cursor: string | null = null;
 
-        while (hasNextPage) {
+        do {
           const objects = await client.getOwnedObjects({
             owner: address,
             cursor,
             limit: 50,
-            filter: {
-              StructType: tokenType,
-            },
-            options: {
-              showType: true,
-              showContent: true,
-              showDisplay: true,
-            },
+            filter: { StructType: tokenType },
+            options: { showType: true, showContent: true, showDisplay: true },
           });
 
           const pageTokens = objects.data
@@ -150,31 +122,14 @@ export function useTokenEvents({
             });
 
           allTokens = [...allTokens, ...pageTokens];
-
-          hasNextPage = objects.hasNextPage;
           cursor = objects.nextCursor ?? null;
+        } while (cursor);
 
-          if (!hasNextPage || !cursor) break;
-        }
+        const dedupedTokens = Array.from(
+          new Map(allTokens.map((token) => [token.id, token])).values(),
+        );
 
-        // Deduplicate tokens by id, preserving the first encountered instance
-        const dedupedTokens = [];
-        const seenIds = new Set();
-        for (const token of allTokens) {
-          if (!seenIds.has(token.id)) {
-            seenIds.add(token.id);
-            dedupedTokens.push(token);
-          }
-        }
-        // Update cache
-        if (cacheKey) {
-          setToCache(cacheKey, {
-            tokens: dedupedTokens,
-            timestamp: Date.now(),
-          });
-        }
-
-        // Force a new array reference to ensure React detects the change
+        if (cacheKey) setToCache(cacheKey, dedupedTokens);
         setTokens([...dedupedTokens]);
       } catch (err) {
         setError(
@@ -188,71 +143,58 @@ export function useTokenEvents({
     [proposalId, address, assetType, cacheKey],
   );
 
+  useEffect(() => {
+    if (enabled) fetchTokens(false);
+  }, [enabled, fetchTokens, cacheKey]);
+
   const groupedTokens = useMemo<GroupedToken[]>(() => {
-    const outcomeMap = new Map<
-      number,
-      { assetBalance: bigint; stableBalance: bigint }
-    >();
+    const outcomeMap = new Map<number, { asset: bigint; stable: bigint }>();
 
     tokens.forEach((token) => {
       if (!outcomeMap.has(token.outcome)) {
-        outcomeMap.set(token.outcome, { assetBalance: 0n, stableBalance: 0n });
+        outcomeMap.set(token.outcome, { asset: 0n, stable: 0n });
       }
       const group = outcomeMap.get(token.outcome)!;
       if (token.asset_type === 0) {
-        group.assetBalance += BigInt(token.balance);
+        group.asset += BigInt(token.balance);
       } else {
-        group.stableBalance += BigInt(token.balance);
+        group.stable += BigInt(token.balance);
       }
     });
 
-    const result = Array.from(outcomeMap.entries())
+    return Array.from(outcomeMap.entries())
       .sort(([aOutcome], [bOutcome]) => aOutcome - bOutcome)
       .map(([outcome, balances]) => {
-        // Convert raw balances to human-readable format with proper decimals
-        const assetBalanceRaw = balances.assetBalance.toString();
-        const stableBalanceRaw = balances.stableBalance.toString();
-
-        // Format with proper decimals using BigInt arithmetic
-        const assetBalanceFormatted =
-          (balances.assetBalance / BigInt(assetScale)).toString() +
-          "." +
-          (balances.assetBalance % BigInt(assetScale))
+        const formatBalance = (
+          balance: bigint,
+          scale: number,
+          decimals: number,
+        ) => {
+          const whole = (balance / BigInt(scale)).toString();
+          const fraction = (balance % BigInt(scale))
             .toString()
-            .padStart(asset_decimals, "0")
-            .slice(0, asset_decimals);
-
-        const stableBalanceFormatted =
-          (balances.stableBalance / BigInt(stableScale)).toString() +
-          "." +
-          (balances.stableBalance % BigInt(stableScale))
-            .toString()
-            .padStart(stable_decimals, "0")
-            .slice(0, stable_decimals);
+            .padStart(decimals, "0")
+            .slice(0, decimals);
+          return `${whole}.${fraction}`;
+        };
 
         return {
           outcome,
-          assetBalance: assetBalanceRaw,
-          stableBalance: stableBalanceRaw,
-          assetBalanceFormatted,
-          stableBalanceFormatted,
+          assetBalance: balances.asset.toString(),
+          stableBalance: balances.stable.toString(),
+          assetBalanceFormatted: formatBalance(
+            balances.asset,
+            assetScale,
+            asset_decimals,
+          ),
+          stableBalanceFormatted: formatBalance(
+            balances.stable,
+            stableScale,
+            stable_decimals,
+          ),
         };
       });
-
-    return result;
   }, [tokens, assetScale, stableScale, asset_decimals, stable_decimals]);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    // Initialize from cache or fetch if needed
-    const cachedData = cacheKey ? getFromCache(cacheKey) : null;
-    if (cachedData) {
-      setTokens(cachedData.tokens);
-    } else {
-      fetchTokens(false);
-    }
-  }, [proposalId, address, assetType, enabled, fetchTokens, cacheKey]);
 
   return {
     tokens,
