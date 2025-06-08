@@ -133,13 +133,7 @@ export function ProposalView() {
     },
   });
 
-  const {
-    tokens,
-    groupedTokens,
-    isLoading: tokensLoading,
-    error: tokensError,
-    refreshTokens,
-  } = useTokenEvents({
+  const { tokens, groupedTokens, isLoading: tokensLoading, error: tokensError, refreshTokens } = useTokenEvents({
     proposalId: proposalId || "",
     address: account?.address,
     assetType: null,
