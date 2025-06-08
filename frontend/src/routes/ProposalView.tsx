@@ -140,10 +140,10 @@ export function ProposalView() {
     error: tokensError,
     refreshTokens,
   } = useTokenEvents({
-    proposalId: proposal?.proposal_id || "",
+    proposalId: proposalId || "",
     address: account?.address,
     assetType: null,
-    enabled: !!account?.address && !!proposal?.proposal_id,
+    enabled: !!account?.address && !!proposalId,
     asset_decimals: proposal?.dao.asset_decimals,
     stable_decimals: proposal?.dao.stable_decimals,
   });
