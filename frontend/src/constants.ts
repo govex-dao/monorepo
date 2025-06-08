@@ -34,5 +34,4 @@ export const CONSTANTS = {
   stableMetaData: stablePackage.metadataId,
   stableType: stablePackage.coinType,
   network: "testnet" as Network,
-  explorerUrl: "https://testnet.suivision.xyz/",
 };

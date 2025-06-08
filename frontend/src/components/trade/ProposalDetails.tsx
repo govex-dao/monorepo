@@ -1,7 +1,8 @@
 import React from "react";
 import { AdvanceStateButton } from "../daos/AdvanceStateButton";
 import MessageDecoder from "../converter";
-import { ExplorerLink } from "../ExplorerLink";
+import { ClipboardIcon } from "@radix-ui/react-icons";
+import toast from "react-hot-toast";
 
 interface StateHistory {
   id: number;
@@ -126,17 +127,59 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
             </div>
             <div className="flex justify-between">
               <span>Proposal ID</span>
-              <ExplorerLink id={proposal.proposal_id} />
+              <div className="flex items-center space-x-2">
+                <span className="font-medium text-gray-200">
+                  {proposal?.proposal_id.slice(0, 6)}...
+                  {proposal?.proposal_id.slice(-4)}
+                </span>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(proposal?.proposal_id);
+                    toast.success("Proposal ID copied to clipboard");
+                  }}
+                  className="hover:text-gray-200 transition-colors"
+                >
+                  <ClipboardIcon className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div>
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span>DAO ID</span>
-                  <ExplorerLink id={proposal.dao_id} />
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-200">
+                      {proposal.dao_id.slice(0, 6)}...
+                      {proposal.dao_id.slice(-4)}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(proposal.dao_id);
+                        toast.success("DAO ID copied to clipboard");
+                      }}
+                      className="hover:text-gray-200 transition-colors"
+                    >
+                      <ClipboardIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span>Proposer</span>
-                  <ExplorerLink id={proposal.proposer} isAddress />
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium text-gray-200">
+                      {proposal.proposer.slice(0, 6)}...
+                      {proposal.proposer.slice(-4)}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(proposal.proposer);
+                        toast.success("Proposer address copied to clipboard");
+                      }}
+                      className="hover:text-gray-200 transition-colors"
+                    >
+                      <ClipboardIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex justify-between">
                   <span>Created At</span>
