@@ -13,6 +13,7 @@ import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
+import { getOutcomeColors } from "@/utils/outcomeColors";
 
 interface StateHistory {
   id: number;
@@ -179,6 +180,7 @@ export function ProposalView() {
   const GAP = 20;
   const inlineBreakpoint = TRADEFORM_MAX_WIDTH + CHART_MIN_WIDTH + GAP; // e.g., 1320px
   const isInlineLayout = windowWidth >= inlineBreakpoint;
+  const outcomeColors = getOutcomeColors(Number(proposal.outcome_count));
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
@@ -198,7 +200,7 @@ export function ProposalView() {
         </Link>
         {proposal.dao_verified ? (
           <VerifiedIcon
-            className="ml-1 inline-flex items-center align-middle"
+            className="ml-1  inline-flex items-center align-middle"
             size={24}
           />
         ) : (
@@ -274,13 +276,17 @@ export function ProposalView() {
                 {proposal.current_state === 2 &&
                   proposal.winning_outcome != null && (
                     <div className="p-6 rounded-lg bg-gray-900 border border-gray-800 text-center shadow-lg w-full max-w-sm">
-                      <h2 className="text-2xl font-semibold text-gray-200 mb-3">
-                        The Winning Outcome is:{" "}
-                        {
-                          proposal.outcome_messages[
-                            Number(proposal.winning_outcome)
-                          ]
-                        }
+                      <h2 className="text-2xl font-semibold text-gray-300">
+                        <span
+                          className="block text-3xl font-bold mb-2"
+                          style={{
+                            color:
+                              outcomeColors[Number(proposal.winning_outcome)],
+                          }}
+                        >
+                          {proposal.outcome_messages[Number(proposal.winning_outcome)]}
+                        </span>
+                        is the Winning Outcome.
                       </h2>
                       <p className="text-gray-300">
                         The trading period for this proposal has ended.

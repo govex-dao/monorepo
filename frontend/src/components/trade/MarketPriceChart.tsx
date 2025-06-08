@@ -9,9 +9,11 @@ import {
   PriceScaleMode,
   LineSeries,
   IPriceFormatter,
+  LineSeriesPartialOptions,
 } from "lightweight-charts";
 import { CONSTANTS } from "@/constants";
 import TimeRangeSelector from "./TimeRangeSelector";
+import { getOutcomeColors } from "@/utils/outcomeColors";
 import TwapLegend from "./TwapLegend";
 
 interface SwapEvent {
@@ -53,23 +55,6 @@ interface MarketPriceChartProps {
   swapError?: Error;
 }
 
-const hslToHex = (h: number, s: number, l: number): string => {
-  s /= 100;
-  l /= 100;
-
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) =>
-    l - a * Math.max(Math.min(k(n) - 3, 9 - k(n), 1), -1);
-
-  const toHex = (x: number) =>
-    Math.round(x * 255)
-      .toString(16)
-      .padStart(2, "0");
-
-  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
-};
-
 const CustomLegend = ({ payload }: { payload?: any[] }) => (
   <div
     style={{
@@ -90,21 +75,16 @@ const CustomLegend = ({ payload }: { payload?: any[] }) => (
         }}
       >
         <svg width="16" height="16" style={{ marginRight: "8px" }}>
-          <rect
-            x="0"
-            y="0"
-            width="16"
-            height="16"
-            rx="4"
-            ry="4"
-            fill={entry.color}
-          />
+          <rect x="0" y="0" width="16" height="16" rx="4" ry="4" fill={entry.color} />
         </svg>
-        <span style={{ color: "rgb(209, 213, 219)" }}>{entry.value}</span>
+        <span style={{ color: "rgb(209, 213, 219)", fontWeight: entry.fontWeight || "normal" }}>
+          {entry.value}
+        </span>
       </div>
     ))}
   </div>
 );
+ 
 
 const MarketPriceChart = ({
   proposalId,
@@ -444,33 +424,26 @@ const MarketPriceChart = ({
     outcome_count,
     currentState,
     userTimezoneOffsetSeconds,
+    winning_outcome,
   ]);
 
+  const winningOutcomeIndex = winning_outcome ? Number(winning_outcome) : null;
+
   const colors = React.useMemo(() => {
-    const outcomeCount = Number(outcome_count);
-    if (outcomeCount === 1) return ["#ef4444"];
-    if (outcomeCount === 2) return ["#ef4444", "#22c55e"];
-    const generateDistantColors = (count: number) => {
-      const startHue = 120;
-      const endHue = 300;
-      const step = (endHue - startHue) / (count - 1);
-      return Array.from({ length: count - 1 }, (_, i) => {
-        const hue = startHue + i * step;
-        return hslToHex(hue, 100, 50);
-      });
-    };
-    const additionalColors = generateDistantColors(outcomeCount);
-    return ["#ef4444", ...additionalColors];
+    return getOutcomeColors(Number(outcome_count));
   }, [outcome_count]);
 
-  const legendPayload = React.useMemo(
-    () =>
-      outcome_messages.map((message, index) => ({
-        color: colors[index],
-        value: message,
-      })),
-    [colors, outcome_messages],
-  );
+  const legendPayload = React.useMemo(() => {
+    const isResolved = winningOutcomeIndex !== null;
+    return outcome_messages.map((message, index) => ({
+      color:
+        isResolved && index !== winningOutcomeIndex
+          ? `${colors[index]}80`
+          : colors[index],
+      value: message,
+      fontWeight: "normal",
+    }));
+  }, [colors, outcome_messages, winningOutcomeIndex]);
 
   useEffect(() => {
     if (!chartContainerRef.current || !chartData.length) {
@@ -497,6 +470,18 @@ const MarketPriceChart = ({
         horzLines: { color: "transparent" },
         vertLines: { color: "transparent" },
       },
+      crosshair: { // This block controls the crosshair lines and labels
+        // Settings for the HORIZONTAL line
+        horzLine: {
+          visible: false, // Keep the horizontal line visible
+          labelVisible: false, // Hide the price label on the right axis
+        },
+        vertLine: {
+          visible: true, // Hide the vertical line itself
+          labelVisible: false, // Hide the time label on the bottom axis
+          style: 0,
+        },
+       },
       timeScale: {
         timeVisible: true,
         secondsVisible: true,
@@ -545,6 +530,8 @@ const MarketPriceChart = ({
       color: string;
       title: string;
       formatter: IPriceFormatter;
+      fontWeight?: string;
+      opacity?: string;
     }
 
     const toolTip = document.createElement("div");
@@ -589,11 +576,17 @@ const MarketPriceChart = ({
           (dataPoint: any, seriesApi: ISeriesApi<"Line">) => {
             const seriesIndex = seriesRefs.current.indexOf(seriesApi);
             if (seriesIndex > -1 && dataPoint && "value" in dataPoint) {
+              const isResolved = winningOutcomeIndex !== null;
+              const isWinningLine = seriesIndex === winningOutcomeIndex;
+              const finalColor = isResolved && !isWinningLine ? `${colors[seriesIndex]}80` : colors[seriesIndex];
+              const finalFontWeight = "500";
               tooltipEntries.push({
                 value: dataPoint.value,
-                color: colors[seriesIndex],
+                color: finalColor,
                 title: outcome_messages[seriesIndex],
                 formatter: seriesApi.priceFormatter(),
+                fontWeight: finalFontWeight,
+                opacity: "1",
               });
             }
           },
@@ -609,8 +602,8 @@ const MarketPriceChart = ({
             return `
             <div style="display: flex; align-items: center; margin-bottom: 4px; font-size: 16px;">
                 <span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background-color: ${entry.color}; margin-right: 8px;"></span>
-                <span style="color: white; font-weight: 500; margin-right: 8px;">$${formattedPrice}</span>
-                <span style="color: #D1D5DB;">${entry.title}</span>
+                <span style="color: white; font-weight: ${entry.fontWeight}; margin-right: 8px;">$${formattedPrice}</span>
+                <span style="color: #D1D5DB; font-weight: ${entry.fontWeight};">${entry.title}</span>
             </div>
           `;
           })
@@ -643,16 +636,30 @@ const MarketPriceChart = ({
     // FIX CHANGE 2: Subscribe using the named handler.
     chart.subscribeCrosshairMove(crosshairMoveHandler);
 
-    // --- SERIES CREATION (Unchanged) ---
     seriesRefs.current = Array.from(
       { length: Number(outcome_count) },
       (_, i) => {
-        const lineSeries = chart.addSeries(LineSeries, {
+        const isResolved = winningOutcomeIndex !== null;
+        const isWinningLine = i === winningOutcomeIndex;
+        const seriesOptions: LineSeriesPartialOptions = {
+           lineWidth: isResolved ? (isWinningLine ? 4 : 2) : 2,
+           priceLineVisible: false,
+           priceFormat: { type: "price", precision: 7, minMove: 0.0000001 },
           color: colors[i],
-          lineWidth: 2,
-          priceLineVisible: false,
-          priceFormat: { type: "price", precision: 7, minMove: 0.0000001 },
-        });
+        };
+        if (isResolved && !isWinningLine) {
+          // For losing outcomes, make the series line semi-transparent
+          seriesOptions.color = `${colors[i]}80`;
+          // And provide a solid, dimmed color for the price axis label via priceLineColor,
+          // as the label does not respect the alpha channel from the main `color` option.
+          const hex = colors[i];
+          const f = parseInt(hex.slice(1), 16), r = f >> 16, g = (f >> 8) & 0x00ff, b = f & 0x0000ff;
+          const dim = (c: number) => Math.floor(c * 0.5); // 50% darker
+          const toHex = (c: number) => ('0' + c.toString(16)).slice(-2);
+          seriesOptions.priceLineColor = `#${toHex(dim(r))}${toHex(dim(g))}${toHex(dim(b))}`;
+        }
+
+        const lineSeries = chart.addSeries(LineSeries, seriesOptions);
         lineSeries.setData(
           chartData.map((point) => ({
             time: point.time as Time,
@@ -663,7 +670,6 @@ const MarketPriceChart = ({
       },
     );
 
-    // --- INITIAL TIME RANGE (Unchanged) ---
     const originalUTCEndTime =
       currentState === 1
         ? Math.floor(Date.now() / 1000)
@@ -706,6 +712,7 @@ const MarketPriceChart = ({
     // Consider if tradingStart needs to be a dep if getTimeRangeStart is memoized or part of this effect.
     // For now, assuming tradingStart doesn't change often enough to warrant re-running this whole effect,
     // as chartData already depends on it.
+    winning_outcome,
   ]);
 
   const statusMessage = React.useMemo(() => {
@@ -738,6 +745,8 @@ const MarketPriceChart = ({
               outcomeMessages={outcome_messages}
               asset_decimals={asset_decimals}
               stable_decimals={stable_decimals}
+              winning_outcome={winning_outcome}
+              colors={colors}
             />
           </div>
           <TimeRangeSelector

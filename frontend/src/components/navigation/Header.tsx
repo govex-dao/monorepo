@@ -3,7 +3,7 @@ import { HamburgerMenuIcon } from "@radix-ui/react-icons";
 import { Box, Container, Flex, IconButton, Separator } from "@radix-ui/themes";
 import { NavLink } from "react-router-dom";
 import { HeaderWithGlowIcon } from "../HeaderWithGlowIcon.tsx";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CONSTANTS } from "@/constants.ts";
 import MintTestnetCoins from "../learn/MintTestnetCoins.tsx";
 
@@ -16,9 +16,32 @@ const menu = [
 export function Header() {
   const [isOpen, setIsOpen] = useState(false);
   const wallets = useWallets();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const handleClick = useCallback(() => {
     setIsOpen(!isOpen);
+  }, [isOpen]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        buttonRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        !buttonRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
   }, [isOpen]);
 
   return (
@@ -76,6 +99,7 @@ export function Header() {
             {/* Mobile Menu Button */}
             <Box className="lg:hidden">
               <IconButton
+                ref={buttonRef}
                 className="bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
                 variant="ghost"
                 onClick={handleClick}
@@ -90,6 +114,7 @@ export function Header() {
               {/* Dropdown overlay */}
               {isOpen && (
                 <Flex
+                  ref={dropdownRef}
                   gap="2"
                   py="4"
                   px="2"

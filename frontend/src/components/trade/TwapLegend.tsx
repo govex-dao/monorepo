@@ -8,6 +8,7 @@ interface TwapLegendProps {
   colors?: string[];
   asset_decimals: number;
   stable_decimals: number;
+  winning_outcome: string | null;
 }
 
 const TwapLegend: React.FC<TwapLegendProps> = ({
@@ -17,10 +18,14 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
   colors,
   asset_decimals,
   stable_decimals,
+  winning_outcome,
 }) => {
   if (twaps === null) {
     return null;
   }
+  const winningOutcomeIndex =
+    winning_outcome != null ? Number(winning_outcome) : null;
+  const isResolved = winningOutcomeIndex !== null;
   const outcomeCount = outcomeMessages.length;
 
   const formatTwap = (value: number | null): string => {
@@ -28,12 +33,6 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
     if (value === 0) return "0.00000";
 
     const ON_CHAIN_PRICE_SCALING_FACTOR = 1000000000000; // 1e12
-
-    // Combined calculation:
-    // (value / 1e12) * 10^(asset_decimals - stable_decimals)
-    // which is value * 10^(asset_decimals - stable_decimals - 12)
-    // Note: Math.pow can be slow; direct multiplication/division might be marginally faster
-    // if performance is critical, but clarity is good here.
 
     const adjustedValue =
       (value / ON_CHAIN_PRICE_SCALING_FACTOR) *
@@ -63,7 +62,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
   }
 
   // Combine outcome messages with twaps and colors
-  const items = outcomeMessages.map((message, index) => {
+  const baseItems = outcomeMessages.map((message, index) => {
     const raw = twaps && twaps[index] ? parseFloat(twaps[index]) : null;
     const twapValue = raw !== null && !isNaN(raw) ? raw : null;
     return {
@@ -73,6 +72,7 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
       color: defaultColors[index],
     };
   });
+
   // For outcome index 0, adjust its TWAP by multiplying it by (1 + threshold/100000)
   const effectiveSortValue = (item: {
     index: number;
@@ -85,30 +85,49 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
     return item.twap;
   };
 
-  // Sort items in descending order based on effective TWAP value
-  items.sort((a, b) => effectiveSortValue(b) - effectiveSortValue(a));
+  let winningItems: typeof baseItems = [];
+  let failingItems: typeof baseItems = [];
 
-  const pluralSuffix = items.length > 2 ? "s" : "";
+  if (isResolved) {
+    const winner = baseItems.find((item) => item.index === winningOutcomeIndex);
+    if (winner) {
+      winningItems.push(winner);
+    }
+    failingItems = baseItems.filter(
+      (item) => item.index !== winningOutcomeIndex,
+    );
+  } else {
+    // Sort items in descending order based on effective TWAP value
+    const sortedItems = [...baseItems].sort(
+      (a, b) => effectiveSortValue(b) - effectiveSortValue(a),
+    );
+    if (sortedItems.length > 0) {
+      winningItems.push(sortedItems[0]);
+    }
+    failingItems = sortedItems.slice(1);
+  }
+
+  const pluralSuffix = failingItems.length > 1 ? "s" : "";
 
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center relative">
         <div className="flex items-center">
           <span className="text-base font-bold text-gray-300">
-            Winning TWAP
+            {isResolved ? "Winning Outcome" : "Winning TWAP"}
           </span>
           <div className="relative group ml-1 mr-0.5 shrink-0">
             <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
             <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-              The time average weighted price for the {outcomeMessages[0]}{" "}
-              market. Coins for market with the highest TWAP at the end of the
-              traded period can be redeemed for cannonical tokens.
+              {isResolved
+                ? "The final winning outcome for this market."
+                : `The time average weighted price for the ${outcomeMessages[0]} market. Coins for market with the highest TWAP at the end of the traded period can be redeemed for cannonical tokens.`}
             </div>
           </div>
           <span className="text-base font-bold text-gray-300">:</span>
         </div>
 
-        {items.slice(0, 1).map((item) => (
+        {winningItems.map((item) => (
           <div key={item.index} className="flex items-center relative">
             <div className="flex items-center">
               <svg width="8" height="8" className="shrink-0">
@@ -124,39 +143,53 @@ const TwapLegend: React.FC<TwapLegendProps> = ({
           </div>
         ))}
 
-        <div className="flex items-center mt-4 sm:mt-0">
-          <span className="text-base font-bold text-gray-300">
-            Failing TWAP{pluralSuffix}
-          </span>
-          <div className="relative group ml-1 mr-0.5 shrink-0">
-            <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
-            <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
-              The time average weighted price for the failing market
-              {items.length > 2 ? "s" : ""}. Coins for markets that fail cannot
-              be redeemed for cannonical tokens at the end of the trading
-              period.
-            </div>
-          </div>
-          <span className="text-base font-bold text-gray-300">:</span>
-        </div>
-
-        <div className="flex flex-wrap gap-4 items-start">
-          {items.slice(1).map((item) => (
-            <div key={item.index} className="flex items-center relative">
-              <div className="flex items-center">
-                <svg width="8" height="8" className="shrink-0">
-                  <circle cx="4" cy="4" r="4" fill={item.color} />
-                </svg>
-                <span className="text-gray-300 text-base ml-2 whitespace-nowrap">
-                  <span className="font-bold">{formatTwap(item.twap)} </span>
-                  <span className="text-gray-400 font-bold">
-                    for {item.message}
-                  </span>
-                </span>
+        {failingItems.length > 0 && (
+          <>
+            <div className="flex items-center mt-4 sm:mt-0">
+              <span className="text-base font-bold text-gray-300">
+                {isResolved
+                  ? `Losing Outcome${pluralSuffix}`
+                  : `Failing TWAP${pluralSuffix}`}
+              </span>
+              <div className="relative group ml-1 mr-0.5 shrink-0">
+                <InfoCircledIcon className="w-4 h-4 cursor-pointer" />
+                <div className="absolute left-0 top-6 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                  {isResolved
+                    ? `The final losing outcome${pluralSuffix} for this market.`
+                    : `The time average weighted price for the failing market${
+                        failingItems.length > 1 ? "s" : ""
+                      }. Coins for markets that fail cannot be redeemed for cannonical tokens at the end of the trading period.`}
+                </div>
               </div>
+              <span className="text-base font-bold text-gray-300">:</span>
             </div>
-          ))}
-        </div>
+
+            <div className="flex flex-wrap gap-4 items-start">
+              {failingItems.map((item) => (
+                <div key={item.index} className="flex items-center relative">
+                  <div className="flex items-center">
+                    <svg width="8" height="8" className="shrink-0">
+                      <circle
+                        cx="4"
+                        cy="4"
+                        r="4"
+                        fill={isResolved ? `${item.color}80` : item.color}
+                      />
+                    </svg>
+                    <span className="text-gray-300 text-base ml-2 whitespace-nowrap">
+                      <span className="font-bold">
+                        {formatTwap(item.twap)}{" "}
+                      </span>
+                      <span className="text-gray-400 font-bold">
+                        for {item.message}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
