@@ -1,14 +1,10 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { RedeemTokensButton } from "./RedeemTokensButton";
+import { TokenInfo } from "./TradeForm";
+import { getOutcomeColor } from "@/utils/outcomes";
 
 interface TokenSectionProps {
   proposalId: string;
-  userTokens: {
-    id: string;
-    outcome: number;
-    balance: string;
-    asset_type: number;
-  }[];
   outcomeMessages: string[];
   winning_outcome: string | null;
   current_state: number;
@@ -20,19 +16,14 @@ interface TokenSectionProps {
   stable_decimals: number;
   asset_symbol: string;
   stable_symbol: string;
-}
-
-interface GroupedToken {
-  outcome: number;
-  assetBalance: string;
-  stableBalance: string;
-  assetBalanceFormatted: string;
-  stableBalanceFormatted: string;
+  tokens: TokenInfo[];
+  groupedTokens: any[];
+  isLoading: boolean;
+  error: Error | null;
 }
 
 const TokenSection: React.FC<TokenSectionProps> = ({
   proposalId,
-  userTokens,
   outcomeMessages,
   winning_outcome,
   current_state,
@@ -44,62 +35,37 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   stable_decimals,
   asset_symbol,
   stable_symbol,
+  tokens,
+  groupedTokens,
+  isLoading,
+  error,
 }) => {
-  const [assetScale, stableScale] = useMemo(
-    () => [10 ** asset_decimals, 10 ** stable_decimals],
-    [asset_decimals, stable_decimals],
-  );
-
-  const groupedByOutcome = useMemo<GroupedToken[]>(() => {
-    const outcomeMap = new Map<
-      number,
-      { assetBalance: bigint; stableBalance: bigint }
-    >();
-
-    userTokens.forEach((token) => {
-      if (!outcomeMap.has(token.outcome)) {
-        outcomeMap.set(token.outcome, { assetBalance: 0n, stableBalance: 0n });
-      }
-      const group = outcomeMap.get(token.outcome)!;
-      if (token.asset_type === 0) {
-        group.assetBalance += BigInt(token.balance);
-      } else {
-        group.stableBalance += BigInt(token.balance);
-      }
-    });
-
-    return Array.from(outcomeMap.entries())
-      .sort(([aOutcome], [bOutcome]) => aOutcome - bOutcome)
-      .map(([outcome, balances]) => {
-        // Convert raw balances to human-readable format with proper decimals
-        const assetBalanceRaw = balances.assetBalance.toString();
-        const stableBalanceRaw = balances.stableBalance.toString();
-
-        // Format with proper decimals
-        const assetBalanceFormatted = (
-          Number(assetBalanceRaw) / Number(assetScale)
-        ).toFixed(asset_decimals);
-        const stableBalanceFormatted = (
-          Number(stableBalanceRaw) / Number(stableScale)
-        ).toFixed(stable_decimals);
-
-        return {
-          outcome,
-          assetBalance: assetBalanceRaw,
-          stableBalance: stableBalanceRaw,
-          assetBalanceFormatted,
-          stableBalanceFormatted,
-        };
-      });
-  }, [userTokens, assetScale, stableScale, asset_decimals, stable_decimals]);
-
   return (
-    <div className="space-y-2 px-6">
-      {groupedByOutcome.length > 0 ? (
-        <>
+    <div className="space-y-4 p-6">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold uppercase text-gray-300">
+            Your Tokens
+          </h3>
+          <span className="text-xs text-gray-500">
+            {outcome_count} outcomes
+          </span>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="text-gray-400 p-8 text-center bg-gray-900/50 border border-gray-800/50 rounded-lg shadow-md">
+          <p className="text-sm">Loading your tokens...</p>
+        </div>
+      ) : error ? (
+        <div className="text-red-400 p-8 text-center bg-gray-900/50 border border-gray-800/50 rounded-lg shadow-md">
+          <p className="text-sm">Error loading tokens: {error.message}</p>
+        </div>
+      ) : groupedTokens.length > 0 ? (
+        <div className="bg-gray-900/50 border border-gray-800/50 rounded-lg shadow-md">
           <RedeemTokensButton
             proposalId={proposalId}
-            userTokens={userTokens}
+            userTokens={tokens}
             winning_outcome={winning_outcome}
             current_state={current_state}
             escrow={escrow}
@@ -107,25 +73,57 @@ const TokenSection: React.FC<TokenSectionProps> = ({
             stable_type={stable_type}
             outcome_count={outcome_count}
           />
-          <div className="pl-1 text-gray-300">
-            <div className="grid grid-cols-3 gap-4 mb-2 font-semibold">
-              <span>Outcome</span>
-              <span>{asset_symbol}</span>
-              <span>{stable_symbol}</span>
-            </div>
-            {groupedByOutcome.map((token) => (
-              <div key={token.outcome} className="grid grid-cols-3 gap-4 mb-1">
-                <span>
-                  {outcomeMessages[token.outcome] || `Outcome ${token.outcome}`}
-                </span>
-                <span>{token.assetBalanceFormatted}</span>
-                <span>{token.stableBalanceFormatted}</span>
-              </div>
-            ))}
+          <div className="overflow-x-auto rounded-lg">
+            <table className="w-full">
+              <thead>
+                <tr className="text-xs text-gray-400 border-b border-gray-800 bg-gray-900/70">
+                  <th className="text-left py-3.5 px-4 font-medium">Outcome</th>
+                  <th className="text-right py-3.5 px-4 font-medium">
+                    {asset_symbol}
+                  </th>
+                  <th className="text-right py-3.5 px-4 font-medium">
+                    {stable_symbol}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {groupedTokens.map((token) => {
+                  const outcomeColor = getOutcomeColor(token.outcome);
+
+                  return (
+                    <tr
+                      key={`${token.outcome}-${token.assetBalance}-${token.stableBalance}`}
+                      className="text-sm border-b border-gray-800/70 hover:bg-gray-800/50 transition-colors"
+                    >
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`px-2.5 py-1 rounded text-xs font-medium border ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border}`}
+                        >
+                          {outcomeMessages[token.outcome] ||
+                            `Outcome ${token.outcome}`}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right text-gray-200">
+                        <span className="font-medium">
+                          {token.assetBalanceFormatted}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right text-gray-200">
+                        <span className="font-medium">
+                          {token.stableBalanceFormatted}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </>
+        </div>
       ) : (
-        <div className="text-gray-400 pl-4">No tokens found</div>
+        <div className="text-gray-400 p-8 text-center bg-gray-900/50 border border-gray-800/50 rounded-lg shadow-md">
+          <p className="text-sm">You don't have any tokens for this proposal</p>
+        </div>
       )}
     </div>
   );

@@ -1,30 +1,36 @@
 import React, { useState } from "react";
 import TokenSection from "./TokenSection";
 import ProposalDetails from "./ProposalDetails";
-import { TokenInfo } from "./TradeForm";
 import Description from "./Description";
 import Liquidity from "./Liquidity";
+import { TokenInfo } from "./TradeForm";
 
 interface TabSectionProps {
   proposal: any;
   outcomeMessages: any[];
-  userTokens: TokenInfo[];
   details: string;
   asset_symbol?: string;
   stable_symbol?: string;
   asset_decimals?: number;
   stable_decimals?: number;
+  tokens: TokenInfo[];
+  groupedTokens: any[];
+  isLoading: boolean;
+  error: Error | null;
 }
 
 const TabSection: React.FC<TabSectionProps> = ({
   proposal,
   outcomeMessages,
-  userTokens,
   details,
   asset_symbol = "Asset",
   stable_symbol = "Stable",
   asset_decimals = 9,
   stable_decimals = 9,
+  tokens,
+  groupedTokens,
+  isLoading,
+  error,
 }) => {
   const [activeTab, setActiveTab] = useState<
     "tokens" | "description" | "details" | "liquidity"
@@ -78,7 +84,6 @@ const TabSection: React.FC<TabSectionProps> = ({
       {activeTab === "tokens" && (
         <TokenSection
           proposalId={proposal.proposal_id}
-          userTokens={userTokens}
           outcomeMessages={outcomeMessages}
           winning_outcome={proposal.winning_outcome}
           current_state={proposal.current_state}
@@ -90,6 +95,10 @@ const TabSection: React.FC<TabSectionProps> = ({
           stable_decimals={stable_decimals}
           asset_symbol={asset_symbol}
           stable_symbol={stable_symbol}
+          tokens={tokens}
+          groupedTokens={groupedTokens}
+          isLoading={isLoading}
+          error={error}
         />
       )}
       {activeTab === "description" && <Description details={details} />}
@@ -101,7 +110,7 @@ const TabSection: React.FC<TabSectionProps> = ({
       )}
       {activeTab === "liquidity" && (
         <Liquidity
-          userTokens={userTokens}
+          // userTokens={tokens}
           winning_outcome={proposal.winning_outcome}
           current_state={proposal.current_state}
           escrow={proposal.escrow_id}
