@@ -31,7 +31,7 @@ export function DaoIcon(props: DaoIconProps) {
 
   return (
     <Flex
-      className={`rounded-full ${className} ${sizeClass} items-center justify-center overflow-hidden aspect-square border-gray-700/30 border-2 bg-[#111113]`}
+      className={`rounded-full ${className} ${sizeClass} items-center justify-center overflow-hidden aspect-square border-gray-500/30 border-2 bg-[#111113]`}
     >
       {icon ? (
         <img src={icon} alt={name} className="w-full h-full object-cover" />

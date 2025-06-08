@@ -184,33 +184,39 @@ export function ProposalView() {
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
-      <h1 className="text-3xl font-bold mt-4 pl-6 pr-6 flex flex-row items-center gap-2 ">
+      <h1 className="text-3xl font-bold mt-4 px-6 flex flex-row flex-wrap items-center gap-x-2 gap-y-1">
+        {/* DAO Name and Icon Link */}
         <Link
           to={`/dao/${proposal.dao_id}`}
-          className="hover:opacity-80 group flex items-center gap-2"
+          // Use inline-flex to make the link a flex container itself
+          className="hover:opacity-80 group inline-flex items-center gap-2"
         >
           <DaoIcon
             icon={proposal.dao_icon}
             name={proposal.dao_name}
             size="lg"
+            className="flex-shrink-0" // Prevent icon from shrinking
           />
           <span className="text-gray-400 group-hover:text-white group-hover:underline">
             {proposal.dao_name}
           </span>
         </Link>
-        {proposal.dao_verified ? (
-          <VerifiedIcon
-            className="ml-1  inline-flex items-center align-middle"
-            size={24}
-          />
-        ) : (
-          <UnverifiedIcon
-            className="ml-1 inline-flex items-center align-middle"
-            size={24}
-          />
-        )}
-        {": "}
-        {proposal.title}
+
+        {/* Verification Status Icon */}
+        {/* The flex-shrink-0 class is crucial to maintain icon size */}
+        <span className="flex-shrink-0 mt-2">
+          {proposal.dao_verified ? (
+            <VerifiedIcon size={24} />
+          ) : (
+            <UnverifiedIcon size={24} />
+          )}
+        </span>
+
+        {/* Colon (now a separate, gray element) */}
+        <span className="text-gray-400">:</span>
+
+        {/* Proposal Title (now without the colon) */}
+        <span>{proposal.title}</span>
       </h1>
       <div className="px-4 sm:px-6 mt-3 mb-2">
         {" "}
