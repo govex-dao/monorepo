@@ -320,8 +320,6 @@ export function ProposalView() {
           details={proposal.details}
           asset_symbol={proposal.dao.asset_symbol}
           stable_symbol={proposal.dao.stable_symbol}
-          asset_decimals={proposal.dao.asset_decimals}
-          stable_decimals={proposal.dao.stable_decimals}
           tokens={tokens}
           groupedTokens={groupedTokens}
           isLoading={tokensLoading}
