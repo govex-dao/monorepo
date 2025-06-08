@@ -184,7 +184,7 @@ export function ProposalView() {
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
-      <h1 className="text-3xl font-bold mt-4 px-6 flex flex-row flex-wrap items-center gap-x-2 gap-y-1">
+      <h1 className="text-3xl font-bold mt-4 pr-6 pl-7 flex flex-row flex-wrap items-center gap-x-1 gap-y-1">
         {/* DAO Name and Icon Link */}
         <Link
           to={`/dao/${proposal.dao_id}`}
