@@ -38,6 +38,7 @@ interface TradeFormProps {
   stableType: string;
   packageId: string;
   network?: "testnet" | "mainnet" | "devnet" | "localnet";
+  tokens: TokenInfo[]; // All tokens passed from parent
   outcome_messages: string[];
   asset_symbol: string;
   stable_symbol: string;
@@ -47,8 +48,6 @@ interface TradeFormProps {
   asset_decimals: number;
   stable_decimals: number;
   swapEvents?: SwapEvent[];
-  tokens: TokenInfo[];
-  refreshTokens: () => void;
 }
 
 export interface TokenInfo {
@@ -66,6 +65,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   stableType,
   packageId,
   network = CONSTANTS.network,
+  tokens,
   outcome_messages,
   asset_symbol,
   stable_symbol,
@@ -75,8 +75,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
   asset_decimals,
   stable_decimals,
   swapEvents,
-  tokens,
-  refreshTokens,
 }) => {
   const [assetScale, stableScale] = useMemo(
     () => [10 ** asset_decimals, 10 ** stable_decimals],
@@ -486,7 +484,6 @@ const TradeForm: React.FC<TradeFormProps> = ({
             toast.dismiss(loadingToast);
             refreshAssetBalance();
             refreshStableBalance();
-            refreshTokens();
           },
           onSuccess: (result) => {
             if (result.effects?.status.status === "success") {

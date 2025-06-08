@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 import { useSuiClientContext } from "@mysten/dapp-kit";
 import { formatAddress } from "@mysten/sui/utils";
 import { CheckIcon, CopyIcon } from "@radix-ui/react-icons";
@@ -91,14 +94,9 @@ export function ExplorerLink({ id, type }: ExplorerLinkProps) {
         />
       )}
 
-      {/* formatAddress works well for most IDs (addresses, object IDs)
+      <a href={link} target="_blank" rel="noreferrer">
+        {/* formatAddress works well for most IDs (addresses, object IDs)
             For transaction digests, it will also shorten them, which is usually fine. */}
-      <a
-        href={link}
-        target="_blank"
-        rel="noreferrer"
-        className="text-xs hover:text-blue-400 text-gray-400 transition-colors flex items-center gap-1.5"
-      >
         {formatAddress(id || "")}
       </a>
     </span>

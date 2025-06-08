@@ -7,7 +7,7 @@ import MarketPriceChart from "../components/trade/MarketPriceChart.tsx";
 import TradeForm from "../components/trade/TradeForm.tsx";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon.tsx";
 import TabSection from "../components/trade/TabSection";
-import { useTokenEvents } from "@/hooks/useTokenEvents.ts";
+import { useTokenEvents } from "../hooks/useTokenEvents";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
@@ -109,6 +109,7 @@ const useWindowWidth = () => {
 };
 
 export function ProposalView() {
+  // Call hooks at the very top of the component.
   const account = useCurrentAccount();
   const { proposalId } = useParams<{ proposalId: string }>();
   const windowWidth = useWindowWidth();
@@ -133,13 +134,12 @@ export function ProposalView() {
     },
   });
 
-  const { tokens, groupedTokens, isLoading: tokensLoading, error: tokensError, refreshTokens } = useTokenEvents({
-    proposalId: proposalId || "",
+  // Wait for proposal to load before fetching tokens.
+  const { tokens } = useTokenEvents({
+    proposalId: proposal?.proposal_id ?? "",
     address: account?.address,
     assetType: null,
-    enabled: !!account?.address && !!proposalId,
-    asset_decimals: proposal?.dao.asset_decimals,
-    stable_decimals: proposal?.dao.stable_decimals,
+    enabled: !!account?.address && !!proposal?.proposal_id,
   });
 
   // Call useSwapEvents unconditionally, but disable fetching until proposal is available.
@@ -266,6 +266,7 @@ export function ProposalView() {
                 assetType={proposal.asset_type}
                 stableType={proposal.stable_type}
                 packageId={CONSTANTS.futarchyPackage}
+                tokens={tokens}
                 outcome_messages={proposal.outcome_messages}
                 asset_symbol={proposal.dao.asset_symbol}
                 stable_symbol={proposal.dao.stable_symbol}
@@ -275,8 +276,6 @@ export function ProposalView() {
                 asset_decimals={proposal.dao.asset_decimals}
                 stable_decimals={proposal.dao.stable_decimals}
                 swapEvents={swapEvents}
-                tokens={tokens}
-                refreshTokens={refreshTokens}
               />
             ) : (
               <div className="flex flex-col items-center justify-center h-full">
@@ -311,15 +310,12 @@ export function ProposalView() {
         <TabSection
           proposal={proposal}
           outcomeMessages={proposal.outcome_messages}
+          userTokens={tokens}
           details={proposal.details}
           asset_symbol={proposal.dao.asset_symbol}
           stable_symbol={proposal.dao.stable_symbol}
           asset_decimals={proposal.dao.asset_decimals}
           stable_decimals={proposal.dao.stable_decimals}
-          tokens={tokens}
-          groupedTokens={groupedTokens}
-          isLoading={tokensLoading}
-          error={tokensError}
         />
       </div>
     </Theme>
