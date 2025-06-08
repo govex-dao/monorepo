@@ -32,11 +32,11 @@ export function TableHeader(props: TableHeaderProps) {
 
   const SortableHeader = ({
     field,
-    align = "left",
+    align = "center",
     label,
   }: {
     field: SortField;
-    align?: "left" | "right";
+    align?: "left" | "right" | "center";
     label?: string;
   }) => (
     <th
@@ -46,7 +46,13 @@ export function TableHeader(props: TableHeaderProps) {
       aria-sort={sortConfig.field === field ? sortConfig.direction : undefined}
     >
       <div
-        className={`flex items-center capitalize gap-1.5 ${align === "right" ? "justify-end" : ""}`}
+        className={`flex items-center capitalize gap-1.5 ${
+          align === "right"
+            ? "justify-end"
+            : align === "center"
+              ? "justify-center"
+              : "justify-start"
+        }`}
       >
         {label || field}
         {getSortIndicator(field, sortConfig)}
@@ -59,7 +65,7 @@ export function TableHeader(props: TableHeaderProps) {
     align = "left",
   }: {
     field: string;
-    align?: "left" | "right";
+    align?: "left" | "right" | "center";
   }) => (
     <th
       className={`text-${align} capitalize py-2.5 sm:py-3.5 px-2 sm:px-4 font-medium`}
@@ -72,7 +78,7 @@ export function TableHeader(props: TableHeaderProps) {
   return (
     <thead className="select-none">
       <tr className="text-xs text-gray-400 border-b border-gray-800 bg-gray-900/70">
-        <SortableHeader field="time" />
+        <SortableHeader field="time" align="left" />
         <StaticHeader field="type" />
         <StaticHeader field="outcome" />
         <SortableHeader field="price" align="right" />
