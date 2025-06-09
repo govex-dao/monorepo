@@ -83,6 +83,7 @@ model Proposal {
   result ProposalResult?
   
   @@index([dao_id]) // Add this index for better query performance
+  @@index([current_state, created_at]) // Index for bot queries
 }
 
 model ProposalTWAP {
@@ -136,6 +137,8 @@ model ProposalStateChange {
   proposal Proposal @relation(fields: [proposal_id], references: [proposal_id])
 
   @@index([proposal_id])
+  @@index([proposal_id, new_state]) // Index for bot state change queries
+  @@index([new_state, timestamp]) // Index for timestamp-based queries
 }
 
 model ProposalResult {
@@ -182,4 +185,13 @@ model ResultSigned {
   @@index([proposal_id])
   @@index([dao_id])
   @@index([timestamp])
+}
+
+model ProposalLock {
+  proposal_id String @id
+  locked_at BigInt
+  locked_by String
+  expires_at BigInt
+  
+  @@index([expires_at])
 }
