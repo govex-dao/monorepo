@@ -31,3 +31,13 @@ cd ~
 ```
 tree -I "node_modules" > repo_structure.txt
 ```
+
+# Getting all issues to evaluate next one
+```
+gh issue list --state open --limit 1000 --json number,title,body,state,url,createdAt,author,labels,assignees > open_issues_detailed.json
+```
+
+```
+for my futarchy platform in dog fooding stage
+give me two most important tickets from here
+```
