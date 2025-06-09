@@ -1,6 +1,7 @@
 # Futarchy Contract Cardinality
 
-<img width="930" alt="image" src="https://github.com/user-attachments/assets/b1e14167-159e-4b8b-b907-2ae48de17842" />
+<img width="773" alt="image" src="https://github.com/user-attachments/assets/099f2353-a3d0-40f5-a850-c2eb3c7717e4" />
+
 
 # Sequence Diagram
 
