@@ -71,11 +71,18 @@ The decision-making of the Company shall be managed and made algorithmically as 
 
 2. The proposal shall be implemented in the manner specified in the approved proposal. 
 
-V.2 **Managing Members.** The Managing Members have the right but not the obligation to make the ordinary and usual decisions concerning the business affairs of the Company, only when:
+V.2 **Managing Members.** The Managing Members have the right but not the obligation to:
 
-1. the Algorithmic Management is unable to represent itself due to technical failures or edge cases.
+(a) Make the ordinary and usual decisions concerning the business affairs of the Company when:
+    1. the Algorithmic Management is unable to represent itself due to technical failures or edge cases.
+    2. or when having a company figurehead is required for the DAO while interfacing with legacy or offline institutions, or when it will likely save time or reduce cost while dealing with such institutions.
 
-2. or when having a company figurehead is required for the DAO while interfacing with legacy or offline institutions or  when it will likely save time or reduce cost while dealing with such institutions. 
+(b) Until the 28th of February 2026, disable new proposal creation without prior notice. After waiting for any live proposals to finalize or by giving four days of notice, whichever is shorter, update any smart contract addresses, package IDs, or other technical identifiers referenced in this Agreement, when necessary to:
+    1. Address security vulnerabilities or bugs
+    2. Maintain operational continuity
+    3. Implement technical improvements
+ 
+Such updates shall be documented and communicated to Members through official venues, with the Agreement deemed automatically amended to reflect new identifiers after four days have passed. As an emergency backup if 30 days have passed since proposal creation was paused any DAO member can redeploy the package in use when the pause began and create a new DAO with the same DAO configs, the first instance of such a package and DAO created that is announced in the official online venue will be automatically deemed the new official DAO ID and the package ID and DAO IDs in V.1 may be updated by any member to match the new identifiers.
 
 The list of initial Managing Members is set forth in “**Exhibit A**.” 
 
