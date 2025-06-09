@@ -72,7 +72,6 @@ The decision-making of the Company shall be managed and made algorithmically as 
 2. The proposal shall be implemented in the manner specified in the approved proposal. 
 
 V.2 **Managing Members.** The Managing Members have the right but not the obligation to:
-
 (a) Make the ordinary and usual decisions concerning the business affairs of the Company when:
     1. the Algorithmic Management is unable to represent itself due to technical failures or edge cases.
     2. or when having a company figurehead is required for the DAO while interfacing with legacy or offline institutions, or when it will likely save time or reduce cost while dealing with such institutions.
