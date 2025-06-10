@@ -320,10 +320,10 @@ async function advanceTradingToFinalized() {
             // Manually construct the nested objects from flattened query results
             const proposal = { ...p } as Proposal;
             const dao = {
-                dao_id: p['dao.dao_id'],
-                assetType: p['dao.assetType'],
-                stableType: p['dao.stableType'],
-                dao_name: p['dao.dao_name']
+                dao_id: (p as any)['dao.dao_id'],
+                assetType: (p as any)['dao.assetType'],
+                stableType: (p as any)['dao.stableType'],
+                dao_name: (p as any)['dao.dao_name']
             } as Dao;
             
             // Try to acquire lock before processing
