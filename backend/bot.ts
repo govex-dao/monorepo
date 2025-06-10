@@ -117,7 +117,15 @@ async function initializeSuiClient() {
 
     try {
         suiClient = new SuiClient({ url: SUI_RPC_URL });
-        keypair = Ed25519Keypair.fromSecretKey(Buffer.from(SUI_PRIVATE_KEY, 'hex'));
+        
+        // Decode the full 33-byte key from Base64
+        const fullDecodedKey = Buffer.from(SUI_PRIVATE_KEY, 'base64');
+
+        // Slice it to get only the 32-byte secret part (skipping the first byte)
+        const secretKey32Bytes = fullDecodedKey.slice(1);
+
+        // Create the keypair from the 32-byte key
+        keypair = Ed25519Keypair.fromSecretKey(secretKey32Bytes);
         
         const address = keypair.getPublicKey().toSuiAddress();
         console.log(`Bot initialized with address: ${address}`);
@@ -294,7 +302,7 @@ async function advanceTradingToFinalized() {
                 p.asset_value, p.stable_value, p.asset_type, p.stable_type,
                 p.title, p.details, p.metadata, p.current_state, p.review_period_ms,
                 p.trading_period_ms, p.initial_outcome_amounts, p.twap_start_delay,
-                p.twap_step_max, p.initial_twap_observation, p.twap_threshold,
+                p.twap_step_max, p.twap_initial_observation, p.twap_threshold,
                 d.dao_id as "dao.dao_id", d.assetType as "dao.assetType", 
                 d.stableType as "dao.stableType", d.dao_name as "dao.dao_name",
                 psc.timestamp as trading_start_time
@@ -361,6 +369,7 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
             const txb = new Transaction();
             txb.setGasBudget(50000000);
 
+            // First advance the state
             txb.moveCall({
                 target: `${PACKAGE_ID}::advance_stage::try_advance_state_entry`,
                 typeArguments: [dao.assetType, dao.stableType],
@@ -371,6 +380,21 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
                     txb.object('0x6'), // Clock object
                 ],
             });
+
+            // If advancing to Finalized, also execute the proposal
+            if (transition === 'Trading->Finalized') {
+                console.log(`[${transition}] Also executing proposal: ${proposal.proposal_id}`);
+                txb.moveCall({
+                    target: `${PACKAGE_ID}::dao::sign_result_entry`,
+                    typeArguments: [dao.assetType, dao.stableType],
+                    arguments: [
+                        txb.object(dao.dao_id),
+                        txb.object(proposal.proposal_id),
+                        txb.object(proposal.escrow_id),
+                        txb.object('0x6'), // Clock object
+                    ],
+                });
+            }
 
             const result = await suiClient.signAndExecuteTransaction({
                 signer: keypair,

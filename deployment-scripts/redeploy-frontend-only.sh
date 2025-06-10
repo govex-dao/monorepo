@@ -97,10 +97,12 @@ function check_dependencies() {
 }
 
 function show_backend_status() {
-    echo "=== Current Backend Status ==="
+    echo "=== Current Backend & Bot Status ==="
     echo "Backend files on disk: NOT modified"
     echo "Backend PM2 process status:"
     pm2 status backend 2>/dev/null || echo "Backend process not found"
+    echo "Bot PM2 process status:"
+    pm2 status bot 2>/dev/null || echo "Bot process not found"
     echo ""
 }
 
@@ -115,6 +117,7 @@ function main() {
     echo "  ✗ NOT touch the database"
     echo "  ✗ NOT modify backend files"
     echo "  ✗ NOT restart backend process"
+    echo "  ✗ NOT restart bot process"
     echo ""
     
     # Show current status
@@ -140,12 +143,14 @@ function main() {
     echo "✓ Frontend rebuilt and redeployed"
     echo "✓ Backend files on disk: unchanged"
     echo "✓ Backend process: still running old code"
+    echo "✓ Bot process: still running old code"
     echo "✓ Database: untouched"
     echo ""
     echo "Useful commands:"
     echo "  pm2 status          - Check all processes"
     echo "  pm2 logs frontend   - View frontend logs"
     echo "  pm2 logs backend    - View backend logs"
+    echo "  pm2 logs bot        - View bot logs"
     echo ""
     
     # Final status check

@@ -56,8 +56,10 @@ function reinstall_and_deploy() {
         echo "Stopping PM2 processes..."
         pm2 stop frontend 2>/dev/null || echo "Frontend process not running."
         pm2 stop backend 2>/dev/null || echo "Backend process not running."
+        pm2 stop bot 2>/dev/null || echo "Bot process not running."
         pm2 delete frontend 2>/dev/null || echo "No frontend process to delete."
         pm2 delete backend 2>/dev/null || echo "No backend process to delete."
+        pm2 delete bot 2>/dev/null || echo "No bot process to delete."
         pm2 save
         echo "Removing project directory..."
         sudo rm -rf "/root/monorepo" || { echo "Failed to remove project directory."; exit 1; }
@@ -78,6 +80,10 @@ function reinstall_and_deploy() {
         pnpm fresh:db
         pm2 start "pnpm dev:prod" --name backend || { echo "Failed to start backend."; exit 1; }
         pm2 save || { echo "Failed to save PM2 backend process."; exit 1; }
+        
+        echo "Starting Bot service..."
+        pm2 start "pnpm bot:prod" --name bot || { echo "Failed to start bot."; exit 1; }
+        pm2 save || { echo "Failed to save PM2 bot process."; exit 1; }
     else
         echo "Backend directory not found. Skipping backend deployment."
     fi
