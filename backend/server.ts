@@ -615,6 +615,7 @@ app.get('/proposals/:id', async (req, res) => {
           dao_verified: proposal.dao?.verification?.verified || false,
           // Ensure explicit inclusion of fields like title
           title: proposal.title,
+          package_id: proposal.package_id,
           outcome_count: serializeBigInt(proposal.outcome_count),
           created_at: serializeBigInt(proposal.created_at),
           asset_value: serializeBigInt(proposal.asset_value),
