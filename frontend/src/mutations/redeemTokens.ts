@@ -1,4 +1,4 @@
-import { CONSTANTS, QueryKey } from "@/constants";
+import { QueryKey } from "@/constants";
 import { useTransactionExecution } from "@/hooks/useTransactionExecution";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
@@ -19,6 +19,7 @@ interface RedeemTokensParams {
   asset_type: string;
   stable_type: string;
   outcome_count: string;
+  package_id: string;
 }
 
 /**
@@ -47,6 +48,7 @@ export function useRedeemTokensMutation() {
       asset_type,
       stable_type,
       outcome_count,
+      package_id,
     }: RedeemTokensParams) => {
       if (!currentAccount?.address) {
         throw new Error("Wallet not connected");
@@ -80,7 +82,7 @@ export function useRedeemTokensMutation() {
           if (winningTokensByType.asset.length > 1) {
             const [baseToken, ...restTokens] = winningTokensByType.asset;
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
+              target: `${package_id}::conditional_token::merge_many_entry`,
               arguments: [
                 txb.object(baseToken.id),
                 txb.makeMoveVec({
@@ -93,7 +95,7 @@ export function useRedeemTokensMutation() {
           }
 
           txb.moveCall({
-            target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_winning_tokens_asset_entry`,
+            target: `${package_id}::liquidity_interact::redeem_winning_tokens_asset_entry`,
             arguments: [
               txb.object(proposalId),
               txb.object(escrow),
@@ -110,7 +112,7 @@ export function useRedeemTokensMutation() {
           if (winningTokensByType.stable.length > 1) {
             const [baseToken, ...restTokens] = winningTokensByType.stable;
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
+              target: `${package_id}::conditional_token::merge_many_entry`,
               arguments: [
                 txb.object(baseToken.id),
                 txb.makeMoveVec({
@@ -123,7 +125,7 @@ export function useRedeemTokensMutation() {
           }
 
           txb.moveCall({
-            target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_winning_tokens_stable_entry`,
+            target: `${package_id}::liquidity_interact::redeem_winning_tokens_stable_entry`,
             arguments: [
               txb.object(proposalId),
               txb.object(escrow),
@@ -158,7 +160,7 @@ export function useRedeemTokensMutation() {
             if (tokensForOutcome.length > 1) {
               const [baseToken, ...restTokens] = tokensForOutcome;
               txb.moveCall({
-                target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
+                target: `${package_id}::conditional_token::merge_many_entry`,
                 arguments: [
                   txb.object(baseToken.id),
                   txb.makeMoveVec({
@@ -193,7 +195,7 @@ export function useRedeemTokensMutation() {
 
               if (tokenBalance > commonAmount && commonAmount > 0n) {
                 txb.moveCall({
-                  target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
+                  target: `${package_id}::conditional_token::split_entry`,
                   arguments: [
                     txb.object(tokenId),
                     txb.pure.u64(tokenBalance - commonAmount),
@@ -207,7 +209,7 @@ export function useRedeemTokensMutation() {
 
           if (completeSetTokens.length === parseInt(outcome_count, 10)) {
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_complete_set_asset_entry`,
+              target: `${package_id}::liquidity_interact::redeem_complete_set_asset_entry`,
               arguments: [
                 txb.object(proposalId),
                 txb.object(escrow),
@@ -239,7 +241,7 @@ export function useRedeemTokensMutation() {
             if (tokensForOutcome.length > 1) {
               const [baseToken, ...restTokens] = tokensForOutcome;
               txb.moveCall({
-                target: `${CONSTANTS.futarchyPackage}::conditional_token::merge_many_entry`,
+                target: `${package_id}::conditional_token::merge_many_entry`,
                 arguments: [
                   txb.object(baseToken.id),
                   txb.makeMoveVec({
@@ -273,7 +275,7 @@ export function useRedeemTokensMutation() {
 
               if (tokenBalance > commonAmount && commonAmount > 0n) {
                 txb.moveCall({
-                  target: `${CONSTANTS.futarchyPackage}::conditional_token::split_entry`,
+                  target: `${package_id}::conditional_token::split_entry`,
                   arguments: [
                     txb.object(tokenId),
                     txb.pure.u64(tokenBalance - commonAmount),
@@ -287,7 +289,7 @@ export function useRedeemTokensMutation() {
 
           if (completeSetTokens.length === parseInt(outcome_count, 10)) {
             txb.moveCall({
-              target: `${CONSTANTS.futarchyPackage}::liquidity_interact::redeem_complete_set_stable_entry`,
+              target: `${package_id}::liquidity_interact::redeem_complete_set_stable_entry`,
               arguments: [
                 txb.object(proposalId),
                 txb.object(escrow),

@@ -69,6 +69,7 @@ interface ApiProposal {
   twap_step_max: string; // Using string since other number fields are strings
   twap_threshold: string;
   twaps: string[] | null;
+  package_id: string;
 }
 
 // const getStateLabel = (state: number | null): string => {
@@ -272,7 +273,7 @@ export function ProposalView() {
                 outcomeCount={proposal.outcome_count}
                 assetType={proposal.asset_type}
                 stableType={proposal.stable_type}
-                packageId={CONSTANTS.futarchyPackage}
+                packageId={proposal.package_id}
                 outcome_messages={proposal.outcome_messages}
                 asset_symbol={proposal.dao.asset_symbol}
                 stable_symbol={proposal.dao.stable_symbol}

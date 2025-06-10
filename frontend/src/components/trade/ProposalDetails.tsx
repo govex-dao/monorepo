@@ -30,6 +30,7 @@ interface ApiProposal {
   twap_threshold: string;
   twap_start_delay: string;
   winning_outcome: string | null;
+  package_id: string;
 }
 
 interface ProposalDetailsProps {
