@@ -382,20 +382,6 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
             });
 
             // If advancing to Finalized, also execute the proposal
-            if (transition === 'Trading->Finalized') {
-                console.log(`[${transition}] Also executing proposal: ${proposal.proposal_id}`);
-                txb.moveCall({
-                    target: `${PACKAGE_ID}::dao::sign_result_entry`,
-                    typeArguments: [dao.assetType, dao.stableType],
-                    arguments: [
-                        txb.object(dao.dao_id),
-                        txb.object(proposal.proposal_id),
-                        txb.object(proposal.escrow_id),
-                        txb.object('0x6'), // Clock object
-                    ],
-                });
-            }
-
             const result = await suiClient.signAndExecuteTransaction({
                 signer: keypair,
                 transaction: txb,
