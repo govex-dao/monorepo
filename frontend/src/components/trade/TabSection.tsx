@@ -93,6 +93,7 @@ const TabSection: React.FC<TabSectionProps> = ({
           groupedTokens={groupedTokens}
           isLoading={isLoading}
           error={error}
+          package_id={proposal.package_id}
         />
       )}
       {activeTab === "description" && <Description details={details} />}

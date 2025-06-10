@@ -14,6 +14,7 @@ interface RedeemTokensButtonProps {
   asset_type: string;
   stable_type: string;
   outcome_count: string;
+  package_id: string;
 }
 
 export function RedeemTokensButton({
@@ -25,6 +26,7 @@ export function RedeemTokensButton({
   asset_type,
   stable_type,
   outcome_count,
+  package_id,
 }: RedeemTokensButtonProps) {
   const redeemTokens = useRedeemTokensMutation();
   const buttonStyle =
@@ -54,6 +56,7 @@ export function RedeemTokensButton({
         asset_type,
         stable_type,
         outcome_count,
+        package_id,
       });
     } catch (error) {
       console.error("Error redeeming tokens:", error);

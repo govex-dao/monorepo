@@ -70,6 +70,7 @@ model Proposal {
   title String   
   details String 
   metadata String
+  package_id String
   current_state Int?
   state_history ProposalStateChange[]
   review_period_ms BigInt

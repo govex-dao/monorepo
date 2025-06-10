@@ -18,6 +18,7 @@ interface TokenSectionProps {
   groupedTokens: any[];
   isLoading: boolean;
   error: Error | null;
+  package_id: string;
 }
 
 const TokenSection: React.FC<TokenSectionProps> = ({
@@ -35,6 +36,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
   groupedTokens,
   isLoading,
   error,
+  package_id,
 }) => {
   return (
     <div className="space-y-4 p-6">
@@ -68,6 +70,7 @@ const TokenSection: React.FC<TokenSectionProps> = ({
             asset_type={asset_type}
             stable_type={stable_type}
             outcome_count={outcome_count}
+            package_id={package_id}
           />
           <div className="overflow-x-auto rounded-lg">
             <table className="w-full">
