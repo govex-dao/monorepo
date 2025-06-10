@@ -139,6 +139,7 @@ export const handleProposalResults = async (events: SuiEvent[], type: string) =>
                             title: "pending",
                             details: "pending",
                             metadata: "pending",
+                            package_id: "pending",
                             current_state: null,
                             review_period_ms: 0n,
                             trading_period_ms: 0n,

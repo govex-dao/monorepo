@@ -142,6 +142,7 @@ export const handleProposalStateChanges = async (events: SuiEvent[], type: strin
                                 title: "pending",
                                 details: "pending",
                                 metadata: "pending",
+                                package_id: "pending",
                                 current_state: change.new_state,
                                 review_period_ms: 0n,
                                 trading_period_ms: 0n,

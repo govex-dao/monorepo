@@ -1,6 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { CONFIG } from '../config';
 
 interface ProposalCreated {
     proposal_id: string;
@@ -18,6 +19,7 @@ interface ProposalCreated {
     title: string;
     details: string;
     metadata: string;
+    package_id: string;
     review_period_ms: string;
     trading_period_ms: string;
     initial_outcome_amounts: string[] | null;  // Handle Option<vector<u64>>
@@ -26,7 +28,6 @@ interface ProposalCreated {
     twap_step_max: string;
     twap_threshold: string;
     oracle_ids: string[];
-    package_id: string;
 }
 
 // Helper to safely convert string to BigInt
@@ -57,7 +58,7 @@ function validateProposalData(data: unknown): data is ProposalCreated {
         'asset_value', 'stable_value', 'asset_type',
         'stable_type', 'title', 'details', 'metadata',
         'review_period_ms', 'trading_period_ms', 'initial_outcome_amounts',
-        'twap_start_delay', 'twap_step_max', 'twap_threshold', 'oracle_ids', 'package_id'
+        'twap_start_delay', 'twap_step_max', 'twap_threshold', 'oracle_ids'
     ];
   
     return requiredFields.every(field => {
@@ -90,7 +91,7 @@ function formatProposalData(data: ProposalCreated): Prisma.ProposalCreateInput {
         title: data.title,
         details: data.details,
         metadata: data.metadata,
-        package_id: data.package_id,
+        package_id: CONFIG.DAO_CONTRACT.packageId,
         current_state: 0,
         state_history: { create: [] },
         review_period_ms: safeBigInt(data.review_period_ms),
