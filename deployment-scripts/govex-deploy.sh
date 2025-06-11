@@ -77,7 +77,7 @@ function reinstall_and_deploy() {
         pnpm install || { echo "Failed to install backend dependencies."; exit 1; }
         echo "Enforcing WAL mode on SQLite database..."
         sqlite3 dev.db "PRAGMA journal_mode=WAL;" || { echo "Failed to enable WAL mode."; exit 1; }
-        pnpm fresh:db
+
         pm2 start "pnpm dev:prod" --name backend || { echo "Failed to start backend."; exit 1; }
         pm2 save || { echo "Failed to save PM2 backend process."; exit 1; }
         
