@@ -42,7 +42,7 @@ export async function createProposalTransaction(
     const txb = new Transaction();
     const isMainnet = CONSTANTS.network === "mainnet";
     const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
-    const gasBudget = isMainnet ? 20_500_000_000 : 1_000_000_000;
+    const gasBudget = isMainnet ? 500_000_000 : 500_000_000;
     txb.setGasBudget(gasBudget);
 
     const [paymentCoin] = txb.splitCoins(txb.gas, [txb.pure.u64(splitAmount)]);
