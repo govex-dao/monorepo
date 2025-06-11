@@ -97,9 +97,12 @@ const VerifyDaoForm = () => {
       }
 
       const tx = new Transaction();
-      tx.setGasBudget(10_050_000_000);
+      const isMainnet = CONSTANTS.network === "mainnet";
+      const gasBudget = isMainnet ? 500_000_000 : 500_000_000;
+      const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
+      tx.setGasBudget(gasBudget);
+      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(splitAmount)]);
 
-      const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(10_000_000_000)]);
 
       tx.moveCall({
         target: `${CONSTANTS.futarchyPackage}::factory::request_verification`,
