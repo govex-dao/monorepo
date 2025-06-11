@@ -103,7 +103,6 @@ const VerifyDaoForm = () => {
       tx.setGasBudget(gasBudget);
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(splitAmount)]);
 
-
       tx.moveCall({
         target: `${CONSTANTS.futarchyPackage}::factory::request_verification`,
         arguments: [
