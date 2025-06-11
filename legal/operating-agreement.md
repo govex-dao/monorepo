@@ -63,11 +63,11 @@ IV.5 **Miscellaneous Obligations.** Each Member shall be duty-bound to act consi
 
 **MANAGEMENT**
 
-V.1 **Algorithmic** **Management.**   The ordinary and usual decisions concerning business affairs of the Company shall be made by the Members, with proposals submitted to and adjudicated by the Smart Contract for market-governed proposals (the "DAO Contract") located at 0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c, which operates with package ID 0x112d0c1e539149e400428a00a05b4fd882548ab9b3aafdf3d8db74be73336cd2. 
+V.1 **Algorithmic** **Management.**   The ordinary and usual decisions concerning business affairs of the Company shall be made by the Members, with proposals submitted to and adjudicated by the Smart Contract for market-governed proposals (the "DAO Contract") located at 0x08bdcf7f09bd994cacc0a81a8e38847f8c11caffd04c04e5fbdd780395cc55d8, which operates with package ID 0xf4c667e72665250e272e1dd42e08ca811cad6d2ec7799d116c0c815090f08632. 
 
 The decision-making of the Company shall be managed and made algorithmically as follows: 
 
-1. Proposals are to be submitted and markets observed and managed by the DAO Contract located on the Sui blockchain at address 0xb8462b88af6e5fe74bda7c936eba012a32a4ec6c2dc69000dfc607918d26a42c. 
+1. Proposals are to be submitted and markets observed and managed by the DAO Contract located on the Sui blockchain at address 0x08bdcf7f09bd994cacc0a81a8e38847f8c11caffd04c04e5fbdd780395cc55d8. 
 
 2. The proposal shall be implemented in the manner specified in the approved proposal. 
 

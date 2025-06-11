@@ -41,10 +41,10 @@ const getAddCoinParams = () => {
 
     return {
         packageId: futarchyPub.packageId,
-        stableType: stablePub.coinType,
+        stableType: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
         factoryObjectId: futarchyPub.factoryId,
         factoryOwnerObj: futarchyPub.factoryOwnerCapId,
-        network: 'testnet' as Network
+        network: 'mainnet' as Network
     };
 };
 

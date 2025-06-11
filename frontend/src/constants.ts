@@ -33,6 +33,6 @@ export const CONSTANTS = {
   stableTreasury: stablePackage.treasuryCapId,
   stableMetaData: stablePackage.metadataId,
   stableType: stablePackage.coinType,
-  network: "testnet" as Network,
+  network: "mainnet" as Network,
   explorerUrl: "https://testnet.suivision.xyz/",
 };

@@ -316,7 +316,7 @@ const CreateDaoForm = () => {
     try {
       const tx = new Transaction();
       const isMainnet = CONSTANTS.network === "mainnet";
-      const gasBudget = isMainnet ? 20_500_000_000 : 1_000_000_000;
+      const gasBudget = isMainnet ? 500_000_000 : 500_000_000;
       const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
       tx.setGasBudget(gasBudget);
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(splitAmount)]);

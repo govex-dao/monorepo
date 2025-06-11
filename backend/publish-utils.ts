@@ -157,7 +157,7 @@ export const publishPackage = async ({
 		}),
 	);
 
-	txb.setGasBudget(500000000);
+	txb.setGasBudget(5000000000);
 	const cap = txb.publish({
 		modules,
 		dependencies,
