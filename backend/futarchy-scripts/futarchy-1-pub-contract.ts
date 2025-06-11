@@ -23,7 +23,7 @@ import path from 'path';
     }
     await publishPackage({
         packagePath: __dirname + '/../../contracts/futarchy',
-        network: 'testnet',
+        network: 'mainnet',
         exportFileName: 'futarchy-contract',
     });
     
