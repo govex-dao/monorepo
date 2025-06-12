@@ -1,0 +1,1 @@
+Create a Wolfram like proposal language, to ensure type saftey and clarity for proposals
