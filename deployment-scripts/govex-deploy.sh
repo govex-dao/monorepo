@@ -75,6 +75,7 @@ function reinstall_and_deploy() {
     if [ -d "$BACKEND_DIR" ]; then
         cd "$BACKEND_DIR" || { echo "Failed to enter backend directory."; exit 1; }
         pnpm install || { echo "Failed to install backend dependencies."; exit 1; }
+        npx prisma generate
         echo "Enforcing WAL mode on SQLite database..."
         sqlite3 dev.db "PRAGMA journal_mode=WAL;" || { echo "Failed to enable WAL mode."; exit 1; }
 
