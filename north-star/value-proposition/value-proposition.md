@@ -32,4 +32,4 @@ If prediction markets are a truth machine that makes Govex an oracle project.
 I view a futarchy as a V2 oracle. Futarchies are self-resolving and natural language compatible. Futarchies don't rely on the economic security of external oracle chains. Futarchies are protected by 'proof of positive expected value'. Futarchies can be used to verify the completion of imprecise and unconstrained or hard-to-verify intents or disputes.
 
 ### The Composable Standard for Organization Governance
-When the majority of Orgs are on the Govex protocol, there will be addiitonal [network benefits](https://en.wikipedia.org/wiki/Metcalfe%27s_law) unlocked. Organizations will be able to create atomic interdependant cross-organization proposals.
+When the majority of Orgs are on the Govex protocol, there will be additional [network benefits](https://en.wikipedia.org/wiki/Metcalfe%27s_law) unlocked. Organizations will be able to create atomic interdependent cross-organization proposals.
