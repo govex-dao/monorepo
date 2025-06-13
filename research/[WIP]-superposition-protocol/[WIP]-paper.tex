@@ -27,10 +27,35 @@
 \maketitle
 
 \begin{abstract}
-We present a novel form of futarchy where conditional outcomes exist in superposition until resolved by market consensus. Upon initiation of a futarchy proposal all proposed token actions are minted and performed immediately with conditional tokens. These tokens trade freely until being resolved by highest reading the Time-Weighted-Average-Price.
-The protocol operates on a state budget rather than limiting concurrent events, allowing flexible combinations (e.g., the Cartesian product of 4 binary events or one 16-outcome event within a 16-state budget).
-\end{abstract}
+    We present a novel form of futarchy where conditional outcomes exist in superposition until resolved by market consensus, with all concurrent 
+    proposals sharing the same liquidity pool. Unlike traditional futarchy 
+    where each proposal requires separate liquidity, our system enables 
+    multiple proposals to trade simultaneously against a unified AMM, 
+    dramatically improving capital efficiency and price discovery. Upon initiation of a futarchy proposal all proposed token actions are minted and performed immediately with conditional tokens. These tokens trade freely until being resolved by highest reading the Time-Weighted-Average-Price.
+    The protocol operates on a state budget rather than limiting concurrent events, allowing flexible combinations (e.g., the Cartesian product of 4 binary events or one 16-outcome event within a 16-state budget).
+    \end{abstract}
+    
+\section{Unified Liquidity Across Concurrent Proposals}
 
+Traditional futarchy implementations suffer from liquidity fragmentation - 
+each proposal requires its own separate market with dedicated liquidity. 
+This creates several problems:
+\begin{itemize}
+    \item Capital inefficiency: 10 proposals need 10x the liquidity
+    \item Weak price signals: Thin markets lead to poor price discovery  
+    \item Limited scalability: Organizations can only run few proposals simultaneously
+\end{itemize}
+
+Superposition futarchy solves this by having ALL proposals share the SAME 
+liquidity pool. With a 16-state budget, you could run:
+\begin{itemize}
+    \item 4 binary proposals concurrently ($2^4 = 16$ states)
+    \item 2 binary + 1 four-option proposal ($2 \times 2 \times 4 = 16$ states)
+    \item 1 sixteen-option proposal
+\end{itemize}
+
+All using the SAME liquidity, providing deep markets for accurate pricing.
+    
 
 \section{Immediate Conditional Token Creation}
 \begin{itemize}
@@ -54,7 +79,13 @@ The protocol operates on a state budget rather than limiting concurrent events, 
 
 \section{Superposition State Budget}
 \begin{itemize}
-    \item Current leading implementations of futarchy allow for N outcomes markets that share the same liquidity[4]. Other proposals do not share the same liquidity. Assuming all liquidity is in a Uniswap-V2 style AMM, thicker liquidity will create greater incentives for traders to price the outcomes accurately.
+    \item Current leading implementations of futarchy allow for N outcomes 
+    markets that share the same liquidity[4]. However, existing systems 
+    require separate liquidity pools per proposal. Our superposition approach 
+    ensures ALL active proposals trade against the same unified liquidity pool. 
+    This means adding a new proposal doesn't dilute liquidity - it simply 
+    expands the state space while maintaining full market depth. Assuming all liquidity is in a Uniswap-V2 style AMM, thicker liquidity will create greater incentives for traders to price the outcomes accurately.
+
     
     \item Each proposal $i$ defines a \textbf{factor space} $\mathcal{F}_i$ with $k_i$ possible outcomes. For binary proposals, $\mathcal{F}_i = \{\text{Accept}_i, \text{Reject}_i\}$ where $k_i = 2$.
     
@@ -128,13 +159,37 @@ The protocol operates on a state budget rather than limiting concurrent events, 
     \begin{equation}
     |\mathcal{S}_{\text{collapsed}}| = \frac{|\mathcal{S}|}{k_j}
     \end{equation}
+
+    \item When spot tokens enter the system, they split 1:1 into each active state. For example, 1000 spot USDC with 16 active states becomes 1000 conditional USDC in each state (16,000 total conditional tokens). This ensures full liquidity depth in every state - there is no fragmentation or liquidity sharding.
     
     \item Total AMM liquidity $L$ is preserved during state transitions. 
     When all proposals resolve, conditional liquidity converts to spot liquidity at a 1:1 ratio for winning outcomes.
     
-    \item Lazy evaluation of state transitions. Users conditional tokens can be updated to reflect latest states when they next go to swap or redeem them.
-\end{itemize}
+    \item Lazy token state updates: When users interact with their conditional tokens, the system must resolve their current valid states. Two approaches:
+    \begin{itemize}
+        \item \textbf{State History Traversal}: Maintain a log of state collapses. When user tokens are accessed, replay collapses from their last update timestamp. Complexity: O(k) where k is number of resolutions since last update.
+        \item \textbf{Finalization Checkpoints}: After sufficient proposals resolve, mark remaining states as "finalized" with direct spot redemption rates. Tokens in finalized states skip traversal entirely (O(1) redemption).
+        \end{itemize}
+        Example: User holds tokens from state (Accept$_A$, Accept$_B$, Reject$_C$). If proposal A resolved to Reject, their tokens are worthless. If A and B both resolved to Accept, and only C remains active, their tokens map to states (Accept$_C$) and (Reject$_C$) with defined redemption values.
 
+        \item TWAP tracking via maximum state price: For each proposal $i$, the system tracks the highest-priced state for each outcome at every time window. Every window (e.g., 1 minute):
+        \begin{equation}
+        \text{TWAP}_{o,t} = \max_{\{s \in \mathcal{S} : s_i = o\}} \text{TWAP}(s)
+        \end{equation}
+        
+        At resolution time $T$, the winning outcome is:
+        \begin{equation}
+        o_i^* = \arg\max_{o \in \mathcal{F}_i} \frac{1}{T} \sum_{t=0}^{T} \text{TWAP}_{o,t}
+        \end{equation}
+        
+        Example: Proposal A tracked over 3 windows:
+        \begin{itemize}
+            \item Window 1: Accept$_A$ max state TWAP: \$0.70, Reject$_A$ max state TWAP: \$0.35
+            \item Window 2: Accept$_A$ max state TWAP: \$0.75, Reject$_A$ max state TWAP: \$0.30  
+            \item Window 3: Accept$_A$ max state TWAP: \$0.68, Reject$_A$ max state TWAP: \$0.32
+        \end{itemize}
+        Accept$_A$ wins with average of max TWAPs: \$0.71 vs Reject$_A$'s \$0.323.
+        \end{itemize}
 \section{References}
 \begin{enumerate}
    \item https://www.govex.ai/
