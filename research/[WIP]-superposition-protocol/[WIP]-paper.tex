@@ -26,94 +26,50 @@
 \maketitle
 
 \begin{abstract}
-We present a novel form of futarchy where conditional outcomes exist in superposition until resolved by market consensus. Upon initiation of a futarchy proposal all proposed token actions are minted and performed immediately with conditional tokens. These tokens trade freely until being resolved by a market-based uncertainty metric $\Delta P \times \Delta R$ falls below a threshold k, triggering deterministic "collapse" to a single outcome. If uncertainty remains high at deadline, probabilistic resolution based on market prices prevents indefinite lockup.
-The protocol operates on a state budget rather than limiting concurrent events, allowing flexible combinations (e.g., the Cartesian product of 4 binary events or one 16-outcome event within a 16-state budget). Events can be entangled via logical dependencies, enabling complex conditional structures.
+We present a novel form of futarchy where conditional outcomes exist in superposition until resolved by market consensus. Upon initiation of a futarchy proposal all proposed token actions are minted and performed immediately with conditional tokens. These tokens trade freely until being resolved by highest reading the Time-Weighted-Average-Price.
+The protocol operates on a state budget rather than limiting concurrent events, allowing flexible combinations (e.g., the Cartesian product of 4 binary events or one 16-outcome event within a 16-state budget).
 \end{abstract}
 
 
 \section{Immediate Conditional Token Creation}
 \begin{itemize}
-    \item Current implementations of futarchy allow users to create proposals for the futarchy treasury to transfer spot tokens to an address. Assuming the proposal measuring period is X seconds. This creates X seconds latency between decision proposal and decision actions. This has an opportunity cost of VALUE-TO-TRANSFER*X*MARKET-INTEREST-RATE.
-    \item Mint all outcome tokens instantly: approved-X and rejected-X
-   \item Tokens trade freely until resolution
-   \item No waiting period, immediate capital utility
-   \item Useful abstraction that allows futarchy treasury to atomically buy back or dilute its own stock when it is trades below or above net asset value, without being front run. 
+    \item Current implementations of futarchy allow users to create proposals for a company treasury to transfer spot tokens to an address when if the proposal passes [1]. Assuming the proposal measuring period is X seconds. This creates X seconds latency between decision proposal and decision actions. This has an opportunity cost of : \begin{equation}
+    C = V \cdot X \cdot r
+    \end{equation}
+    
+    where:
+    \begin{align*}
+    C &= \text{Opportunity Cost} \\
+    V &= \text{Value to Transfer} \\
+    X &= \text{Latency (in seconds)} \\
+    r &= \text{Market Interest Rate}
+    \end{align*}
+    Immediate transfers offer immediate capital utility.
+    \item In Superposition futarchy if Alice creates a proposal for company B to pay her 1000 USDC to do work. She immediately get sent 1000 Accept-USDC. This will only be redeemable for 1000 spot USDC if the proposal passes. So she both does and doesn't get paid. The decision markets collapse the superposition to one of the options.
+    \item This is a useful abstraction that allows a futarchy treasury to atomically buy back or dilute its own stock when it is trades below or above net asset value, without being front run. MntCapital an onchain fund had significant friction with buy backs [2]. This requires deep conditional liquidity, which a futarchy AMM provides [3].
+   \item Conditional tokens trade freely until resolution. This helps the market to more fairly price and token actions. 
+
 \end{itemize}
 
-\section{Quantum states budget}
+\section{Superposition states budget}
 \begin{itemize}
-    \item using carteasian product of all verses and their partitions
-    \item State expansion
-    \item State colapse
+    \item Current leading implementations of futarchy allow for N outcomes markets [1]. Other proposal will not share the same liquidity.
+    \item Using carteasian product of all verses and their partitions
+    \item State expansion as proposal are added to state space.
     \item Superposition: multiple states exist simultaneously
     \item States collapse as proposals resolve
     \item New proposals enter freed slots
     \item Continuous pipeline of decisions
     \item Liquidity preservation across transitions
-    \item Efficient encoding of valid states
     \item Pruning impossible combinations
     \item Lazy evaluation of state transitions
-    \item Memory-efficient representation
-    \item https://a16zcrypto.com/posts/videos/multidimensional-tfm-design/ optimization
 \end{itemize}
 
-\section{The Uncertainty Measurement: $\Delta P \times \Delta R$ Formalization}
-\begin{itemize}
-   \item $\Delta P$: price volatility (bid-ask spread or standard deviation)
-   \item $\Delta R$: rate of price reversals (flip frequency)
-   \item Threshold $k$: market-specific constant
-   \item Analogous to Heisenberg uncertainty principle
-   \item Progressive Resolution Thresholds
-    \item Early phase: requires very low $\Delta P \times \Delta R$
-    \item Threshold relaxes as deadline approaches
-    \item Prevents premature resolution
-    \item Ensures eventual resolution
-   \item When $\Delta P \times \Delta R < k$: market consensus achieved
-   \item Deterministic outcome based on market prices
-   \item All non-winning tokens $\rightarrow$ 0
-\end{itemize}
-
-\section{Dynamic Resolution Ordering}
-\begin{itemize}
-    \item Proposals with lowest $\Delta P \times \Delta R$ resolve first
-    \item Queue dynamically reorders as market conditions change
-    \item Creates natural prioritization of clear decisions
-    \item Resolution racing incentives
-\end{itemize}
-
-\section{Quantum Measurement: Probabilistic Fallback}
-\begin{itemize}
-   \item If deadline reached with high uncertainty
-   \item Sample outcome probabilistically from market distribution
-   \item Prevents griefing attacks
-   \item Maintains incentive compatibility
-\end{itemize}
-
-\section{Logical Gates for Conditional Events}
-\begin{itemize}
-    \item AND/OR/NOT/XOR relationships between proposals
-    \item Automatic cascading when parent resolves
-    \item Dependency DAG construction
-    \item Prevents inconsistent states
-\end{itemize}
-
-\section{Cascading Resolution Mechanics}
-\begin{itemize}
-    \item Parent resolution triggers child collapses
-    \item Automatic execution of dependent actions
-    \item No manual intervention required
-\end{itemize}
-
-\section{Entangled Order Types}
-\begin{itemize}
-    \item Entanglement: correlated proposals via logic gates
-    \item Cross-market conditional execution
-    \item Spread trading between correlated proposals
-    \item Automatic arbitrage for maintaining correlations
-    \item Natural price discovery for dependencies
-\end{itemize}
-
-\bibliographystyle{alpha}
-\bibliography{sample}
+\section{References}
+\begin{enumerate}
+   \item https://www.govex.ai/
+   \item https://metadao.fi/mtncapital/trade-v4/CV5gPgHMyJQV3a9m5FZnAxvRXsAn65dMScsANTCydHrX
+   \item https://x.com/metaproph3t/status/1930686351680409637
+\end{enumerate}
 
 \end{document}
