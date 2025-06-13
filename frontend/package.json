@@ -20,7 +20,7 @@
     "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "serve -s dist"
+    "start": "serve -s dist -l 0.0.0.0:5173"
   },
   "dependencies": {
     "@mysten/dapp-kit": "0.14.30",
