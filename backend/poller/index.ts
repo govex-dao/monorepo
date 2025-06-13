@@ -1,4 +1,4 @@
-import { twapPoller } from './poller/twapPoller';
+import { twapPoller } from './twapPoller';
 
 // Start the polling service
 setTimeout(() => {

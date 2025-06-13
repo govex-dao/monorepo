@@ -15,9 +15,9 @@
 		"db:setup:dev": "npx prisma migrate dev --name init",
 		"db:reset:dev": "npx prisma db push --force-reset",
 		"db:studio": "npx prisma studio",
-		"api:dev": "npx ts-node server.ts",
-		"poll:dev": "npx ts-node poller.ts",
-		"indexer": "npx ts-node indexer.ts",
+		"api:dev": "npx ts-node ./server/index.ts",
+		"poll:dev": "npx ts-node ./poller/index.ts",
+		"indexer": "npx ts-node ./indexer/index.ts",
 		"bot": "npx ts-node bot.ts",
 		"bot:dev": "cross-env NODE_ENV=development npx ts-node bot.ts",
 		"bot:prod": "cross-env NODE_ENV=production npx ts-node bot.ts"

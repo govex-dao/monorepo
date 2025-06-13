@@ -5,18 +5,18 @@ import cors from 'cors';
 import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
-import { processAndGetBase64Icon } from './imageUtils';
+import { processAndGetBase64Icon } from '../imageUtils';
 
 
-import { prisma } from './db';
+import { prisma } from '../db';
 import {
 	formatPaginatedResponse,
 	parsePaginationForQuery,
 	parseWhereStatement,
 	WhereParam,
 	WhereParamTypes,
-} from './utils/api-queries';
-import { swapCache, SWAP_CACHE_TTL, cleanupExpiredCache, getCacheStats } from './cache-utils';
+} from '../utils/api-queries';
+import { swapCache, SWAP_CACHE_TTL, cleanupExpiredCache, getCacheStats } from '../utils/cache-utils';
 
 // Clean up expired cache entries every minute
 setInterval(() => {
