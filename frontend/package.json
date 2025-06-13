@@ -19,7 +19,8 @@
     "lint": "pnpm run eslint:check && pnpm run prettier:check",
     "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "start": "serve -s dist"
   },
   "dependencies": {
     "@mysten/dapp-kit": "0.14.30",
@@ -40,6 +41,7 @@
     "react-syntax-highlighter": "^15.6.1",
     "recharts": "^2.15.3",
     "remark-gfm": "^4.0.1",
+    "serve": "^14.2.4",
     "vite-plugin-pages": "^0.32.5"
   },
   "devDependencies": {
