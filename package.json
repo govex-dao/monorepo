@@ -1,0 +1,18 @@
+{
+  "name": "govex-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Govex DAO monorepo",
+  "scripts": {
+    "start": "echo 'Please use service-specific commands: start:backend or start:frontend'",
+    "start:backend": "cd backend && npx ts-node server.ts",
+    "start:frontend": "cd frontend && serve -s dist -l ${PORT:-3000}",
+    "build:backend": "cd backend && npx prisma generate",
+    "build:frontend": "cd frontend && pnpm install && pnpm run build-frontend",
+    "install:backend": "cd backend && pnpm install",
+    "install:frontend": "cd frontend && pnpm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

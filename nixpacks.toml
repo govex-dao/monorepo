@@ -1,0 +1,25 @@
+# Backend Service Configuration
+[phases.setup]
+nixPkgs = ["nodejs_18", "pnpm", "sqlite"]
+
+[phases.install]
+dependsOn = ["setup"]
+cmds = [
+    "cd backend && pnpm install"
+]
+
+[phases.build]
+dependsOn = ["install"]
+cmds = [
+    "cd backend && npx prisma generate",
+    "cd backend && npx prisma db push",
+    "cd backend && sqlite3 prisma/dev.db 'PRAGMA journal_mode=WAL;' || true"
+]
+
+[start]
+cmd = "cd backend && pnpm dev:prod"
+
+[variables]
+NODE_ENV = "production"
+PORT = "3000"
+NETWORK = "testnetProd"
