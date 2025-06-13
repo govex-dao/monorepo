@@ -126,7 +126,6 @@ export function useTokenEvents({
           cursor = objects.nextCursor ?? null;
           if (!hasNextPage || !cursor) break;
         }
-
         const dedupedTokens = Array.from(
           new Map(allTokens.map((token) => [token.id, token])).values(),
         );

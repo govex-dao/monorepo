@@ -163,7 +163,6 @@ export function TradeHistory({
       const aValue = a[field as keyof CalculatedEvent] as number;
       const bValue = b[field as keyof CalculatedEvent] as number;
 
-      console.log(field, aValue, bValue);
       return sortConfig.direction === "descending"
         ? bValue - aValue
         : aValue - bValue;
