@@ -73,6 +73,12 @@ export default defineConfig(({ command, mode }) => {
       coverage: {
         reporter: ["text", "json", "html"],
       },
-    }
+    },
+    preview: {
+      host: "0.0.0.0",
+      port: 4173,
+      allowedHosts: [".railway.app"], // allow any Railway preview domain
+    },
   };
 });
+
