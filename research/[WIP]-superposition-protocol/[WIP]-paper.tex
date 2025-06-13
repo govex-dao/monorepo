@@ -26,66 +26,11 @@
 \maketitle
 
 \begin{abstract}
-We present a novel financial primitive where conditional outcomes exist in superposition until resolved by market consensus. Upon initiation of any conditional event—whether a governance proposal, insurance claim, prediction market, or payment contract—all possible outcome tokens are minted immediately. These tokens trade freely until a market-based uncertainty metric $\Delta P \times \Delta R$ falls below a threshold k, triggering deterministic "collapse" to a single outcome. If uncertainty remains high at deadline, probabilistic resolution based on market prices prevents indefinite lockup.
+We present a novel financial primitive where conditional outcomes exist in superposition until resolved by market consensus. Upon initiation of any conditional event—whether a futarchy proposal, insurance claim, prediction market, or payment contract—all possible outcome tokens are minted immediately. These tokens trade freely until being resolved by a market-based uncertainty metric $\Delta P \times \Delta R$ falls below a threshold k, triggering deterministic "collapse" to a single outcome. If uncertainty remains high at deadline, probabilistic resolution based on market prices prevents indefinite lockup.
 The protocol operates on a state budget rather than limiting concurrent events, allowing flexible combinations (e.g., the Cartesian product of 4 binary events or one 16-outcome event within a 16-state budget). Events can be entangled via logical dependencies, enabling complex conditional structures.
-We demonstrate applications across multiple domains: (1) governance without voting, where proposals execute immediately via conditional tokens, (2) decentralized insurance with instant claim tokens that resolve based on oracle consensus, (3) trustless escrow where payments exist in superposition until conditions are verified. Anywhere society currently makes discrete choices under uncertainty OR uncertain discrete events happen, you can create superposition until information resolves. This protocol is quantum isomorphic.
+We demonstrate applications across multiple domains: (1) futarchy, where proposals execute immediately via conditional tokens, (2) decentralized insurance with instant claim tokens that resolve based on oracle consensus, (3) trustless escrow where payments exist in superposition until conditions are verified.
 \end{abstract}
 
-
-\section{Introduction}
-\begin{itemize}
-   \item Traditional consensus mechanisms require O(N) operations (voting)
-   \item Markets achieve price discovery with O(1) best case complexity
-   \item Introduce superposition protocol: all outcomes exist until market observation
-   \item Applications span governance, insurance, payments, prediction markets
-\end{itemize}
-
-\section{Related Work}
-\subsection{Prediction Markets and Information Aggregation}
-\begin{itemize}
-   \item Hayek's information aggregation through prices
-   \item Arrow-Debreu securities and state-contingent claims
-   \item Modern prediction markets (Augur, Polymarket)
-\end{itemize}
-
-\subsection{Futarchy and Market Governance}
-\begin{itemize}
-   \item Hanson's futarchy: "vote values, bet beliefs"
-   \item Commitment problem: DAOs can ignore market signals
-   \item MetaDAO implementation and limitations
-\end{itemize}
-
-\subsection{Capital Efficiency Bounds}
-\begin{itemize}
-    \item Maximum capital lockup per decision
-    \item Liquidity requirements for security
-    \item Trade-offs between states and efficiency
-    \item Optimal state budget analysis
-\end{itemize}
-
-\subsection{Convergence Guarantees}
-\begin{itemize}
-    \item Proof of eventual resolution
-    \item Bounds on time to consensus
-    \item Relationship between liquidity and convergence
-    \item Progressive thresholds ensure termination
-\end{itemize}
-
-\subsection{Automated Market Makers and Constant Function Markets}
-\begin{itemize}
-    \item Uniswap's xy=k and its variants
-    \item Balancer's weighted pools
-    \item Curve's stableswap invariant
-    \item Application to prediction markets
-\end{itemize}
-
-\subsection{Quantum Computing Primitives in Economic Systems}
-\begin{itemize}
-    \item Quantum game theory
-    \item Superposition in financial models
-    \item Previous attempts at quantum-inspired mechanisms
-    \item Why actual implementation differs from metaphor
-\end{itemize}
 
 \section{The Superposition Protocol: Core Mechanics}
 \subsection{Immediate Conditional Token Creation}
@@ -108,7 +53,6 @@ We demonstrate applications across multiple domains: (1) governance without voti
     \item Superposition: multiple states exist simultaneously
     \item using carteasian product of all verses and their partitions
     \item Measurement: market observation causes collapse
-    \item Uncertainty principle: $\Delta P \times \Delta R \geq k$
     \item Entanglement: correlated proposals via logic gates
     \item Wave function: probability distribution of outcomes
 \end{itemize}
@@ -225,11 +169,10 @@ We demonstrate applications across multiple domains: (1) governance without voti
    \item Market prices become execution triggers
 \end{itemize}
 
-\subsection{Continuous Governance vs. Discrete Voting}
+\subsection{Continuous Governance }
 \begin{itemize}
-   \item 24/7 price discovery vs periodic votes
+   \item 24/7 price discovery
    \item Information incorporated immediately
-   \item No voter fatigue or attention requirements
 \end{itemize}
 
 \section{Application Domain: Conditional Payments and Insurance}
@@ -281,45 +224,12 @@ We demonstrate applications across multiple domains: (1) governance without voti
     \item Enables participation without full capital lock
 \end{itemize}
 
-\subsection{On-Chain Legal Infrastructure}
-\begin{itemize}
-    \item Walrus: Sui-controlled decentralized storage
-    \item Git-on-Walrus: Version controlled legal documents
-    \item Operating agreements hash-linked to on-chain governance
-    \item Legal documents updated only through superposition protocol
-    \item Courts must follow on-chain state (code as law)
-    \item Complete legal autonomy for DAOs
-\end{itemize}
-
 \subsection{Gas Optimization Strategies}
 \begin{itemize}
     \item Lazy state evaluation
     \item Compute $\Delta P \times \Delta R$ only on trades
     \item Keeper incentives for resolution triggers
 \end{itemize}
-
-\subsection{User Interface Primitives: A Wolfram-Like Language}
-\begin{itemize}
-    \item Symbolic representation of complex proposals
-    \item Pattern matching for dependencies
-    \item Composable governance primitives
-    \item Example: \texttt{Proposal["Hire"] := \{Amount -> 500k, Vesting -> Years[4]\}}
-\end{itemize}
-
-\section{Conclusion}
-\begin{itemize}
-   \item Superposition protocol enables O(1) collective decisions
-   \item Markets replace voting as coordination primitive
-   \item Immediate execution solves commitment problems
-   \item Foundation for market-based organizational intelligence
-\end{itemize}
-
-
-\appendix
-\section{Mathematical Proofs}
-\section{Implementation Code Samples}
-\section{Experimental Data}
-\section{Formal Grammar for Proposal Specification Language}
 
 \bibliographystyle{alpha}
 \bibliography{sample}
