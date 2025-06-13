@@ -1,10 +1,11 @@
 {
-	"name": "escrow-api-demo",
+	"name": "govex-backend",
 	"version": "1.0.10",
 	"private": true,
-	"description": "Demo package for escrow",
+	"description": "Backend service for Govex.ai",
 	"main": "server.ts",
 	"scripts": {
+		"build": "tsc",
 		"fresh:db": "chmod +x fresh-db.sh && ./fresh-db.sh",
 		"branch:db": "chmod +x branch-db.sh && ./branch-db.sh",
 		"dev": "concurrently \"pnpm api:dev\" \"pnpm indexer\" \"pnpm poll:dev\"",

@@ -19,3 +19,5 @@ frontend/dist/
 **/.env
 .DS_Store
 **/.DS_Store
+
+dist/

@@ -7,7 +7,7 @@
     "start": "echo 'Please use service-specific commands: start:backend or start:frontend'",
     "start:backend": "cd backend && node dist/server.js",
     "start:frontend": "cd frontend && serve -s dist -l ${PORT:-3000}",
-    "build:backend": "cd backend && pnpm install && tsc",
+    "build:backend": "pnpm --filter govex-backend run build",
     "build:frontend": "cd frontend && pnpm install && pnpm run build-frontend",
     "install:backend": "cd backend && pnpm install",
     "install:frontend": "cd frontend && pnpm install"
