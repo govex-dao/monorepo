@@ -5,7 +5,7 @@
 	"description": "Backend service for Govex.ai",
 	"main": "server.ts",
 	"scripts": {
-		"build": "pnpm clean && pnpm exec tsc",
+		"build": "pnpm clean && npx prisma generate && pnpm exec tsc",
 		"clean": "rm -rf dist",
 		"fresh:db": "chmod +x fresh-db.sh && ./fresh-db.sh",
 		"branch:db": "chmod +x branch-db.sh && ./branch-db.sh",
