@@ -15,6 +15,11 @@ if [ -z "${ADMIN_EMAIL}" ]; then
   exit 1
 fi
 
+if [ -z "${VITE_NETWORK}" ]; then
+  echo "Error: VITE_NETWORK environment variable is required"
+  exit 1
+fi
+
 PROJECT_DIR="/root/monorepo"
 
 # Helper Functions
