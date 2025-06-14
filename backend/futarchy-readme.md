@@ -22,7 +22,6 @@ npx ts-node futarchy-scripts/futarchy-5-create-prop.ts
 
 
 
-
 withdraw liquidity
 withdraw fees
 
