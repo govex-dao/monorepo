@@ -25,7 +25,7 @@
 		"start:backend": "pm2 start 'pnpm dev:prod' --name backend && pm2 save",
 		"start:bot": "pm2 start 'pnpm bot:prod' --name bot && pm2 save",
 		"start:all": "pnpm start:backend && pnpm start:bot",
-		"deploy": "pnpm setup:prod && pnpm start:all",
+		"deploy:prod": "pnpm setup:prod && pnpm start:all",
 		"stop:all": "pm2 stop backend bot",
 		"restart:all": "pm2 restart backend bot",
 		"logs:backend": "pm2 logs backend",

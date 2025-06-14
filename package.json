@@ -13,7 +13,7 @@
     "build:frontend": "cd frontend && pnpm install && pnpm run build-frontend",
     "install:backend": "cd backend && pnpm install",
     "install:frontend": "cd frontend && pnpm install",
-    "start:backend": "cd backend && pnpm deploy"
+    "start:backend": "cd backend && pnpm deploy:prod"
   },
   "engines": {
     "node": ">=18.0.0"
