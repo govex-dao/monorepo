@@ -1,0 +1,10 @@
+{
+  "packageId": "0x1fb34746db01cd84b1b712683631909ec600e701a160b711371f7d553b8126dd",
+  "upgradeCapId": "0xb412b7b7b34f20261ea64e840d2560ea0b4b4e280307d418c671be6db01b4598",
+  "factoryId": "0x8c519be44e3ea9a197fcf6f1b41fe5197d9769355d945ecca5a64584fdb7e19e",
+  "factoryOwnerCapId": "0x5f3ae04d8dc358df650bf82716cd842335803bad61da251b77707905b3fd266f",
+  "validatorAdminCapId": "0x6fa2b5010c931a35c69c8fa1842aa59170090d3d7978a5cb4a6f5c0549717e71",
+  "feeAdminCapId": "0x1839201f0178f6cef480032a67a2fc5fb1bfa430f32f545ef95454738c56d5b3",
+  "feeManagerId": "0x28a77cf77fa1fc0235df4ea28c63c02184d33f52c715e618754c7747271fdc22",
+  "transactionDigest": "G4gPxquZ3E3zt1JoU9u9b9nAjDfWaHW3A4YTdFwoDjcx"
+}

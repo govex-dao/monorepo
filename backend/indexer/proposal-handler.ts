@@ -91,7 +91,7 @@ function formatProposalData(data: ProposalCreated): Prisma.ProposalCreateInput {
         title: data.title,
         details: data.details,
         metadata: data.metadata,
-        package_id: CONFIG.DAO_CONTRACT.packageId,
+        package_id: CONFIG.FUTARCHY_CONTRACT.packageId,
         current_state: 0,
         state_history: { create: [] },
         review_period_ms: safeBigInt(data.review_period_ms),

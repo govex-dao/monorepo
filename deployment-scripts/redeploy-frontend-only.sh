@@ -7,6 +7,11 @@ ROOT_DOMAIN="govex.ai"
 FRONTEND_PORT=5173
 PROJECT_DIR="/root/monorepo"
 
+if [ -z "${VITE_NETWORK}" ]; then
+  echo "Error: VITE_NETWORK environment variable is required"
+  exit 1
+fi
+
 function update_frontend_code_only() {
     echo "=== Updating Frontend Code Only ==="
     if [ -d "$PROJECT_DIR" ]; then

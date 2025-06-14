@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { mintCoins } from '../mint-utils';
 import { execSync } from 'child_process';
 import fs from 'fs';

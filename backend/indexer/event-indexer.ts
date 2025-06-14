@@ -26,71 +26,71 @@ type EventTracker = {
 // Event configuration
 const EVENTS_TO_TRACK: EventTracker[] = [
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::proposal::ProposalCreated`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::proposal::ProposalCreated`,
         filter: {
             MoveEventModule: {
                 module: 'proposal',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleProposalObjects,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::dao::DAOCreated`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::dao::DAOCreated`,
         filter: {
             MoveEventModule: {
                 module: 'dao',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleDAOObjects,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::dao::ResultSigned`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::dao::ResultSigned`,
         filter: {
             MoveEventModule: {
                 module: 'dao',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleProposalResults,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::amm::SwapEvent`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::amm::SwapEvent`,
         filter: {
             MoveEventModule: {
                 module: 'amm',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleSwapEvents,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::advance_stage::ProposalStateChanged`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::advance_stage::ProposalStateChanged`,
         filter: {
             MoveEventModule: {
                 module: 'advance_stage',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleProposalStateChanges,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::factory::VerificationRequested`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::factory::VerificationRequested`,
         filter: {
             MoveEventModule: {
                 module: 'factory',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleVerificationRequests,
     },
     {
-        type: `${CONFIG.DAO_CONTRACT.packageId}::factory::DAOReviewed`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::factory::DAOReviewed`,
         filter: {
             MoveEventModule: {
                 module: 'factory',
-                package: CONFIG.DAO_CONTRACT.packageId,
+                package: CONFIG.FUTARCHY_CONTRACT.packageId,
             },
         },
         callback: handleVerifications,
