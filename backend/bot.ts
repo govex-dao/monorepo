@@ -17,7 +17,7 @@ const parseConfigurationFile = (fileName: string) => {
 
 
 // --- Configuration ---
-const FUTARCHY_CONTRACT = parseConfigurationFile(`deployments/${process.env.NETWORK}-futarchy`)
+const FUTARCHY_CONTRACT = parseConfigurationFile(`deployments/futarchy-${process.env.NETWORK}`)
 const SUI_PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
 const SUI_RPC_URL = process.env.SUI_RPC_URL || getFullnodeUrl('testnet');
 const PACKAGE_ID = process.env.PACKAGE_ID || FUTARCHY_CONTRACT.packageId;

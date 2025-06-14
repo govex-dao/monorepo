@@ -21,5 +21,5 @@ export const CONFIG = {
 	POLLING_INTERVAL_MS: 5000,
 	DEFAULT_LIMIT: 50,
 	NETWORK: (process.env.NETWORK as CustomNetwork) || 'devnet',
-	FUTARCHY_CONTRACT: parseConfigurationFile(`deployments/${process.env.NETWORK}-futarchy`),
+	FUTARCHY_CONTRACT: parseConfigurationFile(`deployments/futarchy-${process.env.NETWORK}`),
 };

@@ -11,7 +11,7 @@
 		"branch:db": "chmod +x branch-db.sh && ./branch-db.sh",
 		"dev": "concurrently \"pnpm api:dev\" \"pnpm indexer\" \"pnpm poll:dev\"",
 		"dev:local": "cross-env NETWORK=devnet pnpm dev",
-		"dev:prod": "cross-env NETWORK=testnetProd pnpm dev",
+		"dev:prod": "cross-env pnpm dev",
 		"db:setup:dev": "npx prisma migrate dev --name init",
 		"db:reset:dev": "npx prisma db push --force-reset",
 		"db:studio": "npx prisma studio",

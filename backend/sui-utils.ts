@@ -8,7 +8,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { fromBase64 } from '@mysten/sui/utils';
 
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
-export type CustomNetwork = 'mainnet' | 'testnet' | 'devnet' | 'localnet' | 'testnetLocal' | 'testnetProd';
+export type CustomNetwork = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
 export const ACTIVE_NETWORK = (process.env.NETWORK as Network) || 'devnet';
 
 export const SUI_BIN = `sui`;
@@ -43,21 +43,14 @@ export const getSigner = () => {
 /** Get the client for the specified network. */
 export const getClient = (network: CustomNetwork) => {
 
-    // Validate environment variables for custom networks
-    if (network === 'testnetLocal' && !process.env.TESTNET_LOCAL_URL) {
-        throw new Error('TESTNET_LOCAL_URL environment variable is required for testnetLocal network');
-    }
-
-    if (network === 'testnetProd' && !process.env.TESTNET_PROD_URL) {
-        throw new Error('TESTNET_PROD_URL environment variable is required for testnetProd network');
+    if (!process.env.TESTNET_RPC_URL && !process.env.MAINNET_RPC_URL) {
+        throw new Error('one of TESTNET_RPC_URL or MAINNET_RPC_URL is required in the environment variables');
     }
     const urls: Record<CustomNetwork, string> = {
-        mainnet: getFullnodeUrl('mainnet' as Network),
-        testnet: getFullnodeUrl('testnet' as Network),
+        mainnet: process.env.MAINNET_RPC_URL as string,
+        testnet: process.env.TESTNET_RPC_URL as string,
         devnet: getFullnodeUrl('devnet' as Network),
-        localnet: getFullnodeUrl('localnet' as Network),
-        testnetLocal: process.env.TESTNET_LOCAL_URL as string,
-        testnetProd: process.env.TESTNET_PROD_URL as string
+        localnet: getFullnodeUrl('localnet' as Network)
     };
 
     return new SuiClient({ url: urls[network] });
