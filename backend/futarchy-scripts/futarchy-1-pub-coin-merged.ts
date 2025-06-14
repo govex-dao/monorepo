@@ -13,8 +13,7 @@ import { fromBase64 } from '@mysten/sui/utils';
 // Constants & Type Definitions
 // -----------------------
 
-type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
-const ACTIVE_NETWORK: Network = (process.env.NETWORK as Network) || 'devnet';
+type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet'
 
 // SUI_BIN is the binary name used to call the move build command.
 const SUI_BIN = 'sui';

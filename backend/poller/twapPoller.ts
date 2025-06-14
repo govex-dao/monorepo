@@ -252,7 +252,7 @@ class TWAPPoller {
 
 // Create and export the poller instance.
 export const twapPoller = new TWAPPoller({
-  packageId: CONFIG.DAO_CONTRACT.packageId,
+  packageId: CONFIG.FUTARCHY_CONTRACT.packageId,
   oracleModule: 'oracle',
   clockObjectId: '0x6' // Ensure this matches your configuration.
 });

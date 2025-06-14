@@ -10,7 +10,6 @@ import { fromBase64 } from '@mysten/sui/utils';
 
 // Constants
 export type Network = 'mainnet' | 'testnet' | 'devnet' | 'localnet';
-export const ACTIVE_NETWORK = (process.env.NETWORK as Network) || 'devnet';
 export const SUI_BIN = `sui`;
 
 export const getActiveAddress = () => {
