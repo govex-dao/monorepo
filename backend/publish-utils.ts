@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { execSync } from 'child_process';
 import { readFileSync, writeFileSync } from 'fs';
 import { existsSync, unlinkSync} from 'fs';
@@ -171,10 +168,12 @@ export const publishPackage = async ({
 	// Single write operation that replaces your previous two writes
 
 	const resultsDir = 'futarchy-results';
+	const deployDir = 'deployments'
 	const fileConfigs = [
 	  { path: path.join(resultsDir, 'futarchy-pub-short.json'), content: parseDeploymentResults(results) },
 	  { path: path.join(resultsDir, 'futarchy-pub-full.json'), content: results },
-	  { path: 'dao-contract.json', content: parseDeploymentResults(results) }
+	  { path: 'dao-contract.json', content: parseDeploymentResults(results) },
+	  { path: path.join(deployDir, `${ACTIVE_NETWORK}-futarchy.json`), content: parseDeploymentResults(results) },
 	];
 	
 	// Delete existing files

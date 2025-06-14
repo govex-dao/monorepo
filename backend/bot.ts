@@ -4,14 +4,24 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
 import express from 'express';
 import crypto from 'crypto';
-import daoContract from './dao-contract.json';
+import { readFileSync } from 'fs';
+
+/// We assume our config files are in the format: { "packageId": "0x..." }
+const parseConfigurationFile = (fileName: string) => {
+	try {
+		return JSON.parse(readFileSync(`${fileName}.json`, 'utf8'));
+	} catch (e) {
+		throw new Error(`Missing config file ${fileName}.json`);
+	}
+};
 
 
 // --- Configuration ---
+const FUTARCHY_CONTRACT = parseConfigurationFile(`deployments/${process.env.NETWORK}-futarchy`)
 const SUI_PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
 const SUI_RPC_URL = process.env.SUI_RPC_URL || getFullnodeUrl('testnet');
-const PACKAGE_ID = process.env.PACKAGE_ID || daoContract.packageId;
-const FEE_MANAGER_ID = process.env.FEE_MANAGER_ID || daoContract.feeManagerId;
+const PACKAGE_ID = process.env.PACKAGE_ID || FUTARCHY_CONTRACT.packageId;
+const FEE_MANAGER_ID = process.env.FEE_MANAGER_ID || FUTARCHY_CONTRACT.feeManagerId;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '60000', 10);
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;

@@ -1,6 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
-
 import { publishPackage } from '../publish-utils';
 import fs from 'fs';
 import path from 'path';
