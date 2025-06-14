@@ -20,7 +20,16 @@
 		"indexer": "npx ts-node ./indexer/index.ts",
 		"bot": "npx ts-node bot.ts",
 		"bot:dev": "cross-env NODE_ENV=development npx ts-node bot.ts",
-		"bot:prod": "cross-env NODE_ENV=production npx ts-node bot.ts"
+		"bot:prod": "cross-env NODE_ENV=production npx ts-node bot.ts",
+		"setup:prod": "pnpm install && npx prisma generate && sqlite3 dev.db 'PRAGMA journal_mode=WAL;'",
+		"start:backend": "pm2 start 'pnpm dev:prod' --name backend && pm2 save",
+		"start:bot": "pm2 start 'pnpm bot:prod' --name bot && pm2 save",
+		"start:all": "pnpm start:backend && pnpm start:bot",
+		"deploy": "pnpm setup:prod && pnpm start:all",
+		"stop:all": "pm2 stop backend bot",
+		"restart:all": "pm2 restart backend bot",
+		"logs:backend": "pm2 logs backend",
+		"logs:bot": "pm2 logs bot"
 	},
 	"keywords": [],
 	"author": "",
