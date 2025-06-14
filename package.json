@@ -12,7 +12,8 @@
     "build:backend": "pnpm --filter govex-backend pnpm deploy",
     "build:frontend": "cd frontend && pnpm install && pnpm run build-frontend",
     "install:backend": "cd backend && pnpm install",
-    "install:frontend": "cd frontend && pnpm install"
+    "install:frontend": "cd frontend && pnpm install",
+    "start:backend": "cd backend && pnpm deploy"
   },
   "engines": {
     "node": ">=18.0.0"
