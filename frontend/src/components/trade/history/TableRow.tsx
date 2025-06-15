@@ -1,4 +1,4 @@
-import { getOutcomeColor } from "@/utils/outcomes";
+import { getOutcomeColor } from "@/utils/outcomeColors";
 import { ExplorerLink } from "../../ExplorerLink";
 import { CalculatedEvent } from "./TradeHistory";
 

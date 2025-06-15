@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { getOutcomeColor } from "@/utils/outcomes";
+import { getOutcomeColor } from "@/utils/outcomeColors";
 import { TableRow } from "./TableRow";
 import { SortConfig, SortField, TableHeader } from "./TableHeader";
 import {

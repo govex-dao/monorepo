@@ -1,7 +1,7 @@
 import React from "react";
 import { RedeemTokensButton } from "./RedeemTokensButton";
 import { TokenInfo } from "./TradeForm";
-import { getOutcomeColor } from "@/utils/outcomes";
+import { getOutcomeColor } from "@/utils/outcomeColors";
 
 interface TokenSectionProps {
   proposalId: string;

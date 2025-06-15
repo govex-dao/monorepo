@@ -1,42 +1,67 @@
-// Helper function to convert HSL color to HEX format.
-const hslToHex = (h: number, s: number, l: number): string => {
-  s /= 100;
-  l /= 100;
+// Single source of truth for outcome colors
+const OUTCOME_COLORS = [
+  {
+    hex: "#f87171", // red-400
+    bg: "bg-red-900/30",
+    text: "text-red-400",
+    border: "border-red-700/30",
+  },
+  {
+    hex: "#4ade80", // green-400
+    bg: "bg-green-900/30",
+    text: "text-green-400",
+    border: "border-green-700/30",
+  },
+  {
+    hex: "#60a5fa", // blue-400
+    bg: "bg-blue-900/30",
+    text: "text-blue-400",
+    border: "border-blue-700/30",
+  },
+  {
+    hex: "#c084fc", // purple-400
+    bg: "bg-purple-900/30",
+    text: "text-purple-400",
+    border: "border-purple-700/30",
+  },
+  {
+    hex: "#facc15", // yellow-400
+    bg: "bg-yellow-900/30",
+    text: "text-yellow-400",
+    border: "border-yellow-700/30",
+  },
+  {
+    hex: "#f472b6", // pink-400
+    bg: "bg-pink-900/30",
+    text: "text-pink-400",
+    border: "border-pink-700/30",
+  },
+  {
+    hex: "#a78bfa", // indigo-400
+    bg: "bg-indigo-900/30",
+    text: "text-indigo-400",
+    border: "border-indigo-700/30",
+  },
+];
 
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) =>
-    l - a * Math.max(Math.min(k(n) - 3, 9 - k(n), 1), -1);
-
-  const toHex = (x: number) =>
-    Math.round(x * 255)
-      .toString(16)
-      .padStart(2, "0");
-
-  return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+/**
+ * Gets the color for a specific outcome by index.
+ * Returns Tailwind classes for styling.
+ */
+export const getOutcomeColor = (
+  index: number,
+): { bg: string; text: string; border: string } => {
+  const color = OUTCOME_COLORS[index % OUTCOME_COLORS.length];
+  return { bg: color.bg, text: color.text, border: color.border };
 };
 
 /**
- * Generates an array of distinct colors for market outcomes based on the logic from the chart.
- * @param outcomeCount The number of outcomes.
- * @returns An array of hex color strings.
+ * Generates an array of hex colors for market outcomes.
+ * Used for chart visualization.
  */
 export const getOutcomeColors = (outcomeCount: number): string[] => {
   if (outcomeCount <= 0) return [];
-  if (outcomeCount === 1) return ["#ef4444"]; // Red
-  if (outcomeCount === 2) return ["#ef4444", "#22c55e"]; // Red, Green
-
-  // For >2 outcomes, generate visually distinct colors starting with Red.
-  const generateDistantColors = (count: number) => {
-    const startHue = 120; // Green
-    const endHue = 300; // Magenta/Purple
-    const step = (endHue - startHue) / (count - 1);
-    return Array.from({ length: count - 1 }, (_, i) => {
-      const hue = startHue + i * step;
-      return hslToHex(hue, 100, 50);
-    });
-  };
-
-  const additionalColors = generateDistantColors(outcomeCount);
-  return ["#ef4444", ...additionalColors];
+  
+  return OUTCOME_COLORS.slice(0, Math.min(outcomeCount, OUTCOME_COLORS.length))
+    .map(color => color.hex);
 };
