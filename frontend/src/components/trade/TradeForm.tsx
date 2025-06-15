@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSignAndExecuteTransaction, useSuiClient } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { SuiClient } from "@mysten/sui/client";
@@ -17,6 +16,7 @@ import TradeDirectionToggle, {
 import TokenInputField from "./swap/TokenInputField";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
 import { SwapBreakdown } from "@/utils/trade/types";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 
 const DEFAULT_SLIPPAGE_BPS = 200;
 
@@ -87,20 +87,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
   const [selectedOutcome, setSelectedOutcome] = useState("0");
   const [isBuy, setIsBuy] = useState(true);
   const [expectedAmountOut, setExpectedAmountOut] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const client = useSuiClient();
-  const { mutate: signAndExecute } = useSignAndExecuteTransaction({
-    execute: async ({ bytes, signature }) =>
-      await client.executeTransactionBlock({
-        transactionBlock: bytes,
-        signature,
-        options: {
-          showRawEffects: true,
-          showEffects: true,
-          showObjectChanges: true,
-        },
-      }),
-  });
+  const { executeTransaction, isLoading } = useSuiTransaction();
   const [swapDetails, setSwapDetails] = useState<SwapBreakdown | null>(null);
   const { balance: assetBalance, refreshBalance: refreshAssetBalance } =
     useTokenBalance({
@@ -383,10 +370,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       toast.error("Amount and expected amount out must be positive numbers");
       return;
     }
-    const loadingToast = toast.loading("Preparing swap transaction...");
-
     try {
-      setIsLoading(true);
       // Convert from human-readable to blockchain amounts
       const amountScaled = BigInt(
         Math.floor(parseFloat(amount) * Number(fromToken.scale)),
@@ -479,96 +463,34 @@ const TradeForm: React.FC<TradeFormProps> = ({
         });
       }
 
-      signAndExecute(
-        { transaction: txb },
+      await executeTransaction(
+        txb,
         {
           onSettled: () => {
-            toast.dismiss(loadingToast);
             refreshAssetBalance();
             refreshStableBalance();
             refreshTokens();
           },
-          onSuccess: (result) => {
-            if (result.effects?.status.status === "success") {
-              toast.success(
-                <div>
-                  Swap successful!
-                  <a
-                    href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline ml-2"
-                  >
-                    View transaction
-                  </a>
-                </div>,
-                { duration: 5000 },
-              );
-              setAmount("");
-              setExpectedAmountOut("");
-            } else {
-              // Transaction was submitted but failed/aborted during execution
-              const errorMessage =
-                result.effects?.status.error ||
-                "Transaction failed during execution";
-
-              // Check if it's a Move abort
-              let displayError = errorMessage;
-              if (
-                errorMessage.includes("Move abort") ||
-                errorMessage.includes("MOVE_ABORT")
-              ) {
-                const abortCodeMatch = errorMessage.match(/abort code (\d+)/);
-                const locationMatch = errorMessage.match(/in ([^(]+)/);
-
-                if (abortCodeMatch) {
-                  displayError = `Transaction aborted with code ${abortCodeMatch[1]}`;
-                  if (locationMatch) {
-                    displayError += ` in ${locationMatch[1].trim()}`;
-                  }
-                }
-              }
-
-              toast.error(
-                <div>
-                  {displayError}
-                  <a
-                    href={`https://suiscan.xyz/${CONSTANTS.network}/tx/${result.digest}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline ml-2"
-                  >
-                    View details
-                  </a>
-                </div>,
-                { duration: 5000 },
-              );
-            }
-          },
-          onError: (error) => {
-            let errorMsg = "Swap failed";
-
-            if (error.message?.includes("Rejected from user")) {
-              errorMsg = "Transaction cancelled";
-            } else if (error.message?.includes("Insufficient gas")) {
-              errorMsg = "Insufficient SUI for gas fees";
-            } else if (error.message?.includes("InsufficientBalance")) {
-              errorMsg = `Insufficient ${fromToken.symbol} balance`;
-            } else if (error.message) {
-              errorMsg = error.message;
-            }
-
-            toast.error(errorMsg);
+          onSuccess: () => {
+            setAmount("");
+            setExpectedAmountOut("");
           },
         },
+        {
+          loadingMessage: "Preparing swap transaction...",
+          successMessage: "Swap successful!",
+          errorMessage: (error: Error) => {
+            if (error.message?.includes("InsufficientBalance")) {
+              return `Insufficient ${fromToken.symbol} balance`;
+            }
+            return error.message || "Transaction failed"; // Return a default message instead of undefined
+          },
+        }
       );
     } catch (error) {
-      toast.dismiss(loadingToast);
       const errorMsg =
         error instanceof Error ? error.message : "An unknown error occurred";
       toast.error(errorMsg);
-    } finally {
-      setIsLoading(false);
     }
   };
 

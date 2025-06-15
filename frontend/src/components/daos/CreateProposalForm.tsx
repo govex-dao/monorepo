@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { InfoCircledIcon, ReloadIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
@@ -504,7 +504,7 @@ const CreateProposalForm = ({
     };
   });
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction, isLoading } = useSuiTransaction();
   const descriptionSaveTimeoutRef = useRef<NodeJS.Timeout>();
 
   // Helper function to combine sections into full description
@@ -671,7 +671,6 @@ const CreateProposalForm = ({
     });
     setCustomAmounts(newAmounts);
   };
-  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // We no longer need these helper functions since we're managing description through sections
@@ -738,21 +737,12 @@ const CreateProposalForm = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreating(true);
     setError(null);
 
     if (!currentAccount?.address) {
       toast.error("Please connect your wallet before creating a proposal.");
       return;
     }
-
-    const loadingToast = toast.loading("Preparing transaction...");
-    const walletApprovalTimeout = setTimeout(() => {
-      toast.error("Wallet approval timeout - no response after 1 minute", {
-        id: loadingToast,
-        duration: 5000,
-      });
-    }, 60000);
 
     try {
       // Constants for maximum lengths
@@ -840,34 +830,45 @@ const CreateProposalForm = ({
         CONSTANTS.futarchyPackage,
       );
 
-      toast.loading("Waiting for wallet approval...", { id: loadingToast });
-
-      const response = await executeTransaction(txBlock);
-
-      // Handle the response
-      if (
-        response &&
-        response.digest &&
-        "effects" in response &&
-        response.effects?.status?.status === "success"
-      ) {
-        // Clear localStorage on successful submission
-        localStorage.removeItem("proposalFormData");
-        localStorage.removeItem("proposalDescription");
-        setFormData((prev) => ({
-          ...DEFAULT_FORM_DATA,
-          senderAddress: prev.senderAddress,
-        }));
-      }
+      await executeTransaction(
+        txBlock,
+        {
+          onSuccess: () => {
+            // Clear localStorage on successful submission
+            localStorage.removeItem("proposalFormData");
+            localStorage.removeItem("proposalDescription");
+            setFormData((prev) => ({
+              ...DEFAULT_FORM_DATA,
+              senderAddress: prev.senderAddress,
+            }));
+          },
+          onError: (error) => {
+            console.error("Error creating proposal:", {
+              message: error.message,
+              details: error,
+            });
+            setError(error.message);
+          },
+        },
+        {
+          loadingMessage: "Creating proposal...",
+          successMessage: "Proposal created successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to create proposal: ${error.message}`;
+          },
+        }
+      );
     } catch (error: unknown) {
-      console.error("Error creating proposal:", {
-        message: error instanceof Error ? error.message : String(error),
-        details: error,
-      });
-    } finally {
-      setCreating(false);
-      clearTimeout(walletApprovalTimeout);
-      toast.dismiss(loadingToast);
+      // Handle pre-transaction errors (validation, etc.)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error preparing proposal:", errorMessage);
+      toast.error(errorMessage);
+      setError(errorMessage);
     }
   };
   return (
@@ -1237,10 +1238,10 @@ const CreateProposalForm = ({
 
         <button
           type="submit"
-          disabled={creating}
+          disabled={isLoading}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {creating ? "Creating..." : "Create Proposal"}
+          {isLoading ? "Creating..." : "Create Proposal"}
         </button>
       </form>
     </div>

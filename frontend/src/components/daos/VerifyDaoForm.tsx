@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Transaction } from "@mysten/sui/transactions";
 import { InfoCircledIcon, ClipboardIcon } from "@radix-ui/react-icons";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import toast from "react-hot-toast";
 import DaoSearchInput from "./DaoSearchInput";
 import { CONSTANTS } from "../../constants";
@@ -48,10 +48,9 @@ const VerifyDaoForm = () => {
   });
 
   const [selectedDao, setSelectedDao] = useState<DaoData | null>(null);
-  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction, isLoading } = useSuiTransaction();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -71,21 +70,12 @@ const VerifyDaoForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setVerifying(true);
     setError(null);
 
     if (!currentAccount) {
-      toast.error("Please connect your wallet before creating a DAO.");
+      toast.error("Please connect your wallet before verifying a DAO.");
       return;
     }
-
-    const loadingToast = toast.loading("Preparing DAO verification...");
-    const walletApprovalTimeout = setTimeout(() => {
-      toast.error("Wallet approval timeout - no response after 1 minute", {
-        id: loadingToast,
-        duration: 5000,
-      });
-    }, 60000);
 
     try {
       if (!formData.daoId) {
@@ -106,7 +96,7 @@ const VerifyDaoForm = () => {
       tx.moveCall({
         target: `${CONSTANTS.futarchyPackage}::factory::request_verification`,
         arguments: [
-          tx.object(CONSTANTS.futarchyFactoryId),
+          tx.object(CONSTANTS.futarchyPaymentManagerId),
           splitCoin,
           tx.object(formData.daoId),
           tx.pure.string(formData.attestationUrl),
@@ -114,25 +104,39 @@ const VerifyDaoForm = () => {
         ],
       });
 
-      toast.loading("Waiting for wallet approval...", { id: loadingToast });
-
-      const response = await executeTransaction(tx);
-
-      if (response && response.digest) {
-        setFormData({
-          daoId: "",
-          attestationUrl: "",
-        });
-        setSelectedDao(null);
-      }
+      await executeTransaction(
+        tx,
+        {
+          onSuccess: () => {
+            setFormData({
+              daoId: "",
+              attestationUrl: "",
+            });
+            setSelectedDao(null);
+          },
+          onError: (error) => {
+            setError(error.message);
+          },
+        },
+        {
+          loadingMessage: "Requesting DAO verification...",
+          successMessage: "Verification request submitted successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to request verification: ${error.message}`;
+          },
+        }
+      );
     } catch (err) {
+      // Handle pre-transaction errors (validation, etc.)
       const errorMessage =
         err instanceof Error ? err.message : "Failed to request verification";
       setError(errorMessage);
-    } finally {
-      setVerifying(false);
-      clearTimeout(walletApprovalTimeout);
-      toast.dismiss(loadingToast);
+      toast.error(errorMessage);
     }
   };
 
@@ -234,10 +238,10 @@ const VerifyDaoForm = () => {
 
         <button
           type="submit"
-          disabled={verifying}
+          disabled={isLoading}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {verifying ? "Verifying..." : "Get DAO Verified"}
+          {isLoading ? "Verifying..." : "Get DAO Verified"}
         </button>
       </form>
       <VerificationHistory

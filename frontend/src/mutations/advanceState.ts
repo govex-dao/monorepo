@@ -1,9 +1,8 @@
 import { CONSTANTS, QueryKey } from "@/constants";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
 
 /**
  * Builds and executes the PTB to advance the proposal state.
@@ -11,7 +10,7 @@ import toast from "react-hot-toast";
  */
 export function useAdvanceStateMutation() {
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction } = useSuiTransaction();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -32,14 +31,6 @@ export function useAdvanceStateMutation() {
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
-
-      const loadingToast = toast.loading("Preparing transaction...");
-      const walletApprovalTimeout = setTimeout(() => {
-        toast.error("Wallet approval timeout - no response after 1 minute", {
-          id: loadingToast,
-          duration: 5000,
-        });
-      }, 60000);
 
       const txb = new Transaction();
       txb.setGasBudget(50000000);
@@ -90,37 +81,29 @@ export function useAdvanceStateMutation() {
         });
       }
 
-      try {
-        toast.loading("Waiting for wallet approval...", { id: loadingToast });
-        const result = await executeTransaction(txb);
-
-        // Check if we have a result and it was successful
-        if (
-          result &&
-          "effects" in result &&
-          result.effects?.status?.status === "success"
-        ) {
-          // Wait for backend to update (10 seconds)
-          setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
-          }, 10_000);
+      await executeTransaction(
+        txb,
+        {
+          onSuccess: () => {
+            // Wait for backend to update (10 seconds)
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
+            }, 10_000);
+          },
+        },
+        {
+          loadingMessage: "Advancing proposal state...",
+          successMessage: "Proposal state advanced successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to advance state: ${error.message}`;
+          },
         }
-
-        return result;
-      } catch (error) {
-        // Dismiss loading toast and show error
-        console.error(
-          error instanceof Error ? error.message : "Transaction failed",
-        );
-        throw error;
-      } finally {
-        clearTimeout(walletApprovalTimeout);
-        toast.dismiss(loadingToast);
-      }
-    },
-
-    onError: (error) => {
-      toast.error(`Failed to advance state: ${error.message}`);
+      );
     },
   });
 }

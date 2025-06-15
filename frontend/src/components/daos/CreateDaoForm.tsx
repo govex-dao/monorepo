@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { CONSTANTS } from "../../constants";
 import { InfoCircledIcon } from "@radix-ui/react-icons";
 import toast from "react-hot-toast";
@@ -52,8 +52,7 @@ const CreateDaoForm = () => {
   });
 
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
-  const [creating, setCreating] = useState(false);
+  const { executeTransaction, isLoading } = useSuiTransaction();
   const [_error, setError] = useState<string | null>(null);
   const [_success, setSuccess] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -300,18 +299,8 @@ const CreateDaoForm = () => {
       return;
     }
 
-    setCreating(true);
     setError(null);
     setSuccess(false);
-    const loadingToast = toast.loading("Preparing transaction...");
-    const walletApprovalTimeout = setTimeout(() => {
-      toast.error("Wallet approval timeout - no response after 1 minute", {
-        id: loadingToast,
-        duration: 5000,
-      });
-      setError("Wallet approval timeout");
-      setCreating(false);
-    }, 60000); // 1 minute timeout
 
     try {
       const tx = new Transaction();
@@ -346,27 +335,49 @@ const CreateDaoForm = () => {
         ],
       });
 
-      toast.loading("Waiting for wallet approval...", { id: loadingToast });
-
-      const response = await executeTransaction(tx);
-
-      if (
-        response &&
-        response.digest &&
-        "effects" in response &&
-        response.effects?.status?.status === "success"
-      ) {
-        setSuccess(true);
-      } else {
-        // Handle case where response exists but doesn't indicate success
-        setError("Transaction completed but with unexpected result");
-      }
+      await executeTransaction(
+        tx,
+        {
+          onSuccess: () => {
+            setSuccess(true);
+            // Reset form on success
+            setFormData({
+              assetType: DEFAULT_ASSET_TYPE,
+              stableType: DEFAULT_STABLE_TYPE,
+              minAssetAmount: "1",
+              minStableAmount: "1",
+              daoName: "",
+              imageUrl: "",
+              reviewPeriodMs: 0,
+              tradingPeriodMs: 0,
+              twapStartDelay: 0,
+              twapInitialObservation: "1000000000000",
+              twapStepMax: "5000000000",
+              twapThreshold: 1,
+            });
+          },
+          onError: (error) => {
+            setError(error.message);
+          },
+        },
+        {
+          loadingMessage: "Creating DAO...",
+          successMessage: "DAO created successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to create DAO: ${error.message}`;
+          },
+        }
+      );
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Transaction failed");
-    } finally {
-      setCreating(false);
-      clearTimeout(walletApprovalTimeout);
-      toast.dismiss(loadingToast);
+      // Handle pre-transaction errors (validation, calculation errors)
+      const errorMessage = error instanceof Error ? error.message : "Transaction failed";
+      setError(errorMessage);
+      toast.error(errorMessage);
     }
   };
 
@@ -660,10 +671,10 @@ const CreateDaoForm = () => {
         </div>
         <button
           type="submit"
-          disabled={creating}
+          disabled={isLoading}
           className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
         >
-          {creating ? "Creating..." : "Create DAO"}
+          {isLoading ? "Creating..." : "Create DAO"}
         </button>
       </form>
     </div>

@@ -1,26 +1,19 @@
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation } from "@tanstack/react-query";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
-import toast from "react-hot-toast";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { CONSTANTS } from "../../constants";
 
 export function useMintTestnetCoins() {
   const account = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction } = useSuiTransaction();
 
   return useMutation({
     mutationFn: async () => {
       if (!account?.address) {
         throw new Error("Please connect your wallet first!");
       }
-      const loadingToast = toast.loading("Preparing transaction...");
-      const walletApprovalTimeout = setTimeout(() => {
-        toast.error("Wallet approval timeout - no response after 1 minute", {
-          id: loadingToast,
-          duration: 5000,
-        });
-      }, 60000);
+      
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -44,22 +37,22 @@ export function useMintTestnetCoins() {
         ],
       });
 
-      // Show loading toast while transaction is processing
-
-      toast.loading("Minting testnet coins...", { id: loadingToast });
-
-      try {
-        const result = await executeTransaction(txb);
-
-        return result;
-      } catch (error) {
-        console.error(
-          error instanceof Error ? error.message : "Transaction failed",
-        );
-      } finally {
-        toast.dismiss(loadingToast);
-        clearTimeout(walletApprovalTimeout);
-      }
+      await executeTransaction(
+        txb,
+        {},
+        {
+          loadingMessage: "Minting testnet coins...",
+          successMessage: "Testnet coins minted successfully! You received 10 ASSET and 10 STABLE tokens.",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to mint coins: ${error.message}`;
+          },
+        }
+      );
     },
   });
 }

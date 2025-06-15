@@ -1,7 +1,6 @@
 import { QueryKey } from "@/constants";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
 import { Transaction } from "@mysten/sui/transactions";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 
@@ -36,7 +35,7 @@ interface RedeemTokensParams {
  */
 export function useRedeemTokensMutation() {
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction } = useSuiTransaction();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -53,13 +52,6 @@ export function useRedeemTokensMutation() {
       if (!currentAccount?.address) {
         throw new Error("Wallet not connected");
       }
-      const loadingToast = toast.loading("Preparing transaction...");
-      const walletApprovalTimeout = setTimeout(() => {
-        toast.error("Wallet approval timeout - no response after 1 minute", {
-          id: loadingToast,
-          duration: 5000,
-        });
-      }, 60000);
 
       const txb = new Transaction();
       txb.setGasBudget(50000000);
@@ -304,23 +296,26 @@ export function useRedeemTokensMutation() {
         }
       }
 
-      toast.loading("Redeeming tokens...", { id: loadingToast });
-      try {
-        const result = await executeTransaction(txb);
-        queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
-        return result;
-      } catch (error: any) {
-        if (error.message?.includes("Rejected from user")) {
-          toast.error("Transaction cancelled by user");
-        } else if (error.message?.includes("Insufficient gas")) {
-          toast.error("Insufficient SUI for gas fees");
-        } else {
-          toast.error(`Transaction failed: ${error.message}`);
+      await executeTransaction(
+        txb,
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
+          },
+        },
+        {
+          loadingMessage: "Redeeming tokens...",
+          successMessage: "Tokens redeemed successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Transaction failed: ${error.message}`;
+          },
         }
-      } finally {
-        toast.dismiss(loadingToast);
-        clearTimeout(walletApprovalTimeout);
-      }
+      );
     },
   });
 }

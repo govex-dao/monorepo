@@ -152,7 +152,7 @@ app.get('/daos', async (req, res) => {
                 amm_twap_start_delay: true,
                 amm_twap_step_max: true,
                 twap_threshold:true,
-                verificationRequests: true,
+                verificationRequests: false,  // Exclude this to avoid BigInt serialization issues
                 verification: {
                         select: {
                             verified: true

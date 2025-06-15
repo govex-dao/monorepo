@@ -1,13 +1,12 @@
 import { CONSTANTS, QueryKey } from "@/constants";
-import { useTransactionExecution } from "@/hooks/useTransactionExecution";
+import { useSuiTransaction } from "@/hooks/useSuiTransaction";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { Transaction } from "@mysten/sui/transactions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import toast from "react-hot-toast";
 
 export function useWithdrawProposerLiquidityMutation() {
   const currentAccount = useCurrentAccount();
-  const executeTransaction = useTransactionExecution();
+  const { executeTransaction } = useSuiTransaction();
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -26,13 +25,7 @@ export function useWithdrawProposerLiquidityMutation() {
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
-      const loadingToast = toast.loading("Preparing transaction...");
-      const walletApprovalTimeout = setTimeout(() => {
-        toast.error("Wallet approval timeout - no response after 1 minute", {
-          id: loadingToast,
-          duration: 5000,
-        });
-      }, 60000);
+      
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -47,29 +40,28 @@ export function useWithdrawProposerLiquidityMutation() {
         typeArguments: [`0x${assetType}`, `0x${stableType}`],
       });
 
-      toast.loading("Withdrawing liquidity...", { id: loadingToast });
-
-      try {
-        const result = await executeTransaction(txb);
-
-        if (
-          result &&
-          "effects" in result &&
-          result.effects?.status?.status === "success"
-        ) {
-          setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
-          }, 10_000);
+      await executeTransaction(
+        txb,
+        {
+          onSuccess: () => {
+            setTimeout(() => {
+              queryClient.invalidateQueries({ queryKey: [QueryKey.Proposals] });
+            }, 10_000);
+          },
+        },
+        {
+          loadingMessage: "Withdrawing liquidity...",
+          successMessage: "Liquidity withdrawn successfully!",
+          errorMessage: (error) => {
+            if (error.message?.includes("Rejected from user")) {
+              return "Transaction cancelled by user";
+            } else if (error.message?.includes("Insufficient gas")) {
+              return "Insufficient SUI for gas fees";
+            }
+            return `Failed to withdraw liquidity: ${error.message}`;
+          },
         }
-        return result;
-      } catch (error: any) {
-        console.error(
-          error instanceof Error ? error.message : "Transaction failed",
-        );
-      } finally {
-        toast.dismiss(loadingToast);
-        clearTimeout(walletApprovalTimeout);
-      }
+      );
     },
   });
 }
