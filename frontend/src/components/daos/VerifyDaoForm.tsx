@@ -99,7 +99,7 @@ const VerifyDaoForm = () => {
       const tx = new Transaction();
       const isMainnet = CONSTANTS.network === "mainnet";
       const gasBudget = isMainnet ? 500_000_000 : 500_000_000;
-      const splitAmount = isMainnet ? 20_000_000_000 : 10_000;
+      const splitAmount = isMainnet ? 10_000_000_000 : 10_000;
       tx.setGasBudget(gasBudget);
       const [splitCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(splitAmount)]);
 
