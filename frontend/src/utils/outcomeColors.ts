@@ -1,43 +1,43 @@
 // Single source of truth for outcome colors
 const OUTCOME_COLORS = [
   {
-    hex: "#f87171", // red-400
+    hex: "#ef4444", // red-500
     bg: "bg-red-900/30",
     text: "text-red-400",
     border: "border-red-700/30",
   },
   {
-    hex: "#4ade80", // green-400
+    hex: "#22c55e", // green-500
     bg: "bg-green-900/30",
     text: "text-green-400",
     border: "border-green-700/30",
   },
   {
-    hex: "#60a5fa", // blue-400
+    hex: "#3b82f6", // blue-500
     bg: "bg-blue-900/30",
     text: "text-blue-400",
     border: "border-blue-700/30",
   },
   {
-    hex: "#c084fc", // purple-400
+    hex: "#a855f7", // purple-500
     bg: "bg-purple-900/30",
     text: "text-purple-400",
     border: "border-purple-700/30",
   },
   {
-    hex: "#facc15", // yellow-400
+    hex: "#eab308", // yellow-500
     bg: "bg-yellow-900/30",
     text: "text-yellow-400",
     border: "border-yellow-700/30",
   },
   {
-    hex: "#f472b6", // pink-400
+    hex: "#ec4899", // pink-500
     bg: "bg-pink-900/30",
     text: "text-pink-400",
     border: "border-pink-700/30",
   },
   {
-    hex: "#a78bfa", // indigo-400
+    hex: "#6366f1", // indigo-500
     bg: "bg-indigo-900/30",
     text: "text-indigo-400",
     border: "border-indigo-700/30",
