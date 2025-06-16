@@ -34,10 +34,10 @@ const TabSection: React.FC<TabSectionProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex border-b border-gray-700">
+      <div className="flex overflow-x-auto border-b border-gray-700">
         <button
           onClick={() => setActiveTab("tokens")}
-          className={`px-6 py-3 text-sm font-medium ${
+          className={`px-6 py-5 text-sm font-medium whitespace-nowrap ${
             activeTab === "tokens"
               ? "text-blue-500 border-b-2 border-blue-500"
               : "text-gray-400 hover:text-gray-300"
@@ -47,7 +47,7 @@ const TabSection: React.FC<TabSectionProps> = ({
         </button>
         <button
           onClick={() => setActiveTab("description")}
-          className={`px-6 py-3 text-sm font-medium ${
+          className={`px-6 py-5 text-sm font-medium whitespace-nowrap ${
             activeTab === "description"
               ? "text-blue-500 border-b-2 border-blue-500"
               : "text-gray-400 hover:text-gray-300"
@@ -57,7 +57,7 @@ const TabSection: React.FC<TabSectionProps> = ({
         </button>
         <button
           onClick={() => setActiveTab("details")}
-          className={`px-6 py-3 text-sm font-medium ${
+          className={`px-6 py-5 text-sm font-medium whitespace-nowrap ${
             activeTab === "details"
               ? "text-blue-500 border-b-2 border-blue-500"
               : "text-gray-400 hover:text-gray-300"
@@ -67,7 +67,7 @@ const TabSection: React.FC<TabSectionProps> = ({
         </button>
         <button
           onClick={() => setActiveTab("liquidity")}
-          className={`px-6 py-3 text-sm font-medium ${
+          className={`px-6 py-5 text-sm font-medium whitespace-nowrap ${
             activeTab === "liquidity"
               ? "text-blue-500 border-b-2 border-blue-500"
               : "text-gray-400 hover:text-gray-300"
