@@ -48,6 +48,74 @@ function serializeBigInt(key: string, value: any): any {
     return value;
 }
 
+// Send Discord webhook notification for new proposal
+async function sendDiscordNotification(proposal: ProposalCreated): Promise<void> {
+    if (!CONFIG.DISCORD_WEBHOOK_URL) {
+        console.log('Discord webhook URL not configured, skipping notification');
+        return;
+    }
+
+    try {
+        const networkLabel = CONFIG.NETWORK === 'mainnet' ? '🌐 Mainnet' : '🧪 Testnet';
+        const embed = {
+            title: `${networkLabel} - New Proposal: ${proposal.title}`,
+            description: proposal.details,
+            color: CONFIG.NETWORK === 'mainnet' ? 0x0099ff : 0x00ff00, // Blue for mainnet, green for testnet
+            fields: [
+                {
+                    name: 'DAO',
+                    value: (proposal as any).dao_name || 'Unknown',
+                    inline: true
+                },
+                {
+                    name: 'Proposer',
+                    value: `\`${proposal.proposer}\``,
+                    inline: true
+                },
+                {
+                    name: 'Network',
+                    value: CONFIG.NETWORK,
+                    inline: true
+                },
+                {
+                    name: 'Outcomes',
+                    value: proposal.outcome_messages.join('\n'),
+                    inline: false
+                },
+                {
+                    name: 'Asset Value',
+                    value: proposal.asset_value,
+                    inline: true
+                },
+                {
+                    name: 'Stable Value',
+                    value: proposal.stable_value,
+                    inline: true
+                }
+            ],
+            timestamp: new Date().toISOString()
+        };
+
+        const response = await fetch(CONFIG.DISCORD_WEBHOOK_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                embeds: [embed]
+            })
+        });
+
+        if (!response.ok) {
+            console.error('Failed to send Discord notification:', response.statusText);
+        } else {
+            console.log(`Discord notification sent for proposal ${proposal.proposal_id} on ${CONFIG.NETWORK}`);
+        }
+    } catch (error) {
+        console.error('Error sending Discord notification:', error);
+    }
+}
+
 // Validate required fields in proposal data
 function validateProposalData(data: unknown): data is ProposalCreated {
     if (!data || typeof data !== 'object') return false;
@@ -137,6 +205,34 @@ async function processBatch(
                     await tx.proposal.create({
                         data: proposal
                     });
+                    
+                    // Fetch DAO name from database
+                    // If proposal.dao is a connect object, get the dao_id from it
+                    // Otherwise, use the direct dao_id field from proposal
+                    const daoId = typeof proposal.dao === 'object' && proposal.dao?.connect?.dao_id 
+                        ? proposal.dao.connect.dao_id 
+                        : (proposal as any).dao_id || '';
+                    
+                    const dao = await tx.dao.findUnique({
+                        where: { dao_id: daoId },
+                        select: { dao_name: true }
+                    });
+                    
+                    // Send Discord notification for new proposal
+                    // Note: We'll need to reconstruct the ProposalCreated data with minimal fields
+                    const proposalData = {
+                        proposal_id: proposal.proposal_id,
+                        dao_name: dao?.dao_name || 'Unknown DAO',
+                        title: proposal.title,
+                        details: proposal.details,
+                        outcome_messages: JSON.parse(proposal.outcome_messages as string),
+                        created_at: proposal.created_at.toString(),
+                    };
+                    
+                    // Send notification asynchronously (don't wait for it)
+                    sendDiscordNotification(proposalData as any).catch(error => 
+                        console.error('Failed to send Discord notification:', error)
+                    );
                 } else {
                     // Update proposal but preserve current_state
                     const { current_state, twapHistory, ...updateData } = proposal;

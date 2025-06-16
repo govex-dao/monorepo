@@ -22,4 +22,7 @@ export const CONFIG = {
 	DEFAULT_LIMIT: 50,
 	NETWORK: (process.env.NETWORK as CustomNetwork) || 'devnet',
 	FUTARCHY_CONTRACT: parseConfigurationFile(`deployments/futarchy-${process.env.NETWORK}`),
+	DISCORD_WEBHOOK_URL: process.env.NETWORK === 'mainnet' 
+		? process.env.DISCORD_WEBHOOK_URL_MAINNET 
+		: process.env.DISCORD_WEBHOOK_URL_TESTNET,
 };
