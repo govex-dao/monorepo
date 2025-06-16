@@ -31,6 +31,8 @@ interface ApiProposal {
   twap_start_delay: string;
   winning_outcome: string | null;
   package_id: string;
+  review_period_ms: string;
+  trading_period_ms?: string;
 }
 
 interface ProposalDetailsProps {
@@ -117,6 +119,10 @@ const ProposalDetails: React.FC<ProposalDetailsProps> = ({
                 daoId={proposal.dao_id}
                 proposalState={proposal.current_state}
                 winningOutcome={proposal.winning_outcome}
+                createdAt={proposal.created_at}
+                reviewPeriodMs={proposal.review_period_ms}
+                tradingPeriodMs={proposal.trading_period_ms}
+                stateHistory={proposal.state_history}
               />
             </div>
             <div className="flex justify-between">

@@ -11,7 +11,7 @@ import { useTokenEvents } from "@/hooks/useTokenEvents.ts";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
-import ProposalCountdownTimer from "@/components/trade/ProposalCountdownTimer";
+import ProposalStateManager from "@/components/trade/ProposalStateManager";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
 import { TradeHistory } from "@/components/trade/history/TradeHistory.tsx";
 import { getOutcomeColors } from "@/utils/outcomeColors.ts";
@@ -229,12 +229,12 @@ export function ProposalView() {
       <div className="px-4 sm:px-6 mt-3 mb-2">
         {" "}
         {/* Added responsive padding and adjusted margins */}
-        <ProposalCountdownTimer
+        <ProposalStateManager
           currentState={proposal.current_state}
           createdAt={proposal.created_at}
           reviewPeriodMs={proposal.review_period_ms}
-          tradingPeriodMs={proposal.trading_period_ms} // Pass directly, component handles if undefined
-          stateHistory={proposal.state_history || []} // Ensure stateHistory is always an array
+          tradingPeriodMs={proposal.trading_period_ms}
+          stateHistory={proposal.state_history || []}
         />
       </div>
       <div className="flex-1 overflow-hidden p-4">

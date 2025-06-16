@@ -1,5 +1,15 @@
 // components/AdvanceStateButton.tsx
 import { useAdvanceStateMutation } from "@/mutations/advanceState";
+import { useCurrentAccount } from "@mysten/dapp-kit";
+import toast from "react-hot-toast";
+
+interface StateHistory {
+  id: number;
+  proposal_id: string;
+  old_state: number;
+  new_state: number;
+  timestamp: string;
+}
 
 interface AdvanceStateButtonProps {
   proposalId: string;
@@ -9,6 +19,10 @@ interface AdvanceStateButtonProps {
   daoId: string;
   proposalState: number;
   winningOutcome: string | null;
+  createdAt: string;
+  reviewPeriodMs: string;
+  tradingPeriodMs?: string;
+  stateHistory: StateHistory[];
 }
 
 export function AdvanceStateButton({
@@ -19,8 +33,13 @@ export function AdvanceStateButton({
   daoId,
   proposalState,
   winningOutcome,
+  createdAt,
+  reviewPeriodMs,
+  tradingPeriodMs,
+  stateHistory,
 }: AdvanceStateButtonProps) {
   const advanceState = useAdvanceStateMutation();
+  const currentAccount = useCurrentAccount();
 
   const getButtonText = (state: number) => {
     switch (state) {
@@ -33,7 +52,43 @@ export function AdvanceStateButton({
     }
   };
 
-  if (winningOutcome !== null) {
+  // Determine if button should be shown based on state and timing
+  const shouldShowButton = () => {
+    const now = Date.now();
+    
+    if (proposalState === 0) {
+      // State 0: Show if current time > review_period_ms + created_at
+      const createdAtMs = Number(createdAt);
+      const reviewPeriodMsNum = Number(reviewPeriodMs);
+      if (!isNaN(createdAtMs) && !isNaN(reviewPeriodMsNum)) {
+        return now > createdAtMs + reviewPeriodMsNum;
+      }
+      return false;
+    } else if (proposalState === 1) {
+      // State 1: Show if current time > timestamp moved from state 0 to 1 + trading_period_ms
+      if (!tradingPeriodMs) return false;
+      
+      const tradingStartEvent = stateHistory
+        .filter(event => event.new_state === 1)
+        .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))[0];
+      
+      if (tradingStartEvent) {
+        const tradingStartMs = Number(tradingStartEvent.timestamp);
+        const tradingPeriodMsNum = Number(tradingPeriodMs);
+        if (!isNaN(tradingStartMs) && !isNaN(tradingPeriodMsNum)) {
+          return now > tradingStartMs + tradingPeriodMsNum;
+        }
+      }
+      return false;
+    } else if (proposalState === 2) {
+      // State 2: Show only if there is no winning outcome
+      return winningOutcome === null;
+    }
+    
+    return false;
+  };
+
+  if (!shouldShowButton()) {
     return null;
   }
 
@@ -49,6 +104,12 @@ export function AdvanceStateButton({
   };
 
   const handleAdvanceState = async () => {
+    if (!currentAccount) {
+      const action = proposalState === 2 ? "execute" : "advance";
+      toast.error(`Please connect your wallet to ${action} the proposal`);
+      return;
+    }
+
     try {
       await advanceState.mutateAsync({
         proposalId,
