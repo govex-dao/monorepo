@@ -107,7 +107,6 @@ const useTradeFilters = (
 
 export function TradeHistory({
   swapEvents = [],
-  assetSymbol,
   stableSymbol,
   outcomeMessages,
   assetScale,
@@ -449,7 +448,6 @@ export function TradeHistory({
                     event={event}
                     isMyTrade={event.sender === account?.address}
                     outcomeMessages={outcomeMessages}
-                    assetSymbol={assetSymbol}
                     stableSymbol={stableSymbol}
                   />
                 ))}

@@ -79,11 +79,11 @@ export function TableHeader(props: TableHeaderProps) {
     <thead className="select-none">
       <tr className="text-xs text-gray-400 border-b border-gray-800 bg-gray-900/70">
         <SortableHeader field="time" align="left" />
-        <StaticHeader field="type" />
-        <StaticHeader field="outcome" />
+        <StaticHeader field="type" align="center" />
+        <StaticHeader field="outcome" align="center" />
         <SortableHeader field="price" align="right" />
         <SortableHeader field="volume" align="right" />
-        <SortableHeader field="impact" align="right" label="Price impact" />
+        <SortableHeader field="impact" align="center" label="Price impact" />
         <StaticHeader field="trader" align="right" />
       </tr>
     </thead>

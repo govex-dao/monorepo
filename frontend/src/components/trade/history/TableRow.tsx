@@ -48,13 +48,11 @@ export function TableRow({
   event,
   isMyTrade,
   outcomeMessages,
-  assetSymbol,
   stableSymbol,
 }: {
   event: CalculatedEvent;
   isMyTrade: boolean;
   outcomeMessages: string[];
-  assetSymbol: string;
   stableSymbol: string;
 }) {
   const date = new Date(Number(event.timestamp));
@@ -108,7 +106,7 @@ export function TableRow({
         <span className={valueClass}>{formatNumber(event.volume)}</span>
         <span className={unitClass}>{stableSymbol}</span>
       </td>
-      <td className={rightAlignedCellClass} role="cell">
+      <td className={`${cellClass} text-center text-gray-200`} role="cell">
         <span 
           className={`${valueClass} ${
             event.impact > 0 ? "text-green-400" : event.impact < 0 ? "text-red-400" : ""
