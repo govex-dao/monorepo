@@ -30,6 +30,15 @@ interface ProposalCreated {
     oracle_ids: string[];
 }
 
+// A specific, honest interface for the data needed by the notification function.
+interface ProposalNotificationPayload {
+    proposal_id: string;
+    dao_name: string;
+    title: string;
+    details: string;
+    outcome_messages: string[];
+}
+
 // Helper to safely convert string to BigInt
 function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
     if (!value) return defaultValue;
@@ -49,7 +58,7 @@ function serializeBigInt(key: string, value: any): any {
 }
 
 // Send Discord webhook notification for new proposal
-async function sendDiscordNotification(proposal: ProposalCreated): Promise<void> {
+async function sendDiscordNotification(proposal: ProposalNotificationPayload): Promise<void> {
     if (!CONFIG.DISCORD_WEBHOOK_URL) {
         console.log('Discord webhook URL not configured, skipping notification');
         return;
@@ -64,33 +73,18 @@ async function sendDiscordNotification(proposal: ProposalCreated): Promise<void>
             fields: [
                 {
                     name: 'DAO',
-                    value: (proposal as any).dao_name || 'Unknown',
+                    value: proposal.dao_name || 'Unknown Org',
                     inline: true
                 },
                 {
-                    name: 'Proposer',
-                    value: `\`${proposal.proposer}\``,
-                    inline: true
-                },
-                {
-                    name: 'Network',
-                    value: CONFIG.NETWORK,
-                    inline: true
+                    name: 'Title',
+                    value: proposal.title,
+                    inline: false
                 },
                 {
                     name: 'Outcomes',
                     value: proposal.outcome_messages.join('\n'),
                     inline: false
-                },
-                {
-                    name: 'Asset Value',
-                    value: proposal.asset_value,
-                    inline: true
-                },
-                {
-                    name: 'Stable Value',
-                    value: proposal.stable_value,
-                    inline: true
                 }
             ],
             timestamp: new Date().toISOString()
@@ -220,17 +214,16 @@ async function processBatch(
                     
                     // Send Discord notification for new proposal
                     // Note: We'll need to reconstruct the ProposalCreated data with minimal fields
-                    const proposalData = {
+                    const proposalData: ProposalNotificationPayload = {
                         proposal_id: proposal.proposal_id,
                         dao_name: dao?.dao_name || 'Unknown DAO',
                         title: proposal.title,
                         details: proposal.details,
                         outcome_messages: JSON.parse(proposal.outcome_messages as string),
-                        created_at: proposal.created_at.toString(),
                     };
-                    
+
                     // Send notification asynchronously (don't wait for it)
-                    sendDiscordNotification(proposalData as any).catch(error => 
+                    sendDiscordNotification(proposalData).catch(error =>
                         console.error('Failed to send Discord notification:', error)
                     );
                 } else {
