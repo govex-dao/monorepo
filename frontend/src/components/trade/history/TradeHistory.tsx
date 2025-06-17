@@ -352,7 +352,7 @@ export function TradeHistory({
                           filters.selectedOutcome === index ? null : index,
                       }))
                     }
-                    className={`text-xs px-2.5 py-1 rounded transition-colors border ${
+                    className={`text-xs px-2.5 py-1 rounded transition-colors border whitespace-nowrap ${
                       filters.selectedOutcome === index
                         ? `${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border}`
                         : "text-gray-400 hover:text-gray-200 border-transparent"
