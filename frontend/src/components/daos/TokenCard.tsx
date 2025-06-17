@@ -48,29 +48,23 @@ export function TokenCard({
     <div className="p-3 bg-gray-800/70 rounded-lg border border-gray-700/50">
       <Flex align="center" gap="3">
         <div
-          className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientClasses} flex items-center justify-center shadow-md overflow-hidden flex-shrink-0`}
+          className={`w-8 h-8 rounded-full bg-transparent flex items-center justify-center shadow-md overflow-hidden flex-shrink-0`}
         >
           {iconUrl ? (
             <img
               src={iconUrl}
               alt={`${name || symbol} icon`}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                const fallback = e.currentTarget
-                  .nextElementSibling as HTMLElement;
-                if (fallback) fallback.style.display = "flex";
-              }}
+              className="w-full h-full object-cover rounded-full"
             />
-          ) : null}
-          <div
-            className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientClasses} flex items-center justify-center shadow-md`}
-            style={{ display: iconUrl ? "none" : "flex" }}
-          >
-            <Text size="1" className={`${textColor} font-semibold`}>
-              {symbol?.charAt(0) || (isAsset ? "A" : "S")}
-            </Text>
-          </div>
+          ) : (
+            <div
+              className={`w-8 h-8 rounded-full bg-gradient-to-br ${gradientClasses} flex items-center justify-center shadow-md`}
+            >
+              <Text size="1" className={`${textColor} font-semibold`}>
+                {symbol?.charAt(0) || (isAsset ? "A" : "S")}
+              </Text>
+            </div>
+          )}
         </div>
         <Flex className="flex-1 min-w-0" direction="column">
           <Text weight="bold" size="2" className="text-gray-200">

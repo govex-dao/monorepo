@@ -643,7 +643,7 @@ const CreateDaoForm = () => {
         {/* Image preview section */}
         <div className="mt-6 space-y-2">
           <h3 className="block text-sm font-medium">Preview DAO Image</h3>
-          <div className="w-32 h-32 border rounded-lg overflow-hidden bg-gray-50">
+          <div className="w-32 h-32 border rounded-lg overflow-hidden bg-transparent">
             {previewImage && (
               <img
                 src={previewImage}
@@ -657,7 +657,7 @@ const CreateDaoForm = () => {
               />
             )}
             {!previewImage && (
-              <div className="w-full h-full flex items-center justify-center text-gray-400">
+              <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg">
                 No image
               </div>
             )}

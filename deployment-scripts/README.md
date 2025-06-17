@@ -41,3 +41,8 @@ gh issue list --state open --limit 1000 --json number,title,body,state,url,creat
 for my futarchy platform in dog fooding stage
 give me two most important tickets from here
 ```
+
+Get AI API from here
+```
+https://aistudio.google.com/app/apikey
+```

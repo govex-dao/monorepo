@@ -182,15 +182,18 @@ const DaoSearchInput = ({
                     onClick={() => handleSelect(dao)}
                   >
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 flex-shrink-0">
-                        <img
-                          src={dao.dao_icon || "/placeholder-dao.png"}
-                          alt={dao.dao_name}
-                          className="w-full h-full rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = "/placeholder-dao.png";
-                          }}
-                        />
+                      <div className="w-8 h-8 flex-shrink-0 rounded-full bg-transparent overflow-hidden">
+                        {dao.dao_icon ? (
+                          <img
+                            src={dao.dao_icon}
+                            alt={dao.dao_name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-sm text-gray-300 font-semibold">
+                            {dao.dao_name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                       </div>
                       <div className="flex-grow min-w-0 space-y-1">
                         <div className="font-medium truncate flex items-center">

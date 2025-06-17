@@ -152,14 +152,19 @@ const UnifiedSearch = () => {
                             <span className="text-sm text-blue-400 whitespace-nowrap">
                               DAO:
                             </span>
-                            <img
-                              src={dao.dao_icon || "/placeholder-dao.png"}
-                              alt=""
-                              className="w-5 h-5 rounded-full object-cover flex-shrink-0"
-                              onError={(e) => {
-                                e.currentTarget.src = "/placeholder-dao.png";
-                              }}
-                            />
+                            <div className="w-5 h-5 rounded-full bg-transparent flex-shrink-0 overflow-hidden">
+                              {dao.dao_icon ? (
+                                <img
+                                  src={dao.dao_icon}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-xs text-gray-300 font-semibold">
+                                  {dao.dao_name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <span className="text-gray-100 font-medium truncate">
                                 {highlightMatch(dao.dao_name, searchTerm)}
@@ -192,18 +197,19 @@ const UnifiedSearch = () => {
                                 <span className="text-sm text-green-400 whitespace-nowrap flex-shrink-0">
                                   PROPOSAL:
                                 </span>
-                                <img
-                                  src={
-                                    proposal.dao.dao_icon ||
-                                    "/placeholder-dao.png"
-                                  }
-                                  alt=""
-                                  className="w-5 h-5 rounded-full object-cover flex-shrink-0"
-                                  onError={(e) => {
-                                    e.currentTarget.src =
-                                      "/placeholder-dao.png";
-                                  }}
-                                />
+                                <div className="w-5 h-5 rounded-full bg-transparent flex-shrink-0 overflow-hidden">
+                                  {proposal.dao.dao_icon ? (
+                                    <img
+                                      src={proposal.dao.dao_icon}
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-xs text-gray-300 font-semibold">
+                                      {proposal.dao.dao_name.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
                                 <span className="text-sm text-gray-400 whitespace-nowrap flex-shrink-0">
                                   {proposal.dao.dao_name}
                                 </span>
