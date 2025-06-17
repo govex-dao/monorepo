@@ -127,26 +127,28 @@ async function validateAndCompressImage(buffer: Buffer): Promise<Buffer | null> 
             });
         }
 
-        // Compression process
-        console.log('Starting image compression...');
-        const resizedPipeline = pipeline
-        .rotate()
-        .resize(64, 64, {
-            fit: 'inside',
-            withoutEnlargement: true
-        })
-        .flatten({ background: { r: 255, g: 255, b: 255 } }); // Add white background
-    
-        // Keep WebP format for WebP images, use JPEG for others
-        const compressed = isWebP ? 
-        await resizedPipeline.webp({ quality: 80 }).toBuffer() :
-        await resizedPipeline.jpeg({ quality: 80, mozjpeg: true }).toBuffer();
+        // This section resizes the image to fit within a 64x64 square, padding
+        // with transparency to preserve the aspect ratio, and outputs as PNG.
+        console.log('Starting image compression to a 64x64 square PNG...');
+        const compressed = await pipeline
+            .rotate() // Auto-rotate based on EXIF data
+            .resize(64, 64, {
+                // 'contain' pads the image to a square, preserving the full logo.
+                fit: 'contain',
+                // Use a transparent background for padding. This looks best on Discord.
+                background: { r: 0, g: 0, b: 0, alpha: 0 },
+                withoutEnlargement: true
+            })
+            // Standardize output to PNG to preserve transparency and quality for icons.
+            .png({ quality: 90, compressionLevel: 9 })
+            .toBuffer();
         
 
         console.log('Compression complete:', {
-            originalSize: `${buffer.length / 1024}KB`,
-            compressedSize: `${compressed.length / 1024}KB`,
-            compressionRatio: `${(compressed.length / buffer.length * 100).toFixed(1)}%`
+            originalSize: `${(buffer.length / 1024).toFixed(2)}KB`,
+            compressedSize: `${(compressed.length / 1024).toFixed(2)}KB`,
+            finalDimensions: '64x64',
+            finalFormat: 'png'
         });
 
         return compressed;
@@ -182,15 +184,8 @@ async function cacheDAOImage(iconUrl: string, daoId: string): Promise<string | n
             .digest('hex')
             .slice(0, 12);
 
-        const ext = path.extname(sanitizedUrl.pathname).toLowerCase();
-        const safeExt = ALLOWED_EXTENSIONS.has(ext) ? ext : '.png';
-        console.log('File extension:', {
-            original: ext,
-            sanitized: safeExt,
-            allowed: Array.from(ALLOWED_EXTENSIONS)
-        });
-
-        const filename = `${daoId}-${hash}${safeExt}`;
+        // Always use .png as we standardize the output format in validateAndCompressImage.
+        const filename = `${daoId}-${hash}.png`;
         const filePath = path.join(cacheDir, filename);
         const tempPath = `${filePath}.temp`;
         console.log('File paths generated:', {
