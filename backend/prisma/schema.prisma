@@ -196,3 +196,12 @@ model ProposalLock {
   
   @@index([expires_at])
 }
+
+model DailyMetric {
+  id    Int      @id @default(autoincrement())
+  date  DateTime // SQLite stores as TEXT in ISO8601 format
+  key   String   // The name of the metric, e.g., "globalAiReviewCount"
+  count Int      @default(0)
+
+  @@unique([key, date]) // Ensures one row per metric per day
+}

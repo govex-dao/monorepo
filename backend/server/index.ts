@@ -3,6 +3,7 @@ import express from 'express';
 import fs from 'fs/promises';
 import path from 'path';
 import { processAndGetBase64Icon } from '../imageUtils';
+import aiReviewRouter from './routes/ai-review';
 
 
 import { prisma } from '../db';
@@ -24,6 +25,9 @@ const app = express();
 app.use(cors());
 
 app.use(express.json());
+
+// Mount AI Review routes
+app.use(aiReviewRouter);
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
