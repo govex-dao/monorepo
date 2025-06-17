@@ -36,13 +36,13 @@
 	"author": "",
 	"license": "Apache-2.0",
 	"devDependencies": {
-		"@prisma/client": "^6.8.2",
-		"@types/cors": "^2.8.18",
-		"@types/express": "^5.0.2",
-		"@types/node": "^22.15.21",
+		"@prisma/client": "^6.9.0",
+		"@types/cors": "^2.8.19",
+		"@types/express": "^5.0.3",
+		"@types/node": "^22.15.32",
 		"concurrently": "^9.1.2",
 		"cross-env": "^7.0.3",
-		"prisma": "^6.8.2",
+		"prisma": "^6.9.0",
 		"ts-node": "^10.9.2",
 		"typescript": "^5.8.3"
 	},
