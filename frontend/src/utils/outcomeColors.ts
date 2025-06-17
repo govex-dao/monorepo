@@ -61,7 +61,9 @@ export const getOutcomeColor = (
  */
 export const getOutcomeColors = (outcomeCount: number): string[] => {
   if (outcomeCount <= 0) return [];
-  
-  return OUTCOME_COLORS.slice(0, Math.min(outcomeCount, OUTCOME_COLORS.length))
-    .map(color => color.hex);
+
+  return OUTCOME_COLORS.slice(
+    0,
+    Math.min(outcomeCount, OUTCOME_COLORS.length),
+  ).map((color) => color.hex);
 };

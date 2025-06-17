@@ -19,9 +19,18 @@ export enum QueryKey {
 
 export const CONSTANTS = {
   apiEndpoint: import.meta.env.VITE_API_URL ?? "https://www.govex.ai/api/",
-  futarchyPackage: network === 'mainnet' ? mainnetfutarchy.packageId : testnetfutarchy.packageId,
-  futarchyFactoryId: network === 'mainnet' ? mainnetfutarchy.factoryId : testnetfutarchy.factoryId,
-  futarchyPaymentManagerId: network === 'mainnet' ?  mainnetfutarchy.feeManagerId : testnetfutarchy.feeManagerId,
+  futarchyPackage:
+    network === "mainnet"
+      ? mainnetfutarchy.packageId
+      : testnetfutarchy.packageId,
+  futarchyFactoryId:
+    network === "mainnet"
+      ? mainnetfutarchy.factoryId
+      : testnetfutarchy.factoryId,
+  futarchyPaymentManagerId:
+    network === "mainnet"
+      ? mainnetfutarchy.feeManagerId
+      : testnetfutarchy.feeManagerId,
   assetPackage: assetPackage.packageId,
   assetTreasury: assetPackage.treasuryCapId,
   assetMetaData: assetPackage.metadataId,

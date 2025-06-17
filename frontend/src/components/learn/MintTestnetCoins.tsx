@@ -13,7 +13,7 @@ export function useMintTestnetCoins() {
       if (!account?.address) {
         throw new Error("Please connect your wallet first!");
       }
-      
+
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -42,7 +42,8 @@ export function useMintTestnetCoins() {
         {},
         {
           loadingMessage: "Minting testnet coins...",
-          successMessage: "Testnet coins minted successfully! You received 10 ASSET and 10 STABLE tokens.",
+          successMessage:
+            "Testnet coins minted successfully! You received 10 ASSET and 10 STABLE tokens.",
           errorMessage: (error) => {
             if (error.message?.includes("Rejected from user")) {
               return "Transaction cancelled by user";
@@ -51,7 +52,7 @@ export function useMintTestnetCoins() {
             }
             return `Failed to mint coins: ${error.message}`;
           },
-        }
+        },
       );
     },
   });

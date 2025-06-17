@@ -861,11 +861,12 @@ const CreateProposalForm = ({
             }
             return `Failed to create proposal: ${error.message}`;
           },
-        }
+        },
       );
     } catch (error: unknown) {
       // Handle pre-transaction errors (validation, etc.)
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.error("Error preparing proposal:", errorMessage);
       toast.error(errorMessage);
       setError(errorMessage);

@@ -129,7 +129,7 @@ const VerifyDaoForm = () => {
             }
             return `Failed to request verification: ${error.message}`;
           },
-        }
+        },
       );
     } catch (err) {
       // Handle pre-transaction errors (validation, etc.)

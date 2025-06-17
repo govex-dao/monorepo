@@ -25,7 +25,7 @@ export function useWithdrawProposerLiquidityMutation() {
     }) => {
       if (!currentAccount?.address)
         throw new Error("You need to connect your wallet!");
-      
+
       const txb = new Transaction();
       txb.setGasBudget(50000000);
 
@@ -60,7 +60,7 @@ export function useWithdrawProposerLiquidityMutation() {
             }
             return `Failed to withdraw liquidity: ${error.message}`;
           },
-        }
+        },
       );
     },
   });

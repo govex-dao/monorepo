@@ -102,7 +102,7 @@ export function useAdvanceStateMutation() {
             }
             return `Failed to advance state: ${error.message}`;
           },
-        }
+        },
       );
     },
   });

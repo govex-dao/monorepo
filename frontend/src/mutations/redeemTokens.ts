@@ -314,7 +314,7 @@ export function useRedeemTokensMutation() {
             }
             return `Transaction failed: ${error.message}`;
           },
-        }
+        },
       );
     },
   });

@@ -29,13 +29,13 @@ export function useSuiTransaction() {
   const [isLoading, setIsLoading] = useState(false);
   const isMountedRef = useRef(true);
   const client = useSuiClient();
-  
+
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
     };
   }, []);
-  
+
   const { mutate: signAndExecute } = useSignAndExecuteTransaction({
     execute: async ({ bytes, signature }) =>
       await client.executeTransactionBlock({
@@ -53,20 +53,23 @@ export function useSuiTransaction() {
     async (
       transaction: Transaction,
       callbacks?: TransactionCallbacks,
-      options?: TransactionOptions
+      options?: TransactionOptions,
     ) => {
       const opts = { ...defaultOptions, ...options };
       const loadingToast = toast.loading(opts.loadingMessage!);
-      
+
       setIsLoading(true);
 
       // Set up timeout for wallet response
       const timeoutId = setTimeout(() => {
         if (isMountedRef.current) {
           toast.dismiss(loadingToast);
-          toast.error("Transaction timeout - wallet did not respond. Please try again.", {
-            duration: 5000
-          });
+          toast.error(
+            "Transaction timeout - wallet did not respond. Please try again.",
+            {
+              duration: 5000,
+            },
+          );
           setIsLoading(false);
         }
       }, 30000); // 30 second timeout
@@ -103,12 +106,14 @@ export function useSuiTransaction() {
                       View transaction
                     </a>
                   </div>,
-                  { duration: opts.toastDuration }
+                  { duration: opts.toastDuration },
                 );
               } else {
-                toast.success(successContent as string, { duration: opts.toastDuration });
+                toast.success(successContent as string, {
+                  duration: opts.toastDuration,
+                });
               }
-              
+
               callbacks?.onSuccess?.(result);
             } else {
               // Transaction was submitted but failed during execution
@@ -117,7 +122,7 @@ export function useSuiTransaction() {
                 "Transaction failed during execution";
 
               let displayError = errorMessage;
-              
+
               // Parse Move abort errors
               if (
                 errorMessage.includes("Move abort") ||
@@ -147,12 +152,12 @@ export function useSuiTransaction() {
                       View details
                     </a>
                   </div>,
-                  { duration: opts.toastDuration }
+                  { duration: opts.toastDuration },
                 );
               } else {
                 toast.error(displayError, { duration: opts.toastDuration });
               }
-              
+
               const error = new Error(displayError);
               callbacks?.onError?.(error);
             }
@@ -180,10 +185,10 @@ export function useSuiTransaction() {
             toast.error(displayError);
             callbacks?.onError?.(error);
           },
-        }
+        },
       );
     },
-    [signAndExecute]
+    [signAndExecute],
   );
 
   return {

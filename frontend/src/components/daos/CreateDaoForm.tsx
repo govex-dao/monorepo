@@ -371,11 +371,12 @@ const CreateDaoForm = () => {
             }
             return `Failed to create DAO: ${error.message}`;
           },
-        }
+        },
       );
     } catch (error) {
       // Handle pre-transaction errors (validation, calculation errors)
-      const errorMessage = error instanceof Error ? error.message : "Transaction failed";
+      const errorMessage =
+        error instanceof Error ? error.message : "Transaction failed";
       setError(errorMessage);
       toast.error(errorMessage);
     }

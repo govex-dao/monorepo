@@ -485,7 +485,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
             }
             return error.message || "Transaction failed"; // Return a default message instead of undefined
           },
-        }
+        },
       );
     } catch (error) {
       const errorMsg =

@@ -55,7 +55,7 @@ export function AdvanceStateButton({
   // Determine if button should be shown based on state and timing
   const shouldShowButton = () => {
     const now = Date.now();
-    
+
     if (proposalState === 0) {
       // State 0: Show if current time > review_period_ms + created_at
       const createdAtMs = Number(createdAt);
@@ -67,11 +67,11 @@ export function AdvanceStateButton({
     } else if (proposalState === 1) {
       // State 1: Show if current time > timestamp moved from state 0 to 1 + trading_period_ms
       if (!tradingPeriodMs) return false;
-      
+
       const tradingStartEvent = stateHistory
-        .filter(event => event.new_state === 1)
+        .filter((event) => event.new_state === 1)
         .sort((a, b) => Number(b.timestamp) - Number(a.timestamp))[0];
-      
+
       if (tradingStartEvent) {
         const tradingStartMs = Number(tradingStartEvent.timestamp);
         const tradingPeriodMsNum = Number(tradingPeriodMs);
@@ -84,7 +84,7 @@ export function AdvanceStateButton({
       // State 2: Show only if there is no winning outcome
       return winningOutcome === null;
     }
-    
+
     return false;
   };
 

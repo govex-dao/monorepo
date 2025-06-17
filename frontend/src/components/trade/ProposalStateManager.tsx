@@ -49,7 +49,9 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
 }) => {
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [label, setLabel] = useState<string>("");
-  const [additionalMessage, setAdditionalMessage] = useState<string | null>(null);
+  const [additionalMessage, setAdditionalMessage] = useState<string | null>(
+    null,
+  );
   const [isTimerVisible, setIsTimerVisible] = useState<boolean>(false);
 
   const parsedCreatedAtMs = useMemo(() => Number(createdAt), [createdAt]);
@@ -78,7 +80,7 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
       if (!isNaN(parsedCreatedAtMs) && !isNaN(parsedReviewPeriodMs)) {
         targetTimeMs = parsedCreatedAtMs + parsedReviewPeriodMs;
         const timeRemaining = targetTimeMs - now;
-        
+
         if (timeRemaining > 0) {
           currentTimerLabel = "Trading Starts In:";
           showTimer = true;
@@ -88,7 +90,9 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
           showTimer = false;
         }
       } else {
-        console.warn("Invalid createdAt or reviewPeriodMs for PRE_MARKET timer.");
+        console.warn(
+          "Invalid createdAt or reviewPeriodMs for PRE_MARKET timer.",
+        );
         showTimer = false;
       }
     } else if (currentState === TRADING_STARTED) {
@@ -106,7 +110,7 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
           if (!isNaN(actualTradingStartTimeMs)) {
             targetTimeMs = actualTradingStartTimeMs + parsedTradingPeriodMs;
             const timeRemaining = targetTimeMs - now;
-            
+
             if (timeRemaining > 0) {
               currentTimerLabel = "Trading Ends In:";
               showTimer = true;
@@ -116,19 +120,27 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
               showTimer = false;
             }
           } else {
-            console.warn("Invalid timestamp for TRADING_STARTED event in stateHistory.");
+            console.warn(
+              "Invalid timestamp for TRADING_STARTED event in stateHistory.",
+            );
             showTimer = false;
           }
         } else {
-          console.warn("TRADING_STARTED event not found or invalid in stateHistory.");
+          console.warn(
+            "TRADING_STARTED event not found or invalid in stateHistory.",
+          );
           showTimer = false;
         }
       } else {
         showTimer = false;
         if (parsedTradingPeriodMs === null) {
-          console.warn("Trading period (tradingPeriodMs) is not provided for TRADING_STARTED state.");
+          console.warn(
+            "Trading period (tradingPeriodMs) is not provided for TRADING_STARTED state.",
+          );
         } else {
-          console.warn("Trading period (tradingPeriodMs) is zero or invalid for TRADING_STARTED state.");
+          console.warn(
+            "Trading period (tradingPeriodMs) is zero or invalid for TRADING_STARTED state.",
+          );
         }
       }
     } else {
@@ -175,11 +187,9 @@ const ProposalStateManager: React.FC<ProposalStateManagerProps> = ({
           </p>
         </>
       )}
-      
+
       {additionalMessage && (
-        <p className="text-xs text-blue-200 mt-1 mb-3">
-          {additionalMessage}
-        </p>
+        <p className="text-xs text-blue-200 mt-1 mb-3">{additionalMessage}</p>
       )}
     </div>
   );
