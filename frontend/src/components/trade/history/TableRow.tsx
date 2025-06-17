@@ -14,8 +14,7 @@ const formatNumber = (() => {
     const absNum = Math.abs(num);
     const isNegative = num < 0;
     let result: string;
-
-    if (absNum < 0.000001) {
+    if (num < 0.000001) {
       result = num.toExponential(2);
     } else if (absNum >= 1000000) {
       result = absNum.toLocaleString(undefined, {
@@ -35,8 +34,6 @@ const formatNumber = (() => {
       const decimalPlaces = Math.min(6, leadingZeros + 3);
       result = absNum.toFixed(decimalPlaces).replace(/\.?0+$/, "");
     }
-
-    if (isNegative) result = "-" + result;
 
     memo.set(num, result);
     return result;
@@ -109,19 +106,9 @@ export function TableRow({
         <span className={valueClass}>{formatNumber(event.volume)}</span>
         <span className={unitClass}>{stableSymbol}</span>
       </td>
-      <td className={`${cellClass} text-center text-gray-200`} role="cell">
-        <span
-          className={`${valueClass} ${
-            event.impact > 0
-              ? "text-green-400"
-              : event.impact < 0
-                ? "text-red-400"
-                : ""
-          }`}
-        >
-          {event.impact > 0 ? "+" : ""}
-          {formatNumber(event.impact)}%
-        </span>
+      <td className={rightAlignedCellClass} role="cell">
+        <span className={valueClass}>{formatNumber(event.impact)}%</span>
+        <span className={unitClass}>of reserves</span>
       </td>
       <td className={rightAlignedCellClass + " flex flex-row"} role="cell">
         <div className="flex-1"></div>
