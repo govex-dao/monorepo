@@ -89,10 +89,7 @@ export function TableRow({
           {event.is_buy ? "Buy" : "Sell"}
         </span>
       </td>
-      <td
-        className={cellClass + " text-center min-w-[180px] sm:min-w-[200px]"}
-        role="cell"
-      >
+      <td className={cellClass + " text-center min-w-[180px] sm:min-w-[200px]"} role="cell">
         <span
           className={`${badgeClass} ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border} whitespace-nowrap`}
         >
