@@ -2,6 +2,7 @@ import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { CONFIG } from '../config';
+import { sendDiscordWebhook } from './discord-webhook';
 
 interface ProposalCreated {
     proposal_id: string;
@@ -34,9 +35,12 @@ interface ProposalCreated {
 interface ProposalNotificationPayload {
     proposal_id: string;
     dao_name: string;
+    dao_icon_cache_path: string | null;
+    dao_icon_url: string | null;
     title: string;
     details: string;
     outcome_messages: string[];
+    is_verified: boolean;
 }
 
 // Helper to safely convert string to BigInt
@@ -66,13 +70,18 @@ async function sendDiscordNotification(proposal: ProposalNotificationPayload): P
 
     try {
         const networkLabel = CONFIG.NETWORK === 'mainnet' ? '🌐 Mainnet' : '🧪 Testnet';
+        
         const embed = {
             title: `${networkLabel} - New Proposal: ${proposal.title}`,
             color: CONFIG.NETWORK === 'mainnet' ? 0x0099ff : 0x00ff00, // Blue for mainnet, green for testnet
+            author: {
+                name: proposal.dao_name || 'Unknown Org'
+                // icon_url will be set by discord-webhook.ts if attachment succeeds
+            },
             fields: [
                 {
-                    name: 'DAO:',
-                    value: proposal.dao_name || 'Unknown Org',
+                    name: 'Verified:',
+                    value: proposal.is_verified ? '✅ Verified' : '⚠️ Unverified',
                     inline: true
                 },
                 {
@@ -81,7 +90,7 @@ async function sendDiscordNotification(proposal: ProposalNotificationPayload): P
                     inline: false
                 },
                 {
-                    name: 'Type',
+                    name: 'Proposal Type:',
                     value: "Memo",
                     inline: false
                 },
@@ -94,21 +103,14 @@ async function sendDiscordNotification(proposal: ProposalNotificationPayload): P
             timestamp: new Date().toISOString()
         };
 
-        const response = await fetch(CONFIG.DISCORD_WEBHOOK_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                embeds: [embed]
-            })
+        await sendDiscordWebhook({
+            webhookUrl: CONFIG.DISCORD_WEBHOOK_URL,
+            embed,
+            attachmentPath: proposal.dao_icon_cache_path,
+            attachmentFilename: `dao-icon-${proposal.proposal_id}`
         });
 
-        if (!response.ok) {
-            console.error('Failed to send Discord notification:', response.statusText);
-        } else {
-            console.log(`Discord notification sent for proposal ${proposal.proposal_id} on ${CONFIG.NETWORK}`);
-        }
+        console.log(`Discord notification sent for proposal ${proposal.proposal_id} on ${CONFIG.NETWORK}`);
     } catch (error) {
         console.error('Error sending Discord notification:', error);
     }
@@ -213,7 +215,16 @@ async function processBatch(
                     
                     const dao = await tx.dao.findUnique({
                         where: { dao_id: daoId },
-                        select: { dao_name: true }
+                        select: { 
+                            dao_name: true,
+                            icon_cache_path: true,
+                            icon_url: true,
+                            verification: {
+                                select: {
+                                    verified: true
+                                }
+                            }
+                        }
                     });
                     
                     // Send Discord notification for new proposal
@@ -221,9 +232,12 @@ async function processBatch(
                     const proposalData: ProposalNotificationPayload = {
                         proposal_id: proposal.proposal_id,
                         dao_name: dao?.dao_name || 'Unknown DAO',
+                        dao_icon_cache_path: dao?.icon_cache_path || null,
+                        dao_icon_url: dao?.icon_url || null,
                         title: proposal.title,
                         details: proposal.details,
                         outcome_messages: JSON.parse(proposal.outcome_messages as string),
+                        is_verified: dao?.verification?.verified || false,
                     };
 
                     // Send notification asynchronously (don't wait for it)

@@ -10,18 +10,14 @@ export function calculateAmountInAsset(
     : Number(amountIn) / assetScale;
 }
 
-export function calculatePriceImpact(
+export function calculateVolumeInUSDC(
   amountIn: string,
+  amountOut: string,
   isBuy: boolean,
-  stableReserve: string,
-  assetReserve: string,
-  assetScale: number,
   stableScale: number,
 ): number {
-  const stableReserveNum = Number(stableReserve) / stableScale;
-  const assetReserveNum = Number(assetReserve) / assetScale;
-
-  return isBuy
-    ? (Number(amountIn) / stableScale / stableReserveNum) * 100
-    : (Number(amountIn) / assetScale / assetReserveNum) * 100;
+  // For buys: amount_in is USDC
+  // For sells: amount_out is USDC
+  const usdcAmount = isBuy ? amountIn : amountOut;
+  return Number(usdcAmount) / stableScale;
 }

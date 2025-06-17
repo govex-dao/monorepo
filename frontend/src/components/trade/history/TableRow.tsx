@@ -11,27 +11,32 @@ const formatNumber = (() => {
 
     if (num === 0) return "0";
 
+    const absNum = Math.abs(num);
+    const isNegative = num < 0;
     let result: string;
-    if (num < 0.000001) {
+    
+    if (absNum < 0.000001) {
       result = num.toExponential(2);
-    } else if (num >= 1000000) {
-      result = num.toLocaleString(undefined, {
+    } else if (absNum >= 1000000) {
+      result = absNum.toLocaleString(undefined, {
         maximumFractionDigits: 2,
         notation: "compact",
         compactDisplay: "short",
       });
-    } else if (num >= 1) {
-      result = num.toLocaleString(undefined, {
+    } else if (absNum >= 1) {
+      result = absNum.toLocaleString(undefined, {
         maximumFractionDigits: 2,
         minimumFractionDigits: 0,
       });
     } else {
-      const str = num.toString();
+      const str = absNum.toString();
       const match = str.match(/^0\.0*/);
       const leadingZeros = match ? match[0].length - 2 : 0;
       const decimalPlaces = Math.min(6, leadingZeros + 3);
-      result = num.toFixed(decimalPlaces).replace(/\.?0+$/, "");
+      result = absNum.toFixed(decimalPlaces).replace(/\.?0+$/, "");
     }
+    
+    if (isNegative) result = "-" + result;
 
     memo.set(num, result);
     return result;
@@ -97,16 +102,20 @@ export function TableRow({
         </span>
       </td>
       <td className={rightAlignedCellClass} role="cell">
-        <span className={valueClass}>{formatNumber(event.price)}</span>
+        <span className={valueClass}>${formatNumber(event.price)}</span>
+      </td>
+      <td className={rightAlignedCellClass} role="cell">
+        <span className={valueClass}>{formatNumber(event.volume)}</span>
         <span className={unitClass}>{stableSymbol}</span>
       </td>
       <td className={rightAlignedCellClass} role="cell">
-        <span className={valueClass}>{formatNumber(event.amount)}</span>
-        <span className={unitClass}>{assetSymbol}</span>
-      </td>
-      <td className={rightAlignedCellClass} role="cell">
-        <span className={valueClass}>{formatNumber(event.impact)}%</span>
-        <span className={unitClass}>of reserves</span>
+        <span 
+          className={`${valueClass} ${
+            event.impact > 0 ? "text-green-400" : event.impact < 0 ? "text-red-400" : ""
+          }`}
+        >
+          {event.impact > 0 ? "+" : ""}{formatNumber(event.impact)}%
+        </span>
       </td>
       <td className={rightAlignedCellClass + " flex flex-row"} role="cell">
         <div className="flex-1"></div>
