@@ -68,21 +68,25 @@ async function sendDiscordNotification(proposal: ProposalNotificationPayload): P
         const networkLabel = CONFIG.NETWORK === 'mainnet' ? '🌐 Mainnet' : '🧪 Testnet';
         const embed = {
             title: `${networkLabel} - New Proposal: ${proposal.title}`,
-            description: proposal.details,
             color: CONFIG.NETWORK === 'mainnet' ? 0x0099ff : 0x00ff00, // Blue for mainnet, green for testnet
             fields: [
                 {
-                    name: 'DAO',
+                    name: 'DAO:',
                     value: proposal.dao_name || 'Unknown Org',
                     inline: true
                 },
                 {
-                    name: 'Title',
+                    name: 'Title:',
                     value: proposal.title,
                     inline: false
                 },
                 {
-                    name: 'Outcomes',
+                    name: 'Type',
+                    value: "Memo",
+                    inline: false
+                },
+                {
+                    name: 'Outcomes:',
                     value: proposal.outcome_messages.join('\n'),
                     inline: false
                 }
