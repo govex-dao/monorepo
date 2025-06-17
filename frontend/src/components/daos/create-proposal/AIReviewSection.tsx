@@ -89,13 +89,7 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
           <button
             type="button"
             onClick={handleReview}
-            disabled={
-              isLoading ||
-              isDisabled ||
-              !title ||
-              !description ||
-              outcomeMessages.length < 2
-            }
+            disabled={isLoading || isDisabled || !title || !description || outcomeMessages.length < 2}
             className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-700 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isLoading ? (
@@ -120,13 +114,9 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
         <div className="space-y-4">
           {/* Rating Display */}
           <div className="flex items-center gap-3">
-            <div
-              className={`flex items-center gap-2 ${getRatingColor(review.consistency_rating)}`}
-            >
+            <div className={`flex items-center gap-2 ${getRatingColor(review.consistency_rating)}`}>
               {getRatingIcon(review.consistency_rating)}
-              <span className="text-2xl font-bold">
-                {review.consistency_rating}/10
-              </span>
+              <span className="text-2xl font-bold">{review.consistency_rating}/10</span>
             </div>
             <span className="text-gray-400">Consistency Rating</span>
           </div>
