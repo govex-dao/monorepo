@@ -1,4 +1,4 @@
-export type SortField = "time" | "amount" | "price" | "impact";
+export type SortField = "time" | "volume" | "price" | "impact";
 export type SortDirection = "ascending" | "descending";
 
 export interface SortConfig {
@@ -82,8 +82,8 @@ export function TableHeader(props: TableHeaderProps) {
         <StaticHeader field="type" />
         <StaticHeader field="outcome" />
         <SortableHeader field="price" align="right" />
-        <SortableHeader field="amount" align="right" />
-        <SortableHeader field="impact" align="right" label="Reserves impact" />
+        <SortableHeader field="volume" align="right" />
+        <SortableHeader field="impact" align="right" label="Price impact" />
         <StaticHeader field="trader" align="right" />
       </tr>
     </thead>

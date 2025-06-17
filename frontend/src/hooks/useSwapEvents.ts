@@ -7,10 +7,12 @@ export interface SwapEvent {
   timestamp: string;
   is_buy: boolean;
   amount_in: string;
+  amount_out: string;
   outcome: number;
   asset_reserve: string;
   stable_reserve: string;
   sender: string;
+  price_impact: string;
 }
 
 type UseSwapEventsOptions = Omit<

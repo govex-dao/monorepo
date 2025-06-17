@@ -3,10 +3,7 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { getOutcomeColor } from "@/utils/outcomeColors";
 import { TableRow } from "./TableRow";
 import { SortConfig, SortField, TableHeader } from "./TableHeader";
-import {
-  calculateAmountInAsset,
-  calculatePriceImpact,
-} from "./tradeCalculations";
+import { calculateAmountInAsset, calculateVolumeInUSDC } from "./tradeCalculations";
 import { Flex } from "@radix-ui/themes";
 
 interface SwapEvent {
@@ -14,10 +11,12 @@ interface SwapEvent {
   timestamp: string;
   is_buy: boolean;
   amount_in: string;
+  amount_out: string;
   outcome: number;
   asset_reserve: string;
   stable_reserve: string;
   sender: string;
+  price_impact: string;
 }
 
 interface TradeHistoryProps {
@@ -39,6 +38,7 @@ interface FilterState {
 
 export interface CalculatedEvent extends Omit<SwapEvent, "price"> {
   amount: number;
+  volume: number;
   impact: number;
   time: number;
   price: number;
@@ -144,15 +144,14 @@ export function TradeHistory({
         assetScale,
         stableScale,
       ),
-      price: Number(event.price) / assetScale,
-      impact: calculatePriceImpact(
+      volume: calculateVolumeInUSDC(
         event.amount_in,
+        event.amount_out,
         event.is_buy,
-        event.stable_reserve,
-        event.asset_reserve,
-        assetScale,
         stableScale,
       ),
+      price: Number(event.price) / assetScale,
+      impact: (Number(event.price_impact) / 100) * (event.is_buy ? 1 : -1),
       time: Number(event.timestamp),
     }));
   }, [filteredEvents, assetScale, stableScale]);
