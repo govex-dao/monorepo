@@ -746,7 +746,7 @@ const CreateProposalForm = ({
               : "bg-gray-700 text-gray-400 cursor-not-allowed"
           } disabled:cursor-not-allowed`}
         >
-          {isLoading ? "Creating..." : hasPassedReview ? "Create Proposal" : "AI Review Required (8+ rating)"}
+          {isLoading ? "Creating..." : hasPassedReview ? "Create Proposal" : "AI Review Required (8+ rating out of 10)"}
         </button>
       </form>
     </div>

@@ -36,9 +36,7 @@ export function DaoIcon(props: DaoIconProps) {
       {icon ? (
         <img src={icon} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <p
-          className={`font-medium ${textSizeClass} bg-[#111113] rounded-full w-full h-full flex items-center justify-center`}
-        >
+        <p className={`font-medium ${textSizeClass} bg-[#111113] rounded-full w-full h-full flex items-center justify-center`}>
           {props.name[0]}
         </p>
       )}
