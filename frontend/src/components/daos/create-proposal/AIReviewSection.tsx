@@ -63,14 +63,14 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
   };
 
   const getRatingColor = (rating: number) => {
-    if (rating >= 8) return "text-green-500";
-    if (rating >= 6) return "text-yellow-500";
+    if (rating >= 6) return "text-green-500";
+    if (rating >= 4) return "text-yellow-500";
     return "text-red-500";
   };
 
   const getRatingIcon = (rating: number) => {
-    if (rating >= 8) return <CheckCircle2 className="w-5 h-5" />;
-    if (rating >= 6) return <AlertCircle className="w-5 h-5" />;
+    if (rating >= 6) return <CheckCircle2 className="w-5 h-5" />;
+    if (rating >= 4) return <AlertCircle className="w-5 h-5" />;
     return <XCircle className="w-5 h-5" />;
   };
 
@@ -135,18 +135,18 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
             </div>
           )}
 
-          {/* Warning if rating is below 8 */}
-          {review.consistency_rating < 8 && (
+          {/* Warning if rating is below 6 */}
+          {review.consistency_rating < 6 && (
             <div className="p-3 bg-yellow-900/20 border border-yellow-500 rounded-md">
               <p className="text-yellow-400 text-sm">
-                <strong>Note:</strong> Your proposal needs a consistency rating of at least 8/10 to be submitted. 
+                <strong>Note:</strong> Your proposal needs a consistency rating of at least 6/10 to be submitted. 
                 Please address the feedback above and try again.
               </p>
             </div>
           )}
 
-          {/* Success message if rating is 8 or above */}
-          {review.consistency_rating >= 8 && (
+          {/* Success message if rating is 6 or above */}
+          {review.consistency_rating >= 6 && (
             <div className="p-3 bg-green-900/20 border border-green-500 rounded-md">
               <p className="text-green-400 text-sm">
                 <strong>Great!</strong> Your proposal has passed the consistency check. You can now submit it.
@@ -154,8 +154,8 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
             </div>
           )}
 
-          {/* Retry button if rating is below 8 */}
-          {review.consistency_rating < 8 && (
+          {/* Retry button if rating is below 6 */}
+          {review.consistency_rating < 6 && (
             <button
               type="button"
               onClick={() => {
