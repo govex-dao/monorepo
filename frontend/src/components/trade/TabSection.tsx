@@ -3,6 +3,7 @@ import TokenSection from "./TokenSection";
 import ProposalDetails from "./ProposalDetails";
 import Description from "./Description";
 import Liquidity from "./Liquidity";
+import { TradeHistory } from "./history/TradeHistory";
 import { TokenInfo } from "./TradeForm";
 
 interface TabSectionProps {
@@ -15,6 +16,9 @@ interface TabSectionProps {
   groupedTokens: any[];
   isLoading: boolean;
   error: Error | null;
+  swapEvents?: any[];
+  assetScale?: number;
+  stableScale?: number;
 }
 
 const TabSection: React.FC<TabSectionProps> = ({
@@ -27,9 +31,12 @@ const TabSection: React.FC<TabSectionProps> = ({
   groupedTokens,
   isLoading,
   error,
+  swapEvents,
+  assetScale = 1,
+  stableScale = 1,
 }) => {
   const [activeTab, setActiveTab] = useState<
-    "tokens" | "description" | "details" | "liquidity"
+    "tokens" | "description" | "details" | "liquidity" | "activity"
   >("tokens");
 
   return (
@@ -54,6 +61,16 @@ const TabSection: React.FC<TabSectionProps> = ({
           }`}
         >
           Description
+        </button>
+        <button
+          onClick={() => setActiveTab("activity")}
+          className={`px-6 py-5 text-sm font-medium whitespace-nowrap ${
+            activeTab === "activity"
+              ? "text-blue-500 border-b-2 border-blue-500"
+              : "text-gray-400 hover:text-gray-300"
+          }`}
+        >
+          Activity
         </button>
         <button
           onClick={() => setActiveTab("details")}
@@ -112,6 +129,17 @@ const TabSection: React.FC<TabSectionProps> = ({
           asset_type={proposal.asset_type}
           stable_type={proposal.stable_type}
           proposalId={proposal.proposal_id}
+        />
+      )}
+      {activeTab === "activity" && (
+        <TradeHistory
+          swapEvents={swapEvents}
+          assetSymbol={asset_symbol}
+          stableSymbol={stable_symbol}
+          outcomeMessages={outcomeMessages}
+          assetScale={assetScale}
+          stableScale={stableScale}
+          hasStarted={proposal.current_state !== "Pending"}
         />
       )}
     </div>

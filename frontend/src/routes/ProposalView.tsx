@@ -13,7 +13,6 @@ import { useSwapEvents } from "@/hooks/useSwapEvents";
 import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalStateManager from "@/components/trade/ProposalStateManager";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
-import { TradeHistory } from "@/components/trade/history/TradeHistory.tsx";
 import { getOutcomeColors } from "@/utils/outcomeColors.ts";
 
 interface StateHistory {
@@ -326,15 +325,9 @@ export function ProposalView() {
           groupedTokens={groupedTokens}
           isLoading={tokensLoading}
           error={tokensError}
-        />
-        <TradeHistory
           swapEvents={swapEvents}
-          assetSymbol={proposal.dao.asset_symbol}
-          stableSymbol={proposal.dao.stable_symbol}
-          outcomeMessages={proposal.outcome_messages}
           assetScale={Math.pow(10, proposal.dao.asset_decimals)}
           stableScale={Math.pow(10, proposal.dao.stable_decimals)}
-          hasStarted={proposal.current_state >= 1}
         />
       </div>
     </Theme>
