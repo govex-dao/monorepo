@@ -462,7 +462,7 @@ const CreateProposalForm = ({
   };
 
   const handleAIReviewComplete = (rating: number) => {
-    setHasPassedReview(rating >= 8);
+    setHasPassedReview(rating >= 6);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -476,7 +476,7 @@ const CreateProposalForm = ({
 
     // Check if AI review has been done and passed
     if (!hasPassedReview) {
-      toast.error("Please get an AI review with a rating of at least 8/10 before submitting.");
+      toast.error("Please get an AI review with a rating of at least 6/10 before submitting.");
       return;
     }
 
@@ -746,7 +746,7 @@ const CreateProposalForm = ({
               : "bg-gray-700 text-gray-400 cursor-not-allowed"
           } disabled:cursor-not-allowed`}
         >
-          {isLoading ? "Creating..." : hasPassedReview ? "Create Proposal" : "AI Review Required (8+ rating out of 10)"}
+          {isLoading ? "Creating..." : hasPassedReview ? "Create Proposal" : "AI Review Required (6+ rating out of 10)"}
         </button>
       </form>
     </div>
