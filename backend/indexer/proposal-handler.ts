@@ -31,6 +31,18 @@ interface ProposalCreated {
     oracle_ids: string[];
 }
 
+// A specific, honest interface for the data needed by the notification function.
+interface ProposalNotificationPayload {
+    proposal_id: string;
+    dao_name: string;
+    dao_icon_cache_path: string | null;
+    dao_icon_url: string | null;
+    title: string;
+    details: string;
+    outcome_messages: string[];
+    is_verified: boolean;
+}
+
 // Helper to safely convert string to BigInt
 function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
     if (!value) return defaultValue;
@@ -225,7 +237,7 @@ async function processBatch(
                         title: proposal.title,
                         details: proposal.details,
                         outcome_messages: JSON.parse(proposal.outcome_messages as string),
-                        created_at: proposal.created_at.toString(),
+                        is_verified: dao?.verification?.verified || false,
                     };
 
                     // Send notification asynchronously (don't wait for it)
