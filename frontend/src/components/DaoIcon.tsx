@@ -31,12 +31,12 @@ export function DaoIcon(props: DaoIconProps) {
 
   return (
     <Flex
-      className={`rounded-full ${className} ${sizeClass} items-center justify-center overflow-hidden aspect-square border-gray-500/30 border-2 bg-[#111113]`}
+      className={`rounded-full ${className} ${sizeClass} items-center justify-center overflow-hidden aspect-square border-gray-500/30 border-2 bg-transparent`}
     >
       {icon ? (
         <img src={icon} alt={name} className="w-full h-full object-cover" />
       ) : (
-        <p className={`font-medium ${textSizeClass}`}>{props.name[0]}</p>
+        <p className={`font-medium ${textSizeClass} bg-[#111113] rounded-full w-full h-full flex items-center justify-center`}>{props.name[0]}</p>
       )}
     </Flex>
   );

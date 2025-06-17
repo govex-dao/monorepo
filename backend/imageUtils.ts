@@ -19,11 +19,10 @@ export async function processAndGetBase64Icon(iconCachePath: string | null, daoI
                 fit: 'inside',
                 withoutEnlargement: true
             })
-            .flatten({ background: { r: 255, g: 255, b: 255 } }) // White background
-            .jpeg({ quality: 80, mozjpeg: true }) // Consistent output format
+            .png({ quality: 90, compressionLevel: 9 }) // Use PNG to preserve transparency
             .toBuffer();
 
-        return `data:image/jpeg;base64,${processedBuffer.toString('base64')}`;
+        return `data:image/png;base64,${processedBuffer.toString('base64')}`;
     } catch (error) {
         console.error(`Error processing icon for dao ${daoId}:`, error);
         return null;
