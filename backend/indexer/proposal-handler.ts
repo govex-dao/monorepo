@@ -68,19 +68,19 @@ async function sendDiscordNotification(proposal: ProposalNotificationPayload): P
             },
             fields: [
                 {
-                    name: 'DAO',
-                    value: (proposal as any).dao_name || 'Unknown',
+                    name: 'Verified:',
+                    value: proposal.is_verified ? '✅ Verified' : '⚠️ Unverified',
                     inline: true
                 },
                 {
-                    name: 'Proposer',
-                    value: `\`${proposal.proposer}\``,
-                    inline: true
+                    name: 'Title:',
+                    value: proposal.title,
+                    inline: false
                 },
                 {
-                    name: 'Network',
-                    value: CONFIG.NETWORK,
-                    inline: true
+                    name: 'Proposal Type:',
+                    value: "Memo",
+                    inline: false
                 },
                 {
                     name: 'Outcomes:',
