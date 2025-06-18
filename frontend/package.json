@@ -7,8 +7,8 @@
   "scripts": {
     "dev": "vite",
     "dev:local": "cross-env VITE_API_URL=http://localhost:3000/ vite",
-    "build-frontend": "tsc && vite build",
-    "build-frontend:local": "cross-env VITE_API_URL=http://localhost:3000/ tsc && vite build",
+    "build": "tsc && vite build",
+    "build:local": "cross-env VITE_API_URL=http://localhost:3000/ tsc && vite build",
     "preview": "vite preview",
     "preview:local": "cross-env VITE_API_URL=http://localhost:3000/ vite preview",
     "prettier:check": "prettier -c --ignore-unknown .",

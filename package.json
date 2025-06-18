@@ -9,8 +9,8 @@
     "start:poller": "cd backend && node dist/poller/index.js",
     "start:indexer": "cd backend && node dist/indexer/index.js",
     "start:frontend": "cd frontend && serve -s dist -l ${PORT:-3000}",
-    "build:backend": "pnpm --filter govex-backend pnpm deploy",
-    "build:frontend": "cd frontend && pnpm install && pnpm run build-frontend",
+    "build:backend": "pnpm --filter govex-backend pnpm build",
+    "build:frontend": "cd frontend && pnpm install && pnpm run build",
     "install:backend": "cd backend && pnpm install",
     "install:frontend": "cd frontend && pnpm install",
     "start:backend": "cd backend && pnpm start:railway"
