@@ -305,45 +305,57 @@ async function advanceTradingToFinalized() {
     try {
         const currentTime = BigInt(Date.now());
         
-        // Query for proposals in Trading state with their state change history
-        const proposals = await prisma.$queryRaw<Array<Proposal & { dao: Dao, trading_start_time: BigInt }>>`
-            SELECT 
-                p.id, p.proposal_id, p.market_state_id, p.dao_id, p.proposer,
-                p.outcome_count, p.outcome_messages, p.created_at, p.escrow_id,
-                p.asset_value, p.stable_value, p.asset_type, p.stable_type,
-                p.title, p.details, p.metadata, p.current_state, p.review_period_ms,
-                p.trading_period_ms, p.initial_outcome_amounts, p.twap_start_delay,
-                p.twap_step_max, p.twap_initial_observation, p.twap_threshold,
-                d.dao_id as "dao.dao_id", d.assetType as "dao.assetType", 
-                d.stableType as "dao.stableType", d.dao_name as "dao.dao_name",
-                psc.timestamp as trading_start_time
-            FROM Proposal p
-            JOIN Dao d ON p.dao_id = d.dao_id
-            JOIN ProposalStateChange psc ON p.proposal_id = psc.proposal_id
-            LEFT JOIN ProposalLock pl ON p.proposal_id = pl.proposal_id
-            WHERE p.current_state = 1 
-            AND p.created_at > 0
-            AND psc.new_state = 1
-            AND (psc.timestamp + p.trading_period_ms) <= ${currentTime}
-            AND (pl.proposal_id IS NULL OR pl.expires_at < ${currentTime})
-        `;
+        // Clean up expired locks first
+        await cleanupExpiredLocks();
+        
+        // Get locked proposal IDs
+        const lockedProposals = await prisma.proposalLock.findMany({
+            where: {
+                expires_at: { gte: currentTime }
+            },
+            select: { proposal_id: true }
+        });
+        const lockedProposalIds = lockedProposals.map(lock => lock.proposal_id);
+        
+        // Find proposals in Trading state (current_state = 1)
+        const proposals = await prisma.proposal.findMany({
+            where: {
+                current_state: 1,
+                created_at: { gt: 0 },
+                proposal_id: { notIn: lockedProposalIds }
+            },
+            include: {
+                dao: true,
+                state_history: {
+                    where: { new_state: 1 },
+                    orderBy: { timestamp: 'desc' },
+                    take: 1
+                }
+            }
+        });
 
-        if (proposals.length === 0) {
+        // Filter proposals that have completed their trading period
+        const readyProposals = proposals.filter(proposal => {
+            // Get the trading start time from state history
+            const tradingStateChange = proposal.state_history[0];
+            if (!tradingStateChange) return false;
+            
+            const tradingEndTime = tradingStateChange.timestamp + proposal.trading_period_ms;
+            return tradingEndTime <= currentTime;
+        });
+
+        if (readyProposals.length === 0) {
             console.log('No proposals ready to advance from Trading to Finalized');
             return;
         }
 
-        console.log(`Found ${proposals.length} proposals ready to advance from Trading to Finalized`);
+        console.log(`Found ${readyProposals.length} proposals ready to advance from Trading to Finalized`);
 
-        for (const p of proposals) {
-            // Manually construct the nested objects from flattened query results
-            const proposal = { ...p } as Proposal;
-            const dao = {
-                dao_id: (p as any)['dao.dao_id'],
-                assetType: (p as any)['dao.assetType'],
-                stableType: (p as any)['dao.stableType'],
-                dao_name: (p as any)['dao.dao_name']
-            } as Dao;
+        for (const proposal of readyProposals) {
+            if (!proposal.dao) {
+                console.error(`No DAO found for proposal ${proposal.proposal_id}`);
+                continue;
+            }
             
             // Try to acquire lock before processing
             const locked = await acquireLock(proposal.proposal_id);
@@ -353,7 +365,7 @@ async function advanceTradingToFinalized() {
             }
             
             try {
-                await executeTransaction(proposal, dao, 'Trading->Finalized');
+                await executeTransaction(proposal, proposal.dao, 'Trading->Finalized');
             } finally {
                 // Always release the lock
                 await releaseLock(proposal.proposal_id);
@@ -361,6 +373,51 @@ async function advanceTradingToFinalized() {
         }
     } catch (error) {
         console.error('Error in advanceTradingToFinalized:', error);
+    }
+}
+
+async function executeFinalizedProposals() {
+    try {
+        // Query for proposals in Finalized state that haven't been executed
+        const proposals = await prisma.proposal.findMany({
+            where: {
+                current_state: 2, // STATE_FINALIZED
+                result: null // Not yet executed
+            },
+            include: {
+                dao: true
+            }
+        });
+
+        if (proposals.length === 0) {
+            console.log('No finalized proposals ready for execution');
+            return;
+        }
+
+        console.log(`Found ${proposals.length} finalized proposals ready for execution`);
+
+        for (const proposal of proposals) {
+            if (!proposal.dao) {
+                console.error(`No DAO found for proposal ${proposal.proposal_id}`);
+                continue;
+            }
+
+            // Try to acquire lock before processing
+            const locked = await acquireLock(proposal.proposal_id);
+            if (!locked) {
+                console.log(`Proposal ${proposal.proposal_id} is locked by another instance. Skipping.`);
+                continue;
+            }
+
+            try {
+                await executeProposal(proposal, proposal.dao);
+            } finally {
+                // Always release the lock
+                await releaseLock(proposal.proposal_id);
+            }
+        }
+    } catch (error) {
+        console.error('Error in executeFinalizedProposals:', error);
     }
 }
 
@@ -392,7 +449,22 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
                 ],
             });
 
-            // If advancing to Finalized, also execute the proposal
+            // If advancing to Finalized, also execute the proposal in the same transaction
+            if (transition === 'Trading->Finalized') {
+                console.log(`[${transition}] Adding sign_result_entry to the same transaction`);
+                txb.moveCall({
+                    target: `${PACKAGE_ID}::dao::sign_result_entry`,
+                    typeArguments: [dao.assetType, dao.stableType],
+                    arguments: [
+                        txb.object(dao.dao_id),
+                        txb.pure.id(proposal.proposal_id),
+                        txb.object(proposal.escrow_id),
+                        txb.object('0x6'), // Clock object
+                    ],
+                });
+            }
+
+            // Execute the transaction
             const result = await suiClient.signAndExecuteTransaction({
                 signer: keypair,
                 transaction: txb,
@@ -451,12 +523,99 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
     }
 }
 
+async function executeProposal(proposal: Proposal, dao: Dao) {
+    // Check circuit breaker
+    if (isCircuitOpen()) {
+        console.log(`Circuit breaker is OPEN. Skipping execution for proposal ${proposal.proposal_id}`);
+        return;
+    }
+
+    let retries = 0;
+
+    while (retries < MAX_RETRIES) {
+        try {
+            console.log(`[Execute] Executing proposal: ${proposal.proposal_id} (attempt ${retries + 1}/${MAX_RETRIES})`);
+
+            const txb = new Transaction();
+            txb.setGasBudget(50000000);
+
+            // Execute the proposal
+            txb.moveCall({
+                target: `${PACKAGE_ID}::dao::sign_result_entry`,
+                typeArguments: [dao.assetType, dao.stableType],
+                arguments: [
+                    txb.object(dao.dao_id),
+                    txb.pure.id(proposal.proposal_id),
+                    txb.object(proposal.escrow_id),
+                    txb.object('0x6'), // Clock object
+                ],
+            });
+
+            const result = await suiClient.signAndExecuteTransaction({
+                signer: keypair,
+                transaction: txb,
+                options: {
+                    showEffects: true,
+                    showEvents: true,
+                }
+            });
+
+            // Wait for transaction confirmation
+            await suiClient.waitForTransaction({
+                digest: result.digest,
+                options: {
+                    showEffects: true,
+                }
+            });
+
+            console.log(`[Execute] Transaction successful for proposal ${proposal.proposal_id}:`, result.digest);
+            
+            // Log any events
+            if (result.events && result.events.length > 0) {
+                console.log(`[Execute] Events emitted:`, result.events.map(e => e.type));
+            }
+
+            // Record success for circuit breaker and metrics
+            recordSuccess();
+            totalTransactions++;
+            lastSuccessfulPoll = Date.now();
+
+            break; // Success, exit retry loop
+
+        } catch (error: any) {
+            retries++;
+            failedTransactions++;
+            console.error(`[Execute] Failed to execute proposal ${proposal.proposal_id} (attempt ${retries}/${MAX_RETRIES}):`, error.message);
+            
+            if (error.message?.includes('already executed') || 
+                error.message?.includes('EALREADY_EXECUTED')) {
+                console.log(`[Execute] Proposal ${proposal.proposal_id} was already executed. Skipping.`);
+                break; // Don't retry for already executed proposals
+            }
+
+            // Record failure for circuit breaker
+            recordFailure();
+
+            if (retries >= MAX_RETRIES) {
+                await sendAlert(
+                    `Failed to execute proposal ${proposal.proposal_id} after ${MAX_RETRIES} attempts`,
+                    error
+                );
+            } else if (retries < MAX_RETRIES) {
+                console.log(`Retrying in ${RETRY_DELAY_MS}ms...`);
+                await sleep(RETRY_DELAY_MS);
+            }
+        }
+    }
+}
+
 async function poll() {
     console.log(`\n--- Polling at ${new Date().toISOString()} ---`);
     
     try {
         await advanceReviewToTrading();
         await advanceTradingToFinalized();
+        await executeFinalizedProposals();
         isHealthy = true;
     } catch (error) {
         console.error('Error during polling cycle:', error);
