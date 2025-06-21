@@ -9,7 +9,3 @@ Instead of voting we use decision markets as the consensus mechanism for evaluat
 Users can trade on what the predicted price of their DAO's native token is if a given proposal was to be accepted or rejected.
 
 This mechanism is much more efficent than voting and also protects DAO holders while also boosting engagement.
-
-
-
-
