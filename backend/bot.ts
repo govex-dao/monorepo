@@ -20,8 +20,8 @@ const parseConfigurationFile = (fileName: string) => {
 const FUTARCHY_CONTRACT = parseConfigurationFile(`deployments/futarchy-${process.env.NETWORK}`)
 const SUI_PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
 const SUI_RPC_URL = process.env.MAINNET_RPC_URL || process.env.TESTNET_RPC_URL || (() => { throw new Error('Neither MAINNET_RPC_URL nor TESTNET_RPC_URL environment variable is set'); })();
-const PACKAGE_ID = process.env.PACKAGE_ID || FUTARCHY_CONTRACT.packageId;
-const FEE_MANAGER_ID = process.env.FEE_MANAGER_ID || FUTARCHY_CONTRACT.feeManagerId;
+const PACKAGE_ID = FUTARCHY_CONTRACT.packageId;
+const FEE_MANAGER_ID = FUTARCHY_CONTRACT.feeManagerId;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '60000', 10);
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
