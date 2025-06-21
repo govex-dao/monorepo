@@ -62,12 +62,18 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          # Create PR-specific services
-          PR_NUMBER=${{ github.event.pull_request.number }}
+          # For now, deploy to staging with a note about the PR
+          echo "Deploying PR #${{ github.event.pull_request.number }} to staging environment"
           
-          # Deploy with PR-specific service names
-          railway up --service backend-pr-${PR_NUMBER} --environment staging --detach
-          railway up --service frontend-pr-${PR_NUMBER} --environment staging --detach
+          # Deploy to existing services (this will work with your token)
+          railway up --service backend --environment staging --detach
+          railway up --service frontend --environment staging --detach
+          
+          # Note: This deploys to shared staging. For isolated PR environments,
+          # you would need to either:
+          # 1. Pre-create services in Railway (backend-pr-1, backend-pr-2, etc.)
+          # 2. Use Railway API to create services dynamically
+          # 3. Use a different platform that supports dynamic previews
 
       - name: Update deployment status
         if: always()
