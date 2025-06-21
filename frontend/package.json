@@ -8,18 +8,14 @@
     "dev": "vite",
     "dev:local": "cross-env VITE_API_URL=http://localhost:3000/ vite",
     "build-frontend": "tsc && vite build",
-    "build-frontend:local": "cross-env VITE_API_URL=http://localhost:3000/ tsc && vite build",
     "preview": "vite preview",
-    "preview:local": "cross-env VITE_API_URL=http://localhost:3000/ vite preview",
     "prettier:check": "prettier -c --ignore-unknown .",
     "prettier:fix": "prettier -w --ignore-unknown .",
-    "prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
     "eslint:check": "eslint --max-warnings=0 .",
     "eslint:fix": "pnpm run eslint:check --fix",
     "lint": "pnpm run eslint:check && pnpm run prettier:check",
     "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
     "test": "vitest run",
-    "test:watch": "vitest",
     "start": "serve -s dist -l 5173"
   },
   "dependencies": {

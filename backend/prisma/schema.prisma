@@ -5,12 +5,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
-/// We can setup the provider to our database
-/// For this DEMO, we're using sqlite, which allows us to not
-/// have external dependencies.
+/// Database configuration supports both SQLite (local) and PostgreSQL (production)
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db?pragma=journal_mode=WAL&pragma=synchronous=normal&pragma=busy_timeout=5000"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // PostgreSQL optimizations
+  relationMode = "prisma" // Better for connection pooling
 }
 
 /// Saves the latest cursor for a given key.

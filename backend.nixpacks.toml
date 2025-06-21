@@ -1,6 +1,6 @@
-# Backend Service Configuration
+# Backend Service - Simple and Sweet
 [phases.setup]
-nixPkgs = ["nodejs_18", "pnpm", "sqlite"]
+nixPkgs = ["nodejs_18", "pnpm"]
 
 [phases.install]
 dependsOn = ["setup"]
@@ -11,7 +11,7 @@ cmds = [
 [phases.build]
 dependsOn = ["install"]
 cmds = [
-    "echo 'Build phase complete - database setup will happen at startup'"
+    "echo 'Backend build complete'"
 ]
 
 [start]
@@ -19,4 +19,3 @@ cmd = "cd backend && pnpm start:railway"
 
 [variables]
 NODE_ENV = "production"
-PORT = "3000"
