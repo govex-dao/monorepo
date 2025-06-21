@@ -1,0 +1,40 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+jobs:
+  deploy-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      
+      - name: Set Environment
+        id: set-env
+        run: |
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          else
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Deploy All Services
+        run: |
+          ENV=${{ steps.set-env.outputs.environment }}
+          echo "Deploying all services to $ENV"
+          
+          # Deploy backend and frontend
+          railway up -e $ENV -s backend &
+          railway up -e $ENV -s frontend &
+          
+          # Wait for all deployments
+          wait
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

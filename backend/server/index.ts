@@ -21,7 +21,6 @@ setInterval(() => {
 
 const app = express();
 app.use(cors());
-
 app.use(express.json());
 
 // Mount AI Review routes
@@ -29,6 +28,30 @@ app.use(aiReviewRouter);
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
+});
+
+app.get('/health', async (req, res) => {
+	try {
+		// Check database connection
+		await prisma.$queryRaw`SELECT 1`;
+		
+		res.status(200).json({
+			status: 'healthy',
+			service: 'api',
+			timestamp: new Date().toISOString(),
+			network: process.env.NETWORK || 'unknown',
+			database: 'connected'
+		});
+	} catch (error) {
+		res.status(503).json({
+			status: 'unhealthy',
+			service: 'api',
+			timestamp: new Date().toISOString(),
+			network: process.env.NETWORK || 'unknown',
+			database: 'disconnected',
+			error: error instanceof Error ? error.message : 'Unknown error'
+		});
+	}
 });
 
 app.get('/cache-stats', async (req, res) => {

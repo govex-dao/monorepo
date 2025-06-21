@@ -1,0 +1,21 @@
+# Frontend Service Configuration
+[phases.setup]
+nixPkgs = ["nodejs_18", "pnpm"]
+
+[phases.install]
+dependsOn = ["setup"]
+cmds = ["pnpm install"]
+
+[phases.build]
+dependsOn = ["install"]
+cmds = ["pnpm run build-frontend"]
+
+[staticAssets]
+enabled = true
+dir = "dist"
+
+[start]
+cmd = "npx serve -s dist -l ${PORT:-3000}"
+
+[variables]
+NODE_ENV = "production"
