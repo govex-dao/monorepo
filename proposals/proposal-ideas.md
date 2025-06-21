@@ -1,2 +1,3 @@
 - proposal to refund creator for proposals that pass for Govex DAO only. To be changed when protocol and DAO level fees are introduced
 - Move to 0% TWAP next time a DAO is created
+- get to a high score here and add to metadata? https://blockworks.co/token-transparency
