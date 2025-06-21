@@ -12,6 +12,11 @@ permissions:
 jobs:
   deploy-preview:
     runs-on: ubuntu-latest
+    # Only run for org members or repo collaborators
+    if: |
+      github.event.pull_request.author_association == 'MEMBER' ||
+      github.event.pull_request.author_association == 'OWNER' ||
+      github.event.pull_request.author_association == 'COLLABORATOR'
     environment: 
       name: pr-preview-${{ github.event.pull_request.number }}
       url: https://pr-${{ github.event.pull_request.number }}-frontend.railway.app
