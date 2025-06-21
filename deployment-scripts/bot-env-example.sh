@@ -4,13 +4,13 @@
 # Copy this file to bot-env.sh and fill in your actual values
 
 # REQUIRED - Bot wallet private key (hex format, no 0x prefix)
-export SUI_PRIVATE_KEY="your_private_key_here"
+# export SUI_PRIVATE_KEY="your_private_key_here"
 
 # REQUIRED - Package ID from your Futarchy contract deployment
-export PACKAGE_ID="0x..."
+# export PACKAGE_ID="0x..."
 
 # REQUIRED - Fee Manager ID from your deployment
-export FEE_MANAGER_ID="0x..."
+# export FEE_MANAGER_ID="0x..."
 
 # OPTIONAL - RPC endpoint (defaults to testnet)
 # export SUI_RPC_URL="https://fullnode.testnet.sui.io:443"
@@ -32,4 +32,4 @@ export FEE_MANAGER_ID="0x..."
 
 # For the backend API server:
 # REQUIRED - Network configuration
-export NETWORK="testnetProd"  # or "devnet" or "testnet"
+# export NETWORK="testnetProd"  # or "devnet" or "testnet"

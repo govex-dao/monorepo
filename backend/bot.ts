@@ -19,7 +19,7 @@ const parseConfigurationFile = (fileName: string) => {
 // --- Configuration ---
 const FUTARCHY_CONTRACT = parseConfigurationFile(`deployments/futarchy-${process.env.NETWORK}`)
 const SUI_PRIVATE_KEY = process.env.SUI_PRIVATE_KEY;
-const SUI_RPC_URL = process.env.SUI_RPC_URL || getFullnodeUrl('testnet');
+const SUI_RPC_URL = process.env.MAINNET_RPC_URL || process.env.TESTNET_RPC_URL || (() => { throw new Error('Neither MAINNET_RPC_URL nor TESTNET_RPC_URL environment variable is set'); })();
 const PACKAGE_ID = process.env.PACKAGE_ID || FUTARCHY_CONTRACT.packageId;
 const FEE_MANAGER_ID = process.env.FEE_MANAGER_ID || FUTARCHY_CONTRACT.feeManagerId;
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '60000', 10);
@@ -433,6 +433,17 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
     while (retries < MAX_RETRIES) {
         try {
             console.log(`[${transition}] Advancing proposal: ${proposal.proposal_id} (attempt ${retries + 1}/${MAX_RETRIES})`);
+            
+            // Debug logging
+            console.log(`[${transition}] Debug info:`, {
+                proposalId: proposal.proposal_id,
+                escrowId: proposal.escrow_id,
+                packageId: PACKAGE_ID,
+                feeManagerId: FEE_MANAGER_ID,
+                assetType: dao.assetType,
+                stableType: dao.stableType,
+                daoId: dao.dao_id
+            });
 
             const txb = new Transaction();
             txb.setGasBudget(50000000);
@@ -440,7 +451,7 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
             // First advance the state
             txb.moveCall({
                 target: `${PACKAGE_ID}::advance_stage::try_advance_state_entry`,
-                typeArguments: [dao.assetType, dao.stableType],
+                typeArguments: ["0x" + dao.assetType, "0x" + dao.stableType],
                 arguments: [
                     txb.object(proposal.proposal_id),
                     txb.object(proposal.escrow_id),
@@ -454,7 +465,7 @@ async function executeTransaction(proposal: Proposal, dao: Dao, transition: stri
                 console.log(`[${transition}] Adding sign_result_entry to the same transaction`);
                 txb.moveCall({
                     target: `${PACKAGE_ID}::dao::sign_result_entry`,
-                    typeArguments: [dao.assetType, dao.stableType],
+                    typeArguments: ["0x" + dao.assetType, "0x" + dao.stableType],
                     arguments: [
                         txb.object(dao.dao_id),
                         txb.pure.id(proposal.proposal_id),
@@ -542,7 +553,7 @@ async function executeProposal(proposal: Proposal, dao: Dao) {
             // Execute the proposal
             txb.moveCall({
                 target: `${PACKAGE_ID}::dao::sign_result_entry`,
-                typeArguments: [dao.assetType, dao.stableType],
+                typeArguments: ["0x" + dao.assetType, "0x" + dao.stableType],
                 arguments: [
                     txb.object(dao.dao_id),
                     txb.pure.id(proposal.proposal_id),
