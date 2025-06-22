@@ -48,7 +48,8 @@ jobs:
           echo "Deploying frontend..."
           railway up \
             --service frontend \
-            --environment testnet-dev &
+            --environment testnet-dev \
+            --config railway.frontend.json &
           
           # Wait for all deployments
           wait

@@ -59,11 +59,26 @@ if [ -n "$DATABASE_URL" ]; then
     echo "Generating Prisma client with schema: $PRISMA_SCHEMA"
     npx prisma generate --schema="$PRISMA_SCHEMA"
 else
-    echo "No DATABASE_URL found - please set MAINNET_DATABASE_URL or TESTNET_DATABASE_URL"
+    echo "No DATABASE_URL found - please set DATABASE_URL environment variable"
     exit 1
 fi
 
 # No SQLite backup needed for PostgreSQL deployments
+
+# Handle database operations for migrator service
+if [ "$SERVICE" = "migrator" ]; then
+    echo "Running database migration service..."
+    if [ "$DB_RESET_ON_DEPLOY" = "true" ]; then
+        echo "Running full database reset..."
+        npx prisma db push --force-reset --schema="$PRISMA_SCHEMA"
+        npx prisma db push --schema="$PRISMA_SCHEMA"
+    else
+        echo "Running database migrations..."
+        npx prisma migrate deploy --schema="$PRISMA_SCHEMA"
+    fi
+    echo "Migration complete"
+    exit 0
+fi
 
 # Conditional database setup based on environment
 # Only run DB operations for indexer service or when SERVICE=all
@@ -105,6 +120,10 @@ case "$SERVICE" in
     "bot")
         echo "Starting Bot service..."
         pnpm bot:prod
+        ;;
+    "migrator")
+        echo "ERROR: Migrator should have exited earlier"
+        exit 1
         ;;
     "all")
         echo "Starting all services..."

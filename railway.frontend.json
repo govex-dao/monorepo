@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "cd frontend && pnpm install && pnpm run build",
+    "nixpacksConfigPath": "frontend/nixpacks.toml"
+  },
+  "deploy": {
+    "startCommand": "cd frontend && npx serve -s dist -l ${PORT:-3000}",
+    "numReplicas": 1,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
