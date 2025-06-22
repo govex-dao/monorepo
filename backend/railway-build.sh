@@ -14,28 +14,26 @@ if [ -d "backend" ]; then
     cd backend
 fi
 
-# First, generate the default Prisma client that most imports use
-echo "Generating default Prisma client..."
+# Determine which schema to use and copy it as the default
+if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ] || [ "$RAILWAY_GIT_BRANCH" = "main" ]; then
+    echo "Using mainnet schema"
+    cp prisma/schema.mainnet.prisma prisma/schema.prisma
+    BUILD_CMD="pnpm build:mainnet"
+elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || ([ -z "$RAILWAY_GIT_BRANCH" ] || [ "$RAILWAY_GIT_BRANCH" != "main" ] && [ "$RAILWAY_GIT_BRANCH" != "dev" ]); then
+    echo "Using testnet-branch schema"
+    cp prisma/schema.testnet-branch.prisma prisma/schema.prisma
+    BUILD_CMD="pnpm build:testnet-branch"
+else
+    # Default to testnet-dev for dev branch or testnet-dev environment
+    echo "Using testnet-dev schema"
+    cp prisma/schema.testnet-dev.prisma prisma/schema.prisma
+    BUILD_CMD="pnpm build:testnet-dev"
+fi
+
+# Generate the default Prisma client from the copied schema
+echo "Generating Prisma client..."
 npx prisma generate
 
-# Determine which build script to run
-if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ]; then
-    echo "Building for mainnet environment"
-    pnpm build:mainnet
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-dev" ]; then
-    echo "Building for testnet-dev environment"
-    pnpm build:testnet-dev
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ]; then
-    echo "Building for testnet-branch environment"
-    pnpm build:testnet-branch
-elif [ "$RAILWAY_GIT_BRANCH" = "main" ]; then
-    echo "Building for main branch (mainnet)"
-    pnpm build:mainnet
-elif [ "$RAILWAY_GIT_BRANCH" = "dev" ]; then
-    echo "Building for dev branch (testnet-dev)"
-    pnpm build:testnet-dev
-else
-    # For PR branches or other cases
-    echo "Building for branch environment (testnet-branch)"
-    pnpm build:testnet-branch
-fi
+# Run the environment-specific build
+echo "Running build command: $BUILD_CMD"
+$BUILD_CMD
