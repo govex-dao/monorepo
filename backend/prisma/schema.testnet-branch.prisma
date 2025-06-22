@@ -50,9 +50,6 @@ model Dao {
   proposals Proposal[]
   verificationRequests DaoVerificationRequest[]
   verification DaoVerification?  // Changed to optional one-to-one
-  // Branch testing fields
-  branch_test_mode Boolean @default(false)
-  branch_metadata String?
   @@index([dao_id])
 }
 
@@ -86,14 +83,9 @@ model Proposal {
   twap_threshold BigInt
   twapHistory    ProposalTWAP[]
   result ProposalResult?
-  // Branch testing fields
-  branch_name String?
-  pr_number Int?
-  experimental_feature String?
   
   @@index([dao_id]) // Add this index for better query performance
   @@index([current_state, created_at]) // Index for bot queries
-  @@index([branch_name]) // Index for branch filtering
 }
 
 model ProposalTWAP {
@@ -213,31 +205,4 @@ model DailyMetric {
   count Int      @default(0)
 
   @@unique([key, date]) // Ensures one row per metric per day
-}
-
-// Branch testing specific models
-model BranchTestFeature {
-  id Int @id @default(autoincrement())
-  feature_name String
-  branch_name String
-  pr_number Int?
-  enabled Boolean @default(true)
-  test_data String?
-  created_at DateTime @default(now())
-  
-  @@index([branch_name])
-  @@index([feature_name])
-}
-
-model BranchDeployment {
-  id Int @id @default(autoincrement())
-  branch_name String
-  pr_number Int?
-  deployment_id String @unique
-  deployed_at DateTime @default(now())
-  deployed_by String
-  commit_hash String
-  
-  @@index([branch_name])
-  @@index([deployed_at])
 }
