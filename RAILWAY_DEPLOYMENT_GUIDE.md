@@ -51,19 +51,9 @@ You need 3 separate Railway projects for different environments:
    - Services: api, bot, indexer, poller, frontend
    - Database: PostgreSQL (development)
 
-3. **govex-testnet-branch** (PR Previews)
-   - Branch: Feature branches
-   - Services: api, bot, indexer, poller, frontend
-   - Database: PostgreSQL (testing)
-
 ## Setting Up Multi-Service Deployment
 
 ### Step 1: Create Railway Projects
-
-```bash
-# Create 3 new Railway projects
-# Name them: govex-mainnet, govex-testnet-dev, govex-testnet-branch
-```
 
 ### Step 2: Create Services in Each Project
 
@@ -178,7 +168,6 @@ railway plugin create postgresql
 4. **All Services Need Database URLs**:
    - In mainnet project: Set `MAINNET_DATABASE_URL`
    - In testnet-dev project: Set `TESTNET_DATABASE_URL`
-   - In testnet-branch project: Set `TESTNET_BRANCH_DATABASE_URL`
 
 ## GitHub Secrets Setup
 
@@ -188,12 +177,10 @@ Add these secrets to your GitHub repository (Settings → Secrets → Actions):
 # Railway API Tokens (get from Railway dashboard)
 RAILWAY_TOKEN_MAINNET=<mainnet-project-token>
 RAILWAY_TOKEN_DEV=<testnet-dev-project-token>
-RAILWAY_TOKEN_BRANCH=<testnet-branch-project-token>
 
 # Database URLs (copy from Railway PostgreSQL plugins)
 MAINNET_DATABASE_URL=<mainnet-postgres-url>
 TESTNET_DATABASE_URL=<testnet-dev-postgres-url>
-TESTNET_BRANCH_DATABASE_URL=<testnet-branch-postgres-url>
 ```
 
 ## Deployment Methods
@@ -206,7 +193,7 @@ TESTNET_BRANCH_DATABASE_URL=<testnet-branch-postgres-url>
 ```yaml
 # Use the multi-service workflow
 - Go to Actions → "Deploy Multi-Service to Railway"
-- Select environment: mainnet|testnet-dev|testnet-branch
+- Select environment: mainnet|testnet-dev
 - Select services: all|api,bot,indexer,poller,frontend
 - Optional: Reset database (indexer only)
 ```
@@ -231,7 +218,6 @@ railway up --service poller --environment testnet-dev --config railway.poller.js
 │   ├── schema.prisma          # Main schema (simple setup)
 │   ├── schema.mainnet.prisma  # Mainnet-specific
 │   ├── schema.testnet-dev.prisma     # Testnet dev
-│   └── schema.testnet-branch.prisma  # PR previews
 ```
 
 ### Database Operations

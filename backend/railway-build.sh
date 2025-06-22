@@ -19,10 +19,6 @@ if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ] || [ "$RAILWAY_GIT_BRANCH" = "mai
     echo "Using mainnet schema"
     cp prisma/schema.mainnet.prisma prisma/schema.prisma
     BUILD_CMD="pnpm build:mainnet"
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || ([ -z "$RAILWAY_GIT_BRANCH" ] || [ "$RAILWAY_GIT_BRANCH" != "main" ] && [ "$RAILWAY_GIT_BRANCH" != "dev" ]); then
-    echo "Using testnet-branch schema"
-    cp prisma/schema.testnet-branch.prisma prisma/schema.prisma
-    BUILD_CMD="pnpm build:testnet-branch"
 else
     # Default to testnet-dev for dev branch or testnet-dev environment
     echo "Using testnet-dev schema"
