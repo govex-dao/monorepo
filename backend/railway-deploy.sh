@@ -23,14 +23,10 @@ echo "DB Reset on Deploy: ${DB_RESET_ON_DEPLOY}"
 # Set the appropriate schema based on Railway environment
 # DATABASE_URL is already set by Railway
 # NETWORK is for Sui blockchain (mainnet/testnet)
-# RAILWAY_ENVIRONMENT_NAME is for deployment environment (mainnet/testnet-dev/testnet-branch)
 
 if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ]; then
     PRISMA_SCHEMA="prisma/schema.mainnet.prisma"
     echo "Using Mainnet schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ]; then
-    PRISMA_SCHEMA="prisma/schema.testnet-branch.prisma"
-    echo "Using Testnet Branch schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
 elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-dev" ]; then
     PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
     echo "Using Testnet Dev schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
