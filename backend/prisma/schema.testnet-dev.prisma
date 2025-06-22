@@ -50,9 +50,6 @@ model Dao {
   proposals Proposal[]
   verificationRequests DaoVerificationRequest[]
   verification DaoVerification?  // Changed to optional one-to-one
-  // Testnet-specific fields for testing
-  test_mode Boolean @default(false)
-  test_metadata String?
   @@index([dao_id])
 }
 
@@ -86,13 +83,9 @@ model Proposal {
   twap_threshold BigInt
   twapHistory    ProposalTWAP[]
   result ProposalResult?
-  // Testnet-specific fields
-  test_proposal Boolean @default(false)
-  test_notes String?
   
   @@index([dao_id]) // Add this index for better query performance
   @@index([current_state, created_at]) // Index for bot queries
-  @@index([test_proposal]) // Index for filtering test proposals
 }
 
 model ProposalTWAP {
@@ -212,16 +205,4 @@ model DailyMetric {
   count Int      @default(0)
 
   @@unique([key, date]) // Ensures one row per metric per day
-}
-
-// Testnet-specific models for testing features
-model TestTransaction {
-  id Int @id @default(autoincrement())
-  transaction_id String @unique
-  test_type String
-  test_data String
-  created_at DateTime @default(now())
-  
-  @@index([test_type])
-  @@index([created_at])
 }
