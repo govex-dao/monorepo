@@ -11,7 +11,7 @@ dependsOn = ["install"]
 cmds = ["pnpm run build-frontend"]
 
 [staticAssets]
-enabled = true
+enabled = "true"
 dir = "dist"
 
 [start]
