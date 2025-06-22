@@ -16,7 +16,7 @@
     "lint": "pnpm run eslint:check && pnpm run prettier:check",
     "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
     "test": "vitest run",
-    "start": "serve -s dist -l 5173"
+    "start": "serve -s dist -l ${PORT:-5173}"
   },
   "dependencies": {
     "@mysten/dapp-kit": "0.14.30",
