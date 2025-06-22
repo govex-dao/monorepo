@@ -14,6 +14,10 @@ if [ -d "backend" ]; then
     cd backend
 fi
 
+# First, generate the default Prisma client that most imports use
+echo "Generating default Prisma client..."
+npx prisma generate
+
 # Determine which build script to run
 if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ]; then
     echo "Building for mainnet environment"
