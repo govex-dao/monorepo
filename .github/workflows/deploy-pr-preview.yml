@@ -30,8 +30,7 @@ jobs:
           # Set environment variables
           export NETWORK="testnet-branch"
           export DB_RESET_ON_DEPLOY="false"
-          export DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
-          export TESTNET_BRANCH_DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
+          # DATABASE_URL is already set by Railway
           
           # Deploy all services in parallel
           for service in api bot indexer poller; do
