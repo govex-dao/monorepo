@@ -1,0 +1,244 @@
+// Testnet Branch-specific Prisma schema
+// This schema is used for branch testing and PR previews
+// Can have experimental features before merging to dev
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client-testnet-branch"
+}
+
+/// Database configuration for testnet branch PostgreSQL
+datasource db {
+  provider = "postgresql"
+  url      = env("TESTNET_BRANCH_DATABASE_URL")
+  // PostgreSQL optimizations
+  relationMode = "prisma" // Better for connection pooling
+}
+
+/// Saves the latest cursor for a given key.
+model Cursor {
+  id String @id
+  eventSeq String
+  txDigest String
+}
+
+model Dao {
+  id Int @id @default(autoincrement())
+  dao_id String @unique
+  minAssetAmount BigInt
+  minStableAmount BigInt
+  timestamp BigInt
+  assetType String
+  stableType String
+  icon_url String
+  icon_cache_path String? // Add this field to store the cached image path
+  dao_name String 
+  asset_decimals Int
+  stable_decimals Int
+  asset_name String
+  stable_name String
+  asset_icon_url String
+  stable_icon_url String
+  asset_symbol String
+  stable_symbol String
+  review_period_ms BigInt
+  trading_period_ms BigInt
+  amm_twap_start_delay BigInt
+  amm_twap_step_max BigInt
+  amm_twap_initial_observation BigInt
+  twap_threshold BigInt
+  description String
+  proposals Proposal[]
+  verificationRequests DaoVerificationRequest[]
+  verification DaoVerification?  // Changed to optional one-to-one
+  // Branch testing fields
+  branch_test_mode Boolean @default(false)
+  branch_metadata String?
+  @@index([dao_id])
+}
+
+model Proposal {
+  id Int @id @default(autoincrement())
+  proposal_id String @unique
+  market_state_id String @unique
+  dao_id String
+  dao Dao? @relation(fields: [dao_id], references: [dao_id]) // Make this optional with ?
+  proposer String
+  outcome_count BigInt
+  outcome_messages String  // Stored as JSON string
+  created_at BigInt
+  escrow_id String
+  asset_value BigInt
+  stable_value BigInt
+  asset_type String
+  stable_type String
+  title String   
+  details String 
+  metadata String
+  package_id String
+  current_state Int?
+  state_history ProposalStateChange[]
+  review_period_ms BigInt
+  trading_period_ms BigInt
+  initial_outcome_amounts String?  // Stored as JSON string for the Option<vector<u64>>
+  twap_start_delay BigInt
+  twap_step_max BigInt
+  twap_initial_observation BigInt
+  twap_threshold BigInt
+  twapHistory    ProposalTWAP[]
+  result ProposalResult?
+  // Branch testing fields
+  branch_name String?
+  pr_number Int?
+  experimental_feature String?
+  
+  @@index([dao_id]) // Add this index for better query performance
+  @@index([current_state, created_at]) // Index for bot queries
+  @@index([branch_name]) // Index for branch filtering
+}
+
+model ProposalTWAP {
+  id         String   @id @default(uuid())
+  proposalId String
+  outcome    Int
+  twap       BigInt?
+  timestamp  BigInt
+  oracle_id  String
+  proposal   Proposal @relation(fields: [proposalId], references: [proposal_id])
+
+  @@unique([proposalId, outcome])
+}
+
+model DaoVerificationRequest {
+  id Int @id @default(autoincrement())
+  dao_id String
+  dao Dao? @relation(fields: [dao_id], references: [dao_id])
+  requester String
+  attestation_url String
+  verification_id String
+  timestamp BigInt
+  status String @default("pending") // Add status field
+
+  @@index([verification_id])
+  @@index([dao_id, status, timestamp])
+}
+
+model DaoVerification {
+  id Int @id @default(autoincrement())
+  dao_id String @unique  // Added @unique constraint
+  dao Dao? @relation(fields: [dao_id], references: [dao_id])
+  attestation_url String
+  verification_id String
+  verified Boolean
+  validator String
+  timestamp BigInt
+  reject_reason String?
+  @@unique([dao_id, verification_id])
+  
+  @@index([verification_id])
+  @@index([dao_id, timestamp, verified])
+}
+
+model ProposalStateChange {
+  id Int @id @default(autoincrement())
+  proposal_id String
+  old_state Int
+  new_state Int
+  timestamp BigInt
+  proposal Proposal @relation(fields: [proposal_id], references: [proposal_id])
+
+  @@index([proposal_id])
+  @@index([proposal_id, new_state]) // Index for bot state change queries
+  @@index([new_state, timestamp]) // Index for timestamp-based queries
+}
+
+model ProposalResult {
+  id Int @id @default(autoincrement())
+  proposal_id String @unique
+  proposal Proposal @relation(fields: [proposal_id], references: [proposal_id])
+  dao_id String
+  outcome String  // Maps to outcome from ResultSigned
+  winning_outcome BigInt  // Maps to winning_outcome from ResultSigned, using BigInt for u64
+  timestamp BigInt // Maps to timestamp from ResultSigned
+  
+  @@index([proposal_id])
+  @@index([dao_id])
+}
+
+model SwapEvent {
+  id          Int      @id @default(autoincrement())
+  market_id   String   
+  outcome     Int      
+  is_buy      Boolean  
+  amount_in   BigInt   
+  amount_out  BigInt   
+  price_impact BigInt  
+  price       BigInt   
+  sender      String   
+  timestamp   BigInt
+  asset_reserve  BigInt
+  stable_reserve BigInt
+
+  @@index([market_id])
+  @@index([outcome])
+  @@index([sender])
+  @@index([timestamp])
+}
+
+model ResultSigned {
+  id Int @id @default(autoincrement())
+  dao_id String
+  proposal_id String @unique
+  result String     // We'll store the vector<u8> as a string
+  winning_outcome BigInt
+  timestamp BigInt
+
+  @@index([proposal_id])
+  @@index([dao_id])
+  @@index([timestamp])
+}
+
+model ProposalLock {
+  proposal_id String @id
+  locked_at BigInt
+  locked_by String
+  expires_at BigInt
+  
+  @@index([expires_at])
+}
+
+model DailyMetric {
+  id    Int      @id @default(autoincrement())
+  date  DateTime // SQLite stores as TEXT in ISO8601 format
+  key   String   // The name of the metric, e.g., "globalAiReviewCount"
+  count Int      @default(0)
+
+  @@unique([key, date]) // Ensures one row per metric per day
+}
+
+// Branch testing specific models
+model BranchTestFeature {
+  id Int @id @default(autoincrement())
+  feature_name String
+  branch_name String
+  pr_number Int?
+  enabled Boolean @default(true)
+  test_data String?
+  created_at DateTime @default(now())
+  
+  @@index([branch_name])
+  @@index([feature_name])
+}
+
+model BranchDeployment {
+  id Int @id @default(autoincrement())
+  branch_name String
+  pr_number Int?
+  deployment_id String @unique
+  deployed_at DateTime @default(now())
+  deployed_by String
+  commit_hash String
+  
+  @@index([branch_name])
+  @@index([deployed_at])
+}
