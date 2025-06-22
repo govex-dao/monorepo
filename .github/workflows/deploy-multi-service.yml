@@ -11,7 +11,6 @@ on:
         options:
           - mainnet
           - testnet-dev
-          - testnet-branch
       services:
         description: 'Services to deploy (comma-separated: api,bot,indexer,poller,frontend or all)'
         required: true
@@ -44,8 +43,6 @@ jobs:
             echo "environment=mainnet" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
             echo "environment=testnet-dev" >> $GITHUB_OUTPUT
-          else
-            echo "environment=testnet-branch" >> $GITHUB_OUTPUT
           fi
 
       - name: Select Railway token
