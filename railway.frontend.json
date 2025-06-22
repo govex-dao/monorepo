@@ -3,10 +3,10 @@
   "build": {
     "builder": "NIXPACKS",
     "buildCommand": "cd frontend && pnpm install && pnpm run build-frontend",
-    "nixpacksConfigPath": "frontend/nixpacks.toml"
+    "nixpacksConfigPath": "nixpacks.frontend.toml"
   },
   "deploy": {
-    "startCommand": "cd frontend && npx serve -s dist -l 5173",
+    "startCommand": "cd frontend && npx serve -s dist -l 3000",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
