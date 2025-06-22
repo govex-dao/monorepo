@@ -6,7 +6,7 @@
     "nixpacksConfigPath": "frontend/nixpacks.toml"
   },
   "deploy": {
-    "startCommand": "cd frontend && npx serve -s dist -l $PORT",
+    "startCommand": "cd frontend && PORT=${PORT:-3000} npx serve -s dist -l $PORT",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
