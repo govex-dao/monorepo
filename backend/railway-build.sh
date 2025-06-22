@@ -4,8 +4,15 @@
 # based on Railway environment name or branch name
 
 echo "Starting Railway build..."
+echo "Current directory: $(pwd)"
 echo "RAILWAY_ENVIRONMENT_NAME: ${RAILWAY_ENVIRONMENT_NAME}"
 echo "RAILWAY_GIT_BRANCH: ${RAILWAY_GIT_BRANCH}"
+
+# Change to backend directory if we're in the monorepo root
+if [ -d "backend" ]; then
+    echo "Changing to backend directory"
+    cd backend
+fi
 
 # Determine which build script to run
 if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ]; then
