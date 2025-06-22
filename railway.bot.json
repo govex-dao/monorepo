@@ -10,7 +10,6 @@
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10,
     "healthcheckPath": "/health",
-    "healthcheckPort": 3001,
     "healthcheckTimeout": 30
   }
 }
