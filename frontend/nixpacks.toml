@@ -15,7 +15,7 @@ enabled = "true"
 dir = "dist"
 
 [start]
-cmd = "npx serve -s dist -l ${PORT:-3000}"
+cmd = "npx serve -s dist -l $PORT"
 
 [variables]
 NODE_ENV = "production"
