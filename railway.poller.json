@@ -13,6 +13,9 @@
   "variables": {
     "SERVICE_NAME": {
       "value": "poller"
+    },
+    "PORT": {
+      "value": "3003"
     }
   }
 }

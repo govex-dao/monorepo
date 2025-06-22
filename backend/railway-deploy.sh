@@ -33,7 +33,7 @@ elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || [ "$ENVIRONMENT" = "t
     echo "Using Testnet Branch database"
 else
     # Default to testnet-dev
-    export DATABASE_URL="$TESTNET_DEV_DATABASE_URL"
+    export DATABASE_URL="$TESTNET_DATABASE_URL"
     PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
     echo "Using Testnet Dev database"
 fi
@@ -58,12 +58,7 @@ else
     exit 1
 fi
 
-# Backup database if it exists (before any operations)
-if [ -f "$DB_FILE" ] && [ "$DB_RESET_ON_DEPLOY" = "true" ]; then
-    BACKUP_FILE="${DB_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
-    echo "Creating database backup: $BACKUP_FILE"
-    cp "$DB_FILE" "$BACKUP_FILE"
-fi
+# No SQLite backup needed for PostgreSQL deployments
 
 # Conditional database setup based on environment
 # Only run DB operations for indexer service or when SERVICE=all
@@ -74,10 +69,6 @@ if [ "$SERVICE" = "indexer" ] || [ "$SERVICE" = "all" ]; then
             # PostgreSQL reset
             npx prisma db push --force-reset --schema="$PRISMA_SCHEMA"
             npx prisma db push --schema="$PRISMA_SCHEMA"
-        else
-            # SQLite reset
-            pnpm fresh:db
-            pnpm branch:db
         fi
     else
         echo "Skipping database reset (DB_RESET_ON_DEPLOY=false)"
@@ -88,10 +79,7 @@ else
     npx prisma generate --schema="$PRISMA_SCHEMA"
 fi
 
-# Set SQLite to WAL mode only if using SQLite
-if [ -z "$DATABASE_URL" ] && [ -f "$DB_FILE" ]; then
-    sqlite3 "$DB_FILE" 'PRAGMA journal_mode=WAL;' || true
-fi
+# PostgreSQL deployment - no SQLite configuration needed
 
 echo "Database setup complete"
 

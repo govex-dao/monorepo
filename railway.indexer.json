@@ -16,6 +16,9 @@
     },
     "DB_RESET_ON_DEPLOY": {
       "value": "false"
+    },
+    "PORT": {
+      "value": "3002"
     }
   }
 }

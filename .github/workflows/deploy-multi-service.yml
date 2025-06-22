@@ -13,7 +13,7 @@ on:
           - testnet-dev
           - testnet-branch
       services:
-        description: 'Services to deploy (comma-separated: api,bot,indexer,poller or all)'
+        description: 'Services to deploy (comma-separated: api,bot,indexer,poller,frontend or all)'
         required: true
         default: 'all'
         type: string
@@ -26,8 +26,6 @@ on:
     branches:
       - main
       - dev
-  pull_request:
-    types: [opened, synchronize]
 
 jobs:
   setup:
@@ -66,10 +64,10 @@ jobs:
         id: parse
         run: |
           if [[ "${{ inputs.services }}" == "all" ]] || [[ -z "${{ inputs.services }}" ]]; then
-            echo 'services=["api", "bot", "indexer", "poller"]' >> $GITHUB_OUTPUT
+            echo 'services=["api", "bot", "indexer", "poller", "frontend"]' >> $GITHUB_OUTPUT
           else
             # Convert comma-separated list to JSON array
-            SERVICES=$(echo "${{ inputs.services }}" | jq -R 'split(",") | map(select(. == "api" or . == "bot" or . == "indexer" or . == "poller"))')
+            SERVICES=$(echo "${{ inputs.services }}" | jq -R 'split(",") | map(select(. == "api" or . == "bot" or . == "indexer" or . == "poller" or . == "frontend"))')
             echo "services=$SERVICES" >> $GITHUB_OUTPUT
           fi
 
@@ -102,17 +100,26 @@ jobs:
           # Set the appropriate database URL based on environment
           if [[ "$NETWORK" == "mainnet" ]]; then
             export DATABASE_URL="${{ secrets.MAINNET_DATABASE_URL }}"
+            export MAINNET_DATABASE_URL="${{ secrets.MAINNET_DATABASE_URL }}"
           elif [[ "$NETWORK" == "testnet-branch" ]]; then
             export DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
+            export TESTNET_BRANCH_DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
           else
-            export DATABASE_URL="${{ secrets.TESTNET_DEV_DATABASE_URL }}"
+            export DATABASE_URL="${{ secrets.TESTNET_DATABASE_URL }}"
+            export TESTNET_DATABASE_URL="${{ secrets.TESTNET_DATABASE_URL }}"
           fi
           
           # Deploy using the service-specific config
-          railway up \
-            --service govex-${{ matrix.service }} \
-            --environment ${{ needs.setup.outputs.environment }} \
-            --config railway.${{ matrix.service }}.json
+          if [[ "${{ matrix.service }}" == "frontend" ]]; then
+            railway up \
+              --service frontend \
+              --environment ${{ needs.setup.outputs.environment }}
+          else
+            railway up \
+              --service ${{ matrix.service }} \
+              --environment ${{ needs.setup.outputs.environment }} \
+              --config railway.${{ matrix.service }}.json
+          fi
 
   notify:
     needs: [setup, deploy-service]
