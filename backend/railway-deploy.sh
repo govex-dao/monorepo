@@ -19,7 +19,31 @@ fi
 
 echo "Network: ${NETWORK}"
 echo "DB Reset on Deploy: ${DB_RESET_ON_DEPLOY}"
-echo "Database URL: ${DATABASE_URL:-'Using default from schema.prisma'}"
+
+# Set the appropriate database URL and schema based on network and environment
+# Support for 3 Railway projects: mainnet, testnet-dev, testnet-branch
+if [ "$NETWORK" = "mainnet" ]; then
+    export DATABASE_URL="$MAINNET_DATABASE_URL"
+    PRISMA_SCHEMA="prisma/schema.mainnet.prisma"
+    echo "Using Mainnet database"
+elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || [ "$ENVIRONMENT" = "testnet-branch" ]; then
+    # Testnet branch environment (PR previews)
+    export DATABASE_URL="$TESTNET_BRANCH_DATABASE_URL"
+    PRISMA_SCHEMA="prisma/schema.testnet-branch.prisma"
+    echo "Using Testnet Branch database"
+else
+    # Default to testnet-dev
+    export DATABASE_URL="$TESTNET_DEV_DATABASE_URL"
+    PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
+    echo "Using Testnet Dev database"
+fi
+
+# Log environment details
+if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
+    echo "Railway environment: $RAILWAY_ENVIRONMENT_NAME"
+fi
+
+echo "Database URL: ${DATABASE_URL:-'No database URL set'}"
 
 # Install dependencies
 pnpm install
@@ -27,10 +51,10 @@ pnpm install
 # Generate Prisma client for PostgreSQL if DATABASE_URL is set
 if [ -n "$DATABASE_URL" ]; then
     echo "Using PostgreSQL database from DATABASE_URL"
-    npx prisma generate
+    echo "Generating Prisma client with schema: $PRISMA_SCHEMA"
+    npx prisma generate --schema="$PRISMA_SCHEMA"
 else
-    echo "No DATABASE_URL found - for local dev, create .env with:"
-    echo 'DATABASE_URL="file:./dev.db"'
+    echo "No DATABASE_URL found - please set MAINNET_DATABASE_URL or TESTNET_DATABASE_URL"
     exit 1
 fi
 
@@ -48,8 +72,8 @@ if [ "$SERVICE" = "indexer" ] || [ "$SERVICE" = "all" ]; then
         echo "Running full database reset for indexer..."
         if [ -n "$DATABASE_URL" ]; then
             # PostgreSQL reset
-            npx prisma db push --force-reset
-            npx prisma db push
+            npx prisma db push --force-reset --schema="$PRISMA_SCHEMA"
+            npx prisma db push --schema="$PRISMA_SCHEMA"
         else
             # SQLite reset
             pnpm fresh:db
@@ -57,11 +81,11 @@ if [ "$SERVICE" = "indexer" ] || [ "$SERVICE" = "all" ]; then
         fi
     else
         echo "Skipping database reset (DB_RESET_ON_DEPLOY=false)"
-        npx prisma generate
+        npx prisma generate --schema="$PRISMA_SCHEMA"
     fi
 else
     echo "Skipping database operations for $SERVICE service"
-    npx prisma generate
+    npx prisma generate --schema="$PRISMA_SCHEMA"
 fi
 
 # Set SQLite to WAL mode only if using SQLite

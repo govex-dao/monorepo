@@ -1,0 +1,145 @@
+name: Deploy Multi-Service to Railway
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'testnet-dev'
+        type: choice
+        options:
+          - mainnet
+          - testnet-dev
+          - testnet-branch
+      services:
+        description: 'Services to deploy (comma-separated: api,bot,indexer,poller or all)'
+        required: true
+        default: 'all'
+        type: string
+      db_reset:
+        description: 'Reset database on deploy (only for indexer)'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.parse.outputs.services }}
+      environment: ${{ steps.env.outputs.environment }}
+      railway_token: ${{ steps.token.outputs.token }}
+    steps:
+      - name: Determine environment
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "environment=mainnet" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            echo "environment=testnet-dev" >> $GITHUB_OUTPUT
+          else
+            echo "environment=testnet-branch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Select Railway token
+        id: token
+        run: |
+          ENV="${{ steps.env.outputs.environment }}"
+          if [[ "$ENV" == "mainnet" ]]; then
+            echo "token=RAILWAY_TOKEN_MAINNET" >> $GITHUB_OUTPUT
+          elif [[ "$ENV" == "testnet-dev" ]]; then
+            echo "token=RAILWAY_TOKEN_DEV" >> $GITHUB_OUTPUT
+          else
+            echo "token=RAILWAY_TOKEN_BRANCH" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Parse services
+        id: parse
+        run: |
+          if [[ "${{ inputs.services }}" == "all" ]] || [[ -z "${{ inputs.services }}" ]]; then
+            echo 'services=["api", "bot", "indexer", "poller"]' >> $GITHUB_OUTPUT
+          else
+            # Convert comma-separated list to JSON array
+            SERVICES=$(echo "${{ inputs.services }}" | jq -R 'split(",") | map(select(. == "api" or . == "bot" or . == "indexer" or . == "poller"))')
+            echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          fi
+
+  deploy-service:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: ${{ fromJson(needs.setup.outputs.services) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy ${{ matrix.service }} to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets[needs.setup.outputs.railway_token] }}
+        run: |
+          echo "Deploying ${{ matrix.service }} to ${{ needs.setup.outputs.environment }}"
+          
+          # Set environment variables for the deployment
+          export NETWORK="${{ needs.setup.outputs.environment }}"
+          export DB_RESET_ON_DEPLOY="${{ inputs.db_reset || 'false' }}"
+          
+          # Set the appropriate database URL based on environment
+          if [[ "$NETWORK" == "mainnet" ]]; then
+            export DATABASE_URL="${{ secrets.MAINNET_DATABASE_URL }}"
+          elif [[ "$NETWORK" == "testnet-branch" ]]; then
+            export DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
+          else
+            export DATABASE_URL="${{ secrets.TESTNET_DEV_DATABASE_URL }}"
+          fi
+          
+          # Deploy using the service-specific config
+          railway up \
+            --service govex-${{ matrix.service }} \
+            --environment ${{ needs.setup.outputs.environment }} \
+            --config railway.${{ matrix.service }}.json
+
+  notify:
+    needs: [setup, deploy-service]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const services = ${{ needs.setup.outputs.services }};
+            const environment = '${{ needs.setup.outputs.environment }}';
+            
+            let message = `## Railway Deployment Summary\n\n`;
+            message += `**Environment**: ${environment}\n`;
+            message += `**Services**: ${services.join(', ')}\n\n`;
+            
+            if ('${{ needs.deploy-service.result }}' === 'success') {
+              message += '✅ All services deployed successfully!';
+            } else {
+              message += '❌ Some services failed to deploy. Check the workflow logs for details.';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            })
