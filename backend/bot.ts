@@ -674,7 +674,7 @@ function startHealthCheckServer() {
         });
     });
     
-    const server = app.listen(HEALTH_CHECK_PORT, () => {
+    const server = app.listen(HEALTH_CHECK_PORT, '0.0.0.0', () => {
         console.log(`Health check server running on port ${HEALTH_CHECK_PORT}`);
     });
     
