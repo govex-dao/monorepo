@@ -20,20 +20,28 @@ fi
 echo "Network: ${NETWORK}"
 echo "DB Reset on Deploy: ${DB_RESET_ON_DEPLOY}"
 
-# Set the appropriate schema based on network and environment
+# Set the appropriate schema based on Railway environment
 # DATABASE_URL is already set by Railway
-if [ "$NETWORK" = "mainnet" ]; then
+# NETWORK is for Sui blockchain (mainnet/testnet)
+# RAILWAY_ENVIRONMENT_NAME is for deployment environment (mainnet/testnet-dev/testnet-branch)
+
+if [ "$RAILWAY_ENVIRONMENT_NAME" = "mainnet" ]; then
     PRISMA_SCHEMA="prisma/schema.mainnet.prisma"
-    echo "Using Mainnet schema"
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || [ "$ENVIRONMENT" = "testnet-branch" ] || [ "$NETWORK" = "testnet-branch" ]; then
-    # Testnet branch environment (PR previews)
+    echo "Using Mainnet schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
+elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ]; then
     PRISMA_SCHEMA="prisma/schema.testnet-branch.prisma"
-    echo "Using Testnet Branch schema"
-else
-    # Default to testnet-dev
+    echo "Using Testnet Branch schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
+elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-dev" ]; then
     PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
-    echo "Using Testnet Dev schema"
+    echo "Using Testnet Dev schema for Railway environment: $RAILWAY_ENVIRONMENT_NAME"
+else
+    # Default to testnet-dev if RAILWAY_ENVIRONMENT_NAME is not set
+    PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
+    echo "Using default Testnet Dev schema (RAILWAY_ENVIRONMENT_NAME not set)"
 fi
+
+echo "Sui Network: ${NETWORK}"
+echo "Railway Environment: ${RAILWAY_ENVIRONMENT_NAME}"
 
 # Log environment details
 if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
