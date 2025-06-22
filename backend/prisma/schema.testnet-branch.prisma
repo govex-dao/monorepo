@@ -10,7 +10,7 @@ generator client {
 /// Database configuration for testnet branch PostgreSQL
 datasource db {
   provider = "postgresql"
-  url      = env("TESTNET_BRANCH_DATABASE_URL")
+  url      = env("DATABASE_URL")
   // PostgreSQL optimizations
   relationMode = "prisma" // Better for connection pooling
 }
