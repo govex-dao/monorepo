@@ -20,22 +20,19 @@ fi
 echo "Network: ${NETWORK}"
 echo "DB Reset on Deploy: ${DB_RESET_ON_DEPLOY}"
 
-# Set the appropriate database URL and schema based on network and environment
-# Support for 3 Railway projects: mainnet, testnet-dev, testnet-branch
+# Set the appropriate schema based on network and environment
+# DATABASE_URL is already set by Railway
 if [ "$NETWORK" = "mainnet" ]; then
-    export DATABASE_URL="$MAINNET_DATABASE_URL"
     PRISMA_SCHEMA="prisma/schema.mainnet.prisma"
-    echo "Using Mainnet database"
-elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || [ "$ENVIRONMENT" = "testnet-branch" ]; then
+    echo "Using Mainnet schema"
+elif [ "$RAILWAY_ENVIRONMENT_NAME" = "testnet-branch" ] || [ "$ENVIRONMENT" = "testnet-branch" ] || [ "$NETWORK" = "testnet-branch" ]; then
     # Testnet branch environment (PR previews)
-    export DATABASE_URL="$TESTNET_BRANCH_DATABASE_URL"
     PRISMA_SCHEMA="prisma/schema.testnet-branch.prisma"
-    echo "Using Testnet Branch database"
+    echo "Using Testnet Branch schema"
 else
     # Default to testnet-dev
-    export DATABASE_URL="$TESTNET_DATABASE_URL"
     PRISMA_SCHEMA="prisma/schema.testnet-dev.prisma"
-    echo "Using Testnet Dev database"
+    echo "Using Testnet Dev schema"
 fi
 
 # Log environment details
@@ -43,7 +40,7 @@ if [ -n "$RAILWAY_ENVIRONMENT_NAME" ]; then
     echo "Railway environment: $RAILWAY_ENVIRONMENT_NAME"
 fi
 
-echo "Database URL: ${DATABASE_URL:-'No database URL set'}"
+echo "Database URL: ${DATABASE_URL:0:20}..." # Show first 20 chars for security
 
 # Install dependencies
 pnpm install

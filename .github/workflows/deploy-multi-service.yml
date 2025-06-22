@@ -97,17 +97,8 @@ jobs:
           export NETWORK="${{ needs.setup.outputs.environment }}"
           export DB_RESET_ON_DEPLOY="${{ inputs.db_reset || 'false' }}"
           
-          # Set the appropriate database URL based on environment
-          if [[ "$NETWORK" == "mainnet" ]]; then
-            export DATABASE_URL="${{ secrets.MAINNET_DATABASE_URL }}"
-            export MAINNET_DATABASE_URL="${{ secrets.MAINNET_DATABASE_URL }}"
-          elif [[ "$NETWORK" == "testnet-branch" ]]; then
-            export DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
-            export TESTNET_BRANCH_DATABASE_URL="${{ secrets.TESTNET_BRANCH_DATABASE_URL }}"
-          else
-            export DATABASE_URL="${{ secrets.TESTNET_DATABASE_URL }}"
-            export TESTNET_DATABASE_URL="${{ secrets.TESTNET_DATABASE_URL }}"
-          fi
+          # DATABASE_URL is already set by Railway for each project
+          # We just need to ensure the NETWORK variable matches the environment
           
           # Deploy using the service-specific config
           if [[ "${{ matrix.service }}" == "frontend" ]]; then
