@@ -33,8 +33,27 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_DEV }}
+          NETWORK: testnet-dev
+          DATABASE_URL: ${{ secrets.TESTNET_DATABASE_URL }}
+          TESTNET_DATABASE_URL: ${{ secrets.TESTNET_DATABASE_URL }}
         run: |
-          railway up --service backend --environment testnet-dev
+          # Deploy all backend services
+          for service in api bot indexer poller; do
+            echo "Deploying $service..."
+            railway up \
+              --service $service \
+              --environment testnet-dev \
+              --config railway.$service.json &
+          done
+          
+          # Deploy frontend
+          echo "Deploying frontend..."
+          railway up \
+            --service frontend \
+            --environment testnet-dev &
+          
+          # Wait for all deployments
+          wait
 
       - name: Comment on PR
         if: github.event_name == 'issue_comment'
