@@ -1,9 +1,7 @@
 #!/usr/bin/env ts-node
 
-import { PrismaClient } from '@prisma/client';
-
-
-
+import { PrismaClient as SqlitePrismaClient } from '@prisma/client';
+import { PrismaClient as PostgresPrismaClient } from '@prisma/client';
 
 // Configuration
 const SQLITE_PATH = process.env.SQLITE_PATH || '../main-branch/prisma/dev.db';
@@ -75,7 +73,7 @@ async function migrateTable(
 
 async function main() {
   // Initialize clients
-  const sqliteClient = new PrismaClient({
+  const sqliteClient = new SqlitePrismaClient({
     datasources: {
       db: {
         url: `file:${SQLITE_PATH}`
@@ -83,7 +81,7 @@ async function main() {
     }
   });
 
-  const postgresClient = new PrismaClient({
+  const postgresClient = new PostgresPrismaClient({
     datasources: {
       db: {
         url: POSTGRES_URL
@@ -99,8 +97,30 @@ async function main() {
     await postgresClient.$connect();
     console.log(`${colors.green}✓ Connected to PostgreSQL${colors.reset}\n`);
     
-    // SKIP WIPING DATA - Database is already empty
-    console.log(`${colors.yellow}Skipping data wipe - database is empty${colors.reset}\n`);
+    // WIPE EXISTING DATA
+    console.log(`${colors.red}${colors.bright}⚠️  WIPING EXISTING POSTGRESQL DATA...${colors.reset}`);
+    
+    // Delete in reverse order to respect foreign key constraints
+    await postgresClient.proposalLock.deleteMany({});
+    await postgresClient.daoVerification.deleteMany({});
+    await postgresClient.daoVerificationRequest.deleteMany({});
+    await postgresClient.resultSigned.deleteMany({});
+    await postgresClient.swapEvent.deleteMany({});
+    await postgresClient.proposalResult.deleteMany({});
+    await postgresClient.proposalTWAP.deleteMany({});
+    await postgresClient.proposalStateChange.deleteMany({});
+    await postgresClient.proposal.deleteMany({});
+    await postgresClient.dao.deleteMany({});
+    await postgresClient.cursor.deleteMany({});
+    
+    // Also delete DailyMetric if it exists (dev branch table)
+    try {
+      await postgresClient.dailyMetric.deleteMany({});
+    } catch (e) {
+      // Table might not exist, that's ok
+    }
+    
+    console.log(`${colors.green}✓ PostgreSQL database wiped clean${colors.reset}\n`);
     
     // Migrate tables in order (respecting foreign key constraints)
     await migrateTable(
