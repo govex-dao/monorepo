@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db?pragma=journal_mode=WAL&pragma=synchronous=normal&pragma=busy_timeout=5000"
+}
+
+/// Saves the latest cursor for a given key.
+model Cursor {
+  id       String @id
+  eventSeq String
+  txDigest String
+}
+
+model Dao {
+  id                           Int                      @id @default(autoincrement())
+  dao_id                       String                   @unique
+  minAssetAmount               BigInt
+  minStableAmount              BigInt
+  timestamp                    BigInt
+  assetType                    String
+  stableType                   String
+  icon_url                     String
+  icon_cache_path              String?
+  dao_name                     String
+  asset_decimals               Int
+  stable_decimals              Int
+  asset_name                   String
+  stable_name                  String
+  asset_icon_url               String
+  stable_icon_url              String
+  asset_symbol                 String
+  stable_symbol                String
+  review_period_ms             BigInt
+  trading_period_ms            BigInt
+  amm_twap_start_delay         BigInt
+  amm_twap_step_max            BigInt
+  amm_twap_initial_observation BigInt
+  twap_threshold               BigInt
+  description                  String
+  verification                 DaoVerification?
+  verificationRequests         DaoVerificationRequest[]
+  proposals                    Proposal[]
+
+  @@index([dao_id])
+}
+
+model Proposal {
+  id                       Int                   @id @default(autoincrement())
+  proposal_id              String                @unique
+  market_state_id          String                @unique
+  dao_id                   String
+  proposer                 String
+  outcome_count            BigInt
+  outcome_messages         String
+  created_at               BigInt
+  escrow_id                String
+  asset_value              BigInt
+  stable_value             BigInt
+  asset_type               String
+  stable_type              String
+  title                    String
+  details                  String
+  metadata                 String
+  package_id               String
+  current_state            Int?
+  review_period_ms         BigInt
+  trading_period_ms        BigInt
+  initial_outcome_amounts  String?
+  twap_start_delay         BigInt
+  twap_step_max            BigInt
+  twap_initial_observation BigInt
+  twap_threshold           BigInt
+  dao                      Dao                   @relation(fields: [dao_id], references: [dao_id])
+  result                   ProposalResult?
+  state_history            ProposalStateChange[]
+  twapHistory              ProposalTWAP[]
+
+  @@index([dao_id])
+  @@index([current_state, created_at])
+}
+
+model ProposalTWAP {
+  id         String   @id @default(uuid())
+  proposalId String
+  outcome    Int
+  twap       BigInt?
+  timestamp  BigInt
+  oracle_id  String
+  proposal   Proposal @relation(fields: [proposalId], references: [proposal_id])
+
+  @@unique([proposalId, outcome])
+}
+
+model DaoVerificationRequest {
+  id              Int    @id @default(autoincrement())
+  dao_id          String
+  requester       String
+  attestation_url String
+  verification_id String
+  timestamp       BigInt
+  status          String @default("pending")
+  dao             Dao    @relation(fields: [dao_id], references: [dao_id])
+
+  @@index([verification_id])
+  @@index([dao_id, status, timestamp])
+}
+
+model DaoVerification {
+  id              Int     @id @default(autoincrement())
+  dao_id          String  @unique
+  attestation_url String
+  verification_id String
+  verified        Boolean
+  validator       String
+  timestamp       BigInt
+  reject_reason   String?
+  dao             Dao     @relation(fields: [dao_id], references: [dao_id])
+
+  @@unique([dao_id, verification_id])
+  @@index([verification_id])
+  @@index([dao_id, timestamp, verified])
+}
+
+model ProposalStateChange {
+  id          Int      @id @default(autoincrement())
+  proposal_id String
+  old_state   Int
+  new_state   Int
+  timestamp   BigInt
+  proposal    Proposal @relation(fields: [proposal_id], references: [proposal_id])
+
+  @@index([proposal_id])
+  @@index([proposal_id, new_state])
+  @@index([new_state, timestamp])
+}
+
+model ProposalResult {
+  id              Int      @id @default(autoincrement())
+  proposal_id     String   @unique
+  dao_id          String
+  outcome         String
+  winning_outcome BigInt
+  timestamp       BigInt
+  proposal        Proposal @relation(fields: [proposal_id], references: [proposal_id])
+
+  @@index([proposal_id])
+  @@index([dao_id])
+}
+
+model SwapEvent {
+  id             Int     @id @default(autoincrement())
+  market_id      String
+  outcome        Int
+  is_buy         Boolean
+  amount_in      BigInt
+  amount_out     BigInt
+  price_impact   BigInt
+  price          BigInt
+  sender         String
+  timestamp      BigInt
+  asset_reserve  BigInt
+  stable_reserve BigInt
+
+  @@index([market_id])
+  @@index([outcome])
+  @@index([sender])
+  @@index([timestamp])
+}
+
+model ResultSigned {
+  id              Int    @id @default(autoincrement())
+  dao_id          String
+  proposal_id     String @unique
+  result          String
+  winning_outcome BigInt
+  timestamp       BigInt
+
+  @@index([proposal_id])
+  @@index([dao_id])
+  @@index([timestamp])
+}
+
+model ProposalLock {
+  proposal_id String @id
+  locked_at   BigInt
+  locked_by   String
+  expires_at  BigInt
+
+  @@index([expires_at])
+}
