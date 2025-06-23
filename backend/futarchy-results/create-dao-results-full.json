@@ -1,0 +1,209 @@
+{
+  "digest": "DzsQKDBNwgv6qGLKdVbe6G5rrUmhoFiCA8JeACSwwxL9",
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "741",
+    "gasUsed": {
+      "computationCost": "1000000",
+      "storageCost": "12479200",
+      "storageRebate": "7922772",
+      "nonRefundableStorageFee": "80028"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+        "sequenceNumber": "433181111"
+      },
+      {
+        "objectId": "0x40d0cc0d810d21e4ff0ad0c387c484a971ab817e7147c308103b687ca69acba0",
+        "sequenceNumber": "433181111"
+      },
+      {
+        "objectId": "0x74e98d7351b2a22d9d1454325a656b7ad0a76f72ac43d7ff428401fddcf1403a",
+        "sequenceNumber": "433181111"
+      },
+      {
+        "objectId": "0xa7d8b9033274d1cf9e5232dfbec260f9a1f501e219b3aa2f838422b1722a9624",
+        "sequenceNumber": "433181111"
+      },
+      {
+        "objectId": "0xe5ef335f5b031c4ebe1e8c2e1649d01a9eaee17c8ae14d3f1671dc538e938bd9",
+        "sequenceNumber": "433181111"
+      }
+    ],
+    "sharedObjects": [
+      {
+        "objectId": "0xa7d8b9033274d1cf9e5232dfbec260f9a1f501e219b3aa2f838422b1722a9624",
+        "version": 433181111,
+        "digest": "FEx3t66iRFYwWcATQFjbGA5d3QLfGXRtptXxdAsipukn"
+      },
+      {
+        "objectId": "0xe5ef335f5b031c4ebe1e8c2e1649d01a9eaee17c8ae14d3f1671dc538e938bd9",
+        "version": 433181111,
+        "digest": "96dw45qEMcVEYRadiozEnSZ6VVECTWbfg5RQ4ZXtQkks"
+      },
+      {
+        "objectId": "0x0000000000000000000000000000000000000000000000000000000000000006",
+        "version": 433182110,
+        "digest": "BahPAWNJDAKtuxYCidvDZbRaEpwX7JYVtdduR6eCeYx7"
+      }
+    ],
+    "transactionDigest": "DzsQKDBNwgv6qGLKdVbe6G5rrUmhoFiCA8JeACSwwxL9",
+    "created": [
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 433182111
+          }
+        },
+        "reference": {
+          "objectId": "0x3d746b9c578f4b79df17f274136e68ba20ef4f7a0844b7007b044a65b308a614",
+          "version": 433182111,
+          "digest": "CevRRhMmpF3hqXczBaTTKbZs8kvTcfHB3aMDgLo9rVrR"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+        },
+        "reference": {
+          "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+          "version": 433182111,
+          "digest": "3DVqutU8XmS58HpkBHWzTYLN1Lr3CUWiNfdLKJJYNHXs"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+        },
+        "reference": {
+          "objectId": "0x74e98d7351b2a22d9d1454325a656b7ad0a76f72ac43d7ff428401fddcf1403a",
+          "version": 433182111,
+          "digest": "J9dgFgwuyH286BQMTzoK39pT6pxRo7mBbpZjqyPLR9a"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 430900255
+          }
+        },
+        "reference": {
+          "objectId": "0xa7d8b9033274d1cf9e5232dfbec260f9a1f501e219b3aa2f838422b1722a9624",
+          "version": 433182111,
+          "digest": "DmZ9iHyN6zPoJKEFwLgdKcGxypkJXTp6SQrq6nGHXL6"
+        }
+      },
+      {
+        "owner": {
+          "Shared": {
+            "initial_shared_version": 430900255
+          }
+        },
+        "reference": {
+          "objectId": "0xe5ef335f5b031c4ebe1e8c2e1649d01a9eaee17c8ae14d3f1671dc538e938bd9",
+          "version": 433182111,
+          "digest": "Dqi1QS17UTY8taAUJ4hz6BDEkqJrEFVjkziX7HLR2eET"
+        }
+      }
+    ],
+    "deleted": [
+      {
+        "objectId": "0x40d0cc0d810d21e4ff0ad0c387c484a971ab817e7147c308103b687ca69acba0",
+        "version": 433182111,
+        "digest": "7gyGAp71YXQRoxmFBaHxofQXAipvgHyBKPyxmdSJxyvz"
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "reference": {
+        "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+        "version": 433182111,
+        "digest": "3DVqutU8XmS58HpkBHWzTYLN1Lr3CUWiNfdLKJJYNHXs"
+      }
+    },
+    "eventsDigest": "DUJ7UFN9RsQ2zZQYDUtqgmbk3rzEhAiV9TGZ9h2NaEsT",
+    "dependencies": [
+      "Ezu8NfWcdhdRtUxpPVCBvCdJ5BE1294SPxuFmL8oETH",
+      "6yuQ2FcFoVsJKrh7XCBJ4MuM6s9K2E9TpML5fNYQG229",
+      "EoSrmKg4bUGMf6LLzWRRPGcsgK5sJte184YVGkognuS6",
+      "EuDVKyrosb4LtHH92NEZKdMnsVNVfcH32q867fSXbbAh",
+      "GUNvHs4qYbDB1ZCRX4THrSNRjR58rJjKL1AvqoSDuo8w"
+    ]
+  },
+  "objectChanges": [
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+      "version": "433182111",
+      "previousVersion": "433181111",
+      "digest": "3DVqutU8XmS58HpkBHWzTYLN1Lr3CUWiNfdLKJJYNHXs"
+    },
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "objectType": "0x2::coin::CoinMetadata<0xf4796ef0bf75cb6e48d6053471ef735ab93d69d79cca1056bde6c58e690d86d4::my_asset::MY_ASSET>",
+      "objectId": "0x74e98d7351b2a22d9d1454325a656b7ad0a76f72ac43d7ff428401fddcf1403a",
+      "version": "433182111",
+      "previousVersion": "433181111",
+      "digest": "J9dgFgwuyH286BQMTzoK39pT6pxRo7mBbpZjqyPLR9a"
+    },
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 430900255
+        }
+      },
+      "objectType": "0x4e9fa785eb3a8527547313c71a42b37df186e93b36e083340e4b0a5d1b66f745::factory::Factory",
+      "objectId": "0xa7d8b9033274d1cf9e5232dfbec260f9a1f501e219b3aa2f838422b1722a9624",
+      "version": "433182111",
+      "previousVersion": "433181111",
+      "digest": "DmZ9iHyN6zPoJKEFwLgdKcGxypkJXTp6SQrq6nGHXL6"
+    },
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 430900255
+        }
+      },
+      "objectType": "0x4e9fa785eb3a8527547313c71a42b37df186e93b36e083340e4b0a5d1b66f745::fee::FeeManager",
+      "objectId": "0xe5ef335f5b031c4ebe1e8c2e1649d01a9eaee17c8ae14d3f1671dc538e938bd9",
+      "version": "433182111",
+      "previousVersion": "433181111",
+      "digest": "Dqi1QS17UTY8taAUJ4hz6BDEkqJrEFVjkziX7HLR2eET"
+    },
+    {
+      "type": "created",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "Shared": {
+          "initial_shared_version": 433182111
+        }
+      },
+      "objectType": "0x4e9fa785eb3a8527547313c71a42b37df186e93b36e083340e4b0a5d1b66f745::dao::DAO",
+      "objectId": "0x3d746b9c578f4b79df17f274136e68ba20ef4f7a0844b7007b044a65b308a614",
+      "version": "433182111",
+      "digest": "CevRRhMmpF3hqXczBaTTKbZs8kvTcfHB3aMDgLo9rVrR"
+    }
+  ],
+  "confirmedLocalExecution": false
+}

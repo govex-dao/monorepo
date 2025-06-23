@@ -1,0 +1,114 @@
+{
+  "digest": "9GHvtumtUzWe3NtYa6dw4PH9pZC621SnVysEi453yuRr",
+  "effects": {
+    "messageVersion": "v1",
+    "status": {
+      "status": "success"
+    },
+    "executedEpoch": "741",
+    "gasUsed": {
+      "computationCost": "1000000",
+      "storageCost": "4134400",
+      "storageRebate": "2723688",
+      "nonRefundableStorageFee": "27512"
+    },
+    "modifiedAtVersions": [
+      {
+        "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+        "sequenceNumber": "433242950"
+      },
+      {
+        "objectId": "0x20014d75ce749c58276dc513903dea8672b0d7b71cd806fae731e94b0d24f8c2",
+        "sequenceNumber": "433240971"
+      }
+    ],
+    "transactionDigest": "9GHvtumtUzWe3NtYa6dw4PH9pZC621SnVysEi453yuRr",
+    "created": [
+      {
+        "owner": {
+          "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+        },
+        "reference": {
+          "objectId": "0x2586e83423d353b28394ec0a05450eb6e7a9f972a908bb978036d9d45fbe8f1f",
+          "version": 433242951,
+          "digest": "HkoB4ZH4xn52K5hcM2KYeZZgkrb1qzbb1GjnMHVLMQpj"
+        }
+      }
+    ],
+    "mutated": [
+      {
+        "owner": {
+          "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+        },
+        "reference": {
+          "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+          "version": 433242951,
+          "digest": "26QovRo1rymNx7DGgJWrV4W8LgRwek9BzcwLbY4pHkZh"
+        }
+      },
+      {
+        "owner": {
+          "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+        },
+        "reference": {
+          "objectId": "0x20014d75ce749c58276dc513903dea8672b0d7b71cd806fae731e94b0d24f8c2",
+          "version": 433242951,
+          "digest": "6oiUCpELb8wbXNS6tVvPs5C1xDPpTdyz8TxffdtYPaZT"
+        }
+      }
+    ],
+    "gasObject": {
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "reference": {
+        "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+        "version": 433242951,
+        "digest": "26QovRo1rymNx7DGgJWrV4W8LgRwek9BzcwLbY4pHkZh"
+      }
+    },
+    "dependencies": [
+      "Ezu8NfWcdhdRtUxpPVCBvCdJ5BE1294SPxuFmL8oETH",
+      "73zzv1Mkv3ujtgYrvTo83zqRF8L4hftNy1cDbyMCSWmt",
+      "Hh3S5NhBX3f3DKLhGHCMRGSz7Cm7Un5JUoAbKjLdyiq4"
+    ]
+  },
+  "objectChanges": [
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "objectType": "0x2::coin::Coin<0x2::sui::SUI>",
+      "objectId": "0x008f8f2055ca0e5005c5150287d71d03b8035e2cadee1a72508490be8bbea9b7",
+      "version": "433242951",
+      "previousVersion": "433242950",
+      "digest": "26QovRo1rymNx7DGgJWrV4W8LgRwek9BzcwLbY4pHkZh"
+    },
+    {
+      "type": "mutated",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "objectType": "0x2::coin::TreasuryCap<0xf4796ef0bf75cb6e48d6053471ef735ab93d69d79cca1056bde6c58e690d86d4::my_asset::MY_ASSET>",
+      "objectId": "0x20014d75ce749c58276dc513903dea8672b0d7b71cd806fae731e94b0d24f8c2",
+      "version": "433242951",
+      "previousVersion": "433240971",
+      "digest": "6oiUCpELb8wbXNS6tVvPs5C1xDPpTdyz8TxffdtYPaZT"
+    },
+    {
+      "type": "created",
+      "sender": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b",
+      "owner": {
+        "AddressOwner": "0x65f839fe74834f8935c386bee6eea7b1c9e1cd2f3d6175cdaba36be18c14927b"
+      },
+      "objectType": "0x2::coin::Coin<0xf4796ef0bf75cb6e48d6053471ef735ab93d69d79cca1056bde6c58e690d86d4::my_asset::MY_ASSET>",
+      "objectId": "0x2586e83423d353b28394ec0a05450eb6e7a9f972a908bb978036d9d45fbe8f1f",
+      "version": "433242951",
+      "digest": "HkoB4ZH4xn52K5hcM2KYeZZgkrb1qzbb1GjnMHVLMQpj"
+    }
+  ],
+  "confirmedLocalExecution": false
+}
