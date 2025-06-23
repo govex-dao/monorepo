@@ -226,3 +226,32 @@ Bad operators get voted out
 System gradually improves
 
 Critical: No permanent positions. Even founders must face re-election eventually. The protocol is bigger than any individual.
+
+===
+Delegating to a secretive, Apple-like board if company has gold check mark and board is doxed like normal public company
+futarchy can also delegate funds where dont need details exposed
+
+===
+
+proposal creates funds for project to build new amm, allocate 100k creat spending code amm-1
+
+and dao opperator can create actions to spend using that code
+
+e.g. monthyl 3k to two devs
+
+pay marketr
+
+or pay audit
+
+each action has 24 hours to be challenged ( and that create a proposal)
+
+and maybe spending code closes after 1 year
+
+===
+unverfied
+
+blue verified socials
+
+silver legla futary
+
+gold full public company standards followed

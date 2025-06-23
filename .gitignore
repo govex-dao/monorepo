@@ -21,11 +21,3 @@ frontend/dist/
 **/.DS_Store
 
 dist/
-
-# Database backups - NEVER COMMIT
-backups/
-backend/backups/
-*.sql
-*.sql.gz
-*.dump
-db-backups/
