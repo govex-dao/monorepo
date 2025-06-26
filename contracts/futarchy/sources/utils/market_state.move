@@ -1,20 +1,21 @@
 module futarchy::market_state;
 
+// === Introduction ===
+// This module tracks proposal life cycle and acts as a source of truth for proposal state
+
+// === Imports ===
 use std::string::String;
-use sui::clock::{Self, Clock};
+use sui::clock::{Clock};
 use sui::event;
 
-// === Introduction ===
-// This tracks proposal life cycle and acts a source of truth for proposal state
-
-// ======== Error Constants ========
-const ETRADING_ALREADY_STARTED: u64 = 0;
-const EOUTCOME_OUT_OF_BOUNDS: u64 = 1;
-const EALREADY_FINALIZED: u64 = 2;
-const ETRADING_ALREADY_ENDED: u64 = 3;
-const ETRADING_NOT_ENDED: u64 = 4;
-const ENOT_FINALIZED: u64 = 5;
-const ETRADING_NOT_STARTED: u64 = 6;
+// === Errors ===
+const ETradingAlreadyStarted: u64 = 0;
+const EOutcomeOutOfBounds: u64 = 1;
+const EAlreadyFinalized: u64 = 2;
+const ETradingAlreadyEnded: u64 = 3;
+const ETradingNotEnded: u64 = 4;
+const ENotFinalized: u64 = 5;
+const ETradingNotStarted: u64 = 6;
 
 // === Structs ===
 public struct MarketStatus has copy, drop, store {
@@ -54,7 +55,7 @@ public struct MarketStateFinalizedEvent has copy, drop {
     timestamp_ms: u64,
 }
 
-// === Public Functions ===
+// === Public Package Functions ===
 public(package) fun new(
     market_id: ID,
     dao_id: ID,
@@ -63,9 +64,9 @@ public(package) fun new(
     clock: &Clock,
     ctx: &mut TxContext,
 ): MarketState {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
 
-    let state = MarketState {
+    MarketState {
         id: object::new(ctx),
         market_id,
         dao_id,
@@ -81,15 +82,13 @@ public(package) fun new(
         trading_start: 0,
         trading_end: option::none(),
         finalization_time: option::none(),
-    };
-
-    state
+    }
 }
 
 public(package) fun start_trading(state: &mut MarketState, duration_ms: u64, clock: &Clock) {
-    assert!(!state.status.trading_started, ETRADING_ALREADY_STARTED);
+    assert!(!state.status.trading_started, ETradingAlreadyStarted);
 
-    let start_time = clock::timestamp_ms(clock);
+    let start_time = clock.timestamp_ms();
     let end_time = start_time + duration_ms;
 
     state.status.trading_started = true;
@@ -102,21 +101,22 @@ public(package) fun start_trading(state: &mut MarketState, duration_ms: u64, clo
     });
 }
 
+// === Public Functions ===
 public fun assert_trading_active(state: &MarketState) {
-    assert!(state.status.trading_started, ETRADING_NOT_STARTED);
-    assert!(!state.status.trading_ended, ETRADING_ALREADY_ENDED);
+    assert!(state.status.trading_started, ETradingNotStarted);
+    assert!(!state.status.trading_ended, ETradingAlreadyEnded);
 }
 
 public fun assert_in_trading_or_pre_trading(state: &MarketState) {
-    assert!(!state.status.trading_ended, ETRADING_ALREADY_ENDED);
-    assert!(!state.status.finalized, EALREADY_FINALIZED);
+    assert!(!state.status.trading_ended, ETradingAlreadyEnded);
+    assert!(!state.status.finalized, EAlreadyFinalized);
 }
 
 public(package) fun end_trading(state: &mut MarketState, clock: &Clock) {
-    assert!(state.status.trading_started, ETRADING_NOT_STARTED);
-    assert!(!state.status.trading_ended, ETRADING_ALREADY_ENDED);
+    assert!(state.status.trading_started, ETradingNotStarted);
+    assert!(!state.status.trading_ended, ETradingAlreadyEnded);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     state.status.trading_ended = true;
 
     event::emit(TradingEndedEvent {
@@ -126,11 +126,11 @@ public(package) fun end_trading(state: &mut MarketState, clock: &Clock) {
 }
 
 public(package) fun finalize(state: &mut MarketState, winner: u64, clock: &Clock) {
-    assert!(state.status.trading_ended, ETRADING_NOT_ENDED);
-    assert!(!state.status.finalized, EALREADY_FINALIZED);
-    assert!(winner < state.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+    assert!(state.status.trading_ended, ETradingNotEnded);
+    assert!(!state.status.finalized, EAlreadyFinalized);
+    assert!(winner < state.outcome_count, EOutcomeOutOfBounds);
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     state.status.finalized = true;
     state.winning_outcome = option::some(winner);
     state.finalization_time = option::some(timestamp);
@@ -142,20 +142,20 @@ public(package) fun finalize(state: &mut MarketState, winner: u64, clock: &Clock
     });
 }
 
-// ======== Validators ========
+// === Assertion Functions ===
 public fun assert_market_finalized(state: &MarketState) {
-    assert!(state.status.finalized, ENOT_FINALIZED);
+    assert!(state.status.finalized, ENotFinalized);
 }
 
 public fun assert_not_finalized(state: &MarketState) {
-    assert!(!state.status.finalized, EALREADY_FINALIZED);
+    assert!(!state.status.finalized, EAlreadyFinalized);
 }
 
 public fun validate_outcome(state: &MarketState, outcome: u64) {
-    assert!(outcome < state.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+    assert!(outcome < state.outcome_count, EOutcomeOutOfBounds);
 }
 
-// ======== Getter Functions ========
+// === View Functions (Getters) ===
 public fun market_id(state: &MarketState): ID {
     state.market_id
 }
@@ -164,6 +164,7 @@ public fun outcome_count(state: &MarketState): u64 {
     state.outcome_count
 }
 
+// === View Functions (Predicates) ===
 public fun is_trading_active(state: &MarketState): bool {
     state.status.trading_started && !state.status.trading_ended
 }
@@ -177,13 +178,13 @@ public fun dao_id(state: &MarketState): ID {
 }
 
 public fun get_winning_outcome(state: &MarketState): u64 {
-    assert!(state.status.finalized, ENOT_FINALIZED);
-    *option::borrow(&state.winning_outcome)
+    assert!(state.status.finalized, ENotFinalized);
+    state.winning_outcome.destroy_some()
 }
 
 public fun get_outcome_message(state: &MarketState, outcome_idx: u64): String {
-    assert!(outcome_idx < state.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
-    *vector::borrow(&state.outcome_messages, outcome_idx)
+    assert!(outcome_idx < state.outcome_count, EOutcomeOutOfBounds);
+    state.outcome_messages[outcome_idx]
 }
 
 public fun get_creation_time(state: &MarketState): u64 {
@@ -245,21 +246,7 @@ public fun finalize_for_testing(state: &mut MarketState) {
 
 #[test_only]
 public fun destroy_for_testing(state: MarketState) {
-    let MarketState {
-        id,
-        market_id: _,
-        outcome_count: _,
-        status: _,
-        winning_outcome: _,
-        creation_time: _,
-        trading_start: _,
-        trading_end: _,
-        finalization_time: _,
-        dao_id: _,
-        outcome_messages: _,
-    } = state;
-
-    object::delete(id);
+    sui::test_utils::destroy(state);
 }
 
 #[test_only]

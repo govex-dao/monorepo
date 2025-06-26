@@ -1,37 +1,46 @@
 module futarchy::proposal;
 
-use futarchy::amm::{Self, LiquidityPool};
-use futarchy::coin_escrow;
-use futarchy::liquidity_initialize;
-use futarchy::market_state;
-use futarchy::oracle;
-use std::ascii::String as AsciiString;
-use std::string::String;
-use std::type_name;
-use sui::balance::{Self, Balance};
-use sui::clock::{Self, Clock};
-use sui::event;
-
 // === Introduction ===
 // This defines the core proposal logic and details
 
+// === Imports ===
+use std::ascii::String as AsciiString;
+use std::string::String;
+use std::type_name;
+
+use sui::{
+    balance::{Balance},
+    clock::{Clock},
+    event
+};
+
+use futarchy::{
+    amm::{LiquidityPool},
+    coin_escrow,
+    liquidity_initialize,
+    market_state,
+    oracle
+};
+
 // === Errors ===
-const EINVALID_POOL_LENGTH: u64 = 0;
-const EINVALID_AMOUNT: u64 = 1;
-const EINVALID_STATE: u64 = 2;
-const EINVALID_LIQUIDITY: u64 = 3;
-const EASSET_LIQUIDITY_TOO_LOW: u64 = 4;
-const ESTABLE_LIQUIDITY_TOO_LOW: u64 = 5;
-const EPOOL_NOT_FOUND: u64 = 6;
-const EOUTCOME_OUT_OF_BOUNDS: u64 = 7;
+
+const EInvalidPoolLength: u64 = 0;
+const EInvalidAmount: u64 = 1;
+const EInvalidState: u64 = 2;
+const EInvalidLiquidity: u64 = 3;
+const EAssetLiquidityTooLow: u64 = 4;
+const EStableLiquidityTooLow: u64 = 5;
+const EPoolNotFound: u64 = 6;
+const EOutcomeOutOfBounds: u64 = 7;
 
 // === Constants ===
+
 const STATE_REVIEW: u8 = 0;
-const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
 
 // === Structs ===
-// Core proposal object that owns AMM pools
+
+/// Core proposal object that owns AMM pools
 public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     created_at: u64,
@@ -43,21 +52,22 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     amm_pools: vector<LiquidityPool>, // Now owns the pools directly
     escrow_id: ID,
     market_state_id: ID,
-    title: String, // New field
-    details: String, // Renamed from description
+    title: String,
+    details: String,
     metadata: String,
     outcome_messages: vector<String>,
     twap_prices: vector<u128>, // Historical TWAP prices
-    last_twap_update: u64, // Last TWAP update timestamp,
-    review_period_ms: u64, // Review period in milliseconds
-    trading_period_ms: u64, // Trading period in milliseconds
-    min_asset_liquidity: u64, // Minimum asset liquidity required
-    min_stable_liquidity: u64, // Minimum stable liquidity
+    last_twap_update: u64,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    min_asset_liquidity: u64,
+    min_stable_liquidity: u64,
     twap_threshold: u64,
     winning_outcome: Option<u64>,
 }
 
-// === Constants ===
+// === Events ===
+
 public struct ProposalCreated has copy, drop {
     proposal_id: ID,
     dao_id: ID,
@@ -81,7 +91,7 @@ public struct ProposalCreated has copy, drop {
     twap_initial_observation: u128,
     twap_step_max: u64,
     twap_threshold: u64,
-    oracle_ids: vector<ID>, // NEW: List of oracle IDs for each outcome
+    oracle_ids: vector<ID>,
 }
 
 // === Public Functions ===
@@ -108,28 +118,28 @@ public(package) fun create<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
     // Return proposal_id, market_state_id, and state
-    let asset_value = balance::value(&initial_asset);
-    let stable_value = balance::value(&initial_stable);
+    let asset_value = initial_asset.value();
+    let stable_value = initial_stable.value();
 
-    assert!(asset_value >= min_asset_liquidity, EASSET_LIQUIDITY_TOO_LOW);
-    assert!(stable_value >= min_stable_liquidity, ESTABLE_LIQUIDITY_TOO_LOW);
+    assert!(asset_value >= min_asset_liquidity, EAssetLiquidityTooLow);
+    assert!(stable_value >= min_stable_liquidity, EStableLiquidityTooLow);
 
-    let (asset_amounts, stable_amounts) = if (option::is_some(&initial_outcome_amounts)) {
-        let amounts = option::destroy_some(initial_outcome_amounts);
-        assert!(vector::length(&amounts) == outcome_count * 2, EINVALID_POOL_LENGTH);
+    let (asset_amounts, stable_amounts) = if (initial_outcome_amounts.is_some()) {
+        let amounts = initial_outcome_amounts.destroy_some();
+        assert!(amounts.length() == outcome_count * 2, EInvalidPoolLength);
 
-        let mut asset_amounts = vector::empty();
-        let mut stable_amounts = vector::empty();
+        let mut asset_amounts = vector[];
+        let mut stable_amounts = vector[];
         let mut max_asset = 0;
         let mut max_stable = 0;
 
         let mut i = 0;
         while (i < outcome_count) {
-            let asset_amt = *vector::borrow(&amounts, i * 2);
-            let stable_amt = *vector::borrow(&amounts, i * 2 + 1);
+            let asset_amt = amounts[i * 2];
+            let stable_amt = amounts[i * 2 + 1];
 
-            assert!(asset_amt >= min_asset_liquidity, EINVALID_AMOUNT);
-            assert!(stable_amt >= min_stable_liquidity, EINVALID_AMOUNT);
+            assert!(asset_amt >= min_asset_liquidity, EInvalidAmount);
+            assert!(stable_amt >= min_stable_liquidity, EInvalidAmount);
 
             // Track maximum amounts for each type to validate against deposits
             if (asset_amt > max_asset) {
@@ -139,31 +149,31 @@ public(package) fun create<AssetType, StableType>(
                 max_stable = stable_amt;
             };
 
-            vector::push_back(&mut asset_amounts, asset_amt);
-            vector::push_back(&mut stable_amounts, stable_amt);
+            asset_amounts.push_back(asset_amt);
+            stable_amounts.push_back(stable_amt);
             i = i + 1;
         };
 
-        assert!(max_asset == asset_value, EINVALID_LIQUIDITY);
-        assert!(max_stable == stable_value, EINVALID_LIQUIDITY);
+        assert!(max_asset == asset_value, EInvalidLiquidity);
+        assert!(max_stable == stable_value, EInvalidLiquidity);
 
         (asset_amounts, stable_amounts)
     } else {
         // Default to equal distribution if no initial amounts specified
-        let mut asset_amounts = vector::empty();
-        let mut stable_amounts = vector::empty();
+        let mut asset_amounts = vector[];
+        let mut stable_amounts = vector[];
         let mut i = 0;
         while (i < outcome_count) {
-            vector::push_back(&mut asset_amounts, asset_value);
-            vector::push_back(&mut stable_amounts, stable_value);
+            asset_amounts.push_back(asset_value);
+            stable_amounts.push_back(stable_value);
             i = i + 1;
         };
         (asset_amounts, stable_amounts)
     };
 
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     let id = object::new(ctx);
-    let proposal_id = object::uid_to_inner(&id);
+    let proposal_id = id.to_inner();
 
     // Create market state with correct parameters
     let market_state = market_state::new(
@@ -184,8 +194,8 @@ public(package) fun create<AssetType, StableType>(
 
     let escrow_id = object::id(&escrow);
 
-    let escrow_market_state_id = coin_escrow::get_market_state_id(&escrow);
-    assert!(escrow_market_state_id == market_state_id, EINVALID_STATE);
+    let escrow_market_state_id = escrow.get_market_state_id();
+    assert!(escrow_market_state_id == market_state_id, EInvalidState);
 
     // Initialize supplies and AMM pools
     let (supply_ids, amm_pools) = liquidity_initialize::create_outcome_markets(
@@ -204,7 +214,7 @@ public(package) fun create<AssetType, StableType>(
 
     let proposal = Proposal<AssetType, StableType> {
         id,
-        created_at: clock::timestamp_ms(clock),
+        created_at: clock.timestamp_ms(),
         state: STATE_REVIEW,
         outcome_count,
         dao_id,
@@ -217,8 +227,8 @@ public(package) fun create<AssetType, StableType>(
         details,
         metadata,
         outcome_messages,
-        twap_prices: vector::empty(),
-        last_twap_update: clock::timestamp_ms(clock),
+        twap_prices: vector[],
+        last_twap_update: clock.timestamp_ms(),
         review_period_ms,
         trading_period_ms,
         min_asset_liquidity,
@@ -228,15 +238,15 @@ public(package) fun create<AssetType, StableType>(
     };
 
     // Build oracle_ids vector from each liquidity pool's oracle.
-    let amm_pools_ref = &proposal.amm_pools; // Create a reference to the proposal's amm_pools
-    let mut oracle_ids = vector::empty<ID>();
+    let amm_pools_ref = &proposal.amm_pools;
+    let mut oracle_ids = vector[];
     let mut i = 0;
-    while (i < vector::length(amm_pools_ref)) {
-        let pool = vector::borrow(amm_pools_ref, i);
-        let oracle_ref = amm::get_oracle(pool);
-        let oracle_uid_ref = oracle::get_id(oracle_ref);
-        let oracle_id = object::uid_to_inner(oracle_uid_ref);
-        vector::push_back(&mut oracle_ids, oracle_id);
+    while (i < amm_pools_ref.length()) {
+        let pool = &amm_pools_ref[i];
+        let oracle_ref = pool.get_oracle();
+        let oracle_uid_ref = oracle::id(oracle_ref);
+        let oracle_id = oracle_uid_ref.to_inner();
+        oracle_ids.push_back(oracle_id);
         i = i + 1;
     };
 
@@ -247,16 +257,16 @@ public(package) fun create<AssetType, StableType>(
         outcome_count,
         outcome_messages,
         created_at: proposal.created_at,
-        escrow_id: escrow_id,
-        market_state_id: market_state_id,
-        asset_value: asset_value,
-        stable_value: stable_value,
+        escrow_id,
+        market_state_id,
+        asset_value,
+        stable_value,
         asset_type: type_name::into_string(type_name::get<AssetType>()),
         stable_type: type_name::into_string(type_name::get<StableType>()),
-        review_period_ms: review_period_ms,
-        trading_period_ms: trading_period_ms,
-        title, // New field
-        details, // Renamed from description
+        review_period_ms,
+        trading_period_ms,
+        title,
+        details,
         metadata,
         initial_outcome_amounts,
         twap_start_delay,
@@ -270,7 +280,6 @@ public(package) fun create<AssetType, StableType>(
 
     // Share escrow object
     transfer::public_share_object(escrow);
-
     transfer::public_share_object(proposal);
 
     (proposal_id, market_state_id, state)
@@ -283,32 +292,34 @@ public fun get_twaps_for_proposal<AssetType, StableType>(
     clock: &Clock,
 ): vector<u128> {
     let pools = &mut proposal.amm_pools;
-    let mut twaps = vector::empty<u128>();
+    let mut twaps = vector[];
     let mut i = 0;
-    while (i < vector::length(pools)) {
-        let pool = vector::borrow_mut(pools, i);
-        let twap = amm::get_twap(pool, clock);
-        vector::push_back(&mut twaps, twap);
+    while (i < pools.length()) {
+        let pool = &mut pools[i];
+        let twap = pool.get_twap(clock);
+        twaps.push_back(twap);
         i = i + 1;
     };
     twaps
 }
 
-// ====== Internal Helpers ======
+// === Private Functions ===
+
 fun get_pool_mut(pools: &mut vector<LiquidityPool>, outcome_idx: u8): &mut LiquidityPool {
     let mut i = 0;
-    let len = vector::length(pools);
+    let len = pools.length();
     while (i < len) {
-        let pool = vector::borrow_mut(pools, i);
-        if (amm::get_outcome_idx(pool) == outcome_idx) {
+        let pool = &mut pools[i];
+        if (pool.get_outcome_idx() == outcome_idx) {
             return pool
         };
         i = i + 1;
     };
-    abort EPOOL_NOT_FOUND
+    abort EPoolNotFound
 }
 
-// ====== Query Functions ======
+// === View Functions ===
+
 public fun is_finalized<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
     proposal.state == STATE_FINALIZED
 }
@@ -325,7 +336,6 @@ public fun get_last_twap_update<AssetType, StableType>(
     proposal.last_twap_update
 }
 
-// ====== Getters ======
 public fun state<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u8 {
     proposal.state
 }
@@ -333,19 +343,19 @@ public fun state<AssetType, StableType>(proposal: &Proposal<AssetType, StableTyp
 public fun get_winning_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): u64 {
-    assert!(option::is_some(&proposal.winning_outcome), EINVALID_STATE);
-    *option::borrow(&proposal.winning_outcome)
+    assert!(proposal.winning_outcome.is_some(), EInvalidState);
+    *proposal.winning_outcome.borrow()
 }
 
 /// Checks if winning outcome has been set
 public fun is_winning_outcome_set<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): bool {
-    option::is_some(&proposal.winning_outcome)
+    proposal.winning_outcome.is_some()
 }
 
 public fun get_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
-    object::uid_to_inner(&proposal.id)
+    proposal.id.to_inner()
 }
 
 public fun escrow_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
@@ -381,12 +391,12 @@ public fun get_metadata<AssetType, StableType>(
 public fun get_amm_pool_ids<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<ID> {
-    let mut ids = vector::empty();
+    let mut ids = vector[];
     let mut i = 0;
-    let len = vector::length(&proposal.amm_pools);
+    let len = proposal.amm_pools.length();
     while (i < len) {
-        let pool = vector::borrow(&proposal.amm_pools, i);
-        vector::push_back(&mut ids, amm::get_id(pool));
+        let pool = &proposal.amm_pools[i];
+        ids.push_back(pool.get_id());
         i = i + 1;
     };
     ids
@@ -396,7 +406,7 @@ public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_idx: u8,
 ): &mut LiquidityPool {
-    assert!((outcome_idx as u64) < proposal.outcome_count, EOUTCOME_OUT_OF_BOUNDS);
+    assert!((outcome_idx as u64) < proposal.outcome_count, EOutcomeOutOfBounds);
     get_pool_mut(&mut proposal.amm_pools, outcome_idx)
 }
 
@@ -409,7 +419,7 @@ public fun get_dao_id<AssetType, StableType>(proposal: &Proposal<AssetType, Stab
 }
 
 public fun proposal_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
-    object::uid_to_inner(&proposal.id)
+    proposal.id.to_inner()
 }
 
 public fun get_amm_pools<AssetType, StableType>(
@@ -446,7 +456,8 @@ public fun get_twap_threshold<AssetType, StableType>(
     proposal.twap_threshold
 }
 
-// Mutator functions
+// === Package Functions ===
+
 public(package) fun set_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     new_state: u8,
@@ -476,12 +487,12 @@ public(package) fun set_winning_outcome<AssetType, StableType>(
 }
 
 // === Test Functions ===
+
 #[test_only]
 /// Gets a mutable reference to the token escrow of the proposal
 public fun test_get_coin_escrow<AssetType, StableType>(
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
 ): &mut coin_escrow::TokenEscrow<AssetType, StableType> {
-    // The function now directly returns the mutable reference passed in.
     escrow
 }
 
@@ -490,5 +501,5 @@ public fun test_get_coin_escrow<AssetType, StableType>(
 public fun test_get_market_state<AssetType, StableType>(
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
 ): &market_state::MarketState {
-    coin_escrow::get_market_state<AssetType, StableType>(escrow)
+    escrow.get_market_state()
 }

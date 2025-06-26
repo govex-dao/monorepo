@@ -1,34 +1,33 @@
 module futarchy::factory;
 
-use futarchy::dao;
-use futarchy::fee;
-use std::ascii::{Self, String as AsciiString};
-use std::string::{Self, String as UTF8String};
-use std::type_name;
-use std::u64;
-use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin, CoinMetadata};
-use sui::event;
-use sui::sui::SUI;
-use sui::transfer::{public_share_object, public_transfer};
-use sui::url;
-use sui::vec_set::{Self, VecSet};
-
 // === Introduction ===
 // This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
 
+// === Imports ===
+use futarchy::dao;
+use futarchy::fee;
+use std::ascii::String as AsciiString;
+use std::string::String as UTF8String;
+use std::type_name;
+use std::u64;
+use sui::clock::Clock;
+use sui::coin::{Coin, CoinMetadata};
+use sui::event;
+use sui::sui::SUI;
+use sui::vec_set::{Self, VecSet};
+
 // === Errors ===
-const EHIGH_TWAP_THRESHOLD: u64 = 0;
-const EPAUSED: u64 = 1;
-const EALREADY_VERIFIED: u64 = 2;
-const EBAD_WITNESS: u64 = 3;
-const ESTABLE_TYPE_NOT_ALLOWED: u64 = 4;
-const ELOW_TWAP_WINDOW_CAP: u64 = 5;
-const ELONG_TRADING_TIME: u64 = 6;
-const ELONG_REVIEW_TIME: u64 = 7;
-const ELONG_TWAP_DELAY_TIME: u64 = 8;
-const ETWAP_INITIAL_TOO_LARGE: u64 = 9;
-const E_DELAY_NEAR_TOTAL_TRADING: u64 = 10;
+const EHighTwapThreshold: u64 = 0;
+const EPaused: u64 = 1;
+const EAlreadyVerified: u64 = 2;
+const EBadWitness: u64 = 3;
+const EStableTypeNotAllowed: u64 = 4;
+const ELowTwapWindowCap: u64 = 5;
+const ELongTradingTime: u64 = 6;
+const ELongReviewTime: u64 = 7;
+const ELongTwapDelayTime: u64 = 8;
+const ETwapInitialTooLarge: u64 = 9;
+const EDelayNearTotalTrading: u64 = 10;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1;
@@ -38,8 +37,11 @@ const MAX_TWAP_START_DELAY: u64 = 86_400_000; // 1 days in ms
 const MAX_TWAP_THRESHOLD: u64 = 1_000_000; //equivilant to requiring 10x increase in price to pass
 
 // === Structs ===
+/// One-time witness for factory initialization
 public struct FACTORY has drop {}
 
+/// Factory is the main entry point for creating DAOs in the Futarchy protocol.
+/// It manages admin capabilities, tracks created DAOs, and enforces creation parameters.
 public struct Factory has key, store {
     id: UID,
     dao_count: u64,
@@ -51,7 +53,6 @@ public struct FactoryOwnerCap has key, store {
     id: UID,
 }
 
-// New validator admin capability
 public struct ValidatorAdminCap has key, store {
     id: UID,
 }
@@ -87,10 +88,10 @@ public struct StableCoinTypeRemoved has copy, drop {
     timestamp: u64,
 }
 
-// ======== Constructor ========
+// === Public Functions ===
 fun init(witness: FACTORY, ctx: &mut TxContext) {
     // Verify that the witness is valid and one-time only.
-    assert!(sui::types::is_one_time_witness(&witness), EBAD_WITNESS);
+    assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
     // Initialize with an empty set for now
     let allowed_stable_types = vec_set::empty<UTF8String>();
@@ -110,15 +111,14 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         id: object::new(ctx),
     };
 
-    public_share_object(factory);
-    public_transfer(owner_cap, tx_context::sender(ctx));
-    public_transfer(validator_cap, tx_context::sender(ctx));
+    transfer::share_object(factory);
+    transfer::public_transfer(owner_cap, ctx.sender());
+    transfer::public_transfer(validator_cap, ctx.sender());
 
     // Consuming the witness ensures one-time initialization.
     let _ = witness;
 }
 
-// ======== Core Functions ========
 public entry fun create_dao<AssetType, StableType>(
     factory: &mut Factory,
     fee_manager: &mut fee::FeeManager,
@@ -140,54 +140,54 @@ public entry fun create_dao<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Check factory is active
-    assert!(!factory.paused, EPAUSED);
+    assert!(!factory.paused, EPaused);
 
     // Check if StableType is allowed
     let stable_type_str = get_type_string<StableType>();
     assert!(
         vec_set::contains(&factory.allowed_stable_types, &stable_type_str),
-        ESTABLE_TYPE_NOT_ALLOWED,
+        EStableTypeNotAllowed,
     );
 
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
-    let asset_decimals = coin::get_decimals(asset_metadata);
-    let stable_decimals = coin::get_decimals(stable_metadata);
-    let asset_name = coin::get_name(asset_metadata);
-    let stable_name = coin::get_name(stable_metadata);
+    let asset_decimals = asset_metadata.get_decimals();
+    let stable_decimals = stable_metadata.get_decimals();
+    let asset_name = asset_metadata.get_name();
+    let stable_name = stable_metadata.get_name();
 
     // 1) Retrieve icon Option<URL> for the asset
-    let maybe_asset_icon = coin::get_icon_url(asset_metadata);
+    let maybe_asset_icon = asset_metadata.get_icon_url();
 
     // 2) Use a single `if/else` expression that returns an AsciiString
-    let asset_icon_url = if (std::option::is_none(&maybe_asset_icon)) {
-        ascii::string(vector[])
+    let asset_icon_url = if (maybe_asset_icon.is_none()) {
+        b"".to_ascii_string()
     } else {
-        let url_ref = std::option::borrow(&maybe_asset_icon);
-        url::inner_url(url_ref)
+        let url_ref = maybe_asset_icon.borrow();
+        url_ref.inner_url()
     };
 
     // Same pattern for stable icon
-    let maybe_stable_icon = coin::get_icon_url(stable_metadata);
-    let stable_icon_url = if (std::option::is_none(&maybe_stable_icon)) {
-        ascii::string(vector[])
+    let maybe_stable_icon = stable_metadata.get_icon_url();
+    let stable_icon_url = if (maybe_stable_icon.is_none()) {
+        b"".to_ascii_string()
     } else {
-        let url_ref = std::option::borrow(&maybe_stable_icon);
-        url::inner_url(url_ref)
+        let url_ref = maybe_stable_icon.borrow();
+        url_ref.inner_url()
     };
 
-    let asset_symbol = coin::get_symbol(asset_metadata);
-    let stable_symbol = coin::get_symbol(stable_metadata);
+    let asset_symbol = asset_metadata.get_symbol();
+    let stable_symbol = stable_metadata.get_symbol();
 
-    assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELOW_TWAP_WINDOW_CAP);
-    assert!(review_period_ms <= MAX_REVIEW_TIME, ELONG_REVIEW_TIME);
-    assert!(trading_period_ms <= MAX_TRADING_TIME, ELONG_TRADING_TIME);
-    assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELONG_TWAP_DELAY_TIME);
-    assert!((amm_twap_start_delay + 60_000) < trading_period_ms, E_DELAY_NEAR_TOTAL_TRADING); // Must have one full window of trading
-    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHIGH_TWAP_THRESHOLD);
+    assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
+    assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
+    assert!(trading_period_ms <= MAX_TRADING_TIME, ELongTradingTime);
+    assert!(amm_twap_start_delay <= MAX_TWAP_START_DELAY, ELongTwapDelayTime);
+    assert!((amm_twap_start_delay + 60_000) < trading_period_ms, EDelayNearTotalTrading); // Must have one full window of trading
+    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHighTwapThreshold);
     assert!(
         amm_twap_initial_observation <= (u64::max_value!() as u128) * 1_000_000_000_000,
-        ETWAP_INITIAL_TOO_LARGE,
+        ETwapInitialTooLarge,
     );
 
     // Create DAO and AdminCap
@@ -219,8 +219,7 @@ public entry fun create_dao<AssetType, StableType>(
     factory.dao_count = factory.dao_count + 1;
 }
 
-// ======== Admin Functions ========
-
+// === Admin Functions ===
 public entry fun toggle_pause(factory: &mut Factory, _cap: &FactoryOwnerCap) {
     factory.paused = !factory.paused;
 }
@@ -233,14 +232,14 @@ public entry fun request_verification(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(!dao::is_verified(dao), EALREADY_VERIFIED);
+    assert!(!dao.is_verified(), EAlreadyVerified);
 
     fee::deposit_verification_payment(fee_manager, payment, clock, ctx);
 
     // Generate unique verification ID
     let verification_id = object::new(ctx);
     let verification_id_inner = object::uid_to_inner(&verification_id);
-    object::delete(verification_id);
+    verification_id.delete();
 
     // Set pending verification state
     dao::set_pending_verification(dao, attestation_url);
@@ -249,9 +248,9 @@ public entry fun request_verification(
     event::emit(VerificationRequested {
         dao_id: object::id(dao),
         verification_id: verification_id_inner,
-        requester: tx_context::sender(ctx),
+        requester: ctx.sender(),
         attestation_url,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -274,13 +273,13 @@ public entry fun verify_dao(
         verification_id,
         attestation_url,
         verified,
-        validator: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        validator: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
         reject_reason,
     });
 }
 
-// ======== Stable Coin Type Management ========
+/// Adds a new stable coin type to the allowed list
 public entry fun add_allowed_stable_type<StableType>(
     factory: &mut Factory,
     _owner_cap: &FactoryOwnerCap,
@@ -293,8 +292,8 @@ public entry fun add_allowed_stable_type<StableType>(
 
         event::emit(StableCoinTypeAdded {
             type_str,
-            admin: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            admin: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
     }
 }
@@ -311,8 +310,8 @@ public entry fun remove_allowed_stable_type<StableType>(
 
         event::emit(StableCoinTypeRemoved {
             type_str,
-            admin: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            admin: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
     }
 }
@@ -323,18 +322,18 @@ public entry fun disable_dao_proposals(dao: &mut dao::DAO, _cap: &FactoryOwnerCa
 
 public entry fun burn_factory_owner_cap(cap: FactoryOwnerCap) {
     let FactoryOwnerCap { id } = cap;
-    object::delete(id);
+    id.delete();
 }
 
-// ======== Helper Functions ========
-/// Convert a type to a string representation
+// === Private Functions ===
+
 fun get_type_string<T>(): UTF8String {
     let type_name_obj = type_name::get_with_original_ids<T>();
     let type_str = type_name_obj.into_string().into_bytes();
-    string::utf8(type_str)
+    type_str.to_string()
 }
 
-// ======== View Functions ========
+// === View Functions ===
 public fun dao_count(factory: &Factory): u64 {
     factory.dao_count
 }
@@ -358,7 +357,7 @@ public fun create_factory(ctx: &mut TxContext) {
         allowed_stable_types: {
             let mut set = vec_set::empty<UTF8String>();
             let stable_str = get_type_string<futarchy::stable_coin::STABLE_COIN>();
-            vec_set::insert(&mut set, stable_str);
+            set.insert(stable_str);
             set
         },
     };
@@ -371,14 +370,14 @@ public fun create_factory(ctx: &mut TxContext) {
         id: object::new(ctx),
     };
 
-    public_share_object(factory);
-    public_transfer(owner_cap, tx_context::sender(ctx));
-    public_transfer(validator_cap, tx_context::sender(ctx));
+    transfer::share_object(factory);
+    transfer::public_transfer(owner_cap, ctx.sender());
+    transfer::public_transfer(validator_cap, ctx.sender());
 }
 
 #[test_only]
 public fun check_stable_type_allowed<StableType>(factory: &Factory) {
     let type_str = get_type_string<StableType>();
-    // Abort with ESTABLE_TYPE_NOT_ALLOWED if not allowed.
-    assert!(vec_set::contains(&factory.allowed_stable_types, &type_str), ESTABLE_TYPE_NOT_ALLOWED);
+    // Abort with EStableTypeNotAllowed if not allowed.
+    assert!(vec_set::contains(&factory.allowed_stable_types, &type_str), EStableTypeNotAllowed);
 }

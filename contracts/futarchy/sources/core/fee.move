@@ -1,22 +1,23 @@
 module futarchy::fee;
 
+// === Introduction ===
+// Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
+
+// === Imports ===
 use std::ascii::String as AsciiString;
 use std::type_name;
 use sui::balance::{Self, Balance};
-use sui::clock::{Self, Clock};
+use sui::clock::{Clock};
 use sui::coin::{Self, Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
 use sui::transfer::{public_share_object, public_transfer};
 
-// === Introduction ===
-// Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
-
 // === Errors ===
-const EINVALID_PAYMENT: u64 = 0;
-const ESTABLE_TYPE_NOT_FOUND: u64 = 1;
-const EBAD_WITNESS: u64 = 2;
+const EInvalidPayment: u64 = 0;
+const EStableTypeNotFound: u64 = 1;
+const EBadWitness: u64 = 2;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
@@ -102,7 +103,7 @@ public struct StableFeesWithdrawn has copy, drop {
 // === Public Functions ===
 fun init(witness: FEE, ctx: &mut TxContext) {
     // Verify that the witness is valid and one-time only.
-    assert!(sui::types::is_one_time_witness(&witness), EBAD_WITNESS);
+    assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
     let fee_manager = FeeManager {
         id: object::new(ctx),
@@ -117,22 +118,22 @@ fun init(witness: FEE, ctx: &mut TxContext) {
     };
 
     public_share_object(fee_manager);
-    public_transfer(fee_admin_cap, tx_context::sender(ctx));
+    public_transfer(fee_admin_cap, ctx.sender());
 
     // Consuming the witness ensures one-time initialization.
     let _ = witness;
 }
 
-// === Fee Collection Functions ===
+// === Package Functions ===
 // Generic internal fee collection function
 fun deposit_payment(fee_manager: &mut FeeManager, fee_amount: u64, payment: Coin<SUI>): u64 {
     // Verify payment
-    let payment_amount = coin::value(&payment);
-    assert!(payment_amount == fee_amount, EINVALID_PAYMENT);
+    let payment_amount = payment.value();
+    assert!(payment_amount == fee_amount, EInvalidPayment);
 
     // Process payment
-    let paid_balance = coin::into_balance(payment);
-    balance::join(&mut fee_manager.sui_balance, paid_balance);
+    let paid_balance = payment.into_balance();
+    fee_manager.sui_balance.join(paid_balance);
     return payment_amount
     // Event emission will be handled by specific wrappers
 }
@@ -151,8 +152,8 @@ public(package) fun deposit_dao_creation_payment(
     // Emit event
     event::emit(DAOCreationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -170,8 +171,8 @@ public(package) fun deposit_proposal_creation_payment(
     // Emit event
     event::emit(ProposalCreationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -188,8 +189,8 @@ public(package) fun deposit_verification_payment(
     // Emit event
     event::emit(VerificationFeeCollected {
         amount: payment_amount,
-        payer: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -201,18 +202,18 @@ public entry fun withdraw_all_fees(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let amount = balance::value(&fee_manager.sui_balance);
-    let sender = tx_context::sender(ctx);
+    let amount = fee_manager.sui_balance.value();
+    let sender = ctx.sender();
 
     let withdrawal = coin::from_balance(
-        balance::split(&mut fee_manager.sui_balance, amount),
+        fee_manager.sui_balance.split(amount),
         ctx,
     );
 
     event::emit(FeesWithdrawn {
         amount,
         recipient: sender,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     public_transfer(withdrawal, sender);
@@ -232,8 +233,8 @@ public entry fun update_dao_creation_fee(
     event::emit(DAOCreationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -251,8 +252,8 @@ public entry fun update_proposal_creation_fee(
     event::emit(ProposalCreationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -270,12 +271,12 @@ public entry fun update_verification_fee(
     event::emit(VerificationFeeUpdated {
         old_fee,
         new_fee,
-        admin: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
-// ========== AMM Fees ============
+// === AMM Fees ===
 
 // Structure to store stable coin balance information
 public struct StableCoinBalance<phantom T> has store {
@@ -291,7 +292,7 @@ public(package) fun deposit_stable_fees<StableType>(
     proposal_id: ID,
     clock: &Clock,
 ) {
-    let amount = balance::value(&fees);
+    let amount = fees.value();
 
     if (
         dynamic_field::exists_with_type<
@@ -303,7 +304,7 @@ public(package) fun deposit_stable_fees<StableType>(
             StableFeeRegistry<StableType>,
             StableCoinBalance<StableType>,
         >(&mut fee_manager.id, StableFeeRegistry<StableType> {});
-        balance::join(&mut fee_balance_wrapper.balance, fees);
+        fee_balance_wrapper.balance.join(fees);
     } else {
         let balance_wrapper = StableCoinBalance<StableType> {
             balance: fees,
@@ -312,13 +313,13 @@ public(package) fun deposit_stable_fees<StableType>(
     };
 
     let type_name = type_name::get<StableType>();
-    let type_str = type_name::into_string(type_name);
+    let type_str = type_name.into_string();
     // Emit collection event
     event::emit(StableFeesCollected {
         amount,
         stable_type: type_str,
         proposal_id,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -336,17 +337,17 @@ public entry fun withdraw_stable_fees<StableType>(
             &fee_manager.id,
             StableFeeRegistry<StableType> {},
         ),
-        ESTABLE_TYPE_NOT_FOUND,
+        EStableTypeNotFound,
     );
 
     let fee_balance_wrapper = dynamic_field::borrow_mut<
         StableFeeRegistry<StableType>,
         StableCoinBalance<StableType>,
     >(&mut fee_manager.id, StableFeeRegistry<StableType> {});
-    let amount = balance::value(&fee_balance_wrapper.balance);
+    let amount = fee_balance_wrapper.balance.value();
 
     if (amount > 0) {
-        let withdrawn = balance::split(&mut fee_balance_wrapper.balance, amount);
+        let withdrawn = fee_balance_wrapper.balance.split(amount);
         let coin = coin::from_balance(withdrawn, ctx);
 
         let type_name = type_name::get<StableType>();
@@ -355,12 +356,12 @@ public entry fun withdraw_stable_fees<StableType>(
         event::emit(StableFeesWithdrawn {
             amount,
             stable_type: type_str,
-            recipient: tx_context::sender(ctx),
-            timestamp: clock::timestamp_ms(clock),
+            recipient: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
         });
 
         // Transfer to sender
-        transfer::public_transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, ctx.sender());
     }
 }
 
@@ -378,7 +379,7 @@ public fun get_verification_fee(fee_manager: &FeeManager): u64 {
 }
 
 public fun get_sui_balance(fee_manager: &FeeManager): u64 {
-    balance::value(&fee_manager.sui_balance)
+    fee_manager.sui_balance.value()
 }
 
 public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
@@ -392,7 +393,7 @@ public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
             StableFeeRegistry<StableType>,
             StableCoinBalance<StableType>,
         >(&fee_manager.id, StableFeeRegistry<StableType> {});
-        balance::value(&balance_wrapper.balance)
+        balance_wrapper.balance.value()
     } else {
         0
     }
@@ -414,5 +415,5 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
     };
 
     public_share_object(fee_manager);
-    public_transfer(admin_cap, tx_context::sender(ctx));
+    public_transfer(admin_cap, ctx.sender());
 }

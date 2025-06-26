@@ -1,5 +1,9 @@
 module futarchy::liquidity_initialize;
 
+// === Introduction ===
+// Method to initialize AMM liquidity
+
+// === Imports ===
 use futarchy::amm::{Self, LiquidityPool};
 use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::conditional_token as token;
@@ -7,14 +11,11 @@ use futarchy::market_state;
 use sui::balance::Balance;
 use sui::clock::Clock;
 
-// === Introduction ===
-// Method to initialize AMM liquidity
-
 // === Errors ===
-const E_INIT_ASSET_RESERVES_MISMATCH: u64 = 100;
-const E_INIT_STABLE_RESERVES_MISMATCH: u64 = 101;
-const E_INIT_POOL_COUNT_MISMATCH: u64 = 102;
-const E_INIT_POOL_OUTCOME_MISMATCH: u64 = 103;
+const EInitAssetReservesMismatch: u64 = 100;
+const EInitStableReservesMismatch: u64 = 101;
+const EInitPoolCountMismatch: u64 = 102;
+const EInitPoolOutcomeMismatch: u64 = 103;
 
 // === Public Functions ===
 public(package) fun create_outcome_markets<AssetType, StableType>(
@@ -30,8 +31,8 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ID>, vector<LiquidityPool>) {
-    let mut supply_ids = vector::empty<ID>();
-    let mut amm_pools = vector::empty<LiquidityPool>();
+    let mut supply_ids = vector[];
+    let mut amm_pools = vector[];
 
     // 1. Create supplies and register them for each outcome
     let mut i = 0;
@@ -45,8 +46,8 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
             // Record their IDs
             let asset_supply_id = object::id(&asset_supply);
             let stable_supply_id = object::id(&stable_supply);
-            vector::push_back(&mut supply_ids, asset_supply_id);
-            vector::push_back(&mut supply_ids, stable_supply_id);
+            supply_ids.push_back(asset_supply_id);
+            supply_ids.push_back(stable_supply_id);
 
             // Register
             coin_escrow::register_supplies(escrow, i, asset_supply, stable_supply);
@@ -70,8 +71,8 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     // 3. Create AMM pools for each outcome - same as original
     i = 0;
     while (i < outcome_count) {
-        let asset_amt = *vector::borrow(&asset_amounts, i);
-        let stable_amt = *vector::borrow(&stable_amounts, i);
+        let asset_amt = asset_amounts[i];
+        let stable_amt = stable_amounts[i];
 
         // Use same scoped borrow pattern as original
         {
@@ -86,7 +87,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
                 twap_step_max,
                 ctx,
             );
-            vector::push_back(&mut amm_pools, pool);
+            amm_pools.push_back(pool);
         };
 
         i = i + 1;
@@ -103,19 +104,19 @@ fun assert_initial_reserves_consistency<AssetType, StableType>(
 ) {
     let outcome_count = market_state::outcome_count(coin_escrow::get_market_state(escrow));
 
-    assert!(vector::length(amm_pools) == outcome_count, E_INIT_POOL_COUNT_MISMATCH);
+    assert!(amm_pools.length() == outcome_count, EInitPoolCountMismatch);
 
     let (escrow_asset, escrow_stable) = coin_escrow::get_balances(escrow);
 
     let mut i = 0;
     while (i < outcome_count) {
-        let pool = vector::borrow(amm_pools, i);
+        let pool = &amm_pools[i];
 
-        assert!(amm::get_outcome_idx(pool) == (i as u8), E_INIT_POOL_OUTCOME_MISMATCH);
+        assert!(amm::get_outcome_idx(pool) == (i as u8), EInitPoolOutcomeMismatch);
 
         let (amm_asset, amm_stable) = amm::get_reserves(pool);
         let protocol_fees = amm::get_protocol_fees(pool);
-        assert!(protocol_fees == 0, E_INIT_STABLE_RESERVES_MISMATCH); // Fees must be 0 initially
+        assert!(protocol_fees == 0, EInitStableReservesMismatch); // Fees must be 0 initially
 
         let (
             _fetched_escrow_asset,
@@ -127,12 +128,12 @@ fun assert_initial_reserves_consistency<AssetType, StableType>(
         // --- Perform the Core Assertions ---
 
         // Verify asset equation: AMM asset reserves + asset token supply = total escrow asset
-        assert!(amm_asset + asset_total_supply == escrow_asset, E_INIT_ASSET_RESERVES_MISMATCH);
+        assert!(amm_asset + asset_total_supply == escrow_asset, EInitAssetReservesMismatch);
 
         // Verify stable equation: AMM stable reserves + protocol fees (0) + stable token supply = total escrow stable
         assert!(
             amm_stable + protocol_fees + stable_total_supply == escrow_stable, // protocol_fees is 0 here
-            E_INIT_STABLE_RESERVES_MISMATCH,
+            EInitStableReservesMismatch,
         );
 
         i = i + 1;

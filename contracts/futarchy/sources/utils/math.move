@@ -1,31 +1,32 @@
 module futarchy::math;
 
-use std::u128;
-use std::u256;
-use std::u64;
-
 // === Introduction ===
 // Integer type conversion and integer methods
 
-// === Errors ===
-const EOVERFLOW: u64 = 0;
-const EDIVIDE_BY_ZERO: u64 = 1;
-const EVALUE_EXCEEDS_U64: u64 = 2;
+// === Imports ===
+use std::u128;
+use std::u64;
 
-/// Multiplies two u64 values and divides by a third, checking for overflow
-/// Returns (a * b) / c
+// === Errors ===
+const EOverflow: u64 = 0;
+const EDivideByZero: u64 = 1;
+const EValueExceedsU64: u64 = 2;
+
+// === Public Functions ===
+// Multiplies two u64 values and divides by a third, checking for overflow
+// Returns (a * b) / c
 public fun mul_div_to_64(a: u64, b: u64, c: u64): u64 {
-    assert!(c != 0, EDIVIDE_BY_ZERO);
+    assert!(c != 0, EDivideByZero);
     let a_128 = (a as u128);
     let b_128 = (b as u128);
     let c_128 = (c as u128);
     let result = (a_128 * b_128) / c_128;
-    assert!(result <= (u64::max_value!() as u128), EOVERFLOW); // Max u64
+    assert!(result <= (u64::max_value!() as u128), EOverflow);
     (result as u64)
 }
 
 public fun mul_div_to_128(a: u64, b: u64, c: u64): u128 {
-    assert!(c != 0, EDIVIDE_BY_ZERO);
+    assert!(c != 0, EDivideByZero);
     let a_128 = (a as u128);
     let b_128 = (b as u128);
     let c_128 = (c as u128);
@@ -34,19 +35,19 @@ public fun mul_div_to_128(a: u64, b: u64, c: u64): u128 {
 }
 
 public fun mul_div_mixed(a: u128, b: u64, c: u128): u128 {
-    assert!(c != 0, EDIVIDE_BY_ZERO);
+    assert!(c != 0, EDivideByZero);
     let a_128 = (a as u256);
     let b_128 = (b as u256);
     let c_128 = (c as u256);
     let result = (a_128 * b_128) / c_128;
-    assert!(result <= (u128::max_value!() as u256), EOVERFLOW); // Max u128
+    assert!(result <= (u128::max_value!() as u256), EOverflow);
     (result as u128)
 }
 
-/// Safely multiplies two u64 values and divides by a third, rounding up
-/// Returns ceil((a * b) / c)
+// Safely multiplies two u64 values and divides by a third, rounding up
+// Returns ceil((a * b) / c)
 public fun mul_div_up(a: u64, b: u64, c: u64): u64 {
-    assert!(c != 0, EDIVIDE_BY_ZERO);
+    assert!(c != 0, EDivideByZero);
     let a_128 = (a as u128);
     let b_128 = (b as u128);
     let c_128 = (c as u128);
@@ -56,7 +57,7 @@ public fun mul_div_up(a: u64, b: u64, c: u64): u64 {
     } else {
         (numerator + c_128 - 1) / c_128
     };
-    assert!(result <= (u64::max_value!() as u128), EOVERFLOW); // Max u64
+    assert!(result <= (u64::max_value!() as u128), EOverflow);
     (result as u64)
 }
 
@@ -79,6 +80,6 @@ public fun saturating_sub(a: u128, b: u128): u128 {
 }
 
 public fun safe_u128_to_u64(value: u128): u64 {
-    assert!(value <= (u64::max_value!() as u128), EVALUE_EXCEEDS_U64);
+    assert!(value <= (u64::max_value!() as u128), EValueExceedsU64);
     (value as u64)
 }

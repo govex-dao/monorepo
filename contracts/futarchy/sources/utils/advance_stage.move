@@ -1,21 +1,21 @@
 module futarchy::advance_stage;
 
-use futarchy::amm;
-use futarchy::coin_escrow;
-use futarchy::fee::FeeManager;
-use futarchy::liquidity_interact;
-use futarchy::market_state::{Self, MarketState};
-use futarchy::proposal::{Self, Proposal};
-use sui::clock::{Self, Clock};
-use sui::event;
-
 // === Introduction ===
 // This handles advancing proposal stages
 
+// === Imports ===
+use futarchy::coin_escrow;
+use futarchy::fee::FeeManager;
+use futarchy::liquidity_interact;
+use futarchy::market_state::MarketState;
+use futarchy::proposal::Proposal;
+use sui::clock::{Clock};
+use sui::event;
+
 // === Errors ===
-const EINVALID_STATE_TRANSITION: u64 = 0;
-const EINVALID_STATE: u64 = 1;
-const EIN_TRADIG_PERIOD: u64 = 2;
+const EInvalidStateTransition: u64 = 0;
+const EInvalidState: u64 = 1;
+const EInTradingPeriod: u64 = 2;
 
 // === Constants ===
 const TWAP_BASIS_POINTS: u256 = 100_000;
@@ -23,7 +23,7 @@ const STATE_REVIEW: u8 = 0;
 const STATE_TRADING: u8 = 1;
 const STATE_FINALIZED: u8 = 2;
 
-// === Events ===
+// === Structs ===
 public struct ProposalStateChanged has copy, drop {
     proposal_id: ID,
     old_state: u8,
@@ -44,32 +44,32 @@ public struct MarketFinalizedEvent has copy, drop {
     timestamp_ms: u64,
 }
 
-// === Public Functions ===
+// === Public Package Functions ===
 public(package) fun try_advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
     clock: &Clock,
 ) {
     // Validate the proposal and market state are for the same market
-    assert!(object::id(state) == proposal::market_state_id(proposal), EINVALID_STATE);
-    assert!(market_state::market_id(state) == proposal::get_id(proposal), EINVALID_STATE);
+    assert!(object::id(state) == proposal.market_state_id(), EInvalidState);
+    assert!(state.market_id() == proposal.get_id(), EInvalidState);
     // Validate DAO ID matches
-    assert!(market_state::dao_id(state) == proposal::get_dao_id(proposal), EINVALID_STATE);
+    assert!(state.dao_id() == proposal.get_dao_id(), EInvalidState);
 
-    let current_time = clock::timestamp_ms(clock);
-    let old_state = proposal::state(proposal);
+    let current_time = clock.timestamp_ms();
+    let old_state = proposal.state();
 
     if (
-        proposal::state(proposal) == STATE_REVIEW && 
-                current_time >= proposal::get_created_at(proposal) + proposal::get_review_period_ms(proposal)
+        proposal.state() == STATE_REVIEW && 
+                current_time >= proposal.get_created_at() + proposal.get_review_period_ms()
     ) {
-        proposal::set_state(proposal, STATE_TRADING);
-        market_state::start_trading(state, proposal::get_trading_period_ms(proposal), clock);
+        proposal.set_state(STATE_TRADING);
+        state.start_trading(proposal.get_trading_period_ms(), clock);
         initialize_oracles_for_trading(proposal, state);
-    } else if (proposal::state(proposal) == STATE_TRADING) {
-        let configured_trading_end_option = market_state::get_trading_end_time(state);
-        assert!(current_time >= *option::borrow(&configured_trading_end_option), EIN_TRADIG_PERIOD);
-        market_state::end_trading(state, clock);
+    } else if (proposal.state() == STATE_TRADING) {
+        let configured_trading_end_option = state.get_trading_end_time();
+        assert!(current_time >= configured_trading_end_option.destroy_some(), EInTradingPeriod);
+        state.end_trading(clock);
 
         // Get oracle from first pool for validation
         finalize(
@@ -78,20 +78,21 @@ public(package) fun try_advance_state<AssetType, StableType>(
             clock,
         );
     } else {
-        abort EINVALID_STATE_TRANSITION
+        abort EInvalidStateTransition
     };
 
     // Emit state change event if state changed
-    if (old_state != proposal::state(proposal)) {
+    if (old_state != proposal.state()) {
         event::emit(ProposalStateChanged {
-            proposal_id: proposal::get_id(proposal),
+            proposal_id: proposal.get_id(),
             old_state,
-            new_state: proposal::state(proposal),
+            new_state: proposal.state(),
             timestamp: current_time,
         });
     }
 }
 
+// === Public Entry Functions ===
 public entry fun try_advance_state_entry<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
@@ -99,11 +100,11 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     clock: &Clock,
 ) {
     assert!(
-        coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal),
-        EINVALID_STATE,
+        escrow.get_market_state_id() == proposal.market_state_id(),
+        EInvalidState,
     );
 
-    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let market_state = escrow.get_market_state_mut();
     try_advance_state(
         proposal,
         market_state,
@@ -111,39 +112,42 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     );
 
     // If the proposal is finalized, collect fees before anyone can call empty_all_amm_liquidity
-    if (proposal::state(proposal) == STATE_FINALIZED) {
+    if (proposal.state() == STATE_FINALIZED) {
         liquidity_interact::collect_protocol_fees(proposal, escrow, fee_manager, clock);
     }
 }
 
+// === Private Functions ===
 fun initialize_oracles_for_trading<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &MarketState,
 ) {
-    let pools_count = vector::length(proposal::get_amm_pools(proposal));
+    let pools = proposal.get_amm_pools();
+    let pools_count = vector::length(pools);
     let mut i = 0;
     while (i < pools_count) {
-        let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
-        amm::set_oracle_start_time(pool, state);
+        let pool = proposal.get_pool_mut_by_outcome((i as u8));
+        pool.set_oracle_start_time(state);
         i = i + 1;
     };
 }
 
+// === Public Package Functions (continued) ===
 public(package) fun finalize<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
     clock: &Clock,
 ) {
-    assert!(proposal::state(proposal) == STATE_TRADING, EINVALID_STATE);
+    assert!(proposal.state() == STATE_TRADING, EInvalidState);
     // Validate state belongs to this proposal
-    assert!(object::id(state) == proposal::market_state_id(proposal), EINVALID_STATE);
-    assert!(market_state::market_id(state) == proposal::get_id(proposal), EINVALID_STATE);
+    assert!(object::id(state) == proposal.market_state_id(), EInvalidState);
+    assert!(state.market_id() == proposal.get_id(), EInvalidState);
     // Validate DAO ID matches
-    assert!(market_state::dao_id(state) == proposal::get_dao_id(proposal), EINVALID_STATE);
+    assert!(state.dao_id() == proposal.get_dao_id(), EInvalidState);
 
     // Record final TWAP prices and find winner
-    let timestamp = clock::timestamp_ms(clock);
-    let mut final_twap_prices = vector::empty<u128>();
+    let timestamp = clock.timestamp_ms();
+    let mut final_twap_prices = vector::empty();
 
     let mut i = 0;
     let mut highest_twap = 0;
@@ -151,10 +155,11 @@ public(package) fun finalize<AssetType, StableType>(
     let mut base_twap = 0;
 
     // Get a mutable reference to pools and iterate
-    let pools_count = vector::length(proposal::get_amm_pools(proposal));
+    let pools = proposal.get_amm_pools();
+    let pools_count = vector::length(pools);
     while (i < pools_count) {
-        let pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
-        let twap = amm::get_twap(pool, clock);
+        let pool = proposal.get_pool_mut_by_outcome((i as u8));
+        let twap = pool.get_twap(clock);
         vector::push_back(&mut final_twap_prices, twap);
 
         if (i == 0) {
@@ -163,7 +168,7 @@ public(package) fun finalize<AssetType, StableType>(
             // For non-zero outcomes, check if this TWAP beats the current highest
             // and exceeds the threshold compared to outcome 0
             let threshold_price =
-                ((base_twap as u256) * (TWAP_BASIS_POINTS + (proposal::get_twap_threshold(proposal) as u256))) / TWAP_BASIS_POINTS;
+                ((base_twap as u256) * (TWAP_BASIS_POINTS + (proposal.get_twap_threshold() as u256))) / TWAP_BASIS_POINTS;
             if (twap > highest_twap && twap > (threshold_price as u128)) {
                 highest_twap = twap;
                 winning_outcome = i;
@@ -171,7 +176,7 @@ public(package) fun finalize<AssetType, StableType>(
         };
 
         event::emit(TWAPHistoryEvent {
-            proposal_id: proposal::get_id(proposal),
+            proposal_id: proposal.get_id(),
             outcome_idx: i,
             twap_price: twap,
             timestamp,
@@ -185,17 +190,17 @@ public(package) fun finalize<AssetType, StableType>(
         winning_outcome = 0;
     };
 
-    proposal::set_twap_prices(proposal, final_twap_prices);
-    proposal::set_last_twap_update(proposal, timestamp);
+    proposal.set_twap_prices(final_twap_prices);
+    proposal.set_last_twap_update(timestamp);
 
-    market_state::finalize(state, winning_outcome, clock);
+    state.finalize(winning_outcome, clock);
 
     event::emit(MarketFinalizedEvent {
-        proposal_id: proposal::get_id(proposal),
+        proposal_id: proposal.get_id(),
         winning_outcome: winning_outcome,
         timestamp_ms: timestamp,
     });
 
-    proposal::set_winning_outcome(proposal, winning_outcome);
-    proposal::set_state(proposal, STATE_FINALIZED);
+    proposal.set_winning_outcome(winning_outcome);
+    proposal.set_state(STATE_FINALIZED);
 }
