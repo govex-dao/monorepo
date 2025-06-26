@@ -1,39 +1,38 @@
 module futarchy::oracle;
 
-use futarchy::math;
-use std::debug;
-use std::u128;
-use std::u256;
-use std::u64;
-use sui::clock::{Self, Clock};
-use sui::event;
-
 // === Introduction ===
 // Crankless Time Weighted Average Price (TWAP) Oracle
 
-// ========== Constants =========
+// === Imports ===
+use futarchy::math;
+use std::{u128, u64};
+use sui::{clock::Clock, event};
+#[test_only] 
+use std::debug;
+
+// === Constants ===
 const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
 const ONE_WEEK_MS: u64 = 604_800_000;
 
-// ======== Error Constants ========
-const ETIMESTAMP_REGRESSION: u64 = 0;
-const ETWAP_NOT_STARTED: u64 = 1;
-const EZERO_PERIOD: u64 = 2;
-const EZERO_INITIALIZATION: u64 = 3;
-const EZERO_STEP: u64 = 4;
-const ELONG_DELAY: u64 = 5;
-const ESTALE_TWAP: u64 = 6;
-const EOVERFLOW_V_RAMP: u64 = 7;
-const EOVERFLOW_V_FLAT: u64 = 8;
-const EOVERFLOW_S_DEV_MAG: u64 = 9;
-const EOVERFLOW_BASE_PRICE_SUM_FINAL: u64 = 10;
-const EOVERFLOW_V_SUM_PRICES_ADD: u64 = 11;
-const EINTERNAL_TWAP_ERROR: u64 = 12;
-const E_NONE_FULL_WINDOW_TWAP_DELAY: u64 = 13;
-const E_MARKET_NOT_STARTED: u64 = 14;
-const E_MARKET_ALREADY_STARTED: u64 = 15;
+// === Errors ===
+const ETimestampRegression: u64 = 0;
+const ETwapNotStarted: u64 = 1;
+const EZeroPeriod: u64 = 2;
+const EZeroInitialization: u64 = 3;
+const EZeroStep: u64 = 4;
+const ELongDelay: u64 = 5;
+const EStaleTwap: u64 = 6;
+const EOverflowVRamp: u64 = 7;
+const EOverflowVFlat: u64 = 8;
+const EOverflowSDevMag: u64 = 9;
+const EOverflowBasePriceSumFinal: u64 = 10;
+const EOverflowVSumPricesAdd: u64 = 11;
+const EInternalTwapError: u64 = 12;
+const ENoneFullWindowTwapDelay: u64 = 13;
+const EMarketNotStarted: u64 = 14;
+const EMarketAlreadyStarted: u64 = 15;
 
-// ======== Configuration Struct ========
+// === Structs ===
 public struct Oracle has key, store {
     id: UID,
     last_price: u128,
@@ -57,21 +56,22 @@ public struct Oracle has key, store {
 }
 
 // === Events ===
+
 public struct PriceEvent has copy, drop {
     last_price: u128,
 }
 
-// ======== Constructor ========
+// === Public Functions ===
 public(package) fun new_oracle(
     twap_initialization_price: u128,
     twap_start_delay: u64,
     twap_cap_step: u64,
     ctx: &mut TxContext,
 ): Oracle {
-    assert!(twap_initialization_price > 0, EZERO_INITIALIZATION);
-    assert!(twap_cap_step > 0, EZERO_STEP);
-    assert!(twap_start_delay < ONE_WEEK_MS, ELONG_DELAY); // One week in milliseconds
-    assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, E_NONE_FULL_WINDOW_TWAP_DELAY);
+    assert!(twap_initialization_price > 0, EZeroInitialization);
+    assert!(twap_cap_step > 0, EZeroStep);
+    assert!(twap_start_delay < ONE_WEEK_MS, ELongDelay); // One week in milliseconds
+    assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, ENoneFullWindowTwapDelay);
 
     Oracle {
         id: object::new(ctx), // Create a unique ID for the oracle
@@ -88,7 +88,7 @@ public(package) fun new_oracle(
     }
 }
 
-// ======== Helper Functions ========
+// === Private Functions ===
 fun one_step_cap_price_change(twap_base: u128, new_price: u128, twap_cap_step: u64): u128 {
     if (new_price > twap_base) {
         // Cap upward movement: min(new_price, saturating_add(twap_base, max_change))
@@ -99,13 +99,12 @@ fun one_step_cap_price_change(twap_base: u128, new_price: u128, twap_cap_step: u
     }
 }
 
-// ======== Core Functions ========
 // Called before swaps, LP events and before reading TWAP
 public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     // Sanity time checks
-    assert!(option::is_some(&oracle.market_start_time), E_MARKET_NOT_STARTED);
+    assert!(option::is_some(&oracle.market_start_time), EMarketNotStarted);
     let market_start_time_val = *option::borrow(&oracle.market_start_time);
-    assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
+    assert!(timestamp >= oracle.last_timestamp, ETimestampRegression);
 
     let delay_threshold = market_start_time_val + oracle.twap_start_delay;
     // --- Case 0: No time has passed ---
@@ -153,10 +152,10 @@ public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price
 fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
     // --- Input Validation ---
     // Ensure timestamp is not regressing
-    assert!(timestamp >= oracle.last_timestamp, ETIMESTAMP_REGRESSION);
+    assert!(timestamp >= oracle.last_timestamp, ETimestampRegression);
     // Ensure initial state is consistent (last_timestamp should not be before the window end it relates to)
     // This is a pre-condition check, assuming the state was valid before this call.
-    assert!(oracle.last_timestamp >= oracle.last_window_end, ETIMESTAMP_REGRESSION);
+    assert!(oracle.last_timestamp >= oracle.last_window_end, ETimestampRegression);
 
     // --- Handle Edge Case: No time passed ---
     let time_since_last_update = timestamp - oracle.last_timestamp;
@@ -171,10 +170,11 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
 
     let time_to_next_boundary = TWAP_PRICE_CAP_WINDOW - elapsed_in_current_segment;
 
-    let duration_stage1 = std::u64::min(
-        time_to_next_boundary, // Limit by the time until the next window boundary
-        time_since_last_update, // Limit by the total time available until the target timestamp
-    );
+    let duration_stage1 = if (time_to_next_boundary < time_since_last_update) { 
+        time_to_next_boundary 
+    } else { 
+        time_since_last_update 
+    };
 
     if (duration_stage1 > 0) {
         let end_timestamp_stage1 = oracle.last_timestamp + duration_stage1;
@@ -228,7 +228,7 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
         // After this call, oracle.last_timestamp is updated to the final input timestamp.
         // If the final timestamp hits a window boundary, oracle.last_window_end and TWAP state are also updated.
     };
-    assert!(oracle.last_timestamp == timestamp, EINTERNAL_TWAP_ERROR); // Assuming an internal error code
+    assert!(oracle.last_timestamp == timestamp, EInternalTwapError); // Assuming an internal error code
 }
 
 fun intra_window_accumulation(
@@ -326,7 +326,7 @@ fun multi_full_window_accumulation(
         if (
             sum_indices_part > 0 && (oracle.twap_cap_step as u128) > 0 && (oracle.twap_cap_step as u128) > u128::max_value!() / sum_indices_part
         ) {
-            abort (EOVERFLOW_V_RAMP)
+            abort (EOverflowVRamp)
         };
         v_ramp = (oracle.twap_cap_step as u128) * sum_indices_part;
     };
@@ -340,7 +340,7 @@ fun multi_full_window_accumulation(
         let nft_u128 = num_flat_terms as u128;
         // Check for overflow: g_abs * nft_u128
         if (nft_u128 > 0 && g_abs > 0 && g_abs > u128::max_value!() / nft_u128) {
-            abort (EOVERFLOW_V_FLAT)
+            abort (EOverflowVFlat)
         };
         v_flat = g_abs * nft_u128;
     };
@@ -348,8 +348,8 @@ fun multi_full_window_accumulation(
     // S_dev_mag = V_ramp + V_flat
     // Check for overflow: v_ramp + v_flat
     if (v_ramp > u128::max_value!() - v_flat) {
-        // Equivalent to v_ramp + v_flat > u128::MAX
-        abort (EOVERFLOW_S_DEV_MAG)
+        // Equivalent to v_ramp + v_flat > u128::max_value!()
+        abort (EOverflowSDevMag)
     };
     let s_dev_mag = v_ramp + v_flat;
 
@@ -360,7 +360,7 @@ fun multi_full_window_accumulation(
     if (
         nw_u128 > 0 && oracle.last_window_twap > 0 && oracle.last_window_twap > u128::max_value!() / nw_u128
     ) {
-        abort (EOVERFLOW_BASE_PRICE_SUM_FINAL)
+        abort (EOverflowBasePriceSumFinal)
     };
     base_price_sum = oracle.last_window_twap * nw_u128;
 
@@ -369,7 +369,7 @@ fun multi_full_window_accumulation(
         // sign(P-B) is 0 or 1
         // Check for overflow: base_price_sum + s_dev_mag
         if (base_price_sum > u128::max_value!() - s_dev_mag) {
-            abort (EOVERFLOW_V_SUM_PRICES_ADD)
+            abort (EOverflowVSumPricesAdd)
         };
         v_sum_prices = base_price_sum + s_dev_mag;
     } else {
@@ -419,23 +419,23 @@ fun multi_full_window_accumulation(
 }
 
 public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
-    assert!(option::is_some(&oracle.market_start_time), E_MARKET_NOT_STARTED);
+    assert!(option::is_some(&oracle.market_start_time), EMarketNotStarted);
     let market_start_time_val = *option::borrow(&oracle.market_start_time);
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
 
     // TWAP is only allowed to be read in the same instance, after a write has occured
     // So no logic is needed to extrapolate TWAP for last write to current timestamp
     // Check reading in same instance as last write
-    assert!(current_time == oracle.last_timestamp, ESTALE_TWAP);
+    assert!(current_time == oracle.last_timestamp, EStaleTwap);
 
     // Time checks
-    assert!(oracle.last_timestamp != 0, ETIMESTAMP_REGRESSION);
-    assert!(current_time - market_start_time_val >= oracle.twap_start_delay, ETWAP_NOT_STARTED);
-    assert!(current_time >= market_start_time_val, ETIMESTAMP_REGRESSION);
+    assert!(oracle.last_timestamp != 0, ETimestampRegression);
+    assert!(current_time - market_start_time_val >= oracle.twap_start_delay, ETwapNotStarted);
+    assert!(current_time >= market_start_time_val, ETimestampRegression);
 
     // Calculate period
     let period = ( current_time - market_start_time_val) - oracle.twap_start_delay;
-    assert!(period > 0, EZERO_PERIOD);
+    assert!(period > 0, EZeroPeriod);
 
     // Calculate and validate TWAP
     let twap = (oracle.total_cumulative_price) / (period as u256);
@@ -445,43 +445,43 @@ public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
 
 public(package) fun set_oracle_start_time(oracle: &mut Oracle, market_start_time_param: u64) {
     // Prevent re-initialization
-    assert!(option::is_none(&oracle.market_start_time), E_MARKET_ALREADY_STARTED);
+    assert!(option::is_none(&oracle.market_start_time), EMarketAlreadyStarted);
 
     oracle.market_start_time = option::some(market_start_time_param);
     oracle.last_window_end = market_start_time_param;
     oracle.last_timestamp = market_start_time_param;
 }
 
-// ======== Getters ========
-public fun get_last_price(oracle: &Oracle): u128 {
+// === View Functions ===
+public fun last_price(oracle: &Oracle): u128 {
     oracle.last_price
 }
 
-public fun get_last_timestamp(oracle: &Oracle): u64 {
+public fun last_timestamp(oracle: &Oracle): u64 {
     oracle.last_timestamp
 }
 
-public fun get_config(oracle: &Oracle): (u64, u64) {
+public fun config(oracle: &Oracle): (u64, u64) {
     (oracle.twap_start_delay, oracle.twap_cap_step)
 }
 
-public fun get_market_start_time(oracle: &Oracle): Option<u64> {
+public fun market_start_time(oracle: &Oracle): Option<u64> {
     oracle.market_start_time // Access through config
 }
 
-public fun get_twap_initialization_price(oracle: &Oracle): u128 {
+public fun twap_initialization_price(oracle: &Oracle): u128 {
     oracle.twap_initialization_price // Access through config
 }
 
-public fun get_total_cumulative_price(oracle: &Oracle): u256 {
+public fun total_cumulative_price(oracle: &Oracle): u256 {
     oracle.total_cumulative_price
 }
 
-public fun get_id(o: &Oracle): &UID {
+public fun id(o: &Oracle): &UID {
     &o.id
 }
 
-// ======== Testing Helpers ========
+// === Test Functions ===
 
 #[test_only]
 public fun debug_print_state(oracle: &Oracle) {
@@ -521,7 +521,7 @@ public fun destroy_for_testing(oracle: Oracle) {
         market_start_time: _,
         twap_initialization_price: _,
     } = oracle;
-    object::delete(id);
+    id.delete();
 }
 
 #[test_only]
@@ -531,7 +531,7 @@ public fun debug_get_window_twap(oracle: &Oracle): u128 {
 
 #[test_only]
 public fun is_twap_valid(oracle: &Oracle, min_period: u64, clock: &Clock): bool {
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     current_time >= oracle.last_timestamp + min_period
 }
 

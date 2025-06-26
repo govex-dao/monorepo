@@ -1,24 +1,23 @@
 module futarchy::amm;
 
-use futarchy::market_state::{Self, MarketState};
-use futarchy::math;
-use futarchy::oracle::{Self, Oracle};
-use std::u64;
-use sui::clock::{Self, Clock};
-use sui::event;
-
 // === Introduction ===
 // This a Uniswap V2-style XY=K AMM implementation with controlled liquidity methods.
 
+use futarchy::market_state::MarketState;
+use futarchy::math;
+use futarchy::oracle::{Self, Oracle};
+use sui::clock::Clock;
+use sui::event;
+
 // === Errors ===
-const ELOW_LIQUIDITY: u64 = 0;
-const EPOOL_EMPTY: u64 = 1;
-const EEXCESSIVE_SLIPPAGE: u64 = 2;
-const EDIV_BY_ZERO: u64 = 3;
-const EZERO_LIQUIDITY: u64 = 4;
-const EPRICE_TOO_HIGH: u64 = 5;
-const EZERO_AMOUNT: u64 = 6;
-const EMARKET_ID_MISMATCH: u64 = 7;
+const ELowLiquidity: u64 = 0;
+const EPoolEmpty: u64 = 1;
+const EExcessiveSlippage: u64 = 2;
+const EDivByZero: u64 = 3;
+const EZeroLiquidity: u64 = 4;
+const EPriceTooHigh: u64 = 5;
+const EZeroAmount: u64 = 6;
+const EMarketIdMismatch: u64 = 7;
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -64,9 +63,9 @@ public(package) fun new_pool(
     twap_step_max: u64,
     ctx: &mut TxContext,
 ): LiquidityPool {
-    assert!(initial_asset > 0 && initial_stable > 0, EZERO_AMOUNT);
+    assert!(initial_asset > 0 && initial_stable > 0, EZeroAmount);
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
-    assert!(k >= MINIMUM_LIQUIDITY, ELOW_LIQUIDITY);
+    assert!(k >= MINIMUM_LIQUIDITY, ELowLiquidity);
 
     let twap_initialization_price = twap_initial_observation;
     let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
@@ -85,7 +84,7 @@ public(package) fun new_pool(
     // Create pool object as usual
     let pool = LiquidityPool {
         id: object::new(ctx),
-        market_id: market_state::market_id(state),
+        market_id: state.market_id(),
         outcome_idx,
         asset_reserve: initial_asset,
         stable_reserve: initial_stable,
@@ -106,9 +105,9 @@ public(package) fun swap_asset_to_stable(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    market_state::assert_trading_active(state);
-    assert!(pool.market_id == market_state::market_id(state), EMARKET_ID_MISMATCH);
-    assert!(amount_in > 0, EZERO_AMOUNT);
+    state.assert_trading_active();
+    assert!(pool.market_id == state.market_id(), EMarketIdMismatch);
+    assert!(amount_in > 0, EZeroAmount);
 
     // When selling outcome tokens (asset -> stable):
     // 1. We calculate the full swap output first (before fees)
@@ -130,8 +129,8 @@ public(package) fun swap_asset_to_stable(
     // Take fee directly as stable tokens (never enters pool)
     pool.protocol_fees = pool.protocol_fees + fee_amount;
 
-    assert!(amount_out >= min_amount_out, EEXCESSIVE_SLIPPAGE);
-    assert!(amount_out_before_fee < pool.stable_reserve, EPOOL_EMPTY);
+    assert!(amount_out >= min_amount_out, EExcessiveSlippage);
+    assert!(amount_out_before_fee < pool.stable_reserve, EPoolEmpty);
 
     let price_impact = calculate_price_impact(
         amount_in,
@@ -149,7 +148,7 @@ public(package) fun swap_asset_to_stable(
     pool.asset_reserve = pool.asset_reserve + amount_in;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
     write_observation(
         &mut pool.oracle,
@@ -168,7 +167,7 @@ public(package) fun swap_asset_to_stable(
         amount_out, // Amount after fee for event logging
         price_impact,
         price: current_price,
-        sender: tx_context::sender(ctx),
+        sender: ctx.sender(),
         asset_reserve: pool.asset_reserve,
         stable_reserve: pool.stable_reserve,
         timestamp,
@@ -186,9 +185,9 @@ public(package) fun swap_stable_to_asset(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    market_state::assert_trading_active(state);
-    assert!(pool.market_id == market_state::market_id(state), EMARKET_ID_MISMATCH);
-    assert!(amount_in > 0, EZERO_AMOUNT);
+    state.assert_trading_active();
+    assert!(pool.market_id == state.market_id(), EMarketIdMismatch);
+    assert!(amount_in > 0, EZeroAmount);
 
     // When buying outcome tokens (stable -> asset):
     // 1. We collect fee from stable input first
@@ -210,8 +209,8 @@ public(package) fun swap_stable_to_asset(
         pool.asset_reserve,
     );
 
-    assert!(amount_out >= min_amount_out, EEXCESSIVE_SLIPPAGE);
-    assert!(amount_out < pool.asset_reserve, EPOOL_EMPTY);
+    assert!(amount_out >= min_amount_out, EExcessiveSlippage);
+    assert!(amount_out < pool.asset_reserve, EPoolEmpty);
 
     let price_impact = calculate_price_impact(
         amount_in_after_fee,
@@ -228,7 +227,7 @@ public(package) fun swap_stable_to_asset(
     pool.stable_reserve = pool.stable_reserve + amount_in_after_fee;
     pool.asset_reserve = pool.asset_reserve - amount_out;
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
     write_observation(
         &mut pool.oracle,
@@ -247,7 +246,7 @@ public(package) fun swap_stable_to_asset(
         amount_out,
         price_impact,
         price: current_price,
-        sender: tx_context::sender(ctx),
+        sender: ctx.sender(),
         asset_reserve: pool.asset_reserve,
         stable_reserve: pool.stable_reserve,
         timestamp,
@@ -289,7 +288,7 @@ public fun get_reserves(pool: &LiquidityPool): (u64, u64) {
 }
 
 public fun get_price(pool: &LiquidityPool): u128 {
-    oracle::get_last_price(&pool.oracle)
+    oracle::last_price(&pool.oracle)
 }
 
 public(package) fun get_twap(pool: &mut LiquidityPool, clock: &Clock): u128 {
@@ -331,7 +330,7 @@ fun calculate_price_impact(
 
 // Update the LiquidityPool struct price calculation to use TWAP:
 public fun get_current_price(pool: &LiquidityPool): u128 {
-    assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EZERO_LIQUIDITY);
+    assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EZeroLiquidity);
 
     let price = math::mul_div_to_128(
         pool.stable_reserve,
@@ -343,19 +342,19 @@ public fun get_current_price(pool: &LiquidityPool): u128 {
 }
 
 public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Clock) {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let current_price = get_current_price(pool);
     // Use the sum of reserves as a liquidity measure
     oracle::write_observation(&mut pool.oracle, timestamp, current_price);
 }
 
 public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, state: &MarketState) {
-    assert!(get_ms_id(pool) == market_state::market_id(state), EMARKET_ID_MISMATCH);
-    let trading_start_time = market_state::get_trading_start(state);
+    assert!(get_ms_id(pool) == state.market_id(), EMarketIdMismatch);
+    let trading_start_time = state.get_trading_start();
     oracle::set_oracle_start_time(&mut pool.oracle, trading_start_time);
 }
 
-// ======== Internal Functions ========
+// === Private Functions ===
 fun calculate_fee(amount: u64, fee_percent: u64): u64 {
     // Calculate fee normally
     let calculated_fee = math::mul_div_to_64(amount, fee_percent, FEE_SCALE);
@@ -373,10 +372,10 @@ public(package) fun calculate_output(
     reserve_in: u64,
     reserve_out: u64,
 ): u64 {
-    assert!(reserve_in > 0 && reserve_out > 0, EPOOL_EMPTY);
+    assert!(reserve_in > 0 && reserve_out > 0, EPoolEmpty);
 
     let denominator = reserve_in + amount_in_with_fee;
-    assert!(denominator > 0, EDIV_BY_ZERO);
+    assert!(denominator > 0, EDivByZero);
     let numerator = math::mul_div_to_128(amount_in_with_fee, reserve_out, 1);
     let output = math::mul_div_mixed(numerator, 1, (denominator as u128));
     (output as u64)
@@ -387,7 +386,7 @@ public fun get_outcome_idx(pool: &LiquidityPool): u8 {
 }
 
 public fun get_id(pool: &LiquidityPool): ID {
-    object::uid_to_inner(&pool.id)
+    pool.id.to_inner()
 }
 
 public fun get_k(pool: &LiquidityPool): u128 {
@@ -395,8 +394,8 @@ public fun get_k(pool: &LiquidityPool): u128 {
 }
 
 public fun check_price_under_max(price: u128) {
-    let max_price = (u64::max_value!() as u128) * (BASIS_POINTS as u128);
-    assert!(price <= max_price, EPRICE_TOO_HIGH)
+    let max_price = (0xFFFFFFFFFFFFFFFFu64 as u128) * (BASIS_POINTS as u128);
+    assert!(price <= max_price, EPriceTooHigh)
 }
 
 public(package) fun get_protocol_fees(pool: &LiquidityPool): u64 {
@@ -449,6 +448,6 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         oracle,
         protocol_fees: _,
     } = pool;
-    object::delete(id);
+    id.delete();
     oracle::destroy_for_testing(oracle);
 }

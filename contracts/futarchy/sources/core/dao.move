@@ -1,47 +1,36 @@
 module futarchy::dao;
 
-use futarchy::coin_escrow;
-use futarchy::fee;
-use futarchy::market_state;
-use futarchy::proposal;
-use futarchy::vectors;
-use std::ascii::{Self, String as AsciiString};
-use std::string::{Self, String};
-use std::type_name;
-use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin};
-use sui::event;
-use sui::sui::SUI;
-use sui::table::{Self, Table};
-use sui::url::{Self, Url};
-
 // === Introduction ===
 // This defines the DAO type
 
-// === Errors ===
+// === Imports ===
+use futarchy::{coin_escrow, fee, market_state, proposal, vectors};
+use std::{ascii::{String as AsciiString}, string::String, type_name};
+use sui::{clock::Clock, coin::{Self, Coin}, event, sui::SUI, table::{Self, Table}, url::{Self, Url}};
 
-const EINVALID_AMOUNT: u64 = 0;
-const EPROPOSAL_EXISTS: u64 = 1;
-const EUNAUTHORIZED: u64 = 2;
-const EINVALID_OUTCOME_COUNT: u64 = 3;
-const EPROPOSAL_NOT_FOUND: u64 = 4;
-const EINVALID_MIN_AMOUNTS: u64 = 5;
-const EALREADY_EXECUTED: u64 = 6;
-const EINVALID_MESSAGES: u64 = 7;
-const EINVALID_ASSET_TYPE: u64 = 8;
-const EINVALID_STABLE_TYPE: u64 = 9;
-const E_DECIMALS_TOO_LARGE: u64 = 10;
-const EPROPOSAL_CREATION_DISABLED: u64 = 11;
-const EINVALID_OUTCOME_LENGTHS: u64 = 12;
-const EINVALID_DECIMALS_DIFF: u64 = 13;
-const EMETADATA_TOO_LONG: u64 = 14;
-const EDETAILS_TOO_LONG: u64 = 15;
-const ETITLE_TOO_SHORT: u64 = 16;
-const ETITLE_TOO_LONG: u64 = 17;
-const EDETAILS_TOO_SHORT: u64 = 18;
-const EONE_OUTCOME: u64 = 19;
-const E_NONE_FULL_WINDOW_TWAP_DELAY: u64 = 20;
-const E_DAO_DESCRIPTION_TOO_LONG: u64 = 21;
+// === Errors ===
+const EInvalidAmount: u64 = 0;
+const EProposalExists: u64 = 1;
+const EUnauthorized: u64 = 2;
+const EInvalidOutcomeCount: u64 = 3;
+const EProposalNotFound: u64 = 4;
+const EInvalidMinAmounts: u64 = 5;
+const EAlreadyExecuted: u64 = 6;
+const EInvalidMessages: u64 = 7;
+const EInvalidAssetType: u64 = 8;
+const EInvalidStableType: u64 = 9;
+const EDecimalsTooLarge: u64 = 10;
+const EProposalCreationDisabled: u64 = 11;
+const EInvalidOutcomeLengths: u64 = 12;
+const EInvalidDecimalsDiff: u64 = 13;
+const EMetadataTooLong: u64 = 14;
+const EDetailsTooLong: u64 = 15;
+const ETitleTooShort: u64 = 16;
+const ETitleTooLong: u64 = 17;
+const EDetailsTooShort: u64 = 18;
+const EOneOutcome: u64 = 19;
+const ENoneFullWindowTwapDelay: u64 = 20;
+const EDaoDescriptionTooLong: u64 = 21;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -135,7 +124,7 @@ public struct ResultSigned has copy, drop {
     timestamp: u64,
 }
 
-// === Creation Functions ===
+// === Public Functions ===
 public(package) fun create<AssetType, StableType>(
     min_asset_amount: u64,
     min_stable_amount: u64,
@@ -161,35 +150,35 @@ public(package) fun create<AssetType, StableType>(
 ) {
     assert!(
         min_asset_amount > MIN_AMM_SAFE_AMOUNT && min_stable_amount > MIN_AMM_SAFE_AMOUNT,
-        EINVALID_MIN_AMOUNTS,
+        EInvalidMinAmounts,
     );
     // checks that both types are for coins, but still allows regulated coins
     let _test_coin_asset = coin::zero<AssetType>(ctx);
     let _test_coin_stable = coin::zero<StableType>(ctx);
-    coin::destroy_zero(_test_coin_asset);
-    coin::destroy_zero(_test_coin_stable);
+    _test_coin_asset.destroy_zero();
+    _test_coin_stable.destroy_zero();
 
-    let icon_url = if (ascii::is_empty(&icon_url_string)) {
+    let icon_url = if (icon_url_string.is_empty()) {
         url::new_unsafe(asset_icon_url)
     } else {
         url::new_unsafe(icon_url_string)
     };
 
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
 
     // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
     assert!(if (stable_decimals >= asset_decimals) {
         (stable_decimals - asset_decimals) <= 9
     } else {
         (asset_decimals - stable_decimals) <= 9
-    }, EINVALID_DECIMALS_DIFF);
+    }, EInvalidDecimalsDiff);
 
-    assert!(stable_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
-    assert!(asset_decimals <= MAX_DECIMALS, E_DECIMALS_TOO_LARGE);
+    assert!(stable_decimals <= MAX_DECIMALS, EDecimalsTooLarge);
+    assert!(asset_decimals <= MAX_DECIMALS, EDecimalsTooLarge);
 
-    assert!((amm_twap_start_delay % 60_000) == 0, E_NONE_FULL_WINDOW_TWAP_DELAY);
+    assert!((amm_twap_start_delay % 60_000) == 0, ENoneFullWindowTwapDelay);
 
-    assert!(description.length() <= DAO_DESCRIPTION_MAX_LENGTH, E_DAO_DESCRIPTION_TOO_LONG);
+    assert!(description.length() <= DAO_DESCRIPTION_MAX_LENGTH, EDaoDescriptionTooLong);
 
     let dao = DAO {
         id: object::new(ctx),
@@ -217,7 +206,7 @@ public(package) fun create<AssetType, StableType>(
         stable_symbol,
         review_period_ms,
         trading_period_ms,
-        attestation_url: string::utf8(b""),
+        attestation_url: b"".to_string(),
         verification_pending: false,
         verified: false,
         proposal_creation_enabled: true,
@@ -254,7 +243,6 @@ public(package) fun create<AssetType, StableType>(
     transfer::public_share_object(dao)
 }
 
-// ======== Proposal Functions ========
 public entry fun create_proposal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
@@ -270,50 +258,49 @@ public entry fun create_proposal<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(dao.proposal_creation_enabled, EPROPOSAL_CREATION_DISABLED);
+    assert!(dao.proposal_creation_enabled, EProposalCreationDisabled);
     fee::deposit_proposal_creation_payment(fee_manager, payment, clock, ctx);
 
     let asset_type = type_name::into_string(type_name::get<AssetType>());
     let stable_type = type_name::into_string(type_name::get<StableType>());
 
-    assert!(&asset_type == &dao.asset_type, EINVALID_ASSET_TYPE);
-    assert!(&stable_type == &dao.stable_type, EINVALID_STABLE_TYPE);
+    assert!(&asset_type == &dao.asset_type, EInvalidAssetType);
+    assert!(&stable_type == &dao.stable_type, EInvalidStableType);
 
-    assert!(outcome_count >= MIN_OUTCOMES && outcome_count <= MAX_OUTCOMES, EINVALID_OUTCOME_COUNT);
-    let asset_amount = coin::value(&asset_coin);
-    let stable_amount = coin::value(&stable_coin);
-    assert!(asset_amount >= dao.min_asset_amount, EINVALID_AMOUNT);
-    assert!(stable_amount >= dao.min_stable_amount, EINVALID_AMOUNT);
-    assert!(vector::length(&outcome_messages) == outcome_count, EINVALID_MESSAGES);
+    assert!(outcome_count >= MIN_OUTCOMES && outcome_count <= MAX_OUTCOMES, EInvalidOutcomeCount);
+    let asset_amount = asset_coin.value();
+    let stable_amount = stable_coin.value();
+    assert!(asset_amount >= dao.min_asset_amount, EInvalidAmount);
+    assert!(stable_amount >= dao.min_stable_amount, EInvalidAmount);
+    assert!(outcome_messages.length() == outcome_count, EInvalidMessages);
 
     // Assert first outcome is "Reject"
-    let reject_string = string::utf8(b"Reject");
-    let first_message = vector::borrow(&outcome_messages, 0);
-    assert!(first_message == &reject_string, EINVALID_MESSAGES);
+    let reject_string = b"Reject".to_string();
+    let first_message = &outcome_messages[0];
+    assert!(first_message == &reject_string, EInvalidMessages);
 
     // For 2-outcome proposals, assert second outcome is "Accept"
     if (outcome_count == 2) {
-        let accept_string = string::utf8(b"Accept");
-        let second_message = vector::borrow(&outcome_messages, 1);
-        assert!(second_message == &accept_string, EINVALID_MESSAGES);
+        let accept_string = b"Accept".to_string();
+        let second_message = &outcome_messages[1];
+        assert!(second_message == &accept_string, EInvalidMessages);
     };
     assert!(
         vectors::check_valid_outcomes(outcome_messages, MAX_RESULT_LENGTH),
-        EINVALID_OUTCOME_LENGTHS,
+        EInvalidOutcomeLengths,
     );
 
-    assert!(title.length() <= TITLE_MAX_LENGTH, ETITLE_TOO_LONG);
-    assert!(metadata.length() <= METADATA_MAX_LENGTH, EMETADATA_TOO_LONG);
-    assert!(details.length() <= DETAILS_MAX_LENGTH, EDETAILS_TOO_LONG);
+    assert!(title.length() <= TITLE_MAX_LENGTH, ETitleTooLong);
+    assert!(metadata.length() <= METADATA_MAX_LENGTH, EMetadataTooLong);
+    assert!(details.length() <= DETAILS_MAX_LENGTH, EDetailsTooLong);
 
-    assert!(title.length() > 0, ETITLE_TOO_SHORT);
-    assert!(details.length() > 0, EDETAILS_TOO_SHORT);
+    assert!(title.length() > 0, ETitleTooShort);
+    assert!(details.length() > 0, EDetailsTooShort);
 
-    // Existing validations
-    assert!(outcome_count > 1, EONE_OUTCOME);
+    assert!(outcome_count > 1, EOneOutcome);
 
-    let initial_asset = coin::into_balance(asset_coin);
-    let initial_stable = coin::into_balance(stable_coin);
+    let initial_asset = asset_coin.into_balance();
+    let initial_stable = stable_coin.into_balance();
 
     let (proposal_id, market_state_id, state) = proposal::create<AssetType, StableType>(
         object::uid_to_inner(&dao.id),
@@ -324,8 +311,8 @@ public entry fun create_proposal<AssetType, StableType>(
         dao.trading_period_ms,
         dao.min_asset_amount,
         dao.min_stable_amount,
-        title, // Changed from description
-        details, // Added new field
+        title,
+        details,
         metadata,
         outcome_messages,
         dao.amm_twap_start_delay,
@@ -338,24 +325,24 @@ public entry fun create_proposal<AssetType, StableType>(
     );
 
     let info = ProposalInfo {
-        proposer: tx_context::sender(ctx),
-        created_at: clock::timestamp_ms(clock),
+        proposer: ctx.sender(),
+        created_at: clock.timestamp_ms(),
         state,
         outcome_count,
-        description: title, // Changed to use title instead of description
+        description: title,
         result: option::none(),
         execution_time: option::none(),
         executed: false,
         market_state_id,
     };
 
-    assert!(!table::contains(&dao.proposals, proposal_id), EPROPOSAL_EXISTS);
-    table::add(&mut dao.proposals, proposal_id, info);
+    assert!(!dao.proposals.contains(proposal_id), EProposalExists);
+    dao.proposals.add(proposal_id, info);
     dao.active_proposal_count = dao.active_proposal_count + 1;
     dao.total_proposals = dao.total_proposals + 1;
 }
 
-// ======== Result Signing ========
+// === Package Functions ===
 public(package) fun sign_result(
     dao: &mut DAO,
     proposal_id: ID,
@@ -363,23 +350,23 @@ public(package) fun sign_result(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    assert!(table::contains(&dao.proposals, proposal_id), EPROPOSAL_NOT_FOUND);
+    assert!(dao.proposals.contains(proposal_id), EProposalNotFound);
 
-    let info = table::borrow_mut(&mut dao.proposals, proposal_id);
-    assert!(!info.executed, EALREADY_EXECUTED);
+    let info = &mut dao.proposals[proposal_id];
+    assert!(!info.executed, EAlreadyExecuted);
 
-    assert!(object::id(market_state) == info.market_state_id, EUNAUTHORIZED);
-    assert!(market_state::market_id(market_state) == proposal_id, EUNAUTHORIZED);
-    assert!(market_state::dao_id(market_state) == object::uid_to_inner(&dao.id), EUNAUTHORIZED);
+    assert!(object::id(market_state) == info.market_state_id, EUnauthorized);
+    assert!(market_state.market_id() == proposal_id, EUnauthorized);
+    assert!(market_state.dao_id() == object::uid_to_inner(&dao.id), EUnauthorized);
 
-    market_state::assert_market_finalized(market_state);
+    market_state.assert_market_finalized();
 
-    let winning_outcome = market_state::get_winning_outcome(market_state);
-    let message = market_state::get_outcome_message(market_state, winning_outcome);
+    let winning_outcome = market_state.get_winning_outcome();
+    let message = market_state.get_outcome_message(winning_outcome);
 
-    option::fill(&mut info.result, message);
+    info.result.fill(message);
     info.executed = true;
-    info.execution_time = option::some(clock::timestamp_ms(clock));
+    info.execution_time = option::some(clock.timestamp_ms());
 
     // Safely reduce active_proposal_count
     if (dao.active_proposal_count > 0) {
@@ -391,7 +378,7 @@ public(package) fun sign_result(
         proposal_id,
         outcome: message,
         winning_outcome: winning_outcome,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -402,11 +389,11 @@ public entry fun sign_result_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let escrow_market_state_id = coin_escrow::get_market_state_id(escrow);
+    let escrow_market_state_id = escrow.get_market_state_id();
     let info = get_proposal_info(dao, proposal_id);
-    assert!(escrow_market_state_id == info.market_state_id, EUNAUTHORIZED);
+    assert!(escrow_market_state_id == info.market_state_id, EUnauthorized);
 
-    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let market_state = escrow.get_market_state_mut();
     sign_result(
         dao,
         proposal_id,
@@ -416,7 +403,6 @@ public entry fun sign_result_entry<AssetType, StableType>(
     );
 }
 
-// ======== Admin Functions ========
 public(package) fun set_pending_verification(dao: &mut DAO, attestation_url: String) {
     dao.attestation_url = attestation_url;
     dao.verification_pending = true;
@@ -426,7 +412,7 @@ public(package) fun set_verification(dao: &mut DAO, attestation_url: String, ver
     if (verified) {
         dao.attestation_url = attestation_url;
     } else {
-        dao.attestation_url = string::utf8(b""); // Empty string in Move
+        dao.attestation_url = b"".to_string();
     };
 
     dao.verification_pending = false;
@@ -441,13 +427,13 @@ public fun is_verified(dao: &DAO): bool { dao.verified }
 
 public fun get_attestation_url(dao: &DAO): &String { &dao.attestation_url }
 
-// === Getters ===
+// === View Functions ===
 public fun get_amm_config(dao: &DAO): (u64, u64, u128) {
     (dao.amm_twap_start_delay, dao.amm_twap_step_max, dao.amm_twap_initial_observation)
 }
 
 public fun get_proposal_info(dao: &DAO, proposal_id: ID): &ProposalInfo {
-    assert!(table::contains(&dao.proposals, proposal_id), EPROPOSAL_NOT_FOUND);
+    assert!(dao.proposals.contains(proposal_id), EProposalNotFound);
     table::borrow(&dao.proposals, proposal_id)
 }
 
@@ -509,8 +495,7 @@ public fun are_proposals_enabled(dao: &DAO): bool {
 
 // === Test Functions ===
 #[test_only]
-// Test helper function to set proposal state directly
 public fun test_set_proposal_state(dao: &mut DAO, proposal_id: ID, state: u8) {
-    let info = table::borrow_mut(&mut dao.proposals, proposal_id);
+    let info = &mut dao.proposals[proposal_id];
     info.state = state;
 }

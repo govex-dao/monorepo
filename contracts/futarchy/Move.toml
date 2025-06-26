@@ -1,6 +1,6 @@
 [package]
 name = "futarchy"
-edition = "2024.beta"
+edition = "2024"
 license = "BSL"
 
 [dependencies]

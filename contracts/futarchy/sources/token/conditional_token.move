@@ -1,9 +1,5 @@
 module futarchy::conditional_token;
 
-use futarchy::market_state;
-use sui::clock::{Self, Clock};
-use sui::event;
-
 // === Introduction ===
 // This is an implementation of a custom psuedo coin.
 // New coins (types) can't be created dynamically in Move
@@ -11,20 +7,25 @@ use sui::event;
 // Long term using a table will likely be more scalable
 // market_amounts: Table<(ID, ID), Table<address, u64>>,
 
+// === Imports ===
+use futarchy::market_state;
+use sui::clock::Clock;
+use sui::event;
+
 // === Errors ===
-const EINVALID_ASSET_TYPE: u64 = 0;
-const EWRONG_MARKET: u64 = 1;
-const EWRONG_TOKEN_TYPE: u64 = 2;
-const EWRONG_OUTCOME: u64 = 3;
-const EZERO_AMOUNT: u64 = 4;
-const EINSUFFICIENT_BALANCE: u64 = 5;
-const EEMPTY_VECTOR: u64 = 6;
-const ENO_TOKEN_FOUND: u64 = 7;
-const ENONZERO_BALANCE: u64 = 8;
+const EInvalidAssetType: u64 = 0;
+const EWrongMarket: u64 = 1;
+const EWrongTokenType: u64 = 2;
+const EWrongOutcome: u64 = 3;
+const EZeroAmount: u64 = 4;
+const EInsufficientBalance: u64 = 5;
+const EEmptyVector: u64 = 6;
+const ENoTokenFound: u64 = 7;
+const ENonzeroBalance: u64 = 8;
 
 // === Structs ===
-// Supply tracking object for a specific conditional token type
-// Total supply is tracked to aid with testing, it is not a source of truth. Token balances are the source of truth
+/// Supply tracking object for a specific conditional token type.
+/// Total supply is tracked to aid with testing, it is not a source of truth. Token balances are the source of truth.
 public struct Supply has key, store {
     id: UID,
     market_id: ID,
@@ -33,7 +34,7 @@ public struct Supply has key, store {
     total_supply: u64,
 }
 
-// The conditional token itself
+/// The conditional token representing a position in a prediction market
 public struct ConditionalToken has key, store {
     id: UID,
     market_id: ID,
@@ -43,6 +44,7 @@ public struct ConditionalToken has key, store {
 }
 
 // === Events ===
+/// Event emitted when tokens are minted
 public struct TokenMinted has copy, drop {
     id: ID,
     market_id: ID,
@@ -53,6 +55,7 @@ public struct TokenMinted has copy, drop {
     timestamp: u64,
 }
 
+/// Event emitted when tokens are burned
 public struct TokenBurned has copy, drop {
     id: ID,
     market_id: ID,
@@ -63,6 +66,7 @@ public struct TokenBurned has copy, drop {
     timestamp: u64,
 }
 
+/// Event emitted when a token is split
 public struct TokenSplit has copy, drop {
     original_token_id: ID,
     new_token_id: ID,
@@ -75,6 +79,7 @@ public struct TokenSplit has copy, drop {
     timestamp: u64,
 }
 
+/// Event emitted when multiple tokens are merged
 public struct TokenMergeMany has copy, drop {
     base_token_id: ID,
     merged_token_ids: vector<ID>,
@@ -87,7 +92,8 @@ public struct TokenMergeMany has copy, drop {
     timestamp: u64,
 }
 
-// ======== Supply Functions ========
+// === Package Functions ===
+/// Create a new supply tracker for a specific conditional token type
 public(package) fun new_supply(
     state: &market_state::MarketState,
     asset_type: u8,
@@ -96,7 +102,7 @@ public(package) fun new_supply(
 ): Supply {
     // Verify authority and market state
     market_state::validate_outcome(state, (outcome as u64));
-    assert!(asset_type <= 1, EINVALID_ASSET_TYPE);
+    assert!(asset_type <= 1, EInvalidAssetType);
 
     Supply {
         id: object::new(ctx),
@@ -107,24 +113,25 @@ public(package) fun new_supply(
     }
 }
 
+/// Update the total supply by increasing or decreasing the amount
 public(package) fun update_supply(supply: &mut Supply, amount: u64, increase: bool) {
-    assert!(amount > 0, EZERO_AMOUNT);
+    assert!(amount > 0, EZeroAmount);
     if (increase) {
         supply.total_supply = supply.total_supply + amount;
     } else {
-        assert!(supply.total_supply >= amount, EINSUFFICIENT_BALANCE);
+        assert!(supply.total_supply >= amount, EInsufficientBalance);
         supply.total_supply = supply.total_supply - amount;
     };
 }
 
-// ======== Token Functions ========
-// Destroys a ConditionalToken. The token's balance must be zero.
+/// Destroys a ConditionalToken. The token's balance must be zero.
 public(package) fun destroy(token: ConditionalToken) {
     let ConditionalToken { id, market_id: _, asset_type: _, outcome: _, balance } = token;
-    assert!(balance == 0, ENONZERO_BALANCE);
-    object::delete(id);
+    assert!(balance == 0, ENonzeroBalance);
+    id.delete();
 }
 
+/// Split a conditional token into two parts, transferring the split amount to a recipient
 public(package) fun split(
     token: &mut ConditionalToken,
     amount: u64,
@@ -132,8 +139,8 @@ public(package) fun split(
     clock: &Clock, // new parameter
     ctx: &mut TxContext,
 ) {
-    assert!(amount > 0, EZERO_AMOUNT);
-    assert!(token.balance > amount, EINSUFFICIENT_BALANCE);
+    assert!(amount > 0, EZeroAmount);
+    assert!(token.balance > amount, EInsufficientBalance);
 
     token.balance = token.balance - amount;
 
@@ -155,40 +162,42 @@ public(package) fun split(
         original_amount: token.balance,
         split_amount: amount,
         owner: recipient,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     transfer::transfer(new_token, recipient);
 }
 
-public entry fun split_entry(
+/// Split tokens for the sender
+entry fun split_entry(
     token: &mut ConditionalToken,
     amount: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let sender = tx_context::sender(ctx);
+    let sender = ctx.sender();
     split(token, amount, sender, clock, ctx);
 }
 
+/// Merge multiple conditional tokens of the same type into the base token
 public(package) fun merge_many(
     base_token: &mut ConditionalToken,
     mut tokens: vector<ConditionalToken>,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    assert!(!vector::is_empty(&tokens), EEMPTY_VECTOR);
+    assert!(!tokens.is_empty(), EEmptyVector);
 
     let mut total_merged_amount = 0;
-    let mut token_ids = vector::empty();
+    let mut token_ids = vector[];
     // Iterate by popping from the end - O(1) operation per element
-    while (!vector::is_empty(&tokens)) {
+    while (!tokens.is_empty()) {
         // Remove the last token from the vector
-        let token = vector::pop_back(&mut tokens);
+        let token = tokens.pop_back();
         // Verify token matches
-        assert!(token.market_id == base_token.market_id, EWRONG_MARKET);
-        assert!(token.asset_type == base_token.asset_type, EWRONG_TOKEN_TYPE);
-        assert!(token.outcome == base_token.outcome, EWRONG_OUTCOME);
+        assert!(token.market_id == base_token.market_id, EWrongMarket);
+        assert!(token.asset_type == base_token.asset_type, EWrongTokenType);
+        assert!(token.outcome == base_token.outcome, EWrongOutcome);
 
         let merged_token_object_id = object::id(&token);
 
@@ -201,11 +210,11 @@ public(package) fun merge_many(
         } = token;
 
         // Add to totals and the ID list
-        vector::push_back(&mut token_ids, merged_token_object_id);
+        token_ids.push_back(merged_token_object_id);
         total_merged_amount = total_merged_amount + balance;
 
         base_token.balance = base_token.balance + balance;
-        object::delete(id);
+        id.delete();
     };
 
     // Emit merge event with all token IDs
@@ -217,22 +226,24 @@ public(package) fun merge_many(
         outcome: base_token.outcome,
         base_amount: base_token.balance - total_merged_amount,
         merged_amount: total_merged_amount,
-        owner: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        owner: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 
-    vector::destroy_empty(tokens);
+    tokens.destroy_empty();
 }
 
-public entry fun merge_many_entry(
+/// Merge multiple tokens for the sender
+entry fun merge_many_entry(
     base_token: &mut ConditionalToken,
     tokens: vector<ConditionalToken>,
     clock: &Clock,
-    ctx: &mut TxContext,
+    ctx: &TxContext,
 ) {
     merge_many(base_token, tokens, clock, ctx);
 }
 
+/// Burn a conditional token and update the supply tracker
 public(package) fun burn(
     supply: &mut Supply,
     token: ConditionalToken,
@@ -240,9 +251,9 @@ public(package) fun burn(
     ctx: &TxContext,
 ) {
     // Verify token matches supply
-    assert!(token.market_id == supply.market_id, EWRONG_MARKET);
-    assert!(token.asset_type == supply.asset_type, EWRONG_TOKEN_TYPE);
-    assert!(token.outcome == supply.outcome, EWRONG_OUTCOME);
+    assert!(token.market_id == supply.market_id, EWrongMarket);
+    assert!(token.asset_type == supply.asset_type, EWrongTokenType);
+    assert!(token.outcome == supply.outcome, EWrongOutcome);
 
     let ConditionalToken {
         id,
@@ -262,14 +273,15 @@ public(package) fun burn(
         asset_type,
         outcome,
         amount: balance,
-        sender: tx_context::sender(ctx),
-        timestamp: clock::timestamp_ms(clock),
+        sender: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
     });
 
     // Clean up
-    object::delete(id);
+    id.delete();
 }
 
+/// Mint new conditional tokens and update the supply tracker
 public(package) fun mint(
     state: &market_state::MarketState,
     supply: &mut Supply,
@@ -280,9 +292,9 @@ public(package) fun mint(
 ): ConditionalToken {
     // Verify market state and trading period
     market_state::assert_in_trading_or_pre_trading(state);
-    assert!(amount > 0, EZERO_AMOUNT);
+    assert!(amount > 0, EZeroAmount);
 
-    assert!(market_state::market_id(state) == supply.market_id, EWRONG_MARKET);
+    assert!(market_state::market_id(state) == supply.market_id, EWrongMarket);
     // Update supply
     update_supply(supply, amount, true);
 
@@ -303,20 +315,21 @@ public(package) fun mint(
         outcome: supply.outcome,
         amount,
         recipient,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
 
     // Return token instead of transferring
     token
 }
 
+/// Extract a conditional token from an Option, asserting it exists
 public(package) fun extract(option: &mut Option<ConditionalToken>): ConditionalToken {
-    assert!(option::is_some(option), ENO_TOKEN_FOUND);
-    let token = option::extract(option);
+    assert!(option.is_some(), ENoTokenFound);
+    let token = option.extract();
     token
 }
 
-// === Getters ===
+// === View Functions ===
 
 public fun market_id(token: &ConditionalToken): ID {
     token.market_id
@@ -337,6 +350,8 @@ public fun value(token: &ConditionalToken): u64 {
 public fun total_supply(supply: &Supply): u64 {
     supply.total_supply
 }
+
+// === Test Functions ===
 
 #[test_only]
 /// Creates a ConditionalToken with specified values for testing purposes.
