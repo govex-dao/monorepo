@@ -461,13 +461,13 @@ fun swap_asset_to_stable_internal<AssetType, StableType>(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    assert!(proposal::proposal_id(proposal) == state.market_id(), EMarketIdMismatch);
+    assert!(proposal.proposal_id() == state.market_id(), EMarketIdMismatch);
 
-    assert!(outcome_idx < proposal::outcome_count(proposal), EInvalidOutcome);
-    assert!(proposal::state(proposal) == STATE_TRADING, EInvalidState);
+    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
+    assert!(proposal.state() == STATE_TRADING, EInvalidState);
 
-    let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
-    amm::swap_asset_to_stable(pool, state, amount_in, min_amount_out, clock, ctx)
+    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    pool.swap_asset_to_stable(state, amount_in, min_amount_out, clock, ctx)
 }
 
 fun swap_stable_to_asset_internal<AssetType, StableType>(
@@ -479,10 +479,10 @@ fun swap_stable_to_asset_internal<AssetType, StableType>(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    assert!(proposal::proposal_id(proposal) == state.market_id(), EMarketIdMismatch);
-    assert!(outcome_idx < proposal::outcome_count(proposal), EInvalidOutcome);
-    assert!(proposal::state(proposal) == STATE_TRADING, EInvalidState);
+    assert!(proposal.proposal_id() == state.market_id(), EMarketIdMismatch);
+    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
+    assert!(proposal.state() == STATE_TRADING, EInvalidState);
 
-    let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
-    amm::swap_stable_to_asset(pool, state, amount_in, min_amount_out, clock, ctx)
+    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    pool.swap_stable_to_asset(state, amount_in, min_amount_out, clock, ctx)
 }

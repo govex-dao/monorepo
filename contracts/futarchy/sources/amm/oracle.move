@@ -170,11 +170,10 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
 
     let time_to_next_boundary = TWAP_PRICE_CAP_WINDOW - elapsed_in_current_segment;
 
-    let duration_stage1 = if (time_to_next_boundary < time_since_last_update) { 
-        time_to_next_boundary 
-    } else { 
-        time_since_last_update 
-    };
+    let duration_stage1 = std::u64::min(
+        time_to_next_boundary, // Limit by the time until the next window boundary
+        time_since_last_update, // Limit by the total time available until the target timestamp
+    );
 
     if (duration_stage1 > 0) {
         let end_timestamp_stage1 = oracle.last_timestamp + duration_stage1;
