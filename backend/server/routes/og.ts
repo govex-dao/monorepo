@@ -21,6 +21,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
     const dao = await prisma.dao.findUnique({
       where: { dao_id: daoId },
       select: {
+        dao_id: true,
         dao_name: true,
         description: true,
         icon_url: true,
@@ -36,12 +37,11 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
         }
       }
     });
-
     if (!dao) {
       res.status(404).json({ error: 'DAO not found' });
       return;
     }
-    
+
     // ONLY use cached image - no fallback to external URLs
     let daoImage = null;
     if (dao.icon_cache_large) {
@@ -75,10 +75,46 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
   }
 });
 
-router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response): Promise<void> => {
+// Generate proposal image from query parameters
+router.get('/proposal-image', async (req: Request, res: Response) => {
+  try {
+    const {
+      title, daoName, daoLogo, currentState,
+      winningOutcome, outcomeMessages, traders, trades,
+      tradingStartDate, tradingPeriodMs
+    } = req.query;
+
+    const svg = await generateProposalOG({
+      title: title as string,
+      daoName: daoName as string,
+      daoLogo: daoLogo as string || "placeholder",
+      currentState: Number(currentState) || 0,
+      winningOutcome: Number(winningOutcome) || 0,
+      outcomeMessages: outcomeMessages ? JSON.parse(outcomeMessages as string) : undefined,
+      traders: Number(traders) || 0,
+      trades: Number(trades) || 0,
+      tradingStartDate: new Date(tradingStartDate as string),
+      tradingPeriodMs: Number(tradingPeriodMs) || 0
+    });
+
+    const png = renderSvgToPng(svg, {
+      dpi: 300,
+      shapeRendering: 1,
+      textRendering: 1,
+      imageRendering: 1,
+    });
+    sendPngResponse(res, png);
+  } catch (error) {
+    sendErrorResponse(res, error, 'Error generating proposal OG image');
+  }
+});
+
+// Get proposal data or image by ID
+router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response) => {
   try {
     const { propId } = req.params;
-    
+    const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
+
     // Validate input
     if (!validateId(propId)) {
       res.status(400).json({ error: 'Invalid proposal ID format' });
@@ -86,10 +122,11 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     }
 
     const proposal = await prisma.proposal.findUnique({
-      where: { proposal_id: propId },
+      where: { market_state_id: propId },
       select: {
         proposal_id: true,
         title: true,
+        details: true,
         created_at: true,
         current_state: true,
         outcome_messages: true,
@@ -159,7 +196,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
   }
 });
 
-router.get('/general', async (req: Request, res: Response): Promise<void> => {
+// Generate general OG image
+router.get('/general', async (_req: Request, res: Response) => {
   try {
     const svg = await generateGeneralOG();
     const resvg = new Resvg(svg);
@@ -168,7 +206,6 @@ router.get('/general', async (req: Request, res: Response): Promise<void> => {
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=604800'); // Cache for 7 days since it's static
     res.send(png);
-
   } catch (error) {
     logSecurityError('generateGeneralOG', error);
     res.status(500).json({ error: 'Failed to generate image' });

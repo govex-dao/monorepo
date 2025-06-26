@@ -1,10 +1,12 @@
 # Backend Service Configuration
 [phases.setup]
 nixPkgs = ["nodejs_18", "pnpm", "sqlite"]
+aptPkgs = ["fonts-liberation", "fontconfig", "fonts-dejavu-core", "fonts-noto"]
 
 [phases.install]
 dependsOn = ["setup"]
 cmds = [
+    "fc-cache -fv",
     "cd backend && pnpm install"
 ]
 
