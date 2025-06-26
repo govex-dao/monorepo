@@ -101,12 +101,12 @@ public(package) fun new_supply(
     ctx: &mut TxContext,
 ): Supply {
     // Verify authority and market state
-    market_state::validate_outcome(state, (outcome as u64));
+    state.validate_outcome((outcome as u64));
     assert!(asset_type <= 1, EInvalidAssetType);
 
     Supply {
         id: object::new(ctx),
-        market_id: market_state::market_id(state),
+        market_id: state.market_id(),
         asset_type,
         outcome,
         total_supply: 0,
@@ -154,7 +154,7 @@ public(package) fun split(
 
     // Emit split event
     event::emit(TokenSplit {
-        original_token_id: object::uid_to_inner(&token.id),
+        original_token_id: token.id.to_inner(),
         new_token_id: object::id(&new_token),
         market_id: token.market_id,
         asset_type: token.asset_type,
@@ -219,7 +219,7 @@ public(package) fun merge_many(
 
     // Emit merge event with all token IDs
     event::emit(TokenMergeMany {
-        base_token_id: object::uid_to_inner(&base_token.id),
+        base_token_id: base_token.id.to_inner(),
         merged_token_ids: token_ids,
         market_id: base_token.market_id,
         asset_type: base_token.asset_type,
@@ -245,8 +245,8 @@ entry fun merge_many_entry(
 
 /// Burn a conditional token and update the supply tracker
 public(package) fun burn(
-    supply: &mut Supply,
     token: ConditionalToken,
+    supply: &mut Supply,
     clock: &Clock,
     ctx: &TxContext,
 ) {
@@ -268,7 +268,7 @@ public(package) fun burn(
 
     // Emit event
     event::emit(TokenBurned {
-        id: object::uid_to_inner(&id), // Convert UID to ID
+        id: id.to_inner(),
         market_id,
         asset_type,
         outcome,
@@ -294,7 +294,7 @@ public(package) fun mint(
     market_state::assert_in_trading_or_pre_trading(state);
     assert!(amount > 0, EZeroAmount);
 
-    assert!(market_state::market_id(state) == supply.market_id, EWrongMarket);
+    assert!(state.market_id() == supply.market_id, EWrongMarket);
     // Update supply
     update_supply(supply, amount, true);
 

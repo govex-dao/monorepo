@@ -1555,7 +1555,7 @@ fun test_supply_tracking_fixed() {
     {
         let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0); // Get mut borrow again
         let token_to_burn = vector::pop_back(&mut tokens); // Take the single token
-        token::burn(asset_supply, token_to_burn, &clock, &mut ctx); // Burn it
+        token_to_burn.burn(asset_supply,  &clock, &mut ctx); // Burn it
 
         // Check supply after burning (re-borrow needed if burn didn't extend borrow)
         let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0); // Re-borrow mutably

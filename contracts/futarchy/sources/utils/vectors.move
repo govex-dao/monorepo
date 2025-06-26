@@ -24,12 +24,12 @@ public fun check_valid_outcomes(outcome: vector<String>, max_length: u64): bool 
         if (string_length == 0 || string_length > max_length) {
             return false
         };
-        if (vec_set::contains(&seen, current_string_ref)) {
+        if (seen.contains(current_string_ref)) {
             return false
         };
 
         // Add to our set of seen strings
-        vec_set::insert(&mut seen, *current_string_ref);
+        seen.insert(*current_string_ref);
         i = i + 1;
     };
 

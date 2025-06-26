@@ -5,12 +5,11 @@ module futarchy::swap;
 
 // === Imports ===
 use futarchy::{
-    amm,
-    coin_escrow::{Self, TokenEscrow},
-    conditional_token::{Self as token, ConditionalToken},
+    coin_escrow::TokenEscrow,
+    conditional_token::ConditionalToken,
     liquidity_interact,
     market_state::MarketState,
-    proposal::{Self, Proposal}
+    proposal::Proposal
 };
 use sui::{
     clock::Clock,
@@ -39,7 +38,7 @@ public fun swap_asset_to_stable<AssetType, StableType>(
     ctx: &mut TxContext,
 ): ConditionalToken {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
     let amount_in = token_to_swap.value();
@@ -47,7 +46,7 @@ public fun swap_asset_to_stable<AssetType, StableType>(
     // Calculate the swap amount using AMM
     let amount_out = swap_asset_to_stable_internal(
         proposal,
-        coin_escrow::get_market_state(escrow),
+        escrow.get_market_state(),
         outcome_idx,
         amount_in,
         min_amount_out,
@@ -56,8 +55,7 @@ public fun swap_asset_to_stable<AssetType, StableType>(
     );
 
     // Handle token swap atomically in escrow - tokens will be minted directly to sender
-    let stable_token = coin_escrow::swap_token_asset_to_stable(
-        escrow,
+    let stable_token = escrow.swap_token_asset_to_stable(
         token_to_swap,
         outcome_idx,
         amount_out,
@@ -102,7 +100,7 @@ public fun swap_stable_to_asset<AssetType, StableType>(
     ctx: &mut TxContext,
 ): ConditionalToken {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
     let amount_in = token_to_swap.value();
@@ -110,7 +108,7 @@ public fun swap_stable_to_asset<AssetType, StableType>(
     // Calculate the swap amount using AMM
     let amount_out = swap_stable_to_asset_internal(
         proposal,
-        coin_escrow::get_market_state(escrow),
+        escrow.get_market_state(),
         outcome_idx,
         amount_in,
         min_amount_out,
@@ -119,8 +117,7 @@ public fun swap_stable_to_asset<AssetType, StableType>(
     );
 
     // Handle token swap atomically in escrow - tokens will be minted directly to sender
-    let asset_token = coin_escrow::swap_token_stable_to_asset(
-        escrow,
+    let asset_token = escrow.swap_token_stable_to_asset(
         token_to_swap,
         outcome_idx,
         amount_out,
@@ -167,10 +164,10 @@ public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
-    let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
+    let mut tokens = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
     let mut swap_token = tokens.remove(outcome_idx);
@@ -179,14 +176,14 @@ public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     assert!(existing_token.outcome() == (outcome_idx as u8), EWrongOutcome);
     assert!(existing_token.asset_type() == 1, EWrongTokenType);
     assert!(
-        existing_token.market_id() == coin_escrow::get_market_state(escrow).market_id(),
+        existing_token.market_id() == escrow.get_market_state().market_id(),
         EMarketIdMismatch,
     );
 
     assert!(swap_token.outcome() == (outcome_idx as u8), EWrongOutcome);
     let mut existing_token_in_vector = vector[];
     existing_token_in_vector.push_back(existing_token);
-    token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
+    swap_token.merge_many(existing_token_in_vector, clock, ctx);
 
     // Swap the selected token
     let asset_token = swap_stable_to_asset(
@@ -249,10 +246,10 @@ public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
-    let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
+    let mut tokens = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
     let mut swap_token = tokens.remove(outcome_idx);
@@ -260,14 +257,14 @@ public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     assert!(existing_token.outcome() == (outcome_idx as u8), EWrongOutcome);
     assert!(existing_token.asset_type() == 0, EWrongTokenType);
     assert!(
-        existing_token.market_id() == coin_escrow::get_market_state(escrow).market_id(),
+        existing_token.market_id() == escrow.get_market_state().market_id(),
         EMarketIdMismatch,
     );
 
     assert!(swap_token.outcome() == (outcome_idx as u8), EWrongOutcome);
     let mut existing_token_in_vector = vector[];
     existing_token_in_vector.push_back(existing_token);
-    token::merge_many(&mut swap_token, existing_token_in_vector, clock, ctx);
+    swap_token.merge_many(existing_token_in_vector, clock, ctx);
 
     // Swap the selected token
     let stable_token = swap_asset_to_stable(
@@ -329,10 +326,10 @@ public fun create_and_swap_asset_to_stable<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
-    let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
+    let mut tokens = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
     let token_to_swap = tokens.remove(outcome_idx);
@@ -395,10 +392,10 @@ public fun create_and_swap_stable_to_asset<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
     assert!(
-        proposal::market_state_id(proposal) == coin_escrow::get_market_state_id(escrow),
+        proposal.market_state_id() == escrow.get_market_state_id(),
         EMarketIdMismatch,
     );
-    let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
+    let mut tokens = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
     let token_to_swap = tokens.remove(outcome_idx);

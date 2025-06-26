@@ -5,9 +5,11 @@ module futarchy::oracle;
 
 // === Imports ===
 use futarchy::math;
-use std::{u128, u64};
-use sui::{clock::Clock, event};
-#[test_only] 
+use std::u128;
+use std::u64;
+use sui::clock::Clock;
+use sui::event;
+#[test_only]
 use std::debug;
 
 // === Constants ===
@@ -74,7 +76,7 @@ public(package) fun new_oracle(
     assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, ENoneFullWindowTwapDelay);
 
     Oracle {
-        id: object::new(ctx), // Create a unique ID for the oracle
+        id: object::new(ctx),
         last_price: twap_initialization_price,
         last_timestamp: 0, // set to current time when trading starts
         total_cumulative_price: 0,
@@ -102,8 +104,8 @@ fun one_step_cap_price_change(twap_base: u128, new_price: u128, twap_cap_step: u
 // Called before swaps, LP events and before reading TWAP
 public(package) fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
     // Sanity time checks
-    assert!(option::is_some(&oracle.market_start_time), EMarketNotStarted);
-    let market_start_time_val = *option::borrow(&oracle.market_start_time);
+    assert!(oracle.market_start_time.is_some(), EMarketNotStarted);
+    let market_start_time_val = *oracle.market_start_time.borrow();
     assert!(timestamp >= oracle.last_timestamp, ETimestampRegression);
 
     let delay_threshold = market_start_time_val + oracle.twap_start_delay;
@@ -418,8 +420,8 @@ fun multi_full_window_accumulation(
 }
 
 public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
-    assert!(option::is_some(&oracle.market_start_time), EMarketNotStarted);
-    let market_start_time_val = *option::borrow(&oracle.market_start_time);
+    assert!(oracle.market_start_time.is_some(), EMarketNotStarted);
+    let market_start_time_val = *oracle.market_start_time.borrow();
     let current_time = clock.timestamp_ms();
 
     // TWAP is only allowed to be read in the same instance, after a write has occured
@@ -444,7 +446,7 @@ public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
 
 public(package) fun set_oracle_start_time(oracle: &mut Oracle, market_start_time_param: u64) {
     // Prevent re-initialization
-    assert!(option::is_none(&oracle.market_start_time), EMarketAlreadyStarted);
+    assert!(oracle.market_start_time.is_none(), EMarketAlreadyStarted);
 
     oracle.market_start_time = option::some(market_start_time_param);
     oracle.last_window_end = market_start_time_param;
@@ -465,11 +467,11 @@ public fun config(oracle: &Oracle): (u64, u64) {
 }
 
 public fun market_start_time(oracle: &Oracle): Option<u64> {
-    oracle.market_start_time // Access through config
+    oracle.market_start_time
 }
 
 public fun twap_initialization_price(oracle: &Oracle): u128 {
-    oracle.twap_initialization_price // Access through config
+    oracle.twap_initialization_price
 }
 
 public fun total_cumulative_price(oracle: &Oracle): u256 {

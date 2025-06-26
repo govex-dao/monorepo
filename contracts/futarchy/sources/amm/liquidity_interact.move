@@ -3,16 +3,12 @@ module futarchy::liquidity_interact;
 // === Introduction ===
 // Methods to interact with AMM liquidity and escrow balances
 
-use futarchy::amm;
-use futarchy::coin_escrow::{Self, TokenEscrow};
-use futarchy::conditional_token::{Self as token, ConditionalToken};
-use futarchy::fee::{Self, FeeManager};
-use futarchy::market_state;
-use futarchy::proposal::{Self, Proposal};
-use sui::balance::Balance;
-use sui::clock::Clock;
-use sui::coin::{Self, Coin};
-use sui::event;
+// === Imports ===
+use futarchy::coin_escrow::{TokenEscrow};
+use futarchy::conditional_token::{ConditionalToken};
+use futarchy::fee::{FeeManager};
+use futarchy::proposal::{Proposal};
+use sui::{balance::Balance, clock::Clock, coin::{Self, Coin}, event};
 
 // === Errors ===
 const EInvalidOutcome: u64 = 0;
@@ -37,25 +33,24 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     outcome_idx: u64,
     ctx: &mut TxContext,
 ) {
-    assert!(outcome_idx < proposal::outcome_count(proposal), EInvalidOutcome);
-    assert!(proposal::is_finalized(proposal), EInvalidState);
-    assert!(ctx.sender() == proposal::proposer(proposal), EInvalidLiquidityTransfer);
-    assert!(outcome_idx == proposal::get_winning_outcome(proposal), EWrongOutcome);
+    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
+    assert!(proposal.is_finalized(), EInvalidState);
+    assert!(ctx.sender() == proposal.proposer(), EInvalidLiquidityTransfer);
+    assert!(outcome_idx == proposal.get_winning_outcome(), EWrongOutcome);
 
     // Validate that proposal and escrow belong to the same market
-    let market_id = proposal::market_state_id(proposal);
-    let escrow_market_id = coin_escrow::get_market_state_id(escrow);
+    let market_id = proposal.market_state_id();
+    let escrow_market_id = escrow.get_market_state_id();
     assert!(market_id == escrow_market_id, EMarketIdMismatch);
 
-    let market_state = coin_escrow::get_market_state(escrow);
-    market_state::assert_market_finalized(market_state);
+    let market_state = escrow.get_market_state();
+    market_state.assert_market_finalized();
 
-    let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
-    let (asset_out, stable_out) = amm::empty_all_amm_liquidity(pool, ctx);
+    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
 
     // Call remove_liquidity and capture the returned coins
-    let (asset_coin_out, stable_coin_out) = coin_escrow::remove_liquidity(
-        escrow,
+    let (asset_coin_out, stable_coin_out) = escrow.remove_liquidity(
         asset_out,
         stable_out,
         ctx,
@@ -72,24 +67,23 @@ public fun assert_all_reserves_consistency<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
 ) {
     // Get outcome count
-    let outcome_count = proposal::outcome_count(proposal);
+    let outcome_count = proposal.outcome_count();
 
     // Get escrow balances
-    let (escrow_asset, escrow_stable) = coin_escrow::get_balances(escrow);
+    let (escrow_asset, escrow_stable) = escrow.get_balances();
 
     // Check each outcome
     let mut i = 0;
     while (i < outcome_count) {
         // Get pool for this outcome
-        let pool = &proposal::get_amm_pools(proposal)[i];
+        let pool = &proposal.get_amm_pools()[i];
 
         // Get reserves and fees
-        let (amm_asset, amm_stable) = amm::get_reserves(pool);
-        let protocol_fees = amm::get_protocol_fees(pool);
+        let (amm_asset, amm_stable) = pool.get_reserves();
+        let protocol_fees = pool.get_protocol_fees();
 
         // Get token supplies
-        let (_, _, asset_supply, stable_supply) = coin_escrow::get_escrow_balances_and_supply(
-            escrow,
+        let (_, _, asset_supply, stable_supply) = escrow.get_escrow_balances_and_supply(
             i,
         );
 
@@ -109,21 +103,20 @@ public fun assert_winning_reserves_consistency<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     escrow: &TokenEscrow<AssetType, StableType>,
 ) {
-    let winning_outcome = proposal::get_winning_outcome(proposal);
+    let winning_outcome = proposal.get_winning_outcome();
 
     // Get escrow balances
-    let (escrow_asset, escrow_stable) = coin_escrow::get_balances(escrow);
+    let (escrow_asset, escrow_stable) = escrow.get_balances();
 
     // Get pool for this outcome
-    let pool = &proposal::get_amm_pools(proposal)[winning_outcome];
+    let pool = &proposal.get_amm_pools()[winning_outcome];
 
     // Get reserves and fees
-    let (amm_asset, amm_stable) = amm::get_reserves(pool);
-    let protocol_fees = amm::get_protocol_fees(pool);
+    let (amm_asset, amm_stable) = pool.get_reserves();
+    let protocol_fees = pool.get_protocol_fees();
 
     // Get token supplies
-    let (_, _, asset_supply, stable_supply) = coin_escrow::get_escrow_balances_and_supply(
-        escrow,
+    let (_, _, asset_supply, stable_supply) = escrow.get_escrow_balances_and_supply(
         winning_outcome,
     );
 
@@ -141,7 +134,7 @@ public entry fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let balance_out = coin_escrow::redeem_winning_tokens_stable(escrow, token, clock, ctx);
+    let balance_out = escrow.redeem_winning_tokens_stable(token, clock, ctx);
 
     assert_winning_reserves_consistency(proposal, escrow);
 
@@ -157,7 +150,7 @@ public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut tokens_out = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
+    let mut tokens_out = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
@@ -178,7 +171,7 @@ public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut tokens_out = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
+    let mut tokens_out = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
@@ -200,7 +193,7 @@ public entry fun redeem_complete_set_asset_entry<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Call the underlying package function from coin_escrow
-    let balance_out = coin_escrow::redeem_complete_set_asset(escrow, tokens, clock, ctx);
+    let balance_out = escrow.redeem_complete_set_asset(tokens, clock, ctx);
 
     // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
@@ -218,7 +211,7 @@ public entry fun redeem_complete_set_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let balance_out = coin_escrow::redeem_complete_set_stable(escrow, tokens, clock, ctx);
+    let balance_out = escrow.redeem_complete_set_stable(tokens, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
@@ -234,7 +227,7 @@ public entry fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let balance_out = coin_escrow::redeem_winning_tokens_asset(escrow, token, clock, ctx);
+    let balance_out = escrow.redeem_winning_tokens_asset(token, clock, ctx);
 
     // Pass ctx only if the assert function requires it
     assert_winning_reserves_consistency(proposal, escrow);
@@ -252,12 +245,12 @@ public fun redeem_winning_tokens_stable<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): Balance<StableType> {
     // Pre-checks using proposal state
-    assert!(proposal::is_finalized(proposal), EInvalidState);
-    let winning_outcome = proposal::get_winning_outcome(proposal);
-    assert!(token::outcome(&token) == (winning_outcome as u8), EWrongOutcome);
+    assert!(proposal.is_finalized(), EInvalidState);
+    let winning_outcome = proposal.get_winning_outcome();
+    assert!(token.outcome() == (winning_outcome as u8), EWrongOutcome);
 
     // Call the core logic in coin_escrow
-    let balance_out = coin_escrow::redeem_winning_tokens_stable(escrow, token, clock, ctx);
+    let balance_out = escrow.redeem_winning_tokens_stable(token, clock, ctx);
 
     assert_winning_reserves_consistency(proposal, escrow);
 
@@ -275,12 +268,12 @@ public fun redeem_winning_tokens_asset<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): Balance<AssetType> {
     // Pre-checks using proposal state
-    assert!(proposal::is_finalized(proposal), EInvalidState);
-    let winning_outcome = proposal::get_winning_outcome(proposal);
-    assert!(token::outcome(&token) == (winning_outcome as u8), EWrongOutcome);
+    assert!(proposal.is_finalized(), EInvalidState);
+    let winning_outcome = proposal.get_winning_outcome();
+    assert!(token.outcome() == (winning_outcome as u8), EWrongOutcome);
 
     // Call the core logic in coin_escrow
-    let balance_out = coin_escrow::redeem_winning_tokens_asset(escrow, token, clock, ctx);
+    let balance_out = escrow.redeem_winning_tokens_asset(token, clock, ctx);
 
     assert_winning_reserves_consistency(proposal, escrow);
 
@@ -298,10 +291,10 @@ public fun mint_complete_set_asset<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): vector<ConditionalToken> {
     // Optional pre-checks using proposal state
-    assert!(!proposal::is_finalized(proposal), EInvalidState);
+    assert!(!proposal.is_finalized(), EInvalidState);
 
     // Call the core logic in coin_escrow
-    let tokens_out = coin_escrow::mint_complete_set_asset(escrow, coin_in, clock, ctx);
+    let tokens_out = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
@@ -319,10 +312,10 @@ public fun mint_complete_set_stable<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): vector<ConditionalToken> {
     // Optional pre-checks using proposal state
-    assert!(!proposal::is_finalized(proposal), EInvalidState);
+    assert!(!proposal.is_finalized(), EInvalidState);
 
     // Call the core logic in coin_escrow
-    let tokens_out = coin_escrow::mint_complete_set_stable(escrow, coin_in, clock, ctx);
+    let tokens_out = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
@@ -340,10 +333,10 @@ public fun redeem_complete_set_asset<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): Balance<AssetType> {
     // Optional pre-checks using proposal state
-    assert!(!proposal::is_finalized(proposal), EInvalidState);
+    assert!(!proposal.is_finalized(), EInvalidState);
 
     // Call the core logic in coin_escrow
-    let balance_out = coin_escrow::redeem_complete_set_asset(escrow, tokens, clock, ctx);
+    let balance_out = escrow.redeem_complete_set_asset(tokens, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
@@ -361,10 +354,10 @@ public fun redeem_complete_set_stable<AssetType, StableType>(
     ctx: &mut TxContext, // Still needed for coin_escrow call
 ): Balance<StableType> {
     // Optional pre-checks using proposal state
-    assert!(!proposal::is_finalized(proposal), EInvalidState);
+    assert!(!proposal.is_finalized(), EInvalidState);
 
     // Call the core logic in coin_escrow
-    let balance_out = coin_escrow::redeem_complete_set_stable(escrow, tokens, clock, ctx);
+    let balance_out = escrow.redeem_complete_set_stable(tokens, clock, ctx);
 
     // Assert consistency AFTER the operation
     assert_all_reserves_consistency(proposal, escrow);
@@ -382,12 +375,11 @@ public entry fun burn_unused_tokens_entry<AssetType, StableType>(
 ) {
     // 1. Pre-check: Ensure the proposal (and thus market) is finalized
     // This aligns with the check inside coin_escrow::burn_unused_tokens
-    assert!(proposal::is_finalized(proposal), EInvalidState);
+    assert!(proposal.is_finalized(), EInvalidState);
 
     // 2. Call the package-private burn function in coin_escrow
     // This function will handle all individual token checks and burning.
-    coin_escrow::burn_unused_tokens(
-        escrow,
+    escrow.burn_unused_tokens(
         tokens_to_burn, // The vector is consumed here
         clock,
         ctx,
@@ -407,33 +399,31 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
     clock: &Clock,
 ) {
     // Can only collect fees if the proposal is finalized
-    assert!(proposal::is_finalized(proposal), EInvalidState);
-    assert!(proposal::is_winning_outcome_set(proposal), EInvalidState);
+    assert!(proposal.is_finalized(), EInvalidState);
+    assert!(proposal.is_winning_outcome_set(), EInvalidState);
 
     assert!(
-        coin_escrow::get_market_state_id(escrow) == proposal::market_state_id(proposal),
+        escrow.get_market_state_id() == proposal.market_state_id(),
         EInvalidState,
     );
 
-    let winning_outcome = proposal::get_winning_outcome(proposal);
-    let winning_pool = proposal::get_pool_mut_by_outcome(proposal, (winning_outcome as u8));
-    let protocol_fee_amount = amm::get_protocol_fees(winning_pool);
+    let winning_outcome = proposal.get_winning_outcome();
+    let winning_pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    let protocol_fee_amount = winning_pool.get_protocol_fees();
 
     if (protocol_fee_amount > 0) {
         // Reset fees in the pool
-        amm::reset_protocol_fees(winning_pool);
+        winning_pool.reset_protocol_fees();
 
         // Extract the fees from escrow
-        let fee_balance = coin_escrow::extract_stable_fees<AssetType, StableType>(
-            escrow,
+        let fee_balance = escrow.extract_stable_fees<AssetType, StableType>(
             protocol_fee_amount,
         );
 
         // Deposit to fee manager
-        fee::deposit_stable_fees<StableType>(
-            fee_manager,
+        fee_manager.deposit_stable_fees<StableType>(
             fee_balance,
-            proposal::get_id(proposal),
+            proposal.get_id(),
             clock,
         );
 
@@ -441,7 +431,7 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
 
         // Emit event
         event::emit(ProtocolFeesCollected {
-            proposal_id: proposal::get_id(proposal),
+            proposal_id: proposal.get_id(),
             winning_outcome,
             fee_amount: protocol_fee_amount,
             timestamp_ms: clock.timestamp_ms(),
@@ -453,12 +443,12 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
 public(package) fun get_liquidity_for_proposal<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): vector<u64> {
-    let pools = proposal::get_amm_pools(proposal);
+    let pools = proposal.get_amm_pools();
     let mut liquidity = vector[];
     let mut i = 0;
     while (i < pools.length()) {
         let pool = &pools[i];
-        let (asset, stable) = amm::get_reserves(pool);
+        let (asset, stable) = pool.get_reserves();
         liquidity.push_back(asset);
         liquidity.push_back(stable);
         i = i + 1;

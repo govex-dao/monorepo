@@ -9,13 +9,13 @@ use std::string::String;
 use std::type_name;
 
 use sui::{
-    balance::{Balance},
-    clock::{Clock},
+    balance::Balance,
+    clock::Clock,
     event
 };
 
 use futarchy::{
-    amm::{LiquidityPool},
+    amm::LiquidityPool,
     coin_escrow,
     liquidity_initialize,
     market_state,
@@ -261,8 +261,8 @@ public(package) fun create<AssetType, StableType>(
         market_state_id,
         asset_value,
         stable_value,
-        asset_type: type_name::into_string(type_name::get<AssetType>()),
-        stable_type: type_name::into_string(type_name::get<StableType>()),
+        asset_type: type_name::get<AssetType>().into_string(),
+        stable_type: type_name::get<StableType>().into_string(),
         review_period_ms,
         trading_period_ms,
         title,
