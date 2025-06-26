@@ -14,7 +14,7 @@ const formatNumber = (() => {
     const absNum = Math.abs(num);
     const isNegative = num < 0;
     let result: string;
-    
+
     if (absNum < 0.000001) {
       result = num.toExponential(2);
     } else if (absNum >= 1000000) {
@@ -35,7 +35,7 @@ const formatNumber = (() => {
       const decimalPlaces = Math.min(6, leadingZeros + 3);
       result = absNum.toFixed(decimalPlaces).replace(/\.?0+$/, "");
     }
-    
+
     if (isNegative) result = "-" + result;
 
     memo.set(num, result);
@@ -92,7 +92,10 @@ export function TableRow({
           {event.is_buy ? "Buy" : "Sell"}
         </span>
       </td>
-      <td className={cellClass + " text-center min-w-[180px] sm:min-w-[200px]"} role="cell">
+      <td
+        className={cellClass + " text-center min-w-[180px] sm:min-w-[200px]"}
+        role="cell"
+      >
         <span
           className={`${badgeClass} ${outcomeColor.bg} ${outcomeColor.text} ${outcomeColor.border} whitespace-nowrap`}
         >
@@ -107,12 +110,17 @@ export function TableRow({
         <span className={unitClass}>{stableSymbol}</span>
       </td>
       <td className={`${cellClass} text-center text-gray-200`} role="cell">
-        <span 
+        <span
           className={`${valueClass} ${
-            event.impact > 0 ? "text-green-400" : event.impact < 0 ? "text-red-400" : ""
+            event.impact > 0
+              ? "text-green-400"
+              : event.impact < 0
+                ? "text-red-400"
+                : ""
           }`}
         >
-          {event.impact > 0 ? "+" : ""}{formatNumber(event.impact)}%
+          {event.impact > 0 ? "+" : ""}
+          {formatNumber(event.impact)}%
         </span>
       </td>
       <td className={rightAlignedCellClass + " flex flex-row"} role="cell">

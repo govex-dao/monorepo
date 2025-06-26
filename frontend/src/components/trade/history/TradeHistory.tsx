@@ -3,7 +3,10 @@ import { useCurrentAccount } from "@mysten/dapp-kit";
 import { getOutcomeColor } from "@/utils/outcomeColors";
 import { TableRow } from "./TableRow";
 import { SortConfig, SortField, TableHeader } from "./TableHeader";
-import { calculateAmountInAsset, calculateVolumeInUSDC } from "./tradeCalculations";
+import {
+  calculateAmountInAsset,
+  calculateVolumeInUSDC,
+} from "./tradeCalculations";
 import { Flex } from "@radix-ui/themes";
 
 interface SwapEvent {

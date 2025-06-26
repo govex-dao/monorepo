@@ -60,9 +60,11 @@ export const ProposalContent: React.FC<ProposalContentProps> = ({
     // Set default content for each outcome
     outcomes.forEach((outcome) => {
       if (outcome === "Reject") {
-        newSections.outcomes["Reject"] = DEFAULT_PROPOSAL_SECTIONS.outcomes["Reject"];
+        newSections.outcomes["Reject"] =
+          DEFAULT_PROPOSAL_SECTIONS.outcomes["Reject"];
       } else if (outcomes.length === 2 && outcome === "Accept") {
-        newSections.outcomes["Accept"] = DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"];
+        newSections.outcomes["Accept"] =
+          DEFAULT_PROPOSAL_SECTIONS.outcomes["Accept"];
       } else {
         newSections.outcomes[outcome] = "";
       }
