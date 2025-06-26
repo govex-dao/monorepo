@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "@/constants";
 import { useState, useEffect } from "react";
 import { Theme } from "@radix-ui/themes";
-import { SEOMetadata } from "@/components/SEOMetadata";
+import { Helmet } from "react-helmet-async";
 import MarketPriceChart from "../components/trade/MarketPriceChart.tsx";
 import TradeForm from "../components/trade/TradeForm.tsx";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon.tsx";
@@ -15,6 +15,7 @@ import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalStateManager from "@/components/trade/ProposalStateManager";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
 import { getOutcomeColors } from "@/utils/outcomeColors.ts";
+import { ProposalStatus } from "@/components/ProposalStatus.tsx";
 
 interface StateHistory {
   id: number;
@@ -100,7 +101,7 @@ interface ApiProposal {
 
 // Define the custom hook outside of the component.
 const useWindowWidth = () => {
-  const [width, setWidth] = useState<number>(window.innerWidth);
+  const [width, setWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 1200);
 
   useEffect(() => {
     const handleResize = () => setWidth(window.innerWidth);
@@ -160,10 +161,14 @@ export function ProposalView() {
 
 
 
+
   // Early returns (all hooks have already been called).
   if (isLoading) {
     return (
       <div className="w-full p-6 text-center text-gray-400">
+        <Helmet>
+          <title>Loading proposal...</title>
+        </Helmet>
         Loading proposal...
       </div>
     );
@@ -172,6 +177,9 @@ export function ProposalView() {
   if (error) {
     return (
       <div className="w-full p-6 text-center text-red-400">
+        <Helmet>
+          <title>Govex</title>
+        </Helmet>
         Error loading proposal: {error.message}
       </div>
     );
@@ -194,19 +202,13 @@ export function ProposalView() {
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
-      <SEOMetadata
-        proposal={proposal ? {
-          id: proposal.proposal_id,
-          title: proposal.title,
-          details: proposal.details,
-          daoName: proposal.dao_name,
-          daoId: proposal.dao_id,
-          currentState: proposal.current_state,
-          createdAt: proposal.created_at,
-          outcomeMessages: proposal.outcome_messages,
-          winningOutcome: proposal.winning_outcome ? proposal.outcome_messages[Number(proposal.winning_outcome)] : undefined
-        } : undefined}
-      />
+      <Helmet>
+        <title>
+          {proposal
+            ? `${proposal.title} - ${proposal.dao_name}`
+            : "Proposal View - Govex"}
+        </title>
+      </Helmet>
       <h1 className="text-3xl font-bold mt-4 pr-6 pl-7 flex flex-row flex-wrap items-center gap-x-1 gap-y-1">
         {/* DAO Name and Icon Link */}
         <Link

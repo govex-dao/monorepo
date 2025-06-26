@@ -34,14 +34,6 @@ export function useAdvanceStateMutation() {
 
       const txb = new Transaction();
       txb.setGasBudget(50000000);
-      console.log(
-        CONSTANTS.futarchyPackage,
-        assetType,
-        stableType,
-        proposalId,
-        escrowId,
-        daoId,
-      );
 
       if (proposalState === 0 || proposalState == null) {
         txb.moveCall({

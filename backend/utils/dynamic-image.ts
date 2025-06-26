@@ -271,12 +271,12 @@ export function createInfoCard({
   <circle cx="40" cy="45" r="8" fill="${color}">
     <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
   </circle>
-  <text x="70" y="52" font-family="Roboto, sans-serif" font-size="20" fill="${color}" font-weight="600" letter-spacing="0.1em">${title}</text>
+  <text x="70" y="52" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="${color}" font-weight="600" letter-spacing="0.1em">${title}</text>
   ` : `
-  <text x="30" y="45" font-family="Roboto, sans-serif" font-size="20" fill="${COLORS.text.tertiary}" font-weight="500" letter-spacing="0.1em">${title}</text>
+  <text x="30" y="45" font-family="Arial, Helvetica, sans-serif" font-size="20" fill="${COLORS.text.tertiary}" font-weight="500" letter-spacing="0.1em">${title}</text>
   `}
-  <text x="30" y="100" font-family="Roboto, sans-serif" font-size="${value.length > 8 ? '36' : '48'}" font-weight="700" fill="${color}" letter-spacing="-0.01em">${value}</text>
-  <text x="30" y="130" font-family="Roboto, sans-serif" font-size="16" fill="${COLORS.text.quaternary}" opacity="0.8">${subtitle}</text>
+  <text x="30" y="100" font-family="Arial, Helvetica, sans-serif" font-size="${value.length > 8 ? '36' : '48'}" font-weight="700" fill="${color}" letter-spacing="-0.01em">${value}</text>
+  <text x="30" y="130" font-family="Arial, Helvetica, sans-serif" font-size="16" fill="${COLORS.text.quaternary}" opacity="0.8">${subtitle}</text>
 </g>`;
 }
 
@@ -357,16 +357,16 @@ export function createVerifiedBadge(isVerified: boolean): string {
   if (!isVerified) return '';
 
   return `
-<!-- Verified Badge - Top Right -->
-<g transform="translate(${OG_IMAGE_DIMENSIONS.width - 280}, 40)">
+<!-- Verified Badge - Below "Powered by Govex" -->
+<g transform="translate(${OG_IMAGE_DIMENSIONS.width - 280}, 100)">
   <rect x="0" y="0" width="220" height="50" rx="25" fill="url(#verifiedBg)" stroke="${COLORS.accent.blueDark}" stroke-width="2" filter="url(#cardShadow)"/>
-  <text x="110" y="32" font-family="Roboto, sans-serif" font-size="20" font-weight="700" fill="${COLORS.accent.blue}" text-anchor="middle">✓ VERIFIED DAO</text>
+  <text x="110" y="32" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="${COLORS.accent.blue}" text-anchor="middle">✓ VERIFIED DAO</text>
 </g>`;
 }
 
 export function createBranding(): string {
   return `
-<text x="${OG_IMAGE_DIMENSIONS.width - 290}" y="${OG_IMAGE_DIMENSIONS.height - 30}" font-family="Roboto, sans-serif" font-size="30" fill="${COLORS.text.quaternary}" opacity="1">Powered by Govex</text>`;
+<text x="${OG_IMAGE_DIMENSIONS.width - 300}" y="60" font-family="Arial, Helvetica, sans-serif" font-size="30" fill="${COLORS.text.quaternary}" opacity="1">Powered by Govex</text>`;
 }
 
 // Main DAO SVG Generator
@@ -472,7 +472,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   <rect x="3" y="3" width="1130" height="74" rx="17" fill="none" stroke="${borderColor}" stroke-width="1" opacity="0.2"/>
   
   <!-- Status prefix with different styling -->
-  <text x="568" y="25" font-family="Roboto, sans-serif" font-size="16" font-weight="600" fill="${outcomeColor}" text-anchor="middle" letter-spacing="0.1em" opacity="0.8">
+  <text x="568" y="25" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="600" fill="${outcomeColor}" text-anchor="middle" letter-spacing="0.1em" opacity="0.8">
     ${currentState === 2 ? 'PROPOSAL FINALIZED' : 'CURRENTLY WINNING'}
   </text>
   
@@ -586,7 +586,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     <circle cx="990" cy="75" r="10" fill="${COLORS.accent.blue}">
       <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
     </circle>
-    <text x="1030" y="83" font-family="Roboto, sans-serif" font-size="28" fill="${statusInfo.color}" font-weight="600" alignment-baseline="middle" letter-spacing="0.08em">${statusInfo.text}</text>
+    <text x="1030" y="83" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="${statusInfo.color}" font-weight="600" alignment-baseline="middle" letter-spacing="0.08em">${statusInfo.text}</text>
     </g>
     ` : ''}
   
@@ -650,7 +650,7 @@ export async function generateGeneralOG(): Promise<string> {
       <clipPath id="logoClipGeneral">
         <circle cx="0" cy="0" r="68" />
       </clipPath>
-      ${govexLogo ? `<image href="${govexLogo}" x="-68" y="-68" width="136" height="136" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClipGeneral)" />` : `<text x="0" y="15" font-family="Roboto, sans-serif" font-size="68" font-weight="800" fill="${COLORS.accent.blue}" text-anchor="middle" filter="url(#glow)">G</text>`}
+      ${govexLogo ? `<image href="${govexLogo}" x="-68" y="-68" width="136" height="136" preserveAspectRatio="xMidYMid slice" clip-path="url(#logoClipGeneral)" />` : `<text x="0" y="15" font-family="Arial, Helvetica, sans-serif" font-size="68" font-weight="800" fill="${COLORS.accent.blue}" text-anchor="middle" filter="url(#glow)">G</text>`}
       
       <!-- Subtle orbit lines -->
       <circle cx="0" cy="0" r="110" fill="none" stroke="${COLORS.accent.blue}" stroke-width="1" opacity="0.3" stroke-dasharray="4,8"/>
@@ -659,15 +659,15 @@ export async function generateGeneralOG(): Promise<string> {
     <!-- Content section - right aligned -->
     <g transform="translate(320, 60)">
       <!-- Brand name -->
-      <text x="0" y="60" font-family="Roboto, sans-serif" font-size="110" font-weight="800" fill="${COLORS.text.primary}" letter-spacing="-0.02em" filter="url(#glow)">Govex</text>
+      <text x="0" y="60" font-family="Arial, Helvetica, sans-serif" font-size="110" font-weight="800" fill="${COLORS.text.primary}" letter-spacing="-0.02em" filter="url(#glow)">Govex</text>
       
       <!-- Tagline -->
-      <text x="0" y="120" font-family="Roboto, sans-serif" font-size="38" font-weight="500" fill="${COLORS.accent.blue}" letter-spacing="0.04em" opacity="0.9">Futarchy on Sui</text>
+      <text x="0" y="120" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="500" fill="${COLORS.accent.blue}" letter-spacing="0.04em" opacity="0.9">Futarchy on Sui</text>
       
       <!-- Description -->
       <g transform="translate(0, 160)">
         ${descLines.map((line, index) =>
-    `<text x="0" y="${index * (descFontSize + 12)}" font-family="Roboto, sans-serif" font-size="${descFontSize}" font-weight="400" fill="${COLORS.text.secondary}" opacity="0.8" letter-spacing="0.01em">${line}</text>`
+    `<text x="0" y="${index * (descFontSize + 12)}" font-family="Arial, Helvetica, sans-serif" font-size="${descFontSize}" font-weight="400" fill="${COLORS.text.secondary}" opacity="0.8" letter-spacing="0.01em">${line}</text>`
   ).join('')}
       </g>
     </g>
@@ -681,18 +681,18 @@ export async function generateGeneralOG(): Promise<string> {
     
     <!-- Feature items with balanced positioning -->
     <g transform="translate(240, 40)">
-      <text x="0" y="35" font-family="Roboto, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Prediction Markets</text>
-      <text x="0" y="65" font-family="Roboto, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Futarchy governance</text>
+      <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Prediction Markets</text>
+      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Futarchy governance</text>
     </g>
     
     <g transform="translate(${width / 2}, 40)">
-      <text x="0" y="35" font-family="Roboto, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Sui Blockchain</text>
-      <text x="0" y="65" font-family="Roboto, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Fast transactions</text>
+      <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Sui Blockchain</text>
+      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Fast transactions</text>
     </g>
     
     <g transform="translate(960, 40)">
-      <text x="0" y="35" font-family="Roboto, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Multiple Outcomes</text>
-      <text x="0" y="65" font-family="Roboto, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Complex decisions</text>
+      <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Multiple Outcomes</text>
+      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Complex decisions</text>
     </g>
   </g>
   </svg>`;

@@ -10,13 +10,13 @@ import {
   Badge,
   Dialog,
 } from "@radix-ui/themes";
-import { SEOMetadata } from "@/components/SEOMetadata";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { ExplorerLink } from "@/components/ExplorerLink";
 import { VerifiedIcon } from "@/components/icons/VerifiedIcon";
 import CreateProposalForm from "@/components/daos/CreateProposalForm";
 import VerifyDaoForm from "@/components/daos/VerifyDaoForm";
 import { useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { DaoIcon } from "@/components/DaoIcon";
 import { ProposalCard } from "@/components/daos/ProposalCard";
 import { TokenCard } from "@/components/daos/TokenCard";
@@ -217,9 +217,13 @@ export function DaoView() {
     staleTime: 2 * 60 * 1000,
   });
 
+
   if (isLoading) {
     return (
       <Flex justify="center" align="center" className="p-8 h-64 text-gray-300">
+        <Helmet>
+          <title>Loading Dao ...</title>
+        </Helmet>
         <Text size="3">Loading DAO information...</Text>
       </Flex>
     );
@@ -228,6 +232,9 @@ export function DaoView() {
   if (error || !dao) {
     return (
       <Flex justify="center" align="center" className="p-8 h-64">
+        <Helmet>
+          <title>Govex</title>
+        </Helmet>
         <Card className="p-6 bg-red-900/20 border border-red-800/50 text-red-300">
           <Text size="3">Error loading DAO information</Text>
         </Card>
@@ -300,18 +307,16 @@ export function DaoView() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <SEOMetadata
-        dao={dao ? {
-          id: dao.dao_id,
-          name: dao.dao_name,
-          iconUrl: dao.icon_url || dao.icon_cache_path || undefined,
-          verified: dao.verification?.verified,
-          assetSymbol: dao.asset_symbol,
-          stableSymbol: dao.stable_symbol,
-          proposalCount: proposals?.length || 0,
-          timestamp: dao.timestamp
-        } : undefined}
-      />
+      <Helmet>
+        <title>
+          {dao
+            ? (dao.dao_name !== "Govex"
+              ? `${dao.dao_name} - Govex`
+              : dao.dao_name)
+            : "DAO View - Govex"}
+        </title>
+      </Helmet>
+
       {/* Header Section */}
       <div className="relative flex flex-wrap items-end justify-between w-full mt-24">
         <div className="h-48 w-full absolute -z-20 -top-32 rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden" />
