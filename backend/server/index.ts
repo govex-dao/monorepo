@@ -2,7 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import { processAndGetBase64Icon } from '../imageUtils';
 import aiReviewRouter from './routes/ai-review';
-
+import ogRouter from './routes/og';
 
 import { prisma } from '../db';
 import {
@@ -25,6 +25,9 @@ app.use(express.json());
 
 // Mount AI Review routes
 app.use(aiReviewRouter);
+
+// Mount OG routes
+app.use('/og', ogRouter);
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
@@ -542,7 +545,7 @@ app.get('/proposals/:id', async (req, res) => {
               asset_symbol: true,
               stable_symbol: true,
               asset_decimals: true,  
-              stable_decimals: true, 
+              stable_decimals: true,
               verification: {
                 select: {
                   verified: true
