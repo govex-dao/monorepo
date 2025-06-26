@@ -145,11 +145,11 @@ public entry fun create_dao<AssetType, StableType>(
     // Check if StableType is allowed
     let stable_type_str = get_type_string<StableType>();
     assert!(
-        vec_set::contains(&factory.allowed_stable_types, &stable_type_str),
+        factory.allowed_stable_types.contains(&stable_type_str),
         EStableTypeNotAllowed,
     );
 
-    fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
+    fee_manager.deposit_dao_creation_payment(payment, clock, ctx);
 
     let asset_decimals = asset_metadata.get_decimals();
     let stable_decimals = stable_metadata.get_decimals();
@@ -234,7 +234,7 @@ public entry fun request_verification(
 ) {
     assert!(!dao.is_verified(), EAlreadyVerified);
 
-    fee::deposit_verification_payment(fee_manager, payment, clock, ctx);
+    fee_manager.deposit_verification_payment(payment, clock, ctx);
 
     // Generate unique verification ID
     let verification_id = object::new(ctx);
@@ -242,7 +242,7 @@ public entry fun request_verification(
     verification_id.delete();
 
     // Set pending verification state
-    dao::set_pending_verification(dao, attestation_url);
+    dao.set_pending_verification(attestation_url);
 
     // Emit event
     event::emit(VerificationRequested {
@@ -265,7 +265,7 @@ public entry fun verify_dao(
     ctx: &mut TxContext,
 ) {
     // Update verification status with optional new attestation URL
-    dao::set_verification(dao, attestation_url, verified);
+    dao.set_verification(attestation_url, verified);
 
     // Emit verification event
     event::emit(DAOReviewed {
@@ -287,8 +287,8 @@ public entry fun add_allowed_stable_type<StableType>(
     ctx: &mut TxContext,
 ) {
     let type_str = get_type_string<StableType>();
-    if (!vec_set::contains(&factory.allowed_stable_types, &type_str)) {
-        vec_set::insert(&mut factory.allowed_stable_types, type_str);
+    if (!factory.allowed_stable_types.contains(&type_str)) {
+        factory.allowed_stable_types.insert(type_str);
 
         event::emit(StableCoinTypeAdded {
             type_str,
@@ -305,8 +305,8 @@ public entry fun remove_allowed_stable_type<StableType>(
     ctx: &mut TxContext,
 ) {
     let type_str = get_type_string<StableType>();
-    if (vec_set::contains(&factory.allowed_stable_types, &type_str)) {
-        vec_set::remove(&mut factory.allowed_stable_types, &type_str);
+    if (factory.allowed_stable_types.contains(&type_str)) {
+        factory.allowed_stable_types.remove(&type_str);
 
         event::emit(StableCoinTypeRemoved {
             type_str,
@@ -317,7 +317,7 @@ public entry fun remove_allowed_stable_type<StableType>(
 }
 
 public entry fun disable_dao_proposals(dao: &mut dao::DAO, _cap: &FactoryOwnerCap) {
-    dao::disable_proposals(dao);
+    dao.disable_proposals();
 }
 
 public entry fun burn_factory_owner_cap(cap: FactoryOwnerCap) {
@@ -344,7 +344,7 @@ public fun is_paused(factory: &Factory): bool {
 
 public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
     let type_str = get_type_string<StableType>();
-    vec_set::contains(&factory.allowed_stable_types, &type_str)
+    factory.allowed_stable_types.contains(&type_str)
 }
 
 // === Test Functions ===
@@ -379,5 +379,5 @@ public fun create_factory(ctx: &mut TxContext) {
 public fun check_stable_type_allowed<StableType>(factory: &Factory) {
     let type_str = get_type_string<StableType>();
     // Abort with EStableTypeNotAllowed if not allowed.
-    assert!(vec_set::contains(&factory.allowed_stable_types, &type_str), EStableTypeNotAllowed);
+    assert!(factory.allowed_stable_types.contains(&type_str), EStableTypeNotAllowed);
 }

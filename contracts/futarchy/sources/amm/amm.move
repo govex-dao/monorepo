@@ -275,7 +275,7 @@ public(package) fun empty_all_amm_liquidity(
 // === Oracle Functions ===
 // Update new_oracle to be simpler:
 fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
-    oracle::write_observation(oracle, timestamp, price)
+    oracle.write_observation(timestamp, price)
 }
 
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
@@ -288,13 +288,12 @@ public fun get_reserves(pool: &LiquidityPool): (u64, u64) {
 }
 
 public fun get_price(pool: &LiquidityPool): u128 {
-    oracle::last_price(&pool.oracle)
+    pool.oracle.last_price()
 }
 
 public(package) fun get_twap(pool: &mut LiquidityPool, clock: &Clock): u128 {
     update_twap_observation(pool, clock);
-    let oracle_ref = &pool.oracle;
-    oracle::get_twap(oracle_ref, clock)
+    pool.oracle.get_twap(clock)
 }
 
 public fun quote_swap_asset_to_stable(pool: &LiquidityPool, amount_in: u64): u64 {
@@ -345,13 +344,13 @@ public(package) fun update_twap_observation(pool: &mut LiquidityPool, clock: &Cl
     let timestamp = clock.timestamp_ms();
     let current_price = get_current_price(pool);
     // Use the sum of reserves as a liquidity measure
-    oracle::write_observation(&mut pool.oracle, timestamp, current_price);
+    pool.oracle.write_observation(timestamp, current_price);
 }
 
 public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, state: &MarketState) {
     assert!(get_ms_id(pool) == state.market_id(), EMarketIdMismatch);
     let trading_start_time = state.get_trading_start();
-    oracle::set_oracle_start_time(&mut pool.oracle, trading_start_time);
+    pool.oracle.set_oracle_start_time(trading_start_time);
 }
 
 // === Private Functions ===
@@ -449,5 +448,5 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         protocol_fees: _,
     } = pool;
     id.delete();
-    oracle::destroy_for_testing(oracle);
+    oracle.destroy_for_testing();
 }

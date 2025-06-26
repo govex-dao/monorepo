@@ -182,8 +182,8 @@ public(package) fun create<AssetType, StableType>(
 
     let dao = DAO {
         id: object::new(ctx),
-        asset_type: type_name::into_string(type_name::get<AssetType>()),
-        stable_type: type_name::into_string(type_name::get<StableType>()),
+        asset_type: type_name::get<AssetType>().into_string(),
+        stable_type: type_name::get<StableType>().into_string(),
         min_asset_amount,
         min_stable_amount,
         proposals: table::new(ctx),
@@ -214,12 +214,12 @@ public(package) fun create<AssetType, StableType>(
     };
 
     event::emit(DAOCreated {
-        dao_id: object::uid_to_inner(&dao.id),
+        dao_id: dao.id.to_inner(),
         min_asset_amount,
         min_stable_amount,
         timestamp,
-        asset_type: type_name::into_string(type_name::get<AssetType>()),
-        stable_type: type_name::into_string(type_name::get<StableType>()),
+        asset_type: type_name::get<AssetType>().into_string(),
+        stable_type: type_name::get<StableType>().into_string(),
         dao_name: dao_name,
         icon_url: icon_url,
         asset_decimals,
@@ -259,10 +259,10 @@ public entry fun create_proposal<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     assert!(dao.proposal_creation_enabled, EProposalCreationDisabled);
-    fee::deposit_proposal_creation_payment(fee_manager, payment, clock, ctx);
+    fee_manager.deposit_proposal_creation_payment(payment, clock, ctx);
 
-    let asset_type = type_name::into_string(type_name::get<AssetType>());
-    let stable_type = type_name::into_string(type_name::get<StableType>());
+    let asset_type = type_name::get<AssetType>().into_string();
+    let stable_type = type_name::get<StableType>().into_string();
 
     assert!(&asset_type == &dao.asset_type, EInvalidAssetType);
     assert!(&stable_type == &dao.stable_type, EInvalidStableType);
@@ -303,7 +303,7 @@ public entry fun create_proposal<AssetType, StableType>(
     let initial_stable = stable_coin.into_balance();
 
     let (proposal_id, market_state_id, state) = proposal::create<AssetType, StableType>(
-        object::uid_to_inner(&dao.id),
+        dao.id.to_inner(),
         outcome_count,
         initial_asset,
         initial_stable,
@@ -357,7 +357,7 @@ public(package) fun sign_result(
 
     assert!(object::id(market_state) == info.market_state_id, EUnauthorized);
     assert!(market_state.market_id() == proposal_id, EUnauthorized);
-    assert!(market_state.dao_id() == object::uid_to_inner(&dao.id), EUnauthorized);
+    assert!(market_state.dao_id() == dao.id.to_inner(), EUnauthorized);
 
     market_state.assert_market_finalized();
 
@@ -374,7 +374,7 @@ public(package) fun sign_result(
     };
 
     event::emit(ResultSigned {
-        dao_id: object::uid_to_inner(&dao.id),
+        dao_id: dao.id.to_inner(),
         proposal_id,
         outcome: message,
         winning_outcome: winning_outcome,
@@ -390,7 +390,7 @@ public entry fun sign_result_entry<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     let escrow_market_state_id = escrow.get_market_state_id();
-    let info = get_proposal_info(dao, proposal_id);
+    let info = dao.get_proposal_info(proposal_id);
     assert!(escrow_market_state_id == info.market_state_id, EUnauthorized);
 
     let market_state = escrow.get_market_state_mut();
@@ -434,7 +434,7 @@ public fun get_amm_config(dao: &DAO): (u64, u64, u128) {
 
 public fun get_proposal_info(dao: &DAO, proposal_id: ID): &ProposalInfo {
     assert!(dao.proposals.contains(proposal_id), EProposalNotFound);
-    table::borrow(&dao.proposals, proposal_id)
+    &dao.proposals[proposal_id]
 }
 
 public fun get_result(info: &ProposalInfo): &Option<String> {

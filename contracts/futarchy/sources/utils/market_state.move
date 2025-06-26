@@ -198,18 +198,19 @@ public(package) fun get_trading_end_time(state: &MarketState): Option<u64> {
 public fun get_trading_start(state: &MarketState): u64 {
     state.trading_start
 }
+
 // === Test Functions ===
 #[test_only]
 public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
     let dummy_id = object::new(ctx);
-    let market_id = object::uid_to_inner(&dummy_id);
-    object::delete(dummy_id);
+    let market_id = dummy_id.uid_to_inner();
+    dummy_id.delete();
 
     MarketState {
         id: object::new(ctx),
         market_id,
         dao_id: market_id,
-        outcome_messages: vector::empty(),
+        outcome_messages: vector[],
         outcome_count: outcomes,
         status: MarketStatus {
             trading_started: false,

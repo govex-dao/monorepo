@@ -9,7 +9,7 @@ use futarchy::fee::FeeManager;
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
 use futarchy::proposal::Proposal;
-use sui::clock::{Clock};
+use sui::clock::Clock;
 use sui::event;
 
 // === Errors ===
@@ -123,7 +123,7 @@ fun initialize_oracles_for_trading<AssetType, StableType>(
     state: &MarketState,
 ) {
     let pools = proposal.get_amm_pools();
-    let pools_count = vector::length(pools);
+    let pools_count = pools.length();
     let mut i = 0;
     while (i < pools_count) {
         let pool = proposal.get_pool_mut_by_outcome((i as u8));
@@ -147,7 +147,7 @@ public(package) fun finalize<AssetType, StableType>(
 
     // Record final TWAP prices and find winner
     let timestamp = clock.timestamp_ms();
-    let mut final_twap_prices = vector::empty();
+    let mut final_twap_prices = vector[];
 
     let mut i = 0;
     let mut highest_twap = 0;
@@ -156,11 +156,11 @@ public(package) fun finalize<AssetType, StableType>(
 
     // Get a mutable reference to pools and iterate
     let pools = proposal.get_amm_pools();
-    let pools_count = vector::length(pools);
+    let pools_count = pools.length();
     while (i < pools_count) {
         let pool = proposal.get_pool_mut_by_outcome((i as u8));
         let twap = pool.get_twap(clock);
-        vector::push_back(&mut final_twap_prices, twap);
+        final_twap_prices.push_back(twap);
 
         if (i == 0) {
             base_twap = twap; // Store outcome 0's TWAP

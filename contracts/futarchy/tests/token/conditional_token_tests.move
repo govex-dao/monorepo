@@ -121,9 +121,8 @@ fun test_mint_and_burn() {
         let mut supply = test_scenario::take_from_sender<Supply>(&scenario);
         let ctx = test_scenario::ctx(&mut scenario);
 
-        conditional_token::burn(
+        token.burn(
             &mut supply,
-            token,
             &clock,
             ctx,
         );
@@ -288,7 +287,7 @@ fun test_merge_many() {
         let ctx = test_scenario::ctx(&mut scenario);
 
         // Create vector of tokens to merge
-        let mut tokens_to_merge = vector::empty();
+        let mut tokens_to_merge = vector[];
         vector::push_back(&mut tokens_to_merge, token2);
         vector::push_back(&mut tokens_to_merge, token3);
 

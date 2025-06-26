@@ -8,7 +8,7 @@ use std::ascii::String as AsciiString;
 use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::clock::{Clock};
-use sui::coin::{Self, Coin};
+use sui::coin::{Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
@@ -205,10 +205,7 @@ public entry fun withdraw_all_fees(
     let amount = fee_manager.sui_balance.value();
     let sender = ctx.sender();
 
-    let withdrawal = coin::from_balance(
-        fee_manager.sui_balance.split(amount),
-        ctx,
-    );
+    let withdrawal = fee_manager.sui_balance.split(amount).into_coin(ctx);
 
     event::emit(FeesWithdrawn {
         amount,
@@ -348,10 +345,10 @@ public entry fun withdraw_stable_fees<StableType>(
 
     if (amount > 0) {
         let withdrawn = fee_balance_wrapper.balance.split(amount);
-        let coin = coin::from_balance(withdrawn, ctx);
+        let coin = withdrawn.into_coin(ctx);
 
         let type_name = type_name::get<StableType>();
-        let type_str = type_name::into_string(type_name);
+        let type_str = type_name.into_string();
         // Emit withdrawal event
         event::emit(StableFeesWithdrawn {
             amount,
@@ -361,7 +358,7 @@ public entry fun withdraw_stable_fees<StableType>(
         });
 
         // Transfer to sender
-        transfer::public_transfer(coin, ctx.sender());
+        public_transfer(coin, ctx.sender());
     }
 }
 

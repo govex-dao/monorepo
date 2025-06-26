@@ -5,9 +5,8 @@ module futarchy::liquidity_initialize;
 
 // === Imports ===
 use futarchy::amm::{Self, LiquidityPool};
-use futarchy::coin_escrow::{Self, TokenEscrow};
+use futarchy::coin_escrow::{TokenEscrow};
 use futarchy::conditional_token as token;
-use futarchy::market_state;
 use sui::balance::Balance;
 use sui::clock::Clock;
 
@@ -39,7 +38,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     while (i < outcome_count) {
         // Use same pattern as original to avoid borrow issues
         {
-            let ms = coin_escrow::get_market_state(escrow); // Immutable borrow
+            let ms = escrow.get_market_state(); // Immutable borrow
             let asset_supply = token::new_supply(ms, 0, (i as u8), ctx);
             let stable_supply = token::new_supply(ms, 1, (i as u8), ctx);
 
@@ -50,15 +49,14 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
             supply_ids.push_back(stable_supply_id);
 
             // Register
-            coin_escrow::register_supplies(escrow, i, asset_supply, stable_supply);
+            escrow.register_supplies(i, asset_supply, stable_supply);
         };
 
         i = i + 1;
     };
 
     // 2. Deposit liquidity and handle differential minting in one step
-    coin_escrow::deposit_initial_liquidity(
-        escrow,
+    escrow.deposit_initial_liquidity(
         outcome_count,
         &asset_amounts,
         &stable_amounts,
@@ -76,7 +74,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
 
         // Use same scoped borrow pattern as original
         {
-            let ms = coin_escrow::get_market_state(escrow); // Immutable borrow
+            let ms = escrow.get_market_state(); // Immutable borrow
             let pool = amm::new_pool(
                 ms,
                 (i as u8),
@@ -102,20 +100,20 @@ fun assert_initial_reserves_consistency<AssetType, StableType>(
     escrow: &TokenEscrow<AssetType, StableType>,
     amm_pools: &vector<LiquidityPool>,
 ) {
-    let outcome_count = market_state::outcome_count(coin_escrow::get_market_state(escrow));
+    let outcome_count = escrow.get_market_state().outcome_count();
 
     assert!(amm_pools.length() == outcome_count, EInitPoolCountMismatch);
 
-    let (escrow_asset, escrow_stable) = coin_escrow::get_balances(escrow);
+    let (escrow_asset, escrow_stable) = escrow.get_balances();
 
     let mut i = 0;
     while (i < outcome_count) {
         let pool = &amm_pools[i];
 
-        assert!(amm::get_outcome_idx(pool) == (i as u8), EInitPoolOutcomeMismatch);
+        assert!(pool.get_outcome_idx() == (i as u8), EInitPoolOutcomeMismatch);
 
-        let (amm_asset, amm_stable) = amm::get_reserves(pool);
-        let protocol_fees = amm::get_protocol_fees(pool);
+        let (amm_asset, amm_stable) = pool.get_reserves();
+        let protocol_fees = pool.get_protocol_fees();
         assert!(protocol_fees == 0, EInitStableReservesMismatch); // Fees must be 0 initially
 
         let (
@@ -123,7 +121,7 @@ fun assert_initial_reserves_consistency<AssetType, StableType>(
             _fetched_escrow_stable,
             asset_total_supply,
             stable_total_supply,
-        ) = coin_escrow::get_escrow_balances_and_supply(escrow, i);
+        ) = escrow.get_escrow_balances_and_supply(i);
 
         // --- Perform the Core Assertions ---
 
