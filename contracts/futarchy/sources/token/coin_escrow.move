@@ -157,8 +157,8 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     // 3. Mint differential tokens for each outcome
     i = 0;
     while (i < outcome_count) {
-        let asset_amt = *vector::borrow(asset_amounts, i);
-        let stable_amt = *vector::borrow(stable_amounts, i);
+        let asset_amt = *asset_amounts.borrow(i);
+        let stable_amt = *stable_amounts.borrow(i);
 
         // Mint asset tokens if necessary
         if (asset_amt < max_asset) {
@@ -219,8 +219,8 @@ public(package) fun remove_liquidity<AssetType, StableType>(
     let stable_balance_out = escrow.escrowed_stable.split(stable_amount);
 
     // Convert balances to coins
-    let asset_coin_out = coin::from_balance(asset_balance_out, ctx);
-    let stable_coin_out = coin::from_balance(stable_balance_out, ctx);
+    let asset_coin_out = asset_balance_out.into_coin(ctx);
+    let stable_coin_out = stable_balance_out.into_coin(ctx);
 
     // Emit event with withdrawal information (reflects state *after* split)
     event::emit(LiquidityWithdrawal {
@@ -781,7 +781,7 @@ public fun create_asset_token_for_testing<AssetType, StableType>(
     // First create all tokens using an existing function
     let mut tokens = mint_complete_set_asset(
         escrow,
-        coin::from_balance(balance::create_for_testing<AssetType>(amount), ctx),
+        balance::create_for_testing<AssetType>(amount).into_coin(ctx),
         clock,
         ctx,
     );
@@ -821,7 +821,7 @@ public fun create_stable_token_for_testing<AssetType, StableType>(
     ctx: &mut TxContext,
 ): ConditionalToken {
     // Same approach as asset token but for stable tokens
-    let coin = coin::from_balance(balance::create_for_testing<StableType>(amount), ctx);
+    let coin = balance::create_for_testing<StableType>(amount).into_coin(ctx);
     let mut tokens = mint_complete_set_stable(escrow, coin, clock, ctx);
 
     // Extract the token we want and return it
