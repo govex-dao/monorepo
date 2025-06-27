@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 
 const router = Router();
 
-router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
+router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response) => {
   try {
     const { daoId } = req.params;
     
@@ -73,7 +73,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
   }
 });
 
-router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response): Promise<void> => {
+router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response) => {
   try {
     const { propId } = req.params;
     
@@ -155,7 +155,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
   }
 });
 
-router.get('/general', async (req: Request, res: Response): Promise<void> => {
+router.get('/general', async (req: Request, res: Response) => {
   try {
     const svg = await generateGeneralOG();
     const resvg = new Resvg(svg);

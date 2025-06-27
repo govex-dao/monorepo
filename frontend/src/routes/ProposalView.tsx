@@ -15,7 +15,6 @@ import UnverifiedIcon from "@/components/icons/UnverifiedIcon.tsx";
 import ProposalStateManager from "@/components/trade/ProposalStateManager";
 import { DaoIcon } from "@/components/DaoIcon.tsx";
 import { getOutcomeColors } from "@/utils/outcomeColors.ts";
-import { ProposalStatus } from "@/components/ProposalStatus.tsx";
 
 interface StateHistory {
   id: number;

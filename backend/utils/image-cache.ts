@@ -61,10 +61,12 @@ class ImageCache {
     // Evict old entries if needed
     while (this.currentCacheSize + size > this.maxCacheSize && this.cache.size > 0) {
       const firstKey = this.cache.keys().next().value;
-      const firstEntry = this.cache.get(firstKey);
-      if (firstEntry) {
-        this.currentCacheSize -= firstEntry.size;
-        this.cache.delete(firstKey);
+      if (firstKey) {
+        const firstEntry = this.cache.get(firstKey);
+        if (firstEntry) {
+          this.currentCacheSize -= firstEntry.size;
+          this.cache.delete(firstKey);
+        }
       }
     }
 
