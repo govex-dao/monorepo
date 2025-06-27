@@ -56,7 +56,7 @@ interface ProposalCardProps {
 
 function ProposalCard({ proposal }: ProposalCardProps) {
   return (
-    <Link to={`/trade/${proposal.market_state_id}`} className="block">
+    <Link to={`/trade/${proposal.proposal_id}`} className="block">
       <div className="group bg-gray-800 rounded-lg shadow-sm border border-gray-700 p-5 hover:shadow-md hover:bg-gray-700 hover:border-gray-600 group-hover:text-white transition">
         <div className="flex justify-between items-start mb-4">
           <Tooltip
