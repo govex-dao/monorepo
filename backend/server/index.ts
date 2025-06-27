@@ -1,5 +1,6 @@
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { processAndGetBase64Icon } from '../imageUtils';
 import aiReviewRouter from './routes/ai-review';
 import ogRouter from './routes/og';
@@ -23,11 +24,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Rate limiter for OG image generation
+const ogImageLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 50, // Limit each IP to 50 requests per window
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: 'Too many OG image requests, please try again later',
+	handler: (req, res) => {
+		res.status(429).json({ error: 'Too many requests, please try again later' });
+	}
+});
+
 // Mount AI Review routes
 app.use(aiReviewRouter);
 
-// Mount OG routes
-app.use('/og', ogRouter);
+// Mount OG routes with rate limiting
+app.use('/og', ogImageLimiter, ogRouter);
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });

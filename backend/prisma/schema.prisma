@@ -29,7 +29,9 @@ model Dao {
   assetType String
   stableType String
   icon_url String
-  icon_cache_path String? // Add this field to store the cached image path
+  icon_cache_path String? // 64x64 cached image path (legacy)
+  icon_cache_medium String? // 256x256 cached image path
+  icon_cache_large String? // 512x512 cached image path
   dao_name String 
   asset_decimals Int
   stable_decimals Int
