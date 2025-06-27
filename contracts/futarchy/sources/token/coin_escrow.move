@@ -1,16 +1,15 @@
 module futarchy::coin_escrow;
 
-// === Introduction ===
-// Tracks and stores coins
-
-// === Imports ===
 use futarchy::conditional_token::{Self as token, ConditionalToken, Supply};
-use futarchy::market_state::{MarketState};
+use futarchy::market_state::MarketState;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::{Coin};
+use sui::coin::Coin;
 use sui::event;
 use sui::types;
+
+// === Introduction ===
+// Tracks and stores coins
 
 // === Errors ===
 const EInsufficientBalance: u64 = 0;
@@ -337,7 +336,7 @@ public(package) fun redeem_complete_set_asset<AssetType, StableType>(
         let outcome = token.outcome();
 
         let supply = &mut escrow.outcome_asset_supplies[(outcome as u64)];
-        token.burn(supply,  clock, ctx);
+        token.burn(supply, clock, ctx);
         i = i + 1;
     };
 
@@ -393,10 +392,7 @@ public(package) fun redeem_winning_tokens_asset<AssetType, StableType>(
     // Verify token matches winning outcome
     let winner_u8 = (winner as u8);
     assert!(token.outcome() == winner_u8, EWrongOutcome);
-    assert!(
-        token.market_id() == escrow.market_state.market_id(),
-        EWrongMarket,
-    );
+    assert!(token.market_id() == escrow.market_state.market_id(), EWrongMarket);
     assert!(token.asset_type() == TOKEN_TYPE_ASSET, EWrongTokenType);
 
     // Get token amount and burn token
@@ -430,10 +426,7 @@ public(package) fun redeem_winning_tokens_stable<AssetType, StableType>(
     // Verify token matches winning outcome
     let winner_u8 = (winner as u8);
     assert!(token.outcome() == winner_u8, EWrongOutcome);
-    assert!(
-        token.market_id() == escrow.market_state.market_id(),
-        EWrongMarket,
-    );
+    assert!(token.market_id() == escrow.market_state.market_id(), EWrongMarket);
     assert!(token.asset_type() == TOKEN_TYPE_STABLE, EWrongTokenType);
 
     // Get token amount and burn token
@@ -581,7 +574,7 @@ public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     assert!(token_in.asset_type() == TOKEN_TYPE_STABLE, EWrongTokenType);
 
     let stable_supply = &mut escrow.outcome_stable_supplies[outcome_idx];
-    token_in.burn(stable_supply,  clock, ctx);
+    token_in.burn(stable_supply, clock, ctx);
 
     let asset_supply = &mut escrow.outcome_asset_supplies[outcome_idx];
     let token = token::mint(
@@ -632,7 +625,7 @@ public(package) fun burn_unused_tokens<AssetType, StableType>(
         if (token_type == TOKEN_TYPE_ASSET) {
             let supply_ref = &mut escrow.outcome_asset_supplies[outcome_idx];
             // burn consumes the token object
-            token.burn(supply_ref,  clock, ctx);
+            token.burn(supply_ref, clock, ctx);
         } else if (token_type == TOKEN_TYPE_STABLE) {
             let supply_ref = &mut escrow.outcome_stable_supplies[outcome_idx];
             // burn consumes the token object

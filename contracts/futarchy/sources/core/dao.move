@@ -1,12 +1,22 @@
 module futarchy::dao;
 
+use futarchy::coin_escrow;
+use futarchy::fee;
+use futarchy::market_state;
+use futarchy::proposal;
+use futarchy::vectors;
+use std::ascii::String as AsciiString;
+use std::string::String;
+use std::type_name;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::sui::SUI;
+use sui::table::{Self, Table};
+use sui::url::{Self, Url};
+
 // === Introduction ===
 // This defines the DAO type
-
-// === Imports ===
-use futarchy::{coin_escrow, fee, market_state, proposal, vectors};
-use std::{ascii::{String as AsciiString}, string::String, type_name};
-use sui::{clock::Clock, coin::{Self, Coin}, event, sui::SUI, table::{Self, Table}, url::{Self, Url}};
 
 // === Errors ===
 const EInvalidAmount: u64 = 0;

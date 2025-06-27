@@ -1,12 +1,11 @@
 module futarchy::market_state;
 
+use std::string::String;
+use sui::clock::Clock;
+use sui::event;
+
 // === Introduction ===
 // This module tracks proposal life cycle and acts as a source of truth for proposal state
-
-// === Imports ===
-use std::string::String;
-use sui::clock::{Clock};
-use sui::event;
 
 // === Errors ===
 const ETradingAlreadyStarted: u64 = 0;

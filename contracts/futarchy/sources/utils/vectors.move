@@ -1,11 +1,10 @@
 module futarchy::vectors;
 
-// === Introduction ===
-// Vector Methods and processing
-
-// === Imports ===
 use std::string::String;
 use sui::vec_set;
+
+// === Introduction ===
+// Vector Methods and processing
 
 // === Public Functions ===
 // Combined check that a vector contains only unique elements and that all the elements are less then a certain length

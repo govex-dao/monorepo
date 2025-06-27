@@ -1,13 +1,13 @@
 module futarchy::amm;
 
-// === Introduction ===
-// This a Uniswap V2-style XY=K AMM implementation with controlled liquidity methods.
-
 use futarchy::market_state::MarketState;
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
 use sui::clock::Clock;
 use sui::event;
+
+// === Introduction ===
+// This a Uniswap V2-style XY=K AMM implementation with controlled liquidity methods.
 
 // === Errors ===
 const ELowLiquidity: u64 = 0;

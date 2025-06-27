@@ -1,14 +1,13 @@
 module futarchy::liquidity_initialize;
 
-// === Introduction ===
-// Method to initialize AMM liquidity
-
-// === Imports ===
 use futarchy::amm::{Self, LiquidityPool};
-use futarchy::coin_escrow::{TokenEscrow};
+use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token as token;
 use sui::balance::Balance;
 use sui::clock::Clock;
+
+// === Introduction ===
+// Method to initialize AMM liquidity
 
 // === Errors ===
 const EInitAssetReservesMismatch: u64 = 100;

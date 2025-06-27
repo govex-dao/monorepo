@@ -1,14 +1,16 @@
 module futarchy::liquidity_interact;
 
+use futarchy::coin_escrow::TokenEscrow;
+use futarchy::conditional_token::ConditionalToken;
+use futarchy::fee::FeeManager;
+use futarchy::proposal::Proposal;
+use sui::balance::Balance;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+
 // === Introduction ===
 // Methods to interact with AMM liquidity and escrow balances
-
-// === Imports ===
-use futarchy::coin_escrow::{TokenEscrow};
-use futarchy::conditional_token::{ConditionalToken};
-use futarchy::fee::{FeeManager};
-use futarchy::proposal::{Proposal};
-use sui::{balance::Balance, clock::Clock, coin::{Self, Coin}, event};
 
 // === Errors ===
 const EInvalidOutcome: u64 = 0;
@@ -402,10 +404,7 @@ public(package) fun collect_protocol_fees<AssetType, StableType>(
     assert!(proposal.is_finalized(), EInvalidState);
     assert!(proposal.is_winning_outcome_set(), EInvalidState);
 
-    assert!(
-        escrow.get_market_state_id() == proposal.market_state_id(),
-        EInvalidState,
-    );
+    assert!(escrow.get_market_state_id() == proposal.market_state_id(), EInvalidState);
 
     let winning_outcome = proposal.get_winning_outcome();
     let winning_pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
