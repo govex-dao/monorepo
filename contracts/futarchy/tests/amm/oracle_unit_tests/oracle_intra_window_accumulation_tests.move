@@ -2,7 +2,6 @@
 module futarchy::oracle_intra_accum_tests {
     use futarchy::oracle::{
         Self, Oracle,
-        TWAP_PRICE_CAP_WINDOW, // Import the constant from the oracle module
         // Test helpers from oracle module
         set_last_timestamp_for_testing,
         set_last_window_end_for_testing,
@@ -80,8 +79,8 @@ module futarchy::oracle_intra_accum_tests {
         call_intra_window_accumulation_for_testing(&mut oracle_inst, price_input, time_to_include, new_timestamp);
 
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_tcp, 1);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == new_timestamp, 2);
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 3);
+        assert!(oracle::last_timestamp(&oracle_inst) == new_timestamp, 2);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 3);
 
         // Verify boundary fields are unchanged
         assert!(get_last_window_end_for_testing(&oracle_inst) == initial_lwe, 4);
@@ -125,8 +124,8 @@ module futarchy::oracle_intra_accum_tests {
         call_intra_window_accumulation_for_testing(&mut oracle_inst, price_input, time_to_include, new_timestamp);
 
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == final_tcp, 1);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == new_timestamp, 2);
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 3);
+        assert!(oracle::last_timestamp(&oracle_inst) == new_timestamp, 2);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 3);
 
         // Verify boundary fields ARE updated
         assert!(get_last_window_end_for_testing(&oracle_inst) == new_timestamp, 4);
@@ -156,7 +155,7 @@ module futarchy::oracle_intra_accum_tests {
 
         call_intra_window_accumulation_for_testing(&mut oracle_inst, high_price_input, time_to_include, new_timestamp);
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 1);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_price_contribution, 2);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -181,7 +180,7 @@ module futarchy::oracle_intra_accum_tests {
 
         call_intra_window_accumulation_for_testing(&mut oracle_inst, low_price_input, time_to_include, new_timestamp);
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 1);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_price_contribution, 2);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -206,7 +205,7 @@ module futarchy::oracle_intra_accum_tests {
 
         call_intra_window_accumulation_for_testing(&mut oracle_inst, normal_price_input, time_to_include, new_timestamp);
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 1);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_price_contribution, 2);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -235,8 +234,8 @@ module futarchy::oracle_intra_accum_tests {
 
         // TCP unchanged as price_contribution is 0
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == initial_tcp, 1);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == new_timestamp, 2);
-        assert!(oracle::get_last_price(&oracle_inst) == price_input, 3); // Capping logic runs, price_input is within cap
+        assert!(oracle::last_timestamp(&oracle_inst) == new_timestamp, 2);
+        assert!(oracle::last_price(&oracle_inst) == price_input, 3); // Capping logic runs, price_input is within cap
 
         // Boundary logic triggers
         assert!(get_last_window_end_for_testing(&oracle_inst) == new_timestamp, 4);
@@ -284,8 +283,8 @@ module futarchy::oracle_intra_accum_tests {
         call_intra_window_accumulation_for_testing(&mut oracle_inst, large_price_input, large_time, new_timestamp);
 
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_tcp, 1);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == new_timestamp, 2);
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 3);
+        assert!(oracle::last_timestamp(&oracle_inst) == new_timestamp, 2);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 3);
 
         oracle::destroy_for_testing(oracle_inst);
         test::end(scenario);

@@ -3,7 +3,6 @@
 module futarchy::oracle_tests;
 
 use futarchy::oracle::{Self, Oracle};
-use std::debug;
 use std::u128;
 use sui::clock;
 use sui::test_scenario::{Self as test, Scenario};
@@ -54,14 +53,14 @@ fun test_new_oracle() {
         let ctx = test::ctx(&mut scenario);
         let oracle_inst = setup_test_oracle(ctx);
         // Validate initial values
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
-        let (delay, step) = oracle::get_config(&oracle_inst);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
+        let (delay, step) = oracle::config(&oracle_inst);
         assert!(delay == TWAP_START_DELAY, 3);
         assert!(step == TWAP_STEP_MAX, 4);
         assert!(step == TWAP_STEP_MAX, 4); // Error code 4 for this line
-        assert!(oracle::get_market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 5);
-        assert!(oracle::get_twap_initialization_price(&oracle_inst) == INIT_PRICE, 6);
+        assert!(oracle::market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 5);
+        assert!(oracle::twap_initialization_price(&oracle_inst) == INIT_PRICE, 6);
         oracle::destroy_for_testing(oracle_inst);
     };
     test::end(scenario);
@@ -77,10 +76,9 @@ fun test_write_observation_after_delay_upward_cap() {
         let observation_time = 63_500;
         let high_price = 15000; // Exceeds allowed cap.
         oracle::write_observation(&mut oracle_inst, observation_time, high_price);
-        assert!(oracle::get_last_price(&oracle_inst) == 12000, 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == observation_time, 1);
+        assert!(oracle::last_price(&oracle_inst) == 12000, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == observation_time, 1);
         let (_, _, cumulative) = oracle::debug_get_state(&oracle_inst);
-        debug::print(&oracle_inst);
         assert!(cumulative == 12000 as u256 * 2500, 2);
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
@@ -99,8 +97,8 @@ fun test_write_observation_after_delay_downward_cap() {
         let observation_time = 63500;
         let low_price = 5000; // Too low, will be capped.
         oracle::write_observation(&mut oracle_inst, observation_time, low_price);
-        assert!(oracle::get_last_price(&oracle_inst) == 8000, 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == observation_time, 1);
+        assert!(oracle::last_price(&oracle_inst) == 8000, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == observation_time, 1);
         let (_, _, cumulative) = oracle::debug_get_state(&oracle_inst);
         assert!(cumulative == 8000 as u256 * 2500, 2);
         oracle::destroy_for_testing(oracle_inst);
@@ -110,7 +108,7 @@ fun test_write_observation_after_delay_downward_cap() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::oracle::ETIMESTAMP_REGRESSION)]
+#[expected_failure(abort_code = futarchy::oracle::ETimestampRegression)]
 fun test_timestamp_regression() {
     // An observation with a timestamp earlier than the previous one should abort.
     let (mut scenario, clock_inst) = setup_scenario_and_clock();
@@ -156,10 +154,10 @@ fun test_getters() {
     {
         let ctx = test::ctx(&mut scenario);
         let oracle_inst = setup_test_oracle(ctx);
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
-        assert!(oracle::get_market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 4);
-        assert!(oracle::get_twap_initialization_price(&oracle_inst) == INIT_PRICE, 5);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
+        assert!(oracle::market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 4);
+        assert!(oracle::twap_initialization_price(&oracle_inst) == INIT_PRICE, 5);
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
     };
@@ -182,12 +180,10 @@ fun test_write_observation_no_time_progress() {
         oracle::write_observation(&mut oracle_inst, delay_threshold, 15000);
 
         // Expect that last_price remains at INIT_PRICE and cumulative price remains 0.
-        let price = oracle::get_last_price(&oracle_inst);
-        debug::print(&price);
-        assert!(oracle::get_last_price(&oracle_inst) == (INIT_PRICE + (TWAP_STEP_MAX as u128)), 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == delay_threshold, 1);
+        let _price = oracle::last_price(&oracle_inst);
+        assert!(oracle::last_price(&oracle_inst) == (INIT_PRICE + (TWAP_STEP_MAX as u128)), 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == delay_threshold, 1);
         let (_, _, cumulative) = oracle::debug_get_state(&oracle_inst);
-                debug::print(&cumulative);
         assert!(cumulative == 0, 2);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -332,7 +328,7 @@ fun test_twap_drift_towards_observation_price() {
 // This test intentionally drives the cumulative price near the maximum,
 // then triggers an overflow on the second observation.
 #[test]
-#[expected_failure(abort_code = oracle::EOVERFLOW_BASE_PRICE_SUM_FINAL)]
+#[expected_failure(abort_code = oracle::EOverflowBasePriceSumFinal)]
 fun test_cumulative_price_overflow() {
     // Set up an oracle with extreme parameters:
     // - twap_initialization_price = U64_MAX,
@@ -381,7 +377,6 @@ fun test_exact_full_window_boundary() {
     oracle::write_observation(&mut oracle_inst, obs_time, 15000);
     let (_last_price, ts2, cumulative2) = oracle::debug_get_state(&oracle_inst);
     assert!(ts2 == obs_time, 2);
-    debug::print(&cumulative2);
     assert!(cumulative2 == 720000000, 3);
 
     oracle::destroy_for_testing(oracle_inst);
@@ -431,7 +426,7 @@ fun test_cross_delay_period_twap_calculation() {
 
         let current_time = 72000;
         clock::set_for_testing(&mut clock_inst, current_time);
-        let last_price = oracle::get_last_price(&oracle_inst);
+        let last_price = oracle::last_price(&oracle_inst);
         oracle::write_observation(&mut oracle_inst, current_time, last_price);
         let expected_twap = 9000;
         let twap = oracle::get_twap(&oracle_inst, &clock_inst);
@@ -444,7 +439,7 @@ fun test_cross_delay_period_twap_calculation() {
 }
 
 #[test]
-#[expected_failure(abort_code = oracle::EZERO_PERIOD)]
+#[expected_failure(abort_code = oracle::EZeroPeriod)]
 fun test_get_twap_zero_period() {
     // Calling get_twap with an effective period of zero should trigger EZERO_PERIOD.
     let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
@@ -454,7 +449,7 @@ fun test_get_twap_zero_period() {
         let ts = MARKET_START_TIME + TWAP_START_DELAY;
         clock::set_for_testing(&mut clock_inst, ts);
         // Refresh observation at ts.
-        let last_price = oracle::get_last_price(&oracle_inst);
+        let last_price = oracle::last_price(&oracle_inst);
         oracle::write_observation(&mut oracle_inst, ts, last_price);
         let _ = oracle::get_twap(&oracle_inst, &clock_inst);
         oracle::destroy_for_testing(oracle_inst);
@@ -505,7 +500,7 @@ fun test_repeated_get_twap_consistency() {
     let fixed_time: u64 = delay_threshold + 11000; // 14000
     clock::set_for_testing(&mut clock_inst, fixed_time);
     // Refresh observation at fixed_time.
-    let last_price = oracle::get_last_price(&oracle_inst);
+    let last_price = oracle::last_price(&oracle_inst);
     oracle::write_observation(&mut oracle_inst, fixed_time, last_price);
     let twap1: u128 = oracle::get_twap(&oracle_inst, &clock_inst);
     let twap2: u128 = oracle::get_twap(&oracle_inst, &clock_inst);
@@ -541,15 +536,15 @@ fun test_twap_delay_zero() {
         expected_price_after_first as u256 * ((first_obs_time - MARKET_START_TIME) as u256);
 
     // Validate state after the first observation.
-    assert!(oracle::get_last_timestamp(&oracle_inst) == first_obs_time, 0);
-    assert!(oracle::get_last_price(&oracle_inst) == expected_price_after_first, 1);
+    assert!(oracle::last_timestamp(&oracle_inst) == first_obs_time, 0);
+    assert!(oracle::last_price(&oracle_inst) == expected_price_after_first, 1);
     let (_, _, cumulative_first) = oracle::debug_get_state(&oracle_inst);
     assert!(cumulative_first == expected_cumulative_first, 2);
 
     // Second (refresh) observation at time = MARKET_START_TIME + 1000 = 2000.
     let second_obs_time = MARKET_START_TIME + 1000; // 2000
     // Use the last capped price (11000) to refresh the observation.
-    let last_price = oracle::get_last_price(&oracle_inst);
+    let last_price = oracle::last_price(&oracle_inst);
     oracle::write_observation(&mut oracle_inst, second_obs_time, last_price);
 
     // Additional contribution: 11000 * (2000 - 1500) = 11000 * 500.
@@ -622,7 +617,6 @@ fun test_twap_over_week_with_irregular_updates() {
     let actual_twap = oracle::get_twap(&oracle_inst, &clock_inst);
 
     // Assert that calculated TWAP matches oracle's TWAP exactly
-    debug::print(&actual_twap);
     assert!(actual_twap == 10656, 0);
     
     oracle::destroy_for_testing(oracle_inst);
@@ -685,7 +679,7 @@ fun test_twap_over_year_with_ten_swaps() {
         oracle::write_observation(&mut oracle_inst, observation_time, observation_price);
         
         // Get the capped price (after oracle's internal capping logic)
-        let capped_price = oracle::get_last_price(&oracle_inst);
+        let capped_price = oracle::last_price(&oracle_inst);
         
         // Calculate time-weighted contribution
         let time_diff = observation_time - last_observation_time;
@@ -741,9 +735,9 @@ fun test_initial_high_price_no_swaps() {
         oracle::set_oracle_start_time(&mut oracle_inst, market_start_time);
 
         // Validate initial state immediately after creation
-        assert!(oracle::get_last_price(&oracle_inst) == HIGH_INIT_PRICE, 0);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == market_start_time, 1); // Initial timestamp is market_start_time
-        assert!(oracle::get_twap_initialization_price(&oracle_inst) == HIGH_INIT_PRICE, 2);
+        assert!(oracle::last_price(&oracle_inst) == HIGH_INIT_PRICE, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == market_start_time, 1); // Initial timestamp is market_start_time
+        assert!(oracle::twap_initialization_price(&oracle_inst) == HIGH_INIT_PRICE, 2);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == HIGH_INIT_PRICE, 3); // last_window_twap starts as init price
         let (_, _, cumulative_initial) = oracle::debug_get_state(&oracle_inst);
         assert!(cumulative_initial == 0, 4); // Cumulative price starts at 0
@@ -771,12 +765,10 @@ fun test_initial_high_price_no_swaps() {
         oracle::write_observation(&mut oracle_inst, current_time + 100_000, HIGH_INIT_PRICE);
 
         // Verify state after the first observation at current_time
-        assert!(oracle::get_last_price(&oracle_inst) == HIGH_INIT_PRICE, 5);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == current_time + 100_000, 6);
-        let (_, _, cumulative_after_write) = oracle::debug_get_state(&oracle_inst);
-        let expected_cumulative = (HIGH_INIT_PRICE as u256) * (100_000 as u256);
-        debug::print(&expected_cumulative);
-        debug::print(&cumulative_after_write);
+        assert!(oracle::last_price(&oracle_inst) == HIGH_INIT_PRICE, 5);
+        assert!(oracle::last_timestamp(&oracle_inst) == current_time + 100_000, 6);
+        let (_, _, _cumulative_after_write) = oracle::debug_get_state(&oracle_inst);
+        let _expected_cumulative = (HIGH_INIT_PRICE as u256) * (100_000 as u256);
         //assert!(cumulative_after_write == expected_cumulative, 7);
 
         // Get the TWAP. Clock is already set to current_time (1000000), which matches last_timestamp.
@@ -785,8 +777,6 @@ fun test_initial_high_price_no_swaps() {
         // TWAP = total_cumulative_price / period
         // = ((HIGH_INIT_PRICE as u256) * 1000000) / 1000000 = HIGH_INIT_PRICE as u256.
         let twap = oracle::get_twap(&oracle_inst, &clock_inst);
-        debug::print(&HIGH_INIT_PRICE);
-        debug::print(&twap);
         // Verify TWAP matches the high initial price
         assert!(twap == HIGH_INIT_PRICE, 8);
 
@@ -797,7 +787,7 @@ fun test_initial_high_price_no_swaps() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::oracle::E_MARKET_NOT_STARTED)]
+#[expected_failure(abort_code = futarchy::oracle::EMarketNotStarted)]
 fun test_write_observation_without_market_start_time_fails() {
     // Test that write_observation fails if market_start_time is not set.
     let (mut scenario, clock_inst) = setup_scenario_and_clock(); // clock_inst not strictly needed but setup provides it
@@ -823,7 +813,7 @@ fun test_write_observation_without_market_start_time_fails() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::oracle::E_MARKET_NOT_STARTED)]
+#[expected_failure(abort_code = futarchy::oracle::EMarketNotStarted)]
 fun test_get_twap_without_market_start_time_fails() {
     // Test that get_twap fails if market_start_time is not set.
     let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
@@ -851,7 +841,7 @@ fun test_get_twap_without_market_start_time_fails() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::oracle::E_MARKET_ALREADY_STARTED)]
+#[expected_failure(abort_code = futarchy::oracle::EMarketAlreadyStarted)]
 fun test_set_oracle_start_time_when_already_started_fails() {
     // This test verifies that calling `set_oracle_start_time` on an oracle
     // that already has its market_start_time set will result in an

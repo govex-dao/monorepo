@@ -147,7 +147,7 @@ fun test_deposit_verification_payment() {
 
 // Test error on invalid payment
 #[test]
-#[expected_failure(abort_code = fee::EINVALID_PAYMENT)]
+#[expected_failure(abort_code = fee::EInvalidPayment)]
 fun test_invalid_payment_amount() {
     let (mut scenario, _admin) = test_init();
     let clock = create_clock(&mut scenario);
@@ -408,7 +408,7 @@ fun test_withdraw_stable_fees() {
 
 // Test error on nonexistent stable type
 #[test]
-#[expected_failure(abort_code = fee::ESTABLE_TYPE_NOT_FOUND)]
+#[expected_failure(abort_code = fee::EStableTypeNotFound)]
 fun test_withdraw_nonexistent_stable_fees() {
     let (mut scenario, admin) = test_init();
     let clock = create_clock(&mut scenario);
@@ -713,7 +713,7 @@ fun test_zero_balance_withdraw() {
 }
 
 #[test]
-#[expected_failure(abort_code = fee::EINVALID_PAYMENT)]
+#[expected_failure(abort_code = fee::EInvalidPayment)]
 fun test_payment_amount_too_large() {
     let (mut scenario, _admin) = test_init();
     let clock = create_clock(&mut scenario);
