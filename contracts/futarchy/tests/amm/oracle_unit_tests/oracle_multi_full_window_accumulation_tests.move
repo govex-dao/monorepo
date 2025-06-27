@@ -5,11 +5,10 @@ module futarchy::oracle_multi_window_tests {
 
     use futarchy::oracle::{
         Self, Oracle,
-        TWAP_PRICE_CAP_WINDOW, // Constant from oracle module
-        ETIMESTAMP_REGRESSION, ETWAP_NOT_STARTED, EZERO_PERIOD, EZERO_INITIALIZATION, EZERO_STEP,
-        ELONG_DELAY, ESTALE_TWAP, EOVERFLOW_V_RAMP, EOVERFLOW_V_FLAT, EOVERFLOW_S_DEV_MAG,
-        EOVERFLOW_BASE_PRICE_SUM_FINAL, EOVERFLOW_V_SUM_PRICES_ADD, EINTERNAL_TWAP_ERROR,
-        E_NONE_FULL_WINDOW_TWAP_DELAY // Import all error codes
+        ETimestampRegression, ETwapNotStarted, EZeroPeriod, EZeroInitialization, EZeroStep,
+        ELongDelay, EStaleTwap, EOverflowVRamp, EOverflowVFlat, EOverflowSDevMag,
+        EOverflowBasePriceSumFinal, EOverflowVSumPricesAdd, EInternalTwapError,
+        ENoneFullWindowTwapDelay // Import all error codes
     };
 
     use std::u64;
@@ -73,7 +72,7 @@ module futarchy::oracle_multi_window_tests {
 
         // g_abs = 0, s_dev_mag = 0
         // p_n_w_effective and new last_window_twap are oracle.last_window_twap
-        assert!(oracle::get_last_price(&oracle_inst) == base_twap, 0);
+        assert!(oracle::last_price(&oracle_inst) == base_twap, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == base_twap, 1);
 
         let expected_v_sum_prices = (num_windows as u128) * base_twap;
@@ -82,7 +81,7 @@ module futarchy::oracle_multi_window_tests {
 
         assert!(oracle::get_total_cumulative_price_for_testing(&oracle_inst) == expected_final_cumulative, 2);
         assert!(oracle::get_last_window_end_cumulative_price_for_testing(&oracle_inst) == expected_final_cumulative, 3);
-        assert!(oracle::get_last_timestamp(&oracle_inst) == end_ts, 4);
+        assert!(oracle::last_timestamp(&oracle_inst) == end_ts, 4);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == end_ts, 5);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -111,7 +110,7 @@ module futarchy::oracle_multi_window_tests {
         );
 
         // p_n_w_effective should become price
-        assert!(oracle::get_last_price(&oracle_inst) == price, 0);
+        assert!(oracle::last_price(&oracle_inst) == price, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == price, 1);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -142,7 +141,7 @@ module futarchy::oracle_multi_window_tests {
 
         // p_n_w_effective is B + N_W * cap_step
         let expected_pnw = base_twap + (num_windows as u128) * (cap_step as u128); // 10000 + 3*100 = 10300
-        assert!(oracle::get_last_price(&oracle_inst) == expected_pnw, 0);
+        assert!(oracle::last_price(&oracle_inst) == expected_pnw, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_pnw, 1);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -170,7 +169,7 @@ module futarchy::oracle_multi_window_tests {
             &mut oracle_inst, price, num_windows, end_ts
         );
 
-        assert!(oracle::get_last_price(&oracle_inst) == price, 0);
+        assert!(oracle::last_price(&oracle_inst) == price, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == price, 1);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -199,7 +198,7 @@ module futarchy::oracle_multi_window_tests {
         );
 
         let expected_pnw = base_twap - (num_windows as u128) * (cap_step as u128); // 10000 - 300 = 9700
-        assert!(oracle::get_last_price(&oracle_inst) == expected_pnw, 0);
+        assert!(oracle::last_price(&oracle_inst) == expected_pnw, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_pnw, 1);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -239,7 +238,7 @@ module futarchy::oracle_multi_window_tests {
         let expected_deviation = (num_windows as u128) * (cap_step as u128);
         let expected_pnw = base_twap + expected_deviation;
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_pnw, 0);
+        assert!(oracle::last_price(&oracle_inst) == expected_pnw, 0);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_pnw, 1);
 
         oracle::destroy_for_testing(oracle_inst);
@@ -268,7 +267,7 @@ module futarchy::oracle_multi_window_tests {
         );
         // n_ramp_terms = 0, v_ramp = 0. s_dev_mag = v_flat = g_abs * num_flat_terms = 0 * 5 = 0.
         // p_n_w_effective = base_twap.
-        assert!(oracle::get_last_price(&oracle1) == base_twap, 0);
+        assert!(oracle::last_price(&oracle1) == base_twap, 0);
         oracle::destroy_for_testing(oracle1);
 
         // Case 2: 0 < g_abs <= cap_step
@@ -286,14 +285,14 @@ module futarchy::oracle_multi_window_tests {
         // v_flat = g_abs * num_flat_terms = 50 * 5 = 250. s_dev_mag = 250.
         // deviation_for_p_n_w = min(N_W * cap_step, g_abs) = min(5*100, 50) = 50.
         // p_n_w_effective = base_twap + 50 = price2.
-        assert!(oracle::get_last_price(&oracle2) == price2, 1);
+        assert!(oracle::last_price(&oracle2) == price2, 1);
         oracle::destroy_for_testing(oracle2);
 
         test::end(scenario);
     }
 
     #[test]
-    #[expected_failure(abort_code = EOVERFLOW_V_RAMP)]
+    #[expected_failure(abort_code = EOverflowVRamp)]
     fun test_multi_v_ramp_overflow() {
         let mut scenario = test::begin(@0x1);
         let base_twap = 1u128;
@@ -347,7 +346,7 @@ module futarchy::oracle_multi_window_tests {
         // num_flat_terms = N_W - NRT = 2 - 2 = 0. v_flat = 0. s_dev_mag = 30.
         // dev_for_pnw = min(N_W*cap, g_abs) = min(2*10, 1000) = 20.
         // pnw_effective = 10000 + 20 = 10020.
-        assert!(oracle::get_last_price(&oracle_even) == base_twap + (num_windows_even as u128)*(cap_step as u128), 0);
+        assert!(oracle::last_price(&oracle_even) == base_twap + (num_windows_even as u128)*(cap_step as u128), 0);
         oracle::destroy_for_testing(oracle_even);
 
         // Case 2: n_ramp_terms is odd (e.g., 3)
@@ -363,7 +362,7 @@ module futarchy::oracle_multi_window_tests {
         // num_flat_terms = 0. s_dev_mag = 60.
         // dev_for_pnw = min(N_W*cap, g_abs) = min(3*10, 1000) = 30.
         // pnw_effective = 10000 + 30 = 10030.
-        assert!(oracle::get_last_price(&oracle_odd) == base_twap + (num_windows_odd as u128)*(cap_step as u128), 1);
+        assert!(oracle::last_price(&oracle_odd) == base_twap + (num_windows_odd as u128)*(cap_step as u128), 1);
         oracle::destroy_for_testing(oracle_odd);
 
         test::end(scenario);
@@ -399,7 +398,7 @@ module futarchy::oracle_multi_window_tests {
         // s_dev_mag = v_ramp = cap_step * (2*(2+1)/2) = 100 * 3 = 300.
         // deviation_for_p_n_w = min(N_W*cap, g_abs) = min(2*100, 201) = min(200,201) = 200.
         // pnw = 10000 + 200 = 10200.
-        assert!(oracle::get_last_price(&oracle_inst) == base_twap + (num_windows as u128)*(cap_step as u128), 0);
+        assert!(oracle::last_price(&oracle_inst) == base_twap + (num_windows as u128)*(cap_step as u128), 0);
         // To verify v_flat=0, we can check total_cumulative_price.
         // v_sum_prices = N_W*B + s_dev_mag = 2*10000 + 300 = 20300.
         let expected_v_sum_prices = (num_windows as u128)*base_twap + 300;
@@ -413,7 +412,7 @@ module futarchy::oracle_multi_window_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = EOVERFLOW_BASE_PRICE_SUM_FINAL)]
+    #[expected_failure(abort_code = EOverflowBasePriceSumFinal)]
     fun test_multi_base_price_sum_overflow() {
         let mut scenario = test::begin(@0x1);
         let base_twap = u128::max_value!();
@@ -460,7 +459,7 @@ module futarchy::oracle_multi_window_tests {
 
         // Check that p_n_w_effective is B - min(N_W*cap, g_abs)
         // dev = min(5*10, 100) = 50. pnw_eff = 100 - 50 = 50.
-        assert!(oracle::get_last_price(&oracle_inst) == base_twap - (num_windows as u128)*(cap_step as u128), 0);
+        assert!(oracle::last_price(&oracle_inst) == base_twap - (num_windows as u128)*(cap_step as u128), 0);
         // cumulative price should be positive
         let v_sum_prices_val = (num_windows as u128)*base_twap - 150; // 500 - 150 = 350
         let price_contrib = (v_sum_prices_val as u256) * (TWAP_PRICE_CAP_WINDOW_TIME as u256);
@@ -497,7 +496,7 @@ module futarchy::oracle_multi_window_tests {
             &mut oracle_inst, price_input, num_windows, num_windows * TWAP_PRICE_CAP_WINDOW_TIME
         );
 
-        assert!(oracle::get_last_price(&oracle_inst) == u128::max_value!(), 0);
+        assert!(oracle::last_price(&oracle_inst) == u128::max_value!(), 0);
 
         oracle::destroy_for_testing(oracle_inst);
         test::end(scenario);
@@ -522,7 +521,7 @@ module futarchy::oracle_multi_window_tests {
             &mut oracle_inst, 0u128, num_windows, num_windows * TWAP_PRICE_CAP_WINDOW_TIME
         );
 
-        assert!(oracle::get_last_price(&oracle_inst) == 0u128, 0);
+        assert!(oracle::last_price(&oracle_inst) == 0u128, 0);
 
         oracle::destroy_for_testing(oracle_inst);
         test::end(scenario);
@@ -544,7 +543,7 @@ module futarchy::oracle_multi_window_tests {
         oracle::call_multi_full_window_accumulation_for_testing(
             &mut oracle1, price1, num_windows, num_windows * TWAP_PRICE_CAP_WINDOW_TIME
         );
-        assert!(oracle::get_last_price(&oracle1) == price1, 0);
+        assert!(oracle::last_price(&oracle1) == price1, 0);
         oracle::destroy_for_testing(oracle1);
 
         // Case 2: g_abs > cap_step. k_ramp_limit >= 1. n_ramp_terms = 1.
@@ -557,7 +556,7 @@ module futarchy::oracle_multi_window_tests {
             &mut oracle2, price2, num_windows, num_windows * TWAP_PRICE_CAP_WINDOW_TIME
         );
         let expected_pnw2 = base_twap + (cap_step as u128);
-        assert!(oracle::get_last_price(&oracle2) == expected_pnw2, 1);
+        assert!(oracle::last_price(&oracle2) == expected_pnw2, 1);
         oracle::destroy_for_testing(oracle2);
 
         test::end(scenario);
@@ -590,7 +589,7 @@ module futarchy::oracle_multi_window_tests {
         // deviation_for_p_n_w = min(N_W * cap_step, g_abs)
         // = min(1000 * 10, 40000) = min(10000, 40000) = 10000.
         let expected_pnw = base_twap + 10000u128; // 10000 + 10000 = 20000.
-        assert!(oracle::get_last_price(&oracle_inst) == expected_pnw, 0);
+        assert!(oracle::last_price(&oracle_inst) == expected_pnw, 0);
 
         // s_dev_mag = v_ramp. nrt=1000.
         // sum_indices = 1000*(1001)/2 = 500 * 1001 = 500500.
@@ -634,9 +633,9 @@ module futarchy::oracle_multi_window_tests {
         // dev_for_pnw = min(N_W*cap, g_abs) = min(3*100, 150) = min(300,150)=150.
         let expected_pnw = base_twap + 150u128; // 10150, which is price.
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == expected_end_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == expected_end_ts, 0);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == expected_end_ts, 1);
-        assert!(oracle::get_last_price(&oracle_inst) == expected_pnw, 2);
+        assert!(oracle::last_price(&oracle_inst) == expected_pnw, 2);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_pnw, 3);
 
         // total_cumulative_price and last_window_end_cumulative_price

@@ -3,8 +3,6 @@
 module futarchy::oracle_burst_tests;
 
 use futarchy::oracle::{Self, Oracle};
-use std::debug;
-use std::u128;
 use sui::clock;
 use sui::test_scenario::{Self as test, Scenario};
 
@@ -14,9 +12,6 @@ const TWAP_START_DELAY: u64 = 120_000;
 const MARKET_START_TIME: u64 = 1000;
 const INIT_PRICE: u128 = 10000;
 const TWAP_PRICE_CAP_WINDOW_PERIOD: u64 = 60000;
-
-// For testing extreme values, define a maximum u64 constant.
-const U64_MAX: u64 = 18446744073709551615;
 
 // ======== Helper Functions ========
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
@@ -101,7 +96,7 @@ fun test_twap_with_fifty_random_swaps() {
         oracle::write_observation(&mut oracle_inst, observation_time, new_price);
         
         // Get the capped price
-        let capped_price = oracle::get_last_price(&oracle_inst);
+        let capped_price = oracle::last_price(&oracle_inst);
         
         // Calculate time-weighted contribution
         let time_diff = observation_time - last_observation_time;
@@ -195,7 +190,7 @@ fun test_twap_with_random_swaps() {
         oracle::write_observation(&mut oracle_inst, observation_time, new_price);
         
         // Get the capped price
-        let capped_price = oracle::get_last_price(&oracle_inst);
+        let capped_price = oracle::last_price(&oracle_inst);
         
         // Calculate time-weighted contribution
         let time_diff = observation_time - last_observation_time;

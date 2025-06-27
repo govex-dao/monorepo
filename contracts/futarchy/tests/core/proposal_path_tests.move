@@ -5,18 +5,12 @@ use futarchy::advance_stage;
 use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::fee;
 use futarchy::liquidity_interact;
-use futarchy::market_state;
 use futarchy::proposal::{Self, Proposal};
-use futarchy::conditional_token;
 use std::option;
 use std::string::{Self, String};
-use std::vector;
 use sui::balance;
 use sui::clock::{Self, Clock};
-use sui::object::{Self, ID};
 use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
-use sui::transfer;
-use sui::tx_context;
 use sui::coin;
 use futarchy::swap;
 
@@ -44,11 +38,11 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
     let stable_balance = balance::create_for_testing<u64>(MIN_STABLE_LIQUIDITY);
     let dao_id = object::id_from_address(DAO);
 
-    let mut outcome_messages = vector::empty<String>();
-    vector::push_back(&mut outcome_messages, string::utf8(b"Outcome 0"));
-    vector::push_back(&mut outcome_messages, string::utf8(b"Outcome 1"));
+    let mut outcome_messages = vector[];
+    outcome_messages.push_back(b"Outcome 0".to_string());
+    outcome_messages.push_back(b"Outcome 1".to_string());
 
-    let (_proposal_id, _market_state_id, _state) = proposal::create<u64, u64>(
+    let (_, _, _) = proposal::create<u64, u64>(
         dao_id,
         2, // outcome_count
         asset_balance,
@@ -57,14 +51,14 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         TRADING_PERIOD_MS,
         MIN_ASSET_LIQUIDITY,
         MIN_STABLE_LIQUIDITY,
-        string::utf8(b"Test Proposal"), // title
-        string::utf8(b"Test Details"), // details
-        string::utf8(b"Test Metadata"), // metadata
+        b"Test Proposal".to_string(), // title
+        b"Test Details".to_string(), // details
+        b"Test Metadata".to_string(), // metadata
         outcome_messages,
         TWAP_START_DELAY,
         TWAP_INITIAL_OBSERVATION,
         TWAP_STEP_MAX,
-        option::none<vector<u64>>(), // initial_outcome_amounts
+        option::none(), // initial_outcome_amounts
         TWAP_THRESHOLD,
         clock,
         ctx(scenario),
@@ -214,8 +208,8 @@ fun test_proposal_path_with_swaps() {
 
     // Storage for values we need to compare across transactions
     let mut initial_asset_0 = 0;
-    let mut initial_stable_0 = 0;
-    let mut initial_asset_1 = 0;
+    let mut _initial_stable_0 = 0;
+    let mut _initial_asset_1 = 0;
     let mut initial_stable_1 = 0;
 
     // Step 1: Create proposal
@@ -237,10 +231,10 @@ fun test_proposal_path_with_swaps() {
         
         // Capture initial liquidity values
         let initial_liquidity = liquidity_interact::get_liquidity_for_proposal(&proposal);
-        initial_asset_0 = *vector::borrow(&initial_liquidity, 0);
-        initial_stable_0 = *vector::borrow(&initial_liquidity, 1);
-        initial_asset_1 = *vector::borrow(&initial_liquidity, 2);
-        initial_stable_1 = *vector::borrow(&initial_liquidity, 3);
+        initial_asset_0 = initial_liquidity[0];
+        _initial_stable_0 = initial_liquidity[1];
+        _initial_asset_1 = initial_liquidity[2];
+        initial_stable_1 = initial_liquidity[3];
 
         test::return_shared(proposal);
         test::return_shared(escrow);
@@ -285,7 +279,7 @@ fun test_proposal_path_with_swaps() {
         // Create tokens for swap_stable_to_asset_entry
         let stable_coin = coin::from_balance(balance::create_for_testing<u64>(500_000), ctx(&mut scenario));
         let mut tokens = coin_escrow::mint_complete_set_stable(&mut escrow, stable_coin, &clock, ctx(&mut scenario));
-        let token_to_swap = vector::remove(&mut tokens, 1); // Get outcome 1 stable token
+        let token_to_swap = tokens.remove(1); // Get outcome 1 stable token
         
         // Swap stable token for outcome 1
         swap::swap_stable_to_asset_entry(
@@ -299,11 +293,11 @@ fun test_proposal_path_with_swaps() {
         );
         
         // Clean up remaining tokens
-        while (!vector::is_empty(&tokens)) {
-            let token = vector::pop_back(&mut tokens);
+        while (!tokens.is_empty()) {
+            let token = tokens.pop_back();
             transfer::public_transfer(token, ADMIN);
         };
-        vector::destroy_empty(tokens);
+        tokens.destroy_empty();
         
         // Create more stable coins for the next swap
         let stable_coin = coin::from_balance(balance::create_for_testing<u64>(2_000_000), ctx(&mut scenario));
@@ -336,7 +330,7 @@ fun test_proposal_path_with_swaps() {
         // Create tokens for swap_asset_to_stable_entry
         let asset_coin = coin::from_balance(balance::create_for_testing<u64>(500_000), ctx(&mut scenario));
         let mut tokens = coin_escrow::mint_complete_set_asset(&mut escrow, asset_coin, &clock, ctx(&mut scenario));
-        let token_to_swap = vector::remove(&mut tokens, 0); // Get outcome 0 asset token
+        let token_to_swap = tokens.remove(0); // Get outcome 0 asset token
         
         // Swap asset token for outcome 0
         swap::swap_asset_to_stable_entry(
@@ -350,23 +344,23 @@ fun test_proposal_path_with_swaps() {
         );
         
         // Clean up remaining tokens
-        while (!vector::is_empty(&tokens)) {
-            let token = vector::pop_back(&mut tokens);
+        while (!tokens.is_empty()) {
+            let token = tokens.pop_back();
             transfer::public_transfer(token, ADMIN);
         };
-        vector::destroy_empty(tokens);
+        tokens.destroy_empty();
         
         // Create tokens for with_existing test
         let asset_coin = coin::from_balance(balance::create_for_testing<u64>(500_000), ctx(&mut scenario));
         let mut tokens = coin_escrow::mint_complete_set_asset(&mut escrow, asset_coin, &clock, ctx(&mut scenario));
-        let existing_token = vector::remove(&mut tokens, 0); // Get outcome 0 asset token
+        let existing_token = tokens.remove(0); // Get outcome 0 asset token
         
         // Clean up remaining tokens
-        while (!vector::is_empty(&tokens)) {
-            let token = vector::pop_back(&mut tokens);
+        while (!tokens.is_empty()) {
+            let token = tokens.pop_back();
             transfer::public_transfer(token, ADMIN);
         };
-        vector::destroy_empty(tokens);
+        tokens.destroy_empty();
         
         // Create and swap with existing asset token
         let asset_coin = coin::from_balance(balance::create_for_testing<u64>(1_500_000), ctx(&mut scenario));
@@ -400,14 +394,14 @@ fun test_proposal_path_with_swaps() {
         // Create tokens for with_existing test
         let stable_coin = coin::from_balance(balance::create_for_testing<u64>(500_000), ctx(&mut scenario));
         let mut tokens = coin_escrow::mint_complete_set_stable(&mut escrow, stable_coin, &clock, ctx(&mut scenario));
-        let existing_token = vector::remove(&mut tokens, 1); // Get outcome 1 stable token
+        let existing_token = tokens.remove(1); // Get outcome 1 stable token
         
         // Clean up remaining tokens
-        while (!vector::is_empty(&tokens)) {
-            let token = vector::pop_back(&mut tokens);
+        while (!tokens.is_empty()) {
+            let token = tokens.pop_back();
             transfer::public_transfer(token, ADMIN);
         };
-        vector::destroy_empty(tokens);
+        tokens.destroy_empty();
         
         // Create and swap with existing stable token
         let stable_coin = coin::from_balance(balance::create_for_testing<u64>(100_000_000), ctx(&mut scenario));
@@ -424,8 +418,8 @@ fun test_proposal_path_with_swaps() {
         
         // Verify the liquidity has changed after our swaps
         let post_swap_liquidity = liquidity_interact::get_liquidity_for_proposal(&proposal);
-        assert!(*vector::borrow(&post_swap_liquidity, 0) > initial_asset_0, 1); // More assets in pool 0
-        assert!(*vector::borrow(&post_swap_liquidity, 3) > initial_stable_1, 2); // More stable in pool 1
+        assert!(post_swap_liquidity[0] > initial_asset_0, 1); // More assets in pool 0
+        assert!(post_swap_liquidity[3] > initial_stable_1, 2); // More stable in pool 1
         
         test::return_shared(proposal);
         test::return_shared(escrow);
@@ -483,7 +477,7 @@ fun test_proposal_path_with_swaps() {
         let winning_outcome = proposal::get_winning_outcome(&proposal);
 
         // Get escrow balances *before* emptying liquidity (optional comparison point)
-        let (asset_before, stable_before) = coin_escrow::get_balances(&escrow);
+        let (_, _) = coin_escrow::get_balances(&escrow);
 
         // Extract liquidity from the *winning* AMM pool
         liquidity_interact::empty_all_amm_liquidity(
@@ -497,7 +491,7 @@ fun test_proposal_path_with_swaps() {
         // Emptying liquidity *returns* the underlying coins from the AMM *to* the escrow.
         // The total amount available for redemption *increases* (or stays same if pool was empty).
         // The balances only decrease when users redeem winning tokens.
-        let (asset_after, stable_after) = coin_escrow::get_balances(&escrow);
+        let (_, _) = coin_escrow::get_balances(&escrow);
         // We can't make simple assertions like asset_after < asset_before here.
         // We expect the balances might *increase* as liquidity returns to the escrow.
         // The critical check is the next step.

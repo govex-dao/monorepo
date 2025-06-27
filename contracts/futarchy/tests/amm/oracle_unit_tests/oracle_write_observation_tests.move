@@ -2,14 +2,12 @@
 module futarchy::oracle_write_observation_tests {
     use futarchy::oracle::{
         Self, Oracle,
-        ETIMESTAMP_REGRESSION,
+        ETimestampRegression,
         // Add other error constants if needed for expected failures
     };
     use sui::clock::{Self, Clock};
     use sui::test_scenario::{Self as test, Scenario, ctx};
-    use std::debug;
     use std::u128;
-    use std::u256; // For type casting in assertions
 
     // ======== Test Constants ========
     const MARKET_START_TIME: u64 = 100_000;
@@ -67,7 +65,7 @@ module futarchy::oracle_write_observation_tests {
     // ======== Test Cases ========
 
     #[test]
-    #[expected_failure(abort_code = ETIMESTAMP_REGRESSION)]
+    #[expected_failure(abort_code = ETimestampRegression)]
     fun test_write_obs_fail_timestamp_regression() {
         let (mut scenario, clock_inst) = setup_scenario_and_clock();
         let test_ctx = ctx(&mut scenario);

@@ -47,20 +47,20 @@ fun test_price_capping_basic_scenarios() {
         // Test case 1: Basic upward movement within cap
         // Base price: 11000, max step:1000
         oracle::write_observation(&mut oracle_inst, delay_threshold + 100, 11900);
-        assert!(oracle::get_last_price(&oracle_inst) == 11900, 0);
+        assert!(oracle::last_price(&oracle_inst) == 11900, 0);
 
         // Test case 2: Basic upward movement exceeding cap
         oracle::write_observation(&mut oracle_inst, delay_threshold + 200, 12200);
         debug::print(&oracle_inst);
-        assert!(oracle::get_last_price(&oracle_inst) == 12000, 1);
+        assert!(oracle::last_price(&oracle_inst) == 12000, 1);
 
         // Test case 3: Basic downward movement within cap
         oracle::write_observation(&mut oracle_inst, delay_threshold + 300, 10100);
-        assert!(oracle::get_last_price(&oracle_inst) == 10100, 2);
+        assert!(oracle::last_price(&oracle_inst) == 10100, 2);
 
         // Test case 4: Basic downward movement exceeding cap
         oracle::write_observation(&mut oracle_inst, delay_threshold + 400, 9800);
-        assert!(oracle::get_last_price(&oracle_inst) == 10000, 3);
+        assert!(oracle::last_price(&oracle_inst) == 10000, 3);
 
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
@@ -78,7 +78,7 @@ fun test_price_capping_multi_window() {
 
         // First observation to establish baseline (INIT_PRICE = 10000)
         oracle::write_observation(&mut oracle_inst, delay_threshold + 100, INIT_PRICE);
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 0);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE, 0);
 
         // After one window:
         // The window TWAP becomes the base for capping
@@ -87,8 +87,8 @@ fun test_price_capping_multi_window() {
         oracle::write_observation(&mut oracle_inst, first_window_time, 13000);
 
         // Verify first window TWAP and new price
-        debug::print(&oracle::get_last_price(&oracle_inst));
-        assert!(oracle::get_last_price(&oracle_inst) == 11000, 0);
+        debug::print(&oracle::last_price(&oracle_inst));
+        assert!(oracle::last_price(&oracle_inst) == 11000, 0);
 
         // After second window:
         // New TWAP becomes base for capping
@@ -96,7 +96,7 @@ fun test_price_capping_multi_window() {
         oracle::write_observation(&mut oracle_inst, second_window_time, 15000);
 
         // Verify second window price
-        let second_window_price = oracle::get_last_price(&oracle_inst);
+        let second_window_price = oracle::last_price(&oracle_inst);
         assert!(second_window_price == 11998, 0);
         debug::print(&second_window_price);
 
@@ -116,17 +116,17 @@ fun test_price_capping_edge_cases() {
 
         // Test case 1: No change in price
         oracle::write_observation(&mut oracle_inst, delay_threshold + 100, INIT_PRICE);
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 0);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE, 0);
 
         // Test case 2: Very small price movement
         oracle::write_observation(&mut oracle_inst, delay_threshold + 200, INIT_PRICE + 1);
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE + 1, 1);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE + 1, 1);
 
         // Test case 3: Exactly at cap limit
         let exact_cap_price =
             INIT_PRICE + (TWAP_STEP_MAX as u128);
         oracle::write_observation(&mut oracle_inst, delay_threshold + 300, exact_cap_price);
-        assert!(oracle::get_last_price(&oracle_inst) == exact_cap_price, 2);
+        assert!(oracle::last_price(&oracle_inst) == exact_cap_price, 2);
 
         oracle::destroy_for_testing(oracle_inst);
         clock::destroy_for_testing(clock_inst);
@@ -167,7 +167,7 @@ fun test_price_capping_rapid_reversals() {
                 *vector::borrow(&prices, i),
             );
             assert!(
-                oracle::get_last_price(&oracle_inst) == *vector::borrow(&expected_prices, i),
+                oracle::last_price(&oracle_inst) == *vector::borrow(&expected_prices, i),
                 i,
             );
             i = i + 1;
@@ -190,24 +190,24 @@ fun test_price_capping_long_term_trend() {
         // Simulate a strong upward trend over multiple windows
         // First observation at delay threshold
         oracle::write_observation(&mut oracle_inst, delay_threshold, 15000);
-        let initial_cap = oracle::get_last_price(&oracle_inst);
+        let initial_cap = oracle::last_price(&oracle_inst);
 
         // After one window (allowed movement: 1000)
         let time1 = delay_threshold + TWAP_PRICE_CAP_WINDOW_PERIOD;
         oracle::write_observation(&mut oracle_inst, time1, 15000);
-        let price1 = oracle::get_last_price(&oracle_inst);
+        let price1 = oracle::last_price(&oracle_inst);
         assert!(price1 > initial_cap, 0);
 
         // After two windows (allowed movement: 2000)
         let time2 = time1 + TWAP_PRICE_CAP_WINDOW_PERIOD;
         oracle::write_observation(&mut oracle_inst, time2, 15000);
-        let price2 = oracle::get_last_price(&oracle_inst);
+        let price2 = oracle::last_price(&oracle_inst);
         assert!(price2 > price1, 1);
 
         // After three windows (allowed movement: 3000)
         let time3 = time2 + TWAP_PRICE_CAP_WINDOW_PERIOD;
         oracle::write_observation(&mut oracle_inst, time3, 15000);
-        let price3 = oracle::get_last_price(&oracle_inst);
+        let price3 = oracle::last_price(&oracle_inst);
         assert!(price3 > price2, 2);
 
         // Verify the trend is approaching target
@@ -228,7 +228,7 @@ fun test_multi_window_flash_attack() {
     
     // Set up normal trading pattern
     oracle::write_observation(&mut oracle_inst, delay_threshold + 100, 10000);
-    let initial_price = oracle::get_last_price(&oracle_inst);
+    let initial_price = oracle::last_price(&oracle_inst);
     
     // Flash attack: Attempt to push price up across multiple windows rapidly
     // Simulate 5 consecutive windows with maximum allowed upward pressure
@@ -237,7 +237,7 @@ fun test_multi_window_flash_attack() {
     
     while (i < 5) {
         oracle::write_observation(&mut oracle_inst, time, 20000); // Try extreme upward pressure
-        let actual_price = oracle::get_last_price(&oracle_inst);
+        let actual_price = oracle::last_price(&oracle_inst);
         
         // Just verify that manipulation is limited - price is below the attempted 20000
         assert!(actual_price < 20000, 0);
@@ -247,7 +247,7 @@ fun test_multi_window_flash_attack() {
     };
     
     // Check that over the entire attack period, price did increase
-    let final_price = oracle::get_last_price(&oracle_inst);
+    let final_price = oracle::last_price(&oracle_inst);
     assert!(final_price > initial_price, 1);
     
     oracle::destroy_for_testing(oracle_inst);
@@ -271,7 +271,7 @@ fun test_stale_oracle_attack() {
     
     // Attempt to manipulate after long inactivity
     oracle::write_observation(&mut oracle_inst, after_gap_time, 20000);
-    let post_gap_price = oracle::get_last_price(&oracle_inst);
+    let post_gap_price = oracle::last_price(&oracle_inst);
     
     // With a 3-day gap, the oracle should allow significant movement
     // The key is to verify that some capping is still occurring
@@ -280,7 +280,7 @@ fun test_stale_oracle_attack() {
     
     // Verify that a second extreme movement is still capped
     oracle::write_observation(&mut oracle_inst, after_gap_time + 1000, 5000);
-    let second_price = oracle::get_last_price(&oracle_inst);
+    let second_price = oracle::last_price(&oracle_inst);
     
     // Make sure there's some capping of the downward movement
     assert!(second_price < post_gap_price, 2); // Price did move down
@@ -348,12 +348,12 @@ fun test_zigzag_attack() {
     while (i < 5) {
         // First push price up maximally
         oracle::write_observation(&mut oracle_inst, time, 20000);
-        let high_price = oracle::get_last_price(&oracle_inst);
+        let high_price = oracle::last_price(&oracle_inst);
         
         // Then immediately try to push price down maximally at next window
         time = time + TWAP_PRICE_CAP_WINDOW_PERIOD;
         oracle::write_observation(&mut oracle_inst, time, 5000);
-        let low_price = oracle::get_last_price(&oracle_inst);
+        let low_price = oracle::last_price(&oracle_inst);
         
         // Calculate the amplitude of the swing
         let current_diff = high_price - low_price;

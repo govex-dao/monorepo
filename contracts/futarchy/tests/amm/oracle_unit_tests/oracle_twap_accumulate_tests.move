@@ -3,9 +3,8 @@ module futarchy::oracle_twap_accumulate_tests {
     use futarchy::oracle::{
         Self,
         Oracle,
-        ETIMESTAMP_REGRESSION,
-        EINTERNAL_TWAP_ERROR,
-        TWAP_PRICE_CAP_WINDOW // Make sure this is accessible or re-declare if private
+        ETimestampRegression,
+        EInternalTwapError
     };
     use sui::test_scenario::{Self as test, Scenario, ctx};
     use std::u64;
@@ -46,7 +45,7 @@ module futarchy::oracle_twap_accumulate_tests {
     // ======== Test Cases for twap_accumulate ========
 
     #[test]
-    #[expected_failure(abort_code = futarchy::oracle::ETIMESTAMP_REGRESSION)]
+    #[expected_failure(abort_code = ETimestampRegression)]
     fun test_accumulate_fail_timestamp_regression_direct() {
         let mut scenario = setup_scenario();
         let test_ctx = ctx(&mut scenario);
@@ -64,7 +63,7 @@ module futarchy::oracle_twap_accumulate_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = futarchy::oracle::ETIMESTAMP_REGRESSION)]
+    #[expected_failure(abort_code = ETimestampRegression)]
     fun test_accumulate_fail_inconsistent_state_last_ts_lt_window_end() {
         let mut scenario = setup_scenario();
         let test_ctx = ctx(&mut scenario);
@@ -83,7 +82,7 @@ module futarchy::oracle_twap_accumulate_tests {
     }
 
     #[test]
-    // Note: Forcing EINTERNAL_TWAP_ERROR (oracle.last_timestamp != timestamp at function end)
+    // Note: Forcing EInternalTwapError (oracle.last_timestamp != timestamp at function end)
     // is non-trivial without modifying the source code of twap_accumulate or its sub-functions
     // to intentionally misbehave, or discovering a subtle arithmetic bug.
     // The current implementation of twap_accumulate and its stages seems robust in ensuring
@@ -117,7 +116,7 @@ module futarchy::oracle_twap_accumulate_tests {
 
         // The critical assertion is inside twap_accumulate. If we reach here, it passed.
         // We can also verify the final oracle.last_timestamp.
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_timestamp, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_timestamp, 0);
 
         // Clean up
         oracle::destroy_for_testing(oracle_inst);
@@ -136,13 +135,13 @@ module futarchy::oracle_twap_accumulate_tests {
         oracle::set_last_window_end_for_testing(&mut oracle_inst, initial_ts - 20_000); // 80_000
         oracle::set_last_window_twap_for_testing(&mut oracle_inst, INIT_PRICE + 500);
         oracle::set_cumulative_prices_for_testing(&mut oracle_inst, 12345u256, 54321u256);
-        let initial_last_price = oracle::get_last_price(&oracle_inst); // Will be INIT_PRICE from new_oracle
+        let initial_last_price = oracle::last_price(&oracle_inst); // Will be INIT_PRICE from new_oracle
 
         // Call accumulate with timestamp == oracle.last_timestamp
         oracle::call_twap_accumulate_for_testing(&mut oracle_inst, initial_ts, OBSERVATION_PRICE);
 
         // Verify no accumulation stages run, oracle state unchanged
-        assert!(oracle::get_last_timestamp(&oracle_inst) == initial_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == initial_ts, 0);
         assert!(oracle::get_total_cumulative_price_for_testing(&oracle_inst) == 12345u256, 1);
         assert!(oracle::get_last_window_end_cumulative_price_for_testing(&oracle_inst) == 54321u256, 2);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == INIT_PRICE + 500, 3);
@@ -151,7 +150,7 @@ module futarchy::oracle_twap_accumulate_tests {
         // The only way last_price would change is if initial_last_price was different from the one set in new_oracle.
         // Let's ensure last_price is also monitored if it's expected to be stable.
         // The initial last_price is oracle.twap_initialization_price set by new_oracle.
-        assert!(oracle::get_last_price(&oracle_inst) == INIT_PRICE, 4);
+        assert!(oracle::last_price(&oracle_inst) == INIT_PRICE, 4);
 
 
         // Clean up
@@ -178,14 +177,14 @@ module futarchy::oracle_twap_accumulate_tests {
         oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, OBSERVATION_PRICE);
 
         // Expected: Stage 1 runs for `duration`. No boundary crossed.
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
 
         // Capped price: one_step_cap_price_change(10000, 10500, 100) = min(10500, 10000 + 100) = 10100
         let expected_capped_price = 10100u128;
         let expected_price_contribution = (expected_capped_price as u256) * (duration as u256);
         let expected_total_cum_price = initial_total_cum_price + expected_price_contribution;
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 1);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
         assert!(oracle::get_total_cumulative_price_for_testing(&oracle_inst) == expected_total_cum_price, 2);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == 0, 3); // Not updated
         assert!(oracle::debug_get_window_twap(&oracle_inst) == INIT_PRICE, 4); // Not updated
@@ -216,7 +215,7 @@ module futarchy::oracle_twap_accumulate_tests {
         oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, OBSERVATION_PRICE);
 
         // Assertions
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
 
         let expected_capped_price = 10100u128;
         let price_contribution = (expected_capped_price as u256) * (time_to_boundary as u256);
@@ -227,7 +226,7 @@ module futarchy::oracle_twap_accumulate_tests {
         let actual_window_twap = oracle::debug_get_window_twap(&oracle_inst);
 
         assert!(current_total_cum_price == price_contribution, 1); // total_cumulative_price = 0 + price_contribution
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 2);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 2);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == final_ts, 3);
         assert!(current_lwe_cum_price == current_total_cum_price, 4); // last_window_end_cumulative_price updated to total
 
@@ -255,13 +254,13 @@ module futarchy::oracle_twap_accumulate_tests {
         oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, OBSERVATION_PRICE);
 
         // Expected: Stage 1 runs for `WINDOW_SIZE`. Boundary hit. Stage 2 & 3 skip.
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
 
         let expected_capped_price = 10100u128;
         let price_contribution = (expected_capped_price as u256) * (WINDOW_SIZE as u256);
         let expected_window_twap = expected_capped_price; // Since it's constant over the window
 
-        assert!(oracle::get_last_price(&oracle_inst) == expected_capped_price, 1);
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
         assert!(oracle::get_total_cumulative_price_for_testing(&oracle_inst) == price_contribution, 2);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == final_ts, 3);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_window_twap, 4);
@@ -295,8 +294,8 @@ module futarchy::oracle_twap_accumulate_tests {
         //          New LWT after stage 2 will be INIT_PRICE.
         // Final state: last_ts = final_ts.
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
-        assert!(oracle::get_last_price(&oracle_inst) == price_for_multi_window, 1); // p_n_w_effective will be INIT_PRICE
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_price(&oracle_inst) == price_for_multi_window, 1); // p_n_w_effective will be INIT_PRICE
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == final_ts, 2);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == price_for_multi_window, 3);
 
@@ -360,7 +359,7 @@ module futarchy::oracle_twap_accumulate_tests {
         //                   p_n_w_effective = 8333 + min(1*100, 1667) = 8333 + 100 = 8433.
         // Total cum = (INIT_PRICE*50k) + (8433*60k).
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
         // P_N_W will be the last_price and new LWT
         let expected_final_lwt_and_price = lwt_after_stage1 + (TWAP_CAP_STEP as u128); // Simplified if price > LWT
                                                                                        // (assuming 1 window in S2, N_W * cap_step < G_abs)
@@ -377,7 +376,7 @@ module futarchy::oracle_twap_accumulate_tests {
             lwt_s1 - std::u128::min( (TWAP_CAP_STEP as u128) * (num_full_windows_in_stage2 as u128), lwt_s1 - price_no_cap_effect)
         };
         assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_final_lwt, 2);
-        assert!(oracle::get_last_price(&oracle_inst) == expected_final_lwt, 3);
+        assert!(oracle::last_price(&oracle_inst) == expected_final_lwt, 3);
 
         // Clean up
         oracle::destroy_for_testing(oracle_inst);
@@ -423,7 +422,7 @@ module futarchy::oracle_twap_accumulate_tests {
 
         // Assertions:
         // 1. oracle.last_timestamp should be the final timestamp.
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
 
         // 2. oracle.last_window_end should be the timestamp of the end of the last *full* window processed.
         //    In this scenario, this is the end of Stage 2.
@@ -457,7 +456,7 @@ module futarchy::oracle_twap_accumulate_tests {
 
         oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, OBSERVATION_PRICE);
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
         let expected_lwe_after_stage2 = (1 + num_full_windows_stage2) * WINDOW_SIZE;
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == expected_lwe_after_stage2, 1);
         // Further state checks for last_price, cumulative prices would be complex.
@@ -491,7 +490,7 @@ module futarchy::oracle_twap_accumulate_tests {
         // Stage 2: time_remaining = 25k. num_full_windows = 0. Skipped.
         // Stage 3: duration = 25k. LT becomes 85k. LWE remains 60k.
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == WINDOW_SIZE, 1); // End of Stage 1 window
 
         // Clean up
@@ -517,8 +516,8 @@ module futarchy::oracle_twap_accumulate_tests {
         // Stage 2: (num_total_windows - 1) windows.
         // Stage 3: 0 duration.
 
-        assert!(oracle::get_last_timestamp(&oracle_inst) == final_ts, 0);
-        assert!(oracle::get_last_price(&oracle_inst) == price, 1);
+        assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
+        assert!(oracle::last_price(&oracle_inst) == price, 1);
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == final_ts, 2);
         assert!(oracle::debug_get_window_twap(&oracle_inst) == price, 3);
 

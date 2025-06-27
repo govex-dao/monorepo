@@ -206,7 +206,9 @@ const UnifiedSearch = () => {
                                     />
                                   ) : (
                                     <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center text-xs text-gray-300 font-semibold">
-                                      {proposal.dao.dao_name.charAt(0).toUpperCase()}
+                                      {proposal.dao.dao_name
+                                        .charAt(0)
+                                        .toUpperCase()}
                                     </div>
                                   )}
                                 </div>

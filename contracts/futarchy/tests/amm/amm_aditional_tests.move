@@ -716,7 +716,7 @@ fun test_default_fee_behavior() {
 
 // ======== Min Liquidity Requirement Test ========
 #[test]
-#[expected_failure(abort_code = futarchy::amm::ELOW_LIQUIDITY)]
+#[expected_failure(abort_code = futarchy::amm::ELowLiquidity)]
 fun test_min_liquidity_requirement() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);

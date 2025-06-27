@@ -25,7 +25,7 @@ module futarchy::allowed_stable_tests {
 
     /// Test that by default, TEST_STABLE_COIN is not allowed.
     #[test]
-    #[expected_failure(abort_code = factory::ESTABLE_TYPE_NOT_ALLOWED)]
+    #[expected_failure(abort_code = factory::EStableTypeNotAllowed)]
     fun test_default_disallows_test_stable_coin() {
         let mut scenario = test::begin(@0xA);
         setup_factory(&mut scenario);
@@ -71,7 +71,7 @@ module futarchy::allowed_stable_tests {
 
     /// Test that after adding then removing TEST_STABLE_COIN, it is disallowed again.
     #[test]
-    #[expected_failure(abort_code = factory::ESTABLE_TYPE_NOT_ALLOWED)]
+    #[expected_failure(abort_code = factory::EStableTypeNotAllowed)]
     fun test_add_remove_and_check_test_stable_coin() {
         let mut scenario = test::begin(@0xA);
         setup_factory(&mut scenario);

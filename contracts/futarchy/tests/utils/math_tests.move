@@ -50,25 +50,25 @@ public fun test_mul_div_up() {
 }
 
 #[test]
-#[expected_failure(abort_code = math::EDIVIDE_BY_ZERO)]
+#[expected_failure(abort_code = futarchy::math::EDivideByZero)]
 public fun test_mul_div_div_by_zero() {
     math::mul_div_to_64(100, 100, 0);
 }
 
 #[test]
-#[expected_failure(abort_code = math::EDIVIDE_BY_ZERO)]
+#[expected_failure(abort_code = futarchy::math::EDivideByZero)]
 public fun test_mul_div_up_div_by_zero() {
     math::mul_div_up(100, 100, 0);
 }
 
 #[test]
-#[expected_failure(abort_code = math::EOVERFLOW)]
+#[expected_failure(abort_code = futarchy::math::EOverflow)]
 public fun test_mul_div_overflow() {
     math::mul_div_to_64(18446744073709551615, 18446744073709551615, 1);
 }
 
 #[test]
-#[expected_failure(abort_code = math::EOVERFLOW)]
+#[expected_failure(abort_code = futarchy::math::EOverflow)]
 public fun test_mul_div_up_overflow() {
     math::mul_div_up(18446744073709551615, 18446744073709551615, 1);
 }
@@ -93,7 +93,7 @@ public fun test_mul_div_to_128() {
 }
 
 #[test]
-#[expected_failure(abort_code = math::EDIVIDE_BY_ZERO)]
+#[expected_failure(abort_code = futarchy::math::EDivideByZero)]
 public fun test_mul_div_to_128_div_by_zero() {
     math::mul_div_to_128(100, 100, 0);
 }
@@ -138,7 +138,7 @@ public fun test_safe_u128_to_u64() {
 }
 
 #[test]
-#[expected_failure(abort_code = math::EVALUE_EXCEEDS_U64)]
+#[expected_failure(abort_code = futarchy::math::EValueExceedsU64)]
 public fun test_safe_u128_to_u64_overflow() {
     math::safe_u128_to_u64((u64::max_value!() as u128) + 1);
 }
@@ -209,13 +209,13 @@ public fun test_mul_div_mixed() {
 }
 
 #[test]
-#[expected_failure(abort_code = math::EDIVIDE_BY_ZERO)]
+#[expected_failure(abort_code = futarchy::math::EDivideByZero)]
 public fun test_mul_div_mixed_div_by_zero() {
     math::mul_div_mixed(1u128, 1u64, 0u128);
 }
 
 #[test]
-#[expected_failure(abort_code = math::EOVERFLOW)]
+#[expected_failure(abort_code = futarchy::math::EOverflow)]
 public fun test_mul_div_mixed_result_overflow() {
     let u128_max = u128::max_value!();
     math::mul_div_mixed(u128_max, 2u64, 1u128);

@@ -205,7 +205,7 @@ fun test_create_valid_proposal() {
 }
 
 #[test]
-#[expected_failure(abort_code = dao::EINVALID_MESSAGES)]
+#[expected_failure(abort_code = dao::EInvalidMessages)]
 fun test_create_proposal_invalid_messages() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);
@@ -291,7 +291,7 @@ fun test_create_proposal_invalid_messages() {
 }
 
 #[test]
-#[expected_failure(abort_code = dao::EDETAILS_TOO_SHORT)]
+#[expected_failure(abort_code = dao::EDetailsTooShort)]
 fun test_create_proposal_empty_details() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);
@@ -777,7 +777,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
 }
 
 #[test]
-#[expected_failure(abort_code = proposal::EINVALID_AMOUNT)]
+#[expected_failure(abort_code = proposal::EInvalidAmount)]
 fun test_create_proposal_with_insufficient_initial_amounts() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);

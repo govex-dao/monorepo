@@ -476,7 +476,9 @@ const CreateProposalForm = ({
 
     // Check if AI review has been done and passed
     if (!hasPassedReview) {
-      toast.error("Please get an AI review with a rating of at least 6/10 before submitting.");
+      toast.error(
+        "Please get an AI review with a rating of at least 6/10 before submitting.",
+      );
       return;
     }
 
@@ -700,15 +702,17 @@ const CreateProposalForm = ({
         />
 
         {/* AI Review Section */}
-        {formData.title && formData.description && formData.outcomeMessages.length >= 2 && (
-          <AIReviewSection
-            title={formData.title}
-            outcomeMessages={formData.outcomeMessages}
-            description={formData.description}
-            onReviewComplete={handleAIReviewComplete}
-            isDisabled={!formData.daoObjectId}
-          />
-        )}
+        {formData.title &&
+          formData.description &&
+          formData.outcomeMessages.length >= 2 && (
+            <AIReviewSection
+              title={formData.title}
+              outcomeMessages={formData.outcomeMessages}
+              description={formData.description}
+              onReviewComplete={handleAIReviewComplete}
+              isDisabled={!formData.daoObjectId}
+            />
+          )}
 
         <AdvancedSettings
           showAdvancedSettings={showAdvancedSettings}
@@ -746,7 +750,11 @@ const CreateProposalForm = ({
               : "bg-gray-700 text-gray-400 cursor-not-allowed"
           } disabled:cursor-not-allowed`}
         >
-          {isLoading ? "Creating..." : hasPassedReview ? "Create Proposal" : "AI Review Required (6+ rating out of 10)"}
+          {isLoading
+            ? "Creating..."
+            : hasPassedReview
+              ? "Create Proposal"
+              : "AI Review Required (6+ rating out of 10)"}
         </button>
       </form>
     </div>

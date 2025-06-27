@@ -489,7 +489,7 @@ fun test_price_impact_on_different_swap_sizes() {
 
 // ======== Slippage Tests ========
 #[test]
-#[expected_failure(abort_code = futarchy::amm::EEXCESSIVE_SLIPPAGE)]
+#[expected_failure(abort_code = futarchy::amm::EExcessiveSlippage)]
 fun test_excessive_slippage_protection() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);
@@ -520,7 +520,7 @@ fun test_excessive_slippage_protection() {
 
 // ======== Zero Amount Tests ========
 #[test]
-#[expected_failure(abort_code = futarchy::amm::EZERO_AMOUNT)]
+#[expected_failure(abort_code = futarchy::amm::EZeroAmount)]
 fun test_zero_amount_swap_asset_to_stable() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);
@@ -545,7 +545,7 @@ fun test_zero_amount_swap_asset_to_stable() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::amm::EZERO_AMOUNT)]
+#[expected_failure(abort_code = futarchy::amm::EZeroAmount)]
 fun test_zero_amount_swap_stable_to_asset() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);
@@ -571,7 +571,7 @@ fun test_zero_amount_swap_stable_to_asset() {
 
 // ======== Empty Pool Tests ========
 #[test]
-#[expected_failure(abort_code = futarchy::amm::EPOOL_EMPTY)]
+#[expected_failure(abort_code = futarchy::amm::EPoolEmpty)]
 fun test_swap_with_empty_pool() {
     let (mut scenario, clock) = setup_test();
     let (state) = setup_market(&mut scenario, &clock);
