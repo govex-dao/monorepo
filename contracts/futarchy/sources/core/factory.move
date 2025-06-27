@@ -1,9 +1,5 @@
 module futarchy::factory;
 
-// === Introduction ===
-// This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
-
-// === Imports ===
 use futarchy::dao;
 use futarchy::fee;
 use std::ascii::String as AsciiString;
@@ -15,6 +11,9 @@ use sui::coin::{Coin, CoinMetadata};
 use sui::event;
 use sui::sui::SUI;
 use sui::vec_set::{Self, VecSet};
+
+// === Introduction ===
+// This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
 
 // === Errors ===
 const EHighTwapThreshold: u64 = 0;
@@ -144,10 +143,7 @@ public entry fun create_dao<AssetType, StableType>(
 
     // Check if StableType is allowed
     let stable_type_str = get_type_string<StableType>();
-    assert!(
-        factory.allowed_stable_types.contains(&stable_type_str),
-        EStableTypeNotAllowed,
-    );
+    assert!(factory.allowed_stable_types.contains(&stable_type_str), EStableTypeNotAllowed);
 
     fee_manager.deposit_dao_creation_payment(payment, clock, ctx);
 

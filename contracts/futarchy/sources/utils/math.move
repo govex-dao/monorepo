@@ -1,11 +1,10 @@
 module futarchy::math;
 
-// === Introduction ===
-// Integer type conversion and integer methods
-
-// === Imports ===
 use std::u128;
 use std::u64;
+
+// === Introduction ===
+// Integer type conversion and integer methods
 
 // === Errors ===
 const EOverflow: u64 = 0;

@@ -1,18 +1,17 @@
 module futarchy::fee;
 
-// === Introduction ===
-// Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
-
-// === Imports ===
 use std::ascii::String as AsciiString;
 use std::type_name;
 use sui::balance::{Self, Balance};
-use sui::clock::{Clock};
-use sui::coin::{Coin};
+use sui::clock::Clock;
+use sui::coin::Coin;
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
 use sui::transfer::{public_share_object, public_transfer};
+
+// === Introduction ===
+// Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
 
 // === Errors ===
 const EInvalidPayment: u64 = 0;

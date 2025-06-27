@@ -1,16 +1,15 @@
 module futarchy::conditional_token;
 
+use futarchy::market_state;
+use sui::clock::Clock;
+use sui::event;
+
 // === Introduction ===
 // This is an implementation of a custom psuedo coin.
 // New coins (types) can't be created dynamically in Move
 
 // Long term using a table will likely be more scalable
 // market_amounts: Table<(ID, ID), Table<address, u64>>,
-
-// === Imports ===
-use futarchy::market_state;
-use sui::clock::Clock;
-use sui::event;
 
 // === Errors ===
 const EInvalidAssetType: u64 = 0;

@@ -1,9 +1,5 @@
 module futarchy::advance_stage;
 
-// === Introduction ===
-// This handles advancing proposal stages
-
-// === Imports ===
 use futarchy::coin_escrow;
 use futarchy::fee::FeeManager;
 use futarchy::liquidity_interact;
@@ -11,6 +7,9 @@ use futarchy::market_state::MarketState;
 use futarchy::proposal::Proposal;
 use sui::clock::Clock;
 use sui::event;
+
+// === Introduction ===
+// This handles advancing proposal stages
 
 // === Errors ===
 const EInvalidStateTransition: u64 = 0;
@@ -99,10 +98,7 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     fee_manager: &mut FeeManager,
     clock: &Clock,
 ) {
-    assert!(
-        escrow.get_market_state_id() == proposal.market_state_id(),
-        EInvalidState,
-    );
+    assert!(escrow.get_market_state_id() == proposal.market_state_id(), EInvalidState);
 
     let market_state = escrow.get_market_state_mut();
     try_advance_state(

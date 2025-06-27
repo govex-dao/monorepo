@@ -1,26 +1,19 @@
 module futarchy::proposal;
 
-// === Introduction ===
-// This defines the core proposal logic and details
-
-// === Imports ===
+use futarchy::amm::LiquidityPool;
+use futarchy::coin_escrow;
+use futarchy::liquidity_initialize;
+use futarchy::market_state;
+use futarchy::oracle;
 use std::ascii::String as AsciiString;
 use std::string::String;
 use std::type_name;
+use sui::balance::Balance;
+use sui::clock::Clock;
+use sui::event;
 
-use sui::{
-    balance::Balance,
-    clock::Clock,
-    event
-};
-
-use futarchy::{
-    amm::LiquidityPool,
-    coin_escrow,
-    liquidity_initialize,
-    market_state,
-    oracle
-};
+// === Introduction ===
+// This defines the core proposal logic and details
 
 // === Errors ===
 
