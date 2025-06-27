@@ -126,7 +126,7 @@ fun test_finalize_market() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_ALREADY_STARTED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingAlreadyStarted)]
 fun test_start_trading_twice() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -145,7 +145,7 @@ fun test_start_trading_twice() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_NOT_STARTED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingNotStarted)]
 fun test_end_trading_without_starting() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -163,7 +163,7 @@ fun test_end_trading_without_starting() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_ALREADY_ENDED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingAlreadyEnded)]
 fun test_end_trading_twice() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -183,7 +183,7 @@ fun test_end_trading_twice() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_NOT_ENDED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingNotEnded)]
 fun test_finalize_without_ending_trading() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -202,7 +202,7 @@ fun test_finalize_without_ending_trading() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::EALREADY_FINALIZED)]
+#[expected_failure(abort_code = futarchy::market_state::EAlreadyFinalized)]
 fun test_finalize_twice() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -223,7 +223,7 @@ fun test_finalize_twice() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::EOUTCOME_OUT_OF_BOUNDS)]
+#[expected_failure(abort_code = futarchy::market_state::EOutcomeOutOfBounds)]
 fun test_finalize_with_invalid_outcome() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -243,7 +243,7 @@ fun test_finalize_with_invalid_outcome() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ENOT_FINALIZED)]
+#[expected_failure(abort_code = futarchy::market_state::ENotFinalized)]
 fun test_get_winning_outcome_before_finalization() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -297,7 +297,7 @@ fun test_assert_functions() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_NOT_STARTED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingNotStarted)]
 fun test_assert_trading_active_fails_when_not_started() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -315,7 +315,7 @@ fun test_assert_trading_active_fails_when_not_started() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_ALREADY_ENDED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingAlreadyEnded)]
 fun test_assert_trading_active_fails_when_ended() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -337,7 +337,7 @@ fun test_assert_trading_active_fails_when_ended() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::EALREADY_FINALIZED)]
+#[expected_failure(abort_code = futarchy::market_state::EAlreadyFinalized)]
 fun test_assert_not_finalized_fails_when_finalized() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -360,7 +360,7 @@ fun test_assert_not_finalized_fails_when_finalized() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ENOT_FINALIZED)]
+#[expected_failure(abort_code = futarchy::market_state::ENotFinalized)]
 fun test_assert_market_finalized_fails_when_not_finalized() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -378,7 +378,7 @@ fun test_assert_market_finalized_fails_when_not_finalized() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::EOUTCOME_OUT_OF_BOUNDS)]
+#[expected_failure(abort_code = futarchy::market_state::EOutcomeOutOfBounds)]
 fun test_validate_outcome_fails_with_invalid_outcome() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -480,7 +480,7 @@ fun test_full_market_lifecycle() {
 }
 
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_ALREADY_ENDED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingAlreadyEnded)]
 fun test_assert_in_trading_or_pre_trading_fails_when_ended() {
     let mut scenario = test::begin(ADMIN);
     {
@@ -573,7 +573,7 @@ fun test_trading_with_maximum_duration() {
 
 // Test for finalization assertion
 #[test]
-#[expected_failure(abort_code = futarchy::market_state::ETRADING_ALREADY_ENDED)]
+#[expected_failure(abort_code = futarchy::market_state::ETradingAlreadyEnded)]
 fun test_assert_in_trading_or_pre_trading_fails_when_finalized() {
     let mut scenario = test::begin(ADMIN);
     {

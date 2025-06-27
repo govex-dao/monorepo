@@ -568,7 +568,7 @@ fun test_redeem_winning_tokens() {
 }
 
 #[test]
-#[expected_failure(abort_code = market_state::EOUTCOME_OUT_OF_BOUNDS)] // Use named constant
+#[expected_failure(abort_code = market_state::EOutcomeOutOfBounds)] // Use named constant
 fun test_register_supplies_invalid_outcome() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -587,7 +587,7 @@ fun test_register_supplies_invalid_outcome() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EINCORRECT_SEQUENCE)] // Use named constant
+#[expected_failure(abort_code = coin_escrow::EIncorrectSequence)] // Use named constant
 fun test_register_supplies_incorrect_sequence() {
     let mut ctx = create_test_context();
     let outcome_count = 3;
@@ -648,7 +648,7 @@ fun test_multi_outcome_market() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::ENOT_ENOUGH)] // Use named constant
+#[expected_failure(abort_code = coin_escrow::ENotEnough)] // Use named constant
 fun test_extract_fees_insufficient_balance() {
     let mut ctx = create_test_context();
     let outcome_count = 1;
@@ -803,7 +803,7 @@ fun test_entry_functions() {
 }
 
 #[test]
-#[expected_failure(abort_code = market_state::ENOT_FINALIZED)] // Check market_state error code
+#[expected_failure(abort_code = market_state::ENotFinalized)] // Check market_state error code
 fun test_redeem_winning_tokens_market_not_finalized() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -843,7 +843,7 @@ fun test_redeem_winning_tokens_market_not_finalized() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EWRONG_OUTCOME)] // Use named constant
+#[expected_failure(abort_code = coin_escrow::EWrongOutcome)] // Use named constant
 fun test_redeem_wrong_outcome_token() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -944,7 +944,7 @@ fun test_deposit_initial_liquidity_with_imbalanced_outcomes() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::ENOT_ENOUGH_LIQUIDITY)] // Use named constant
+#[expected_failure(abort_code = coin_escrow::ENotEnoughLiquidity)] // Use named constant
 fun test_remove_liquidity_insufficient_funds() {
     let mut ctx = create_test_context();
     let outcome_count = 1;
@@ -973,7 +973,7 @@ fun test_remove_liquidity_insufficient_funds() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EWRONG_OUTCOME)] // verify_token_set fails with this
+#[expected_failure(abort_code = coin_escrow::EWrongOutcome)] // verify_token_set fails with this
 fun test_verify_token_set_duplicate_outcomes() {
     let mut ctx = create_test_context();
     let outcome_count = 3;
@@ -1027,7 +1027,7 @@ fun test_verify_token_set_duplicate_outcomes() {
 // ===== Market State Tests =====
 
 #[test]
-#[expected_failure(abort_code = market_state::EALREADY_FINALIZED)] // Check market_state code
+#[expected_failure(abort_code = market_state::EAlreadyFinalized)] // Check market_state code
 fun test_mint_after_finalization() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1062,7 +1062,7 @@ fun test_mint_after_finalization() {
 }
 
 #[test]
-#[expected_failure(abort_code = market_state::ETRADING_ALREADY_ENDED)] // Check market_state code
+#[expected_failure(abort_code = market_state::ETradingAlreadyEnded)] // Check market_state code
 fun test_swap_after_trading_ended() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1145,7 +1145,7 @@ fun test_mint_redeem_large_outcome_set() {
 // ===== Edge Cases and Error Conditions =====
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EINCORRECT_SEQUENCE)] // verify_token_set expects full set
+#[expected_failure(abort_code = coin_escrow::EIncorrectSequence)] // verify_token_set expects full set
 fun test_redeem_incomplete_token_set() {
     let mut ctx = create_test_context();
     let outcome_count = 3;
@@ -1482,7 +1482,7 @@ fun test_boundary_values() {
 // ----- Fixed Tests based on original diagnostics -----
 
 #[test]
-#[expected_failure(abort_code = market_state::EOUTCOME_OUT_OF_BOUNDS)]
+#[expected_failure(abort_code = market_state::EOutcomeOutOfBounds)]
 fun test_register_supplies_invalid_outcome_fixed() { // Renamed slightly
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1499,7 +1499,7 @@ fun test_register_supplies_invalid_outcome_fixed() { // Renamed slightly
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EWRONG_OUTCOME)]
+#[expected_failure(abort_code = coin_escrow::EWrongOutcome)]
 fun test_redeem_wrong_outcome_token_fixed() { // Already fixed above, this is just confirmation
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1571,7 +1571,7 @@ fun test_supply_tracking_fixed() {
 
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EWRONG_MARKET)]
+#[expected_failure(abort_code = coin_escrow::EWrongMarket)]
 fun test_verify_token_set_wrong_market_fixed() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1607,7 +1607,7 @@ fun test_verify_token_set_wrong_market_fixed() {
 }
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EWRONG_TOKEN_TYPE)]
+#[expected_failure(abort_code = coin_escrow::EWrongTokenType)]
 fun test_verify_token_set_mixed_types_fixed() {
     let mut ctx = create_test_context();
     let outcome_count = 2;
@@ -1638,7 +1638,7 @@ fun test_verify_token_set_mixed_types_fixed() {
 
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EINSUFFICIENT_BALANCE)] // verify_token_set amount check
+#[expected_failure(abort_code = coin_escrow::EInsufficientBalance)] // verify_token_set amount check
 fun test_verify_token_set_different_amounts_fixed() {
     let mut ctx = create_test_context();
     let outcome_count = 2;

@@ -150,7 +150,7 @@ fun test_twap_accumulation_value_matches_expected_duration_constant_price() {
         let pool0 = vector::borrow(pools, 0);
 
         let oracle_ref = amm::get_oracle(pool0);
-        let total_cumulative_price_val = ft_oracle::get_total_cumulative_price(oracle_ref);
+        let total_cumulative_price_val = ft_oracle::total_cumulative_price(oracle_ref);
 
         let final_twaps_vec = proposal::get_twaps_for_proposal(&mut proposal_obj, &clock);
         let average_price_val = *vector::borrow(&final_twaps_vec, 0);

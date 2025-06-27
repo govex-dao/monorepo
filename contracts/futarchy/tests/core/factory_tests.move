@@ -159,7 +159,7 @@ module futarchy::factory_tests {
 
     // Test 1: Attempting to request verification for an already verified DAO should fail
     #[test]
-    #[expected_failure(abort_code = factory::EALREADY_VERIFIED)]
+    #[expected_failure(abort_code = factory::EAlreadyVerified)]
     fun test_request_verification_already_verified() {
         let mut scenario = test::begin(ADMIN);
         let clock = clock::create_for_testing(ctx(&mut scenario));
@@ -343,7 +343,7 @@ module futarchy::factory_tests {
 
     // Test 5: Test parameter validation in create_dao
     #[test]
-    #[expected_failure(abort_code = factory::ELONG_TRADING_TIME)]
+    #[expected_failure(abort_code = factory::ELongTradingTime)]
     fun test_create_dao_exceed_max_trading_time() {
         let mut scenario = test::begin(ADMIN);
         let clock = clock::create_for_testing(ctx(&mut scenario));
@@ -566,7 +566,7 @@ TWAP_INITIAL_OBSERVATION,
     }
 
     #[test]
-    #[expected_failure(abort_code = factory::EPAUSED)]
+    #[expected_failure(abort_code = factory::EPaused)]
     fun test_create_dao_when_paused() {
         let mut scenario = test::begin(ADMIN);
         setup(&mut scenario);
@@ -625,7 +625,7 @@ TWAP_INITIAL_OBSERVATION,
     }
 
     #[test]
-    #[expected_failure(abort_code = fee::EINVALID_PAYMENT)]
+    #[expected_failure(abort_code = fee::EInvalidPayment)]
     fun test_create_dao_invalid_payment() {
         let mut scenario = test::begin(ADMIN);
         setup(&mut scenario);
