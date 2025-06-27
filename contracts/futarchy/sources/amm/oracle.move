@@ -9,9 +9,6 @@ use sui::event;
 // === Introduction ===
 // Crankless Time Weighted Average Price (TWAP) Oracle
 
-#[test_only]
-use std::debug;
-
 // === Constants ===
 const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
 const ONE_WEEK_MS: u64 = 604_800_000;
@@ -483,6 +480,8 @@ public fun id(o: &Oracle): &UID {
 }
 
 // === Test Functions ===
+#[test_only]
+use std::debug;
 
 #[test_only]
 public fun debug_print_state(oracle: &Oracle) {
