@@ -1,4 +1,8 @@
 
+import { logSecurityError, escapeXml } from './security';
+import path from 'path';
+import fs from 'fs/promises';
+
 // Constants
 export const OG_IMAGE_DIMENSIONS = {
   width: 1200,
@@ -128,24 +132,8 @@ export function wrapText(
   return { lines, fontSize: currentFontSize, totalHeight };
 }
 
-export async function fetchAndEncodeImage(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-
-    if (!res.ok) {
-      throw new Error(`Failed to fetch image: ${res.status}`);
-    }
-
-    const buffer = await res.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
-    const mimeType = res.headers.get("content-type") || "image/png";
-
-    return `data:${mimeType};base64,${base64}`;
-  } catch (error) {
-    console.error('Error fetching image:', error);
-    return null;
-  }
-}
+// Note: fetchAndEncodeImage removed - we only use cached images now
+// This completely eliminates SSRF risk in OG image generation
 
 export const svgDefs = `
 <defs>
@@ -233,14 +221,18 @@ export function createDaoMainContent(name: string, description: string): string 
     650, 28, 100
   );
 
+  // Sanitize user input
+  const safeName = escapeXml(name);
+  const safeDescLines = descLines.map(line => escapeXml(line));
+
   return `
 <g transform="translate(220, 50)">
   <!-- DAO Name -->
-  <text x="0" y="40" font-family="Roboto, sans-serif" font-size="80" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${name}</text>
+  <text x="0" y="40" font-family="Roboto, sans-serif" font-size="80" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${safeName}</text>
   
   <!-- Description -->
   <g transform="translate(0, 90)">
-    ${descLines.map((line, index) =>
+    ${safeDescLines.map((line, index) =>
     `<text x="0" y="${index * (descFontSize + 8)}" font-family="Roboto, sans-serif" font-size="${descFontSize}" font-weight="400" fill="${COLORS.text.secondary}" opacity="0.9" letter-spacing="0.01em">${line}</text>`
   ).join('')}
   </g>
@@ -356,7 +348,7 @@ export function createAvatar({ x, y, size, image, fallbackText, clipId = 'avatar
   </clipPath>
   <image href="${image}" x="0" y="0" width="${size}" height="${size}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${clipId})" />
   ` : `
-  <text x="${radius}" y="${radius + 8}" font-family="Roboto, sans-serif" font-size="${size * 0.4}" font-weight="700" fill="${COLORS.text.tertiary}" text-anchor="middle">${fallbackText}</text>
+  <text x="${radius}" y="${radius + 8}" font-family="Roboto, sans-serif" font-size="${size * 0.4}" font-weight="700" fill="${COLORS.text.tertiary}" text-anchor="middle">${escapeXml(fallbackText)}</text>
   `}
 </g>`;
 }
@@ -429,7 +421,17 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   };
 
   const statusInfo = getStatusInfo(currentState);
-  const daoImage = daoLogo && daoLogo !== "placeholder" ? await fetchAndEncodeImage(daoLogo) : null;
+  // ONLY use cached image - no external URL fetching
+  let daoImage = null;
+  if (daoLogo && daoLogo !== "placeholder" && daoLogo.startsWith('/dao-images/')) {
+    try {
+      const imagePath = path.join(process.cwd(), 'public', daoLogo.substring(1));
+      const imageBuffer = await fs.readFile(imagePath);
+      daoImage = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+    } catch (err) {
+      logSecurityError('readCachedProposalImage', err);
+    }
+  }
 
   // Create outcome section if needed
   const createOutcomeSection = () => {
@@ -476,7 +478,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   
   <!-- Large outcome text with enhanced styling -->
   <text x="568" y="62" font-family="Roboto, sans-serif" font-size="42" font-weight="800" fill="${outcomeColor}" text-anchor="middle" letter-spacing="0.02em">
-    ${outcomeText}
+    ${escapeXml(outcomeText)}
   </text>
   
   ${currentState === 1 ? `
@@ -570,11 +572,11 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   })}
   
   <!-- DAO Name -->
-  <text x="110" y="75" font-family="Roboto, sans-serif" font-size="32" font-weight="600" fill="${COLORS.text.primary}" letter-spacing="0.02em">${daoName}</text>
+  <text x="110" y="75" font-family="Roboto, sans-serif" font-size="32" font-weight="600" fill="${COLORS.text.primary}" letter-spacing="0.02em">${escapeXml(daoName)}</text>
   
   <!-- Proposal Title -->
   ${titleLines.map((line, index) =>
-    `<text x="32" y="${160 + (index * (titleFontSize + 12))}" font-family="Roboto, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${line}</text>`
+    `<text x="32" y="${160 + (index * (titleFontSize + 12))}" font-family="Roboto, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
   ).join('')}
   
   <!-- Status Badge -->
@@ -606,9 +608,9 @@ export async function generateGeneralOG(): Promise<string> {
     80
   );
 
-  // Fetch and encode the Govex logo
-  const govexLogoUrl = "https://raw.githubusercontent.com/govex-dao/monorepo/refs/heads/main/frontend/public/images/govex-icon.png";
-  const govexLogo = await fetchAndEncodeImage(govexLogoUrl);
+  // Use a hardcoded base64 logo or cached version for Govex
+  // This avoids any external fetches
+  const govexLogo = null; // Will use fallback letter 'G' in SVG
 
   return `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
