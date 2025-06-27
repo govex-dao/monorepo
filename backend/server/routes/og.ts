@@ -8,13 +8,14 @@ import fs from 'fs/promises';
 
 const router = Router();
 
-router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response) => {
+router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
     const { daoId } = req.params;
     
     // Validate input
     if (!validateId(daoId)) {
-      return res.status(400).json({ error: 'Invalid DAO ID format' });
+      res.status(400).json({ error: 'Invalid DAO ID format' });
+      return;
     }
 
     const dao = await prisma.dao.findUnique({
@@ -37,7 +38,8 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
     });
 
     if (!dao) {
-      return res.status(404).json({ error: 'DAO not found' });
+      res.status(404).json({ error: 'DAO not found' });
+      return;
     }
     
     // ONLY use cached image - no fallback to external URLs
@@ -73,13 +75,14 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
   }
 });
 
-router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response) => {
+router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response): Promise<void> => {
   try {
     const { propId } = req.params;
     
     // Validate input
     if (!validateId(propId)) {
-      return res.status(400).json({ error: 'Invalid proposal ID format' });
+      res.status(400).json({ error: 'Invalid proposal ID format' });
+      return;
     }
 
     const proposal = await prisma.proposal.findUnique({
@@ -106,7 +109,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     });
 
     if (!proposal) {
-      return res.status(404).json({ error: 'Proposal not found' });
+      res.status(404).json({ error: 'Proposal not found' });
+      return;
     }
     
     const [swapCount, uniqueTraders] = await Promise.all([
@@ -155,7 +159,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
   }
 });
 
-router.get('/general', async (req: Request, res: Response) => {
+router.get('/general', async (req: Request, res: Response): Promise<void> => {
   try {
     const svg = await generateGeneralOG();
     const resvg = new Resvg(svg);
