@@ -16,11 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark-theme" style={{ colorScheme: "dark" }}>
-      <body className="bg-gray-900 text-white">
+      <body className="bg-gray-900 text-white min-h-screen">
         <Providers>
           <div className="min-h-screen flex flex-col">
             <Header />
-            <main className="flex-grow">
+            <main className="flex-1 flex flex-col">
               {children}
             </main>
             <Footer />
