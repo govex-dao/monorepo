@@ -27,7 +27,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SuiClientProvider
           networks={networkConfig}
-          defaultNetwork={process.env.NEXT_PUBLIC_NETWORK as any || "testnet"}
+          defaultNetwork="testnet"
         >
           <WalletProvider autoConnect>
             {children}
