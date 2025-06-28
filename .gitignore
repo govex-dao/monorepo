@@ -21,3 +21,6 @@ frontend/dist/
 **/.DS_Store
 
 dist/
+
+# Working directories
+working-next-js-railway/
