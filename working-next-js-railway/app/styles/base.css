@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.connect-wallet-wrapper > button {
+  @apply !bg-transparent !shadow-none !flex-shrink-0 !py-2 !px-3 !text-sm;
+}
+
+.sui-object-card .rt-CardInner {
+  @apply flex flex-col justify-between;
+}
+
+.rt-TooltipContent {
+  background-color: var(--gray-900) !important;
+  border: 1px solid var(--gray-700) !important;
+  box-shadow: none !important;
+}
+
+/* In your base.css */
+.rt-ContainerInner {
+  max-width: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+
+.prose a {
+  color: #3b82f6; /* Tailwind blue-500 */
+  text-decoration: underline;
+}
+.prose a:hover {
+  color: #2563eb; /* Tailwind blue-700 */
+}
