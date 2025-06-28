@@ -3,6 +3,7 @@
 import React from "react";
 import "@mysten/dapp-kit/dist/index.css";
 import "@radix-ui/themes/styles.css";
+import "./styles/base.css";
 import { getFullnodeUrl } from "@mysten/sui/client";
 import {
   SuiClientProvider,
@@ -11,6 +12,7 @@ import {
 } from "@mysten/dapp-kit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
+import { CONSTANTS } from "./constants";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <SuiClientProvider
           networks={networkConfig}
-          defaultNetwork="testnet"
+          defaultNetwork={CONSTANTS.network}
         >
           <WalletProvider autoConnect>
             {children}
