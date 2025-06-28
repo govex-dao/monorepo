@@ -16,7 +16,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark-theme" style={{ colorScheme: "dark" }}>
-      <body>
+      <body className="bg-gray-900 text-white">
         <Providers>
           <div className="min-h-screen flex flex-col">
             <Header />

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "../constants";
-import { Theme, Tooltip, DropdownMenu, Checkbox } from "@radix-ui/themes";
+import { Tooltip, DropdownMenu, Checkbox } from "@radix-ui/themes";
 import { constructUrlSearchParams } from "../utils/helpers";
 import { VerifiedIcon } from "../components/icons/VerifiedIcon";
 import { ChevronDownIcon } from "@radix-ui/react-icons";
@@ -196,7 +196,7 @@ export function TradeDashboard() {
   }
 
   return (
-    <Theme appearance="dark" className="flex flex-col items-center flex-grow">
+    <div className="flex flex-col items-center flex-grow">
       <div className="w-full px-6 py-6 pb-6 pt-0 max-w-7xl">
         <div className="flex flex-col md:flex-row md:justify-end gap-4">
           <UnifiedSearch />
@@ -244,7 +244,7 @@ export function TradeDashboard() {
           </div>
         )}
       </div>
-    </Theme>
+    </div>
   );
 }
 
