@@ -1,14 +1,10 @@
 'use client';
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  createChart,
+import type {
+  IChartApi,
   ISeriesApi,
   Time,
-  ColorType,
-  TickMarkType,
-  PriceScaleMode,
-  LineSeries,
   IPriceFormatter,
   LineSeriesPartialOptions,
 } from "lightweight-charts";
@@ -116,13 +112,16 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
   swapError,
 }: MarketPriceChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
+  const chartRef = useRef<IChartApi | null>(null);
   const seriesRefs = useRef<ISeriesApi<"Line">[]>([]); // Type ISeriesApi<"Line"> remains appropriate
+  const isInitializingRef = useRef(false);
   const [selectedRange, setSelectedRange] = useState("MAX");
+  const [isClient, setIsClient] = useState(false);
 
   const [userTimezoneOffsetSeconds, setUserTimezoneOffsetSeconds] = useState(0);
   
   useEffect(() => {
+    setIsClient(true);
     setUserTimezoneOffsetSeconds(new Date().getTimezoneOffset() * 60);
   }, []);
 
@@ -205,23 +204,23 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
       }
     };
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const { width } = entries[0].contentRect;
-      if (chartRef.current) {
-        chartRef.current.applyOptions({ width });
-        chartRef.current.timeScale().fitContent();
-      }
-    });
-
-    if (chartContainerRef.current) {
+    let resizeObserver: ResizeObserver | null = null;
+    
+    if (typeof ResizeObserver !== 'undefined' && chartContainerRef.current) {
+      resizeObserver = new ResizeObserver((entries) => {
+        const { width } = entries[0].contentRect;
+        if (chartRef.current) {
+          chartRef.current.applyOptions({ width });
+          chartRef.current.timeScale().fitContent();
+        }
+      });
       resizeObserver.observe(chartContainerRef.current);
     }
 
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
-      if (chartContainerRef.current) {
-        // Ensure current is not null before disconnecting
+      if (resizeObserver) {
         resizeObserver.disconnect();
       }
     };
@@ -463,15 +462,41 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
   }, [colors, outcome_messages, winningOutcomeIndex]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !chartContainerRef.current || !chartData.length) {
+    if (!isClient || typeof window === 'undefined' || !chartContainerRef.current || !chartData.length) {
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
       }
+      isInitializingRef.current = false;
       return;
     }
 
-    const chart = createChart(chartContainerRef.current, {
+    // Prevent double initialization
+    if (isInitializingRef.current) {
+      return;
+    }
+
+    // Double check container is still valid
+    if (!chartContainerRef.current || !document.body.contains(chartContainerRef.current)) {
+      return;
+    }
+
+    isInitializingRef.current = true;
+
+    // Store refs for cleanup
+    let crosshairMoveHandler: ((param: any) => void) | null = null;
+    let toolTip: HTMLDivElement | null = null;
+
+    // Add a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(async () => {
+      if (!chartContainerRef.current || !document.body.contains(chartContainerRef.current)) {
+        isInitializingRef.current = false;
+        return;
+      }
+
+      try {
+        const { createChart, ColorType, LineSeries, TickMarkType, PriceScaleMode } = await import('lightweight-charts');
+        const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 400,
       layout: {
@@ -510,7 +535,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         rightBarStaysOnScroll: true,
         tickMarkFormatter: (
           time: Time,
-          tickType: TickMarkType,
+          tickType: any,
           locale: string,
         ) => {
           const date = new Date((time as number) * 1000);
@@ -552,7 +577,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
       opacity?: string;
     }
 
-    const toolTip = document.createElement("div");
+    toolTip = document.createElement("div");
     if (!toolTip) return; // Safety check
     // All your original styling is preserved
     Object.assign(toolTip.style, {
@@ -578,7 +603,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
 
     // FIX CHANGE 1: The event handler is now a named function so we can unsubscribe from it later.
     // The logic inside is IDENTICAL to your original code.
-    const crosshairMoveHandler = (param: any) => {
+    crosshairMoveHandler = (param: any) => {
       if (
         param.point === undefined ||
         !param.time ||
@@ -588,9 +613,9 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         param.point.y < 0 ||
         param.point.y > chartContainerRef.current.clientHeight
       ) {
-        toolTip.style.display = "none";
+        if (toolTip) toolTip.style.display = "none";
       } else {
-        toolTip.style.display = "block";
+        if (toolTip) toolTip.style.display = "block";
 
         const tooltipEntries: TooltipEntry[] = [];
         param.seriesData.forEach(
@@ -633,27 +658,29 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           })
           .join("");
 
-        toolTip.innerHTML = toolTipHtml;
+        if (toolTip) {
+          toolTip.innerHTML = toolTipHtml;
 
-        // Your positioning logic is preserved
-        const chartWidth = chartContainerRef.current.clientWidth;
-        const chartHeight = chartContainerRef.current.clientHeight;
-        const toolTipWidth = toolTip.offsetWidth;
-        const toolTipHeight = toolTip.offsetHeight;
-        const yMargin = 15;
-        const xMargin = 15;
-        let top = param.point.y + yMargin;
-        let left = param.point.x + xMargin;
+          // Your positioning logic is preserved
+          const chartWidth = chartContainerRef.current.clientWidth;
+          const chartHeight = chartContainerRef.current.clientHeight;
+          const toolTipWidth = toolTip.offsetWidth;
+          const toolTipHeight = toolTip.offsetHeight;
+          const yMargin = 15;
+          const xMargin = 15;
+          let top = param.point.y + yMargin;
+          let left = param.point.x + xMargin;
 
-        if (left + toolTipWidth > chartWidth) {
-          left = param.point.x - toolTipWidth - xMargin;
+          if (left + toolTipWidth > chartWidth) {
+            left = param.point.x - toolTipWidth - xMargin;
+          }
+          if (top + toolTipHeight > chartHeight) {
+            top = param.point.y - toolTipHeight - yMargin;
+          }
+
+          toolTip.style.left = left + "px";
+          toolTip.style.top = top + "px";
         }
-        if (top + toolTipHeight > chartHeight) {
-          top = param.point.y - toolTipHeight - yMargin;
-        }
-
-        toolTip.style.left = left + "px";
-        toolTip.style.top = top + "px";
       }
     };
 
@@ -705,28 +732,44 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           );
     const adjustedEndTime = originalUTCEndTime - userTimezoneOffsetSeconds;
     const adjustedStartTime = getTimeRangeStart(selectedRange, adjustedEndTime);
-    chart.timeScale().setVisibleRange({
-      from: adjustedStartTime as Time,
-      to: adjustedEndTime as Time,
-    });
+        chart.timeScale().setVisibleRange({
+          from: adjustedStartTime as Time,
+          to: adjustedEndTime as Time,
+        });
+
+        isInitializingRef.current = false;
+      } catch (error) {
+        console.error('Error creating chart:', error);
+        isInitializingRef.current = false;
+      }
+    }, 100);
 
     // FIX CHANGE 3: The cleanup function now properly removes all resources.
     return () => {
+      clearTimeout(timeoutId);
+      isInitializingRef.current = false;
       if (chartRef.current) {
-        // 1. Unsubscribe the specific event handler
-        chartRef.current.unsubscribeCrosshairMove(crosshairMoveHandler);
-        // 2. Remove the chart instance itself
-        chartRef.current.remove();
-        chartRef.current = null;
+        try {
+          // 1. Unsubscribe the specific event handler
+          if (crosshairMoveHandler) {
+            chartRef.current.unsubscribeCrosshairMove(crosshairMoveHandler);
+          }
+          // 2. Remove the chart instance itself
+          chartRef.current.remove();
+          chartRef.current = null;
+        } catch (error) {
+          console.error('Error cleaning up chart:', error);
+        }
       }
       // 3. IMPORTANT: Remove the tooltip DOM element you manually created
-      if (toolTip.parentNode) {
+      if (toolTip && toolTip.parentNode) {
         toolTip.parentNode.removeChild(toolTip);
       }
       // 4. Clear the series refs
       seriesRefs.current = [];
     };
   }, [
+    isClient,
     chartData,
     outcome_count,
     outcome_messages,
@@ -787,7 +830,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           <div className="h-full flex items-center justify-center text-red-500">
             {statusMessage}
           </div>
-        ) : chartData.length > 1 || (chartData.length === 1 && tradingStart) ? ( // Show chart if there's at least one data point and trading has started
+        ) : isClient && (chartData.length > 1 || (chartData.length === 1 && tradingStart)) ? ( // Show chart if there's at least one data point and trading has started
           <div
             ref={chartContainerRef}
             style={{ width: "100%", height: "100%" }}
