@@ -175,7 +175,12 @@ const adjustPriceValue = (
   return adjustedValue.toFixed(10).replace(/\.?0+$/, "");
 };
 
-export function DaoView() {
+interface DaoViewProps {
+  initialDaoData?: DaoData | null;
+  initialProposalsData?: Proposal[] | null;
+}
+
+export function DaoView({ initialDaoData, initialProposalsData }: DaoViewProps) {
   const params = useParams();
   const daoId = Array.isArray(params.daoId) ? params.daoId[0] : params.daoId;
   const account = useCurrentAccount();
@@ -199,7 +204,8 @@ export function DaoView() {
       return data.data[0];
     },
     enabled: !!daoId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    initialData: initialDaoData || undefined,
+    staleTime: initialDaoData ? 5 * 60 * 1000 : 0, // 5 minutes if we have initial data
   });
 
   const { data: proposals, isLoading: isLoadingProposals } = useQuery<
@@ -216,7 +222,8 @@ export function DaoView() {
       return data.data;
     },
     enabled: !!daoId,
-    staleTime: 2 * 60 * 1000,
+    initialData: initialProposalsData || undefined,
+    staleTime: initialProposalsData ? 2 * 60 * 1000 : 0,
   });
 
   if (isLoading) {

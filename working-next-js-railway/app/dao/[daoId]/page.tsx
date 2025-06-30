@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { DaoView } from "../../routes/DaoView";
 import type { Metadata } from "next";
 import { CONSTANTS } from "../../constants";
+import { DaoSkeleton } from "../../components/LoadingStates";
 
 type Props = {
   params: Promise<{ daoId: string }>;
@@ -78,38 +79,52 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function DaoPage({ params }: Props) {
   const { daoId } = await params;
   
+  let dao = null;
+  let proposals = null;
   let jsonLd = null;
   
   try {
-    const response = await fetch(
-      `${CONSTANTS.apiEndpoint}daos?dao_id=${encodeURIComponent(daoId)}`,
-      { next: { revalidate: 300 } }
-    );
+    // Fetch DAO and proposals in parallel
+    const [daoResponse, proposalsResponse] = await Promise.all([
+      fetch(
+        `${CONSTANTS.apiEndpoint}daos?dao_id=${encodeURIComponent(daoId)}`,
+        { next: { revalidate: 300 } }
+      ),
+      fetch(
+        `${CONSTANTS.apiEndpoint}proposals?dao_id=${encodeURIComponent(daoId)}`,
+        { next: { revalidate: 120 } }
+      ),
+    ]);
     
-    if (response.ok) {
-      const data = await response.json();
-      const dao = data.data?.[0];
-      
-      if (dao) {
-        jsonLd = {
-          '@context': 'https://schema.org',
-          '@type': 'Organization',
-          name: dao.dao_name,
-          description: dao.dao_name === "Govex"
-            ? `Explore ${dao.dao_name}, the original DAO from this futarchy platform on Sui.`
-            : `Explore ${dao.dao_name}, a futarchy-governed DAO on Sui where prediction markets govern.`,
-          url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://govex.ai'}/dao/${dao.dao_id}`,
-          foundingDate: dao.timestamp,
-          logo: dao.icon_url || dao.icon_cache_path,
-          numberOfEmployees: {
-            '@type': 'QuantitativeValue',
-            value: dao.proposal_count || 0,
-          },
-        };
-      }
+    if (daoResponse.ok) {
+      const daoData = await daoResponse.json();
+      dao = daoData.data?.[0];
+    }
+    
+    if (proposalsResponse.ok) {
+      const proposalsData = await proposalsResponse.json();
+      proposals = proposalsData.data || [];
+    }
+    
+    if (dao) {
+      jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        name: dao.dao_name,
+        description: dao.dao_name === "Govex"
+          ? `Explore ${dao.dao_name}, the original DAO from this futarchy platform on Sui.`
+          : `Explore ${dao.dao_name}, a futarchy-governed DAO on Sui where prediction markets govern.`,
+        url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://govex.ai'}/dao/${dao.dao_id}`,
+        foundingDate: dao.timestamp,
+        logo: dao.icon_url || dao.icon_cache_path,
+        numberOfEmployees: {
+          '@type': 'QuantitativeValue',
+          value: proposals?.length || 0,
+        },
+      };
     }
   } catch (error) {
-    console.error("Error fetching DAO for structured data:", error);
+    console.error("Error fetching DAO data:", error);
   }
   
   return (
@@ -120,8 +135,8 @@ export default async function DaoPage({ params }: Props) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <Suspense fallback={<div>Loading...</div>}>
-        <DaoView />
+      <Suspense fallback={<DaoSkeleton />}>
+        <DaoView initialDaoData={dao} initialProposalsData={proposals} />
       </Suspense>
     </>
   );

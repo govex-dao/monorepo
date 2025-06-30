@@ -119,7 +119,14 @@ function ProposalCard({ proposal }: ProposalCardProps) {
   );
 }
 
-export function TradeDashboard() {
+interface TradeDashboardProps {
+  initialData?: {
+    proposals: ApiProposal[];
+    daos: any[];
+  };
+}
+
+export function TradeDashboard({ initialData }: TradeDashboardProps) {
   const [selectedStates, setSelectedStates] = useState<string[]>(
     stateOptions.map((option) => option.value),
   );
@@ -151,6 +158,8 @@ export function TradeDashboard() {
 
       return response.json();
     },
+    initialData: daoid ? undefined : (initialData ? { data: initialData.proposals } : undefined),
+    staleTime: initialData && !daoid ? 60 * 1000 : 0, // 1 minute if we have initial data
   });
 
   const filteredProposals = proposalsData?.data?.filter(

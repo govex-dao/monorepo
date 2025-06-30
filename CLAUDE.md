@@ -63,12 +63,24 @@
   - Footer: Replaced dynamic Date() with static value
 - **Status**: Build successful, all pages working, OG images generating correctly
 
-### 🚧 Remaining Phases
+#### Phase 5.1: Production Bug Fixes ✅
+- Fixed "Cannot read properties of undefined (reading 'add')" error
+- Root cause: react-helmet-async was being used without HelmetProvider
+- Solution: Removed react-helmet-async entirely, using Next.js native metadata system
+- Removed SEOMetadata component from all pages
+- **Status**: Production deployment working without errors
 
-#### Phase 6: Data Fetching Optimization
-- Convert to server components where possible
-- Implement loading states
-- Optimize parallel data loading
+#### Phase 6: Data Fetching Optimization ✅
+- Implemented server-side data fetching for all main pages:
+  - Home page: Pre-fetches proposals and DAOs
+  - DAO page: Pre-fetches DAO info and proposals in parallel
+  - Proposal page: Pre-fetches proposal data
+- Added professional skeleton loading states
+- Configured React Query to use initial data from server
+- Added proper caching with revalidation
+- **Status**: Build successful, initial data loading implemented
+
+### 🚧 Remaining Phases
 
 #### Phase 7: Final Migration
 - Remove Vite dependencies
@@ -77,33 +89,35 @@
 
 ## Next Immediate Steps
 
-1. **Deploy to Railway** (Checkpoint 5)
-   - Push all changes to git
-   - Deploy and verify OG images work in production
-   - Test with social media debuggers
+1. **Deploy to Railway** (Checkpoint 6) ✅
+   - Phase 5.1: Production bug fixes deployed
+   - Phase 6: Data fetching optimizations complete
+   - Server-side rendering for initial page loads
 
-2. **Start Phase 6: Data Fetching Optimization**
-   - Identify components that can be server components
-   - Implement proper loading states
-   - Optimize parallel data fetching
+2. **Performance Testing**
+   - Measure page load improvements
+   - Monitor Core Web Vitals
+   - Address the 2.6 second load time issue
 
-3. **Performance Testing**
-   - Compare loading times with Vite version
-   - Check Core Web Vitals
-   - Optimize bundle size
+3. **Start Phase 7: Final Migration**
+   - Remove remaining Vite dependencies
+   - Clean up unused code
+   - Final production deployment
 
 ## Known Issues to Address
 
-1. **Styling Differences**
-   - Some Radix UI components may need theme adjustments
-   - Ensure all dark mode styles match Vite app
+1. **Performance**
+   - Initial page load is slow (2.6 seconds)
+   - Large bundle sizes need optimization
+   - Consider code splitting and lazy loading
 
 2. **Data Fetching**
    - Currently all client-side with useQuery
    - Phase 6 will implement server-side fetching
 
-3. **Environment Variables**
-   - Ensure all NEXT_PUBLIC_ prefixed vars are set in Railway
+3. **Styling**
+   - Footer updated to use MinimalFooter (matching Vite app)
+   - All components now have consistent styling
    
 ## Environment Variables for Railway Deployment
 
@@ -149,54 +163,54 @@ Migration plan to convert the current Vite frontend to Next.js 15 (App Router) w
 
 ## Migration Strategy
 
-### Phase 1: Foundation Setup (Checkpoint 1)
+### Phase 1: Foundation Setup ✅
 **Goal**: Set up Next.js project structure and basic configuration
 
-1. **Update Dependencies**
+1. **Update Dependencies** ✅
    - Keep existing Next.js 15 and React 19 RC
    - Add missing dependencies from Vite project:
      - `lightweight-charts`, `recharts`
      - `react-router-dom` types (for migration helpers)
      - Any missing UI components
 
-2. **Configure Next.js**
+2. **Configure Next.js** ✅
    - Set up next.config.ts with:
      - Image optimization settings
      - Environment variables
      - API proxy configuration
    - Configure TypeScript paths
 
-3. **Port Styles and Assets**
+3. **Port Styles and Assets** ✅
    - Copy all CSS from frontend/src/styles
    - Copy public assets and images
    - Update Tailwind configuration
 
-**Checkpoint 1**: Deploy to Railway and verify basic setup works
+**Checkpoint 1**: Deploy to Railway and verify basic setup works ✅
 
-### Phase 2: Component Migration (Checkpoint 2)
+### Phase 2: Component Migration ✅
 **Goal**: Migrate all components without routing
 
-1. **Copy Component Structure**
+1. **Copy Component Structure** ✅
    - Create components directory in app/
    - Port all components maintaining folder structure:
      - icons/, navigation/, daos/, trade/, learn/
    - Convert imports from Vite aliases to Next.js
 
-2. **Port Utilities and Types**
+2. **Port Utilities and Types** ✅
    - Copy utils/, types/, hooks/, mutations/
    - Update import paths
    - Create constants file
 
-3. **Set Up Providers**
-   - Enhance existing providers.tsx with HelmetProvider equivalent
+3. **Set Up Providers** ✅
+   - Enhance existing providers.tsx (removed HelmetProvider - not needed)
    - Ensure all contexts work properly
 
-**Checkpoint 2**: Deploy and verify components render in existing pages
+**Checkpoint 2**: Deploy and verify components render in existing pages ✅
 
-### Phase 3: Dynamic Routes (Checkpoint 3)
+### Phase 3: Dynamic Routes ✅
 **Goal**: Implement dynamic routing with proper folder structure
 
-1. **Create Dynamic Route Folders**
+1. **Create Dynamic Route Folders** ✅
    ```
    app/
    ├── trade/

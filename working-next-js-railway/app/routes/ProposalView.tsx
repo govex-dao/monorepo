@@ -115,7 +115,11 @@ const useWindowWidth = () => {
   return width;
 };
 
-export function ProposalView() {
+interface ProposalViewProps {
+  initialData?: ApiProposal | null;
+}
+
+export function ProposalView({ initialData }: ProposalViewProps) {
   const account = useCurrentAccount();
   const params = useParams();
   const proposalId = Array.isArray(params.proposalId) ? params.proposalId[0] : params.proposalId;
@@ -139,6 +143,8 @@ export function ProposalView() {
       }
       return response.json();
     },
+    initialData: initialData || undefined,
+    staleTime: initialData ? 2 * 60 * 1000 : 0, // 2 minutes if we have initial data
   });
 
   const {

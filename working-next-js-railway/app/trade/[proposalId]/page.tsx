@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { ProposalView } from "../../routes/ProposalView";
 import type { Metadata } from "next";
 import { CONSTANTS } from "../../constants";
+import { ProposalSkeleton } from "../../components/LoadingStates";
 
 type Props = {
   params: Promise<{ proposalId: string }>;
@@ -74,6 +75,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProposalPage({ params }: Props) {
   const { proposalId } = await params;
   
+  let proposal = null;
   let jsonLd = null;
   
   try {
@@ -83,7 +85,7 @@ export default async function ProposalPage({ params }: Props) {
     );
     
     if (response.ok) {
-      const proposal = await response.json();
+      proposal = await response.json();
       
       if (proposal) {
         jsonLd = {
@@ -123,8 +125,8 @@ export default async function ProposalPage({ params }: Props) {
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       )}
-      <Suspense fallback={<div>Loading...</div>}>
-        <ProposalView />
+      <Suspense fallback={<ProposalSkeleton />}>
+        <ProposalView initialData={proposal} />
       </Suspense>
     </>
   );
