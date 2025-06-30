@@ -495,7 +495,22 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
       }
 
       try {
-        const { createChart, ColorType, LineSeries, TickMarkType, PriceScaleMode } = await import('lightweight-charts');
+        const lightweightCharts = await import('lightweight-charts');
+        
+        if (!lightweightCharts || !lightweightCharts.createChart) {
+          console.error('Failed to load lightweight-charts library');
+          isInitializingRef.current = false;
+          return;
+        }
+        
+        const { createChart, ColorType, LineSeries, TickMarkType, PriceScaleMode } = lightweightCharts;
+        
+        if (!chartContainerRef.current || !document.body.contains(chartContainerRef.current)) {
+          console.error('Chart container is not available');
+          isInitializingRef.current = false;
+          return;
+        }
+        
         const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: 400,
@@ -565,6 +580,12 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
       handleScroll: false,
       handleScale: false,
     });
+    if (!chart) {
+      console.error('Failed to create chart instance');
+      isInitializingRef.current = false;
+      return;
+    }
+    
     chartRef.current = chart;
 
     // --- TOOLTIP LOGIC ---
@@ -687,7 +708,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
     // FIX CHANGE 2: Subscribe using the named handler.
     chart.subscribeCrosshairMove(crosshairMoveHandler);
 
-    seriesRefs.current = Array.from(
+    const allSeries = Array.from(
       { length: Number(outcome_count) },
       (_, i) => {
         const isResolved = winningOutcomeIndex !== null;
@@ -713,16 +734,28 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           seriesOptions.priceLineColor = `#${toHex(dim(r))}${toHex(dim(g))}${toHex(dim(b))}`;
         }
 
-        const lineSeries = chart.addSeries(LineSeries, seriesOptions);
-        lineSeries.setData(
-          chartData.map((point) => ({
-            time: point.time as Time,
-            value: point[`market${i}`],
-          })),
-        );
-        return lineSeries;
+        try {
+          const lineSeries = chart.addSeries(LineSeries, seriesOptions);
+          if (!lineSeries) {
+            console.error(`Failed to create series ${i}`);
+            return null;
+          }
+          lineSeries.setData(
+            chartData.map((point) => ({
+              time: point.time as Time,
+              value: point[`market${i}`],
+            })),
+          );
+          return lineSeries;
+        } catch (error) {
+          console.error(`Error creating series ${i}:`, error);
+          return null;
+        }
       },
     );
+    
+    // Filter out any null series
+    seriesRefs.current = allSeries.filter((series): series is ISeriesApi<"Line"> => series !== null);
 
     const originalUTCEndTime =
       currentState === 1

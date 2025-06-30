@@ -3,7 +3,10 @@
 import dynamic from 'next/dynamic';
 
 const MarketPriceChart = dynamic(
-  () => import('./MarketPriceChart'),
+  () => import('./MarketPriceChart').catch(err => {
+    console.error('Failed to load MarketPriceChart:', err);
+    return { default: () => <div className="flex items-center justify-center h-[400px] bg-gray-800 rounded-lg text-red-500">Failed to load chart</div> };
+  }),
   { 
     ssr: false,
     loading: () => (
