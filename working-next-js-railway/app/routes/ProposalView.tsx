@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { CONSTANTS, QueryKey } from "../constants";
 import { useState, useEffect } from "react";
 import { Theme } from "@radix-ui/themes";
-import { SEOMetadata } from "../components/SEOMetadata";
 import MarketPriceChartWrapper from "../components/trade/MarketPriceChartWrapper";
 import TradeForm from "../components/trade/TradeForm";
 import { VerifiedIcon } from "../components/icons/VerifiedIcon";
@@ -201,19 +200,6 @@ export function ProposalView() {
 
   return (
     <Theme appearance="dark" className="flex flex-col flex-1">
-      <SEOMetadata
-        proposal={proposal ? {
-          id: proposal.proposal_id,
-          title: proposal.title,
-          details: proposal.details,
-          daoName: proposal.dao_name,
-          daoId: proposal.dao_id,
-          currentState: proposal.current_state,
-          createdAt: proposal.created_at,
-          outcomeMessages: proposal.outcome_messages,
-          winningOutcome: proposal.winning_outcome ? proposal.outcome_messages[Number(proposal.winning_outcome)] : undefined
-        } : undefined}
-      />
       <h1 className="text-3xl font-bold mt-4 pr-6 pl-7 flex flex-row flex-wrap items-center gap-x-1 gap-y-1">
         {/* DAO Name and Icon Link */}
         <Link

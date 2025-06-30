@@ -498,7 +498,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         const lightweightCharts = await import('lightweight-charts');
         
         if (!lightweightCharts || !lightweightCharts.createChart) {
-          console.error('Failed to load lightweight-charts library');
           isInitializingRef.current = false;
           return;
         }
@@ -506,7 +505,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         const { createChart, ColorType, LineSeries, TickMarkType, PriceScaleMode } = lightweightCharts;
         
         if (!chartContainerRef.current || !document.body.contains(chartContainerRef.current)) {
-          console.error('Chart container is not available');
           isInitializingRef.current = false;
           return;
         }
@@ -517,7 +515,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         const height = 400;
         
         if (width === 0) {
-          console.error('Chart container has no width');
           isInitializingRef.current = false;
           return;
         }
@@ -592,7 +589,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
       handleScale: false,
     });
     if (!chart) {
-      console.error('Failed to create chart instance');
       isInitializingRef.current = false;
       return;
     }
@@ -748,7 +744,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         try {
           const lineSeries = chart.addSeries(LineSeries, seriesOptions);
           if (!lineSeries) {
-            console.error(`Failed to create series ${i}`);
             return null;
           }
           lineSeries.setData(
@@ -759,7 +754,6 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           );
           return lineSeries;
         } catch (error) {
-          console.error(`Error creating series ${i}:`, error);
           return null;
         }
       },
@@ -786,7 +780,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         console.error('Error creating chart:', error);
         isInitializingRef.current = false;
       }
-    }, 250); // Increased delay to ensure DOM stability
+    }, 100);
 
     // FIX CHANGE 3: The cleanup function now properly removes all resources.
     return () => {

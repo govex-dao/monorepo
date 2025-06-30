@@ -12,7 +12,6 @@ import {
   Badge,
   Dialog,
 } from "@radix-ui/themes";
-import { SEOMetadata } from "../components/SEOMetadata";
 import { useCurrentAccount } from "@mysten/dapp-kit";
 import { ExplorerLink } from "../components/ExplorerLink";
 import { VerifiedIcon } from "../components/icons/VerifiedIcon";
@@ -303,18 +302,6 @@ export function DaoView() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      <SEOMetadata
-        dao={dao ? {
-          id: dao.dao_id,
-          name: dao.dao_name,
-          iconUrl: dao.icon_url || dao.icon_cache_path || undefined,
-          verified: dao.verification?.verified,
-          assetSymbol: dao.asset_symbol,
-          stableSymbol: dao.stable_symbol,
-          proposalCount: proposals?.length || 0,
-          timestamp: dao.timestamp
-        } : undefined}
-      />
       {/* Header Section */}
       <div className="relative flex flex-wrap items-end justify-between w-full mt-24">
         <div className="h-48 w-full absolute -z-20 -top-32 rounded-xl bg-gradient-to-r from-indigo-900/40 to-purple-900/40 overflow-hidden" />

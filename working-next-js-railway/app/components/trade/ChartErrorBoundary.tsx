@@ -19,12 +19,14 @@ class ChartErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    console.error('Chart error boundary caught:', error);
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Chart error details:', error, errorInfo);
+    // Log to error reporting service in production
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Chart error:', error, errorInfo);
+    }
   }
 
   render() {
