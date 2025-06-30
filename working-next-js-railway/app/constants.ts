@@ -23,6 +23,7 @@ export const CONSTANTS = {
       ? process.env.NEXT_PUBLIC_API_URL 
       : `${process.env.NEXT_PUBLIC_API_URL}/`
     : "https://www.govex.ai/api/",
+  appUrl: process.env.NEXT_PUBLIC_APP_URL || "https://govex.ai",
   futarchyPackage:
     network === "mainnet"
       ? mainnetfutarchy.packageId
