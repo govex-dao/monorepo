@@ -53,13 +53,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         type: "article",
         publishedTime: proposal.created_at,
         authors: [proposal.dao_name],
-        images: [`${CONSTANTS.apiEndpoint}og/proposal/${proposal.proposal_id}`],
+        images: [`/api/og/proposal/${proposal.proposal_id}`],
       },
       twitter: {
         card: "summary_large_image",
         title,
         description,
-        images: [`${CONSTANTS.apiEndpoint}og/proposal/${proposal.proposal_id}`],
+        images: [`/api/og/proposal/${proposal.proposal_id}`],
       },
     };
   } catch (error) {

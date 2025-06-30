@@ -57,13 +57,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         title,
         description,
         type: "website",
-        images: [`${CONSTANTS.apiEndpoint}og/dao/${dao.dao_id}`],
+        images: [`/api/og/dao/${dao.dao_id}`],
       },
       twitter: {
         card: "summary_large_image",
         title,
         description,
-        images: [`${CONSTANTS.apiEndpoint}og/dao/${dao.dao_id}`],
+        images: [`/api/og/dao/${dao.dao_id}`],
       },
     };
   } catch (error) {

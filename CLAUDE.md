@@ -42,7 +42,8 @@
   - Article schema for proposal pages
 - Fixed Next.js 15 async params compatibility
 - Separated viewport configuration per Next.js 15 requirements
-- **Status**: Build successful, ready for Railway deployment
+- Fixed API endpoint configuration to handle URLs with/without trailing slashes
+- **Status**: Build successful, deployed to Railway, proposals loading correctly
 
 ### 🚧 Remaining Phases
 
