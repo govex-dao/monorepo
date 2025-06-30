@@ -39,6 +39,16 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  
+  // Disable minification for debugging
+  swcMinify: false,
+  productionBrowserSourceMaps: true,
+  webpack: (config, { dev }) => {
+    if (!dev) {
+      config.optimization.minimize = false;
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

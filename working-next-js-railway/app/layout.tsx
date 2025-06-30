@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "./providers";
 import { Header } from "./components/navigation/Header";
-import { Footer } from "./components/navigation/Footer";
+import { MinimalFooter } from "./components/navigation/Footer";
 import "./styles/base.css";
 
 export const metadata: Metadata = {
@@ -102,7 +102,7 @@ export default function RootLayout({
             <main className="flex-1 flex flex-col">
               {children}
             </main>
-            <Footer />
+            <MinimalFooter />
           </div>
         </Providers>
       </body>
