@@ -189,7 +189,7 @@ const MarketPriceChart = ({
   };
 
   useEffect(() => {
-    if (!chartContainerRef.current || !chartRef.current) return;
+    if (typeof window === 'undefined' || !chartContainerRef.current || !chartRef.current) return;
 
     const handleResize = () => {
       if (chartRef.current && chartContainerRef.current) {
@@ -459,7 +459,7 @@ const MarketPriceChart = ({
   }, [colors, outcome_messages, winningOutcomeIndex]);
 
   useEffect(() => {
-    if (!chartContainerRef.current || !chartData.length) {
+    if (typeof window === 'undefined' || !chartContainerRef.current || !chartData.length) {
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
@@ -549,6 +549,7 @@ const MarketPriceChart = ({
     }
 
     const toolTip = document.createElement("div");
+    if (!toolTip) return; // Safety check
     // All your original styling is preserved
     Object.assign(toolTip.style, {
       position: "absolute",
@@ -567,7 +568,9 @@ const MarketPriceChart = ({
       borderRadius: "8px",
       color: "rgb(209, 213, 219)",
     });
-    chartContainerRef.current.appendChild(toolTip);
+    if (chartContainerRef.current) {
+      chartContainerRef.current.appendChild(toolTip);
+    }
 
     // FIX CHANGE 1: The event handler is now a named function so we can unsubscribe from it later.
     // The logic inside is IDENTICAL to your original code.
