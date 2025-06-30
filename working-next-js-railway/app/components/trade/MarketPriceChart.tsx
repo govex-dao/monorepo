@@ -487,7 +487,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
     let crosshairMoveHandler: ((param: any) => void) | null = null;
     let toolTip: HTMLDivElement | null = null;
 
-    // Add a small delay to ensure DOM is ready
+    // Add a larger delay to ensure DOM is fully ready in production
     const timeoutId = setTimeout(async () => {
       if (!chartContainerRef.current || !document.body.contains(chartContainerRef.current)) {
         isInitializingRef.current = false;
@@ -511,9 +511,20 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
           return;
         }
         
-        const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
+        // Ensure container has dimensions before creating chart
+        const container = chartContainerRef.current;
+        const width = container.clientWidth || container.offsetWidth || 800;
+        const height = 400;
+        
+        if (width === 0) {
+          console.error('Chart container has no width');
+          isInitializingRef.current = false;
+          return;
+        }
+        
+        const chart = createChart(container, {
+      width: width,
+      height: height,
       layout: {
         background: { type: ColorType.Solid, color: "#111113" },
         textColor: "#ffffff",
@@ -775,7 +786,7 @@ const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
         console.error('Error creating chart:', error);
         isInitializingRef.current = false;
       }
-    }, 100);
+    }, 250); // Increased delay to ensure DOM stability
 
     // FIX CHANGE 3: The cleanup function now properly removes all resources.
     return () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import ChartErrorBoundary from './ChartErrorBoundary';
 
 const MarketPriceChart = dynamic(
   () => import('./MarketPriceChart').catch(err => {
@@ -18,5 +19,9 @@ const MarketPriceChart = dynamic(
 );
 
 export default function MarketPriceChartWrapper(props: any) {
-  return <MarketPriceChart {...props} />;
+  return (
+    <ChartErrorBoundary>
+      <MarketPriceChart {...props} />
+    </ChartErrorBoundary>
+  );
 }
