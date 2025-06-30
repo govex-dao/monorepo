@@ -1,35 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import dynamic from 'next/dynamic';
+import { lazy, Suspense } from 'react';
 
-// Dynamic import with no SSR
-const MarketPriceChart = dynamic(
-  () => import('./MarketPriceChart').then(mod => mod.default),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center justify-center h-[400px] bg-gray-800 rounded-lg">
-        <div className="text-gray-400">Loading chart...</div>
-      </div>
-    ),
-  }
-);
+const MarketPriceChart = lazy(() => import('./MarketPriceChart'));
 
 export default function MarketPriceChartWrapper(props: any) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  if (!isMounted) {
-    return (
+  return (
+    <Suspense fallback={
       <div className="flex items-center justify-center h-[400px] bg-gray-800 rounded-lg">
         <div className="text-gray-400">Loading chart...</div>
       </div>
-    );
-  }
-
-  return <MarketPriceChart {...props} />;
+    }>
+      <MarketPriceChart {...props} />
+    </Suspense>
+  );
 }
