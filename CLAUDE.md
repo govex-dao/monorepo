@@ -1,6 +1,6 @@
 # Vite to Next.js Migration Plan for Dynamic OG Cards
 
-## Current Progress (As of Phase 3 Completion)
+## Current Progress (As of Phase 4 Completion)
 
 ### ✅ Completed Phases
 
@@ -30,14 +30,23 @@
   - Fixed footer positioning with flex layout
 - **Status**: Dynamic routes tested and working
 
+#### Phase 4: Metadata & SEO ✅
+- Implemented comprehensive default metadata in root layout
+- Created generateMetadata functions for all pages:
+  - Static metadata for create and learn pages
+  - Dynamic metadata for DAO and proposal pages (fetches data server-side)
+- Added structured data (JSON-LD) for all pages:
+  - WebApplication schema for root
+  - EducationalOrganization schema for learn page  
+  - Organization schema for DAO pages
+  - Article schema for proposal pages
+- Fixed Next.js 15 async params compatibility
+- Separated viewport configuration per Next.js 15 requirements
+- **Status**: Build successful, ready for Railway deployment
+
 ### 🚧 Remaining Phases
 
-#### Phase 4: Metadata & SEO (Next)
-- Convert SEOMetadata component to generateMetadata functions
-- Implement server-side metadata for each page
-- Add structured data
-
-#### Phase 5: Dynamic OG Image Generation
+#### Phase 5: Dynamic OG Image Generation (Next)
 - Create API routes for OG image generation
 - Implement image generation matching current design
 - Test social media previews
@@ -78,6 +87,18 @@
 
 3. **Environment Variables**
    - Ensure all NEXT_PUBLIC_ prefixed vars are set in Railway
+   
+## Environment Variables for Railway Deployment
+
+Set these environment variables in your Railway project settings:
+
+```env
+NEXT_PUBLIC_API_URL=https://www.govex.ai/api
+NEXT_PUBLIC_NETWORK=mainnet
+NEXT_PUBLIC_APP_URL=https://govex.ai
+```
+
+Note: All environment variables that need to be accessible in the browser must be prefixed with `NEXT_PUBLIC_`.
 
 ## Deployment Notes
 
