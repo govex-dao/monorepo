@@ -1,26 +1,91 @@
-# Deploy Next.js to Railway
+# Govex - Next.js Application
 
-This is a Next.js template which can be deployed to [Railway](https://railway.app) with zero configuration.
+This is the Next.js version of Govex, a futarchy platform on Sui.
 
-## Deploying to Railway
+## Tech Stack
 
-Railway automatically configures your Next.js application to run as a Node.js server (through `next start`). You can deploy to Railway using their CLI or GitHub integration.
+- **Framework**: Next.js 15 (App Router)
+- **UI**: Radix UI Themes + Tailwind CSS
+- **Blockchain**: Sui (via @mysten/dapp-kit)
+- **Data Fetching**: TanStack Query with SSR
+- **Charts**: lightweight-charts, recharts
+- **Deployment**: Railway
 
-Click the button below to begin:
+## Getting Started
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/new/template/yDom4a)
+### Prerequisites
 
-We highly recommend that you eject from the template after deployment to create a copy of the repo on your GitHub account.
+- Node.js 18+ 
+- pnpm (recommended) or npm
 
-**Note:** You can also choose from a variety of [Next.js app templates](https://railway.app/templates?q=nextjs) created by the community.
+### Installation
 
-For more information, see our [deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying#self-hosting).
+```bash
+pnpm install
+```
 
-## Learn More
+### Development
 
-To learn more about deploying Next.js, take a look at the following resources:
+```bash
+pnpm dev
+```
 
-- [Next.js deployment documentation](https://nextjs.org/docs): Learn about Next.js features and API.
-- [Deploying Next.js to Railway](https://docs.railway.app/quick-start): A quickstart guide on deploying Next.js to Railway via GitHub, Railway CLI, or Docker.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Build
+
+```bash
+pnpm build
+```
+
+### Production
+
+```bash
+pnpm start
+```
+
+## Environment Variables
+
+Create a `.env.local` file with:
+
+```env
+NEXT_PUBLIC_API_URL=https://www.govex.ai/api
+NEXT_PUBLIC_NETWORK=mainnet
+NEXT_PUBLIC_APP_URL=https://govex.ai
+```
+
+## Project Structure
+
+```
+app/
+├── components/      # Reusable UI components
+├── routes/         # Page components
+├── mutations/      # Sui blockchain mutations
+├── hooks/          # Custom React hooks
+├── utils/          # Utility functions
+├── constants.ts    # App constants
+├── (routes)/       # Next.js pages
+└── api/            # API routes (OG image generation)
+```
+
+## Features
+
+- Server-side rendering for better SEO and performance
+- Dynamic OG image generation for social sharing
+- Real-time trading interface with charts
+- Futarchy DAO management
+- Prediction market trading
+- Wallet integration (Sui wallets)
+
+## Migration Status
+
+This app has been successfully migrated from Vite to Next.js 15. See CLAUDE.md for migration details.
+
+## Deployment
+
+The app is configured for deployment on Railway. Push to the main branch to trigger automatic deployment.
+
+## License
+
+See LICENSE file in the root of the monorepo.
+EOF < /dev/null

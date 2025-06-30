@@ -1,9 +1,13 @@
 {
+  "name": "govex-nextjs",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@mysten/dapp-kit": "0.14.30",

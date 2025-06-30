@@ -75,7 +75,7 @@ export function useAdvanceStateMutation() {
             txb.object(daoId),
             txb.object(proposalId),
             txb.object(escrowId),
-            txb.object("0x6"), // TODO: Replace '0xClock' with the proper clock object reference
+            txb.object("0x6"), // Clock object
           ],
           typeArguments: [`0x${assetType}`, `0x${stableType}`],
         });
