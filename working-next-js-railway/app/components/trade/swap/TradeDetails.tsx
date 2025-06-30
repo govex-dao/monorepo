@@ -22,8 +22,10 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
   const [showTradeDetails, setShowTradeDetails] = useState<boolean>(false);
 
   useEffect(() => {
-    const isMobile = window.innerWidth < 768; // Common breakpoint for mobile devices
-    setShowTradeDetails(!isMobile);
+    if (typeof window !== 'undefined') {
+      const isMobile = window.innerWidth < 768; // Common breakpoint for mobile devices
+      setShowTradeDetails(!isMobile);
+    }
   }, []);
 
   if (!amount || !swapDetails) return null;

@@ -124,7 +124,7 @@ export function MinimalFooter() {
               <span className="">Govex.ai</span>
               <span className="text-gray-500 text-xs opacity-80">•</span>
               <span className="text-gray-400 opacity-80">
-                {new Date().getFullYear()}
+                2025
               </span>
             </Text>
           </Flex>

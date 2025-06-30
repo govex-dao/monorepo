@@ -99,7 +99,7 @@ const CustomLegend = ({ payload }: { payload?: any[] }) => (
   </div>
 );
 
-const MarketPriceChart = ({
+const MarketPriceChart: React.FC<MarketPriceChartProps> = ({
   proposalId,
   assetValue,
   stableValue,
@@ -120,7 +120,11 @@ const MarketPriceChart = ({
   const seriesRefs = useRef<ISeriesApi<"Line">[]>([]); // Type ISeriesApi<"Line"> remains appropriate
   const [selectedRange, setSelectedRange] = useState("MAX");
 
-  const userTimezoneOffsetSeconds = new Date().getTimezoneOffset() * 60;
+  const [userTimezoneOffsetSeconds, setUserTimezoneOffsetSeconds] = useState(0);
+  
+  useEffect(() => {
+    setUserTimezoneOffsetSeconds(new Date().getTimezoneOffset() * 60);
+  }, []);
 
   const decimalAdjustmentFactor = Math.pow(
     10,

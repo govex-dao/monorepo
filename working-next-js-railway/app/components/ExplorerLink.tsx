@@ -71,12 +71,14 @@ export function ExplorerLink({ id, type }: ExplorerLinkProps) {
   const link = `https://suiscan.xyz/${network}/${pathSegment}`;
 
   const copy = () => {
-    navigator.clipboard.writeText(id);
-    setCopied(true);
-    setTimeout(() => {
-      setCopied(false);
-    }, 2000);
-    toast.success("Copied to clipboard!");
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(id);
+      setCopied(true);
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+      toast.success("Copied to clipboard!");
+    }
   };
 
   return (

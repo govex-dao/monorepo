@@ -47,7 +47,7 @@ const defaultConfig: PathRouteConfig = {
     description: "Discover and trade on futarchy proposals. Explore DAOs, prediction markets, and governance on Govex, the leading futarchy platform on Sui.",
     keywords:   "futarchy, prediction markets, trade, DAOs, governance, Sui, Govex",
     structuredDataType: "WebApplication",
-    ogImage: `${window.location.origin}/images/og.png`
+    ogImage: typeof window !== 'undefined' ? `${window.location.origin}/images/og.png` : '/images/og.png'
 };
 
 
@@ -110,7 +110,7 @@ function getConfig(l: Route, dao?: Dao, proposal?: Proposal): RouteConfig {
 
     return {
         ...config,
-        canonicalUrl: window.location.href,
+        canonicalUrl: typeof window !== 'undefined' ? window.location.href : '',
     }
 }
 

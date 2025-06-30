@@ -7,15 +7,7 @@ import { CONSTANTS, QueryKey } from "../constants";
 import { useState, useEffect } from "react";
 import { Theme } from "@radix-ui/themes";
 import { SEOMetadata } from "../components/SEOMetadata";
-import dynamic from "next/dynamic";
-
-const MarketPriceChart = dynamic(
-  () => import("../components/trade/MarketPriceChart"),
-  { 
-    ssr: false,
-    loading: () => <div className="flex items-center justify-center h-[400px] bg-gray-800 rounded-lg">Loading chart...</div>
-  }
-);
+import MarketPriceChartWrapper from "../components/trade/MarketPriceChartWrapper";
 import TradeForm from "../components/trade/TradeForm";
 import { VerifiedIcon } from "../components/icons/VerifiedIcon";
 import TabSection from "../components/trade/TabSection";
@@ -274,7 +266,7 @@ export function ProposalView() {
         >
           {/* MarketPriceChart is now on the left */}
           <div className={isInlineLayout ? "w-3/4" : "w-full"}>
-            <MarketPriceChart
+            <MarketPriceChartWrapper
               proposalId={proposal.proposal_id}
               assetValue={proposal.asset_value}
               stableValue={proposal.stable_value}
