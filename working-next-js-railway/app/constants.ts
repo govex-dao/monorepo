@@ -18,7 +18,11 @@ export enum QueryKey {
 }
 
 export const CONSTANTS = {
-  apiEndpoint: process.env.NEXT_PUBLIC_API_URL ? `https://${process.env.NEXT_PUBLIC_API_URL}/` : "https://www.govex.ai/api/",
+  apiEndpoint: process.env.NEXT_PUBLIC_API_URL 
+    ? process.env.NEXT_PUBLIC_API_URL.endsWith('/') 
+      ? process.env.NEXT_PUBLIC_API_URL 
+      : `${process.env.NEXT_PUBLIC_API_URL}/`
+    : "https://www.govex.ai/api/",
   futarchyPackage:
     network === "mainnet"
       ? mainnetfutarchy.packageId
