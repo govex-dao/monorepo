@@ -45,12 +45,18 @@
 - Fixed API endpoint configuration to handle URLs with/without trailing slashes
 - **Status**: Build successful, deployed to Railway, proposals loading correctly
 
-### 🚧 Remaining Phases
+#### Phase 5: Dynamic OG Image Generation ✅
+- Installed @vercel/og package for server-side image generation
+- Created API routes:
+  - `/api/og/dao/[id]/route.tsx` for DAO OG images
+  - `/api/og/proposal/[id]/route.tsx` for proposal OG images
+- Implemented dynamic OG image templates:
+  - DAO images show: icon, name, tokens, verified badge, proposal stats
+  - Proposal images show: title, outcomes, state, liquidity, DAO info
+- Updated metadata to use local API endpoints
+- **Status**: Build successful, ready for Railway deployment
 
-#### Phase 5: Dynamic OG Image Generation (Next)
-- Create API routes for OG image generation
-- Implement image generation matching current design
-- Test social media previews
+### 🚧 Remaining Phases
 
 #### Phase 6: Data Fetching Optimization
 - Convert to server components where possible
