@@ -29,19 +29,17 @@ const EAlreadyExecuted: u64 = 6;
 const EInvalidMessages: u64 = 7;
 const EInvalidAssetType: u64 = 8;
 const EInvalidStableType: u64 = 9;
-const EDecimalsTooLarge: u64 = 10;
 const EProposalCreationDisabled: u64 = 11;
 const EInvalidOutcomeLengths: u64 = 12;
-const EInvalidDecimalsDiff: u64 = 13;
 const EMetadataTooLong: u64 = 14;
 const EDetailsTooLong: u64 = 15;
 const ETitleTooShort: u64 = 16;
 const ETitleTooLong: u64 = 17;
 const EDetailsTooShort: u64 = 18;
-const EInvalidDetailsLength: u64 = 22;
 const EOneOutcome: u64 = 19;
 const ENoneFullWindowTwapDelay: u64 = 20;
 const EDaoDescriptionTooLong: u64 = 21;
+const EInvalidDetailsLength: u64 = 22;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -49,9 +47,8 @@ const METADATA_MAX_LENGTH: u64 = 1024;
 const DETAILS_MAX_LENGTH: u64 = 16384; // 16KB
 const MIN_OUTCOMES: u64 = 2;
 const MAX_OUTCOMES: u64 = 3;
-const MAX_RESULT_LENGTH: u64 = 1024;
+const MAX_RESULT_LENGTH: u64 = 128;
 const MIN_AMM_SAFE_AMOUNT: u64 = 1000; // under 50 swap will have significant slippage
-const MAX_DECIMALS: u8 = 21; // Common max for most token pairs
 const DAO_DESCRIPTION_MAX_LENGTH: u64 = 1024;
 
 // === Structs ===
@@ -71,14 +68,6 @@ public struct DAO has key, store {
     twap_threshold: u64,
     dao_name: AsciiString,
     icon_url: Url,
-    asset_decimals: u8,
-    stable_decimals: u8,
-    asset_name: String,
-    stable_name: String,
-    asset_icon_url: AsciiString,
-    stable_icon_url: AsciiString,
-    asset_symbol: AsciiString,
-    stable_symbol: AsciiString,
     review_period_ms: u64,
     trading_period_ms: u64,
     attestation_url: String,
@@ -110,14 +99,6 @@ public struct DAOCreated has copy, drop {
     stable_type: AsciiString,
     dao_name: AsciiString,
     icon_url: Url,
-    asset_decimals: u8,
-    stable_decimals: u8,
-    asset_name: String,
-    stable_name: String,
-    asset_icon_url: AsciiString,
-    stable_icon_url: AsciiString,
-    asset_symbol: AsciiString,
-    stable_symbol: AsciiString,
     review_period_ms: u64,
     trading_period_ms: u64,
     amm_twap_start_delay: u64,
@@ -144,14 +125,6 @@ public(package) fun create<AssetType, StableType>(
     icon_url_string: AsciiString,
     review_period_ms: u64,
     trading_period_ms: u64,
-    asset_decimals: u8,
-    stable_decimals: u8,
-    asset_name: String,
-    stable_name: String,
-    asset_icon_url: AsciiString,
-    stable_icon_url: AsciiString,
-    asset_symbol: AsciiString,
-    stable_symbol: AsciiString,
     amm_twap_start_delay: u64,
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
@@ -170,23 +143,10 @@ public(package) fun create<AssetType, StableType>(
     _test_coin_asset.destroy_zero();
     _test_coin_stable.destroy_zero();
 
-    let icon_url = if (icon_url_string.is_empty()) {
-        url::new_unsafe(asset_icon_url)
-    } else {
-        url::new_unsafe(icon_url_string)
-    };
+    let icon_url = url::new_unsafe(icon_url_string);
 
     let timestamp = clock.timestamp_ms();
 
-    // there is a limit where a large coin decimals gap this might affect TWAP and AMM calculations so let's cap at 9 for now
-    assert!(if (stable_decimals >= asset_decimals) {
-        (stable_decimals - asset_decimals) <= 9
-    } else {
-        (asset_decimals - stable_decimals) <= 9
-    }, EInvalidDecimalsDiff);
-
-    assert!(stable_decimals <= MAX_DECIMALS, EDecimalsTooLarge);
-    assert!(asset_decimals <= MAX_DECIMALS, EDecimalsTooLarge);
 
     assert!((amm_twap_start_delay % 60_000) == 0, ENoneFullWindowTwapDelay);
 
@@ -208,14 +168,6 @@ public(package) fun create<AssetType, StableType>(
         twap_threshold,
         dao_name: dao_name,
         icon_url,
-        asset_decimals,
-        stable_decimals,
-        asset_name,
-        stable_name,
-        asset_icon_url,
-        stable_icon_url,
-        asset_symbol,
-        stable_symbol,
         review_period_ms,
         trading_period_ms,
         attestation_url: b"".to_string(),
@@ -234,14 +186,6 @@ public(package) fun create<AssetType, StableType>(
         stable_type: type_name::get<StableType>().into_string(),
         dao_name: dao_name,
         icon_url: icon_url,
-        asset_decimals,
-        stable_decimals,
-        asset_name,
-        stable_name,
-        asset_icon_url,
-        stable_icon_url,
-        asset_symbol,
-        stable_symbol,
         review_period_ms,
         trading_period_ms,
         amm_twap_start_delay,

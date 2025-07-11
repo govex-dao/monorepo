@@ -126,9 +126,6 @@ module futarchy::factory_tests {
             );
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(scenario);
-
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
                 &mut fee_manager,
@@ -139,8 +136,6 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
                 60_000,
                 300_000,
                 TWAP_INITIAL_OBSERVATION,
@@ -152,8 +147,6 @@ module futarchy::factory_tests {
 
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
         };
     }
 
@@ -391,8 +384,8 @@ module futarchy::factory_tests {
             );
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             // Use trading period > MAX_TRADING_TIME (604_800_000)
             let excessive_trading_period = 604_800_000 + 1;
@@ -407,8 +400,8 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 excessive_trading_period, // This should cause failure
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -420,8 +413,8 @@ TWAP_INITIAL_OBSERVATION,
 
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         clock::destroy_for_testing(clock);
@@ -462,8 +455,8 @@ TWAP_INITIAL_OBSERVATION,
             let payment = mint_sui(dao_fee, ctx(&mut scenario));
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
@@ -475,8 +468,8 @@ TWAP_INITIAL_OBSERVATION,
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -487,8 +480,8 @@ TWAP_INITIAL_OBSERVATION,
             );
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         test::next_tx(&mut scenario, ADMIN);
@@ -590,8 +583,8 @@ TWAP_INITIAL_OBSERVATION,
             let payment = mint_sui(fee::get_dao_creation_fee(&fee_manager), ctx(&mut scenario));
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
@@ -603,8 +596,8 @@ TWAP_INITIAL_OBSERVATION,
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -616,8 +609,8 @@ TWAP_INITIAL_OBSERVATION,
 
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         clock::destroy_for_testing(clock);
@@ -638,8 +631,8 @@ TWAP_INITIAL_OBSERVATION,
             let payment = mint_sui(10_000_000_000, ctx(&mut scenario)); // Wrong amount
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
@@ -651,8 +644,8 @@ TWAP_INITIAL_OBSERVATION,
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -664,8 +657,8 @@ TWAP_INITIAL_OBSERVATION,
 
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         clock::destroy_for_testing(clock);
@@ -685,8 +678,8 @@ TWAP_INITIAL_OBSERVATION,
             let payment = mint_sui(fee::get_dao_creation_fee(&fee_manager), ctx(&mut scenario));
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
@@ -698,8 +691,8 @@ TWAP_INITIAL_OBSERVATION,
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -712,8 +705,8 @@ TWAP_INITIAL_OBSERVATION,
             assert!(factory::dao_count(&factory) == 1, 0);
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         test::next_tx(&mut scenario, USER);
@@ -739,8 +732,8 @@ TWAP_INITIAL_OBSERVATION,
             let payment = mint_sui(fee::get_dao_creation_fee(&fee_manager), ctx(&mut scenario));
             let dao_name = std::ascii::string(TEST_DAO_NAME);
             let icon_url = std::ascii::string(TEST_DAO_URL);
-            let asset_metadata = test::take_shared<CoinMetadata<ASSET_COIN>>(&scenario);
-            let stable_metadata = test::take_shared<CoinMetadata<STABLE_COIN>>(&scenario);
+            
+            
 
             factory::create_dao<ASSET_COIN, STABLE_COIN>(
                 &mut factory,
@@ -752,8 +745,8 @@ TWAP_INITIAL_OBSERVATION,
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
-                &asset_metadata,
-                &stable_metadata,
+                
+                
                 60_000,
                 300_000,
 TWAP_INITIAL_OBSERVATION,
@@ -765,8 +758,8 @@ TWAP_INITIAL_OBSERVATION,
 
             test::return_shared(factory);
             test::return_shared(fee_manager);
-            test::return_shared(asset_metadata);
-            test::return_shared(stable_metadata);
+            
+            
         };
 
         // Now request verification as the user

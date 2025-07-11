@@ -355,15 +355,7 @@ public(package) fun set_oracle_start_time(pool: &mut LiquidityPool, state: &Mark
 
 // === Private Functions ===
 fun calculate_fee(amount: u64, fee_percent: u64): u64 {
-    // Calculate fee normally
-    let calculated_fee = math::mul_div_to_64(amount, fee_percent, FEE_SCALE);
-
-    // If the calculated fee would be 0 but amount is non-zero, return 1 instead
-    if (calculated_fee == 0) {
-        1
-    } else {
-        calculated_fee
-    }
+    math::mul_div_to_64(amount, fee_percent, FEE_SCALE)
 }
 
 public(package) fun calculate_output(

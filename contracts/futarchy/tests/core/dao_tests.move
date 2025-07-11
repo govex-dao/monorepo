@@ -22,12 +22,6 @@ const DEFAULT_TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
 const DEFAULT_TWAP_STEP_MAX: u64 = 300_000;
 const TEST_DAO_NAME: vector<u8> = b"TestDAO";
 const TEST_DAO_URL: vector<u8> = b"https://test.com";
-const ASSET_DECIMALS: u8 = 5;
-const STABLE_DECIMALS: u8 = 9;
-const ASSET_NAME: vector<u8> = b"Test Asset";
-const STABLE_NAME: vector<u8> = b"Test Stable";
-const ASSET_SYMBOL: vector<u8> = b"TAST";
-const STABLE_SYMBOL: vector<u8> = b"TSTB";
 const TEST_REVIEW_PERIOD: u64 = 2_000_000; // 2 seconds
 const TEST_TRADING_PERIOD: u64 = 2_000_00; // 1 second
 const TWAP_THESHOLD: u64 = 1_000;
@@ -40,9 +34,6 @@ fun setup_test(sender: address): (Clock, Scenario) {
     (clock, scenario)
 }
 
-fun setup_test_metadata(): (AsciiString, AsciiString) {
-    (std::ascii::string(b""), std::ascii::string(b""))
-}
 
 // Helper to create test coins
 fun mint_test_coins(amount: u64, ctx: &mut tx_context::TxContext): (Coin<ASSET>, Coin<STABLE>) {
@@ -63,7 +54,7 @@ fun test_create_dao() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Call the dao::create function - it transfers the DAO via public_share_object
         dao::create<ASSET, STABLE>(
@@ -73,14 +64,6 @@ fun test_create_dao() {
             icon_url,
             TEST_REVIEW_PERIOD, // review_period_ms
             TEST_TRADING_PERIOD, // trading_period_ms
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME), // asset_name as String
-            string::utf8(STABLE_NAME), // stable_name as String
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL), // asset_symbol
-            std::ascii::string(STABLE_SYMBOL), // stable_symbol
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -131,7 +114,7 @@ fun test_create_valid_proposal() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -141,14 +124,10 @@ fun test_create_valid_proposal() {
             icon_url,
             TEST_REVIEW_PERIOD, // review_period_ms
             TEST_TRADING_PERIOD, // trading_period_ms
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME), // asset_name as String
-            string::utf8(STABLE_NAME), // stable_name as String
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL), // asset_symbol
-            std::ascii::string(STABLE_SYMBOL), // stable_symbol
+             // asset_name as String
+             // stable_name as String
+             // asset_symbol
+             // stable_symbol
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -215,7 +194,7 @@ fun test_create_proposal_invalid_messages() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -225,14 +204,10 @@ fun test_create_proposal_invalid_messages() {
             icon_url,
             TEST_REVIEW_PERIOD, // review_period_ms
             TEST_TRADING_PERIOD, // trading_period_ms
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME), // asset_name as String
-            string::utf8(STABLE_NAME), // stable_name as String
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL), // asset_symbol
-            std::ascii::string(STABLE_SYMBOL), // stable_symbol
+             // asset_name as String
+             // stable_name as String
+             // asset_symbol
+             // stable_symbol
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -301,7 +276,7 @@ fun test_create_proposal_empty_details() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -311,14 +286,10 @@ fun test_create_proposal_empty_details() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -379,7 +350,7 @@ fun test_query_functions() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -389,14 +360,10 @@ fun test_query_functions() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -479,7 +446,7 @@ fun test_sign_result_entry() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -489,14 +456,10 @@ fun test_sign_result_entry() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             DEFAULT_TWAP_START_DELAY,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -616,7 +579,7 @@ fun test_create_proposal_with_initial_amounts() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -626,14 +589,10 @@ fun test_create_proposal_with_initial_amounts() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -705,7 +664,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -715,14 +674,10 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -788,7 +743,7 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
     {
         let dao_name = std::ascii::string(TEST_DAO_NAME);
         let icon_url = std::ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         // Create the DAO - it gets shared automatically
         dao::create<ASSET, STABLE>(
@@ -798,14 +753,10 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            string::utf8(ASSET_NAME),
-            string::utf8(STABLE_NAME),
-            asset_icon_url,
-            stable_icon_url,
-            std::ascii::string(ASSET_SYMBOL),
-            std::ascii::string(STABLE_SYMBOL),
+            
+            
+            
+            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,

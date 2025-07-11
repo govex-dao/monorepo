@@ -7,7 +7,7 @@ use std::string::String as UTF8String;
 use std::type_name;
 use std::u64;
 use sui::clock::Clock;
-use sui::coin::{Coin, CoinMetadata};
+use sui::coin::Coin;
 use sui::event;
 use sui::sui::SUI;
 use sui::vec_set::{Self, VecSet};
@@ -128,8 +128,6 @@ public entry fun create_dao<AssetType, StableType>(
     icon_url_string: AsciiString,
     review_period_ms: u64,
     trading_period_ms: u64,
-    asset_metadata: &CoinMetadata<AssetType>,
-    stable_metadata: &CoinMetadata<StableType>,
     amm_twap_start_delay: u64,
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
@@ -146,34 +144,6 @@ public entry fun create_dao<AssetType, StableType>(
     assert!(factory.allowed_stable_types.contains(&stable_type_str), EStableTypeNotAllowed);
 
     fee_manager.deposit_dao_creation_payment(payment, clock, ctx);
-
-    let asset_decimals = asset_metadata.get_decimals();
-    let stable_decimals = stable_metadata.get_decimals();
-    let asset_name = asset_metadata.get_name();
-    let stable_name = stable_metadata.get_name();
-
-    // 1) Retrieve icon Option<URL> for the asset
-    let maybe_asset_icon = asset_metadata.get_icon_url();
-
-    // 2) Use a single `if/else` expression that returns an AsciiString
-    let asset_icon_url = if (maybe_asset_icon.is_none()) {
-        b"".to_ascii_string()
-    } else {
-        let url_ref = maybe_asset_icon.borrow();
-        url_ref.inner_url()
-    };
-
-    // Same pattern for stable icon
-    let maybe_stable_icon = stable_metadata.get_icon_url();
-    let stable_icon_url = if (maybe_stable_icon.is_none()) {
-        b"".to_ascii_string()
-    } else {
-        let url_ref = maybe_stable_icon.borrow();
-        url_ref.inner_url()
-    };
-
-    let asset_symbol = asset_metadata.get_symbol();
-    let stable_symbol = stable_metadata.get_symbol();
 
     assert!(amm_twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
@@ -194,14 +164,6 @@ public entry fun create_dao<AssetType, StableType>(
         icon_url_string,
         review_period_ms,
         trading_period_ms,
-        asset_decimals,
-        stable_decimals,
-        asset_name,
-        stable_name,
-        asset_icon_url,
-        stable_icon_url,
-        asset_symbol,
-        stable_symbol,
         amm_twap_start_delay,
         amm_twap_step_max,
         amm_twap_initial_observation,

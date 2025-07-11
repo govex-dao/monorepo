@@ -24,12 +24,6 @@ public struct WRONG_STABLE has copy, drop {}
 const DEFAULT_TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
 const TEST_DAO_NAME: vector<u8> = b"TestDAO";
 const TEST_DAO_URL: vector<u8> = b"https://test.com";
-const ASSET_DECIMALS: u8 = 5;
-const STABLE_DECIMALS: u8 = 9;
-const ASSET_NAME: vector<u8> = b"Test Asset";
-const STABLE_NAME: vector<u8> = b"Test Stable";
-const ASSET_SYMBOL: vector<u8> = b"TAST";
-const STABLE_SYMBOL: vector<u8> = b"TSTB";
 const TEST_REVIEW_PERIOD: u64 = 2_000_000; // 2 seconds
 const TEST_TRADING_PERIOD: u64 = 2_000_00; // 1 second
 const TWAP_THESHOLD: u64 = 1_000;
@@ -42,9 +36,6 @@ fun setup_test(sender: address): (Clock, Scenario) {
     (clock, scenario)
 }
 
-fun setup_test_metadata(): (AsciiString, AsciiString) {
-    (ascii::string(b""), ascii::string(b""))
-}
 
 fun mint_test_coins(amount: u64, ctx: &mut tx_context::TxContext): (Coin<ASSET>, Coin<STABLE>) {
     (mint_for_testing<ASSET>(amount, ctx), mint_for_testing<STABLE>(amount, ctx))
@@ -54,98 +45,6 @@ fun create_default_outcome_messages(): vector<String> {
     vector[b"Reject".to_string(), b"Accept".to_string()]
 }
 
-// Test: Create DAO with invalid decimals difference
-#[test]
-#[expected_failure(abort_code = dao::EInvalidDecimalsDiff)]
-fun test_create_dao_with_invalid_decimals_diff() {
-    let admin = @0xA;
-    let (clock, mut scenario) = setup_test(admin);
-
-    next_tx(&mut scenario, admin);
-    {
-        let dao_name = ascii::string(TEST_DAO_NAME);
-        let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
-
-        // Set asset_decimals and stable_decimals with difference > 9
-        let too_high_decimals: u8 = 21;
-        let too_low_decimals: u8 = 1;
-
-        // This should fail due to the difference being more than 9
-        dao::create<ASSET, STABLE>(
-            2000,
-            2000,
-            dao_name,
-            icon_url,
-            TEST_REVIEW_PERIOD,
-            TEST_TRADING_PERIOD,
-            too_low_decimals, // asset_decimals
-            too_high_decimals, // stable_decimals (diff = 20, which is > 9)
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
-            60_000,
-            300_000,
-            DEFAULT_TWAP_INITIAL_OBSERVATION,
-            TWAP_THESHOLD,
-            b"DAO description".to_string(),
-            &clock,
-            ctx(&mut scenario),
-        );
-    };
-
-    destroy_for_testing(clock);
-    end(scenario);
-}
-
-// Test: Create DAO with decimals that are too large
-#[test]
-#[expected_failure(abort_code = dao::EInvalidDecimalsDiff)]
-fun test_create_dao_with_large_decimals() {
-    let admin = @0xA;
-    let (clock, mut scenario) = setup_test(admin);
-
-    next_tx(&mut scenario, admin);
-    {
-        let dao_name = ascii::string(TEST_DAO_NAME);
-        let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
-
-        // Set decimals above the MAX_DECIMALS (which is 21)
-        let too_large_decimals: u8 = 22;
-
-        // This should fail because asset_decimals is too large
-        dao::create<ASSET, STABLE>(
-            2000,
-            2000,
-            dao_name,
-            icon_url,
-            TEST_REVIEW_PERIOD,
-            TEST_TRADING_PERIOD,
-            too_large_decimals, // asset_decimals too large
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
-            60_000,
-            300_000,
-            DEFAULT_TWAP_INITIAL_OBSERVATION,
-            TWAP_THESHOLD,
-            b"DAO description".to_string(),
-            &clock,
-            ctx(&mut scenario),
-        );
-    };
-
-    destroy_for_testing(clock);
-    end(scenario);
-}
 
 // Test: Create proposal with title too long
 #[test]
@@ -159,7 +58,7 @@ fun test_create_proposal_with_title_too_long() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -168,14 +67,6 @@ fun test_create_proposal_with_title_too_long() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -240,7 +131,7 @@ fun test_create_proposal_with_metadata_too_long() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -249,14 +140,6 @@ fun test_create_proposal_with_metadata_too_long() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -321,7 +204,7 @@ fun test_create_proposal_with_empty_title() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -330,14 +213,6 @@ fun test_create_proposal_with_empty_title() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -396,7 +271,7 @@ fun test_create_proposal_with_wrong_asset_type() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -405,14 +280,6 @@ fun test_create_proposal_with_wrong_asset_type() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -478,7 +345,7 @@ fun test_create_proposal_with_wrong_stable_type() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -487,14 +354,6 @@ fun test_create_proposal_with_wrong_stable_type() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -560,7 +419,7 @@ fun test_create_proposal_when_disabled() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -569,14 +428,6 @@ fun test_create_proposal_when_disabled() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -642,7 +493,7 @@ fun test_sign_result_nonexistent_proposal() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -651,14 +502,6 @@ fun test_sign_result_nonexistent_proposal() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -745,7 +588,7 @@ fun test_sign_result_already_executed() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -754,14 +597,6 @@ fun test_sign_result_already_executed() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -898,7 +733,7 @@ fun test_verification_functions() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -907,14 +742,6 @@ fun test_verification_functions() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -961,7 +788,7 @@ fun test_create_proposal_with_insufficient_amounts() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000, // min_asset_amount
@@ -970,14 +797,6 @@ fun test_create_proposal_with_insufficient_amounts() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -1040,7 +859,7 @@ fun test_create_proposal_with_invalid_outcome_count() {
     {
         let dao_name = ascii::string(TEST_DAO_NAME);
         let icon_url = ascii::string(TEST_DAO_URL);
-        let (asset_icon_url, stable_icon_url) = setup_test_metadata();
+        
 
         dao::create<ASSET, STABLE>(
             2000,
@@ -1049,14 +868,6 @@ fun test_create_proposal_with_invalid_outcome_count() {
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            ASSET_DECIMALS,
-            STABLE_DECIMALS,
-            ASSET_NAME.to_string(),
-            STABLE_NAME.to_string(),
-            asset_icon_url,
-            stable_icon_url,
-            ascii::string(ASSET_SYMBOL),
-            ascii::string(STABLE_SYMBOL),
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
