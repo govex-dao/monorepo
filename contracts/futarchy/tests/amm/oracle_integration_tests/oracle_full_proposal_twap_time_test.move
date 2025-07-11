@@ -75,7 +75,7 @@ fun setup_test_proposal_for_oracle_check(
         TEST_TWAP_START_DELAY_MS,
         CONSTANT_PRICE_U128,
         TEST_TWAP_STEP_MAX,
-        option::none<vector<u64>>(),
+        vector[1_000_000, 1_000_000, 1_000_000, 1_000_000],
         TEST_TWAP_THRESHOLD,
         clock,
         ctx(scenario),

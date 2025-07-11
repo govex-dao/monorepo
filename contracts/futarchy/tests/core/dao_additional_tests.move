@@ -215,7 +215,7 @@ fun test_create_proposal_with_title_too_long() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -296,7 +296,7 @@ fun test_create_proposal_with_metadata_too_long() {
             b"Test Details".to_string(),
             long_metadata,
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -371,7 +371,7 @@ fun test_create_proposal_with_empty_title() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -453,7 +453,7 @@ fun test_create_proposal_with_wrong_asset_type() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -535,7 +535,7 @@ fun test_create_proposal_with_wrong_stable_type() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -616,7 +616,7 @@ fun test_create_proposal_when_disabled() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -632,7 +632,7 @@ fun test_create_proposal_when_disabled() {
 
 // Test: Try to sign result for non-existent proposal
 #[test]
-#[expected_failure(abort_code = dao::EProposalNotFound)]
+#[expected_failure(abort_code = dao::EPROPOSAL_NOT_FOUND)]
 fun test_sign_result_nonexistent_proposal() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);
@@ -691,7 +691,7 @@ fun test_sign_result_nonexistent_proposal() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -789,7 +789,7 @@ fun test_sign_result_already_executed() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -1008,7 +1008,7 @@ fun test_create_proposal_with_insufficient_amounts() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );
@@ -1098,7 +1098,7 @@ fun test_create_proposal_with_invalid_outcome_count() {
             b"Test Details".to_string(),
             b"{}".to_string(),
             outcome_messages,
-            option::none(),
+            vector[2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000],
             &clock,
             ctx(&mut scenario),
         );

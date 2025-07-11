@@ -44,5 +44,9 @@ dependencies = [
 
 [move.toolchain-version]
 compiler-version = "1.49.1"
+<<<<<<< HEAD
 edition = "2024"
+=======
+edition = "2024.beta"
+>>>>>>> 37cb182 ( dont-default-for-amm-amounts)
 flavor = "sui"

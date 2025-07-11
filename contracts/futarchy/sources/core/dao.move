@@ -264,7 +264,7 @@ public entry fun create_proposal<AssetType, StableType>(
     details: String,
     metadata: String,
     outcome_messages: vector<String>,
-    initial_outcome_amounts: Option<vector<u64>>,
+    initial_outcome_amounts: vector<u64>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

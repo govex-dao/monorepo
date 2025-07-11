@@ -79,7 +79,7 @@ public struct ProposalCreated has copy, drop {
     title: String,
     details: String,
     metadata: String,
-    initial_outcome_amounts: Option<vector<u64>>,
+    initial_outcome_amounts: vector<u64>,
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
@@ -105,7 +105,7 @@ public(package) fun create<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
-    initial_outcome_amounts: Option<vector<u64>>,
+    initial_outcome_amounts: vector<u64>,
     twap_threshold: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -117,54 +117,38 @@ public(package) fun create<AssetType, StableType>(
     assert!(asset_value >= min_asset_liquidity, EAssetLiquidityTooLow);
     assert!(stable_value >= min_stable_liquidity, EStableLiquidityTooLow);
 
-    let (asset_amounts, stable_amounts) = if (initial_outcome_amounts.is_some()) {
-        let amounts = initial_outcome_amounts.destroy_some();
-        assert!(amounts.length() == outcome_count * 2, EInvalidPoolLength);
+    assert!(vector::length(&initial_outcome_amounts) == outcome_count * 2, EINVALID_POOL_LENGTH);
 
-        let mut asset_amounts = vector[];
-        let mut stable_amounts = vector[];
-        let mut max_asset = 0;
-        let mut max_stable = 0;
+    let mut asset_amounts = vector::empty();
+    let mut stable_amounts = vector::empty();
+    let mut max_asset = 0;
+    let mut max_stable = 0;
 
-        let mut i = 0;
-        while (i < outcome_count) {
-            let asset_amt = amounts[i * 2];
-            let stable_amt = amounts[i * 2 + 1];
+    let mut i = 0;
+    while (i < outcome_count) {
+        let asset_amt = *vector::borrow(&initial_outcome_amounts, i * 2);
+        let stable_amt = *vector::borrow(&initial_outcome_amounts, i * 2 + 1);
 
-            assert!(asset_amt >= min_asset_liquidity, EInvalidAmount);
-            assert!(stable_amt >= min_stable_liquidity, EInvalidAmount);
+        assert!(asset_amt >= min_asset_liquidity, EINVALID_AMOUNT);
+        assert!(stable_amt >= min_stable_liquidity, EINVALID_AMOUNT);
 
-            // Track maximum amounts for each type to validate against deposits
-            if (asset_amt > max_asset) {
-                max_asset = asset_amt;
-            };
-            if (stable_amt > max_stable) {
-                max_stable = stable_amt;
-            };
-
-            asset_amounts.push_back(asset_amt);
-            stable_amounts.push_back(stable_amt);
-            i = i + 1;
+        // Track maximum amounts for each type to validate against deposits
+        if (asset_amt > max_asset) {
+            max_asset = asset_amt;
+        };
+        if (stable_amt > max_stable) {
+            max_stable = stable_amt;
         };
 
-        assert!(max_asset == asset_value, EInvalidLiquidity);
-        assert!(max_stable == stable_value, EInvalidLiquidity);
-
-        (asset_amounts, stable_amounts)
-    } else {
-        // Default to equal distribution if no initial amounts specified
-        let mut asset_amounts = vector[];
-        let mut stable_amounts = vector[];
-        let mut i = 0;
-        while (i < outcome_count) {
-            asset_amounts.push_back(asset_value);
-            stable_amounts.push_back(stable_value);
-            i = i + 1;
-        };
-        (asset_amounts, stable_amounts)
+        vector::push_back(&mut asset_amounts, asset_amt);
+        vector::push_back(&mut stable_amounts, stable_amt);
+        i = i + 1;
     };
 
-    let sender = ctx.sender();
+    assert!(max_asset == asset_value, EINVALID_LIQUIDITY);
+    assert!(max_stable == stable_value, EINVALID_LIQUIDITY);
+
+    let sender = tx_context::sender(ctx);
     let id = object::new(ctx);
     let proposal_id = id.to_inner();
 

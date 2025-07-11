@@ -699,7 +699,7 @@ fun test_entry_functions() {
             dao_id, outcome_count, asset_balance, stable_balance, REVIEW_PERIOD_MS, TRADING_PERIOD_MS,
             MIN_ASSET_LIQUIDITY, MIN_STABLE_LIQUIDITY, string::utf8(b"Entry Test"), string::utf8(b"Details"),
             string::utf8(b"Meta"), outcome_messages, TWAP_START_DELAY, TWAP_INITIAL_OBSERVATION,
-            TWAP_STEP_MAX, option::none(), TWAP_THRESHOLD, &clock, ctx(&mut scenario)
+            TWAP_STEP_MAX, vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], TWAP_THRESHOLD, &clock, ctx(&mut scenario)
         );
 
         // Create Fee Manager (assume it shares FeeManager internally)

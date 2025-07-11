@@ -58,7 +58,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         TWAP_START_DELAY,
         TWAP_INITIAL_OBSERVATION,
         TWAP_STEP_MAX,
-        option::none(), // initial_outcome_amounts
+        vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], // initial_outcome_amounts
         TWAP_THRESHOLD,
         clock,
         ctx(scenario),

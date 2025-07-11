@@ -185,7 +185,7 @@ fun test_create_valid_proposal() {
             string::utf8(b"Test Details"), // details
             string::utf8(b"{}"), // metadata
             create_default_outcome_messages(), // outcome messages
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -275,7 +275,7 @@ fun test_create_proposal_invalid_messages() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             invalid_messages,
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -355,7 +355,7 @@ fun test_create_proposal_empty_details() {
             string::utf8(b""), // empty details - this should trigger the error
             string::utf8(b"{}"), // metadata
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -433,7 +433,7 @@ fun test_query_functions() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -533,7 +533,7 @@ fun test_sign_result_entry() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             create_default_outcome_messages(),
-            option::none(),
+            vector[2000, 2000, 2000, 2000],
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -679,7 +679,7 @@ fun test_create_proposal_with_initial_amounts() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             create_default_outcome_messages(),
-            option::some(initial_amounts),
+            initial_amounts,
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -762,7 +762,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             create_default_outcome_messages(),
-            option::some(initial_amounts),
+            initial_amounts,
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -849,7 +849,7 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             string::utf8(b"Test Details"),
             string::utf8(b"{}"),
             create_default_outcome_messages(),
-            option::some(initial_amounts),
+            initial_amounts,
             &clock,
             test_scenario::ctx(&mut scenario),
         );
