@@ -75,6 +75,8 @@ public struct DAO has key, store {
     verified: bool,
     proposal_creation_enabled: bool,
     description: String,
+    max_outcomes: u64,
+    metadata: vector<String>,
 }
 
 public struct ProposalInfo has store {
@@ -130,6 +132,8 @@ public(package) fun create<AssetType, StableType>(
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
     description: String,
+    max_outcomes: u64,
+    metadata: vector<String>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -151,6 +155,9 @@ public(package) fun create<AssetType, StableType>(
     assert!((amm_twap_start_delay % 60_000) == 0, ENoneFullWindowTwapDelay);
 
     assert!(description.length() <= DAO_DESCRIPTION_MAX_LENGTH, EDaoDescriptionTooLong);
+    
+    // Validate max_outcomes is within reasonable bounds
+    assert!(max_outcomes >= MIN_OUTCOMES && max_outcomes <= MAX_OUTCOMES, EInvalidOutcomeCount);
 
     let dao = DAO {
         id: object::new(ctx),
@@ -175,6 +182,8 @@ public(package) fun create<AssetType, StableType>(
         verified: false,
         proposal_creation_enabled: true,
         description: description,
+        max_outcomes: max_outcomes,
+        metadata: metadata,
     };
 
     event::emit(DAOCreated {
@@ -223,7 +232,7 @@ public entry fun create_proposal<AssetType, StableType>(
     assert!(&asset_type == &dao.asset_type, EInvalidAssetType);
     assert!(&stable_type == &dao.stable_type, EInvalidStableType);
 
-    assert!(outcome_count >= MIN_OUTCOMES && outcome_count <= MAX_OUTCOMES, EInvalidOutcomeCount);
+    assert!(outcome_count >= MIN_OUTCOMES && outcome_count <= dao.max_outcomes, EInvalidOutcomeCount);
     let asset_amount = asset_coin.value();
     let stable_amount = stable_coin.value();
     assert!(asset_amount >= dao.min_asset_amount, EInvalidAmount);
@@ -331,7 +340,13 @@ public(package) fun sign_result<AssetType, StableType>(
     
     // Get the description for the winning outcome from the proposal
     let details = proposal::get_details(proposal);
-    let description = details[winning_outcome];
+    // If winning outcome is 0 (Reject), emit empty description since reject actions are 
+    // contextual and advisory only, not binding
+    let description = if (winning_outcome == 0) {
+        b"".to_string()
+    } else {
+        details[winning_outcome]
+    };
 
     info.result.fill(message);
     info.executed = true;
@@ -463,6 +478,14 @@ public(package) fun disable_proposals(dao: &mut DAO) {
 
 public fun are_proposals_enabled(dao: &DAO): bool {
     dao.proposal_creation_enabled
+}
+
+public fun get_max_outcomes(dao: &DAO): u64 {
+    dao.max_outcomes
+}
+
+public fun get_metadata(dao: &DAO): &vector<String> {
+    &dao.metadata
 }
 
 // === Test Functions ===

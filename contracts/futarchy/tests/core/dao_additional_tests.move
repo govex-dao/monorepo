@@ -72,6 +72,8 @@ fun test_create_proposal_with_title_too_long() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -145,6 +147,8 @@ fun test_create_proposal_with_metadata_too_long() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -218,6 +222,8 @@ fun test_create_proposal_with_empty_title() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -285,6 +291,8 @@ fun test_create_proposal_with_wrong_asset_type() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -359,6 +367,8 @@ fun test_create_proposal_with_wrong_stable_type() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -433,6 +443,8 @@ fun test_create_proposal_when_disabled() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -507,6 +519,8 @@ fun test_sign_result_nonexistent_proposal() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -602,6 +616,8 @@ fun test_sign_result_already_executed() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -747,6 +763,8 @@ fun test_verification_functions() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -802,6 +820,8 @@ fun test_create_proposal_with_insufficient_amounts() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );
@@ -873,6 +893,8 @@ fun test_create_proposal_with_invalid_outcome_count() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             b"DAO description".to_string(),
+            3,
+            vector::empty<String>(),
             &clock,
             ctx(&mut scenario),
         );

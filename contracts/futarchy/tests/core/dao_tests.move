@@ -69,6 +69,8 @@ fun test_create_dao() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -133,6 +135,8 @@ fun test_create_valid_proposal() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -213,6 +217,8 @@ fun test_create_proposal_invalid_messages() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -295,6 +301,8 @@ fun test_create_proposal_empty_details() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -369,6 +377,8 @@ fun test_query_functions() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -465,6 +475,8 @@ fun test_sign_result_entry() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -598,6 +610,8 @@ fun test_create_proposal_with_initial_amounts() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -683,6 +697,8 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );
@@ -762,6 +778,8 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             DEFAULT_TWAP_INITIAL_OBSERVATION,
             TWAP_THESHOLD,
             string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
             &clock,
             test_scenario::ctx(&mut scenario),
         );

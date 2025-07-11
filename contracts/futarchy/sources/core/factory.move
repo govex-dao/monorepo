@@ -133,6 +133,8 @@ public entry fun create_dao<AssetType, StableType>(
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
     description: UTF8String,
+    max_outcomes: u64,
+    metadata: vector<UTF8String>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -169,6 +171,8 @@ public entry fun create_dao<AssetType, StableType>(
         amm_twap_initial_observation,
         twap_threshold,
         description,
+        max_outcomes,
+        metadata,
         clock,
         ctx,
     );

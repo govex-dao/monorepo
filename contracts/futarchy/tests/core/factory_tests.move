@@ -141,6 +141,8 @@ module futarchy::factory_tests {
                 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 clock,
                 ctx(scenario),
             );
@@ -407,6 +409,8 @@ module futarchy::factory_tests {
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -475,6 +479,8 @@ TWAP_INITIAL_OBSERVATION,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -603,6 +609,8 @@ TWAP_INITIAL_OBSERVATION,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -651,6 +659,8 @@ TWAP_INITIAL_OBSERVATION,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -698,6 +708,8 @@ TWAP_INITIAL_OBSERVATION,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
@@ -752,6 +764,8 @@ TWAP_INITIAL_OBSERVATION,
 TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
+                3, // max_outcomes
+                vector::empty<string::String>(),
                 &clock,
                 ctx(&mut scenario),
             );
