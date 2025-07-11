@@ -69,7 +69,7 @@ fun setup_test_proposal_for_oracle_check(
         MIN_ASSET_LIQUIDITY_FOR_TEST,
         MIN_STABLE_LIQUIDITY_FOR_TEST,
         string::utf8(b"Oracle TWAP Check Proposal"),
-        string::utf8(b"Details for oracle TWAP check"),
+        vector[string::utf8(b"Details for outcome 0"), string::utf8(b"Details for outcome 1")],
         string::utf8(b"Metadata for oracle TWAP check"),
         outcome_messages,
         TEST_TWAP_START_DELAY_MS,

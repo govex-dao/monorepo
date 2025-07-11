@@ -38,6 +38,7 @@ const EDetailsTooLong: u64 = 15;
 const ETitleTooShort: u64 = 16;
 const ETitleTooLong: u64 = 17;
 const EDetailsTooShort: u64 = 18;
+const EInvalidDetailsLength: u64 = 22;
 const EOneOutcome: u64 = 19;
 const ENoneFullWindowTwapDelay: u64 = 20;
 const EDaoDescriptionTooLong: u64 = 21;
@@ -92,7 +93,7 @@ public struct ProposalInfo has store {
     created_at: u64,
     state: u8,
     outcome_count: u64,
-    description: String,
+    title: String,
     result: Option<String>,
     execution_time: Option<u64>,
     executed: bool,
@@ -130,6 +131,7 @@ public struct ResultSigned has copy, drop {
     dao_id: ID,
     proposal_id: ID,
     outcome: String,
+    description: String,
     winning_outcome: u64,
     timestamp: u64,
 }
@@ -261,7 +263,7 @@ public entry fun create_proposal<AssetType, StableType>(
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     title: String,
-    details: String,
+    details: vector<String>,
     metadata: String,
     outcome_messages: vector<String>,
     initial_outcome_amounts: vector<u64>,
@@ -302,10 +304,18 @@ public entry fun create_proposal<AssetType, StableType>(
 
     assert!(title.length() <= TITLE_MAX_LENGTH, ETitleTooLong);
     assert!(metadata.length() <= METADATA_MAX_LENGTH, EMetadataTooLong);
-    assert!(details.length() <= DETAILS_MAX_LENGTH, EDetailsTooLong);
+    assert!(vector::length(&details) == outcome_count, EInvalidDetailsLength);
+    
+    // Check each detail string length
+    let mut i = 0;
+    while (i < outcome_count) {
+        let detail = &details[i];
+        assert!(detail.length() <= DETAILS_MAX_LENGTH, EDetailsTooLong);
+        assert!(detail.length() > 0, EDetailsTooShort);
+        i = i + 1;
+    };
 
     assert!(title.length() > 0, ETitleTooShort);
-    assert!(details.length() > 0, EDetailsTooShort);
 
     assert!(outcome_count > 1, EOneOutcome);
 
@@ -339,7 +349,7 @@ public entry fun create_proposal<AssetType, StableType>(
         created_at: clock.timestamp_ms(),
         state,
         outcome_count,
-        description: title,
+        title: title,
         result: option::none(),
         execution_time: option::none(),
         executed: false,
@@ -353,9 +363,10 @@ public entry fun create_proposal<AssetType, StableType>(
 }
 
 // === Package Functions ===
-public(package) fun sign_result(
+public(package) fun sign_result<AssetType, StableType>(
     dao: &mut DAO,
     proposal_id: ID,
+    proposal: &proposal::Proposal<AssetType, StableType>,
     market_state: &market_state::MarketState,
     clock: &Clock,
     _ctx: &mut TxContext,
@@ -373,6 +384,10 @@ public(package) fun sign_result(
 
     let winning_outcome = market_state.get_winning_outcome();
     let message = market_state.get_outcome_message(winning_outcome);
+    
+    // Get the description for the winning outcome from the proposal
+    let details = proposal::get_details(proposal);
+    let description = details[winning_outcome];
 
     info.result.fill(message);
     info.executed = true;
@@ -387,6 +402,7 @@ public(package) fun sign_result(
         dao_id: dao.id.to_inner(),
         proposal_id,
         outcome: message,
+        description: description,
         winning_outcome: winning_outcome,
         timestamp: clock.timestamp_ms(),
     });
@@ -395,6 +411,7 @@ public(package) fun sign_result(
 public entry fun sign_result_entry<AssetType, StableType>(
     dao: &mut DAO,
     proposal_id: ID,
+    proposal: &proposal::Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>, // Use fully qualified path
     clock: &Clock,
     ctx: &mut TxContext,
@@ -407,6 +424,7 @@ public entry fun sign_result_entry<AssetType, StableType>(
     sign_result(
         dao,
         proposal_id,
+        proposal,
         market_state,
         clock,
         ctx,
@@ -475,8 +493,8 @@ public fun get_created_at(info: &ProposalInfo): u64 {
     info.created_at
 }
 
-public fun get_description(info: &ProposalInfo): &String {
-    &info.description
+public fun get_title(info: &ProposalInfo): &String {
+    &info.title
 }
 
 public fun get_asset_type(dao: &DAO): &AsciiString {

@@ -182,7 +182,7 @@ fun test_create_valid_proposal() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"), // title
-            string::utf8(b"Test Details"), // details
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")], // details
             string::utf8(b"{}"), // metadata
             create_default_outcome_messages(), // outcome messages
             vector[2000, 2000, 2000, 2000],

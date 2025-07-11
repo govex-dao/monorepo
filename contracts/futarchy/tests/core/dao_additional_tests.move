@@ -212,7 +212,7 @@ fun test_create_proposal_with_title_too_long() {
             asset_coin,
             stable_coin,
             long_title,
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -293,7 +293,7 @@ fun test_create_proposal_with_metadata_too_long() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             long_metadata,
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -368,7 +368,7 @@ fun test_create_proposal_with_empty_title() {
             asset_coin,
             stable_coin,
             b"".to_string(), // Empty title
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -450,7 +450,7 @@ fun test_create_proposal_with_wrong_asset_type() {
             wrong_asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -532,7 +532,7 @@ fun test_create_proposal_with_wrong_stable_type() {
             asset_coin,
             wrong_stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -613,7 +613,7 @@ fun test_create_proposal_when_disabled() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -688,7 +688,7 @@ fun test_sign_result_nonexistent_proposal() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -712,13 +712,18 @@ fun test_sign_result_nonexistent_proposal() {
         let fake_proposal_id = object::id_from_address(@0xDEADBEEF);
 
         // Try to sign result for non-existent proposal - should fail
+        // Note: This test expects to fail because there's no proposal with fake_proposal_id
+        // We need to create a dummy proposal object for the call, but it will fail on validation
+        let dummy_proposal = take_shared<Proposal<ASSET, STABLE>>(&scenario);
         dao::sign_result_entry<ASSET, STABLE>(
             &mut dao,
             fake_proposal_id,
+            &dummy_proposal,
             &mut escrow,
             &clock,
             ctx(&mut scenario),
         );
+        return_shared(dummy_proposal);
 
         return_shared(dao);
         return_shared(escrow);
@@ -786,7 +791,7 @@ fun test_sign_result_already_executed() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -839,6 +844,7 @@ fun test_sign_result_already_executed() {
         dao::sign_result_entry<ASSET, STABLE>(
             &mut dao,
             proposal_id,
+            &proposal,
             &mut escrow,
             &clock,
             ctx(&mut scenario),
@@ -867,6 +873,7 @@ fun test_sign_result_already_executed() {
         dao::sign_result_entry<ASSET, STABLE>(
             &mut dao,
             proposal_id,
+            &proposal,
             &mut escrow,
             &clock,
             ctx(&mut scenario),
@@ -1005,7 +1012,7 @@ fun test_create_proposal_with_insufficient_amounts() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()],
             b"{}".to_string(),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -1095,7 +1102,19 @@ fun test_create_proposal_with_invalid_outcome_count() {
             asset_coin,
             stable_coin,
             b"Test Proposal".to_string(),
-            b"Test Details".to_string(),
+            vector[
+                b"Details for outcome 1".to_string(),
+                b"Details for outcome 2".to_string(),
+                b"Details for outcome 3".to_string(),
+                b"Details for outcome 4".to_string(),
+                b"Details for outcome 5".to_string(),
+                b"Details for outcome 6".to_string(),
+                b"Details for outcome 7".to_string(),
+                b"Details for outcome 8".to_string(),
+                b"Details for outcome 9".to_string(),
+                b"Details for outcome 10".to_string(),
+                b"Details for outcome 11".to_string()
+            ],
             b"{}".to_string(),
             outcome_messages,
             vector[2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000, 2000],

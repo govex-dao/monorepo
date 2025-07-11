@@ -52,7 +52,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         MIN_ASSET_LIQUIDITY,
         MIN_STABLE_LIQUIDITY,
         b"Test Proposal".to_string(), // title
-        b"Test Details".to_string(), // details
+        vector[b"Test Details for Outcome 0".to_string(), b"Test Details for Outcome 1".to_string()], // details
         b"Test Metadata".to_string(), // metadata
         outcome_messages,
         TWAP_START_DELAY,

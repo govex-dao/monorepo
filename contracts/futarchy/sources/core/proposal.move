@@ -25,6 +25,7 @@ const EAssetLiquidityTooLow: u64 = 4;
 const EStableLiquidityTooLow: u64 = 5;
 const EPoolNotFound: u64 = 6;
 const EOutcomeOutOfBounds: u64 = 7;
+const EInvalidDetailsLength: u64 = 8;
 
 // === Constants ===
 
@@ -46,7 +47,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     escrow_id: ID,
     market_state_id: ID,
     title: String,
-    details: String,
+    details: vector<String>,
     metadata: String,
     outcome_messages: vector<String>,
     twap_prices: vector<u128>, // Historical TWAP prices
@@ -77,7 +78,7 @@ public struct ProposalCreated has copy, drop {
     review_period_ms: u64,
     trading_period_ms: u64,
     title: String,
-    details: String,
+    details: vector<String>,
     metadata: String,
     initial_outcome_amounts: vector<u64>,
     twap_start_delay: u64,
@@ -99,7 +100,7 @@ public(package) fun create<AssetType, StableType>(
     min_asset_liquidity: u64,
     min_stable_liquidity: u64,
     title: String,
-    details: String,
+    details: vector<String>,
     metadata: String,
     outcome_messages: vector<String>,
     twap_start_delay: u64,
@@ -118,6 +119,7 @@ public(package) fun create<AssetType, StableType>(
     assert!(stable_value >= min_stable_liquidity, EStableLiquidityTooLow);
 
     assert!(vector::length(&initial_outcome_amounts) == outcome_count * 2, EInvalidPoolLength);
+    assert!(vector::length(&details) == outcome_count, EInvalidDetailsLength);
 
     let mut asset_amounts = vector::empty();
     let mut stable_amounts = vector::empty();
@@ -355,7 +357,7 @@ public fun created_at<AssetType, StableType>(proposal: &Proposal<AssetType, Stab
     proposal.created_at
 }
 
-public fun get_details<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &String {
+public fun get_details<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &vector<String> {
     &proposal.details
 }
 

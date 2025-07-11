@@ -50,7 +50,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         MIN_ASSET_LIQUIDITY,
         MIN_STABLE_LIQUIDITY,
         string::utf8(b"Test Proposal"), // title
-        string::utf8(b"Test Details"), // details
+        vector[string::utf8(b"Test Details for Outcome 0"), string::utf8(b"Test Details for Outcome 1")], // details
         string::utf8(b"Test Metadata"), // metadata
         outcome_messages,
         TWAP_START_DELAY,
