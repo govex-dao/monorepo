@@ -632,7 +632,7 @@ fun test_create_proposal_when_disabled() {
 
 // Test: Try to sign result for non-existent proposal
 #[test]
-#[expected_failure(abort_code = dao::EPROPOSAL_NOT_FOUND)]
+#[expected_failure(abort_code = dao::EProposalNotFound)]
 fun test_sign_result_nonexistent_proposal() {
     let admin = @0xA;
     let (clock, mut scenario) = setup_test(admin);

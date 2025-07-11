@@ -27,6 +27,7 @@ public struct ProposalStateChanged has copy, drop {
     proposal_id: ID,
     old_state: u8,
     new_state: u8,
+    winning_outcome: Option<u64>,
     timestamp: u64,
 }
 
@@ -82,10 +83,18 @@ public(package) fun try_advance_state<AssetType, StableType>(
 
     // Emit state change event if state changed
     if (old_state != proposal.state()) {
+        // Get winning outcome if we just transitioned to finalized state
+        let winning_outcome = if (proposal.state() == STATE_FINALIZED && proposal.is_winning_outcome_set()) {
+            option::some(proposal.get_winning_outcome())
+        } else {
+            option::none()
+        };
+        
         event::emit(ProposalStateChanged {
             proposal_id: proposal.get_id(),
             old_state,
             new_state: proposal.state(),
+            winning_outcome,
             timestamp: current_time,
         });
     }

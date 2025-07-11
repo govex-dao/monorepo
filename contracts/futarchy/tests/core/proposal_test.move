@@ -85,7 +85,7 @@ fun test_create_proposal() {
         assert!(proposal::state(&proposal) == STATE_REVIEW, 0);
         assert!(proposal::outcome_count(&proposal) == 2, 1);
         assert!(proposal::proposer(&proposal) == ADMIN, 2);
-        assert!(string::length(proposal::get_details(&proposal)) > 0, 3);
+        assert!(vector::length(proposal::get_details(&proposal)) > 0, 3);
         assert!(string::length(proposal::get_metadata(&proposal)) > 0, 4);
         assert!(proposal::created_at(&proposal) == STARTING_TIMESTAMP, 5);
 
@@ -129,7 +129,7 @@ fun test_basic_state_transition() {
             MIN_ASSET_LIQUIDITY,
             MIN_STABLE_LIQUIDITY,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Outcome 0"), string::utf8(b"Test Details for Outcome 1")],
             string::utf8(b"Test Metadata"),
             outcome_messages,
             TWAP_START_DELAY,

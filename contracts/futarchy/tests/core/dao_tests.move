@@ -272,7 +272,7 @@ fun test_create_proposal_invalid_messages() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             invalid_messages,
             vector[2000, 2000, 2000, 2000],
@@ -352,7 +352,7 @@ fun test_create_proposal_empty_details() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"), // title
-            string::utf8(b""), // empty details - this should trigger the error
+            vector[string::utf8(b""), string::utf8(b"")], // empty details - this should trigger the error
             string::utf8(b"{}"), // metadata
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -430,7 +430,7 @@ fun test_query_functions() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -455,7 +455,7 @@ fun test_query_functions() {
         // Now verify the proposal info
         let info = dao::get_proposal_info(&dao, proposal_id);
         assert!(dao::get_proposer(info) == admin, 0);
-        assert!(*dao::get_description(info) == string::utf8(b"Test Proposal"), 1);
+        assert!(*dao::get_title(info) == string::utf8(b"Test Proposal"), 1);
         assert!(!dao::is_executed(info), 2);
         assert!(option::is_none(&dao::get_execution_time(info)), 3);
         assert!(option::is_none(dao::get_result(info)), 4);
@@ -530,7 +530,7 @@ fun test_sign_result_entry() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             create_default_outcome_messages(),
             vector[2000, 2000, 2000, 2000],
@@ -584,6 +584,7 @@ fun test_sign_result_entry() {
         dao::sign_result_entry<ASSET, STABLE>(
             &mut dao,
             proposal_id,
+            &proposal,
             &mut escrow,
             &clock,
             test_scenario::ctx(&mut scenario),
@@ -676,7 +677,7 @@ fun test_create_proposal_with_initial_amounts() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             create_default_outcome_messages(),
             initial_amounts,
@@ -759,7 +760,7 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             create_default_outcome_messages(),
             initial_amounts,
@@ -846,7 +847,7 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             asset_coin,
             stable_coin,
             string::utf8(b"Test Proposal"),
-            string::utf8(b"Test Details"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
             string::utf8(b"{}"),
             create_default_outcome_messages(),
             initial_amounts,
