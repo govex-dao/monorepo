@@ -117,7 +117,7 @@ public(package) fun create<AssetType, StableType>(
     assert!(asset_value >= min_asset_liquidity, EAssetLiquidityTooLow);
     assert!(stable_value >= min_stable_liquidity, EStableLiquidityTooLow);
 
-    assert!(vector::length(&initial_outcome_amounts) == outcome_count * 2, EINVALID_POOL_LENGTH);
+    assert!(vector::length(&initial_outcome_amounts) == outcome_count * 2, EInvalidPoolLength);
 
     let mut asset_amounts = vector::empty();
     let mut stable_amounts = vector::empty();
@@ -129,8 +129,8 @@ public(package) fun create<AssetType, StableType>(
         let asset_amt = *vector::borrow(&initial_outcome_amounts, i * 2);
         let stable_amt = *vector::borrow(&initial_outcome_amounts, i * 2 + 1);
 
-        assert!(asset_amt >= min_asset_liquidity, EINVALID_AMOUNT);
-        assert!(stable_amt >= min_stable_liquidity, EINVALID_AMOUNT);
+        assert!(asset_amt >= min_asset_liquidity, EInvalidAmount);
+        assert!(stable_amt >= min_stable_liquidity, EInvalidAmount);
 
         // Track maximum amounts for each type to validate against deposits
         if (asset_amt > max_asset) {
@@ -145,8 +145,8 @@ public(package) fun create<AssetType, StableType>(
         i = i + 1;
     };
 
-    assert!(max_asset == asset_value, EINVALID_LIQUIDITY);
-    assert!(max_stable == stable_value, EINVALID_LIQUIDITY);
+    assert!(max_asset == asset_value, EInvalidLiquidity);
+    assert!(max_stable == stable_value, EInvalidLiquidity);
 
     let sender = tx_context::sender(ctx);
     let id = object::new(ctx);
