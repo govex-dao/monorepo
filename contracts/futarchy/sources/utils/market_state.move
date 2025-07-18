@@ -263,3 +263,15 @@ public fun copy_status(state: &MarketState): MarketStatus {
 public fun copy_winning_outcome(state: &MarketState): Option<u64> {
     state.winning_outcome
 }
+
+#[test_only]
+public fun test_set_winning_outcome(state: &mut MarketState, outcome: u64) {
+    state.winning_outcome = option::some(outcome);
+}
+
+#[test_only]
+public fun test_set_finalized(state: &mut MarketState) {
+    state.status.finalized = true;
+    state.status.trading_ended = true;
+    state.finalization_time = option::some(0);
+}

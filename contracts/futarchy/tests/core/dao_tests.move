@@ -56,8 +56,8 @@ fun test_create_dao() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Call the dao::create function - it transfers the DAO via public_share_object
-        dao::create<ASSET, STABLE>(
+        // Call the dao::create function - returns DAO object
+        let dao = dao::create<ASSET, STABLE>(
             2000, // min_asset_amount
             2000, // min_stable_amount
             dao_name,
@@ -74,6 +74,9 @@ fun test_create_dao() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Start a new transaction to retrieve the shared DAO object
@@ -118,18 +121,14 @@ fun test_create_valid_proposal() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD, // review_period_ms
             TEST_TRADING_PERIOD, // trading_period_ms
-             // asset_name as String
-             // stable_name as String
-             // asset_symbol
-             // stable_symbol
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -140,6 +139,9 @@ fun test_create_valid_proposal() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Create a proposal for the DAO
@@ -200,18 +202,14 @@ fun test_create_proposal_invalid_messages() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD, // review_period_ms
             TEST_TRADING_PERIOD, // trading_period_ms
-             // asset_name as String
-             // stable_name as String
-             // asset_symbol
-             // stable_symbol
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -222,6 +220,9 @@ fun test_create_proposal_invalid_messages() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Try to create a proposal with invalid messages
@@ -272,6 +273,82 @@ fun test_create_proposal_invalid_messages() {
 }
 
 #[test]
+#[expected_failure(abort_code = dao::EInvalidMessages)]
+fun test_create_proposal_invalid_binary_accept() {
+    let admin = @0xA;
+    let (clock, mut scenario) = setup_test(admin);
+
+    // First transaction: Create the DAO
+    test_scenario::next_tx(&mut scenario, admin);
+    {
+        let dao_name = std::ascii::string(TEST_DAO_NAME);
+        let icon_url = std::ascii::string(TEST_DAO_URL);
+        
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
+            2000,
+            2000,
+            dao_name,
+            icon_url,
+            TEST_REVIEW_PERIOD,
+            TEST_TRADING_PERIOD,
+            60_000,
+            300_000,
+            DEFAULT_TWAP_INITIAL_OBSERVATION,
+            TWAP_THESHOLD,
+            string::utf8(b"DAO description"),
+            3,
+            vector::empty<String>(),
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
+        
+        transfer::public_share_object(dao);
+    };
+
+    // Second transaction: Try to create a binary proposal where second message is not "Accept"
+    test_scenario::next_tx(&mut scenario, admin);
+    {
+        let mut dao = test_scenario::take_shared<DAO>(&scenario);
+        let (asset_coin, stable_coin) = mint_test_coins(2000, test_scenario::ctx(&mut scenario));
+        let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
+        let payment = coin::mint_for_testing(
+            fee::get_verification_fee(&fee_manager),
+            ctx(&mut scenario),
+        );
+
+        // Create invalid outcome messages for binary proposal - second is not "Accept"
+        let invalid_messages = vector[
+            string::utf8(b"Reject"),
+            string::utf8(b"Approve"), // Should be "Accept" for binary proposals
+        ];
+
+        // Try to create proposal with invalid messages - should abort
+        dao::create_proposal(
+            &mut dao,
+            &mut fee_manager,
+            payment,
+            2, // binary proposal
+            asset_coin,
+            stable_coin,
+            string::utf8(b"Test Proposal"),
+            vector[string::utf8(b"Test Details for Reject"), string::utf8(b"Test Details for Accept")],
+            string::utf8(b"{}"),
+            invalid_messages,
+            vector[2000, 2000, 2000, 2000],
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
+
+        test_scenario::return_shared(dao);
+        test_scenario::return_shared(fee_manager);
+    };
+
+    clock::destroy_for_testing(clock);
+    test_scenario::end(scenario);
+}
+
+#[test]
 #[expected_failure(abort_code = dao::EDetailsTooShort)]
 fun test_create_proposal_empty_details() {
     let admin = @0xA;
@@ -284,18 +361,14 @@ fun test_create_proposal_empty_details() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -306,6 +379,9 @@ fun test_create_proposal_empty_details() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Try to create a proposal with empty details
@@ -360,18 +436,14 @@ fun test_query_functions() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -382,6 +454,9 @@ fun test_query_functions() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Create the proposal
@@ -458,18 +533,14 @@ fun test_sign_result_entry() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             DEFAULT_TWAP_START_DELAY,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -480,6 +551,9 @@ fun test_sign_result_entry() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Create the proposal
@@ -593,18 +667,14 @@ fun test_create_proposal_with_initial_amounts() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -615,6 +685,9 @@ fun test_create_proposal_with_initial_amounts() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Create a proposal with initial amounts
@@ -680,18 +753,14 @@ fun test_create_proposal_with_invalid_initial_amounts() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -702,6 +771,9 @@ fun test_create_proposal_with_invalid_initial_amounts() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Try to create a proposal with invalid initial amounts
@@ -761,18 +833,14 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
         let icon_url = std::ascii::string(TEST_DAO_URL);
         
 
-        // Create the DAO - it gets shared automatically
-        dao::create<ASSET, STABLE>(
+        // Create the DAO and share it
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
             icon_url,
             TEST_REVIEW_PERIOD,
             TEST_TRADING_PERIOD,
-            
-            
-            
-            
             60_000,
             300_000,
             DEFAULT_TWAP_INITIAL_OBSERVATION,
@@ -783,6 +851,9 @@ fun test_create_proposal_with_insufficient_initial_amounts() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
+        
+        // Share the DAO object
+        transfer::public_share_object(dao);
     };
 
     // Second transaction: Try to create a proposal with insufficient initial amounts

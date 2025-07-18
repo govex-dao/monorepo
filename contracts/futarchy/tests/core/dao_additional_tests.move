@@ -13,6 +13,7 @@ use std::string::String;
 use sui::clock::{Self, Clock, create_for_testing, destroy_for_testing};
 use sui::coin::{Self, Coin, mint_for_testing};
 use sui::test_scenario::{Self as test, Scenario, ctx, next_tx, take_shared, return_shared, end};
+use sui::transfer;
 
 // Test coins
 public struct ASSET has copy, drop {}
@@ -60,7 +61,7 @@ fun test_create_proposal_with_title_too_long() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -77,6 +78,7 @@ fun test_create_proposal_with_title_too_long() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Then try to create a proposal with a title that's too long
@@ -135,7 +137,7 @@ fun test_create_proposal_with_metadata_too_long() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -152,6 +154,7 @@ fun test_create_proposal_with_metadata_too_long() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Then try to create a proposal with metadata that's too long
@@ -210,7 +213,7 @@ fun test_create_proposal_with_empty_title() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -227,6 +230,7 @@ fun test_create_proposal_with_empty_title() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Then try to create a proposal with an empty title
@@ -279,7 +283,7 @@ fun test_create_proposal_with_wrong_asset_type() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -296,6 +300,7 @@ fun test_create_proposal_with_wrong_asset_type() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Then try to create a proposal with WRONG_ASSET and STABLE
@@ -355,7 +360,7 @@ fun test_create_proposal_with_wrong_stable_type() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -372,6 +377,7 @@ fun test_create_proposal_with_wrong_stable_type() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Then try to create a proposal with ASSET and WRONG_STABLE
@@ -431,7 +437,7 @@ fun test_create_proposal_when_disabled() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -448,6 +454,7 @@ fun test_create_proposal_when_disabled() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Disable proposal creation and then immediately try to create a proposal in the same transaction
@@ -507,7 +514,7 @@ fun test_sign_result_nonexistent_proposal() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -524,6 +531,7 @@ fun test_sign_result_nonexistent_proposal() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Create a proposal
@@ -604,7 +612,7 @@ fun test_sign_result_already_executed() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -621,6 +629,7 @@ fun test_sign_result_already_executed() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Create a proposal
@@ -751,7 +760,7 @@ fun test_verification_functions() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -768,6 +777,7 @@ fun test_verification_functions() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Test the verification functions
@@ -808,7 +818,7 @@ fun test_create_proposal_with_insufficient_amounts() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000, // min_asset_amount
             2000, // min_stable_amount
             dao_name,
@@ -825,6 +835,7 @@ fun test_create_proposal_with_insufficient_amounts() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Try to create a proposal with insufficient asset amount
@@ -881,7 +892,7 @@ fun test_create_proposal_with_invalid_outcome_count() {
         let icon_url = ascii::string(TEST_DAO_URL);
         
 
-        dao::create<ASSET, STABLE>(
+        let dao = dao::create<ASSET, STABLE>(
             2000,
             2000,
             dao_name,
@@ -898,6 +909,7 @@ fun test_create_proposal_with_invalid_outcome_count() {
             &clock,
             ctx(&mut scenario),
         );
+        transfer::public_share_object(dao);
     };
 
     // Try to create a proposal with invalid outcome count (3, but maximum is 3)

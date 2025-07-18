@@ -77,6 +77,7 @@ public struct DAO has key, store {
     description: String,
     max_outcomes: u64,
     metadata: vector<String>,
+    treasury_account_id: Option<ID>,
 }
 
 public struct ProposalInfo has store {
@@ -90,6 +91,7 @@ public struct ProposalInfo has store {
     executed: bool,
     market_state_id: ID,
 }
+
 
 // === Events ===
 public struct DAOCreated has copy, drop {
@@ -136,7 +138,7 @@ public(package) fun create<AssetType, StableType>(
     metadata: vector<String>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): DAO {
     assert!(
         min_asset_amount > MIN_AMM_SAFE_AMOUNT && min_stable_amount > MIN_AMM_SAFE_AMOUNT,
         EInvalidMinAmounts,
@@ -184,6 +186,7 @@ public(package) fun create<AssetType, StableType>(
         description: description,
         max_outcomes: max_outcomes,
         metadata: metadata,
+        treasury_account_id: option::none(),
     };
 
     event::emit(DAOCreated {
@@ -204,14 +207,15 @@ public(package) fun create<AssetType, StableType>(
         description,
     });
 
-    // Transfer objects
-    transfer::public_share_object(dao)
+    // Return the DAO
+    dao
 }
 
-public entry fun create_proposal<AssetType, StableType>(
+/// Internal function that returns proposal ID and related IDs for action storage
+public fun create_proposal_internal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
-    payment: Coin<SUI>, // New fee payment parameter
+    payment: Coin<SUI>,
     outcome_count: u64,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
@@ -222,8 +226,10 @@ public entry fun create_proposal<AssetType, StableType>(
     initial_outcome_amounts: vector<u64>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (ID, ID, u8) {
     assert!(dao.proposal_creation_enabled, EProposalCreationDisabled);
+    
+    // Fee payment handles rate limiting through economic cost
     fee_manager.deposit_proposal_creation_payment(payment, clock, ctx);
 
     let asset_type = type_name::get<AssetType>().into_string();
@@ -313,6 +319,42 @@ public entry fun create_proposal<AssetType, StableType>(
     dao.proposals.add(proposal_id, info);
     dao.active_proposal_count = dao.active_proposal_count + 1;
     dao.total_proposals = dao.total_proposals + 1;
+    
+    // Return proposal_id, market_state_id, and state
+    (proposal_id, market_state_id, state)
+}
+
+public entry fun create_proposal<AssetType, StableType>(
+    dao: &mut DAO,
+    fee_manager: &mut fee::FeeManager,
+    payment: Coin<SUI>,
+    outcome_count: u64,
+    asset_coin: Coin<AssetType>,
+    stable_coin: Coin<StableType>,
+    title: String,
+    details: vector<String>,
+    metadata: String,
+    outcome_messages: vector<String>,
+    initial_outcome_amounts: vector<u64>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Call internal function and discard return values
+    let (_proposal_id, _market_state_id, _state) = create_proposal_internal(
+        dao,
+        fee_manager,
+        payment,
+        outcome_count,
+        asset_coin,
+        stable_coin,
+        title,
+        details,
+        metadata,
+        outcome_messages,
+        initial_outcome_amounts,
+        clock,
+        ctx
+    );
 }
 
 // === Package Functions ===
@@ -365,6 +407,19 @@ public(package) fun sign_result<AssetType, StableType>(
         winning_outcome: winning_outcome,
         timestamp: clock.timestamp_ms(),
     });
+
+    // IMPORTANT: Treasury action execution is intentionally separated from proposal resolution
+    // This ensures:
+    // 1. Type safety - each coin type can be executed separately
+    // 2. Atomicity - proposal resolution succeeds even if treasury actions fail
+    // 3. Flexibility - treasury actions can be retried if needed
+    // 
+    // To execute treasury actions after proposal resolution:
+    // - For SUI actions: call treasury_actions::execute_actions_entry_sui
+    // - For other coins: call treasury_actions::execute_actions_entry<CoinType>
+    // - For all actions: call treasury_actions::execute_all_actions_auto
+    //
+    // The ActionRegistry tracks treasury execution status independently
 }
 
 public entry fun sign_result_entry<AssetType, StableType>(
@@ -486,6 +541,133 @@ public fun get_max_outcomes(dao: &DAO): u64 {
 
 public fun get_metadata(dao: &DAO): &vector<String> {
     &dao.metadata
+}
+
+// === Treasury Functions ===
+
+/// Returns the treasury account ID if initialized
+public fun get_treasury_id(dao: &DAO): &Option<ID> {
+    &dao.treasury_account_id
+}
+
+/// Checks if treasury is initialized
+public fun has_treasury(dao: &DAO): bool {
+    dao.treasury_account_id.is_some()
+}
+
+/// Sets the treasury ID (package-only, used by factory)
+public(package) fun set_treasury_id(dao: &mut DAO, treasury_id: ID) {
+    dao.treasury_account_id = option::some(treasury_id);
+}
+
+// === Configuration Update Functions ===
+
+/// Update trading parameters after a config proposal passes
+public(package) fun update_trading_params(
+    dao: &mut DAO,
+    min_asset_amount: Option<u64>,
+    min_stable_amount: Option<u64>,
+    review_period_ms: Option<u64>,
+    trading_period_ms: Option<u64>,
+) {
+    // Update min asset amount if provided
+    if (min_asset_amount.is_some()) {
+        let new_amount = *min_asset_amount.borrow();
+        assert!(new_amount > MIN_AMM_SAFE_AMOUNT, EInvalidMinAmounts);
+        dao.min_asset_amount = new_amount;
+    };
+    
+    // Update min stable amount if provided
+    if (min_stable_amount.is_some()) {
+        let new_amount = *min_stable_amount.borrow();
+        assert!(new_amount > MIN_AMM_SAFE_AMOUNT, EInvalidMinAmounts);
+        dao.min_stable_amount = new_amount;
+    };
+    
+    // Update review period if provided
+    if (review_period_ms.is_some()) {
+        dao.review_period_ms = *review_period_ms.borrow();
+    };
+    
+    // Update trading period if provided
+    if (trading_period_ms.is_some()) {
+        dao.trading_period_ms = *trading_period_ms.borrow();
+    };
+}
+
+/// Update DAO metadata after a config proposal passes
+public(package) fun update_metadata(
+    dao: &mut DAO,
+    dao_name: Option<AsciiString>,
+    icon_url: Option<Url>,
+    description: Option<String>,
+) {
+    // Update name if provided
+    if (dao_name.is_some()) {
+        dao.dao_name = *dao_name.borrow();
+    };
+    
+    // Update icon URL if provided
+    if (icon_url.is_some()) {
+        dao.icon_url = *icon_url.borrow();
+    };
+    
+    // Update description if provided
+    if (description.is_some()) {
+        let new_desc = *description.borrow();
+        assert!(new_desc.length() <= DAO_DESCRIPTION_MAX_LENGTH, EDaoDescriptionTooLong);
+        dao.description = new_desc;
+    };
+}
+
+/// Update TWAP configuration after a config proposal passes
+public(package) fun update_twap_config(
+    dao: &mut DAO,
+    start_delay: Option<u64>,
+    step_max: Option<u64>,
+    initial_observation: Option<u128>,
+    threshold: Option<u64>,
+) {
+    // Update TWAP start delay if provided
+    if (start_delay.is_some()) {
+        let delay = *start_delay.borrow();
+        assert!((delay % 60_000) == 0, ENoneFullWindowTwapDelay);
+        dao.amm_twap_start_delay = delay;
+    };
+    
+    // Update TWAP step max if provided
+    if (step_max.is_some()) {
+        dao.amm_twap_step_max = *step_max.borrow();
+    };
+    
+    // Update TWAP initial observation if provided
+    if (initial_observation.is_some()) {
+        dao.amm_twap_initial_observation = *initial_observation.borrow();
+    };
+    
+    // Update TWAP threshold if provided
+    if (threshold.is_some()) {
+        dao.twap_threshold = *threshold.borrow();
+    };
+}
+
+/// Update governance settings after a config proposal passes
+public(package) fun update_governance(
+    dao: &mut DAO,
+    proposal_creation_enabled: Option<bool>,
+    max_outcomes: Option<u64>,
+) {
+    // Update proposal creation enabled flag if provided
+    if (proposal_creation_enabled.is_some()) {
+        dao.proposal_creation_enabled = *proposal_creation_enabled.borrow();
+    };
+    
+    // Update max outcomes if provided
+    if (max_outcomes.is_some()) {
+        let max = *max_outcomes.borrow();
+        assert!(max >= MIN_OUTCOMES && max <= MAX_OUTCOMES, EInvalidOutcomeCount);
+        dao.max_outcomes = max;
+    };
 }
 
 // === Test Functions ===

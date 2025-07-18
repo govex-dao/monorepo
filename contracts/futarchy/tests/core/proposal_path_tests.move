@@ -39,8 +39,8 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
     let dao_id = object::id_from_address(DAO);
 
     let mut outcome_messages = vector[];
-    outcome_messages.push_back(b"Outcome 0".to_string());
-    outcome_messages.push_back(b"Outcome 1".to_string());
+    outcome_messages.push_back(b"Reject".to_string());
+    outcome_messages.push_back(b"Accept".to_string());
 
     let (_, _, _) = proposal::create<u64, u64>(
         dao_id,
@@ -52,7 +52,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         MIN_ASSET_LIQUIDITY,
         MIN_STABLE_LIQUIDITY,
         b"Test Proposal".to_string(), // title
-        vector[b"Test Details for Outcome 0".to_string(), b"Test Details for Outcome 1".to_string()], // details
+        vector[b"Test Details for Reject".to_string(), b"Test Details for Accept".to_string()], // details
         b"Test Metadata".to_string(), // metadata
         outcome_messages,
         TWAP_START_DELAY,

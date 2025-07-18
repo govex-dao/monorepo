@@ -159,7 +159,7 @@ public entry fun create_dao<AssetType, StableType>(
     );
 
     // Create DAO and AdminCap
-    dao::create<AssetType, StableType>(
+    let dao = dao::create<AssetType, StableType>(
         min_asset_amount,
         min_stable_amount,
         dao_name,
@@ -176,6 +176,12 @@ public entry fun create_dao<AssetType, StableType>(
         clock,
         ctx,
     );
+
+    // Treasury initialization is now optional
+    // DAOs can add treasury later if needed
+
+    // Share the DAO
+    transfer::public_share_object(dao);
 
     // Update state
     factory.dao_count = factory.dao_count + 1;
