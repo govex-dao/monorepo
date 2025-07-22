@@ -2,7 +2,7 @@
 module futarchy::oracle_full_proposal_twap_time_test;
 
 // === Imports ===
-use sui::test_scenario::{Self as test, Scenario, next_tx, ctx};
+use sui::test_scenario::{Self as test, Scenario, next_tx};
 use sui::clock::{Self, Clock};
 use sui::balance;
 use sui::coin;
@@ -59,7 +59,11 @@ fun setup_test_proposal_for_oracle_check(
     vector::push_back(&mut outcome_messages, string::utf8(b"Outcome 0"));
     vector::push_back(&mut outcome_messages, string::utf8(b"Outcome 1"));
 
+    let fee_escrow = balance::zero<u64>(); // No DAO fee for testing
+    let treasury_address = @0x0; // Default treasury address
+    
     let (_proposal_id, _market_state_id, _state) = proposal::create<u64, u64>(
+        fee_escrow,
         dao_id,
         2, // outcome_count
         asset_balance,
@@ -77,10 +81,11 @@ fun setup_test_proposal_for_oracle_check(
         TEST_TWAP_STEP_MAX,
         vector[1_000_000, 1_000_000, 1_000_000, 1_000_000],
         TEST_TWAP_THRESHOLD,
+        treasury_address,
         clock,
-        ctx(scenario),
+        scenario.ctx(),
     );
-    fee::create_fee_manager_for_testing(ctx(scenario));
+    fee::create_fee_manager_for_testing(scenario.ctx());
 }
 
 #[test]
@@ -88,7 +93,7 @@ fun test_twap_accumulation_value_matches_expected_duration_constant_price() {
     assert!(TEST_TRADING_PERIOD_MS > TEST_TWAP_START_DELAY_MS, 0); // Precondition for valid duration
 
     let mut scenario = test::begin(ADMIN);
-    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+    let mut clock = clock::create_for_testing(scenario.ctx());
     clock::set_for_testing(&mut clock, STARTING_TIMESTAMP);
 
     let mut market_start_actual_time = 0;
@@ -112,7 +117,7 @@ fun test_twap_accumulation_value_matches_expected_duration_constant_price() {
         let mut fee_manager_obj = test::take_shared<FeeManager>(&scenario);
 
         advance_stage::try_advance_state_entry(
-            &mut proposal_obj, &mut escrow_obj, &mut fee_manager_obj, &clock,
+            &mut proposal_obj, &mut escrow_obj, &mut fee_manager_obj, &clock, scenario.ctx(),
         );
         assert!(proposal::state(&proposal_obj) == STATE_TRADING, 1);
 
@@ -133,7 +138,7 @@ fun test_twap_accumulation_value_matches_expected_duration_constant_price() {
         let mut fee_manager_obj = test::take_shared<FeeManager>(&scenario);
 
         advance_stage::try_advance_state_entry(
-            &mut proposal_obj, &mut escrow_obj, &mut fee_manager_obj, &clock,
+            &mut proposal_obj, &mut escrow_obj, &mut fee_manager_obj, &clock, scenario.ctx(),
         );
         assert!(proposal::state(&proposal_obj) == STATE_FINALIZED, 2);
 

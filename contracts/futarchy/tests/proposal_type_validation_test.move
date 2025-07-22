@@ -65,16 +65,18 @@ fun test_cannot_mix_treasury_and_config_in_same_proposal() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create config proposal (implicitly config type)
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_trading_params_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Update Trading Params".to_string(),
@@ -126,16 +128,18 @@ fun test_cannot_mix_treasury_and_config_in_same_proposal() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create treasury proposal
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Treasury Transfer".to_string(),
@@ -216,15 +220,17 @@ fun test_memo_only_proposals_allow_neither_treasury_nor_config() {
         let mut dao = scenario.take_shared<DAO>();
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create regular proposal without treasury or config actions
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         dao::create_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -283,16 +289,18 @@ fun test_memo_plus_treasury_allowed() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This is allowed: memo + treasury
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Fund Community Project".to_string(),
@@ -360,16 +368,18 @@ fun test_memo_plus_config_allowed() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This is allowed: memo + config
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_metadata_proposal(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Update DAO Branding".to_string(),

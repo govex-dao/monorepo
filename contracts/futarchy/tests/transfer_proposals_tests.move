@@ -70,7 +70,7 @@ fun setup_dao_with_registry(scenario: &mut Scenario): (ID, ID) {
     {
         let mut factory = test::take_shared<factory::Factory>(scenario);
         let mut fee_manager = test::take_shared<fee::FeeManager>(scenario);
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(scenario)); // DAO creation fee
         let clock = test::take_shared<Clock>(scenario);
         
         // Add our test stable coin to allowed list
@@ -125,7 +125,8 @@ fun test_create_capability_deposit_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -134,6 +135,7 @@ fun test_create_capability_deposit_proposal() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Accept TreasuryCap for TEST".to_string(),
@@ -177,7 +179,8 @@ fun test_create_cross_treasury_transfer_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -186,6 +189,7 @@ fun test_create_cross_treasury_transfer_proposal() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Transfer 100k TEST to Partner DAO".to_string(),
@@ -229,7 +233,8 @@ fun test_create_multi_transfer_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(3_000, ctx(&mut scenario)); // 3 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -259,6 +264,7 @@ fun test_create_multi_transfer_proposal() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Multi-recipient Transfer".to_string(),
@@ -298,7 +304,8 @@ fun test_create_mint_and_transfer_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -315,6 +322,7 @@ fun test_create_mint_and_transfer_proposal() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Mint 1M and Distribute".to_string(),
@@ -359,7 +367,8 @@ fun test_create_cross_treasury_transfer_zero_amount() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -369,6 +378,7 @@ fun test_create_cross_treasury_transfer_zero_amount() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Transfer".to_string(),
@@ -408,7 +418,8 @@ fun test_mint_and_transfer_amount_mismatch() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -425,6 +436,7 @@ fun test_mint_and_transfer_amount_mismatch() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Mint and Transfer".to_string(),
@@ -465,7 +477,8 @@ fun test_mint_and_transfer_array_length_mismatch() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -479,6 +492,7 @@ fun test_mint_and_transfer_array_length_mismatch() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Arrays".to_string(),
@@ -519,7 +533,8 @@ fun test_capability_deposit_with_no_limits() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -528,6 +543,7 @@ fun test_capability_deposit_with_no_limits() {
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Accept Unlimited TreasuryCap".to_string(),

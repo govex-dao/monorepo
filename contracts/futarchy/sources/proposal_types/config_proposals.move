@@ -92,6 +92,7 @@ public fun create_config_proposal<AssetType, StableType>(
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     title: String,
@@ -131,6 +132,7 @@ public fun create_config_proposal<AssetType, StableType>(
         dao,
         fee_manager,
         payment,
+        dao_fee_payment,
         outcome_count,
         asset_coin,
         stable_coin,
@@ -166,6 +168,7 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     title: String,
@@ -213,6 +216,7 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
         fee_manager,
         config_registry,
         payment,
+        dao_fee_payment,
         asset_coin,
         stable_coin,
         title,
@@ -232,6 +236,7 @@ public entry fun create_metadata_proposal<AssetType, StableType>(
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     title: String,
@@ -287,6 +292,7 @@ public entry fun create_metadata_proposal<AssetType, StableType>(
         fee_manager,
         config_registry,
         payment,
+        dao_fee_payment,
         asset_coin,
         stable_coin,
         title,
@@ -484,7 +490,8 @@ public entry fun execute_governance_update<AssetType, StableType>(
     dao::update_governance(
         dao,
         *proposal_creation_enabled,
-        *max_outcomes
+        *max_outcomes,
+        option::none() // proposal_fee_per_outcome not updated through this config
     );
     
     event::emit(ConfigUpdateExecuted {

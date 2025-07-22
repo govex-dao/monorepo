@@ -7,6 +7,7 @@ use futarchy::proposal;
 use futarchy::vectors;
 use futarchy::execution_context::{Self, ProposalExecutionContext};
 use std::ascii::String as AsciiString;
+use std::option;
 use std::string::String;
 use std::type_name;
 use sui::clock::Clock;
@@ -15,6 +16,7 @@ use sui::event;
 use sui::sui::SUI;
 use sui::table::{Self, Table};
 use sui::url::{Self, Url};
+use sui::balance::{Self, Balance};
 
 // === Introduction ===
 // This defines the DAO type
@@ -80,6 +82,7 @@ public struct DAO has key, store {
     max_outcomes: u64,
     metadata: vector<String>,
     treasury_account_id: Option<ID>,
+    proposal_fee_per_outcome: u64,
 }
 
 public struct ProposalInfo has store {
@@ -189,6 +192,7 @@ public(package) fun create<AssetType, StableType>(
         max_outcomes: max_outcomes,
         metadata: metadata,
         treasury_account_id: option::none(),
+        proposal_fee_per_outcome: 0,
     };
 
     event::emit(DAOCreated {
@@ -218,6 +222,7 @@ public fun create_proposal_internal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
+    mut dao_fee_payment: Coin<StableType>,
     outcome_count: u64,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
@@ -231,8 +236,25 @@ public fun create_proposal_internal<AssetType, StableType>(
 ): (ID, ID, u8) {
     assert!(dao.proposal_creation_enabled, EProposalCreationDisabled);
     
-    // Fee payment handles rate limiting through economic cost
-    fee_manager.deposit_proposal_creation_payment(payment, clock, ctx);
+    // Handle factory fee (in SUI)
+    fee::deposit_proposal_creation_payment(fee_manager, payment, outcome_count, clock, ctx);
+
+    // Handle DAO-level fee (in StableType)
+    let required_dao_fee = dao.proposal_fee_per_outcome * outcome_count;
+    let dao_fee_balance: Balance<StableType>;
+    if (required_dao_fee > 0) {
+        assert!(dao.has_treasury(), EUnauthorized); // Must have a treasury to collect fees
+        assert!(dao_fee_payment.value() >= required_dao_fee, EInvalidAmount);
+        // Take only the required amount for escrow and return the rest to the sender
+        let fee_coin = dao_fee_payment.split(required_dao_fee, ctx);
+        dao_fee_balance = fee_coin.into_balance();
+        // Return the remainder to sender
+        transfer::public_transfer(dao_fee_payment, ctx.sender());
+    } else {
+        // If no fee, return the entire coin to the sender
+        dao_fee_balance = balance::zero<StableType>();
+        transfer::public_transfer(dao_fee_payment, ctx.sender());
+    };
 
     let asset_type = type_name::get<AssetType>().into_string();
     let stable_type = type_name::get<StableType>().into_string();
@@ -283,7 +305,14 @@ public fun create_proposal_internal<AssetType, StableType>(
     let initial_asset = asset_coin.into_balance();
     let initial_stable = stable_coin.into_balance();
 
+    let treasury_address = if (dao.treasury_account_id.is_some()) {
+        object::id_to_address(dao.treasury_account_id.borrow())
+    } else {
+        @0x0
+    };
+
     let (proposal_id, market_state_id, state) = proposal::create<AssetType, StableType>(
+        dao_fee_balance,
         dao.id.to_inner(),
         outcome_count,
         initial_asset,
@@ -301,6 +330,7 @@ public fun create_proposal_internal<AssetType, StableType>(
         dao.amm_twap_step_max,
         initial_outcome_amounts,
         dao.twap_threshold,
+        treasury_address,
         clock,
         ctx,
     );
@@ -330,6 +360,7 @@ public entry fun create_proposal<AssetType, StableType>(
     dao: &mut DAO,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
+    mut dao_fee_payment: Coin<StableType>,
     outcome_count: u64,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
@@ -346,6 +377,7 @@ public entry fun create_proposal<AssetType, StableType>(
         dao,
         fee_manager,
         payment,
+        dao_fee_payment,
         outcome_count,
         asset_coin,
         stable_coin,
@@ -674,11 +706,17 @@ public(package) fun update_twap_config(
     };
 }
 
+/// Get the proposal fee per outcome
+public fun get_proposal_fee_per_outcome(dao: &DAO): u64 {
+    dao.proposal_fee_per_outcome
+}
+
 /// Update governance settings after a config proposal passes
 public(package) fun update_governance(
     dao: &mut DAO,
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
+    proposal_fee_per_outcome: Option<u64>,
 ) {
     // Update proposal creation enabled flag if provided
     if (proposal_creation_enabled.is_some()) {
@@ -690,6 +728,11 @@ public(package) fun update_governance(
         let max = *max_outcomes.borrow();
         assert!(max >= MIN_OUTCOMES && max <= MAX_OUTCOMES, EInvalidOutcomeCount);
         dao.max_outcomes = max;
+    };
+    
+    // Update proposal fee per outcome if provided
+    if (proposal_fee_per_outcome.is_some()) {
+        dao.proposal_fee_per_outcome = *proposal_fee_per_outcome.borrow();
     };
 }
 

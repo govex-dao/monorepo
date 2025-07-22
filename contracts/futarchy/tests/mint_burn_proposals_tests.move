@@ -70,7 +70,7 @@ fun setup_dao_with_registry(scenario: &mut Scenario): (ID, ID) {
     {
         let mut factory = test::take_shared<factory::Factory>(scenario);
         let mut fee_manager = test::take_shared<fee::FeeManager>(scenario);
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(scenario)); // DAO creation fee
         let clock = test::take_shared<Clock>(scenario);
         
         // Add our test stable coin to allowed list
@@ -125,15 +125,17 @@ fun test_create_mint_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_mint_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Mint 1000 TEST tokens".to_string(),
@@ -177,15 +179,17 @@ fun test_create_burn_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_burn_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Burn 500 TEST tokens".to_string(),
@@ -228,15 +232,17 @@ fun test_create_mint_and_burn_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_mint_and_burn_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Mint 1000 and Burn 500 TEST".to_string(),
@@ -280,7 +286,7 @@ fun test_multi_outcome_mint_proposal() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(3_000, ctx(&mut scenario)); // 3 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
@@ -308,11 +314,13 @@ fun test_multi_outcome_mint_proposal() {
             b"Aggressive mint".to_string(),
         ];
         
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_multi_outcome_mint_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Multi-outcome Mint Proposal".to_string(),
@@ -353,16 +361,18 @@ fun test_create_mint_proposal_zero_amount() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
         // Should fail with zero mint amount
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_mint_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Mint".to_string(),
@@ -402,16 +412,18 @@ fun test_create_burn_proposal_zero_amount() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
         // Should fail with zero burn amount
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_burn_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Burn".to_string(),
@@ -450,15 +462,17 @@ fun test_mint_and_burn_with_zero_burn() {
         let mut registry = test::take_shared<ActionRegistry>(&scenario);
         let clock = test::take_shared<Clock>(&scenario);
         
-        let payment = coin::mint_for_testing<sui::sui::SUI>(10_000, ctx(&mut scenario));
+        let payment = coin::mint_for_testing<sui::sui::SUI>(2_000, ctx(&mut scenario)); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<TestAssetCoin>(INITIAL_ASSET, ctx(&mut scenario));
         let stable_coin = coin::mint_for_testing<TestStableCoin>(INITIAL_STABLE, ctx(&mut scenario));
         
+        let dao_fee_payment = coin::mint_for_testing<TestStableCoin>(0, scenario.ctx()); // No DAO fee
         mint_burn_proposals::create_mint_and_burn_proposal<TestAssetCoin, TestStableCoin, TestAssetCoin>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Mint only".to_string(),

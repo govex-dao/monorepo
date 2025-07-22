@@ -12,6 +12,7 @@ use std::option;
 use std::string::String;
 use sui::clock::{Self, Clock, create_for_testing, destroy_for_testing};
 use sui::coin::{Self, Coin, mint_for_testing};
+use sui::sui::SUI;
 use sui::test_scenario::{Self as test, Scenario, ctx, next_tx, take_shared, return_shared, end};
 use sui::transfer;
 
@@ -87,8 +88,8 @@ fun test_create_proposal_with_title_too_long() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
@@ -99,10 +100,12 @@ fun test_create_proposal_with_title_too_long() {
         let long_title = long_title_bytes.to_string();
 
         // Try to create a proposal with too long title - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -163,8 +166,8 @@ fun test_create_proposal_with_metadata_too_long() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
@@ -175,10 +178,12 @@ fun test_create_proposal_with_metadata_too_long() {
         let long_metadata = long_metadata_bytes.to_string();
 
         // Try to create a proposal with too long metadata - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -239,16 +244,18 @@ fun test_create_proposal_with_empty_title() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
         // Try to create a proposal with empty title - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -316,16 +323,18 @@ fun test_create_proposal_with_wrong_asset_type() {
         let stable_coin = mint_for_testing<STABLE>(2000, ctx(&mut scenario));
 
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
         // Try to create a proposal with wrong asset type - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal<WRONG_ASSET, STABLE>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             wrong_asset_coin,
             stable_coin,
@@ -393,16 +402,18 @@ fun test_create_proposal_with_wrong_stable_type() {
         );
 
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
         // Try to create a proposal with wrong stable type - should fail
+        let dao_fee_payment = mint_for_testing<WRONG_STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal<ASSET, WRONG_STABLE>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             wrong_stable_coin,
@@ -470,15 +481,17 @@ fun test_create_proposal_when_disabled() {
         // Try to create a proposal in the same transaction - this should fail with EPROPOSAL_CREATION_DISABLED
         let mut fee_manager = take_shared<FeeManager>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -540,15 +553,17 @@ fun test_sign_result_nonexistent_proposal() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -638,15 +653,17 @@ fun test_sign_result_already_executed() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -848,16 +865,18 @@ fun test_create_proposal_with_insufficient_amounts() {
         let stable_coin = mint_for_testing<STABLE>(2000, ctx(&mut scenario));
 
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            2000, // 2 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
         // Try to create a proposal with insufficient asset amount - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,
@@ -918,12 +937,12 @@ fun test_create_proposal_with_invalid_outcome_count() {
         let mut dao = take_shared<DAO>(&scenario);
         let (asset_coin, stable_coin) = mint_test_coins(2000, ctx(&mut scenario));
         let mut fee_manager = take_shared<FeeManager>(&scenario);
-        let payment = mint_for_testing(
-            fee::get_verification_fee(&fee_manager),
+        let payment = mint_for_testing<SUI>(
+            11000, // 11 outcomes * 1000 per outcome
             ctx(&mut scenario),
         );
 
-        // Create outcome messages for 3 outcomes
+        // Create outcome messages for 11 outcomes
         let outcome_messages = vector[
             b"Reject".to_string(),
             b"Accept".to_string(),
@@ -939,10 +958,12 @@ fun test_create_proposal_with_invalid_outcome_count() {
         ];
 
         // Try to create a proposal with too many outcomes - should fail
+        let dao_fee_payment = mint_for_testing<STABLE>(0, ctx(&mut scenario)); // No DAO fee
         dao::create_proposal(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             11, // outcome_count exceeds MAX_OUTCOMES
             asset_coin,
             stable_coin,

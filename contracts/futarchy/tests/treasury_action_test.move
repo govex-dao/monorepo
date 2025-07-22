@@ -113,7 +113,8 @@ fun test_direct_treasury_actions() {
         let mut fee_manager = scenario.take_shared<FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx());
         let asset_coin = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(10_000_000_000, scenario.ctx());
         
@@ -122,6 +123,7 @@ fun test_direct_treasury_actions() {
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2, // outcome_count
             asset_coin,
             stable_coin,

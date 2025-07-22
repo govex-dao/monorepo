@@ -79,16 +79,18 @@ fun test_three_outcome_proposal() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(3_000, scenario.ctx()); // 3 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create multi-outcome proposal
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Budget Allocation Proposal".to_string(),
@@ -169,16 +171,18 @@ fun test_five_outcome_ranking_proposal() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(3_000, scenario.ctx()); // 3 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create ranking proposal with different rewards (only 3 outcomes)
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Project Funding Ranking".to_string(),

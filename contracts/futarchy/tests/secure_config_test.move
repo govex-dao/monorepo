@@ -58,15 +58,17 @@ fun test_config_proposal_workflow() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_metadata_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Update DAO name and description".to_string(),

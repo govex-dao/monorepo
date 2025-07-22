@@ -58,6 +58,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     min_stable_liquidity: u64,
     twap_threshold: u64,
     winning_outcome: Option<u64>,
+    fee_escrow: Balance<StableType>,
+    treasury_address: address,
 }
 
 // === Events ===
@@ -91,6 +93,7 @@ public struct ProposalCreated has copy, drop {
 // === Public Functions ===
 #[allow(lint(share_owned))]
 public(package) fun create<AssetType, StableType>(
+    fee_escrow: Balance<StableType>,
     dao_id: ID,
     outcome_count: u64,
     initial_asset: Balance<AssetType>,
@@ -108,6 +111,7 @@ public(package) fun create<AssetType, StableType>(
     twap_step_max: u64,
     initial_outcome_amounts: vector<u64>,
     twap_threshold: u64,
+    treasury_address: address,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
@@ -214,6 +218,8 @@ public(package) fun create<AssetType, StableType>(
         min_stable_liquidity,
         twap_threshold,
         winning_outcome: option::none(),
+        fee_escrow,
+        treasury_address,
     };
 
     // Build oracle_ids vector from each liquidity pool's oracle.
@@ -242,7 +248,7 @@ public(package) fun create<AssetType, StableType>(
         stable_value,
         asset_type: type_name::get<AssetType>().into_string(),
         stable_type: type_name::get<StableType>().into_string(),
-        review_period_ms,
+        review_period_ms: proposal.review_period_ms,
         trading_period_ms,
         title,
         details,
@@ -262,6 +268,15 @@ public(package) fun create<AssetType, StableType>(
     transfer::public_share_object(proposal);
 
     (proposal_id, market_state_id, state)
+}
+
+/// Takes the escrowed fee balance out of the proposal, leaving a zero balance behind.
+public(package) fun take_fee_escrow<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+): Balance<StableType> {
+    let fee_balance = &mut proposal.fee_escrow;
+    let amount = fee_balance.value();
+    sui::balance::split(fee_balance, amount)
 }
 
 /// Searches the proposal's liquidity pools for an oracle matching the target ID.
@@ -331,6 +346,13 @@ public fun is_winning_outcome_set<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): bool {
     proposal.winning_outcome.is_some()
+}
+
+/// Returns the treasury address where fees for failed proposals are sent.
+public(package) fun treasury_address<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+): address {
+    proposal.treasury_address
 }
 
 public fun get_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {

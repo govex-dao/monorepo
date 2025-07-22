@@ -40,7 +40,11 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
     // The create function returns a tuple (proposal_id, market_state_id, state)
     // We don't need to do anything with the return values since the function
     // already shares the Proposal and TokenEscrow objects
+    let fee_escrow = balance::zero<u64>(); // No DAO fee for testing
+    let treasury_address = @0x0; // Default treasury address
+    
     let (_proposal_id, _market_state_id, _state) = proposal::create<u64, u64>(
+        fee_escrow,
         dao_id,
         2, // outcome_count
         asset_balance,
@@ -58,6 +62,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         TWAP_STEP_MAX,
         vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], // initial_outcome_amounts
         TWAP_THESHOLD,
+        treasury_address,
         clock,
         ctx(scenario),
     );
@@ -119,7 +124,11 @@ fun test_basic_state_transition() {
         vector::push_back(&mut outcome_messages, string::utf8(b"Outcome 1"));
 
         // Correctly capturing tuple return value
+        let fee_escrow = balance::zero<u64>(); // No DAO fee for testing
+        let treasury_address = @0x0; // Default treasury address
+        
         let (_proposal_id, _market_state_id, _state) = proposal::create<u64, u64>(
+            fee_escrow,
             dao_id,
             2,
             asset_balance,
@@ -137,6 +146,7 @@ fun test_basic_state_transition() {
             TWAP_STEP_MAX,
             vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], // initial_outcome_amounts
             TWAP_THESHOLD,
+            treasury_address,
             &clock,
             ctx(&mut scenario),
         );
@@ -212,6 +222,7 @@ fun test_state_transitions() {
             &mut escrow,
             &mut fee_manager,
             &clock,
+            ctx(&mut scenario),
         );
         assert!(proposal::state(&proposal) == STATE_FINALIZED, 2);
 

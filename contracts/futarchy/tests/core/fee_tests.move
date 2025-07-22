@@ -13,7 +13,7 @@ public struct USDT has drop {}
 
 // Test constants (matching those from the fee module)
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
-const DEFAULT_PROPOSAL_CREATION_FEE: u64 = 10_000;
+const DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME: u64 = 1000;
 const DEFAULT_VERIFICATION_FEE: u64 = 10_000;
 const ADMIN: address = @0xA;
 const USER: address = @0xB;
@@ -60,7 +60,7 @@ fun test_fee_manager_initialization() {
 
         // Verify initial fees
         assert!(fee::get_dao_creation_fee(&fee_manager) == DEFAULT_DAO_CREATION_FEE, 0);
-        assert!(fee::get_proposal_creation_fee(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE, 0);
+        assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME, 0);
         assert!(fee::get_verification_fee(&fee_manager) == DEFAULT_VERIFICATION_FEE, 0);
         assert!(fee::get_sui_balance(&fee_manager) == 0, 0);
 
@@ -105,10 +105,12 @@ fun test_deposit_proposal_creation_payment() {
     {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
         let ctx = test_scenario::ctx(&mut scenario);
-        let payment = mint_sui(DEFAULT_PROPOSAL_CREATION_FEE, ctx);
+        let outcome_count = 2; // Binary proposal
+        let total_fee = DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME * outcome_count;
+        let payment = mint_sui(total_fee, ctx);
 
-        fee::deposit_proposal_creation_payment(&mut fee_manager, payment, &clock, ctx);
-        assert!(fee::get_sui_balance(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE, 0);
+        fee::deposit_proposal_creation_payment(&mut fee_manager, payment, outcome_count, &clock, ctx);
+        assert!(fee::get_sui_balance(&fee_manager) == total_fee, 0);
 
         test_scenario::return_shared(fee_manager);
     };
@@ -222,7 +224,7 @@ fun test_update_proposal_creation_fee() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
-        assert!(fee::get_proposal_creation_fee(&fee_manager) == new_fee, 0);
+        assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == new_fee, 0);
 
         test_scenario::return_shared(fee_manager);
         test_scenario::return_to_address(admin, admin_cap);
@@ -457,12 +459,14 @@ fun test_multiple_operations() {
         let ctx = test_scenario::ctx(&mut scenario);
 
         // Collect proposal creation fee
-        let payment2 = mint_sui(DEFAULT_PROPOSAL_CREATION_FEE, ctx);
-        fee::deposit_proposal_creation_payment(&mut fee_manager, payment2, &clock, ctx);
+        let outcome_count = 2; // Binary proposal
+        let proposal_fee = DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME * outcome_count;
+        let payment2 = mint_sui(proposal_fee, ctx);
+        fee::deposit_proposal_creation_payment(&mut fee_manager, payment2, outcome_count, &clock, ctx);
 
         // Verify total balance
         assert!(
-            fee::get_sui_balance(&fee_manager) == DEFAULT_DAO_CREATION_FEE + DEFAULT_PROPOSAL_CREATION_FEE,
+            fee::get_sui_balance(&fee_manager) == DEFAULT_DAO_CREATION_FEE + (DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME * 2),
             0,
         );
 
@@ -502,7 +506,7 @@ fun test_multiple_operations() {
         );
 
         assert!(fee::get_dao_creation_fee(&fee_manager) == new_dao_fee, 0);
-        assert!(fee::get_proposal_creation_fee(&fee_manager) == new_proposal_fee, 0);
+        assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == new_proposal_fee, 0);
         assert!(fee::get_verification_fee(&fee_manager) == new_verification_fee, 0);
 
         test_scenario::return_shared(fee_manager);

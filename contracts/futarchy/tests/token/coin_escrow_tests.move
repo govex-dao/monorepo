@@ -13,7 +13,7 @@ use sui::balance::{Self, Balance}; // Alias needed
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin}; // Alias needed
 use sui::test_utils;
-use sui::test_scenario::{Self as test, Scenario, next_tx, ctx}; 
+use sui::test_scenario::{Self as test, Scenario, next_tx}; 
 use std::string::{Self, String}; 
 
 // Define dummy types to stand in for actual asset and stable types.
@@ -677,7 +677,7 @@ fun test_extract_fees_insufficient_balance() {
 #[test]
 fun test_entry_functions() {
     let mut scenario = test::begin(ADMIN); // Use scenario
-    let mut clock = clock::create_for_testing(ctx(&mut scenario));
+    let mut clock = clock::create_for_testing(scenario.ctx());
     clock::set_for_testing(&mut clock, STARTING_TIMESTAMP);
 
     let outcome_count = 2;
@@ -695,15 +695,35 @@ fun test_entry_functions() {
 
         // Create proposal (assume it shares Proposal & Escrow internally)
         // We don't need to capture the return values if we take them later
+        let fee_escrow = balance::zero<DummyStable>(); // No DAO fee for testing
+        let treasury_address = @0x0; // Default treasury address
+        
         proposal::create<DummyAsset, DummyStable>(
-            dao_id, outcome_count, asset_balance, stable_balance, REVIEW_PERIOD_MS, TRADING_PERIOD_MS,
-            MIN_ASSET_LIQUIDITY, MIN_STABLE_LIQUIDITY, string::utf8(b"Entry Test"), vector[string::utf8(b"Details for Outcome 0"), string::utf8(b"Details for Outcome 1")],
-            string::utf8(b"Meta"), outcome_messages, TWAP_START_DELAY, TWAP_INITIAL_OBSERVATION,
-            TWAP_STEP_MAX, vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], TWAP_THRESHOLD, &clock, ctx(&mut scenario)
+            fee_escrow,
+            dao_id, 
+            outcome_count, 
+            asset_balance, 
+            stable_balance, 
+            REVIEW_PERIOD_MS, 
+            TRADING_PERIOD_MS,
+            MIN_ASSET_LIQUIDITY, 
+            MIN_STABLE_LIQUIDITY, 
+            string::utf8(b"Entry Test"), 
+            vector[string::utf8(b"Details for Outcome 0"), string::utf8(b"Details for Outcome 1")],
+            string::utf8(b"Meta"), 
+            outcome_messages, 
+            TWAP_START_DELAY, 
+            TWAP_INITIAL_OBSERVATION,
+            TWAP_STEP_MAX, 
+            vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], 
+            TWAP_THRESHOLD, 
+            treasury_address,
+            &clock, 
+            scenario.ctx()
         );
 
         // Create Fee Manager (assume it shares FeeManager internally)
-        fee::create_fee_manager_for_testing(ctx(&mut scenario));
+        fee::create_fee_manager_for_testing(scenario.ctx());
         // --- End of Tx 1: Objects are created and shared ---
     };
 
@@ -744,7 +764,7 @@ fun test_entry_functions() {
         let mut escrow = test::take_shared<coin_escrow::TokenEscrow<DummyAsset, DummyStable>>(&scenario);
         let fee_manager = test::take_shared<fee::FeeManager>(&scenario); // Take it again
 
-        let asset_coin = coin::mint_for_testing<DummyAsset>(500, ctx(&mut scenario));
+        let asset_coin = coin::mint_for_testing<DummyAsset>(500, scenario.ctx());
 
         // Call the entry function (requires proposal state == TRADING, which it should be)
         liquidity_interact::mint_complete_set_asset_entry<DummyAsset, DummyStable>(
@@ -752,7 +772,7 @@ fun test_entry_functions() {
             &mut escrow,
             asset_coin,
             &clock,
-            ctx(&mut scenario)
+            scenario.ctx()
         );
 
         // Check balance inside escrow
@@ -774,7 +794,7 @@ fun test_entry_functions() {
         let mut escrow = test::take_shared<coin_escrow::TokenEscrow<DummyAsset, DummyStable>>(&scenario);
         let fee_manager = test::take_shared<fee::FeeManager>(&scenario); // Take it again
 
-        let stable_coin = coin::mint_for_testing<DummyStable>(500, ctx(&mut scenario));
+        let stable_coin = coin::mint_for_testing<DummyStable>(500, scenario.ctx());
 
         // Call the entry function
         liquidity_interact::mint_complete_set_stable_entry<DummyAsset, DummyStable>(
@@ -782,7 +802,7 @@ fun test_entry_functions() {
             &mut escrow,
             stable_coin,
             &clock,
-            ctx(&mut scenario)
+            scenario.ctx()
         );
 
         // Check balances

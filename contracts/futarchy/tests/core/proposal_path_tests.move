@@ -42,7 +42,11 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
     outcome_messages.push_back(b"Reject".to_string());
     outcome_messages.push_back(b"Accept".to_string());
 
+    let fee_escrow = balance::zero<u64>(); // No DAO fee for testing
+    let treasury_address = @0x0; // Default treasury address
+    
     let (_, _, _) = proposal::create<u64, u64>(
+        fee_escrow,
         dao_id,
         2, // outcome_count
         asset_balance,
@@ -60,6 +64,7 @@ fun setup_test_proposal(scenario: &mut Scenario, clock: &Clock) {
         TWAP_STEP_MAX,
         vector[1_000_000, 1_000_000, 1_000_000, 1_000_000], // initial_outcome_amounts
         TWAP_THRESHOLD,
+        treasury_address,
         clock,
         ctx(scenario),
     );
@@ -130,6 +135,7 @@ fun test_proposal_complete_happy_path() {
             &mut escrow,
             &mut fee_manager,
             &clock,
+            ctx(&mut scenario),
         );
         assert!(proposal::state(&proposal) == STATE_FINALIZED, 6);
         assert!(proposal::is_winning_outcome_set(&proposal), 7);
@@ -441,6 +447,7 @@ fun test_proposal_path_with_swaps() {
             &mut escrow,
             &mut fee_manager,
             &clock,
+            ctx(&mut scenario),
         );
         assert!(proposal::state(&proposal) == STATE_FINALIZED, 3);
         assert!(proposal::is_winning_outcome_set(&proposal), 4);

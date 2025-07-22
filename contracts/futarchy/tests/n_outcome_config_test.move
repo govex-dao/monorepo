@@ -58,7 +58,7 @@ fun test_three_outcome_config_proposal() {
         let mut dao = scenario.take_shared<DAO>();
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(3_000, scenario.ctx()); // 3 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
@@ -143,7 +143,7 @@ fun test_governance_ranking_proposal() {
         let mut dao = scenario.take_shared<DAO>();
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(4_000, scenario.ctx()); // 4 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
@@ -230,15 +230,17 @@ fun test_memo_proposal_n_outcomes() {
         let mut dao = scenario.take_shared<DAO>();
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(5_000, scenario.ctx()); // 5 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create memo proposal for community decision
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         dao::create_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             5, // 5 outcomes
             asset_coin,
             stable_coin,

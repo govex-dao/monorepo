@@ -60,16 +60,18 @@ fun test_trading_params_update() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create proposal to update trading params
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_trading_params_proposal(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Update Trading Parameters".to_string(),
@@ -162,15 +164,17 @@ fun test_metadata_update() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_metadata_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Update DAO Metadata".to_string(),
@@ -249,7 +253,7 @@ fun test_comprehensive_config_update() {
         let mut dao = scenario.take_shared<DAO>();
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
@@ -307,6 +311,7 @@ fun test_comprehensive_config_update() {
             &mut dao,
             option::none(),
             option::some(3),
+            option::none<u64>(), // No change to proposal fee
         );
         
         // Verify all updates
@@ -365,6 +370,7 @@ fun test_governance_settings_update() {
             &mut dao,
             option::some(false),
             option::some(3),
+            option::none<u64>(), // No change to proposal fee
         );
         
         // Verify updates
@@ -412,16 +418,18 @@ fun test_empty_metadata_proposal_fails() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This should fail - empty strings mean no changes
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_metadata_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Empty Update".to_string(),
@@ -477,16 +485,18 @@ fun test_empty_config_proposal_fails() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This should fail - no changes specified
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_trading_params_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Empty Update".to_string(),
@@ -543,16 +553,18 @@ fun test_invalid_trading_period_fails() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut config_registry = scenario.take_shared<ConfigActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(10_000, scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(2_000, scenario.ctx()); // 2 outcomes * 1000 per outcome
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This should fail - trading period too short
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx()); // No DAO fee
         config_proposals::create_trading_params_proposal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut config_registry,
             payment,
+            dao_fee_payment,
             asset_coin,
             stable_coin,
             b"Invalid Period".to_string(),

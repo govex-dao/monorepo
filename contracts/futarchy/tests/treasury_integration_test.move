@@ -96,17 +96,21 @@ fun test_partial_execution_and_retry() {
         let mut registry = scenario.take_shared<ActionRegistry>();
         
         // Create payment for proposal
-        let payment = coin::mint_for_testing<SUI>(fee::get_proposal_creation_fee(&fee_manager), scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(fee::get_proposal_creation_fee_per_outcome(&fee_manager) * 2, scenario.ctx());
         
         // Create coins for AMM
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
+        
+        // Create dao fee payment
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx());
         
         // Create the proposal to get a real ID
         let (proposal_id, _, _) = dao::create_proposal_internal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2, // outcome_count
             asset_coin,
             stable_coin,
@@ -423,15 +427,19 @@ fun test_recurring_payment_action() {
         let mut fee_manager = scenario.take_shared<fee::FeeManager>();
         let mut registry = scenario.take_shared<ActionRegistry>();
         
-        let payment = coin::mint_for_testing<SUI>(fee::get_proposal_creation_fee(&fee_manager), scenario.ctx());
+        let payment = coin::mint_for_testing<SUI>(fee::get_proposal_creation_fee_per_outcome(&fee_manager) * 2, scenario.ctx());
         let asset_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
+        
+        // Create dao fee payment
+        let dao_fee_payment = coin::mint_for_testing<SUI>(0, scenario.ctx());
         
         // Create the proposal
         let (proposal_id, _, _) = dao::create_proposal_internal<SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             payment,
+            dao_fee_payment,
             2,
             asset_coin,
             stable_coin,

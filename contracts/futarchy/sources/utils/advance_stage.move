@@ -5,8 +5,11 @@ use futarchy::fee::FeeManager;
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
 use futarchy::proposal::Proposal;
+use std::option;
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 use sui::event;
+use sui::transfer;
 
 // === Introduction ===
 // This handles advancing proposal stages
@@ -49,7 +52,7 @@ public(package) fun try_advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
     clock: &Clock,
-) {
+): bool {
     // Validate the proposal and market state are for the same market
     assert!(object::id(state) == proposal.market_state_id(), EInvalidState);
     assert!(state.market_id() == proposal.get_id(), EInvalidState);
@@ -77,6 +80,7 @@ public(package) fun try_advance_state<AssetType, StableType>(
             state,
             clock,
         );
+        return true
     } else {
         abort EInvalidStateTransition
     };
@@ -97,7 +101,8 @@ public(package) fun try_advance_state<AssetType, StableType>(
             winning_outcome,
             timestamp: current_time,
         });
-    }
+    };
+    false
 }
 
 // === Public Entry Functions ===
@@ -106,19 +111,41 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     fee_manager: &mut FeeManager,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     assert!(escrow.get_market_state_id() == proposal.market_state_id(), EInvalidState);
 
     let market_state = escrow.get_market_state_mut();
-    try_advance_state(
+    let just_finalized = try_advance_state(
         proposal,
         market_state,
         clock,
     );
 
-    // If the proposal is finalized, collect fees before anyone can call empty_all_amm_liquidity
-    if (proposal.state() == STATE_FINALIZED) {
+    // If the proposal just finalized, handle fees and fee distribution.
+    if (just_finalized) {
+        // 1. Collect protocol fees from the AMM pools.
         liquidity_interact::collect_protocol_fees(proposal, escrow, fee_manager, clock);
+
+        // 2. Distribute the DAO-level proposal fee held in escrow on the proposal object.
+        let fee_balance = proposal.take_fee_escrow();
+        if (fee_balance.value() > 0) {
+            let fee_coin = fee_balance.into_coin(ctx);
+            let winning_outcome = proposal.get_winning_outcome();
+
+            if (winning_outcome == 0) { // Proposal was rejected
+                // Send fee to the DAO treasury.
+                let treasury_addr = proposal.treasury_address();
+                transfer::public_transfer(fee_coin, treasury_addr);
+            } else { // Proposal passed
+                // Return fee to the original proposer.
+                let proposer_addr = proposal.proposer();
+                transfer::public_transfer(fee_coin, proposer_addr);
+            }
+        } else {
+            // If fee is 0, destroy the empty balance
+            fee_balance.destroy_zero();
+        };
     }
 }
 

@@ -20,7 +20,7 @@ const EBadWitness: u64 = 2;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
-const DEFAULT_PROPOSAL_CREATION_FEE: u64 = 10_000;
+const DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME: u64 = 1000;
 const DEFAULT_VERIFICATION_FEE: u64 = 10_000;
 
 // === Structs ===
@@ -30,7 +30,7 @@ public struct FEE has drop {}
 public struct FeeManager has key, store {
     id: UID,
     dao_creation_fee: u64,
-    proposal_creation_fee: u64,
+    proposal_creation_fee_per_outcome: u64,
     verification_fee: u64,
     sui_balance: Balance<SUI>,
 }
@@ -55,7 +55,7 @@ public struct DAOCreationFeeUpdated has copy, drop {
 
 public struct ProposalCreationFeeUpdated has copy, drop {
     old_fee: u64,
-    new_fee: u64,
+    new_fee_per_outcome: u64,
     admin: address,
     timestamp: u64,
 }
@@ -107,7 +107,7 @@ fun init(witness: FEE, ctx: &mut TxContext) {
     let fee_manager = FeeManager {
         id: object::new(ctx),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
-        proposal_creation_fee: DEFAULT_PROPOSAL_CREATION_FEE,
+        proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
         verification_fee: DEFAULT_VERIFICATION_FEE,
         sui_balance: balance::zero<SUI>(),
     };
@@ -160,11 +160,13 @@ public(package) fun deposit_dao_creation_payment(
 public(package) fun deposit_proposal_creation_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
+    outcome_count: u64,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    let fee_amount = fee_manager.proposal_creation_fee;
+    let fee_amount = fee_manager.proposal_creation_fee_per_outcome * outcome_count;
 
+    // deposit_payment asserts the payment amount is exactly the fee_amount
     let payment_amount = deposit_payment(fee_manager, fee_amount, payment);
 
     // Emit event
@@ -238,16 +240,16 @@ public entry fun update_dao_creation_fee(
 public entry fun update_proposal_creation_fee(
     fee_manager: &mut FeeManager,
     _admin_cap: &FeeAdminCap,
-    new_fee: u64,
+    new_fee_per_outcome: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let old_fee = fee_manager.proposal_creation_fee;
-    fee_manager.proposal_creation_fee = new_fee;
+    let old_fee = fee_manager.proposal_creation_fee_per_outcome;
+    fee_manager.proposal_creation_fee_per_outcome = new_fee_per_outcome;
 
     event::emit(ProposalCreationFeeUpdated {
         old_fee,
-        new_fee,
+        new_fee_per_outcome,
         admin: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
@@ -366,8 +368,8 @@ public fun get_dao_creation_fee(fee_manager: &FeeManager): u64 {
     fee_manager.dao_creation_fee
 }
 
-public fun get_proposal_creation_fee(fee_manager: &FeeManager): u64 {
-    fee_manager.proposal_creation_fee
+public fun get_proposal_creation_fee_per_outcome(fee_manager: &FeeManager): u64 {
+    fee_manager.proposal_creation_fee_per_outcome
 }
 
 public fun get_verification_fee(fee_manager: &FeeManager): u64 {
@@ -401,7 +403,7 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
     let fee_manager = FeeManager {
         id: object::new(ctx),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
-        proposal_creation_fee: DEFAULT_PROPOSAL_CREATION_FEE,
+        proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
         verification_fee: DEFAULT_VERIFICATION_FEE,
         sui_balance: balance::zero<SUI>(),
     };
