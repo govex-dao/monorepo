@@ -404,15 +404,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 excessive_trading_period, // This should cause failure
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );
@@ -474,15 +474,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );
@@ -604,15 +604,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );
@@ -654,15 +654,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );
@@ -703,15 +703,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );
@@ -759,15 +759,15 @@ module futarchy::factory_tests {
                 icon_url,
                 REVIEW_PERIOD_MS,
                 TRADING_PERIOD_MS,
+                
+                
                 60_000,
                 300_000,
-                TWAP_INITIAL_OBSERVATION,
+TWAP_INITIAL_OBSERVATION,
                 TWAP_THRESHOLD,
                 string::utf8(b"DAO description"),
                 3, // max_outcomes
                 vector::empty<string::String>(),
-                vector::empty<string::String>(), // agreement_lines
-                vector::empty<u64>(), // agreement_difficulties
                 &clock,
                 ctx(&mut scenario),
             );

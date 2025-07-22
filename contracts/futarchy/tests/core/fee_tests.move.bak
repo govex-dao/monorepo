@@ -716,8 +716,6 @@ fun test_dao_platform_fee_collection_with_pause() {
             b"Test DAO Description".to_string(),
             2,
             vector::empty(),
-            vector::empty(), // agreement_lines
-            vector::empty(), // agreement_difficulties
             &clock,
             ctx,
         );
@@ -934,8 +932,6 @@ fun test_multiple_months_fee_collection() {
             b"Test DAO Description".to_string(),
             2,
             vector::empty(),
-            vector::empty(), // agreement_lines
-            vector::empty(), // agreement_difficulties
             &clock,
             ctx,
         );

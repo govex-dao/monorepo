@@ -88,8 +88,6 @@ fun setup_complete_system(scenario: &mut Scenario): ID {
             b"Test DAO for capability deposits".to_string(),
             3, // max_outcomes
             vector[b"Test metadata".to_string()], // metadata
-            vector::empty(), // agreement_lines
-            vector::empty(), // agreement_difficulties
             &clock,
             ctx(scenario)
         );

@@ -63,16 +63,32 @@ fun test_action_registry_creation() {
 }
 
 #[test]
-fun test_update_line_action_creation() {
+fun test_action_creation() {
     let mut scenario = test_scenario::begin(ADMIN);
     
     let line_id = object::id_from_address(@0x111);
     let new_text = string::utf8(b"Updated article text");
     
-    // Create action
-    let action = operating_agreement_actions::new_update_line_action(line_id, new_text);
+    // Test update action
+    let update_action = operating_agreement_actions::new_update_action(line_id, new_text);
     
-    // Action created successfully (fields are private so we can't inspect)
+    // Test insert after action
+    let insert_after_action = operating_agreement_actions::new_insert_after_action(
+        line_id,
+        string::utf8(b"New line after"),
+        25000 // 25% difficulty
+    );
+    
+    // Test insert at beginning action
+    let insert_beginning_action = operating_agreement_actions::new_insert_at_beginning_action(
+        string::utf8(b"New first line"),
+        15000 // 15% difficulty
+    );
+    
+    // Test remove action
+    let remove_action = operating_agreement_actions::new_remove_action(line_id);
+    
+    // Actions created successfully (fields are private so we can't inspect)
     
     test_scenario::end(scenario);
 }

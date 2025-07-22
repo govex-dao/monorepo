@@ -22,6 +22,10 @@ const EProposalNotResolved: u64 = 5;
 const ERejectOutcomeNoAction: u64 = 7;
 
 // === Constants ===
+const ACTION_UPDATE: u8 = 0;
+const ACTION_INSERT_AFTER: u8 = 1;
+const ACTION_INSERT_AT_BEGINNING: u8 = 2;
+const ACTION_REMOVE: u8 = 3;
 const BASIS_POINTS: u256 = 100_000;
 
 // === Structs ===
@@ -29,28 +33,66 @@ const BASIS_POINTS: u256 = 100_000;
 /// Registry to store actions for operating agreement proposals.
 public struct ActionRegistry has key {
     id: UID,
-    // Maps proposal_id -> The action for the "Accept" outcome.
-    actions: Table<ID, UpdateLineAction>,
+    // Maps proposal_id -> A vector of actions for the "Accept" outcome.
+    actions: Table<ID, vector<Action>>,
     // Tracks execution status: proposal_id -> executed
     executed: Table<ID, bool>,
 }
 
-/// The action to update a line in the operating agreement.
-public struct UpdateLineAction has store, copy, drop {
-    line_id: ID,
-    new_text: String,
+/// Represents a single atomic change within a proposal.
+public struct Action has store, copy, drop {
+    action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
+    // Only fields relevant to the action_type will be populated.
+    line_id: Option<ID>, // Used for Update, Remove, and as the *previous* line for Insert After
+    text: Option<String>, // Used for Update and Insert operations
+    difficulty: Option<u64>, // Used for Insert operations
 }
 
-/// Creates a new UpdateLineAction
-public fun new_update_line_action(line_id: ID, new_text: String): UpdateLineAction {
-    UpdateLineAction { line_id, new_text }
+/// Creates a new update action
+public fun new_update_action(line_id: ID, new_text: String): Action {
+    Action { 
+        action_type: ACTION_UPDATE,
+        line_id: option::some(line_id), 
+        text: option::some(new_text),
+        difficulty: option::none(),
+    }
+}
+
+/// Creates a new insert after action
+public fun new_insert_after_action(prev_line_id: ID, text: String, difficulty: u64): Action {
+    Action { 
+        action_type: ACTION_INSERT_AFTER,
+        line_id: option::some(prev_line_id), 
+        text: option::some(text),
+        difficulty: option::some(difficulty),
+    }
+}
+
+/// Creates a new insert at beginning action
+public fun new_insert_at_beginning_action(text: String, difficulty: u64): Action {
+    Action { 
+        action_type: ACTION_INSERT_AT_BEGINNING,
+        line_id: option::none(), 
+        text: option::some(text),
+        difficulty: option::some(difficulty),
+    }
+}
+
+/// Creates a new remove action
+public fun new_remove_action(line_id: ID): Action {
+    Action { 
+        action_type: ACTION_REMOVE,
+        line_id: option::some(line_id), 
+        text: option::none(),
+        difficulty: option::none(),
+    }
 }
 
 // === Events ===
-public struct OperatingAgreementUpdateExecuted has copy, drop {
+public struct OperatingAgreementActionsExecuted has copy, drop {
     dao_id: ID,
     proposal_id: ID,
-    line_id: ID,
+    action_count: u64,
     timestamp: u64,
 }
 
@@ -66,24 +108,25 @@ public fun create_registry(ctx: &mut TxContext) {
     transfer::share_object(registry);
 }
 
-/// Initialize storage for a new proposal's action.
-public fun init_proposal_action(
+/// Initialize storage for a new proposal's actions.
+public fun init_proposal_actions(
     registry: &mut ActionRegistry,
     proposal_id: ID,
-    action: UpdateLineAction,
+    actions_batch: vector<Action>,
 ) {
     assert!(!registry.actions.contains(proposal_id), EActionsAlreadyStored);
-    registry.actions.add(proposal_id, action);
+    registry.actions.add(proposal_id, actions_batch);
     registry.executed.add(proposal_id, false);
 }
 
 
-/// Executes the update if the proposal passed and meets the specific difficulty threshold.
-public entry fun execute_update<AssetType, StableType>(
+/// Executes the actions if the proposal passed and meets the specific difficulty threshold.
+public entry fun execute_actions<AssetType, StableType>(
     registry: &mut ActionRegistry,
     proposal: &Proposal<AssetType, StableType>,
     agreement: &mut OperatingAgreement,
     clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     let proposal_id = proposal.get_id();
 
@@ -101,39 +144,83 @@ public entry fun execute_update<AssetType, StableType>(
         return
     };
 
-    // 4. If outcome is "Accept" (1), perform the special difficulty check.
+    // 4. If outcome is "Accept" (1), perform the special difficulty check for the entire batch.
+    // The entire proposal must clear the bar set by the single most difficult action in the batch.
     assert!(winning_outcome == 1, ERejectOutcomeNoAction);
 
-    // Get the stored action for this proposal.
-    let action = registry.actions.borrow(proposal_id);
-    let line_id = action.line_id;
+    // === PHASE 1: FIND THE HIGHEST DIFFICULTY IN THE BATCH ===
+    let actions_batch = registry.actions.borrow(proposal_id);
+    let mut max_difficulty_in_batch = 0;
+    let mut i = 0;
+    while (i < actions_batch.length()) {
+        let action = actions_batch.borrow(i);
+        let current_difficulty = if (action.action_type == ACTION_UPDATE || action.action_type == ACTION_REMOVE) {
+            operating_agreement::get_difficulty(agreement, *action.line_id.borrow())
+        } else if (action.action_type == ACTION_INSERT_AFTER) {
+            // For insert after, we use the difficulty of the new line
+            *action.difficulty.borrow()
+        } else { // ACTION_INSERT_AT_BEGINNING
+            *action.difficulty.borrow()
+        };
 
-    // Get the required difficulty from the agreement itself.
-    let difficulty = operating_agreement::get_difficulty(agreement, line_id);
+        if (current_difficulty > max_difficulty_in_batch) {
+            max_difficulty_in_batch = current_difficulty;
+        };
+        i = i + 1;
+    };
 
+    // === PHASE 2: PERFORM THE ATOMIC CHECK AGAINST THE HIGHEST DIFFICULTY ===
     // Get the final TWAP prices from the resolved proposal.
     let twaps = proposal.get_twap_prices();
     let twap_reject = *twaps.borrow(0);
     let twap_accept = *twaps.borrow(1);
 
-    // 5. THE SPECIAL CHECK: Verify the accept price beat the reject price by the required difficulty margin.
-    // The formula is: accept_price > reject_price * (1 + difficulty_in_basis_points / 100000)
-    // To avoid floating point, we use: accept_price * 100000 > reject_price * (100000 + difficulty)
     let accept_val = (twap_accept as u256) * BASIS_POINTS;
-    let required_reject_val = (twap_reject as u256) * (BASIS_POINTS + (difficulty as u256));
-
+    let required_reject_val = (twap_reject as u256) * (BASIS_POINTS + (max_difficulty_in_batch as u256));
     assert!(accept_val > required_reject_val, EThresholdNotMet);
 
-    // 6. If the check passes, execute the update.
-    operating_agreement::update_line(agreement, line_id, action.new_text);
+    // === PHASE 3: EXECUTE ALL ACTIONS IN THE BATCH ===
+    // This only runs if the atomic check above passes.
+    i = 0;
+    while (i < actions_batch.length()) {
+        let action = actions_batch.borrow(i);
+        if (action.action_type == ACTION_UPDATE) {
+            operating_agreement::update_line(
+                agreement,
+                *action.line_id.borrow(),
+                *action.text.borrow()
+            );
+        } else if (action.action_type == ACTION_INSERT_AFTER) {
+            let _new_id = operating_agreement::insert_line_after(
+                agreement,
+                *action.line_id.borrow(), // This ID is the 'previous line' to insert after
+                *action.text.borrow(),
+                *action.difficulty.borrow(),
+                ctx
+            );
+        } else if (action.action_type == ACTION_INSERT_AT_BEGINNING) {
+            let _new_id = operating_agreement::insert_line_at_beginning(
+                agreement,
+                *action.text.borrow(),
+                *action.difficulty.borrow(),
+                ctx
+            );
+        } else { // ACTION_REMOVE
+            operating_agreement::remove_line(agreement, *action.line_id.borrow());
+        };
+        i = i + 1;
+    };
 
-    // 7. Mark as executed to prevent replay.
+    // Mark as executed to prevent replay.
     *registry.executed.borrow_mut(proposal_id) = true;
 
-    event::emit(OperatingAgreementUpdateExecuted {
+    event::emit(OperatingAgreementActionsExecuted {
         dao_id: operating_agreement::get_dao_id(agreement),
         proposal_id,
-        line_id,
+        action_count: actions_batch.length(),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Atomically emit the new, full state of the agreement for indexers.
+    operating_agreement::emit_current_state_event(agreement, clock);
 }

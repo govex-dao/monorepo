@@ -100,6 +100,8 @@ fun setup_dao_with_registry(scenario: &mut Scenario): (ID, ID) {
             b"Test DAO for mint/burn proposals".to_string(),
             3, // max_outcomes
             vector[b"Test metadata".to_string()], // metadata
+            vector::empty(), // agreement_lines
+            vector::empty(), // agreement_difficulties
             &clock,
             ctx(scenario)
         );

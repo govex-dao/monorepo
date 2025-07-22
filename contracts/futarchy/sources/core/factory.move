@@ -135,6 +135,9 @@ public entry fun create_dao<AssetType, StableType>(
     description: UTF8String,
     max_outcomes: u64,
     metadata: vector<UTF8String>,
+    // Optional operating agreement parameters
+    agreement_lines: vector<UTF8String>,
+    agreement_difficulties: vector<u64>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -159,7 +162,7 @@ public entry fun create_dao<AssetType, StableType>(
     );
 
     // Create DAO and AdminCap
-    let dao = dao::create<AssetType, StableType>(
+    let mut dao = dao::create<AssetType, StableType>(
         min_asset_amount,
         min_stable_amount,
         dao_name,
@@ -176,6 +179,16 @@ public entry fun create_dao<AssetType, StableType>(
         clock,
         ctx,
     );
+
+    // Initialize operating agreement if lines provided
+    if (!agreement_lines.is_empty()) {
+        dao::init_operating_agreement_internal(
+            &mut dao,
+            agreement_lines,
+            agreement_difficulties,
+            ctx,
+        );
+    };
 
     // Treasury initialization is now optional
     // DAOs can add treasury later if needed
