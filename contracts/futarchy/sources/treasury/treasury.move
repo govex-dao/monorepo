@@ -13,6 +13,7 @@ use sui::{
     bag::{Self, Bag},
     sui::SUI,
     event,
+    clock::Clock,
 };
 
 // === Constants ===
@@ -78,6 +79,14 @@ public struct Withdrawn has copy, drop {
 public struct CoinTypeAdded has copy, drop {
     treasury_id: ID,
     coin_type: TypeName,
+}
+
+public struct PlatformFeeWithdrawn has copy, drop {
+    treasury_id: ID,
+    coin_type: TypeName,
+    amount: u64,
+    collector: address, // address of factory owner who initiated
+    timestamp: u64,
 }
 
 // === Public Functions ===
@@ -300,9 +309,42 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
     }
 }
 
+/// Withdraws coins for platform fees (no auth needed, package-private)
+public(package) fun platform_withdraw<CoinType>(
+    treasury: &mut Treasury,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    // No auth token verification, protected by package privacy.
+    // This should only be called by trusted internal modules like `fee`.
+    let coin_type = type_name::get<CoinType>();
+    assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
+
+    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+    assert!(balance_mut.value() >= amount, EInsufficientBalance);
+
+    let coin = coin::from_balance(balance_mut.split(amount), ctx);
+
+    event::emit(PlatformFeeWithdrawn {
+        treasury_id: object::id(treasury),
+        coin_type,
+        amount,
+        collector: ctx.sender(), // The address that initiated the collection
+        timestamp: clock.timestamp_ms(),
+    });
+
+    coin
+}
+
 /// Check if a coin type exists in treasury
 public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
     treasury.vault.contains<TypeName>(type_name::get<CoinType>())
+}
+
+/// Check if a coin type exists in treasury (by TypeName)
+public fun coin_type_exists_by_name(treasury: &Treasury, coin_type: TypeName): bool {
+    treasury.vault.contains<TypeName>(coin_type)
 }
 
 /// Get treasury ID

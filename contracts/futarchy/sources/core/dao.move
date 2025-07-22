@@ -54,6 +54,8 @@ const MAX_RESULT_LENGTH: u64 = 128;
 const MIN_AMM_SAFE_AMOUNT: u64 = 1000; // under 50 swap will have significant slippage
 const DAO_DESCRIPTION_MAX_LENGTH: u64 = 1024;
 
+const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
+
 // === Structs ===
 
 public struct DAO has key, store {
@@ -83,6 +85,7 @@ public struct DAO has key, store {
     metadata: vector<String>,
     treasury_account_id: Option<ID>,
     proposal_fee_per_outcome: u64,
+    next_fee_due_timestamp: u64,
 }
 
 public struct ProposalInfo has store {
@@ -123,6 +126,17 @@ public struct ResultSigned has copy, drop {
     outcome: String,
     description: String,
     winning_outcome: u64,
+    timestamp: u64,
+}
+
+public struct ProposalCreationPausedDueToUnpaidFees has copy, drop {
+    dao_id: ID,
+    timestamp: u64,
+    fee_due_timestamp: u64,
+}
+
+public struct ProposalCreationUnpaused has copy, drop {
+    dao_id: ID,
     timestamp: u64,
 }
 
@@ -193,6 +207,7 @@ public(package) fun create<AssetType, StableType>(
         metadata: metadata,
         treasury_account_id: option::none(),
         proposal_fee_per_outcome: 0,
+        next_fee_due_timestamp: timestamp + MONTHLY_FEE_PERIOD_MS,
     };
 
     event::emit(DAOCreated {
@@ -709,6 +724,60 @@ public(package) fun update_twap_config(
 /// Get the proposal fee per outcome
 public fun get_proposal_fee_per_outcome(dao: &DAO): u64 {
     dao.proposal_fee_per_outcome
+}
+
+public fun get_next_fee_due_timestamp(dao: &DAO): u64 {
+    dao.next_fee_due_timestamp
+}
+
+public(package) fun update_next_fee_due_timestamp(dao: &mut DAO, new_timestamp: u64) {
+    dao.next_fee_due_timestamp = new_timestamp;
+}
+
+/// Collect monthly platform fee from DAO treasury
+public entry fun collect_dao_platform_fee<StableType: drop>(
+    dao: &mut DAO,
+    fee_manager: &mut fee::FeeManager,
+    treasury: &mut futarchy::treasury::Treasury,
+    admin_cap: &fee::FeeAdminCap,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Call the fee module function, passing DAO info
+    let (new_timestamp, collection_successful) = fee::collect_dao_recurring_fee<StableType>(
+        fee_manager,
+        treasury,
+        admin_cap,
+        object::id(dao),
+        &dao.stable_type,
+        dao.next_fee_due_timestamp,
+        clock,
+        ctx,
+    );
+    
+    if (collection_successful) {
+        // Update the DAO's next fee due timestamp
+        dao.next_fee_due_timestamp = new_timestamp;
+        
+        // Unpause proposal creation if it was paused
+        if (!dao.proposal_creation_enabled) {
+            dao.proposal_creation_enabled = true;
+            event::emit(ProposalCreationUnpaused {
+                dao_id: object::id(dao),
+                timestamp: clock.timestamp_ms(),
+            });
+        }
+    } else {
+        // Pause proposal creation due to insufficient funds
+        if (dao.proposal_creation_enabled) {
+            dao.proposal_creation_enabled = false;
+            event::emit(ProposalCreationPausedDueToUnpaidFees {
+                dao_id: object::id(dao),
+                timestamp: clock.timestamp_ms(),
+                fee_due_timestamp: dao.next_fee_due_timestamp,
+            });
+        }
+    }
 }
 
 /// Update governance settings after a config proposal passes
