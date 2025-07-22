@@ -14,9 +14,11 @@ use sui::{
 };
 use futarchy::{
     treasury::{Self, Treasury},
+    capability_manager::{Self, CapabilityManager},
     recurring_payments,
     recurring_payment_registry::PaymentStreamRegistry,
-    dao::DAO,
+    dao::{Self, DAO},
+    execution_context::{Self, ProposalExecutionContext},
 };
 
 // === Errors ===
@@ -28,11 +30,16 @@ const EInvalidOutcome: u64 = 7;
 const EInvalidAmount: u64 = 9;
 const EInvalidVestingSchedule: u64 = 10;
 const ERecurringPaymentRegistryRequired: u64 = 11;
+const EInvalidAction: u64 = 12;
+const EActionAlreadyExecuted: u64 = 13;
 
 // === Constants ===
 const ACTION_TRANSFER: u8 = 0;
 const ACTION_NO_OP: u8 = 3;
 const ACTION_RECURRING_PAYMENT: u8 = 4;
+const ACTION_MINT: u8 = 5;
+const ACTION_BURN: u8 = 6;
+const ACTION_CAPABILITY_DEPOSIT: u8 = 7;
 
 // === Structs ===
 
@@ -41,6 +48,10 @@ public struct ActionRegistry has key {
     id: UID,
     // Map proposal_id -> ProposalActions
     actions: Table<ID, ProposalActions>,
+    // Track executed transfers: proposal_id -> action_index -> executed
+    executed_transfers: Table<ID, Table<u64, bool>>,
+    // Track executed payments: proposal_id -> action_index -> executed
+    executed_payments: Table<ID, Table<u64, bool>>,
 }
 
 /// Actions for a proposal, stored by outcome using Bags for type safety
@@ -84,6 +95,27 @@ public struct RecurringPaymentAction<phantom CoinType> has store {
     description: String, // Description of the recurring payment
 }
 
+/// Mint action - mints new tokens
+public struct MintAction<phantom CoinType> has store {
+    amount: u64,
+    recipient: address,
+    description: String,
+}
+
+/// Burn action - burns tokens
+public struct BurnAction<phantom CoinType> has store {
+    amount: u64,
+    from_treasury: bool, // If true, burn from treasury balance; if false, expect external coins
+    description: String,
+}
+
+/// Capability deposit action - parameters for accepting a TreasuryCap
+public struct CapabilityDepositAction<phantom CoinType> has store {
+    max_supply: Option<u64>,
+    max_mint_per_proposal: Option<u64>,
+    mint_cooldown_ms: u64,
+}
+
 
 // === Events ===
 
@@ -113,6 +145,8 @@ public fun create_for_testing(ctx: &mut TxContext) {
     let registry = ActionRegistry {
         id: object::new(ctx),
         actions: table::new(ctx),
+        executed_transfers: table::new(ctx),
+        executed_payments: table::new(ctx),
     };
     transfer::share_object(registry);
 }
@@ -287,6 +321,150 @@ public fun add_recurring_payment_action<CoinType>(
     });
 }
 
+/// Add a mint action
+public fun add_mint_action<CoinType>(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    amount: u64,
+    recipient: address,
+    description: String,
+    _ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    // Validate parameters
+    assert!(amount > 0, EInvalidAmount);
+    
+    let action = MintAction<CoinType> {
+        amount,
+        recipient,
+        description,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let coin_type_str = type_name::get<CoinType>().into_string();
+    let metadata = ActionMetadata {
+        action_type: ACTION_MINT,
+        coin_type: option::some(coin_type_str),
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    // Track coin type
+    if (!proposal_actions.coin_types.contains(&coin_type_str)) {
+        proposal_actions.coin_types.push_back(coin_type_str);
+    };
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_MINT,
+        coin_type: option::some(coin_type_str),
+    });
+}
+
+/// Add a burn action
+public fun add_burn_action<CoinType>(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    amount: u64,
+    from_treasury: bool,
+    description: String,
+    _ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    // Validate parameters
+    assert!(amount > 0, EInvalidAmount);
+    
+    let action = BurnAction<CoinType> {
+        amount,
+        from_treasury,
+        description,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let coin_type_str = type_name::get<CoinType>().into_string();
+    let metadata = ActionMetadata {
+        action_type: ACTION_BURN,
+        coin_type: option::some(coin_type_str),
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    // Track coin type
+    if (!proposal_actions.coin_types.contains(&coin_type_str)) {
+        proposal_actions.coin_types.push_back(coin_type_str);
+    };
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_BURN,
+        coin_type: option::some(coin_type_str),
+    });
+}
+
+/// Add a capability deposit action
+public fun add_capability_deposit_action<CoinType>(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    max_supply: Option<u64>,
+    max_mint_per_proposal: Option<u64>,
+    mint_cooldown_ms: u64,
+    _ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    let action = CapabilityDepositAction<CoinType> {
+        max_supply,
+        max_mint_per_proposal,
+        mint_cooldown_ms,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let coin_type_str = type_name::get<CoinType>().into_string();
+    let metadata = ActionMetadata {
+        action_type: ACTION_CAPABILITY_DEPOSIT,
+        coin_type: option::some(coin_type_str),
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    // Track coin type
+    if (!proposal_actions.coin_types.contains(&coin_type_str)) {
+        proposal_actions.coin_types.push_back(coin_type_str);
+    };
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_CAPABILITY_DEPOSIT,
+        coin_type: option::some(coin_type_str),
+    });
+}
+
 // === Execution Functions ===
 
 /// Execute transfer action
@@ -317,7 +495,7 @@ fun execute_transfer<CoinType: drop>(
             recipient,
             ctx
         );
-    }
+    };
 }
 
 
@@ -328,7 +506,7 @@ fun execute_recurring_payment<CoinType: drop>(
     treasury: &mut Treasury,
     auth: treasury::Auth,
     dao: &DAO,
-    registry: &mut PaymentStreamRegistry, // Required for creating a stream
+    payment_registry: &mut PaymentStreamRegistry, // Required for creating a stream
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -364,7 +542,7 @@ fun execute_recurring_payment<CoinType: drop>(
     // Create the autonomous PaymentStream object, which now holds the funds
     recurring_payments::create_payment_stream<CoinType>(
         dao,
-        registry,
+        payment_registry,
         funds,
         recipient,
         amount_per_payment,
@@ -376,6 +554,7 @@ fun execute_recurring_payment<CoinType: drop>(
         clock,
         ctx,
     );
+    
 }
 
 /// Execute no-op action
@@ -392,6 +571,24 @@ fun execute_no_op(
     let _action = bag::remove<u64, NoOpAction>(action_bag, index);
 }
 
+
+
+/// Execute capability deposit action
+fun execute_capability_deposit<CoinType: drop>(
+    action_bag: &mut Bag,
+    index: u64,
+    _treasury: &mut Treasury,
+    _auth: treasury::Auth,
+    _dao: &DAO,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Just remove the action - the actual deposit happens through
+    // the permissionless deposit_treasury_cap function
+    let CapabilityDepositAction { max_supply: _, max_mint_per_proposal: _, mint_cooldown_ms: _ } = 
+        bag::remove<u64, CapabilityDepositAction<CoinType>>(action_bag, index);
+}
+
 // === Private Helper Functions ===
 
 /// Process a single action based on its type
@@ -404,6 +601,8 @@ fun process_action<CoinType: drop>(
     dao: &DAO,
     clock: &Clock,
     ctx: &mut TxContext,
+    cap_manager: &mut CapabilityManager,
+    execution_context: &ProposalExecutionContext,
 ): bool {
     if (action_type == ACTION_TRANSFER) {
         execute_transfer<CoinType>(
@@ -418,6 +617,56 @@ fun process_action<CoinType: drop>(
         true
     } else if (action_type == ACTION_NO_OP) {
         execute_no_op(
+            action_bag,
+            index,
+            treasury,
+            auth,
+            dao,
+            clock,
+            ctx
+        );
+        true
+    } else if (action_type == ACTION_MINT) {
+        // Handle mint action directly
+        let MintAction { amount, recipient, description: _ } = 
+            bag::remove<u64, MintAction<CoinType>>(action_bag, index);
+        
+        capability_manager::mint_tokens<CoinType>(
+            cap_manager,
+            execution_context,
+            amount,
+            recipient,
+            clock,
+            ctx
+        );
+        true
+    } else if (action_type == ACTION_BURN) {
+        // Handle burn action directly
+        let BurnAction { amount, from_treasury, description: _ } = 
+            bag::remove<u64, BurnAction<CoinType>>(action_bag, index);
+        
+        if (from_treasury) {
+            // Withdraw coins from treasury and burn them
+            let coins_to_burn = treasury::withdraw<CoinType>(
+                auth,
+                treasury,
+                amount,
+                ctx
+            );
+            capability_manager::burn_tokens<CoinType>(
+                cap_manager,
+                execution_context,
+                coins_to_burn,
+                ctx
+            );
+        } else {
+            // For burning from other sources, we would need additional logic
+            // For now, only treasury burns are supported
+            abort EInvalidAction
+        };
+        true
+    } else if (action_type == ACTION_CAPABILITY_DEPOSIT) {
+        execute_capability_deposit<CoinType>(
             action_bag,
             index,
             treasury,
@@ -461,15 +710,19 @@ public fun execute_outcome_actions<CoinType: drop>(
     proposal_id: ID,
     outcome: u64,
     ctx: &mut TxContext,
+    cap_manager: &mut CapabilityManager,
+    execution_context: &ProposalExecutionContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
-    let proposal_actions = &mut registry.actions[proposal_id];
     
-    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
-    assert!(!proposal_actions.executed[outcome], EAlreadyExecuted);
-    
-    let action_bag = &mut proposal_actions.outcome_actions[outcome];
-    let metadata_vec = &proposal_actions.action_metadata[outcome];
+    // First, check and mark as executed to prevent replay
+    {
+        let proposal_actions = &mut registry.actions[proposal_id];
+        assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+        assert!(!proposal_actions.executed[outcome], EAlreadyExecuted);
+        // CRITICAL: Mark as executed BEFORE processing to prevent replay attacks
+        *&mut proposal_actions.executed[outcome] = true;
+    };
     
     // Count actions for this coin type
     let mut action_count = 0u64;
@@ -477,31 +730,52 @@ public fun execute_outcome_actions<CoinType: drop>(
     
     // Execute each action
     let mut i = 0;
-    while (i < metadata_vec.length()) {
-        let metadata = &metadata_vec[i];
+    let metadata_vec_length = {
+        let proposal_actions = &registry.actions[proposal_id];
+        proposal_actions.action_metadata[outcome].length()
+    };
+    
+    while (i < metadata_vec_length) {
+        let (action_type, coin_type_opt, index) = {
+            let proposal_actions = &registry.actions[proposal_id];
+            let metadata = &proposal_actions.action_metadata[outcome][i];
+            (metadata.action_type, metadata.coin_type, metadata.index)
+        };
         
         // Only execute actions for this coin type
-        if (metadata.coin_type.is_some() && 
-            *metadata.coin_type.borrow() == coin_type_str) {
+        if (coin_type_opt.is_some() && 
+            *coin_type_opt.borrow() == coin_type_str) {
             
             // Create auth for each action (auth is consumed)
-            let auth = treasury::create_auth_for_proposal(treasury);
+            let auth = treasury::create_auth_for_proposal(treasury, execution_context);
             
-            if (metadata.action_type == ACTION_RECURRING_PAYMENT) {
+            if (action_type == ACTION_RECURRING_PAYMENT) {
                 // Recurring payments need a registry - abort with error
                 abort ERecurringPaymentRegistryRequired
             };
             
-            if (process_action<CoinType>(
-                metadata.action_type,
-                action_bag,
-                metadata.index,
-                treasury,
-                auth,
-                dao,
-                clock,
-                ctx
-            )) {
+            let mut executed = false;
+            
+            if (action_type != ACTION_RECURRING_PAYMENT) {
+                // Get mutable reference to action bag for this specific action
+                let proposal_actions_mut = &mut registry.actions[proposal_id];
+                let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
+                
+                executed = process_action<CoinType>(
+                    action_type,
+                    action_bag,
+                    index,
+                    treasury,
+                    auth,
+                    dao,
+                    clock,
+                    ctx,
+                    cap_manager,
+                    execution_context
+                );
+            };
+            
+            if (executed) {
                 action_count = action_count + 1;
             };
         };
@@ -509,7 +783,10 @@ public fun execute_outcome_actions<CoinType: drop>(
     };
     
     // Check if all actions are done and emit event
-    let is_empty = action_bag.is_empty();
+    let is_empty = {
+        let proposal_actions = &registry.actions[proposal_id];
+        proposal_actions.outcome_actions[outcome].is_empty()
+    };
     let should_mark_executed = finish_execution(
         is_empty,
         proposal_id,
@@ -520,8 +797,9 @@ public fun execute_outcome_actions<CoinType: drop>(
     
     // Mark as executed if all actions for all coin types are done
     if (should_mark_executed) {
-        proposal_actions.executed.remove(outcome);
-        proposal_actions.executed.add(outcome, true);
+        let proposal_actions_final = &mut registry.actions[proposal_id];
+        proposal_actions_final.executed.remove(outcome);
+        proposal_actions_final.executed.add(outcome, true);
     };
 }
 
@@ -535,15 +813,19 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
     proposal_id: ID,
     outcome: u64,
     ctx: &mut TxContext,
+    cap_manager: &mut CapabilityManager,
+    execution_context: &ProposalExecutionContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
-    let proposal_actions = &mut registry.actions[proposal_id];
     
-    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
-    assert!(!proposal_actions.executed[outcome], EAlreadyExecuted);
-    
-    let action_bag = &mut proposal_actions.outcome_actions[outcome];
-    let metadata_vec = &proposal_actions.action_metadata[outcome];
+    // First, check and mark as executed to prevent replay
+    {
+        let proposal_actions = &mut registry.actions[proposal_id];
+        assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+        assert!(!proposal_actions.executed[outcome], EAlreadyExecuted);
+        // Mark as executed BEFORE processing to prevent replay attacks
+        *&mut proposal_actions.executed[outcome] = true;
+    };
     
     // Count actions for this coin type
     let mut action_count = 0u64;
@@ -551,20 +833,33 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
     
     // Execute each action
     let mut i = 0;
-    while (i < metadata_vec.length()) {
-        let metadata = &metadata_vec[i];
+    let metadata_vec_length = {
+        let proposal_actions = &registry.actions[proposal_id];
+        proposal_actions.action_metadata[outcome].length()
+    };
+    
+    while (i < metadata_vec_length) {
+        let (action_type, coin_type_opt, index) = {
+            let proposal_actions = &registry.actions[proposal_id];
+            let metadata = &proposal_actions.action_metadata[outcome][i];
+            (metadata.action_type, metadata.coin_type, metadata.index)
+        };
         
         // Only execute actions for this coin type
-        if (metadata.coin_type.is_some() && 
-            *metadata.coin_type.borrow() == coin_type_str) {
+        if (coin_type_opt.is_some() && 
+            *coin_type_opt.borrow() == coin_type_str) {
             
             // Create auth for each action (auth is consumed)
-            let auth = treasury::create_auth_for_proposal(treasury);
+            let auth = treasury::create_auth_for_proposal(treasury, execution_context);
             
-            if (metadata.action_type == ACTION_RECURRING_PAYMENT) {
+            if (action_type == ACTION_RECURRING_PAYMENT) {
+                // Get mutable reference to action bag for this specific action
+                let proposal_actions_mut = &mut registry.actions[proposal_id];
+                let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
+                
                 execute_recurring_payment<CoinType>(
                     action_bag,
-                    metadata.index,
+                    index,
                     treasury,
                     auth,
                     dao,
@@ -573,24 +868,35 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
                     ctx
                 );
                 action_count = action_count + 1;
-            } else if (process_action<CoinType>(
-                metadata.action_type,
-                action_bag,
-                metadata.index,
-                treasury,
-                auth,
-                dao,
-                clock,
-                ctx
-            )) {
-                action_count = action_count + 1;
+            } else {
+                // Get mutable reference to action bag for this specific action
+                let proposal_actions_mut = &mut registry.actions[proposal_id];
+                let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
+                
+                if (process_action<CoinType>(
+                    action_type,
+                    action_bag,
+                    index,
+                    treasury,
+                    auth,
+                    dao,
+                    clock,
+                    ctx,
+                    cap_manager,
+                    execution_context
+                )) {
+                    action_count = action_count + 1;
+                };
             };
         };
         i = i + 1;
     };
     
     // Check if all actions are done and emit event
-    let is_empty = action_bag.is_empty();
+    let is_empty = {
+        let proposal_actions = &registry.actions[proposal_id];
+        proposal_actions.outcome_actions[outcome].is_empty()
+    };
     let should_mark_executed = finish_execution(
         is_empty,
         proposal_id,
@@ -601,8 +907,9 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
     
     // Mark as executed if all actions for all coin types are done
     if (should_mark_executed) {
-        proposal_actions.executed.remove(outcome);
-        proposal_actions.executed.add(outcome, true);
+        let proposal_actions_final = &mut registry.actions[proposal_id];
+        proposal_actions_final.executed.remove(outcome);
+        proposal_actions_final.executed.add(outcome, true);
     };
 }
 
@@ -611,11 +918,23 @@ public entry fun execute_outcome_actions_sui(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     dao: &DAO,
+    cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
     ctx: &mut TxContext,
 ) {
+    // Verify proposal has been resolved
+    let info = dao::get_proposal_info(dao, proposal_id);
+    assert!(dao::get_result(info).is_some(), ENoActionsFound);
+    
+    // Create execution context
+    let execution_context = dao::create_proposal_execution_context(
+        dao,
+        proposal_id,
+        outcome
+    );
+    
     execute_outcome_actions<SUI>(
         registry,
         treasury,
@@ -623,7 +942,9 @@ public entry fun execute_outcome_actions_sui(
         clock,
         proposal_id,
         outcome,
-        ctx
+        ctx,
+        cap_manager,
+        &execution_context
     );
 }
 
@@ -633,11 +954,23 @@ public entry fun execute_outcome_actions_sui_with_payments(
     treasury: &mut Treasury,
     payment_stream_registry: &mut PaymentStreamRegistry,
     dao: &DAO,
+    cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
     ctx: &mut TxContext,
 ) {
+    // Verify proposal has been resolved
+    let info = dao::get_proposal_info(dao, proposal_id);
+    assert!(dao::get_result(info).is_some(), ENoActionsFound);
+    
+    // Create execution context
+    let execution_context = dao::create_proposal_execution_context(
+        dao,
+        proposal_id,
+        outcome
+    );
+    
     execute_outcome_actions_with_payments<SUI>(
         registry,
         treasury,
@@ -646,14 +979,16 @@ public entry fun execute_outcome_actions_sui_with_payments(
         clock,
         proposal_id,
         outcome,
-        ctx
+        ctx,
+        cap_manager,
+        &execution_context
     );
 }
 
 
 /// Execute USDC-specific actions (for tests)
 #[test_only]
-public entry fun execute_outcome_actions_usdc<USDC: drop>(
+public fun execute_outcome_actions_usdc<USDC: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     dao: &DAO,
@@ -661,6 +996,8 @@ public entry fun execute_outcome_actions_usdc<USDC: drop>(
     proposal_id: ID,
     outcome: u64,
     ctx: &mut TxContext,
+    cap_manager: &mut CapabilityManager,
+    execution_context: &ProposalExecutionContext,
 ) {
     execute_outcome_actions<USDC>(
         registry,
@@ -669,8 +1006,21 @@ public entry fun execute_outcome_actions_usdc<USDC: drop>(
         clock,
         proposal_id,
         outcome,
-        ctx
+        ctx,
+        cap_manager,
+        execution_context
     );
+}
+
+
+
+// === Test Functions ===
+
+#[test_only]
+public fun destroy_for_testing(registry: ActionRegistry) {
+    // For testing purposes, transfer ownership to a black hole address
+    // This avoids the need to properly clean up nested tables
+    transfer::transfer(registry, @0x0);
 }
 
 // === View Functions ===

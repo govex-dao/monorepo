@@ -8,7 +8,7 @@ use futarchy::{
     treasury_initialization,
     config_proposals,
     config_actions::{Self, ConfigActionRegistry},
-    proposals,
+    transfer_proposals,
     proposal::{Self, Proposal},
     fee,
 };
@@ -131,7 +131,7 @@ fun test_cannot_mix_treasury_and_config_in_same_proposal() {
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create treasury proposal
-        proposals::create_and_store_transfer_proposal<SUI, SUI, SUI>(
+        transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
@@ -140,10 +140,20 @@ fun test_cannot_mix_treasury_and_config_in_same_proposal() {
             stable_coin,
             b"Treasury Transfer".to_string(),
             b"Test treasury proposal".to_string(),
+            vector[
+                b"Reject transfer".to_string(),
+                b"Transfer funds to Bob".to_string(),
+            ],
+            vector[
+                b"Reject".to_string(),
+                b"Accept".to_string(),
+            ],
             vector[100_000_000_000, 100_000_000_000, 100_000_000_000, 100_000_000_000],
-            BOB,
-            50_000_000_000,
-            b"Payment to Bob".to_string(),
+            // Transfer specs: [outcome_index, amount, recipient_index]
+            vector[
+                vector[1, 50_000_000_000, 0], // Outcome 1: transfer 50 SUI to recipient 0 (BOB)
+            ],
+            vector[BOB],
             &clock,
             scenario.ctx(),
         );
@@ -278,7 +288,7 @@ fun test_memo_plus_treasury_allowed() {
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // This is allowed: memo + treasury
-        proposals::create_and_store_transfer_proposal<SUI, SUI, SUI>(
+        transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
@@ -287,10 +297,20 @@ fun test_memo_plus_treasury_allowed() {
             stable_coin,
             b"Fund Community Project".to_string(),
             b"Proposal to fund the community garden project with treasury funds".to_string(),
+            vector[
+                b"Reject funding".to_string(),
+                b"Fund community garden".to_string(),
+            ],
+            vector[
+                b"Reject".to_string(),
+                b"Accept".to_string(),
+            ],
             vector[100_000_000_000, 100_000_000_000, 100_000_000_000, 100_000_000_000],
-            BOB,
-            100_000_000_000,
-            b"Community garden funding".to_string(),
+            // Transfer specs: [outcome_index, amount, recipient_index]
+            vector[
+                vector[1, 100_000_000_000, 0], // Outcome 1: transfer 100 SUI to recipient 0 (BOB)
+            ],
+            vector[BOB],
             &clock,
             scenario.ctx(),
         );

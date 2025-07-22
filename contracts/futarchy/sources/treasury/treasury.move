@@ -2,21 +2,18 @@
 module futarchy::treasury;
 
 // === Imports ===
+use futarchy::execution_context::{Self, ProposalExecutionContext};
 use std::{
     string::String,
     type_name::{Self, TypeName},
 };
 use sui::{
-    transfer::Receiving,
-    dynamic_field as df,
-    dynamic_object_field as dof,
     balance::Balance,
     coin::{Self, Coin},
     bag::{Self, Bag},
     sui::SUI,
     event,
 };
-// Deps module has been removed as it was unnecessary
 
 // === Constants ===
 const NEW_COIN_TYPE_FEE: u64 = 10_000_000_000; // 10 SUI fee for new coin types
@@ -259,7 +256,7 @@ public fun withdraw<CoinType: drop>(
     amount: u64,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    verify(treasury, auth);
+    verify_auth(treasury, auth);
     
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists<CoinType>(treasury), ECoinTypeNotFound);
@@ -308,6 +305,11 @@ public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
     treasury.vault.contains<TypeName>(type_name::get<CoinType>())
 }
 
+/// Get treasury ID
+public fun get_id(treasury: &Treasury): ID {
+    object::id(treasury)
+}
+
 /// Get DAO ID
 public fun dao_id(treasury: &Treasury): ID {
     treasury.config.dao_id
@@ -323,20 +325,24 @@ public fun name(treasury: &Treasury): &String {
     &treasury.name
 }
 
-// === Internal Functions ===
+// === Auth Functions ===
 
 /// Create auth token
 fun new_auth(treasury: &Treasury): Auth {
     Auth { treasury_addr: object::id_address(treasury) }
 }
 
-/// Verify auth token
-fun verify(treasury: &Treasury, auth: Auth) {
+/// Verify auth token (public for use by other modules)
+public fun verify_auth(treasury: &Treasury, auth: Auth) {
     assert!(object::id_address(treasury) == auth.treasury_addr, EWrongAccount);
 }
 
-/// Create auth for proposals
-public fun create_auth_for_proposal(treasury: &Treasury): Auth {
+/// Create auth for proposals - requires ProposalExecutionContext as proof of authorization
+public(package) fun create_auth_for_proposal(
+    treasury: &Treasury,
+    _context: &ProposalExecutionContext
+): Auth {
+    // The context proves this is an authorized execution from the DAO
     new_auth(treasury)
 }
 

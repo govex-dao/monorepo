@@ -6,6 +6,7 @@ use futarchy::{
     treasury_actions::{Self, ActionRegistry},
     treasury_initialization,
     dao::{Self, DAO},
+    execution_context::{Self, ProposalExecutionContext},
 };
 use sui::{
     test_scenario::{Self as test},
@@ -46,13 +47,14 @@ fun test_treasury_deposit_withdraw() {
     treasury_initialization::initialize_treasury(&mut dao, admin, scenario.ctx());
     transfer::public_share_object(dao);
     
-    // Get treasury ID
+    // Get treasury ID and DAO ID
     scenario.next_tx(admin);
-    let treasury_id = {
+    let (treasury_id, dao_id) = {
         let dao = scenario.take_shared<DAO>();
-        let id = *dao::get_treasury_id(&dao).borrow();
+        let treasury_id = *dao::get_treasury_id(&dao).borrow();
+        let dao_id = object::id(&dao);
         test::return_shared(dao);
-        id
+        (treasury_id, dao_id)
     };
     
     // Test deposit
@@ -68,7 +70,14 @@ fun test_treasury_deposit_withdraw() {
     scenario.next_tx(admin);
     {
         let mut treasury = scenario.take_shared_by_id<Treasury>(treasury_id);
-        let auth = treasury::create_auth_for_proposal(&treasury);
+        // Create a test execution context
+        let test_proposal_id = object::id_from_address(@0x123);
+        let execution_context = execution_context::create_for_testing(
+            test_proposal_id,
+            0, // outcome
+            dao_id
+        );
+        let auth = treasury::create_auth_for_proposal(&treasury, &execution_context);
         let withdrawn = treasury::withdraw<SUI>(
             auth,
             &mut treasury,

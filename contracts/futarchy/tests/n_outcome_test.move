@@ -6,7 +6,7 @@ use futarchy::{
     treasury::{Self, Treasury},
     treasury_actions::{Self, ActionRegistry},
     treasury_initialization,
-    proposals,
+    transfer_proposals,
     fee,
 };
 use sui::{
@@ -84,7 +84,7 @@ fun test_three_outcome_proposal() {
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create multi-outcome proposal
-        proposals::create_multi_outcome_transfer_proposal<SUI, SUI, SUI>(
+        transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
@@ -107,25 +107,17 @@ fun test_three_outcome_proposal() {
                 100_000_000_000, 100_000_000_000, 100_000_000_000, // Initial amounts for each outcome
                 100_000_000_000, 100_000_000_000, 100_000_000_000,
             ],
-            // Transfer actions: [outcome, amount]
+            // Transfer specs: [outcome_index, amount, recipient_index]
             // Note: Outcome 0 is "Reject" - no transfers
             vector[
-                vector[1, 100_000_000_000], // Option A: Bob gets 100
-                vector[1, 100_000_000_000], // Option A: Charlie gets 100
-                vector[1, 100_000_000_000], // Option A: David gets 100
-                vector[2, 200_000_000_000], // Option B: Bob gets 200
-                vector[2, 100_000_000_000], // Option B: Charlie gets 100
+                vector[1, 100_000_000_000, 0], // Option A: 100 SUI to Bob (recipient 0)
+                vector[1, 100_000_000_000, 1], // Option A: 100 SUI to Charlie (recipient 1)
+                vector[1, 100_000_000_000, 2], // Option A: 100 SUI to David (recipient 2)
+                vector[2, 200_000_000_000, 0], // Option B: 200 SUI to Bob (recipient 0)
+                vector[2, 100_000_000_000, 1], // Option B: 100 SUI to Charlie (recipient 1)
             ],
             // Recipients
-            vector[BOB, CHARLIE, DAVID, BOB, CHARLIE],
-            // Descriptions
-            vector[
-                b"Option A payment to Bob".to_string(),
-                b"Option A payment to Charlie".to_string(),
-                b"Option A payment to David".to_string(),
-                b"Option B payment to Bob".to_string(),
-                b"Option B payment to Charlie".to_string(),
-            ],
+            vector[BOB, CHARLIE, DAVID],
             &clock,
             scenario.ctx(),
         );
@@ -182,7 +174,7 @@ fun test_five_outcome_ranking_proposal() {
         let stable_coin = coin::mint_for_testing<SUI>(100_000_000_000, scenario.ctx());
         
         // Create ranking proposal with different rewards (only 3 outcomes)
-        proposals::create_multi_outcome_transfer_proposal<SUI, SUI, SUI>(
+        transfer_proposals::create_multi_transfer_proposal<SUI, SUI, SUI>(
             &mut dao,
             &mut fee_manager,
             &mut registry,
@@ -205,18 +197,14 @@ fun test_five_outcome_ranking_proposal() {
                 100_000_000_000, 100_000_000_000, 100_000_000_000,
                 100_000_000_000, 100_000_000_000, 100_000_000_000,
             ],
-            // Transfer actions for each ranking
+            // Transfer specs: [outcome_index, amount, recipient_index]
             // Note: Outcome 0 is "Reject" - no transfers
             vector[
-                vector[1, 500_000_000_000], // Project Alpha: 500 SUI
-                vector[2, 300_000_000_000], // Project Beta: 300 SUI
+                vector[1, 500_000_000_000, 0], // Project Alpha: 500 SUI to recipient 0
+                vector[2, 300_000_000_000, 1], // Project Beta: 300 SUI to recipient 1
             ],
-            // Different project wallets (only 2 since reject has no transfers)
+            // Recipients
             vector[@0xA1FA, @0xBE7A],
-            vector[
-                b"Funding for Project Alpha".to_string(),
-                b"Funding for Project Beta".to_string(),
-            ],
             &clock,
             scenario.ctx(),
         );

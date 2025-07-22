@@ -5,6 +5,7 @@ use futarchy::fee;
 use futarchy::market_state;
 use futarchy::proposal;
 use futarchy::vectors;
+use futarchy::execution_context::{Self, ProposalExecutionContext};
 use std::ascii::String as AsciiString;
 use std::string::String;
 use std::type_name;
@@ -52,6 +53,7 @@ const MIN_AMM_SAFE_AMOUNT: u64 = 1000; // under 50 swap will have significant sl
 const DAO_DESCRIPTION_MAX_LENGTH: u64 = 1024;
 
 // === Structs ===
+
 public struct DAO has key, store {
     id: UID,
     asset_type: AsciiString,
@@ -483,6 +485,10 @@ public fun get_result(info: &ProposalInfo): &Option<String> {
     &info.result
 }
 
+public fun has_result(info: &ProposalInfo): bool {
+    info.result.is_some()
+}
+
 public fun get_stats(dao: &DAO): (u64, u64, u64) {
     (dao.active_proposal_count, dao.total_proposals, dao.creation_time)
 }
@@ -542,6 +548,23 @@ public fun get_max_outcomes(dao: &DAO): u64 {
 public fun get_metadata(dao: &DAO): &vector<String> {
     &dao.metadata
 }
+
+// === Execution Context Functions ===
+
+/// Creates a ProposalExecutionContext for authorized proposal execution
+/// This can only be called by trusted modules that have verified the proposal has passed
+public(package) fun create_proposal_execution_context(
+    dao: &DAO,
+    proposal_id: ID,
+    winning_outcome: u64,
+): ProposalExecutionContext {
+    execution_context::new(
+        proposal_id,
+        winning_outcome,
+        object::id(dao)
+    )
+}
+
 
 // === Treasury Functions ===
 
@@ -675,4 +698,47 @@ public(package) fun update_governance(
 public fun test_set_proposal_state(dao: &mut DAO, proposal_id: ID, state: u8) {
     let info = &mut dao.proposals[proposal_id];
     info.state = state;
+}
+
+#[test_only]
+public fun test_mark_proposal_executed(dao: &mut DAO, proposal_id: ID, winning_outcome: u64) {
+    let info = &mut dao.proposals[proposal_id];
+    info.state = 2; // RESOLVED
+    info.result = option::some(if (winning_outcome == 0) { 
+        b"Reject".to_string() 
+    } else { 
+        b"Accept".to_string() 
+    });
+    info.executed = true;
+    
+    // Safely reduce active_proposal_count
+    if (dao.active_proposal_count > 0) {
+        dao.active_proposal_count = dao.active_proposal_count - 1;
+    };
+}
+
+#[test_only]
+public fun add_proposal_for_testing(
+    dao: &mut DAO,
+    proposal_id: ID,
+    outcome_count: u64,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext,
+) {
+    let info = ProposalInfo {
+        proposer: ctx.sender(),
+        created_at: clock.timestamp_ms(),
+        state: 2, // RESOLVED
+        outcome_count,
+        title: b"Test Proposal".to_string(),
+        result: option::some(b"1".to_string()), // Default to outcome 1
+        execution_time: option::some(clock.timestamp_ms() + 3600000), // 1 hour from now
+        executed: false,
+        market_state_id: object::id_from_address(@0x0), // dummy market state
+    };
+    
+    assert!(!dao.proposals.contains(proposal_id), EProposalExists);
+    dao.proposals.add(proposal_id, info);
+    dao.active_proposal_count = dao.active_proposal_count + 1;
+    dao.total_proposals = dao.total_proposals + 1;
 }
