@@ -4,6 +4,7 @@ use futarchy::coin_escrow;
 use futarchy::fee;
 use futarchy::market_state;
 use futarchy::proposal;
+use futarchy::operating_agreement;
 use futarchy::vectors;
 use futarchy::execution_context::{Self, ProposalExecutionContext};
 use std::ascii::String as AsciiString;
@@ -85,6 +86,7 @@ public struct DAO has key, store {
     metadata: vector<String>,
     treasury_account_id: Option<ID>,
     proposal_fee_per_outcome: u64,
+    operating_agreement_id: Option<ID>,
     next_fee_due_timestamp: u64,
 }
 
@@ -207,6 +209,7 @@ public(package) fun create<AssetType, StableType>(
         metadata: metadata,
         treasury_account_id: option::none(),
         proposal_fee_per_outcome: 0,
+        operating_agreement_id: option::none(),
         next_fee_due_timestamp: timestamp + MONTHLY_FEE_PERIOD_MS,
     };
 
@@ -230,6 +233,31 @@ public(package) fun create<AssetType, StableType>(
 
     // Return the DAO
     dao
+}
+
+/// Internal function to initialize the Operating Agreement for the DAO. 
+/// Can only be called by authorized proposal execution.
+/// Returns the ID of the created OperatingAgreement.
+public(package) fun init_operating_agreement_internal(
+    dao: &mut DAO,
+    initial_lines: vector<String>,
+    initial_difficulties: vector<u64>,
+    ctx: &mut TxContext,
+): ID {
+    // Ensure an agreement hasn't already been initialized.
+    assert!(dao.operating_agreement_id.is_none(), EUnauthorized);
+
+    let agreement = operating_agreement::new(
+        object::id(dao),
+        initial_lines,
+        initial_difficulties,
+        ctx,
+    );
+    let agreement_id = object::id(&agreement);
+    dao.operating_agreement_id = option::some(agreement_id);
+    transfer::public_share_object(agreement);
+    
+    agreement_id
 }
 
 /// Internal function that returns proposal ID and related IDs for action storage
@@ -594,6 +622,16 @@ public fun get_max_outcomes(dao: &DAO): u64 {
 
 public fun get_metadata(dao: &DAO): &vector<String> {
     &dao.metadata
+}
+
+/// Returns the operating agreement ID if initialized
+public fun get_operating_agreement_id(dao: &DAO): &Option<ID> {
+    &dao.operating_agreement_id
+}
+
+/// Checks if an operating agreement is initialized
+public fun has_operating_agreement(dao: &DAO): bool {
+    dao.operating_agreement_id.is_some()
 }
 
 // === Execution Context Functions ===
