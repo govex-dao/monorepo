@@ -19,7 +19,7 @@ const EUnauthorized: u64 = 1;
 /// This can be called after DAO creation to add treasury functionality
 #[test_only]
 public entry fun initialize_treasury(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     admin: address,
     ctx: &mut TxContext,
 ) {
@@ -40,7 +40,7 @@ public entry fun initialize_treasury(
 /// Initialize treasury with the sender as admin
 #[test_only]
 public entry fun initialize_treasury_self(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     ctx: &mut TxContext,
 ) {
     initialize_treasury(dao, ctx.sender(), ctx);

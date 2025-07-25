@@ -81,7 +81,7 @@ public fun init_proposal_action(
 public entry fun execute_init<AssetType, StableType>(
     registry: &mut InitActionRegistry,
     proposal: &Proposal<AssetType, StableType>,
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

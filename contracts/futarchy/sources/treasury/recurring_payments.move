@@ -11,7 +11,6 @@ use sui::{
     balance::{Self, Balance},
 };
 use futarchy::{
-    dao::{DAO},
     recurring_payment_registry::{Self, PaymentStreamRegistry},
 };
 
@@ -24,13 +23,11 @@ const EInvalidAmount: u64 = 5;
 
 // === Structs ===
 
-/// Recurring payment stream with pre-funded escrow
+/// Recurring payment stream (acts as permission to claim from treasury)
 public struct PaymentStream<phantom CoinType> has key {
     id: UID,
     // DAO this stream belongs to
     dao_id: ID,
-    // Escrowed funds for future payments
-    funds: Balance<CoinType>,
     // Recipient of payments
     recipient: address,
     // Amount per payment
@@ -81,11 +78,10 @@ public struct StreamCancelled has copy, drop {
 
 // === Public Functions ==
 
-/// Create a new payment stream with pre-funded coins
+/// Create a new payment stream (no longer pre-funded)
 public fun create_payment_stream<CoinType: drop>(
-    dao: &DAO,
+    dao_id: ID,
     registry: &mut PaymentStreamRegistry,
-    funds: Coin<CoinType>,
     recipient: address,
     amount_per_payment: u64,
     payment_interval: u64,
@@ -98,16 +94,9 @@ public fun create_payment_stream<CoinType: drop>(
 ): ID {
     assert!(payment_interval > 0, EInvalidInterval);
     assert!(amount_per_payment > 0, EInvalidAmount);
-    recurring_payment_registry::verify_dao_ownership(registry, dao);
     
-    // Verify we have sufficient funds
-    let fund_amount = funds.value();
-    assert!(fund_amount >= amount_per_payment, EInsufficientBalance);
-    
-    // If max_total is set, verify funds match
-    if (max_total.is_some()) {
-        assert!(fund_amount >= *max_total.borrow(), EInsufficientBalance);
-    };
+    // Verify the registry belongs to the same DAO
+    assert!(recurring_payment_registry::get_dao_id(registry) == dao_id, EInvalidAmount);
     
     let stream_id = object::new(ctx);
     let stream_id_inner = stream_id.to_inner();
@@ -117,7 +106,7 @@ public fun create_payment_stream<CoinType: drop>(
     
     event::emit(StreamCreated {
         stream_id: stream_id_inner,
-        dao_id: object::id(dao),
+        dao_id: dao_id,
         recipient,
         amount_per_payment,
         payment_interval,
@@ -126,8 +115,7 @@ public fun create_payment_stream<CoinType: drop>(
     
     transfer::share_object(PaymentStream<CoinType> {
         id: stream_id,
-        dao_id: object::id(dao),
-        funds: funds.into_balance(),
+        dao_id: dao_id,
         recipient,
         amount_per_payment,
         payment_interval,
@@ -143,20 +131,40 @@ public fun create_payment_stream<CoinType: drop>(
     stream_id_inner
 }
 
-/// Execute a due payment - can be called permissionlessly by anyone
-public entry fun execute_payment<CoinType: drop>(
+
+/// Cancel a payment stream
+/// Only the DAO admin can cancel streams
+public fun cancel_stream<CoinType>(
     stream: &mut PaymentStream<CoinType>,
+    registry: &mut PaymentStreamRegistry,
     clock: &Clock,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
+    stream.active = false;
+    let stream_id = object::id(stream);
+    
+    // Remove from registry
+    recurring_payment_registry::remove_stream(registry, stream_id);
+    
+    event::emit(StreamCancelled {
+        stream_id,
+        total_paid: stream.total_paid,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// === View Functions ===
+
+public(package) fun get_payment_details_and_update_state<CoinType>(
+    stream: &mut PaymentStream<CoinType>,
+    current_time: u64
+): (address, u64) {
     assert!(stream.active, EStreamEnded);
-    
-    let current_time = clock.timestamp_ms();
-    
+
     // Check if payment is due
     assert!(current_time >= stream.last_payment + stream.payment_interval, EPaymentNotDue);
-    
-    // Check if stream has ended
+
+    // Check if stream has ended by date
     if (stream.end_timestamp.is_some()) {
         let end_time = *stream.end_timestamp.borrow();
         if (current_time > end_time) {
@@ -164,8 +172,8 @@ public entry fun execute_payment<CoinType: drop>(
             abort EStreamEnded
         };
     };
-    
-    // Check max total
+
+    // Check if stream has ended by max payment amount
     if (stream.max_total.is_some()) {
         let max = *stream.max_total.borrow();
         if (stream.total_paid + stream.amount_per_payment > max) {
@@ -173,78 +181,16 @@ public entry fun execute_payment<CoinType: drop>(
             abort EStreamEnded
         };
     };
-    
-    // Calculate number of payments due
+
     let payments_due = (current_time - stream.last_payment) / stream.payment_interval;
-    let amount_due = payments_due * stream.amount_per_payment;
-    
-    // Cap amount if it would exceed max_total
-    let amount_to_pay = if (stream.max_total.is_some()) {
-        let max = *stream.max_total.borrow();
-        let remaining = max - stream.total_paid;
-        if (amount_due > remaining) remaining else amount_due
-    } else {
-        amount_due
-    };
-    
-    // Take payment from the stream's escrowed funds
-    assert!(stream.funds.value() >= amount_to_pay, EInsufficientBalance);
-    let payment = coin::from_balance(stream.funds.split(amount_to_pay), ctx);
-    transfer::public_transfer(payment, stream.recipient);
-    
-    // Update stream state
+    let amount_to_pay = payments_due * stream.amount_per_payment;
+
+    // Update stream state immediately
     stream.last_payment = stream.last_payment + (payments_due * stream.payment_interval);
     stream.total_paid = stream.total_paid + amount_to_pay;
-    
-    let payment_number = stream.total_paid / stream.amount_per_payment;
-    
-    event::emit(PaymentExecuted {
-        stream_id: object::id(stream),
-        recipient: stream.recipient,
-        amount: amount_to_pay,
-        payment_number,
-        timestamp: current_time,
-    });
-    
-    // Check if stream should end due to depleted funds
-    check_and_end_if_depleted(stream);
-}
 
-/// Cancel a payment stream and return remaining funds to DAO treasury
-/// Only the DAO admin can cancel streams
-public fun cancel_stream_with_refund<CoinType: drop>(
-    stream: &mut PaymentStream<CoinType>,
-    registry: &mut PaymentStreamRegistry,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<CoinType> {
-    stream.active = false;
-    let stream_id = object::id(stream);
-    
-    // Remove from registry
-    recurring_payment_registry::remove_stream(registry, stream_id);
-    
-    // Return any remaining funds
-    let remaining_balance = stream.funds.withdraw_all();
-    let refund = coin::from_balance(remaining_balance, ctx);
-    
-    event::emit(StreamCancelled {
-        stream_id,
-        total_paid: stream.total_paid,
-        timestamp: clock.timestamp_ms(),
-    });
-    
-    refund
+    (stream.recipient, amount_to_pay)
 }
-
-/// Check and mark stream as ended if funds are depleted
-fun check_and_end_if_depleted<CoinType>(stream: &mut PaymentStream<CoinType>) {
-    if (stream.funds.value() < stream.amount_per_payment) {
-        stream.active = false;
-    };
-}
-
-// === View Functions ===
 
 public fun is_payment_due<CoinType>(stream: &PaymentStream<CoinType>, clock: &Clock): bool {
     if (!stream.active) return false;

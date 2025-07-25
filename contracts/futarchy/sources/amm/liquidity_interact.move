@@ -2,6 +2,7 @@ module futarchy::liquidity_interact;
 
 use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token::ConditionalToken;
+use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
 use futarchy::fee::FeeManager;
 use futarchy::proposal::Proposal;
 use sui::balance::Balance;
@@ -20,6 +21,7 @@ const EInvalidState: u64 = 3;
 const EMarketIdMismatch: u64 = 4;
 const EAssetReservesMismatch: u64 = 5;
 const EStableReservesMismatch: u64 = 6;
+const EUnauthorized: u64 = 7;
 
 // === Events ===
 public struct ProtocolFeesCollected has copy, drop {
@@ -29,6 +31,63 @@ public struct ProtocolFeesCollected has copy, drop {
     timestamp_ms: u64,
 }
 
+/// Empties the winning AMM pool and transfers the underlying liquidity to the original provider.
+/// Called internally by `advance_stage` when a user-funded proposal finalizes.
+public(package) fun empty_amm_and_return_to_provider<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    ctx: &mut TxContext,
+) {
+    assert!(proposal.is_finalized(), EInvalidState);
+    assert!(!proposal.uses_dao_liquidity(), EInvalidState);
+
+    // Validate that proposal and escrow belong to the same market
+    let market_id = proposal.market_state_id();
+    let escrow_market_id = escrow.get_market_state_id();
+    assert!(market_id == escrow_market_id, EMarketIdMismatch);
+    let market_state = escrow.get_market_state();
+    let winning_outcome = proposal.get_winning_outcome();
+    market_state.assert_market_finalized();
+
+    let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
+
+    let (asset_coin, stable_coin) = escrow.remove_liquidity(asset_out, stable_out, ctx);
+    
+    let provider = *proposal.get_liquidity_provider().borrow();
+    transfer::public_transfer(asset_coin, provider);
+    transfer::public_transfer(stable_coin, provider);
+
+    assert_winning_reserves_consistency(proposal, escrow);
+}
+
+/// Empties the winning AMM pool and deposits the liquidity back into the DAO's pool.
+/// Called internally by `advance_stage` when a DAO-funded proposal finalizes.
+public(package) fun empty_amm_and_return_to_dao_pool<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
+    ctx: &mut TxContext,
+) {
+    assert!(proposal.is_finalized(), EInvalidState);
+    assert!(proposal.uses_dao_liquidity(), EInvalidState);
+
+    let market_id = proposal.market_state_id();
+    let escrow_market_id = escrow.get_market_state_id();
+    assert!(market_id == escrow_market_id, EMarketIdMismatch);
+    escrow.get_market_state().assert_market_finalized();
+
+    let winning_outcome = proposal.get_winning_outcome();
+    let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
+
+    let (asset_coin, stable_coin) = escrow.remove_liquidity(asset_out, stable_out, ctx);
+
+    dao_liquidity_pool::join_asset_balance(dao_pool, asset_coin.into_balance());
+    dao_liquidity_pool::join_stable_balance(dao_pool, stable_coin.into_balance());
+}
+
+/// Legacy entry point for user-funded proposals. New code should use advance_stage instead.
 public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -36,32 +95,19 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    assert!(proposal.is_finalized(), EInvalidState);
-    assert!(ctx.sender() == proposal.proposer(), EInvalidLiquidityTransfer);
     assert!(outcome_idx == proposal.get_winning_outcome(), EWrongOutcome);
+    assert!(ctx.sender() == *proposal.get_liquidity_provider().borrow(), EInvalidLiquidityTransfer);
+    empty_amm_and_return_to_provider(proposal, escrow, ctx);
+}
 
-    // Validate that proposal and escrow belong to the same market
-    let market_id = proposal.market_state_id();
-    let escrow_market_id = escrow.get_market_state_id();
-    assert!(market_id == escrow_market_id, EMarketIdMismatch);
-
-    let market_state = escrow.get_market_state();
-    market_state.assert_market_finalized();
-
-    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
-    let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
-
-    // Call remove_liquidity and capture the returned coins
-    let (asset_coin_out, stable_coin_out) = escrow.remove_liquidity(
-        asset_out,
-        stable_out,
-        ctx,
-    );
-    // Transfer the withdrawn coins back to the proposer (the sender)
-    transfer::public_transfer(asset_coin_out, ctx.sender());
-    transfer::public_transfer(stable_coin_out, ctx.sender());
-
-    assert_winning_reserves_consistency(proposal, escrow);
+/// Legacy entry point for DAO-funded proposals. New code should use advance_stage instead.
+public entry fun empty_all_amm_liquidity_to_dao_pool<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
+    ctx: &mut TxContext,
+) {
+    empty_amm_and_return_to_dao_pool(proposal, escrow, dao_pool, ctx);
 }
 
 public fun assert_all_reserves_consistency<AssetType, StableType>(

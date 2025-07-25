@@ -77,6 +77,7 @@ public struct TwapConfigUpdate has store, drop {
 public struct GovernanceUpdate has store, drop {
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
+    required_bond_amount: Option<u64>,
 }
 
 // === Public Functions ===
@@ -146,6 +147,7 @@ public fun create_twap_config_action(
 public fun create_governance_action(
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
+    required_bond_amount: Option<u64>,
 ): ConfigAction {
     ConfigAction {
         config_type: CONFIG_TYPE_GOVERNANCE,
@@ -155,6 +157,7 @@ public fun create_governance_action(
         governance: option::some(GovernanceUpdate {
             proposal_creation_enabled,
             max_outcomes,
+            required_bond_amount,
         }),
     }
 }
@@ -303,6 +306,7 @@ public fun add_governance_update(
     let update = GovernanceUpdate {
         proposal_creation_enabled,
         max_outcomes,
+        required_bond_amount: option::none(), // Not updating bond in tests
     };
     
     let action = ConfigAction {
@@ -431,11 +435,13 @@ public fun get_twap_config_fields(update: &TwapConfigUpdate): (
 /// Get governance update fields
 public fun get_governance_fields(update: &GovernanceUpdate): (
     &Option<bool>,
+    &Option<u64>,
     &Option<u64>
 ) {
     (
         &update.proposal_creation_enabled,
-        &update.max_outcomes
+        &update.max_outcomes,
+        &update.required_bond_amount
     )
 }
 

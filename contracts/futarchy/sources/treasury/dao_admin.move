@@ -29,18 +29,11 @@ public entry fun cancel_and_refund_payment_stream<CoinType: drop>(
     // Verify caller is the treasury admin
     assert!(treasury::get_admin(treasury) == ctx.sender(), ENotAdmin);
     
-    // Cancel the stream and get refund
-    let refund = recurring_payments::cancel_stream_with_refund<CoinType>(
+    // Cancel the stream (no refund in new model as funds stay in treasury)
+    recurring_payments::cancel_stream<CoinType>(
         stream,
         payment_stream_registry,
         clock,
-        ctx
-    );
-    
-    // Deposit the refund back to treasury using admin privileges
-    treasury::admin_deposit<CoinType>(
-        treasury,
-        refund,
         ctx
     );
 }

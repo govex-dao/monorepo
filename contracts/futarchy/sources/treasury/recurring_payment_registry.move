@@ -6,9 +6,7 @@ module futarchy::recurring_payment_registry;
 use sui::{
     table::{Self, Table},
 };
-use futarchy::{
-    dao::{Self, DAO},
-};
+// No imports needed - we'll work with IDs directly
 
 // === Errors ===
 const EUnauthorized: u64 = 0;
@@ -28,12 +26,12 @@ public struct PaymentStreamRegistry has key {
 
 /// Initialize a payment stream registry for a DAO
 public fun init_registry(
-    dao: &mut DAO,
+    dao_id: ID,
     ctx: &mut TxContext,
 ): ID {
     let registry = PaymentStreamRegistry {
         id: object::new(ctx),
-        dao_id: object::id(dao),
+        dao_id: dao_id,
         active_streams: table::new(ctx),
         active_count: 0,
     };
@@ -85,10 +83,3 @@ public fun get_dao_id(registry: &PaymentStreamRegistry): ID {
     registry.dao_id
 }
 
-/// Verify registry belongs to DAO
-public fun verify_dao_ownership(
-    registry: &PaymentStreamRegistry,
-    dao: &DAO,
-) {
-    assert!(registry.dao_id == object::id(dao), EUnauthorized);
-}

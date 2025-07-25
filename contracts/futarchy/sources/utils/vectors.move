@@ -34,3 +34,28 @@ public fun check_valid_outcomes(outcome: vector<String>, max_length: u64): bool 
 
     true
 }
+
+/// Validates a single outcome message - checks length bounds
+public fun validate_outcome_message(message: &String, max_length: u64): bool {
+    let length = message.length();
+    length > 0 && length <= max_length
+}
+
+/// Validates outcome detail - checks length bounds
+public fun validate_outcome_detail(detail: &String, max_length: u64): bool {
+    let length = detail.length();
+    length > 0 && length <= max_length
+}
+
+/// Checks if a message already exists in the outcome messages
+public fun is_duplicate_message(outcome_messages: &vector<String>, new_message: &String): bool {
+    let mut i = 0;
+    let len = outcome_messages.length();
+    while (i < len) {
+        if (outcome_messages[i] == *new_message) {
+            return true
+        };
+        i = i + 1;
+    };
+    false
+}

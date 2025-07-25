@@ -205,10 +205,10 @@ public entry fun toggle_pause(factory: &mut Factory, _cap: &FactoryOwnerCap) {
     factory.paused = !factory.paused;
 }
 
-public entry fun request_verification(
+public entry fun request_verification<AssetType, StableType>(
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
-    dao: &mut dao::DAO,
+    dao: &mut dao::DAO<AssetType, StableType>,
     attestation_url: UTF8String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -235,9 +235,9 @@ public entry fun request_verification(
     });
 }
 
-public entry fun verify_dao(
+public entry fun verify_dao<AssetType, StableType>(
     _validator_cap: &ValidatorAdminCap,
-    dao: &mut dao::DAO,
+    dao: &mut dao::DAO<AssetType, StableType>,
     verification_id: ID,
     attestation_url: UTF8String,
     verified: bool,
@@ -297,7 +297,7 @@ public entry fun remove_allowed_stable_type<StableType>(
     }
 }
 
-public entry fun disable_dao_proposals(dao: &mut dao::DAO, _cap: &FactoryOwnerCap) {
+public entry fun disable_dao_proposals<AssetType, StableType>(dao: &mut dao::DAO<AssetType, StableType>, _cap: &FactoryOwnerCap) {
     dao.disable_proposals();
 }
 

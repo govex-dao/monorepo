@@ -88,13 +88,11 @@ public struct GovernanceUpdate has store, drop {
 /// The system enforces that binary proposals will have outcome_messages set to ["Reject", "Accept"]
 /// automatically, but the caller must ensure outcome 0's action is a no-op.
 public fun create_config_proposal<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     mut outcome_descriptions: vector<String>,
@@ -127,20 +125,29 @@ public fun create_config_proposal<AssetType, StableType>(
         };
     };
     
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    let mut i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
+    };
+    
     // Create the proposal
     let (proposal_id, _market_state_id, _state) = dao::create_proposal_internal<AssetType, StableType>(
         dao,
         fee_manager,
         payment,
         dao_fee_payment,
-        outcome_count,
-        asset_coin,
-        stable_coin,
         title,
-        outcome_descriptions,
         metadata,
         outcome_messages,
-        initial_outcome_amounts,
+        outcome_descriptions,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
@@ -164,13 +171,11 @@ public fun create_config_proposal<AssetType, StableType>(
 
 /// Create a binary trading parameters update proposal
 public entry fun create_trading_params_proposal<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     initial_outcome_amounts: vector<u64>,
@@ -211,14 +216,12 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
     ));
     
     // Call the unified function with binary setup
-    create_config_proposal(
+    create_config_proposal<AssetType, StableType>(
         dao,
         fee_manager,
         config_registry,
         payment,
         dao_fee_payment,
-        asset_coin,
-        stable_coin,
         title,
         metadata,
         vector[b"No change".to_string(), b"Apply changes".to_string()],
@@ -232,13 +235,11 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
 
 /// Create a binary metadata update proposal
 public entry fun create_metadata_proposal<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     config_registry: &mut ConfigActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     initial_outcome_amounts: vector<u64>,
@@ -287,17 +288,75 @@ public entry fun create_metadata_proposal<AssetType, StableType>(
     ));
     
     // Call the unified function with binary setup
+    create_config_proposal<AssetType, StableType>(
+        dao,
+        fee_manager,
+        config_registry,
+        payment,
+        dao_fee_payment,
+        title,
+        metadata,
+        vector[b"No change".to_string(), b"Apply changes".to_string()],
+        vector[b"".to_string(), b"".to_string()], // Will be auto-filled as Reject/Accept
+        initial_outcome_amounts,
+        actions,
+        clock,
+        ctx
+    );
+}
+
+/// Create a governance settings update proposal (convenience function)
+/// Updates DAO governance parameters including proposal creation, max outcomes, and bond requirements
+public entry fun create_governance_proposal<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    fee_manager: &mut fee::FeeManager,
+    config_registry: &mut ConfigActionRegistry,
+    payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
+    title: String,
+    metadata: String,
+    initial_outcome_amounts: vector<u64>,
+    proposal_creation_enabled: Option<bool>,
+    max_outcomes: Option<u64>,
+    required_bond_amount: Option<u64>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate that at least one setting is being changed
+    assert!(
+        option::is_some(&proposal_creation_enabled) || 
+        option::is_some(&max_outcomes) ||
+        option::is_some(&required_bond_amount),
+        ENoChangesSpecified
+    );
+    
+    // Create binary outcome setup
+    let mut outcome_descriptions = vector[
+        b"Reject the governance update".to_string(),
+        b"Accept the governance update".to_string()
+    ];
+    
+    // Create config actions for each outcome
+    let mut actions = vector::empty<ConfigAction>();
+    // Outcome 0: Reject (no-op)
+    vector::push_back(&mut actions, config_actions::create_no_op_action());
+    // Outcome 1: Accept (apply changes)
+    vector::push_back(&mut actions, config_actions::create_governance_action(
+        proposal_creation_enabled,
+        max_outcomes,
+        required_bond_amount
+    ));
+    
+    // Call the unified function with binary setup
     create_config_proposal(
         dao,
         fee_manager,
         config_registry,
         payment,
         dao_fee_payment,
-        asset_coin,
-        stable_coin,
         title,
         metadata,
-        vector[b"No change".to_string(), b"Apply changes".to_string()],
+        outcome_descriptions,
         vector[b"".to_string(), b"".to_string()], // Will be auto-filled as Reject/Accept
         initial_outcome_amounts,
         actions,
@@ -311,7 +370,7 @@ public entry fun create_metadata_proposal<AssetType, StableType>(
 /// Execute trading parameters update after proposal passes
 /// This reads the exact config that was voted on from the registry
 public entry fun execute_trading_params_update<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     config_registry: &mut ConfigActionRegistry,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     proposal_id: ID,
@@ -368,7 +427,7 @@ public entry fun execute_trading_params_update<AssetType, StableType>(
 /// Execute metadata update after proposal passes
 /// This reads the exact config that was voted on from the registry
 public entry fun execute_metadata_update<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     config_registry: &mut ConfigActionRegistry,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     proposal_id: ID,
@@ -409,7 +468,7 @@ public entry fun execute_metadata_update<AssetType, StableType>(
 /// Execute TWAP config update after proposal passes
 /// This reads the exact config that was voted on from the registry
 public entry fun execute_twap_config_update<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     config_registry: &mut ConfigActionRegistry,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     proposal_id: ID,
@@ -461,7 +520,7 @@ public entry fun execute_twap_config_update<AssetType, StableType>(
 /// Execute governance settings update after proposal passes
 /// This reads the exact config that was voted on from the registry
 public entry fun execute_governance_update<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     config_registry: &mut ConfigActionRegistry,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     proposal_id: ID,
@@ -481,7 +540,7 @@ public entry fun execute_governance_update<AssetType, StableType>(
     let update = config_actions::extract_governance(&config_action);
     
     // Get the fields from the update
-    let (proposal_creation_enabled, max_outcomes) = config_actions::get_governance_fields(update);
+    let (proposal_creation_enabled, max_outcomes, required_bond_amount) = config_actions::get_governance_fields(update);
     
     // Validate governance settings from the stored values
     validate_governance_settings(*proposal_creation_enabled, *max_outcomes);
@@ -494,13 +553,19 @@ public entry fun execute_governance_update<AssetType, StableType>(
         option::none() // proposal_fee_per_outcome not updated through this config
     );
     
+    // Apply bond amount update if specified
+    if (option::is_some(required_bond_amount)) {
+        dao::set_required_bond_amount(dao, *option::borrow(required_bond_amount));
+    };
+    
     event::emit(ConfigUpdateExecuted {
         dao_id: object::id(dao),
         proposal_id,
         update_type: b"governance".to_string(),
         changes_count: count_options(&vector[
             option::is_some(proposal_creation_enabled),
-            option::is_some(max_outcomes)
+            option::is_some(max_outcomes),
+            option::is_some(required_bond_amount)
         ]),
         timestamp: clock.timestamp_ms(),
     });

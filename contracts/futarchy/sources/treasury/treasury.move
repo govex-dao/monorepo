@@ -3,6 +3,7 @@ module futarchy::treasury;
 
 // === Imports ===
 use futarchy::execution_context::{Self, ProposalExecutionContext};
+use futarchy::recurring_payments::{Self, PaymentStream};
 use std::{
     string::String,
     type_name::{Self, TypeName},
@@ -87,6 +88,15 @@ public struct PlatformFeeWithdrawn has copy, drop {
     amount: u64,
     collector: address, // address of factory owner who initiated
     timestamp: u64,
+}
+
+public struct PaymentStreamClaimed has copy, drop {
+    treasury_id: ID,
+    stream_id: ID,
+    coin_type: TypeName,
+    amount: u64,
+    recipient: address,
+    claimer: address,
 }
 
 // === Public Functions ===
@@ -295,6 +305,42 @@ public fun withdraw_to<CoinType: drop>(
 ) {
     let coin = withdraw<CoinType>(auth, treasury, amount, ctx);
     transfer::public_transfer(coin, recipient);
+}
+
+/// Permissionlessly claim a due payment from an active payment stream.
+/// This function reads the stream's state, verifies a payment is due,
+/// withdraws the funds from the treasury, and updates the stream's state.
+public entry fun claim_from_stream<CoinType: drop>(
+    treasury: &mut Treasury,
+    stream: &mut PaymentStream<CoinType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // 1. Get payment details and atomically update stream state
+    let (recipient, amount_to_pay) = recurring_payments::get_payment_details_and_update_state(
+        stream,
+        clock.timestamp_ms()
+    );
+
+    // 2. Verify the treasury has sufficient funds
+    let coin_type = type_name::get<CoinType>();
+    assert!(coin_type_exists<CoinType>(treasury), ECoinTypeNotFound);
+    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+    assert!(balance_mut.value() >= amount_to_pay, EInsufficientBalance);
+
+    // 3. Withdraw funds and transfer to the recipient
+    let payment_coin = coin::from_balance(balance_mut.split(amount_to_pay), ctx);
+    transfer::public_transfer(payment_coin, recipient);
+
+    // 4. Emit event
+    event::emit(PaymentStreamClaimed {
+        treasury_id: object::id(treasury),
+        stream_id: object::id(stream),
+        coin_type,
+        amount: amount_to_pay,
+        recipient,
+        claimer: ctx.sender(),
+    });
 }
 
 // === View Functions ===

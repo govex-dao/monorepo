@@ -468,12 +468,12 @@ public fun add_capability_deposit_action<CoinType>(
 // === Execution Functions ===
 
 /// Execute transfer action
-fun execute_transfer<CoinType: drop>(
+fun execute_transfer<AssetType, StableType, CoinType: drop>(
     action_bag: &mut Bag,
     index: u64,
     treasury: &mut Treasury,
     auth: treasury::Auth,
-    _dao: &DAO,
+    _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -500,12 +500,12 @@ fun execute_transfer<CoinType: drop>(
 
 
 /// Execute recurring payment action
-fun execute_recurring_payment<CoinType: drop>(
+fun execute_recurring_payment<AssetType, StableType, CoinType: drop>(
     action_bag: &mut Bag,
     index: u64,
-    treasury: &mut Treasury,
-    auth: treasury::Auth,
-    dao: &DAO,
+    _treasury: &mut Treasury,
+    _auth: treasury::Auth,
+    dao: &DAO<AssetType, StableType>,
     payment_registry: &mut PaymentStreamRegistry, // Required for creating a stream
     clock: &Clock,
     ctx: &mut TxContext,
@@ -522,48 +522,33 @@ fun execute_recurring_payment<CoinType: drop>(
     // Validate timing
     assert!(start_timestamp >= clock.timestamp_ms(), EInvalidVestingSchedule);
     
-    // Calculate total amount needed
-    let total_amount = amount_per_payment * total_payments;
-    
-    // Check treasury has sufficient funds for all payments
-    assert!(
-        treasury::coin_type_value<CoinType>(treasury) >= total_amount,
-        EInsufficientBalance
-    );
-    
-    // Withdraw the total amount needed to fund the new PaymentStream object
-    let funds = treasury::withdraw<CoinType>(
-        auth,
-        treasury,
-        total_amount,
-        ctx
-    );
-    
-    // Create the autonomous PaymentStream object, which now holds the funds
+    // With the new model, we don't pre-fund. We just create the stream object
+    // which acts as a permission slip for future claims against the treasury.
+    let total_amount_cap = amount_per_payment * total_payments;
+
     recurring_payments::create_payment_stream<CoinType>(
-        dao,
+        object::id(dao),
         payment_registry,
-        funds,
         recipient,
         amount_per_payment,
         payment_interval_ms,
         start_timestamp,
-        option::some(start_timestamp + (payment_interval_ms * total_payments)), // End time
-        option::some(total_amount), // Max total
+        // Set end_timestamp and max_total as caps for safety
+        option::some(start_timestamp + (payment_interval_ms * (total_payments + 1))),
+        option::some(total_amount_cap),
         description,
         clock,
         ctx,
     );
-    
 }
 
 /// Execute no-op action
-fun execute_no_op(
+fun execute_no_op<AssetType, StableType>(
     action_bag: &mut Bag,
     index: u64,
     _treasury: &mut Treasury,
     _auth: treasury::Auth,
-    _dao: &DAO,
+    _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
@@ -574,12 +559,12 @@ fun execute_no_op(
 
 
 /// Execute capability deposit action
-fun execute_capability_deposit<CoinType: drop>(
+fun execute_capability_deposit<AssetType, StableType, CoinType: drop>(
     action_bag: &mut Bag,
     index: u64,
     _treasury: &mut Treasury,
     _auth: treasury::Auth,
-    _dao: &DAO,
+    _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
@@ -592,20 +577,20 @@ fun execute_capability_deposit<CoinType: drop>(
 // === Private Helper Functions ===
 
 /// Process a single action based on its type
-fun process_action<CoinType: drop>(
+fun process_action<AssetType, StableType, CoinType: drop>(
     action_type: u8,
     action_bag: &mut Bag,
     index: u64,
     treasury: &mut Treasury,
     auth: treasury::Auth,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
     cap_manager: &mut CapabilityManager,
     execution_context: &ProposalExecutionContext,
 ): bool {
     if (action_type == ACTION_TRANSFER) {
-        execute_transfer<CoinType>(
+        execute_transfer<AssetType, StableType, CoinType>(
             action_bag,
             index,
             treasury,
@@ -616,7 +601,7 @@ fun process_action<CoinType: drop>(
         );
         true
     } else if (action_type == ACTION_NO_OP) {
-        execute_no_op(
+        execute_no_op<AssetType, StableType>(
             action_bag,
             index,
             treasury,
@@ -666,7 +651,7 @@ fun process_action<CoinType: drop>(
         };
         true
     } else if (action_type == ACTION_CAPABILITY_DEPOSIT) {
-        execute_capability_deposit<CoinType>(
+        execute_capability_deposit<AssetType, StableType, CoinType>(
             action_bag,
             index,
             treasury,
@@ -702,10 +687,10 @@ fun finish_execution(
 // === Public Execution Entry Points ===
 
 /// Execute actions for a specific outcome and coin type
-public fun execute_outcome_actions<CoinType: drop>(
+public fun execute_outcome_actions<AssetType, StableType, CoinType: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
@@ -761,7 +746,7 @@ public fun execute_outcome_actions<CoinType: drop>(
                 let proposal_actions_mut = &mut registry.actions[proposal_id];
                 let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
                 
-                executed = process_action<CoinType>(
+                executed = process_action<AssetType, StableType, CoinType>(
                     action_type,
                     action_bag,
                     index,
@@ -804,11 +789,11 @@ public fun execute_outcome_actions<CoinType: drop>(
 }
 
 /// Execute actions for a specific outcome and coin type with payment stream support
-public fun execute_outcome_actions_with_payments<CoinType: drop>(
+public fun execute_outcome_actions_with_payments<AssetType, StableType, CoinType: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     payment_stream_registry: &mut PaymentStreamRegistry,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
@@ -857,7 +842,7 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
                 let proposal_actions_mut = &mut registry.actions[proposal_id];
                 let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
                 
-                execute_recurring_payment<CoinType>(
+                execute_recurring_payment<AssetType, StableType, CoinType>(
                     action_bag,
                     index,
                     treasury,
@@ -873,7 +858,7 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
                 let proposal_actions_mut = &mut registry.actions[proposal_id];
                 let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
                 
-                if (process_action<CoinType>(
+                if (process_action<AssetType, StableType, CoinType>(
                     action_type,
                     action_bag,
                     index,
@@ -914,10 +899,10 @@ public fun execute_outcome_actions_with_payments<CoinType: drop>(
 }
 
 /// Execute SUI-specific actions without payment stream registry
-public entry fun execute_outcome_actions_sui(
+public entry fun execute_outcome_actions_sui<AssetType, StableType>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
@@ -935,7 +920,7 @@ public entry fun execute_outcome_actions_sui(
         outcome
     );
     
-    execute_outcome_actions<SUI>(
+    execute_outcome_actions<AssetType, StableType, SUI>(
         registry,
         treasury,
         dao,
@@ -949,11 +934,11 @@ public entry fun execute_outcome_actions_sui(
 }
 
 /// Execute SUI-specific actions with payment stream registry
-public entry fun execute_outcome_actions_sui_with_payments(
+public entry fun execute_outcome_actions_sui_with_payments<AssetType, StableType>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     payment_stream_registry: &mut PaymentStreamRegistry,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
@@ -971,7 +956,7 @@ public entry fun execute_outcome_actions_sui_with_payments(
         outcome
     );
     
-    execute_outcome_actions_with_payments<SUI>(
+    execute_outcome_actions_with_payments<AssetType, StableType, SUI>(
         registry,
         treasury,
         payment_stream_registry,
@@ -988,10 +973,10 @@ public entry fun execute_outcome_actions_sui_with_payments(
 
 /// Execute USDC-specific actions (for tests)
 #[test_only]
-public fun execute_outcome_actions_usdc<USDC: drop>(
+public fun execute_outcome_actions_usdc<AssetType, StableType, USDC: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO,
+    dao: &DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,

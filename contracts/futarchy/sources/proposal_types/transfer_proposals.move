@@ -22,13 +22,11 @@ const EInvalidParameters: u64 = 0;
 /// Create a treasury capability deposit proposal
 /// This allows the DAO to vote on accepting a TreasuryCap that someone wants to deposit
 public entry fun create_capability_deposit_proposal<AssetType, StableType, CoinType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     registry: &mut ActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     outcome_descriptions: vector<String>,
@@ -42,12 +40,17 @@ public entry fun create_capability_deposit_proposal<AssetType, StableType, CoinT
 ) {
     let outcome_count = outcome_descriptions.length();
     assert!(outcome_count >= 2, EInvalidParameters);
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidParameters);
     
-    // For binary proposals, enforce standard reject/accept pattern
-    let mut final_outcome_messages = outcome_messages;
-    if (outcome_count == 2) {
-        *vector::borrow_mut(&mut final_outcome_messages, 0) = b"Reject".to_string();
-        *vector::borrow_mut(&mut final_outcome_messages, 1) = b"Accept".to_string();
+    
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    let mut i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
     };
     
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(
@@ -55,14 +58,13 @@ public entry fun create_capability_deposit_proposal<AssetType, StableType, CoinT
         fee_manager,
         payment,
         dao_fee_payment,
-        outcome_count,
-        asset_coin,
-        stable_coin,
         title,
-        outcome_descriptions,
         metadata,
-        final_outcome_messages,
-        initial_outcome_amounts,
+        outcome_messages,
+        outcome_descriptions,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
@@ -101,13 +103,11 @@ public entry fun create_capability_deposit_proposal<AssetType, StableType, CoinT
 /// Create a cross-treasury transfer proposal
 /// Allows transferring assets between different treasuries or DAOs
 public entry fun create_cross_treasury_transfer_proposal<AssetType, StableType, CoinType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     registry: &mut ActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     outcome_descriptions: vector<String>,
@@ -123,12 +123,17 @@ public entry fun create_cross_treasury_transfer_proposal<AssetType, StableType, 
     
     let outcome_count = outcome_descriptions.length();
     assert!(outcome_count >= 2, EInvalidParameters);
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidParameters);
     
-    // For binary proposals, enforce standard reject/accept pattern
-    let mut final_outcome_messages = outcome_messages;
-    if (outcome_count == 2) {
-        *vector::borrow_mut(&mut final_outcome_messages, 0) = b"Reject".to_string();
-        *vector::borrow_mut(&mut final_outcome_messages, 1) = b"Accept".to_string();
+    
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    let mut i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
     };
     
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(
@@ -136,14 +141,13 @@ public entry fun create_cross_treasury_transfer_proposal<AssetType, StableType, 
         fee_manager,
         payment,
         dao_fee_payment,
-        outcome_count,
-        asset_coin,
-        stable_coin,
         title,
-        outcome_descriptions,
         metadata,
-        final_outcome_messages,
-        initial_outcome_amounts,
+        outcome_messages,
+        outcome_descriptions,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
@@ -180,13 +184,11 @@ public entry fun create_cross_treasury_transfer_proposal<AssetType, StableType, 
 /// Create a multi-step transfer proposal
 /// Allows complex transfers with multiple recipients and amounts
 public entry fun create_multi_transfer_proposal<AssetType, StableType, CoinType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     registry: &mut ActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     outcome_descriptions: vector<String>,
@@ -200,20 +202,30 @@ public entry fun create_multi_transfer_proposal<AssetType, StableType, CoinType>
 ) {
     let outcome_count = outcome_descriptions.length();
     assert!(outcome_count >= 2, EInvalidParameters);
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidParameters);
+    
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    let mut i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
+    };
     
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(
         dao,
         fee_manager,
         payment,
         dao_fee_payment,
-        outcome_count,
-        asset_coin,
-        stable_coin,
         title,
-        outcome_descriptions,
         metadata,
         outcome_messages,
-        initial_outcome_amounts,
+        outcome_descriptions,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
@@ -251,13 +263,11 @@ public entry fun create_multi_transfer_proposal<AssetType, StableType, CoinType>
 /// Create a proposal that combines minting and transfers
 /// Useful for minting tokens and distributing them in one proposal
 public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     registry: &mut ActionRegistry,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
     outcome_descriptions: vector<String>,
@@ -277,6 +287,7 @@ public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinTy
     
     let outcome_count = outcome_descriptions.length();
     assert!(outcome_count >= 2, EInvalidParameters);
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidParameters);
     
     // Verify amounts sum to mint_amount
     let mut total = 0;
@@ -287,11 +298,15 @@ public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinTy
     };
     assert!(total == mint_amount, EInvalidParameters);
     
-    // For binary proposals, enforce standard reject/accept pattern
-    let mut final_outcome_messages = outcome_messages;
-    if (outcome_count == 2) {
-        *vector::borrow_mut(&mut final_outcome_messages, 0) = b"Reject".to_string();
-        *vector::borrow_mut(&mut final_outcome_messages, 1) = b"Accept".to_string();
+    
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
     };
     
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(
@@ -299,14 +314,13 @@ public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinTy
         fee_manager,
         payment,
         dao_fee_payment,
-        outcome_count,
-        asset_coin,
-        stable_coin,
         title,
-        outcome_descriptions,
         metadata,
-        final_outcome_messages,
-        initial_outcome_amounts,
+        outcome_messages,
+        outcome_descriptions,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
@@ -346,3 +360,4 @@ public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinTy
         };
     };
 }
+

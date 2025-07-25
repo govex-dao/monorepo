@@ -16,62 +16,74 @@ use futarchy::{
 // === Public Functions ===
 
 /// Creates a proposal to initialize a DAO's operating agreement.
-/// This is a binary proposal (Reject/Accept). If accepted, it will create
-/// and attach an operating agreement to the DAO with the specified lines and difficulties.
+/// Supports multiple outcomes - for 2 outcomes, must be ["Reject", "Accept"]
 public entry fun create_init_operating_agreement_proposal<AssetType, StableType>(
-    dao: &mut DAO,
+    dao: &mut DAO<AssetType, StableType>,
     fee_manager: &mut fee::FeeManager,
     init_action_registry: &mut InitActionRegistry,
     // Standard proposal inputs
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
-    asset_coin: Coin<AssetType>,
-    stable_coin: Coin<StableType>,
     title: String,
     metadata: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
     initial_outcome_amounts: vector<u64>,
     // Specific inputs for initializing operating agreement
     initial_lines: vector<String>,
     initial_difficulties: vector<u64>,
+    action_outcome_index: u64, // Which outcome should trigger the action (0-based, typically 1 for binary)
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Ensure the DAO doesn't already have an operating agreement
     assert!(!dao.has_operating_agreement(), 0); // EOperatingAgreementAlreadyExists
 
-    // 1. Create the underlying futarchy proposal.
-    // This will be a 2-outcome proposal.
+    // Validate inputs
+    let outcome_count = outcome_messages.length();
+    assert!(outcome_count >= 2, 1); // Need at least 2 outcomes
+    assert!(outcome_details.length() == outcome_count, 2); // Matching details
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, 3); // asset + stable for each outcome
+    assert!(action_outcome_index < outcome_count, 4); // Valid outcome index
+    
+    // Split initial_outcome_amounts into asset and stable vectors
+    let mut asset_amounts = vector[];
+    let mut stable_amounts = vector[];
+    let mut i = 0;
+    while (i < outcome_count) {
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        i = i + 1;
+    };
+    
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(
         dao,
         fee_manager,
         payment,
         dao_fee_payment,
-        2, // outcome_count is always 2 for this proposal type
-        asset_coin,
-        stable_coin,
         title,
-        // The details vector describes each outcome.
-        vector[
-            b"No operating agreement will be added to the DAO.".to_string(),
-            b"The proposed operating agreement will be initialized for the DAO.".to_string()
-        ],
         metadata,
-        // The outcome_messages are standard "Reject" and "Accept".
-        vector[b"Reject".to_string(), b"Accept".to_string()],
-        initial_outcome_amounts,
+        outcome_messages,
+        outcome_details,
+        asset_amounts,
+        stable_amounts,
+        false, // uses_dao_liquidity
         clock,
         ctx
     );
 
-    // 2. Register the intended action with the secure InitActionRegistry.
-    let action = init_operating_agreement_actions::new_init_agreement_action(
-        initial_lines,
-        initial_difficulties
-    );
+    // Register the intended action with the secure InitActionRegistry
+    // Only if action_outcome_index is not 0 (reject outcome)
+    if (action_outcome_index > 0) {
+        let action = init_operating_agreement_actions::new_init_agreement_action(
+            initial_lines,
+            initial_difficulties
+        );
 
-    init_operating_agreement_actions::init_proposal_action(
-        init_action_registry,
-        proposal_id,
-        action
-    );
+        init_operating_agreement_actions::init_proposal_action(
+            init_action_registry,
+            proposal_id,
+            action
+        );
+    };
 }

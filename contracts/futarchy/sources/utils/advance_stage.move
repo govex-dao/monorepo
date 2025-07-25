@@ -1,15 +1,19 @@
 module futarchy::advance_stage;
 
 use futarchy::coin_escrow;
-use futarchy::fee::FeeManager;
+use futarchy::dao::{Self, DAO};
+use futarchy::fee::{Self, FeeManager};
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
-use futarchy::proposal::Proposal;
+use futarchy::proposal::{Self, Proposal};
 use std::option;
+use std::vector;
 use sui::clock::Clock;
-use sui::coin::{Self, Coin};
+use sui::coin;
 use sui::event;
 use sui::transfer;
+use sui::object::{Self, UID, ID};
+use sui::tx_context::TxContext;
 
 // === Introduction ===
 // This handles advancing proposal stages
@@ -21,9 +25,10 @@ const EInTradingPeriod: u64 = 2;
 
 // === Constants ===
 const TWAP_BASIS_POINTS: u256 = 100_000;
-const STATE_REVIEW: u8 = 0;
-const STATE_TRADING: u8 = 1;
-const STATE_FINALIZED: u8 = 2;
+const STATE_PREMARKET: u8 = 0; // New state before market is live
+const STATE_REVIEW: u8 = 1; // Market initialized but not trading
+const STATE_TRADING: u8 = 2; // Market live and trading
+const STATE_FINALIZED: u8 = 3; // Market resolved
 
 // === Structs ===
 public struct ProposalStateChanged has copy, drop {
@@ -47,6 +52,15 @@ public struct MarketFinalizedEvent has copy, drop {
     timestamp_ms: u64,
 }
 
+/// A hot-potato receipt proving a proposal has been finalized.
+/// Must be consumed to redeem liquidity, which guarantees the DAO's state is updated.
+public struct FinalizationReceipt has key, store {
+    id: UID,
+    proposal_id: ID,
+    liquidity_provider: address,
+    uses_dao_liquidity: bool,
+}
+
 // === Public Package Functions ===
 public(package) fun try_advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
@@ -62,13 +76,9 @@ public(package) fun try_advance_state<AssetType, StableType>(
     let current_time = clock.timestamp_ms();
     let old_state = proposal.state();
 
-    if (
-        proposal.state() == STATE_REVIEW && 
-                current_time >= proposal.get_created_at() + proposal.get_review_period_ms()
-    ) {
-        proposal.set_state(STATE_TRADING);
+    if (proposal.state() == STATE_REVIEW && current_time >= proposal.get_market_initialized_at() + proposal.get_review_period_ms()) {
+        proposal.set_state(STATE_TRADING); // Now transitions from REVIEW to TRADING
         state.start_trading(proposal.get_trading_period_ms(), clock);
-        initialize_oracles_for_trading(proposal, state);
     } else if (proposal.state() == STATE_TRADING) {
         let configured_trading_end_option = state.get_trading_end_time();
         assert!(current_time >= configured_trading_end_option.destroy_some(), EInTradingPeriod);
@@ -105,7 +115,8 @@ public(package) fun try_advance_state<AssetType, StableType>(
     false
 }
 
-// === Public Entry Functions ===
+/// Entry point for advancing proposal state. If the proposal becomes finalized,
+/// returns a FinalizationReceipt that must be consumed to redeem liquidity.
 public entry fun try_advance_state_entry<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
@@ -116,55 +127,47 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
     assert!(escrow.get_market_state_id() == proposal.market_state_id(), EInvalidState);
 
     let market_state = escrow.get_market_state_mut();
-    let just_finalized = try_advance_state(
-        proposal,
-        market_state,
-        clock,
-    );
+    let just_finalized = try_advance_state(proposal, market_state, clock);
 
-    // If the proposal just finalized, handle fees and fee distribution.
     if (just_finalized) {
-        // 1. Collect protocol fees from the AMM pools.
+        // 1. Collect protocol fees and distribute DAO proposal fees.
         liquidity_interact::collect_protocol_fees(proposal, escrow, fee_manager, clock);
 
-        // 2. Distribute the DAO-level proposal fee held in escrow on the proposal object.
         let fee_balance = proposal.take_fee_escrow();
         if (fee_balance.value() > 0) {
             let fee_coin = fee_balance.into_coin(ctx);
             let winning_outcome = proposal.get_winning_outcome();
-
-            if (winning_outcome == 0) { // Proposal was rejected
-                // Send fee to the DAO treasury.
-                let treasury_addr = proposal.treasury_address();
-                transfer::public_transfer(fee_coin, treasury_addr);
-            } else { // Proposal passed
-                // Return fee to the original proposer.
-                let proposer_addr = proposal.proposer();
-                transfer::public_transfer(fee_coin, proposer_addr);
+            if (winning_outcome == 0) { // Proposal was rejected or failed to meet threshold
+                transfer::public_transfer(fee_coin, proposal.treasury_address());
+            } else { // An outcome other than Reject won.
+                let outcome_creators = proposal.get_outcome_creators();
+                let rebate_recipient = *vector::borrow(outcome_creators, winning_outcome);
+                transfer::public_transfer(fee_coin, rebate_recipient);
             }
         } else {
-            // If fee is 0, destroy the empty balance
             fee_balance.destroy_zero();
         };
+
+        // 2. Create and transfer the finalization receipt to the caller
+        let receipt = FinalizationReceipt {
+            id: object::new(ctx),
+            proposal_id: proposal::get_id(proposal),
+            liquidity_provider: proposal::proposer(proposal), // Using proposer as liquidity provider
+            uses_dao_liquidity: proposal::uses_dao_liquidity(proposal),
+        };
+        transfer::public_transfer(receipt, ctx.sender());
     }
 }
 
-// === Private Functions ===
-fun initialize_oracles_for_trading<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    state: &MarketState,
-) {
-    let pools = proposal.get_amm_pools();
-    let pools_count = pools.length();
-    let mut i = 0;
-    while (i < pools_count) {
-        let pool = proposal.get_pool_mut_by_outcome((i as u8));
-        pool.set_oracle_start_time(state);
-        i = i + 1;
-    };
+/// Consumes a FinalizationReceipt to complete the proposal lifecycle
+public fun consume_finalization_receipt(
+    receipt: FinalizationReceipt
+): (ID, address, bool) {
+    let FinalizationReceipt { id, proposal_id, liquidity_provider, uses_dao_liquidity } = receipt;
+    id.delete();
+    (proposal_id, liquidity_provider, uses_dao_liquidity)
 }
 
-// === Public Package Functions (continued) ===
 public(package) fun finalize<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     state: &mut MarketState,
