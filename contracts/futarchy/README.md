@@ -22,6 +22,11 @@ Concatenating all .Move files for use with LLMs
 find . -type f -name '*.move' -exec cat {} + > all_moves.txt
 ```
 
+```
+git add -N .
+git diff HEAD | pbcopy
+```
+
 
 ```
 git diff | pbcopy
