@@ -25,8 +25,6 @@ const EZeroAmount: u64 = 106;
 const EInsufficientLiquidity: u64 = 107;
 /// Slippage exceeded: actual output is less than minimum required
 const EExcessiveSlippage: u64 = 108;
-/// Reentrancy detected: another operation is already in progress
-const EReentrancy: u64 = 110;
 /// Arithmetic overflow: calculation result exceeds maximum value
 const EOverflow: u64 = 111;
 /// No LP tokens found for this proposal
@@ -52,7 +50,6 @@ public struct SpotLiquidityPool<phantom Asset, phantom Stable> has key, store {
     protocol_fee_bps: u16,
     accumulated_protocol_fees: Balance<Stable>,
     k_last: u128, // For fee calculations
-    reentrancy_guard: bool, // Reentrancy protection
     // Store AMM LP tokens for each outcome when proposal is active
     amm_lp_tokens: Table<ID, vector<ConditionalToken>>, // proposal_id -> LP tokens per outcome
 }
@@ -153,7 +150,6 @@ public fun create_pool<Asset, Stable>(
         protocol_fee_bps,
         accumulated_protocol_fees: balance::zero(),
         k_last: k_initial,
-        reentrancy_guard: false,
         amm_lp_tokens: table::new(ctx),
     };
     
@@ -334,10 +330,6 @@ public(package) fun add_liquidity_spot_only<Asset, Stable>(
     min_lp_out: u64,
     ctx: &mut TxContext,
 ): Coin<LP<Asset, Stable>> {
-    // Reentrancy protection
-    assert!(!pool.reentrancy_guard, EReentrancy);
-    pool.reentrancy_guard = true;
-    
     let asset_amount = asset_coin.value();
     let stable_amount = stable_coin.value();
     assert!(asset_amount > 0 && stable_amount > 0, EZeroAmount);
@@ -383,7 +375,6 @@ public(package) fun add_liquidity_spot_only<Asset, Stable>(
         new_stable_reserve: pool.stable_vault.value(),
     });
     
-    pool.reentrancy_guard = false;
     lp_tokens
 }
 
@@ -394,10 +385,6 @@ public(package) fun remove_liquidity_spot_only<Asset, Stable>(
     min_stable_out: u64,
     ctx: &mut TxContext,
 ): (Coin<Asset>, Coin<Stable>) {
-    // Reentrancy protection
-    assert!(!pool.reentrancy_guard, EReentrancy);
-    pool.reentrancy_guard = true;
-
     let lp_amount = lp_coin.value();
     assert!(lp_amount > 0, EZeroAmount);
     
@@ -417,7 +404,6 @@ public(package) fun remove_liquidity_spot_only<Asset, Stable>(
 
     coin::burn(&mut pool.lp_supply, lp_coin);
     
-    pool.reentrancy_guard = false;
 
     (coin::from_balance(asset_balance, ctx), coin::from_balance(stable_balance, ctx))
 }
@@ -470,10 +456,6 @@ public(package) fun swap_stable_to_asset_internal<Asset, Stable>(
     min_asset_out: u64,
     ctx: &mut TxContext
 ): SwapResult<Asset> {
-    // Reentrancy protection
-    assert!(!pool.reentrancy_guard, EReentrancy);
-    pool.reentrancy_guard = true;
-    
     let amount_in = stable_in.value();
     assert!(amount_in > 0, EZeroAmount);
     
@@ -515,7 +497,6 @@ public(package) fun swap_stable_to_asset_internal<Asset, Stable>(
     });
     
     // Release reentrancy guard
-    pool.reentrancy_guard = false;
     
     SwapResult {
         output_coin: coin::from_balance(asset_out, ctx),
@@ -530,10 +511,6 @@ public(package) fun swap_asset_to_stable_internal<Asset, Stable>(
     min_stable_out: u64,
     ctx: &mut TxContext
 ): SwapResult<Stable> {
-    // Reentrancy protection
-    assert!(!pool.reentrancy_guard, EReentrancy);
-    pool.reentrancy_guard = true;
-    
     let amount_in = asset_in.value();
     assert!(amount_in > 0, EZeroAmount);
     
@@ -577,7 +554,6 @@ public(package) fun swap_asset_to_stable_internal<Asset, Stable>(
     });
     
     // Release reentrancy guard
-    pool.reentrancy_guard = false;
     
     SwapResult {
         output_coin: coin::from_balance(stable_out, ctx),
@@ -612,40 +588,6 @@ public fun min_liquidity<Asset, Stable>(pool: &SpotLiquidityPool<Asset, Stable>)
     pool.min_liquidity_stable
 }
 
-// === Backwards Compatibility Functions ===
-
-/// Internal remove liquidity function for backwards compatibility
-public(package) fun remove_liquidity_internal<Asset, Stable>(
-    pool: &mut SpotLiquidityPool<Asset, Stable>,
-    lp_coin: Coin<LP<Asset, Stable>>,
-    min_asset_out: u64,
-    min_stable_out: u64,
-    fee_payment: Coin<sui::sui::SUI>,
-    _clock: &Clock,
-    ctx: &mut TxContext
-): Option<RemovalResult<Asset, Stable>> {
-    // For backwards compatibility, just process immediately
-    // Transfer fee payment to sender (refund it)
-    transfer::public_transfer(fee_payment, ctx.sender());
-    let (asset_coin, stable_coin) = remove_liquidity_spot_only(pool, lp_coin, min_asset_out, min_stable_out, ctx);
-    let result = RemovalResult {
-        asset_coin,
-        stable_coin,
-    };
-    option::some(result)
-}
-
-/// Struct to hold removal result
-public struct RemovalResult<phantom Asset, phantom Stable> has store {
-    asset_coin: Coin<Asset>,
-    stable_coin: Coin<Stable>,
-}
-
-/// Destroy RemovalResult and return both coins
-public fun destroy_removal_result<Asset, Stable>(result: RemovalResult<Asset, Stable>): (Coin<Asset>, Coin<Stable>) {
-    let RemovalResult { asset_coin, stable_coin } = result;
-    (asset_coin, stable_coin)
-}
 
 // === Admin Functions ===
 
