@@ -6,18 +6,16 @@ use futarchy::proposal_fee_manager;
 use futarchy::liquidity_initialize;
 use futarchy::liquidity_interact;
 use futarchy::market_state;
-use futarchy::advance_stage::{Self, FinalizationReceipt};
+use futarchy::advance_stage::{Self};
 use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
 use futarchy::proposal;
 use futarchy::operating_agreement;
 use futarchy::vectors;
-use futarchy::priority_queue::{Self, ProposalQueue, QueuedProposal, ProposalData};
+use futarchy::priority_queue::{Self, ProposalQueue};
 use futarchy::priority_queue_helpers;
 use futarchy::execution_context::{Self, ProposalExecutionContext};
 use std::ascii::String as AsciiString;
-use std::option;
 use std::string::String;
-use std::vector;
 use std::type_name;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin, TreasuryCap};
@@ -26,51 +24,86 @@ use sui::sui::SUI;
 use sui::table::{Self, Table};
 use sui::url::{Self, Url};
 use sui::balance::{Self, Balance};
-use sui::transfer;
-use futarchy::capability_manager::{Self, CapabilityManager};
+use futarchy::capability_manager::{Self};
+use futarchy::treasury;
 
 // === Introduction ===
 // This defines the DAO type
 
 // === Errors ===
+/// Amount must be greater than zero
 const EInvalidAmount: u64 = 0;
+/// Proposal with this ID already exists
 const EProposalExists: u64 = 1;
+/// Unauthorized: caller does not have permission for this action
 const EUnauthorized: u64 = 2;
+/// Invalid outcome count: must be between 2 and max allowed
 const EInvalidOutcomeCount: u64 = 3;
+/// Proposal not found with the given ID
 const EProposalNotFound: u64 = 4;
+/// Minimum asset/stable amounts must be greater than zero
 const EInvalidMinAmounts: u64 = 5;
+/// Proposal has already been executed
 const EAlreadyExecuted: u64 = 6;
+/// Invalid messages format or content
 const EInvalidMessages: u64 = 7;
+/// Asset type does not match DAO configuration
 const EInvalidAssetType: u64 = 8;
+/// Stable type does not match DAO configuration
 const EInvalidStableType: u64 = 9;
+/// Proposal creation has been disabled for this DAO
 const EProposalCreationDisabled: u64 = 11;
+/// Outcome arrays must have the same length
 const EInvalidOutcomeLengths: u64 = 12;
+/// Metadata exceeds maximum allowed length
 const EMetadataTooLong: u64 = 14;
+/// Proposal details exceed maximum allowed length
 const EDetailsTooLong: u64 = 15;
+/// Title is too short: minimum length required
 const ETitleTooShort: u64 = 16;
+/// Title exceeds maximum allowed length
 const ETitleTooLong: u64 = 17;
+/// Details are too short: minimum length required
 const EDetailsTooShort: u64 = 18;
+/// Must have at least 2 outcomes for a valid futarchy market
 const EOneOutcome: u64 = 19;
+/// TWAP delay must be within valid range
 const EInvalidTwapDelay: u64 = 20;
+/// DAO description exceeds maximum allowed length
 const EDaoDescriptionTooLong: u64 = 21;
+/// Details array length does not match outcome count
 const EInvalidDetailsLength: u64 = 22;
+/// Proposal is not in the required state for this operation
 const EInvalidState: u64 = 23;
-const EOutcomeOutOfBounds: u64 = 24;
+/// Duplicate message detected in proposal
 const EDuplicateMessage: u64 = 25;
+/// DAO-owned liquidity is currently in use by active proposals
 const EDaoOwnedLiquidityInUse: u64 = 26;
-const EMaxConcurrentProposalsReached: u64 = 27;
+/// Proposal is queued but not yet active
 const EProposalQueuedNotActive: u64 = 28;
+/// Proposal does not use DAO liquidity
 const EProposalNotUsesDaoLiquidity: u64 = 29;
+/// Proposal already uses DAO liquidity
 const EProposalUsesDaoLiquidity: u64 = 30;
-const EInvalidProposalData: u64 = 31;
+/// Bond amount does not match required amount
 const EInvalidBond: u64 = 32;
+/// Proposal has expired and can no longer be processed
 const EStaleProposal: u64 = 33;
+/// Invalid receipt: does not match expected format or values
 const EInvalidReceipt: u64 = 34;
+/// Proposal ID in context does not match the expected ID
 const EInvalidProposalId: u64 = 35;
+/// Insufficient liquidity in DAO treasury for this operation
+const EInsufficientLiquidity: u64 = 36;
+/// DAO treasury has not been initialized
+const ETreasuryNotInitialized: u64 = 37;
+/// Treasury ID does not match DAO's configured treasury
+const ETreasuryMismatch: u64 = 38;
+/// Invalid execution context: not authorized for this operation
+const EInvalidExecutionContext: u64 = 39;
 
 // === State Constants ===
 const STATE_PREMARKET: u8 = 0;
-const STATE_REVIEW: u8 = 1;
 
 // === Constants ===
 const TITLE_MAX_LENGTH: u64 = 512;
@@ -116,7 +149,7 @@ public struct DAO<phantom AssetType, phantom StableType> has key, store {
     proposal_creation_enabled: bool,
     description: String,
     max_outcomes: u64,
-    metadata: vector<String>,
+    metadata: Table<String, String>,
     treasury_account_id: Option<ID>,
     capability_manager_id: Option<ID>,
     proposal_fee_per_outcome: u64,
@@ -218,7 +251,6 @@ public(package) fun create<AssetType: drop, StableType>(
     twap_threshold: u64,
     description: String,
     max_outcomes: u64,
-    metadata: vector<String>,
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -307,7 +339,7 @@ public(package) fun create<AssetType: drop, StableType>(
         proposal_creation_enabled: true,
         description: description,
         max_outcomes: max_outcomes,
-        metadata: metadata,
+        metadata: table::new(ctx),
         treasury_account_id: option::none(),
         capability_manager_id,
         proposal_fee_per_outcome: 0,
@@ -373,7 +405,7 @@ public(package) fun init_operating_agreement_internal<AssetType, StableType>(
 /// Entry point for users to submit a new proposal to the DAO's priority queue.
 public entry fun submit_to_queue<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     proposal_fee_manager: &mut proposal_fee_manager::ProposalFeeManager,
     payment: Coin<SUI>,
     fee_coin: Coin<SUI>, // Separate coin for proposal submission fee
@@ -423,7 +455,7 @@ public entry fun submit_to_queue<AssetType, StableType>(
     };
     
     // Handle platform fee (in SUI) - paid to the fee manager
-    fee::deposit_proposal_creation_payment(fee_manager, payment, outcome_count, clock, ctx);
+    fee::deposit_proposal_creation_payment(_fee_manager, payment, outcome_count, clock, ctx);
     
     // Generate a unique proposal ID for the queue
     let uid = object::new(ctx);
@@ -529,7 +561,7 @@ public entry fun submit_to_queue<AssetType, StableType>(
 /// This version is for proposals where the liquidity is provided by the caller.
 public entry fun activate_next_proposer_funded_proposal<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     proposal_fee_manager: &mut proposal_fee_manager::ProposalFeeManager,
     // Liquidity for the market must be provided by the activator.
     asset_coin: Coin<AssetType>,
@@ -553,8 +585,8 @@ public entry fun activate_next_proposer_funded_proposal<AssetType, StableType>(
     let metadata = *priority_queue_helpers::get_metadata(data);
     let messages = *priority_queue_helpers::get_outcome_messages(data);
     let details = *priority_queue_helpers::get_outcome_details(data);
-    let asset_amounts = *priority_queue_helpers::get_initial_asset_amounts(data);
-    let stable_amounts = *priority_queue_helpers::get_initial_stable_amounts(data);
+    let _asset_amounts = *priority_queue_helpers::get_initial_asset_amounts(data);
+    let _stable_amounts = *priority_queue_helpers::get_initial_stable_amounts(data);
     
     // Pay activator reward from proposal fee manager
     let proposal_id = priority_queue_helpers::get_proposal_id(&queued_proposal);
@@ -588,7 +620,7 @@ public entry fun activate_next_proposer_funded_proposal<AssetType, StableType>(
 public entry fun activate_next_dao_funded_proposal<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
     pool: &mut DAOLiquidityPool<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     proposal_fee_manager: &mut proposal_fee_manager::ProposalFeeManager,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -628,8 +660,8 @@ public entry fun activate_next_dao_funded_proposal<AssetType, StableType>(
     transfer::public_transfer(reward, ctx.sender());
     
     // Get liquidity from DAO pool
-    let asset_amount = dao_liquidity_pool::asset_balance(pool);
-    let stable_amount = dao_liquidity_pool::stable_balance(pool);
+    let _asset_amount = dao_liquidity_pool::asset_balance(pool);
+    let _stable_amount = dao_liquidity_pool::stable_balance(pool);
     let asset_balance = dao_liquidity_pool::withdraw_all_asset_balance(pool);
     let stable_balance = dao_liquidity_pool::withdraw_all_stable_balance(pool);
     let asset_coin = asset_balance.into_coin(ctx);
@@ -773,7 +805,7 @@ public(package) fun join_stable_balance<AssetType, StableType>(
 /// use the full balance of the DAO's pool.
 public entry fun create_proposal_with_dao_liquidity<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
     title: String,
@@ -790,7 +822,7 @@ public entry fun create_proposal_with_dao_liquidity<AssetType, StableType>(
     let placeholder_amounts = vector::tabulate!(initial_outcome_messages.length(), |_| 0);
 
     let (_p_id, _, _) = create_proposal_internal<AssetType, StableType>(
-        dao, fee_manager, payment, dao_fee_payment, title, metadata,
+        dao, _fee_manager, payment, dao_fee_payment, title, metadata,
         initial_outcome_messages, initial_outcome_details,
         placeholder_amounts, placeholder_amounts, true, // uses_dao_liquidity = true
         clock, ctx
@@ -801,7 +833,7 @@ public entry fun create_proposal_with_dao_liquidity<AssetType, StableType>(
 /// Internal function that returns proposal ID and related IDs for action storage
 public fun create_proposal_internal<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     // Note: No large liquidity deposit here anymore.
     payment: Coin<SUI>,
     mut dao_fee_payment: Coin<StableType>,
@@ -825,7 +857,7 @@ public fun create_proposal_internal<AssetType, StableType>(
     assert!(outcome_count == initial_outcome_asset_amounts.length(), EInvalidDetailsLength);
     assert!(outcome_count == initial_outcome_stable_amounts.length(), EInvalidDetailsLength);
 
-    fee::deposit_proposal_creation_payment(fee_manager, payment, outcome_count, clock, ctx);
+    fee::deposit_proposal_creation_payment(_fee_manager, payment, outcome_count, clock, ctx);
 
     // Handle DAO-level fee (in StableType)
     let required_dao_fee = dao.proposal_fee_per_outcome * outcome_count;
@@ -924,7 +956,7 @@ public fun create_proposal_internal<AssetType, StableType>(
 
 public entry fun create_proposal<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
     dao_fee_payment: Coin<StableType>,
     title: String,
@@ -939,7 +971,7 @@ public entry fun create_proposal<AssetType, StableType>(
     // Call internal function and discard return values
     let (_p_id, _, _) = create_proposal_internal<AssetType, StableType>(
         dao,
-        fee_manager,
+        _fee_manager,
         payment,
         dao_fee_payment,
         title,
@@ -1228,49 +1260,11 @@ public(package) fun mark_proposal_completed<AssetType, StableType>(
     };
 }
 
-/// Redeems liquidity for a proposer-funded proposal and marks it as complete.
-/// Consumes the FinalizationReceipt to ensure atomicity.
-public entry fun redeem_proposer_liquidity<AssetType, StableType>(
-    dao: &mut DAO<AssetType, StableType>,
-    proposal: &mut proposal::Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
-    receipt: FinalizationReceipt,
-    ctx: &mut TxContext,
-) {
-    let (proposal_id, liquidity_provider, uses_dao_liquidity) = advance_stage::consume_finalization_receipt(receipt);
-    
-    assert!(proposal_id == proposal::get_id(proposal), EInvalidReceipt);
-    assert!(!uses_dao_liquidity, EProposalUsesDaoLiquidity);
-
-    liquidity_interact::empty_amm_and_return_to_provider(proposal, escrow, ctx);
-
-    // This call is now guaranteed to happen after liquidity is returned.
-    mark_proposal_completed(dao, proposal::get_id(proposal), proposal);
-}
-
-/// Redeems liquidity for a DAO-funded proposal and marks it as complete.
-public entry fun redeem_dao_liquidity<AssetType, StableType>(
-    dao: &mut DAO<AssetType, StableType>,
-    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
-    proposal: &mut proposal::Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
-    receipt: FinalizationReceipt,
-    ctx: &mut TxContext,
-) {
-    let (proposal_id, liquidity_provider, uses_dao_liquidity) = advance_stage::consume_finalization_receipt(receipt);
-    
-    assert!(proposal_id == proposal::get_id(proposal), EInvalidReceipt);
-    assert!(uses_dao_liquidity, EProposalNotUsesDaoLiquidity);
-
-    liquidity_interact::empty_amm_and_return_to_dao_pool(proposal, escrow, dao_pool, ctx);
-    
-    mark_proposal_completed(dao, proposal::get_id(proposal), proposal);
-}
 
 /// Permissionless function to evict a stale proposal from the queue.
 public entry fun evict_stale_proposal<AssetType, StableType>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     proposal_fee_manager: &mut proposal_fee_manager::ProposalFeeManager,
     proposal_id: ID,
     clock: &Clock,
@@ -1575,8 +1569,48 @@ public fun get_required_bond_amount<AssetType, StableType>(dao: &DAO<AssetType, 
     dao.required_bond_amount
 }
 
-public fun get_metadata<AssetType, StableType>(dao: &DAO<AssetType, StableType>): &vector<String> {
+// === Metadata Management Functions ===
+
+/// Get a reference to the metadata table
+public fun get_metadata_table<AssetType, StableType>(dao: &DAO<AssetType, StableType>): &Table<String, String> {
     &dao.metadata
+}
+
+/// Get a specific metadata value by key
+public fun get_metadata_value<AssetType, StableType>(dao: &DAO<AssetType, StableType>, key: String): Option<String> {
+    if (table::contains(&dao.metadata, key)) {
+        option::some(*table::borrow(&dao.metadata, key))
+    } else {
+        option::none()
+    }
+}
+
+/// Update or add a metadata entry - should be called through governance proposals
+public(package) fun update_metadata_entry<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    key: String,
+    value: String,
+    _ctx: &mut ProposalExecutionContext
+) {
+    if (table::contains(&dao.metadata, key)) {
+        // Update existing value
+        let val_ref = table::borrow_mut(&mut dao.metadata, key);
+        *val_ref = value;
+    } else {
+        // Add new key-value pair
+        table::add(&mut dao.metadata, key, value);
+    }
+}
+
+/// Remove a metadata entry - should be called through governance proposals
+public(package) fun remove_metadata_entry<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    key: String,
+    _ctx: &mut ProposalExecutionContext
+) {
+    if (table::contains(&dao.metadata, key)) {
+        table::remove(&mut dao.metadata, key);
+    }
 }
 
 /// Returns the operating agreement ID if initialized
@@ -1606,6 +1640,33 @@ public(package) fun create_proposal_execution_context<AssetType, StableType>(
 }
 
 
+// === LP Vault Functions ===
+
+
+/// Withdraws LP tokens from DAO treasury for liquidity proposals
+/// LP tokens do not have `drop` so they are handled separately
+public(package) fun withdraw_lp_from_treasury<AssetType, StableType, LPType>(
+    dao: &DAO<AssetType, StableType>,
+    treasury: &mut treasury::Treasury,
+    amount: u64,
+    execution_context: &ProposalExecutionContext,
+    ctx: &mut TxContext
+): Coin<LPType> {
+    // Verify the execution context matches this DAO
+    assert!(execution_context::dao_id(execution_context) == object::id(dao), EInvalidExecutionContext);
+    assert!(dao.treasury_account_id.is_some(), ETreasuryNotInitialized);
+    assert!(object::id(treasury) == *dao.treasury_account_id.borrow(), ETreasuryMismatch);
+    
+    // Verify amount is greater than 0
+    assert!(amount > 0, EInvalidAmount);
+    
+    // Create auth for the treasury
+    let auth = treasury::create_auth_for_proposal(treasury, execution_context);
+    
+    // Withdraw from treasury and return the coins directly
+    treasury::withdraw_without_drop<LPType>(auth, treasury, amount, ctx)
+}
+
 // === Treasury Functions ===
 
 /// Returns the treasury account ID if initialized
@@ -1621,6 +1682,95 @@ public fun has_treasury<AssetType, StableType>(dao: &DAO<AssetType, StableType>)
 /// Sets the treasury ID (package-only, used by factory)
 public(package) fun set_treasury_id<AssetType, StableType>(dao: &mut DAO<AssetType, StableType>, treasury_id: ID) {
     dao.treasury_account_id = option::some(treasury_id);
+}
+
+/// Withdraws Asset coins from DAO treasury for liquidity proposals
+/// Requires ProposalExecutionContext to ensure proper authorization
+/// Returns the coins directly without transferring to any address
+public(package) fun withdraw_asset_from_treasury<AssetType: drop, StableType>(
+    dao: &DAO<AssetType, StableType>,
+    treasury: &mut treasury::Treasury,
+    amount: u64,
+    execution_context: &ProposalExecutionContext,
+    ctx: &mut TxContext
+): Coin<AssetType> {
+    // Verify the execution context matches this DAO
+    assert!(execution_context::dao_id(execution_context) == object::id(dao), EInvalidExecutionContext);
+    assert!(dao.treasury_account_id.is_some(), ETreasuryNotInitialized);
+    assert!(object::id(treasury) == *dao.treasury_account_id.borrow(), ETreasuryMismatch);
+    
+    // Verify amount is greater than 0
+    assert!(amount > 0, EInvalidAmount);
+    
+    // Check if treasury has sufficient balance
+    assert!(treasury::coin_type_exists<AssetType>(treasury), EInvalidAssetType);
+    let available_balance = treasury::coin_type_value<AssetType>(treasury);
+    assert!(available_balance >= amount, EInsufficientLiquidity);
+    
+    // Create auth for the treasury
+    let auth = treasury::create_auth_for_proposal(treasury, execution_context);
+    
+    // Withdraw from treasury and return the coins directly
+    treasury::withdraw<AssetType>(auth, treasury, amount, ctx)
+}
+
+/// Withdraws Stable coins from DAO treasury for liquidity proposals
+/// Requires ProposalExecutionContext to ensure proper authorization
+/// Returns the coins directly without transferring to any address
+public(package) fun withdraw_stable_from_treasury<AssetType, StableType: drop>(
+    dao: &DAO<AssetType, StableType>,
+    treasury: &mut treasury::Treasury,
+    amount: u64,
+    execution_context: &ProposalExecutionContext,
+    ctx: &mut TxContext
+): Coin<StableType> {
+    // Verify the execution context matches this DAO
+    assert!(execution_context::dao_id(execution_context) == object::id(dao), EInvalidExecutionContext);
+    assert!(dao.treasury_account_id.is_some(), ETreasuryNotInitialized);
+    assert!(object::id(treasury) == *dao.treasury_account_id.borrow(), ETreasuryMismatch);
+    
+    // Verify amount is greater than 0
+    assert!(amount > 0, EInvalidAmount);
+    
+    // Check if treasury has sufficient balance
+    assert!(treasury::coin_type_exists<StableType>(treasury), EInvalidStableType);
+    let available_balance = treasury::coin_type_value<StableType>(treasury);
+    assert!(available_balance >= amount, EInsufficientLiquidity);
+    
+    // Create auth for the treasury
+    let auth = treasury::create_auth_for_proposal(treasury, execution_context);
+    
+    // Withdraw from treasury and return the coins directly
+    treasury::withdraw<StableType>(auth, treasury, amount, ctx)
+}
+
+
+/// Deposits Asset coins to DAO treasury
+public(package) fun deposit_asset_to_treasury<AssetType: drop, StableType>(
+    treasury: &mut treasury::Treasury,
+    coin: Coin<AssetType>,
+    ctx: &mut TxContext
+) {
+    treasury::deposit_coin_with_fee(treasury, coin, coin::zero(ctx), ctx);
+}
+
+/// Deposits Stable coins to DAO treasury
+public(package) fun deposit_stable_to_treasury<AssetType, StableType: drop>(
+    treasury: &mut treasury::Treasury,
+    coin: Coin<StableType>,
+    ctx: &mut TxContext
+) {
+    treasury::deposit_coin_with_fee(treasury, coin, coin::zero(ctx), ctx);
+}
+
+/// Deposits LP tokens to DAO treasury
+public(package) fun deposit_lp_to_treasury<AssetType, StableType, LPType>(
+    treasury: &mut treasury::Treasury,
+    lp_coin: Coin<LPType>,
+    ctx: &mut TxContext
+) {
+    // LP tokens need special handling since they don't have drop
+    treasury::deposit_without_drop(treasury, lp_coin, ctx);
 }
 
 // === Configuration Update Functions ===
@@ -1730,7 +1880,7 @@ public(package) fun update_next_fee_due_timestamp<AssetType, StableType>(dao: &m
 /// Collect monthly platform fee from DAO treasury
 public entry fun collect_dao_platform_fee<AssetType, StableType: drop>(
     dao: &mut DAO<AssetType, StableType>,
-    fee_manager: &mut fee::FeeManager,
+    _fee_manager: &mut fee::FeeManager,
     treasury: &mut futarchy::treasury::Treasury,
     admin_cap: &fee::FeeAdminCap,
     clock: &Clock,
@@ -1738,7 +1888,7 @@ public entry fun collect_dao_platform_fee<AssetType, StableType: drop>(
 ) {
     // Call the fee module function, passing DAO info
     let (new_timestamp, collection_successful) = fee::collect_dao_recurring_fee<StableType>(
-        fee_manager,
+        _fee_manager,
         treasury,
         admin_cap,
         object::id(dao),

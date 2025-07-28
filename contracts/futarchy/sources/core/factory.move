@@ -140,7 +140,6 @@ public entry fun create_dao<AssetType: drop, StableType>(
     twap_threshold: u64,
     description: UTF8String,
     max_outcomes: u64,
-    metadata: vector<UTF8String>,
     // Optional operating agreement parameters
     agreement_lines: vector<UTF8String>,
     agreement_difficulties: vector<u64>,
@@ -164,7 +163,6 @@ public entry fun create_dao<AssetType: drop, StableType>(
         twap_threshold,
         description,
         max_outcomes,
-        metadata,
         agreement_lines,
         agreement_difficulties,
         option::none(), // No treasury cap for regular DAO creation
@@ -190,7 +188,6 @@ public(package) fun create_dao_internal<AssetType: drop, StableType>(
     twap_threshold: u64,
     description: UTF8String,
     max_outcomes: u64,
-    metadata: vector<UTF8String>,
     agreement_lines: vector<UTF8String>,
     agreement_difficulties: vector<u64>,
     treasury_cap: Option<TreasuryCap<AssetType>>,
@@ -231,7 +228,6 @@ public(package) fun create_dao_internal<AssetType: drop, StableType>(
         twap_threshold,
         description,
         max_outcomes,
-        metadata,
         treasury_cap,
         clock,
         ctx,

@@ -5,22 +5,35 @@ use sui::clock::Clock;
 use sui::event;
 
 // === Introduction ===
-// This is an implementation of a custom psuedo coin.
-// New coins (types) can't be created dynamically in Move
+// This module implements conditional tokens for prediction markets.
+// Conditional tokens represent claims on specific outcomes in a futarchy proposal.
+//
+// === Live-Flow Model Integration ===
+// Conditional tokens are central to the live-flow liquidity model:
+// - Each outcome has two token types: asset-based and stable-based
+// - Tokens can only be minted in "complete sets" (all outcomes together)
+// - Complete sets can be redeemed back to spot tokens at any time
+// - This ensures conservation of value: 1 spot token = 1 complete set
+//
+// The key innovation is that these tokens trade in outcome-specific AMMs,
+// while LPs interact only with spot tokens, with automatic conversion handled
+// by the protocol.
 
-// Long term using a table will likely be more scalable
-// market_amounts: Table<(ID, ID), Table<address, u64>>,
+// === Constants ===
+const TOKEN_TYPE_ASSET: u8 = 0;
+const TOKEN_TYPE_STABLE: u8 = 1;
+const TOKEN_TYPE_LP: u8 = 2;
 
 // === Errors ===
-const EInvalidAssetType: u64 = 0;
-const EWrongMarket: u64 = 1;
-const EWrongTokenType: u64 = 2;
-const EWrongOutcome: u64 = 3;
-const EZeroAmount: u64 = 4;
-const EInsufficientBalance: u64 = 5;
-const EEmptyVector: u64 = 6;
-const ENoTokenFound: u64 = 7;
-const ENonzeroBalance: u64 = 8;
+const EInvalidAssetType: u64 = 0; // Asset type must be 0 (asset), 1 (stable), or 2 (LP)
+const EWrongMarket: u64 = 1; // Token doesn't belong to expected market
+const EWrongTokenType: u64 = 2; // Wrong token type for operation
+const EWrongOutcome: u64 = 3; // Token outcome doesn't match expected
+const EZeroAmount: u64 = 4; // Amount must be greater than zero
+const EInsufficientBalance: u64 = 5; // Insufficient token balance
+const EEmptyVector: u64 = 6; // Vector is empty when it shouldn't be
+const ENoTokenFound: u64 = 7; // Expected token not found in Option
+const ENonzeroBalance: u64 = 8; // Token must have zero balance to destroy
 
 // === Structs ===
 /// Supply tracking object for a specific conditional token type.
@@ -37,7 +50,7 @@ public struct Supply has key, store {
 public struct ConditionalToken has key, store {
     id: UID,
     market_id: ID,
-    asset_type: u8, // 0 for asset, 1 for stable
+    asset_type: u8, // 0 for asset, 1 for stable, 2 for LP
     outcome: u8, // outcome index
     balance: u64,
 }
@@ -101,7 +114,7 @@ public(package) fun new_supply(
 ): Supply {
     // Verify authority and market state
     state.validate_outcome((outcome as u64));
-    assert!(asset_type <= 1, EInvalidAssetType);
+    assert!(asset_type <= 2, EInvalidAssetType);
 
     Supply {
         id: object::new(ctx),
@@ -327,6 +340,7 @@ public(package) fun extract(option: &mut Option<ConditionalToken>): ConditionalT
     let token = option.extract();
     token
 }
+
 
 // === View Functions ===
 

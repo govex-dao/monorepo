@@ -1,23 +1,53 @@
 module futarchy::amm;
 
 use futarchy::market_state::MarketState;
+use futarchy::conditional_token::ConditionalToken;
+use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 use sui::event;
+use sui::object::{Self, ID, UID};
+use sui::transfer;
+use sui::tx_context::TxContext;
+use std::option;
 
 // === Introduction ===
-// This a Uniswap V2-style XY=K AMM implementation with controlled liquidity methods.
+// This is a Uniswap V2-style XY=K AMM implementation for futarchy prediction markets.
+// 
+// === Live-Flow Model Architecture ===
+// This AMM is part of the "live-flow" liquidity model which allows dynamic liquidity
+// management even while proposals are active. Key features:
+// 
+// 1. **No Liquidity Locking**: Unlike traditional prediction markets, liquidity providers
+//    can add or remove liquidity at any time, even during active proposals.
+// 
+// 2. **Conditional Token Pools**: Each AMM pool trades conditional tokens (not spot tokens)
+//    for a specific outcome. This allows the spot pool to remain liquid.
+// 
+// 3. **Proportional Liquidity**: When LPs add/remove from the spot pool during active
+//    proposals, liquidity is proportionally distributed/collected across all outcome AMMs.
+// 
+// 4. **LP Token Architecture**: Each AMM pool has its own LP token type, but in the live-flow
+//    model, these are managed internally. LPs only receive spot pool LP tokens.
+// 
+// The flow works as follows:
+// - Add liquidity: Spot tokens → Mint conditional tokens → Distribute to AMMs
+// - Remove liquidity: Collect from AMMs → Redeem conditional tokens → Return spot tokens
 
 // === Errors ===
-const ELowLiquidity: u64 = 0;
-const EPoolEmpty: u64 = 1;
-const EExcessiveSlippage: u64 = 2;
-const EDivByZero: u64 = 3;
-const EZeroLiquidity: u64 = 4;
-const EPriceTooHigh: u64 = 5;
-const EZeroAmount: u64 = 6;
-const EMarketIdMismatch: u64 = 7;
+const ELowLiquidity: u64 = 0; // Pool liquidity below minimum threshold
+const EPoolEmpty: u64 = 1; // Attempting to swap/remove from empty pool
+const EExcessiveSlippage: u64 = 2; // Output amount less than minimum specified
+const EDivByZero: u64 = 3; // Division by zero in calculations
+const EZeroLiquidity: u64 = 4; // Pool has zero liquidity
+const EPriceTooHigh: u64 = 5; // Price exceeds maximum allowed value
+const EZeroAmount: u64 = 6; // Input amount is zero
+const EMarketIdMismatch: u64 = 7; // Market ID doesn't match expected value
+const EInsufficientLPTokens: u64 = 8; // Not enough LP tokens to burn
+const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
+const EOverflow: u64 = 10; // Arithmetic overflow detected
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -26,6 +56,7 @@ const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for s
 const MINIMUM_LIQUIDITY: u128 = 1000;
 
 // === Structs ===
+
 public struct LiquidityPool has key, store {
     id: UID,
     market_id: ID,
@@ -35,6 +66,7 @@ public struct LiquidityPool has key, store {
     fee_percent: u64,
     oracle: Oracle,
     protocol_fees: u64, // Track accumulated stable fees
+    lp_supply: u64, // Track total LP shares for this pool
 }
 
 // === Events ===
@@ -81,7 +113,7 @@ public(package) fun new_pool(
         ctx, // Add ctx parameter here
     );
 
-    // Create pool object as usual
+    // Create pool object
     let pool = LiquidityPool {
         id: object::new(ctx),
         market_id: state.market_id(),
@@ -91,6 +123,7 @@ public(package) fun new_pool(
         fee_percent: DEFAULT_FEE,
         oracle,
         protocol_fees: 0,
+        lp_supply: 0, // Start at 0 so first provider logic works correctly
     };
 
     pool
@@ -145,7 +178,10 @@ public(package) fun swap_asset_to_stable(
 
     // Update reserves - include full asset in, but remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
-    pool.asset_reserve = pool.asset_reserve + amount_in;
+    let new_asset_reserve = pool.asset_reserve + amount_in;
+    assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);
+    
+    pool.asset_reserve = new_asset_reserve;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
 
     let timestamp = clock.timestamp_ms();
@@ -224,7 +260,10 @@ public(package) fun swap_stable_to_asset(
     let old_stable = pool.stable_reserve;
 
     // Update reserves with amount after fee
-    pool.stable_reserve = pool.stable_reserve + amount_in_after_fee;
+    let new_stable_reserve = pool.stable_reserve + amount_in_after_fee;
+    assert!(new_stable_reserve >= pool.stable_reserve, EOverflow);
+    
+    pool.stable_reserve = new_stable_reserve;
     pool.asset_reserve = pool.asset_reserve - amount_out;
 
     let timestamp = clock.timestamp_ms();
@@ -256,19 +295,154 @@ public(package) fun swap_stable_to_asset(
 }
 
 // === Liquidity Functions ===
+
+/// Add liquidity proportionally to the AMM pool
+/// This function is called by the spot pool when distributing liquidity across outcome AMMs
+/// Returns LP conditional tokens minted
+public(package) fun add_liquidity_proportional<AssetType, StableType>(
+    pool: &mut LiquidityPool,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_in: ConditionalToken,
+    stable_in: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ConditionalToken {
+    let asset_amount = asset_in.value();
+    let stable_amount = stable_in.value();
+    
+    // Verify tokens match this pool's outcome
+    assert!(asset_in.market_id() == pool.market_id, EMarketIdMismatch);
+    assert!(stable_in.market_id() == pool.market_id, EMarketIdMismatch);
+    assert!(asset_in.outcome() == pool.outcome_idx, EInvalidTokenType);
+    assert!(stable_in.outcome() == pool.outcome_idx, EInvalidTokenType);
+    assert!(asset_in.asset_type() == 0, EInvalidTokenType); // 0 = asset type
+    assert!(stable_in.asset_type() == 1, EInvalidTokenType); // 1 = stable type
+    
+    // Calculate LP tokens to mint based on current pool state
+    let lp_to_mint = if (pool.lp_supply == 0) {
+        // First liquidity provider - bootstrap the pool
+        let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
+        let k = (math::sqrt_u128(k_squared) as u64);
+        assert!(k >= (MINIMUM_LIQUIDITY as u64), ELowLiquidity);
+        // First MINIMUM_LIQUIDITY LP tokens are permanently locked
+        pool.lp_supply = (MINIMUM_LIQUIDITY as u64);
+        k - (MINIMUM_LIQUIDITY as u64)
+    } else {
+        // Subsequent providers - mint proportionally
+        let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
+        let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
+        // Use minimum to ensure proper ratio
+        math::min(lp_from_asset, lp_from_stable)
+    };
+    
+    // Update reserves with overflow checks
+    let new_asset_reserve = pool.asset_reserve + asset_amount;
+    let new_stable_reserve = pool.stable_reserve + stable_amount;
+    let new_lp_supply = pool.lp_supply + lp_to_mint;
+    
+    // Check for overflow
+    assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);
+    assert!(new_stable_reserve >= pool.stable_reserve, EOverflow);
+    assert!(new_lp_supply >= pool.lp_supply, EOverflow);
+    
+    pool.asset_reserve = new_asset_reserve;
+    pool.stable_reserve = new_stable_reserve;
+    pool.lp_supply = new_lp_supply;
+    
+    // Burn the conditional tokens (they're now absorbed into the pool's reserves)
+    coin_escrow::burn_single_conditional_token(escrow, asset_in, clock, ctx);
+    coin_escrow::burn_single_conditional_token(escrow, stable_in, clock, ctx);
+    
+    // Mint LP conditional tokens
+    coin_escrow::mint_single_conditional_token(
+        escrow,
+        2, // TOKEN_TYPE_LP
+        pool.outcome_idx,
+        lp_to_mint,
+        ctx.sender(),
+        clock,
+        ctx
+    )
+}
+
+/// Remove liquidity proportionally from the AMM pool
+/// This function is called by the spot pool when collecting liquidity from outcome AMMs
+/// Takes LP conditional tokens and returns asset/stable conditional tokens
+public(package) fun remove_liquidity_proportional<AssetType, StableType>(
+    pool: &mut LiquidityPool,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    lp_token: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext
+): (ConditionalToken, ConditionalToken) {
+    // Verify LP token is for this pool
+    assert!(lp_token.market_id() == pool.market_id, EMarketIdMismatch);
+    assert!(lp_token.outcome() == pool.outcome_idx, EInvalidTokenType);
+    assert!(lp_token.asset_type() == 2, EInvalidTokenType); // Must be LP token
+    
+    let lp_amount = lp_token.value();
+    assert!(lp_amount > 0, EZeroAmount);
+    assert!(pool.lp_supply > 0, EZeroLiquidity);
+    
+    // Burn the LP token
+    coin_escrow::burn_single_conditional_token(escrow, lp_token, clock, ctx);
+    
+    // Calculate proportional share to remove from this AMM
+    let asset_to_remove = math::mul_div_to_64(lp_amount, pool.asset_reserve, pool.lp_supply);
+    let stable_to_remove = math::mul_div_to_64(lp_amount, pool.stable_reserve, pool.lp_supply);
+    
+    // Ensure minimum liquidity remains
+    assert!(pool.asset_reserve > asset_to_remove, EPoolEmpty);
+    assert!(pool.stable_reserve > stable_to_remove, EPoolEmpty);
+    assert!(pool.lp_supply > lp_amount, EInsufficientLPTokens);
+    
+    // Ensure remaining liquidity is above minimum threshold
+    let remaining_asset = pool.asset_reserve - asset_to_remove;
+    let remaining_stable = pool.stable_reserve - stable_to_remove;
+    let remaining_k = math::mul_div_to_128(remaining_asset, remaining_stable, 1);
+    assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), ELowLiquidity);
+    
+    // Update pool state (underflow already checked by earlier asserts)
+    pool.asset_reserve = pool.asset_reserve - asset_to_remove;
+    pool.stable_reserve = pool.stable_reserve - stable_to_remove;
+    pool.lp_supply = pool.lp_supply - lp_amount;
+    
+    // Create conditional tokens to return using the escrow's mint function
+    // Note: In the live-flow model, these tokens are temporary and will be
+    // immediately redeemed for spot tokens by the calling function
+    let asset_token = coin_escrow::mint_single_conditional_token(
+        escrow,
+        0, // asset type
+        pool.outcome_idx,
+        asset_to_remove,
+        ctx.sender(),
+        clock,
+        ctx
+    );
+    
+    let stable_token = coin_escrow::mint_single_conditional_token(
+        escrow,
+        1, // stable type
+        pool.outcome_idx,
+        stable_to_remove,
+        ctx.sender(),
+        clock,
+        ctx
+    );
+    
+    (asset_token, stable_token)
+}
+
 public(package) fun empty_all_amm_liquidity(
     pool: &mut LiquidityPool,
     _ctx: &mut TxContext,
 ): (u64, u64) {
-    // Since fees are now tracked separately and don't affect the LP ratio,
-    // we can simply return all values separately without any adjustments
+    // This function is now only used in the final step of the old model and can be deprecated/removed.
+    // Or kept for admin/emergency purposes.
     let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
-
-    // Update reserves
     pool.asset_reserve = 0;
     pool.stable_reserve = 0;
-
     (asset_amount_out, stable_amount_out)
 }
 
@@ -283,8 +457,13 @@ public fun get_oracle(pool: &LiquidityPool): &Oracle {
 }
 
 // === View Functions ===
+
 public fun get_reserves(pool: &LiquidityPool): (u64, u64) {
     (pool.asset_reserve, pool.stable_reserve)
+}
+
+public fun get_lp_supply(pool: &LiquidityPool): u64 {
+    pool.lp_supply
 }
 
 public fun get_price(pool: &LiquidityPool): u128 {
@@ -424,6 +603,7 @@ public fun create_test_pool(
             ctx, // Add ctx parameter here
         ),
         protocol_fees: 0,
+        lp_supply: (MINIMUM_LIQUIDITY as u64),
     }
 }
 
@@ -438,6 +618,7 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         fee_percent: _,
         oracle,
         protocol_fees: _,
+        lp_supply: _,
     } = pool;
     id.delete();
     oracle.destroy_for_testing();

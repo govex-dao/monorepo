@@ -19,6 +19,8 @@ use futarchy::{
     proposal,
     coin_escrow::{Self, TokenEscrow},
     market_state,
+    execution_context::ProposalExecutionContext,
+    metadata,
 };
 
 // === Errors ===
@@ -68,6 +70,13 @@ public struct MetadataUpdate has store, drop {
     dao_name: Option<AsciiString>,
     icon_url: Option<Url>,
     description: Option<String>,
+}
+
+/// DAO metadata table entry update action
+public struct MetadataTableUpdate has store, drop {
+    keys: vector<String>,
+    values: vector<String>,
+    keys_to_remove: vector<String>,
 }
 
 /// Governance settings update action
@@ -305,6 +314,66 @@ public entry fun create_metadata_proposal<AssetType, StableType>(
     );
 }
 
+/// Create a metadata table update proposal
+/// Updates key-value pairs in the DAO's metadata table
+public entry fun create_metadata_table_proposal<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    fee_manager: &mut fee::FeeManager,
+    config_registry: &mut ConfigActionRegistry,
+    payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
+    title: String,
+    metadata: String,
+    initial_outcome_amounts: vector<u64>,
+    keys: vector<String>,
+    values: vector<String>,
+    keys_to_remove: vector<String>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate that at least one change is specified
+    assert!(
+        keys.length() > 0 || keys_to_remove.length() > 0,
+        ENoChangesSpecified
+    );
+    
+    // Validate keys and values match
+    assert!(keys.length() == values.length(), EActionMismatch);
+    
+    // Use metadata module to validate the metadata entries
+    if (keys.length() > 0) {
+        metadata::validate_metadata_vectors(&keys, &values);
+    };
+    
+    // Create actions vector for binary proposal
+    let mut actions = vector::empty<ConfigAction>();
+    // Outcome 0: Reject (no-op)
+    vector::push_back(&mut actions, config_actions::create_no_op_action());
+    // Outcome 1: Accept (apply changes)
+    vector::push_back(&mut actions, config_actions::create_metadata_table_action(
+        keys,
+        values,
+        keys_to_remove
+    ));
+    
+    // Call the unified function with binary setup
+    create_config_proposal<AssetType, StableType>(
+        dao,
+        fee_manager,
+        config_registry,
+        payment,
+        dao_fee_payment,
+        title,
+        metadata,
+        vector[b"No change".to_string(), b"Apply metadata changes".to_string()],
+        vector[b"".to_string(), b"".to_string()], // Will be auto-filled as Reject/Accept
+        initial_outcome_amounts,
+        actions,
+        clock,
+        ctx
+    );
+}
+
 /// Create a governance settings update proposal (convenience function)
 /// Updates DAO governance parameters including proposal creation, max outcomes, and bond requirements
 public entry fun create_governance_proposal<AssetType, StableType>(
@@ -513,6 +582,55 @@ public entry fun execute_twap_config_update<AssetType, StableType>(
             option::is_some(initial_observation),
             option::is_some(threshold)
         ]),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Execute metadata table update after proposal passes
+/// This reads the exact config that was voted on from the registry
+public fun execute_metadata_table_update<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    config_registry: &mut ConfigActionRegistry,
+    escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
+    proposal_id: ID,
+    execution_context: &mut ProposalExecutionContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Verify proposal passed
+    let proposal_info = dao::get_proposal_info(dao, proposal_id);
+    assert!(dao::is_executed(proposal_info), EProposalNotExecuted);
+    
+    // Get winning outcome from the market state
+    let market_state = coin_escrow::get_market_state(escrow);
+    let winning_outcome = market_state::get_winning_outcome(market_state);
+    
+    // Get the config action from registry (this also marks it as executed)
+    let config_action = config_actions::get_and_mark_executed(config_registry, proposal_id, winning_outcome);
+    let update = config_actions::extract_metadata_table(&config_action);
+    
+    // Get the fields from the update
+    let (keys, values, keys_to_remove) = config_actions::get_metadata_table_fields(update);
+    
+    // Apply updates - add or update key-value pairs
+    let mut i = 0;
+    while (i < keys.length()) {
+        dao::update_metadata_entry(dao, keys[i], values[i], execution_context);
+        i = i + 1;
+    };
+    
+    // Remove specified keys
+    let mut i = 0;
+    while (i < keys_to_remove.length()) {
+        dao::remove_metadata_entry(dao, keys_to_remove[i], execution_context);
+        i = i + 1;
+    };
+    
+    event::emit(ConfigUpdateExecuted {
+        dao_id: object::id(dao),
+        proposal_id,
+        update_type: b"metadata_table".to_string(),
+        changes_count: keys.length() + keys_to_remove.length(),
         timestamp: clock.timestamp_ms(),
     });
 }

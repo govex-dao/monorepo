@@ -22,6 +22,7 @@ const CONFIG_TYPE_TRADING_PARAMS: u8 = 0;
 const CONFIG_TYPE_METADATA: u8 = 1;
 const CONFIG_TYPE_TWAP: u8 = 2;
 const CONFIG_TYPE_GOVERNANCE: u8 = 3;
+const CONFIG_TYPE_METADATA_TABLE: u8 = 4;
 
 // === Structs ===
 
@@ -48,6 +49,7 @@ public struct ConfigAction has store, drop {
     metadata: Option<MetadataUpdate>,
     twap_config: Option<TwapConfigUpdate>,
     governance: Option<GovernanceUpdate>,
+    metadata_table: Option<MetadataTableUpdate>,
 }
 
 /// Trading parameters update action
@@ -80,6 +82,13 @@ public struct GovernanceUpdate has store, drop {
     required_bond_amount: Option<u64>,
 }
 
+/// Metadata table update action
+public struct MetadataTableUpdate has store, drop {
+    keys: vector<String>,
+    values: vector<String>,
+    keys_to_remove: vector<String>,
+}
+
 // === Public Functions ===
 
 /// Create a ConfigAction for trading params update
@@ -100,6 +109,7 @@ public fun create_trading_params_action(
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     }
 }
 
@@ -119,6 +129,7 @@ public fun create_metadata_action(
         }),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     }
 }
 
@@ -140,6 +151,7 @@ public fun create_twap_config_action(
             threshold,
         }),
         governance: option::none(),
+        metadata_table: option::none(),
     }
 }
 
@@ -159,6 +171,27 @@ public fun create_governance_action(
             max_outcomes,
             required_bond_amount,
         }),
+        metadata_table: option::none(),
+    }
+}
+
+/// Create a ConfigAction for metadata table update
+public fun create_metadata_table_action(
+    keys: vector<String>,
+    values: vector<String>,
+    keys_to_remove: vector<String>,
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_METADATA_TABLE,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::some(MetadataTableUpdate {
+            keys,
+            values,
+            keys_to_remove,
+        }),
     }
 }
 
@@ -170,6 +203,7 @@ public fun create_no_op_action(): ConfigAction {
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     }
 }
 
@@ -236,6 +270,7 @@ public fun add_trading_params_update(
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -262,6 +297,7 @@ public fun add_metadata_update(
         metadata: option::some(update),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -290,6 +326,7 @@ public fun add_twap_config_update(
         metadata: option::none(),
         twap_config: option::some(update),
         governance: option::none(),
+        metadata_table: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -315,6 +352,7 @@ public fun add_governance_update(
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::some(update),
+        metadata_table: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -332,6 +370,7 @@ public fun add_no_op_action(
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::none(),
+        metadata_table: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -374,6 +413,12 @@ public fun extract_twap_config(action: &ConfigAction): &TwapConfigUpdate {
 public fun extract_governance(action: &ConfigAction): &GovernanceUpdate {
     assert!(action.config_type == CONFIG_TYPE_GOVERNANCE, EInvalidOutcome);
     action.governance.borrow()
+}
+
+/// Extract metadata table from config action
+public fun extract_metadata_table(action: &ConfigAction): &MetadataTableUpdate {
+    assert!(action.config_type == CONFIG_TYPE_METADATA_TABLE, EInvalidOutcome);
+    action.metadata_table.borrow()
 }
 
 /// Check if actions exist for a proposal
@@ -442,6 +487,19 @@ public fun get_governance_fields(update: &GovernanceUpdate): (
         &update.proposal_creation_enabled,
         &update.max_outcomes,
         &update.required_bond_amount
+    )
+}
+
+/// Get metadata table update fields
+public fun get_metadata_table_fields(update: &MetadataTableUpdate): (
+    &vector<String>,
+    &vector<String>,
+    &vector<String>
+) {
+    (
+        &update.keys,
+        &update.values,
+        &update.keys_to_remove
     )
 }
 

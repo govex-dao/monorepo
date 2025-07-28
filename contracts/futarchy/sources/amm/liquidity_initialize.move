@@ -5,6 +5,7 @@ use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token as token;
 use sui::balance::Balance;
 use sui::clock::Clock;
+use sui::coin::TreasuryCap;
 
 // === Introduction ===
 // Method to initialize AMM liquidity
@@ -40,15 +41,18 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
             let ms = escrow.get_market_state(); // Immutable borrow
             let asset_supply = token::new_supply(ms, 0, (i as u8), ctx);
             let stable_supply = token::new_supply(ms, 1, (i as u8), ctx);
+            let lp_supply = token::new_supply(ms, 2, (i as u8), ctx);
 
             // Record their IDs
             let asset_supply_id = object::id(&asset_supply);
             let stable_supply_id = object::id(&stable_supply);
+            let lp_supply_id = object::id(&lp_supply);
             supply_ids.push_back(asset_supply_id);
             supply_ids.push_back(stable_supply_id);
+            supply_ids.push_back(lp_supply_id);
 
             // Register
-            escrow.register_supplies(i, asset_supply, stable_supply);
+            escrow.register_supplies(i, asset_supply, stable_supply, lp_supply);
         };
 
         i = i + 1;

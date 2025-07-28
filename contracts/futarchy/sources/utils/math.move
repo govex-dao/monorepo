@@ -82,3 +82,70 @@ public fun safe_u128_to_u64(value: u128): u64 {
     assert!(value <= (u64::max_value!() as u128), EValueExceedsU64);
     (value as u64)
 }
+
+// Returns the smaller of two u64 values
+public fun min(a: u64, b: u64): u64 {
+    if (a < b) { a } else { b }
+}
+
+// Returns the larger of two u64 values
+public fun max(a: u64, b: u64): u64 {
+    if (a > b) { a } else { b }
+}
+
+// Integer square root using Newton's method
+// Returns the largest integer x such that x * x <= n
+public fun sqrt(n: u64): u64 {
+    if (n == 0) return 0;
+    if (n < 4) return 1;
+    
+    // Initial guess: half of n
+    let mut x = n / 2;
+    let mut last_x = x;
+    
+    loop {
+        // Newton's iteration: x = (x + n/x) / 2
+        x = (x + n / x) / 2;
+        
+        // Check convergence
+        if (x >= last_x) {
+            return last_x;
+        };
+        last_x = x;
+    }
+}
+
+// Integer square root for u128 values
+public fun sqrt_u128(n: u128): u128 {
+    if (n == 0) return 0;
+    if (n < 4) return 1;
+    
+    // Initial guess
+    let mut x = n / 2;
+    let mut last_x = x;
+    
+    loop {
+        // Newton's iteration
+        x = (x + n / x) / 2;
+        
+        // Check convergence
+        if (x >= last_x) {
+            return last_x;
+        };
+        last_x = x;
+    }
+}
+
+// Absolute difference between two u64 values
+public fun abs_diff(a: u64, b: u64): u64 {
+    if (a > b) { a - b } else { b - a }
+}
+
+// Check if a value is within a percentage tolerance
+// Returns true if |a - b| <= (tolerance_bps * max(a,b)) / 10000
+public fun within_tolerance(a: u64, b: u64, tolerance_bps: u64): bool {
+    let diff = abs_diff(a, b);
+    let max_val = max(a, b);
+    let tolerance = mul_div_to_64(max_val, tolerance_bps, 10000);
+    diff <= tolerance
+}

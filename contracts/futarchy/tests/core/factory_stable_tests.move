@@ -56,6 +56,7 @@ module futarchy::allowed_stable_tests {
             factory::add_allowed_stable_type<TEST_STABLE_COIN>(
                 &mut factory,
                 &owner_cap,
+                1000000, // min_raise_amount
                 &clock,
                 ctx(&mut scenario),
             );
@@ -86,6 +87,7 @@ module futarchy::allowed_stable_tests {
             factory::add_allowed_stable_type<TEST_STABLE_COIN>(
                 &mut factory,
                 &owner_cap,
+                1000000, // min_raise_amount
                 &clock,
                 ctx(&mut scenario),
             );
@@ -158,6 +160,7 @@ module futarchy::allowed_stable_tests {
             factory::add_allowed_stable_type<TEST_STABLE_COIN>(
                 &mut factory,
                 &owner_cap,
+                1000000, // min_raise_amount
                 &clock,
                 ctx(&mut scenario),
             );
@@ -167,6 +170,7 @@ module futarchy::allowed_stable_tests {
             factory::add_allowed_stable_type<TEST_STABLE_COIN>(
                 &mut factory,
                 &owner_cap,
+                1000000, // min_raise_amount
                 &clock,
                 ctx(&mut scenario),
             );

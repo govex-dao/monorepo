@@ -17,6 +17,7 @@ use futarchy::dao;
 use futarchy::factory;
 use futarchy::fee;
 use futarchy::math;
+use futarchy::metadata;
 
 // === Errors ===
 const ERaiseStillActive: u64 = 0;
@@ -100,6 +101,7 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
 /// Stores all parameters needed for DAO creation to keep the Raise object clean.
 public struct DAOParameters has store, drop, copy {
     dao_name: ascii::String,
+    dao_description: String,
     icon_url_string: ascii::String,
     review_period_ms: u64,
     trading_period_ms: u64,
@@ -108,7 +110,6 @@ public struct DAOParameters has store, drop, copy {
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
     max_outcomes: u64,
-    metadata: vector<String>,
     agreement_lines: vector<String>,
     agreement_difficulties: vector<u64>,
 }
@@ -175,6 +176,7 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     description: String,
     // DAOParameters passed as individual fields for entry function compatibility
     dao_name: ascii::String,
+    dao_description: String,
     icon_url_string: ascii::String,
     review_period_ms: u64,
     trading_period_ms: u64,
@@ -183,7 +185,6 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
     max_outcomes: u64,
-    metadata: vector<String>,
     agreement_lines: vector<String>,
     agreement_difficulties: vector<u64>,
     clock: &Clock,
@@ -200,9 +201,9 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     assert!(min_raise_amount >= factory_min_raise, EBelowMinimumRaise);
     
     let dao_params = DAOParameters {
-        dao_name, icon_url_string, review_period_ms, trading_period_ms,
+        dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
         amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
-        twap_threshold, max_outcomes, metadata, agreement_lines, agreement_difficulties,
+        twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
     };
     
     init_raise<RaiseToken, StableCoin>(
@@ -289,9 +290,8 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
         params.amm_twap_step_max,
         params.amm_twap_initial_observation,
         params.twap_threshold,
-        b"Created via Futarchy Launchpad".to_string(), // DAO description
+        params.dao_description, // DAO description
         params.max_outcomes,
-        params.metadata,
         params.agreement_lines,
         params.agreement_difficulties,
         treasury_cap,

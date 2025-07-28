@@ -307,6 +307,33 @@ public fun withdraw_to<CoinType: drop>(
     transfer::public_transfer(coin, recipient);
 }
 
+/// Withdraws coins from treasury without drop requirement (for LP tokens)
+public (package) fun withdraw_without_drop<CoinType>(
+    auth: Auth,
+    treasury: &mut Treasury,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    verify_auth(treasury, auth);
+    
+    let coin_type = type_name::get<CoinType>();
+    assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
+    
+    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+    assert!(balance_mut.value() >= amount, EInsufficientBalance);
+    
+    let coin = coin::from_balance(balance_mut.split(amount), ctx);
+    
+    event::emit(Withdrawn {
+        treasury_id: object::id(treasury),
+        coin_type,
+        amount,
+        recipient: ctx.sender(),
+    });
+    
+    coin
+}
+
 /// Permissionlessly claim a due payment from an active payment stream.
 /// This function reads the stream's state, verifies a payment is due,
 /// withdraws the funds from the treasury, and updates the stream's state.
@@ -386,6 +413,38 @@ public(package) fun platform_withdraw<CoinType>(
 /// Check if a coin type exists in treasury
 public fun coin_type_exists<CoinType: drop>(treasury: &Treasury): bool {
     treasury.vault.contains<TypeName>(type_name::get<CoinType>())
+}
+
+/// Deposits coins without drop requirement (for LP tokens)
+public (package) fun deposit_without_drop<CoinType>(
+    treasury: &mut Treasury,
+    coin: Coin<CoinType>,
+    ctx: &mut TxContext,
+) {
+    let amount = coin.value();
+    assert!(amount > 0, EInvalidDepositAmount);
+    
+    let depositor = ctx.sender();
+    let coin_type = type_name::get<CoinType>();
+    
+    // Add to vault
+    if (coin_type_exists_by_name(treasury, coin_type)) {
+        let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+        balance_mut.join(coin.into_balance());
+    } else {
+        treasury.vault.add(coin_type, coin.into_balance());
+        event::emit(CoinTypeAdded {
+            treasury_id: object::id(treasury),
+            coin_type,
+        });
+    };
+    
+    event::emit(Deposited {
+        treasury_id: object::id(treasury),
+        coin_type,
+        amount,
+        depositor,
+    });
 }
 
 /// Check if a coin type exists in treasury (by TypeName)

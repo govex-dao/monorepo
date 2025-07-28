@@ -2,6 +2,7 @@ module futarchy::advance_stage;
 
 use futarchy::coin_escrow;
 use futarchy::dao::{Self, DAO};
+use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
 use futarchy::fee::{Self, FeeManager};
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
@@ -52,14 +53,6 @@ public struct MarketFinalizedEvent has copy, drop {
     timestamp_ms: u64,
 }
 
-/// A hot-potato receipt proving a proposal has been finalized.
-/// Must be consumed to redeem liquidity, which guarantees the DAO's state is updated.
-public struct FinalizationReceipt has key, store {
-    id: UID,
-    proposal_id: ID,
-    liquidity_provider: address,
-    uses_dao_liquidity: bool,
-}
 
 // === Public Package Functions ===
 public(package) fun try_advance_state<AssetType, StableType>(
@@ -116,11 +109,13 @@ public(package) fun try_advance_state<AssetType, StableType>(
 }
 
 /// Entry point for advancing proposal state. If the proposal becomes finalized,
-/// returns a FinalizationReceipt that must be consumed to redeem liquidity.
+/// atomically handles liquidity redemption and DAO state updates.
 public entry fun try_advance_state_entry<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     fee_manager: &mut FeeManager,
+    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -148,25 +143,18 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
             fee_balance.destroy_zero();
         };
 
-        // 2. Create and transfer the finalization receipt to the caller
-        let receipt = FinalizationReceipt {
-            id: object::new(ctx),
-            proposal_id: proposal::get_id(proposal),
-            liquidity_provider: proposal::proposer(proposal), // Using proposer as liquidity provider
-            uses_dao_liquidity: proposal::uses_dao_liquidity(proposal),
+        // 2. Atomically redeem liquidity based on proposal type
+        if (proposal::uses_dao_liquidity(proposal)) {
+            liquidity_interact::empty_amm_and_return_to_dao_pool(proposal, escrow, dao_pool, ctx);
+        } else {
+            liquidity_interact::empty_amm_and_return_to_provider(proposal, escrow, ctx);
         };
-        transfer::public_transfer(receipt, ctx.sender());
+        
+        // 3. Mark the proposal as completed in the DAO
+        dao::mark_proposal_completed(dao, proposal::get_id(proposal), proposal);
     }
 }
 
-/// Consumes a FinalizationReceipt to complete the proposal lifecycle
-public fun consume_finalization_receipt(
-    receipt: FinalizationReceipt
-): (ID, address, bool) {
-    let FinalizationReceipt { id, proposal_id, liquidity_provider, uses_dao_liquidity } = receipt;
-    id.delete();
-    (proposal_id, liquidity_provider, uses_dao_liquidity)
-}
 
 public(package) fun finalize<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,

@@ -1,6 +1,6 @@
 module futarchy::proposal;
 
-use futarchy::amm::LiquidityPool;
+use futarchy::amm::{Self, LiquidityPool};
 use futarchy::coin_escrow;
 use futarchy::dao;
 use futarchy::liquidity_initialize;
@@ -12,7 +12,7 @@ use std::type_name;
 use std::vector;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::Coin;
+use sui::coin::{Self, Coin, TreasuryCap};
 use sui::event;
 use sui::object::{Self, UID, ID};
 use sui::transfer;
@@ -52,6 +52,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     liquidity_provider: Option<address>, // The user who provides liquidity (gets liquidity back).
     supply_ids: Option<vector<ID>>,
     amm_pools: Option<vector<LiquidityPool>>,
+    // LP tokens are now handled as conditional tokens with asset_type = 2
     escrow_id: Option<ID>,
     market_state_id: Option<ID>,
     title: String,
@@ -222,6 +223,7 @@ public(package) fun initialize_market<AssetType, StableType>(
         liquidity_provider: option::some(ctx.sender()), // The activator provides liquidity
         supply_ids: option::none(), // Will be set when escrow mints tokens
         amm_pools: option::some(amm_pools),
+        // lp_caps no longer needed - using conditional tokens
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
         title,
@@ -337,6 +339,7 @@ public(package) fun create<AssetType, StableType>(
         liquidity_provider: option::none(),
         supply_ids: option::none(),
         amm_pools: option::none(),
+        // LP tokens handled as conditional tokens
         escrow_id: option::none(),
         market_state_id: option::none(),
         title,
@@ -419,6 +422,7 @@ public(package) fun initialize_market_fields<AssetType, StableType>(
     market_state_id: ID,
     escrow_id: ID,
     amm_pools: vector<LiquidityPool>,
+    // LP tracking moved to conditional tokens
     initialized_at: u64,
     liquidity_provider: address,
 ) {
@@ -428,6 +432,7 @@ public(package) fun initialize_market_fields<AssetType, StableType>(
     option::fill(&mut proposal.market_state_id, market_state_id);
     option::fill(&mut proposal.escrow_id, escrow_id);
     option::fill(&mut proposal.amm_pools, amm_pools);
+    // LP caps no longer needed - using conditional tokens
     option::fill(&mut proposal.market_initialized_at, initialized_at);
     option::fill(&mut proposal.liquidity_provider, liquidity_provider);
     proposal.state = STATE_REVIEW; // Advance state
@@ -599,6 +604,10 @@ public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     let pools_mut = proposal.amm_pools.borrow_mut();
     get_pool_mut(pools_mut, outcome_idx)
 }
+
+// LP caps no longer needed - using conditional tokens for LP
+
+// Pool and LP cap getter no longer needed - using conditional tokens for LP
 
 public fun get_state<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u8 {
     proposal.state

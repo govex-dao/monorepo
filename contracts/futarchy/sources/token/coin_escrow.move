@@ -2,33 +2,53 @@ module futarchy::coin_escrow;
 
 use futarchy::conditional_token::{Self as token, ConditionalToken, Supply};
 use futarchy::market_state::MarketState;
+use std::vector;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::Coin;
 use sui::event;
+use sui::object::{Self, UID, ID};
+use sui::transfer;
+use sui::tx_context::TxContext;
 use sui::types;
 
 // === Introduction ===
-// Tracks and stores coins
+// The TokenEscrow manages the relationship between spot tokens and conditional tokens
+// in the futarchy prediction market system.
+//
+// === Live-Flow Model Integration ===
+// In the live-flow model, the escrow plays a critical role:
+// 1. **Minting Complete Sets**: When LPs add liquidity during active proposals,
+//    spot tokens are converted to complete sets of conditional tokens (one for each outcome)
+// 2. **Redeeming Complete Sets**: When LPs remove liquidity, conditional tokens
+//    are redeemed back to spot tokens
+// 3. **Supply Tracking**: Maintains Supply objects for each outcome's tokens
+//
+// This enables the key innovation: LPs can freely add/remove liquidity even while
+// proposals are active, as their spot tokens are automatically converted to/from
+// conditional tokens as needed.
 
 // === Errors ===
-const EInsufficientBalance: u64 = 0;
-const EIncorrectSequence: u64 = 1;
-const EWrongMarket: u64 = 2;
-const EWrongTokenType: u64 = 3;
-const ESuppliesNotInitialized: u64 = 4;
-const EOutcomeOutOfBounds: u64 = 5;
-const EWrongOutcome: u64 = 6;
-const ENotEnough: u64 = 7;
-const ENotEnoughLiquidity: u64 = 8;
-const EInsufficientAsset: u64 = 9;
-const EInsufficientStable: u64 = 10;
-const EMarketNotExpired: u64 = 11;
-const EBadWitness: u64 = 12;
+const EInsufficientBalance: u64 = 0; // Token balance insufficient for operation
+const EIncorrectSequence: u64 = 1; // Tokens not provided in correct sequence/order
+const EWrongMarket: u64 = 2; // Token belongs to different market
+const EWrongTokenType: u64 = 3; // Wrong token type (asset vs stable)
+const ESuppliesNotInitialized: u64 = 4; // Token supplies not yet initialized
+const EOutcomeOutOfBounds: u64 = 5; // Outcome index exceeds market outcomes
+const EWrongOutcome: u64 = 6; // Token outcome doesn't match expected
+const ENotEnough: u64 = 7; // Not enough tokens/balance for operation
+const ENotEnoughLiquidity: u64 = 8; // Insufficient liquidity in escrow
+const EInsufficientAsset: u64 = 9; // Not enough asset tokens provided
+const EInsufficientStable: u64 = 10; // Not enough stable tokens provided
+const EMarketNotExpired: u64 = 11; // Market hasn't reached expiry period
+const EBadWitness: u64 = 12; // Invalid one-time witness
+const EZeroAmount: u64 = 13; // Amount must be greater than zero
+const EInvalidAssetType: u64 = 14; // Asset type must be 0 (asset) or 1 (stable)
 
 // === Constants ===
-const TOKEN_TYPE_STABLE: u8 = 1;
 const TOKEN_TYPE_ASSET: u8 = 0;
+const TOKEN_TYPE_STABLE: u8 = 1;
+const TOKEN_TYPE_LP: u8 = 2;
 const MARKET_EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in ms
 
 // === Structs ===
@@ -41,6 +61,7 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     // Token supplies for tracking issuance
     outcome_asset_supplies: vector<Supply>,
     outcome_stable_supplies: vector<Supply>,
+    outcome_lp_supplies: vector<Supply>,
 }
 
 public struct EscrowAdminCap has key, store { id: UID }
@@ -91,6 +112,232 @@ fun init(witness: COIN_ESCROW, ctx: &mut TxContext) {
     transfer::public_transfer(admin_cap, ctx.sender());
 }
 
+// === New Functions for Live-Flow Model ===
+
+/// Mint a single conditional token for AMM liquidity removal
+/// This function is used by the AMM when removing liquidity proportionally
+public fun mint_single_conditional_token<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_type: u8,
+    outcome: u8,
+    amount: u64,
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ConditionalToken {
+    assert!(amount > 0, EZeroAmount);
+    assert!(asset_type <= 2, EInvalidAssetType);
+    
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    let outcome_idx = (outcome as u64);
+    assert!(outcome_idx < escrow.market_state.outcome_count(), EOutcomeOutOfBounds);
+    
+    // Get the appropriate supply based on token type
+    if (asset_type == TOKEN_TYPE_ASSET) {
+        let supply = &mut escrow.outcome_asset_supplies[outcome_idx];
+        token::mint(
+            &escrow.market_state,
+            supply,
+            amount,
+            recipient,
+            clock,
+            ctx
+        )
+    } else if (asset_type == TOKEN_TYPE_STABLE) {
+        let supply = &mut escrow.outcome_stable_supplies[outcome_idx];
+        token::mint(
+            &escrow.market_state,
+            supply,
+            amount,
+            recipient,
+            clock,
+            ctx
+        )
+    } else {
+        let supply = &mut escrow.outcome_lp_supplies[outcome_idx];
+        token::mint(
+            &escrow.market_state,
+            supply,
+            amount,
+            recipient,
+            clock,
+            ctx
+        )
+    }
+}
+
+/// Burn a single conditional token - used by AMM when absorbing liquidity
+public fun burn_single_conditional_token<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    token: ConditionalToken,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    let asset_type = token.asset_type();
+    let outcome = token.outcome();
+    let outcome_idx = (outcome as u64);
+    
+    assert!(token.market_id() == escrow.market_state.market_id(), EWrongMarket);
+    assert!(outcome_idx < escrow.market_state.outcome_count(), EOutcomeOutOfBounds);
+    
+    // Get the appropriate supply and burn
+    if (asset_type == TOKEN_TYPE_ASSET) {
+        let supply = &mut escrow.outcome_asset_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    } else if (asset_type == TOKEN_TYPE_STABLE) {
+        let supply = &mut escrow.outcome_stable_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    } else {
+        let supply = &mut escrow.outcome_lp_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    };
+}
+
+/// Mint a complete set of asset conditional tokens for all outcomes
+public fun mint_complete_set_asset<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_in: Coin<AssetType>,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+): vector<ConditionalToken> {
+    let amount = asset_in.value();
+    assert!(amount > 0, EInsufficientAsset);
+    
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    // Deposit asset into escrow
+    escrow.escrowed_asset.join(asset_in.into_balance());
+    
+    // Mint conditional tokens for each outcome
+    let mut tokens = vector::empty();
+    let outcome_count = escrow.outcome_asset_supplies.length();
+    let mut i = 0;
+    
+    while (i < outcome_count) {
+        let supply = &mut escrow.outcome_asset_supplies[i];
+        let token = token::mint(
+            &escrow.market_state,
+            supply,
+            amount,
+            ctx.sender(),
+            _clock,
+            ctx
+        );
+        tokens.push_back(token);
+        i = i + 1;
+    };
+    
+    tokens
+}
+
+/// Mint a complete set of stable conditional tokens for all outcomes
+public fun mint_complete_set_stable<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    stable_in: Coin<StableType>,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+): vector<ConditionalToken> {
+    let amount = stable_in.value();
+    assert!(amount > 0, EInsufficientStable);
+    
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    // Deposit stable into escrow
+    escrow.escrowed_stable.join(stable_in.into_balance());
+    
+    // Mint conditional tokens for each outcome
+    let mut tokens = vector::empty();
+    let outcome_count = escrow.outcome_stable_supplies.length();
+    let mut i = 0;
+    
+    while (i < outcome_count) {
+        let supply = &mut escrow.outcome_stable_supplies[i];
+        let token = token::mint(
+            &escrow.market_state,
+            supply,
+            amount,
+            ctx.sender(),
+            _clock,
+            ctx
+        );
+        tokens.push_back(token);
+        i = i + 1;
+    };
+    
+    tokens
+}
+
+/// Redeem a complete set of asset conditional tokens back to asset
+public fun redeem_complete_set_asset<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    mut tokens: vector<ConditionalToken>,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+): Balance<AssetType> {
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    // Use the helper function to verify we have a complete set
+    let amount = verify_token_set(escrow, &tokens, TOKEN_TYPE_ASSET);
+    
+    // Verify escrow has sufficient balance
+    assert!(escrow.escrowed_asset.value() >= amount, EInsufficientBalance);
+    
+    // Burn all tokens - use the token's outcome to find the correct supply
+    while (!tokens.is_empty()) {
+        let token = tokens.pop_back();
+        let outcome_idx = (token.outcome() as u64);
+        let supply = &mut escrow.outcome_asset_supplies[outcome_idx];
+        token::burn(token, supply, _clock, _ctx);
+    };
+    tokens.destroy_empty();
+    
+    // Return asset
+    escrow.escrowed_asset.split(amount)
+}
+
+/// Redeem a complete set of stable conditional tokens back to stable
+public fun redeem_complete_set_stable<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    mut tokens: vector<ConditionalToken>,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+): Balance<StableType> {
+    // Safety checks
+    escrow.market_state.assert_not_finalized();
+    assert_supplies_initialized(escrow);
+    
+    // Use the helper function to verify we have a complete set
+    let amount = verify_token_set(escrow, &tokens, TOKEN_TYPE_STABLE);
+    
+    // Verify escrow has sufficient balance
+    assert!(escrow.escrowed_stable.value() >= amount, EInsufficientBalance);
+    
+    // Burn all tokens - use the token's outcome to find the correct supply
+    while (!tokens.is_empty()) {
+        let token = tokens.pop_back();
+        let outcome_idx = (token.outcome() as u64);
+        let supply = &mut escrow.outcome_stable_supplies[outcome_idx];
+        token::burn(token, supply, _clock, _ctx);
+    };
+    tokens.destroy_empty();
+    
+    // Return stable
+    escrow.escrowed_stable.split(amount)
+}
+
 public(package) fun new<AssetType, StableType>(
     market_state: MarketState,
     ctx: &mut TxContext,
@@ -102,6 +349,7 @@ public(package) fun new<AssetType, StableType>(
         escrowed_stable: balance::zero(),
         outcome_asset_supplies: vector[],
         outcome_stable_supplies: vector[],
+        outcome_lp_supplies: vector[],
     }
 }
 
@@ -110,6 +358,7 @@ public(package) fun register_supplies<AssetType, StableType>(
     outcome_idx: u64,
     asset_supply: Supply,
     stable_supply: Supply,
+    lp_supply: Supply,
 ) {
     let outcome_count = escrow.market_state.outcome_count();
     assert!(outcome_idx < outcome_count, EOutcomeOutOfBounds);
@@ -117,6 +366,7 @@ public(package) fun register_supplies<AssetType, StableType>(
 
     escrow.outcome_asset_supplies.push_back(asset_supply);
     escrow.outcome_stable_supplies.push_back(stable_supply);
+    escrow.outcome_lp_supplies.push_back(lp_supply);
 }
 
 #[allow(lint(self_transfer))]
@@ -251,7 +501,8 @@ fun assert_supplies_initialized<AssetType, StableType>(
     let outcome_count = escrow.market_state.outcome_count();
     assert!(
         escrow.outcome_asset_supplies.length() == outcome_count &&
-                escrow.outcome_stable_supplies.length() == outcome_count,
+                escrow.outcome_stable_supplies.length() == outcome_count &&
+                escrow.outcome_lp_supplies.length() == outcome_count,
         ESuppliesNotInitialized,
     );
 }
@@ -315,67 +566,7 @@ fun verify_token_set<AssetType, StableType>(
     amount
 }
 
-// Asset token redemption implementation
-public(package) fun redeem_complete_set_asset<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    mut tokens: vector<ConditionalToken>,
-    clock: &Clock,
-    ctx: &TxContext,
-): Balance<AssetType> {
-    escrow.market_state.assert_not_finalized();
-    assert_supplies_initialized(escrow);
 
-    // Verify tokens form a complete set and get common amount
-    let amount = verify_token_set(escrow, &tokens, TOKEN_TYPE_ASSET);
-
-    // Burn all tokens
-    let outcome_count = escrow.market_state.outcome_count();
-    let mut i = 0;
-    while (i < outcome_count) {
-        let token = tokens.pop_back();
-        let outcome = token.outcome();
-
-        let supply = &mut escrow.outcome_asset_supplies[(outcome as u64)];
-        token.burn(supply, clock, ctx);
-        i = i + 1;
-    };
-
-    tokens.destroy_empty();
-    assert!(escrow.escrowed_asset.value() >= amount, EInsufficientBalance);
-    // Return the redeemed assets
-    escrow.escrowed_asset.split(amount)
-}
-
-// Stable token redemption implementation
-public(package) fun redeem_complete_set_stable<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    mut tokens: vector<ConditionalToken>,
-    clock: &Clock,
-    ctx: &TxContext,
-): Balance<StableType> {
-    escrow.market_state.assert_not_finalized();
-    assert_supplies_initialized(escrow);
-
-    // Verify tokens form a complete set and get common amount
-    let amount = verify_token_set(escrow, &tokens, TOKEN_TYPE_STABLE);
-
-    // Burn all tokens
-    let outcome_count = escrow.market_state.outcome_count();
-    let mut i = 0;
-    while (i < outcome_count) {
-        let token = tokens.pop_back();
-        let outcome = token.outcome();
-
-        let supply = &mut escrow.outcome_stable_supplies[(outcome as u64)];
-        token.burn(supply, clock, ctx);
-        i = i + 1;
-    };
-
-    tokens.destroy_empty();
-    assert!(escrow.escrowed_stable.value() >= amount, EInsufficientBalance);
-    // Return the redeemed stable tokens
-    escrow.escrowed_stable.split(amount)
-}
 
 // Asset token redemption for winning outcome
 public(package) fun redeem_winning_tokens_asset<AssetType, StableType>(
@@ -445,83 +636,7 @@ public(package) fun redeem_winning_tokens_stable<AssetType, StableType>(
     escrow.escrowed_stable.split(amount)
 }
 
-public(package) fun mint_complete_set_asset<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    coin_in: Coin<AssetType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): vector<token::ConditionalToken> {
-    let outcome_count = escrow.market_state.outcome_count();
-    assert_supplies_initialized(escrow);
-    escrow.market_state.assert_not_finalized();
 
-    // Get amount and convert coin to balance
-    let amount = coin_in.value();
-    let balance_in = coin_in.into_balance();
-
-    // Deposit into escrow
-    escrow.escrowed_asset.join(balance_in);
-
-    // Mint tokens for each outcome
-    let recipient = ctx.sender();
-    let mut tokens = vector[];
-    let mut i = 0;
-    while (i < outcome_count) {
-        let supply = &mut escrow.outcome_asset_supplies[i];
-        let token = token::mint(
-            &escrow.market_state,
-            supply,
-            amount,
-            recipient,
-            clock,
-            ctx,
-        );
-        tokens.push_back(token);
-        i = i + 1;
-    };
-
-    tokens
-}
-
-/// Mint a complete set of stable tokens by depositing stable coins
-/// Returns the minted tokens instead of transferring them directly
-public(package) fun mint_complete_set_stable<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    coin_in: Coin<StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): vector<token::ConditionalToken> {
-    let outcome_count = escrow.market_state.outcome_count();
-    assert_supplies_initialized(escrow);
-    escrow.market_state.assert_not_finalized();
-
-    // Get amount and convert coin to balance
-    let amount = coin_in.value();
-    let balance_in = coin_in.into_balance();
-
-    // Deposit into escrow
-    escrow.escrowed_stable.join(balance_in);
-
-    // Mint tokens for each outcome
-    let recipient = ctx.sender();
-    let mut tokens = vector[];
-    let mut i = 0;
-    while (i < outcome_count) {
-        let supply = &mut escrow.outcome_stable_supplies[i];
-        let token = token::mint(
-            &escrow.market_state,
-            supply,
-            amount,
-            recipient,
-            clock,
-            ctx,
-        );
-        tokens.push_back(token);
-        i = i + 1;
-    };
-
-    tokens
-}
 
 /// ======= Swap Methods =========
 public(package) fun swap_token_asset_to_stable<AssetType, StableType>(
