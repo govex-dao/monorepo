@@ -6,11 +6,13 @@ use std::ascii::String as AsciiString;
 use std::string::String as UTF8String;
 use std::type_name;
 use std::u64;
+use std::option;
 use sui::clock::Clock;
-use sui::coin::Coin;
+use sui::coin::{Coin, TreasuryCap};
 use sui::event;
 use sui::sui::SUI;
 use sui::vec_set::{Self, VecSet};
+use sui::table::{Self, Table};
 
 // === Introduction ===
 // This is the entry point and Main Factory of the protocol. It define admin capabilities and creates DAOs
@@ -46,6 +48,8 @@ public struct Factory has key, store {
     dao_count: u64,
     paused: bool,
     allowed_stable_types: VecSet<UTF8String>,
+    /// Maps stable coin type string to minimum raise amount (with decimals)
+    min_raise_amounts: Table<UTF8String, u64>,
 }
 
 public struct FactoryOwnerCap has key, store {
@@ -79,6 +83,7 @@ public struct StableCoinTypeAdded has copy, drop {
     type_str: UTF8String,
     admin: address,
     timestamp: u64,
+    min_raise_amount: u64,
 }
 
 public struct StableCoinTypeRemoved has copy, drop {
@@ -100,6 +105,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         dao_count: 0,
         paused: false,
         allowed_stable_types,
+        min_raise_amounts: table::new(ctx),
     };
 
     let owner_cap = FactoryOwnerCap {
@@ -118,7 +124,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
     let _ = witness;
 }
 
-public entry fun create_dao<AssetType, StableType>(
+public entry fun create_dao<AssetType: drop, StableType>(
     factory: &mut Factory,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
@@ -138,6 +144,56 @@ public entry fun create_dao<AssetType, StableType>(
     // Optional operating agreement parameters
     agreement_lines: vector<UTF8String>,
     agreement_difficulties: vector<u64>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Delegate to internal function with no treasury cap
+    create_dao_internal<AssetType, StableType>(
+        factory,
+        fee_manager,
+        payment,
+        min_asset_amount,
+        min_stable_amount,
+        dao_name,
+        icon_url_string,
+        review_period_ms,
+        trading_period_ms,
+        amm_twap_start_delay,
+        amm_twap_step_max,
+        amm_twap_initial_observation,
+        twap_threshold,
+        description,
+        max_outcomes,
+        metadata,
+        agreement_lines,
+        agreement_difficulties,
+        option::none(), // No treasury cap for regular DAO creation
+        clock,
+        ctx,
+    );
+}
+
+/// Internal function to create a DAO with optional TreasuryCap
+public(package) fun create_dao_internal<AssetType: drop, StableType>(
+    factory: &mut Factory,
+    fee_manager: &mut fee::FeeManager,
+    payment: Coin<SUI>,
+    min_asset_amount: u64,
+    min_stable_amount: u64,
+    dao_name: AsciiString,
+    icon_url_string: AsciiString,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    amm_twap_start_delay: u64,
+    amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
+    twap_threshold: u64,
+    description: UTF8String,
+    max_outcomes: u64,
+    metadata: vector<UTF8String>,
+    agreement_lines: vector<UTF8String>,
+    agreement_difficulties: vector<u64>,
+    treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -161,7 +217,7 @@ public entry fun create_dao<AssetType, StableType>(
         ETwapInitialTooLarge,
     );
 
-    // Create DAO and AdminCap
+    // Create DAO (CapabilityManager is shared atomically inside dao::create)
     let mut dao = dao::create<AssetType, StableType>(
         min_asset_amount,
         min_stable_amount,
@@ -176,6 +232,7 @@ public entry fun create_dao<AssetType, StableType>(
         description,
         max_outcomes,
         metadata,
+        treasury_cap,
         clock,
         ctx,
     );
@@ -189,9 +246,6 @@ public entry fun create_dao<AssetType, StableType>(
             ctx,
         );
     };
-
-    // Treasury initialization is now optional
-    // DAOs can add treasury later if needed
 
     // Share the DAO
     transfer::public_share_object(dao);
@@ -260,21 +314,27 @@ public entry fun verify_dao<AssetType, StableType>(
     });
 }
 
-/// Adds a new stable coin type to the allowed list
+/// Adds a new stable coin type to the allowed list with a minimum raise amount
 public entry fun add_allowed_stable_type<StableType>(
     factory: &mut Factory,
     _owner_cap: &FactoryOwnerCap,
+    min_raise_amount: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     let type_str = get_type_string<StableType>();
+    // Require a non-zero minimum raise amount
+    assert!(min_raise_amount > 0, 0);
+    
     if (!factory.allowed_stable_types.contains(&type_str)) {
         factory.allowed_stable_types.insert(type_str);
+        factory.min_raise_amounts.add(type_str, min_raise_amount);
 
         event::emit(StableCoinTypeAdded {
             type_str,
             admin: ctx.sender(),
             timestamp: clock.timestamp_ms(),
+            min_raise_amount,
         });
     }
 }
@@ -288,6 +348,10 @@ public entry fun remove_allowed_stable_type<StableType>(
     let type_str = get_type_string<StableType>();
     if (factory.allowed_stable_types.contains(&type_str)) {
         factory.allowed_stable_types.remove(&type_str);
+        // Also remove from min_raise_amounts table
+        if (factory.min_raise_amounts.contains(type_str)) {
+            factory.min_raise_amounts.remove(type_str);
+        };
 
         event::emit(StableCoinTypeRemoved {
             type_str,
@@ -295,6 +359,25 @@ public entry fun remove_allowed_stable_type<StableType>(
             timestamp: clock.timestamp_ms(),
         });
     }
+}
+
+/// Updates the minimum raise amount for an allowed stable coin type
+public entry fun update_min_raise_amount<StableType>(
+    factory: &mut Factory,
+    _owner_cap: &FactoryOwnerCap,
+    new_min_raise_amount: u64,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let type_str = get_type_string<StableType>();
+    // Require stable type is allowed
+    assert!(factory.allowed_stable_types.contains(&type_str), EStableTypeNotAllowed);
+    // Require a non-zero minimum raise amount
+    assert!(new_min_raise_amount > 0, 0);
+    
+    // Update the minimum raise amount
+    let current_amount = factory.min_raise_amounts.borrow_mut(type_str);
+    *current_amount = new_min_raise_amount;
 }
 
 public entry fun disable_dao_proposals<AssetType, StableType>(dao: &mut dao::DAO<AssetType, StableType>, _cap: &FactoryOwnerCap) {
@@ -328,10 +411,17 @@ public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
     factory.allowed_stable_types.contains(&type_str)
 }
 
+/// Get the minimum raise amount for a stable coin type
+public fun get_min_raise_amount<StableType>(factory: &Factory): u64 {
+    let type_str = get_type_string<StableType>();
+    assert!(factory.allowed_stable_types.contains(&type_str), EStableTypeNotAllowed);
+    *factory.min_raise_amounts.borrow(type_str)
+}
+
 // === Test Functions ===
 #[test_only]
 public fun create_factory(ctx: &mut TxContext) {
-    let factory = Factory {
+    let mut factory = Factory {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
@@ -341,7 +431,12 @@ public fun create_factory(ctx: &mut TxContext) {
             set.insert(stable_str);
             set
         },
+        min_raise_amounts: table::new(ctx),
     };
+    
+    // Add default min raise amount for test stable coin (100 tokens with 6 decimals)
+    let stable_str = get_type_string<futarchy::stable_coin::STABLE_COIN>();
+    factory.min_raise_amounts.add(stable_str, 100_000_000);
 
     let owner_cap = FactoryOwnerCap {
         id: object::new(ctx),

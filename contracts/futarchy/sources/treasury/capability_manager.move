@@ -138,6 +138,51 @@ public fun initialize(ctx: &mut TxContext): ID {
     manager_id
 }
 
+/// Initialize capability manager with a TreasuryCap in one atomic transaction
+public fun initialize_with_cap<T: drop>(
+    cap: TreasuryCap<T>,
+    rules: MintBurnRules,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext,
+): ID {
+    let mut manager = new(ctx);
+    let manager_id = object::id(&manager);
+    
+    // Deposit the capability before sharing
+    let coin_type = type_name::get<T>();
+    
+    // Store capability info
+    let info = CapabilityInfo {
+        exists: true,
+        deposited_at: clock.timestamp_ms(),
+        depositor: ctx.sender(),
+    };
+    manager.capabilities.add(coin_type, info);
+    
+    // Store the capability using dynamic fields
+    let storage = CapabilityStorage {
+        cap,
+        locked: true,
+        lock_until: option::none(),
+    };
+    df::add(&mut manager.id, coin_type, storage);
+    
+    // Store the rules using a compound key
+    let rules_key = RulesKey<T> { coin_type };
+    df::add(&mut manager.id, rules_key, rules);
+    
+    event::emit(CapabilityDeposited {
+        manager_id,
+        coin_type,
+        depositor: ctx.sender(),
+        max_supply: rules.max_supply,
+    });
+    
+    // Now share the manager
+    transfer::share_object(manager);
+    manager_id
+}
+
 /// Deposit a TreasuryCap into the manager
 public fun deposit_capability<T: drop>(
     manager: &mut CapabilityManager,

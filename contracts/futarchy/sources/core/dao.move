@@ -20,13 +20,14 @@ use std::string::String;
 use std::vector;
 use std::type_name;
 use sui::clock::Clock;
-use sui::coin::{Self, Coin};
+use sui::coin::{Self, Coin, TreasuryCap};
 use sui::event;
 use sui::sui::SUI;
 use sui::table::{Self, Table};
 use sui::url::{Self, Url};
 use sui::balance::{Self, Balance};
 use sui::transfer;
+use futarchy::capability_manager::{Self, CapabilityManager};
 
 // === Introduction ===
 // This defines the DAO type
@@ -117,6 +118,7 @@ public struct DAO<phantom AssetType, phantom StableType> has key, store {
     max_outcomes: u64,
     metadata: vector<String>,
     treasury_account_id: Option<ID>,
+    capability_manager_id: Option<ID>,
     proposal_fee_per_outcome: u64,
     operating_agreement_id: Option<ID>,
     // ID of the DAO's own liquidity pool for proposals.
@@ -203,7 +205,7 @@ public struct ProposalEvicted has copy, drop {
 }
 
 // === Public Functions ===
-public(package) fun create<AssetType, StableType>(
+public(package) fun create<AssetType: drop, StableType>(
     min_asset_amount: u64,
     min_stable_amount: u64,
     dao_name: AsciiString,
@@ -217,6 +219,7 @@ public(package) fun create<AssetType, StableType>(
     description: String,
     max_outcomes: u64,
     metadata: vector<String>,
+    mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): DAO<AssetType, StableType> {
@@ -250,6 +253,34 @@ public(package) fun create<AssetType, StableType>(
     transfer::public_share_object(pfm);
     
     let dao_id_inner = dao_id.to_inner();
+    
+    // Atomically handle TreasuryCap and CapabilityManager creation
+    let capability_manager_id = if (treasury_cap.is_some()) {
+        let cap = treasury_cap.extract();
+        
+        // SECURITY FIX: Default rules are now restrictive.
+        // Governance must vote to enable minting.
+        let rules = capability_manager::new_mint_burn_rules(
+            option::none(), // max_supply - no limit
+            false, // can_mint - DISABLED BY DEFAULT
+            false, // can_burn - DISABLED BY DEFAULT  
+            option::some(0), // max_mint_per_proposal - 0 BY DEFAULT
+            0 // mint_cooldown_ms - no cooldown
+        );
+        
+        // SECURITY FIX: Initialize and deposit in one atomic transaction
+        let manager_id = capability_manager::initialize_with_cap(
+            cap,
+            rules,
+            clock,
+            ctx
+        );
+        
+        option::some(manager_id)
+    } else {
+        option::none()
+    };
+    
     let dao = DAO {
         id: dao_id,
         asset_type: type_name::get<AssetType>().into_string(),
@@ -278,6 +309,7 @@ public(package) fun create<AssetType, StableType>(
         max_outcomes: max_outcomes,
         metadata: metadata,
         treasury_account_id: option::none(),
+        capability_manager_id,
         proposal_fee_per_outcome: 0,
         operating_agreement_id: option::none(),
         dao_liquidity_pool_id: option::none(),
@@ -306,6 +338,9 @@ public(package) fun create<AssetType, StableType>(
         description,
     });
 
+    // Ensure treasury_cap is consumed
+    treasury_cap.destroy_none();
+    
     // Return the DAO
     dao
 }
