@@ -6,7 +6,6 @@ use std::ascii::String as AsciiString;
 use std::string::String as UTF8String;
 use std::type_name;
 use std::u64;
-use std::option;
 use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap};
 use sui::event;
@@ -94,7 +93,7 @@ public struct StableCoinTypeRemoved has copy, drop {
 
 // === Public Functions ===
 fun init(witness: FACTORY, ctx: &mut TxContext) {
-    // Verify that the witness is valid and one-time only.
+    // Verify that the witness is valid and one-time only (do this first)
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
     // Initialize with an empty set for now

@@ -16,6 +16,12 @@ use futarchy::{
 
 // === Errors ===
 const EInvalidParameters: u64 = 0;
+const ETransferAmountTooLarge: u64 = 1;
+const ETotalTransferTooLarge: u64 = 2;
+
+// === Constants ===
+const MAX_SINGLE_TRANSFER_AMOUNT: u64 = 100_000_000_000_000; // 100 trillion - reasonable max per transfer
+const MAX_TOTAL_TRANSFER_AMOUNT: u64 = 1_000_000_000_000_000; // 1 quadrillion - reasonable max total
 
 // === Public Functions ===
 
@@ -120,6 +126,7 @@ public entry fun create_cross_treasury_transfer_proposal<AssetType, StableType, 
     ctx: &mut TxContext,
 ) {
     assert!(amount > 0, EInvalidParameters);
+    assert!(amount <= MAX_SINGLE_TRANSFER_AMOUNT, ETransferAmountTooLarge);
     
     let outcome_count = outcome_descriptions.length();
     assert!(outcome_count >= 2, EInvalidParameters);
@@ -240,13 +247,28 @@ public entry fun create_multi_transfer_proposal<AssetType, StableType, CoinType>
     
     // Add transfers based on specs
     let mut i = 0;
+    let mut total_transfer_amount = 0u64;
     while (i < transfer_specs.length()) {
         let spec = &transfer_specs[i];
+        // Validate spec has correct length
+        assert!(spec.length() >= 3, EInvalidParameters);
+        
         let outcome = spec[0];
         let amount = spec[1];
         let recipient_idx = spec[2];
         
+        // Validate indices
+        assert!(outcome < outcome_count, EInvalidParameters);
+        assert!(recipient_idx < recipients.length(), EInvalidParameters);
+        
         if (amount > 0) {
+            // Validate single transfer amount
+            assert!(amount <= MAX_SINGLE_TRANSFER_AMOUNT, ETransferAmountTooLarge);
+            
+            // Check total transfer amount doesn't exceed limit
+            assert!(total_transfer_amount <= MAX_TOTAL_TRANSFER_AMOUNT - amount, ETotalTransferTooLarge);
+            total_transfer_amount = total_transfer_amount + amount;
+            
             treasury_actions::add_transfer_action<CoinType>(
                 registry,
                 proposal_id,
@@ -289,11 +311,14 @@ public entry fun create_mint_and_transfer_proposal<AssetType, StableType, CoinTy
     assert!(outcome_count >= 2, EInvalidParameters);
     assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidParameters);
     
-    // Verify amounts sum to mint_amount
-    let mut total = 0;
+    // Verify amounts sum to mint_amount (with overflow protection)
+    let mut total = 0u64;
     let mut i = 0;
     while (i < amounts.length()) {
-        total = total + amounts[i];
+        let amount = amounts[i];
+        // Check for overflow before adding
+        assert!(total <= std::u64::max_value!() - amount, EInvalidParameters);
+        total = total + amount;
         i = i + 1;
     };
     assert!(total == mint_amount, EInvalidParameters);

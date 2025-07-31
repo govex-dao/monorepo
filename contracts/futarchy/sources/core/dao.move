@@ -4,9 +4,7 @@ use futarchy::coin_escrow;
 use futarchy::fee;
 use futarchy::proposal_fee_manager;
 use futarchy::liquidity_initialize;
-use futarchy::liquidity_interact;
 use futarchy::market_state;
-use futarchy::advance_stage::{Self};
 use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
 use futarchy::proposal;
 use futarchy::operating_agreement;
@@ -95,12 +93,13 @@ const EInvalidReceipt: u64 = 34;
 const EInvalidProposalId: u64 = 35;
 /// Insufficient liquidity in DAO treasury for this operation
 const EInsufficientLiquidity: u64 = 36;
+const EExecutionDeadlineExceeded: u64 = 37;
 /// DAO treasury has not been initialized
-const ETreasuryNotInitialized: u64 = 37;
+const ETreasuryNotInitialized: u64 = 38;
 /// Treasury ID does not match DAO's configured treasury
-const ETreasuryMismatch: u64 = 38;
+const ETreasuryMismatch: u64 = 39;
 /// Invalid execution context: not authorized for this operation
-const EInvalidExecutionContext: u64 = 39;
+const EInvalidExecutionContext: u64 = 40;
 
 // === State Constants ===
 const STATE_PREMARKET: u8 = 0;
@@ -177,6 +176,7 @@ public struct ProposalInfo has store {
     execution_time: Option<u64>,
     executed: bool,
     market_state_id: ID,
+    execution_deadline: Option<u64>, // Timestamp after which execution is no longer allowed
 }
 
 
@@ -514,7 +514,8 @@ public entry fun submit_to_queue<AssetType, StableType>(
             result: option::none(),
             execution_time: option::none(),
             executed: false,
-            market_state_id
+            market_state_id,
+            execution_deadline: option::none(), // Set when proposal is resolved
         });
         
         // Return the submission fee since the proposal was created immediately
@@ -547,7 +548,7 @@ public entry fun submit_to_queue<AssetType, StableType>(
             clock,
         );
         
-        priority_queue::insert(&mut dao.proposal_queue, queued_proposal);
+        priority_queue::insert(&mut dao.proposal_queue, queued_proposal, ctx);
     };
     
     // Ensure bond vector is empty
@@ -556,6 +557,21 @@ public entry fun submit_to_queue<AssetType, StableType>(
     // Clean up uid
     uid.delete();
 }
+
+public entry fun refund_evicted_proposal_fee<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    proposal_fee_manager: &mut proposal_fee_manager::ProposalFeeManager,
+    proposal_id: ID,
+    proposer: address,
+    ctx: &mut TxContext,
+) {
+    // The fee is returned to the proposer of the evicted proposal
+    if (proposal_fee_manager::has_proposal_fee(proposal_fee_manager, proposal_id)) {
+        let reward = proposal_fee_manager::take_activator_reward(proposal_fee_manager, proposal_id, ctx);
+        transfer::public_transfer(reward, proposer);
+    };
+}
+
 
 /// Permissionless crank function to activate the highest-priority proposal from the queue.
 /// This version is for proposals where the liquidity is provided by the caller.
@@ -706,8 +722,8 @@ fun initialize_market_and_provide_liquidity_for_queued<AssetType, StableType>(
 ) {
     let dao_id = object::id(dao);
     let outcome_count = messages.length();
-    let asset_amounts = vector::tabulate!(outcome_count, |_| asset_coin.value() / outcome_count);
-    let stable_amounts = vector::tabulate!(outcome_count, |_| stable_coin.value() / outcome_count);
+    // Ensure we have at least one outcome to avoid division by zero
+    assert!(outcome_count > 0, EInvalidOutcomeCount);
     
     // Get DAO parameters
     let (
@@ -902,12 +918,9 @@ public fun create_proposal_internal<AssetType, StableType>(
     assert!(title.length() > 0, ETitleTooShort);
     assert!(metadata.length() <= METADATA_MAX_LENGTH, EMetadataTooLong);
 
-    let treasury_address = if (dao.treasury_account_id.is_some()) {
-        object::id_to_address(dao.treasury_account_id.borrow())
-    } else {
-        // Use proposer as fallback treasury to avoid burning funds
-        ctx.sender()
-    };
+    // Ensure treasury is configured to properly handle fees
+    assert!(dao.treasury_account_id.is_some(), EUnauthorized);
+    let treasury_address = object::id_to_address(dao.treasury_account_id.borrow());
 
     // Lightweight proposal creation, no market or escrow yet.
     let (proposal_id, market_state_id, state) = proposal::create<AssetType, StableType>(
@@ -943,6 +956,7 @@ public fun create_proposal_internal<AssetType, StableType>(
         execution_time: option::none(),
         executed: false,
         market_state_id,
+        execution_deadline: option::none(), // Set when proposal is resolved
     };
 
     assert!(!dao.proposals.contains(proposal_id), EProposalExists);
@@ -1020,7 +1034,16 @@ public entry fun add_proposal_outcome<AssetType, StableType>(
     let fee_amount = dao.proposal_fee_per_outcome;
     assert!(payment.value() >= fee_amount, EInvalidAmount);
     let fee_coin = payment.split(fee_amount, ctx);
-    transfer::public_transfer(fee_coin, proposal::get_proposer(proposal)); // Transfer fee to original proposer
+    // Send fee to DAO treasury instead of proposer to avoid perverse incentives
+    if (dao.treasury_account_id.is_some()) {
+        let treasury_address = object::id_to_address(dao.treasury_account_id.borrow());
+        // Transfer fee to treasury address (treasury receives the fee)
+        transfer::public_transfer(fee_coin, treasury_address);
+    } else {
+        // If no treasury configured, destroy the fee to prevent gaming
+        // Note: We can't burn without TreasuryCap, so we send to 0x0
+        transfer::public_transfer(fee_coin, @0x0);
+    };
     transfer::public_transfer(payment, ctx.sender()); // Return any excess
 
     // 6. Add the outcome to the proposal object.
@@ -1064,7 +1087,16 @@ public entry fun mutate_proposal_outcome<AssetType, StableType>(
     let fee_amount = dao.proposal_fee_per_outcome;
     assert!(payment.value() >= fee_amount, EInvalidAmount);
     let fee_coin = payment.split(fee_amount, ctx);
-    transfer::public_transfer(fee_coin, proposal::get_proposer(proposal)); // Transfer fee to original proposer
+    // Send fee to DAO treasury instead of proposer to avoid perverse incentives
+    if (dao.treasury_account_id.is_some()) {
+        let treasury_address = object::id_to_address(dao.treasury_account_id.borrow());
+        // Transfer fee to treasury address (treasury receives the fee)
+        transfer::public_transfer(fee_coin, treasury_address);
+    } else {
+        // If no treasury configured, destroy the fee to prevent gaming
+        // Note: We can't burn without TreasuryCap, so we send to 0x0
+        transfer::public_transfer(fee_coin, @0x0);
+    };
     transfer::public_transfer(payment, ctx.sender()); // Return any excess
 
     // 4. Mutate the detail and update the creator for that outcome.
@@ -1366,6 +1398,12 @@ public(package) fun sign_result<AssetType, StableType>(
     info.result.fill(message);
     info.executed = true;
     info.execution_time = option::some(clock.timestamp_ms());
+    
+    // Set execution deadline to 1 day (24 hours) after market finalization
+    let finalization_time = market_state.get_finalization_time();
+    assert!(finalization_time.is_some(), EUnauthorized); // Market must be finalized
+    let one_day_ms = 86_400_000; // 24 * 60 * 60 * 1000
+    info.execution_deadline = option::some(*finalization_time.borrow() + one_day_ms);
 
     // Safely reduce active_proposal_count
     if (dao.active_proposal_count > 0) {
@@ -1387,6 +1425,17 @@ public(package) fun sign_result<AssetType, StableType>(
     // 2. Atomicity - proposal resolution succeeds even if treasury actions fail
     // 3. Flexibility - treasury actions can be retried if needed
     // 
+    // IMPORTANT: Sui Move does NOT support partial transaction success or try-catch blocks.
+    // All operations in a transaction are atomic - they all succeed or all fail.
+    // This is why proposal resolution and execution are intentionally decoupled:
+    // - If execution fails (e.g., insufficient treasury funds), it would rollback the resolution
+    // - No way to "try" execution and still keep the resolution if it fails  
+    // - Decoupling allows retrying failed executions without re-running governance
+    //
+    // The only theoretical issue is if two proposals finalize at nearly the same time
+    // and compete for resources. In practice, the second execution would simply fail
+    // and need retry.
+    //
     // To execute treasury actions after proposal resolution:
     // - For SUI actions: call treasury_actions::execute_actions_entry_sui
     // - For other coins: call treasury_actions::execute_actions_entry<CoinType>
@@ -1441,6 +1490,50 @@ public fun is_verification_pending<AssetType, StableType>(dao: &DAO<AssetType, S
 public fun is_verified<AssetType, StableType>(dao: &DAO<AssetType, StableType>): bool { dao.verified }
 
 public fun get_attestation_url<AssetType, StableType>(dao: &DAO<AssetType, StableType>): &String { &dao.attestation_url }
+
+// === Helper Functions ===
+
+/// Check if proposal execution is still allowed based on deadline
+public fun is_execution_allowed<AssetType, StableType>(
+    dao: &DAO<AssetType, StableType>,
+    proposal_id: ID,
+    clock: &Clock,
+): bool {
+    if (!dao.proposals.contains(proposal_id)) return false;
+    let info = &dao.proposals[proposal_id];
+    
+    // Must be executed (resolved) to have a deadline
+    if (!info.executed) return false;
+    
+    // Check if within execution deadline
+    if (info.execution_deadline.is_some()) {
+        let deadline = *info.execution_deadline.borrow();
+        return clock.timestamp_ms() <= deadline
+    };
+    
+    // No deadline set (old proposals) - allow execution
+    true
+}
+
+/// Create a ProposalExecutionContext for executing proposal actions
+/// This checks that the proposal is executed and within the execution deadline
+public fun create_execution_context<AssetType, StableType>(
+    dao: &DAO<AssetType, StableType>,
+    proposal_id: ID,
+    winning_outcome: u64,
+    clock: &Clock,
+): ProposalExecutionContext {
+    // Check proposal exists and is executed
+    assert!(dao.proposals.contains(proposal_id), EProposalNotFound);
+    let info = &dao.proposals[proposal_id];
+    assert!(info.executed, EUnauthorized);
+    
+    // Check execution deadline
+    assert!(is_execution_allowed(dao, proposal_id, clock), EExecutionDeadlineExceeded);
+    
+    // Create the execution context
+    execution_context::new(proposal_id, winning_outcome, object::id(dao))
+}
 
 // === View Functions ===
 public fun get_amm_config<AssetType, StableType>(dao: &DAO<AssetType, StableType>): (u64, u64, u128) {
@@ -1650,6 +1743,7 @@ public(package) fun withdraw_lp_from_treasury<AssetType, StableType, LPType>(
     treasury: &mut treasury::Treasury,
     amount: u64,
     execution_context: &ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ): Coin<LPType> {
     // Verify the execution context matches this DAO
@@ -1664,7 +1758,7 @@ public(package) fun withdraw_lp_from_treasury<AssetType, StableType, LPType>(
     let auth = treasury::create_auth_for_proposal(treasury, execution_context);
     
     // Withdraw from treasury and return the coins directly
-    treasury::withdraw_without_drop<LPType>(auth, treasury, amount, ctx)
+    treasury::withdraw_without_drop<LPType>(auth, treasury, amount, clock, ctx)
 }
 
 // === Treasury Functions ===
@@ -1692,6 +1786,7 @@ public(package) fun withdraw_asset_from_treasury<AssetType: drop, StableType>(
     treasury: &mut treasury::Treasury,
     amount: u64,
     execution_context: &ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ): Coin<AssetType> {
     // Verify the execution context matches this DAO
@@ -1711,7 +1806,7 @@ public(package) fun withdraw_asset_from_treasury<AssetType: drop, StableType>(
     let auth = treasury::create_auth_for_proposal(treasury, execution_context);
     
     // Withdraw from treasury and return the coins directly
-    treasury::withdraw<AssetType>(auth, treasury, amount, ctx)
+    treasury::withdraw<AssetType>(auth, treasury, amount, clock, ctx)
 }
 
 /// Withdraws Stable coins from DAO treasury for liquidity proposals
@@ -1722,6 +1817,7 @@ public(package) fun withdraw_stable_from_treasury<AssetType, StableType: drop>(
     treasury: &mut treasury::Treasury,
     amount: u64,
     execution_context: &ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ): Coin<StableType> {
     // Verify the execution context matches this DAO
@@ -1741,7 +1837,7 @@ public(package) fun withdraw_stable_from_treasury<AssetType, StableType: drop>(
     let auth = treasury::create_auth_for_proposal(treasury, execution_context);
     
     // Withdraw from treasury and return the coins directly
-    treasury::withdraw<StableType>(auth, treasury, amount, ctx)
+    treasury::withdraw<StableType>(auth, treasury, amount, clock, ctx)
 }
 
 

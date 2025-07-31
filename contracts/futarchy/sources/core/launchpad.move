@@ -1,23 +1,16 @@
 module futarchy::launchpad;
 
 use std::ascii;
-use std::string::{Self, String};
-use std::option::{Self, Option};
+use std::string::{String};
 use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::clock::{Clock};
 use sui::event;
-use sui::object::{Self, ID, UID};
 use sui::dynamic_field as df;
-use sui::transfer;
-use sui::tx_context::TxContext;
-
-use futarchy::dao;
 use futarchy::factory;
 use futarchy::fee;
 use futarchy::math;
-use futarchy::metadata;
 
 // === Errors ===
 const ERaiseStillActive: u64 = 0;
@@ -226,9 +219,9 @@ public entry fun contribute<RaiseToken, StableCoin>(
 
     raise.stable_coin_vault.join(contribution.into_balance());
     
-    // Use safe arithmetic to prevent overflow
+    // Check for overflow before addition
+    assert!(raise.total_raised <= std::u64::max_value!() - amount, EArithmeticOverflow);
     let new_total = raise.total_raised + amount;
-    assert!(new_total >= raise.total_raised, EArithmeticOverflow);
     raise.total_raised = new_total;
 
     let contributor_key = ContributorKey { contributor };
@@ -236,6 +229,8 @@ public entry fun contribute<RaiseToken, StableCoin>(
     // Check if contributor exists using dynamic fields
     if (df::exists_(&raise.id, contributor_key)) {
         let current_contribution: &mut u64 = df::borrow_mut(&mut raise.id, contributor_key);
+        // Check for overflow before updating contributor amount
+        assert!(*current_contribution <= std::u64::max_value!() - amount, EArithmeticOverflow);
         *current_contribution = *current_contribution + amount;
     } else {
         df::add(&mut raise.id, contributor_key, amount);

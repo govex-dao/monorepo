@@ -18,6 +18,8 @@ const ENoActionsFound: u64 = 1;
 const EAlreadyExecuted: u64 = 2;
 const EProposalNotResolved: u64 = 3;
 const EOperatingAgreementAlreadyExists: u64 = 4;
+const EProposalDAOMismatch: u64 = 5;
+const EInvalidWinningOutcome: u64 = 6;
 
 // === Structs ===
 
@@ -76,6 +78,12 @@ public fun init_proposal_action(
     registry.executed.add(proposal_id, false);
 }
 
+/// Check if a proposal has been executed
+public fun is_executed(registry: &InitActionRegistry, proposal_id: ID): bool {
+    if (!registry.executed.contains(proposal_id)) return false;
+    *registry.executed.borrow(proposal_id)
+}
+
 
 /// Executes the initialization if the proposal passed.
 public entry fun execute_init<AssetType, StableType>(
@@ -92,7 +100,10 @@ public entry fun execute_init<AssetType, StableType>(
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     assert!(!*registry.executed.borrow(proposal_id), EAlreadyExecuted);
     
-    // 2. Ensure DAO doesn't already have an operating agreement
+    // 2. Verify proposal belongs to this DAO
+    assert!(proposal.get_dao_id() == object::id(dao), EProposalDAOMismatch);
+    
+    // 3. Ensure DAO doesn't already have an operating agreement
     assert!(!dao.has_operating_agreement(), EOperatingAgreementAlreadyExists);
 
     // 3. Get the winning outcome from the proposal object.
@@ -104,8 +115,9 @@ public entry fun execute_init<AssetType, StableType>(
         return
     };
 
-    // 5. If outcome is "Accept" (1), initialize the operating agreement
-    assert!(winning_outcome == 1, 0); // Sanity check
+    // 5. If outcome is "Accept" (typically 1), initialize the operating agreement
+    // Note: For multi-outcome proposals, any non-zero outcome is considered acceptance
+    assert!(winning_outcome > 0, EInvalidWinningOutcome);
 
     // Get the stored action for this proposal.
     let action = registry.actions.borrow(proposal_id);

@@ -1,10 +1,8 @@
 module futarchy::dao_liquidity_pool;
 
 use sui::{
-    object::{Self, UID, ID},
     balance::{Self, Balance},
-    coin::{Self, Coin},
-    tx_context::TxContext,
+    coin::{Self, Coin}
 };
 
 /// A DAO-owned pool used to provide liquidity for proposals.

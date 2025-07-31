@@ -1,13 +1,8 @@
 module futarchy::spot_liquidity_pool;
 
-use std::option::{Self, Option};
-use std::vector;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::clock::Clock;
-use sui::object::{Self, ID, UID};
-use sui::transfer;
-use sui::tx_context::TxContext;
 use sui::event;
 use sui::table::{Self, Table};
 
@@ -29,6 +24,8 @@ const EExcessiveSlippage: u64 = 108;
 const EOverflow: u64 = 111;
 /// No LP tokens found for this proposal
 const ENoLPAllocation: u64 = 112;
+/// Invalid admin capability
+const EInvalidAdminCap: u64 = 113;
 
 // === Constants ===
 const MINIMUM_LIQUIDITY: u64 = 1000;
@@ -38,10 +35,16 @@ const MINIMUM_LIQUIDITY: u64 = 1000;
 /// LP token for the spot AMM
 public struct LP<phantom Asset, phantom Stable> has drop {}
 
+/// Admin capability for protocol fee collection
+public struct ProtocolAdminCap has key, store {
+    id: UID,
+}
+
 /// Spot liquidity pool with AMM functionality
 public struct SpotLiquidityPool<phantom Asset, phantom Stable> has key, store {
     id: UID,
     dao_id: ID,
+    protocol_admin_cap_id: ID,
     asset_vault: Balance<Asset>,
     stable_vault: Balance<Stable>,
     lp_supply: TreasuryCap<LP<Asset, Stable>>,
@@ -109,7 +112,7 @@ public fun create_pool<Asset, Stable>(
     lp_fee_bps: u16,
     protocol_fee_bps: u16,
     ctx: &mut TxContext,
-): (SpotLiquidityPool<Asset, Stable>, Coin<LP<Asset, Stable>>) {
+): (SpotLiquidityPool<Asset, Stable>, Coin<LP<Asset, Stable>>, ProtocolAdminCap) {
     // Get minimum liquidity from DAO configuration
     let (_min_asset_amount, min_liquidity_stable) = dao::get_min_amounts(dao);
     let initial_asset_val = initial_asset.value();
@@ -139,9 +142,15 @@ public fun create_pool<Asset, Stable>(
     
     let k_initial = (initial_asset_val as u128) * (initial_stable_val as u128);
     
+    // Create protocol admin cap
+    let protocol_admin_cap = ProtocolAdminCap {
+        id: object::new(ctx),
+    };
+    
     let pool = SpotLiquidityPool<Asset, Stable> {
         id: object::new(ctx),
         dao_id: object::id(dao),
+        protocol_admin_cap_id: object::id(&protocol_admin_cap),
         asset_vault: initial_asset.into_balance(),
         stable_vault: initial_stable.into_balance(),
         lp_supply: treasury_cap,
@@ -163,7 +172,7 @@ public fun create_pool<Asset, Stable>(
     
     transfer::public_freeze_object(metadata);
     
-    (pool, lp_tokens)
+    (pool, lp_tokens, protocol_admin_cap)
 }
 
 /// Add liquidity to the spot AMM when no proposal is active
@@ -218,7 +227,8 @@ public entry fun add_liquidity_with_proposal<Asset, Stable>(
 
         let amm_pool = proposal::get_pool_mut_by_outcome(proposal, (i as u8));
         // Add liquidity proportionally - LP tokens are returned as conditional tokens
-        let lp_token = amm::add_liquidity_proportional(amm_pool, escrow, asset_tkn, stable_tkn, clock, ctx);
+        // Use 0 as min_lp_out for individual AMMs since slippage protection is at the spot pool level
+        let lp_token = amm::add_liquidity_proportional(amm_pool, escrow, asset_tkn, stable_tkn, 0, clock, ctx);
         
         // Store the LP token instead of sending to black hole
         let proposal_id = proposal::get_id(proposal);
@@ -294,13 +304,11 @@ public entry fun remove_liquidity_with_proposal<Asset, Stable>(
         let lp_for_withdrawal = if (lp_to_withdraw == outcome_lp_balance) {
             vector::swap_remove(stored_lp_tokens, i)
         } else {
-            // Split the token
+            // Split the token using the new function that returns the split token
             let mut temp_token = vector::swap_remove(stored_lp_tokens, i);
-            conditional_token::split(&mut temp_token, lp_to_withdraw, ctx.sender(), clock, ctx);
+            let split_token = conditional_token::split_and_return(&mut temp_token, lp_to_withdraw, clock, ctx);
             vector::push_back(stored_lp_tokens, temp_token);
-            // The split token was transferred to sender, we need to get it back
-            // This is a design issue - we need a better way to handle this
-            abort ENoLPAllocation // This is a design flaw - we can't split tokens properly
+            split_token
         };
         
         let (asset_tkn, stable_tkn) = amm::remove_liquidity_proportional(amm_pool, escrow, lp_for_withdrawal, clock, ctx);
@@ -496,8 +504,6 @@ public(package) fun swap_stable_to_asset_internal<Asset, Stable>(
         new_stable_reserve: pool.stable_vault.value(),
     });
     
-    // Release reentrancy guard
-    
     SwapResult {
         output_coin: coin::from_balance(asset_out, ctx),
         fee_amount,
@@ -553,8 +559,6 @@ public(package) fun swap_asset_to_stable_internal<Asset, Stable>(
         new_stable_reserve: pool.stable_vault.value(),
     });
     
-    // Release reentrancy guard
-    
     SwapResult {
         output_coin: coin::from_balance(stable_out, ctx),
         fee_amount,
@@ -594,8 +598,11 @@ public fun min_liquidity<Asset, Stable>(pool: &SpotLiquidityPool<Asset, Stable>)
 /// Collect accumulated protocol fees
 public fun collect_protocol_fees<Asset, Stable>(
     pool: &mut SpotLiquidityPool<Asset, Stable>,
+    admin_cap: &ProtocolAdminCap,
     ctx: &mut TxContext
 ) {
+    // Verify the admin cap belongs to this pool
+    assert!(object::id(admin_cap) == pool.protocol_admin_cap_id, EInvalidAdminCap);
     let fee_amount = pool.accumulated_protocol_fees.value();
     if (fee_amount > 0) {
         let fees = coin::from_balance(

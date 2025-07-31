@@ -2,14 +2,10 @@ module futarchy::coin_escrow;
 
 use futarchy::conditional_token::{Self as token, ConditionalToken, Supply};
 use futarchy::market_state::MarketState;
-use std::vector;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::Coin;
 use sui::event;
-use sui::object::{Self, UID, ID};
-use sui::transfer;
-use sui::tx_context::TxContext;
 use sui::types;
 
 // === Introduction ===
@@ -44,6 +40,7 @@ const EMarketNotExpired: u64 = 11; // Market hasn't reached expiry period
 const EBadWitness: u64 = 12; // Invalid one-time witness
 const EZeroAmount: u64 = 13; // Amount must be greater than zero
 const EInvalidAssetType: u64 = 14; // Asset type must be 0 (asset) or 1 (stable)
+const EOverflow: u64 = 15; // Arithmetic overflow protection
 
 // === Constants ===
 const TOKEN_TYPE_ASSET: u8 = 0;
@@ -388,9 +385,9 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     escrow.escrowed_asset.join(initial_asset);
     escrow.escrowed_stable.join(initial_stable);
 
-    // 2. Calculate maximum amounts needed across outcomes
-    let mut max_asset = 0;
-    let mut max_stable = 0;
+    // 2. Calculate maximum amounts needed across outcomes with overflow protection
+    let mut max_asset = 0u64;
+    let mut max_stable = 0u64;
     let mut i = 0;
     while (i < outcome_count) {
         let asset_amt = asset_amounts[i];
@@ -442,12 +439,12 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
         i = i + 1;
     };
 
-    // 4. Emit event with deposit information
+    // 4. Emit event with deposit information showing final escrow balances
     event::emit(LiquidityDeposit {
-        escrowed_asset: asset_amount,
-        escrowed_stable: stable_amount,
-        asset_amount: asset_amount,
-        stable_amount: stable_amount,
+        escrowed_asset: escrow.escrowed_asset.value(),  // Actual escrow balance after deposit
+        escrowed_stable: escrow.escrowed_stable.value(), // Actual escrow balance after deposit
+        asset_amount: asset_amount,  // Amount deposited
+        stable_amount: stable_amount, // Amount deposited
     });
 }
 
@@ -519,6 +516,9 @@ fun verify_token_set<AssetType, StableType>(
 
     // Must have exactly one token per outcome
     assert!(tokens.length() == outcome_count, EIncorrectSequence);
+    
+    // Ensure tokens vector is not empty before accessing
+    assert!(tokens.length() > 0, EIncorrectSequence);
 
     // Initialize outcomes_seen vector
     let mut outcomes_seen = vector[];
@@ -538,11 +538,11 @@ fun verify_token_set<AssetType, StableType>(
     while (i < outcome_count) {
         let token = &tokens[i];
 
-        // Verify token properties
-        // Verify token properties
+        // Verify all token properties comprehensively
         assert!(token.market_id() == market_id, EWrongMarket);
         assert!(token.asset_type() == token_type, EWrongTokenType);
         assert!(token.value() == amount, EInsufficientBalance);
+        assert!(amount > 0, EZeroAmount);
 
         let outcome = token.outcome();
         let outcome_idx = (outcome as u64);
@@ -743,6 +743,10 @@ public(package) fun burn_unused_tokens<AssetType, StableType>(
             token.burn(supply_ref, clock, ctx);
         } else if (token_type == TOKEN_TYPE_STABLE) {
             let supply_ref = &mut escrow.outcome_stable_supplies[outcome_idx];
+            // burn consumes the token object
+            token.burn(supply_ref, clock, ctx);
+        } else if (token_type == TOKEN_TYPE_LP) {
+            let supply_ref = &mut escrow.outcome_lp_supplies[outcome_idx];
             // burn consumes the token object
             token.burn(supply_ref, clock, ctx);
         } else {

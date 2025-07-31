@@ -12,11 +12,7 @@
 module futarchy::liquidity_proposals;
 
 use std::string::String;
-use std::option::{Self, Option};
-use sui::coin::{Self, Coin};
-use sui::tx_context::TxContext;
-use sui::object::{Self, ID, UID};
-use sui::transfer;
+use sui::coin::{Coin};
 use sui::event;
 use sui::clock::Clock;
 use sui::sui::SUI;
@@ -24,19 +20,19 @@ use sui::sui::SUI;
 use futarchy::dao::{Self, DAO};
 use futarchy::spot_liquidity_pool::{Self, SpotLiquidityPool, LP};
 use futarchy::execution_context::ProposalExecutionContext;
-use futarchy::treasury::{Self, Treasury};
+use futarchy::treasury::{Treasury};
 use futarchy::fee;
 use sui::table::{Self, Table};
 
 // === Errors ===
-const EInvalidAmount: u64 = 300;
-const EInsufficientTreasuryBalance: u64 = 301;
-const EPoolNotFound: u64 = 302;
-const EInvalidRatio: u64 = 303;
-const EActionsAlreadyStored: u64 = 304;
-const ENoActionsFound: u64 = 305;
-const EAlreadyExecuted: u64 = 306;
-const EInvalidOutcome: u64 = 307;
+const EInvalidAmount: u64 = 0;
+const EInsufficientTreasuryBalance: u64 = 1;
+const EPoolNotFound: u64 = 2;
+const EInvalidRatio: u64 = 3;
+const EActionsAlreadyStored: u64 = 4;
+const ENoActionsFound: u64 = 5;
+const EAlreadyExecuted: u64 = 6;
+const EInvalidOutcome: u64 = 7;
 
 // === Events ===
 
@@ -104,6 +100,7 @@ public struct LiquidityAction has store, drop {
 public struct AddLiquidityAction has store, drop {
     asset_amount: u64,
     stable_amount: u64,
+    min_lp_out: u64, // Minimum LP tokens to receive (slippage protection)
 }
 
 /// Action to remove liquidity from spot pool to DAO treasury
@@ -143,12 +140,14 @@ fun init(ctx: &mut TxContext) {
 public fun create_add_liquidity_action(
     asset_amount: u64,
     stable_amount: u64,
+    min_lp_out: u64,
 ): LiquidityAction {
     LiquidityAction {
         action_type: LIQUIDITY_ACTION_ADD,
         add_liquidity: option::some(AddLiquidityAction {
             asset_amount,
             stable_amount,
+            min_lp_out,
         }),
         remove_liquidity: option::none(),
         update_fees: option::none(),
@@ -267,6 +266,7 @@ public entry fun create_add_liquidity_proposal<Asset, Stable>(
     metadata: String,
     asset_amount: u64,
     stable_amount: u64,
+    min_lp_out: u64, // Minimum LP tokens to receive (slippage protection)
     initial_outcome_messages: vector<String>,
     initial_outcome_details: vector<String>,
     initial_outcome_asset_amounts: vector<u64>,
@@ -300,7 +300,7 @@ public entry fun create_add_liquidity_proposal<Asset, Stable>(
     
     // For add liquidity, all outcomes have the same action
     while (i < outcome_count) {
-        let action = create_add_liquidity_action(asset_amount, stable_amount);
+        let action = create_add_liquidity_action(asset_amount, stable_amount, min_lp_out);
         table::add(&mut outcome_actions, i, action);
         i = i + 1;
     };
@@ -394,7 +394,10 @@ public entry fun create_update_fees_proposal<Asset, Stable>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    assert!(new_lp_fee_bps + new_protocol_fee_bps < 1000, EInvalidAmount); // Max 10%
+    // Validate individual fees and total
+    assert!(new_lp_fee_bps <= 500, EInvalidAmount); // Max 5% LP fee
+    assert!(new_protocol_fee_bps <= 200, EInvalidAmount); // Max 2% protocol fee
+    assert!(new_lp_fee_bps + new_protocol_fee_bps < 1000, EInvalidAmount); // Max 10% total
     
     // Create the proposal through DAO's internal function
     let (proposal_id, market_id, _) = dao::create_proposal_internal(
@@ -514,6 +517,7 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
     proposal_id: ID,
     winning_outcome: u64,
     execution_context: &mut ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
     // Get the action for the winning outcome
@@ -530,6 +534,7 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
         treasury,
         asset_amount,
         execution_context,
+        clock,
         ctx
     );
     let stable_coin = dao::withdraw_stable_from_treasury(
@@ -537,6 +542,7 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
         treasury,
         stable_amount,
         execution_context,
+        clock,
         ctx
     );
     
@@ -545,7 +551,7 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
         pool,
         asset_coin,
         stable_coin,
-        0, // No minimum LP out for DAO
+        add_action.min_lp_out, // Use the minimum LP out from the proposal
         ctx
     );
     
@@ -569,6 +575,7 @@ public(package) fun execute_remove_liquidity<Asset: drop, Stable: drop>(
     proposal_id: ID,
     winning_outcome: u64,
     execution_context: &mut ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
     // Get the action for the winning outcome
@@ -586,6 +593,7 @@ public(package) fun execute_remove_liquidity<Asset: drop, Stable: drop>(
         treasury,
         lp_amount,
         execution_context,
+        clock,
         ctx
     );
     
@@ -644,6 +652,7 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
     proposal_id: ID,
     winning_outcome: u64,
     execution_context: &mut ProposalExecutionContext,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
     // Get the action for the winning outcome
@@ -662,6 +671,7 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
         treasury,
         initial_asset,
         execution_context,
+        clock,
         ctx
     );
     let stable_coin = dao::withdraw_stable_from_treasury(
@@ -669,11 +679,12 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
         treasury,
         initial_stable,
         execution_context,
+        clock,
         ctx
     );
     
     // Create the pool
-    let (pool, initial_lp) = spot_liquidity_pool::create_pool(
+    let (pool, initial_lp, protocol_admin_cap) = spot_liquidity_pool::create_pool(
         dao,
         asset_coin,
         stable_coin,
@@ -684,6 +695,11 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
     
     // Transfer pool to DAO as a shared object
     transfer::public_share_object(pool);
+    
+    // Transfer protocol admin cap to the sender (DAO creator) for now
+    // TODO: In production, this should be transferred to a governance-controlled address
+    // or stored in the DAO's capability manager
+    transfer::public_transfer(protocol_admin_cap, ctx.sender());
     
     // Deposit the newly minted LP tokens into the treasury
     dao::deposit_lp_to_treasury<Asset, Stable, LP<Asset, Stable>>(treasury, initial_lp, ctx);

@@ -14,12 +14,18 @@ use futarchy::{
     recurring_payment_registry::{Self, PaymentStreamRegistry},
 };
 
+// === Constants ===
+const MAX_PAYMENTS_PER_CLAIM: u64 = 100; // Maximum payments that can be claimed in one transaction
+
 // === Errors ===
 const EPaymentNotDue: u64 = 0;
 const EStreamEnded: u64 = 1;
 const EInsufficientBalance: u64 = 3;
 const EInvalidInterval: u64 = 4;
 const EInvalidAmount: u64 = 5;
+const EOverflow: u64 = 6;
+const EInvalidRegistryMismatch: u64 = 7;
+const EMaxPaymentPerClaimExceeded: u64 = 8;
 
 // === Structs ===
 
@@ -95,8 +101,8 @@ public fun create_payment_stream<CoinType: drop>(
     assert!(payment_interval > 0, EInvalidInterval);
     assert!(amount_per_payment > 0, EInvalidAmount);
     
-    // Verify the registry belongs to the same DAO
-    assert!(recurring_payment_registry::get_dao_id(registry) == dao_id, EInvalidAmount);
+    // SECURITY FIX: Use correct error code for registry mismatch
+    assert!(recurring_payment_registry::get_dao_id(registry) == dao_id, EInvalidRegistryMismatch);
     
     let stream_id = object::new(ctx);
     let stream_id_inner = stream_id.to_inner();
@@ -173,20 +179,45 @@ public(package) fun get_payment_details_and_update_state<CoinType>(
         };
     };
 
+    // SECURITY FIX: Calculate payments due with overflow protection
+    let payments_due = (current_time - stream.last_payment) / stream.payment_interval;
+    
+    // SECURITY FIX: Cap maximum payments per claim to prevent overflow and DOS
+    let capped_payments_due = if (payments_due > MAX_PAYMENTS_PER_CLAIM) {
+        MAX_PAYMENTS_PER_CLAIM
+    } else {
+        payments_due
+    };
+    
+    // SECURITY FIX: Check for multiplication overflow before calculating
+    let max_u64 = 18446744073709551615u64;
+    assert!(capped_payments_due == 0 || stream.amount_per_payment <= max_u64 / capped_payments_due, EOverflow);
+    let amount_to_pay = capped_payments_due * stream.amount_per_payment;
+
     // Check if stream has ended by max payment amount
     if (stream.max_total.is_some()) {
         let max = *stream.max_total.borrow();
-        if (stream.total_paid + stream.amount_per_payment > max) {
+        // SECURITY FIX: Validate against remaining balance instead of next payment
+        let remaining = if (max > stream.total_paid) { max - stream.total_paid } else { 0 };
+        if (amount_to_pay > remaining) {
+            // Only pay what's remaining
+            let final_amount = remaining;
+            let final_payments = final_amount / stream.amount_per_payment;
+            
+            // SECURITY FIX: Update state only after all validations pass
+            stream.last_payment = stream.last_payment + (final_payments * stream.payment_interval);
+            stream.total_paid = stream.total_paid + (final_payments * stream.amount_per_payment);
             stream.active = false;
-            abort EStreamEnded
+            
+            return (stream.recipient, final_payments * stream.amount_per_payment)
         };
     };
 
-    let payments_due = (current_time - stream.last_payment) / stream.payment_interval;
-    let amount_to_pay = payments_due * stream.amount_per_payment;
-
-    // Update stream state immediately
-    stream.last_payment = stream.last_payment + (payments_due * stream.payment_interval);
+    // SECURITY FIX: Validate state update won't overflow
+    assert!(stream.total_paid <= max_u64 - amount_to_pay, EOverflow);
+    
+    // Update stream state only after all validations pass
+    stream.last_payment = stream.last_payment + (capped_payments_due * stream.payment_interval);
     stream.total_paid = stream.total_paid + amount_to_pay;
 
     (stream.recipient, amount_to_pay)

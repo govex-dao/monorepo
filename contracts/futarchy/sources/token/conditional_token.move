@@ -180,6 +180,43 @@ public(package) fun split(
     transfer::transfer(new_token, recipient);
 }
 
+/// Split a conditional token and return the new token instead of transferring it
+/// This is useful when the caller needs to process the split token further
+public(package) fun split_and_return(
+    token: &mut ConditionalToken,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ConditionalToken {
+    assert!(amount > 0, EZeroAmount);
+    assert!(token.balance > amount, EInsufficientBalance);
+
+    token.balance = token.balance - amount;
+
+    let new_token = ConditionalToken {
+        id: object::new(ctx),
+        market_id: token.market_id,
+        asset_type: token.asset_type,
+        outcome: token.outcome,
+        balance: amount,
+    };
+
+    // Emit split event
+    event::emit(TokenSplit {
+        original_token_id: token.id.to_inner(),
+        new_token_id: object::id(&new_token),
+        market_id: token.market_id,
+        asset_type: token.asset_type,
+        outcome: token.outcome,
+        original_amount: token.balance,
+        split_amount: amount,
+        owner: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+
+    new_token
+}
+
 /// Split tokens for the sender
 entry fun split_entry(
     token: &mut ConditionalToken,

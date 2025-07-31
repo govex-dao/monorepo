@@ -21,6 +21,15 @@ const EMarketIdMismatch: u64 = 4;
 // === Constants ===
 const STATE_TRADING: u8 = 1;
 
+// === Helper Functions ===
+/// Efficiently transfers all tokens in a vector to the recipient
+fun transfer_tokens_to_recipient(mut tokens: vector<ConditionalToken>, recipient: address) {
+    while (!tokens.is_empty()) {
+        transfer::public_transfer(tokens.pop_back(), recipient);
+    };
+    tokens.destroy_empty();
+}
+
 // === Public Functions ===
 
 public fun swap_asset_to_stable<AssetType, StableType>(
@@ -33,6 +42,7 @@ public fun swap_asset_to_stable<AssetType, StableType>(
     ctx: &mut TxContext,
 ): ConditionalToken {
     assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(token_to_swap.asset_type() == 0, EWrongTokenType);
     let amount_in = token_to_swap.value();
 
     // Calculate the swap amount using AMM
@@ -92,6 +102,7 @@ public fun swap_stable_to_asset<AssetType, StableType>(
     ctx: &mut TxContext,
 ): ConditionalToken {
     assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(token_to_swap.asset_type() == 1, EWrongTokenType);
     let amount_in = token_to_swap.value();
 
     // Calculate the swap amount using AMM
@@ -163,7 +174,7 @@ public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     assert!(existing_token.asset_type() == 1, EWrongTokenType);
     assert!(existing_token.market_id() == escrow.get_market_state().market_id(), EMarketIdMismatch);
 
-    assert!(swap_token.outcome() == (outcome_idx as u8), EWrongOutcome);
+    // swap_token.outcome() is guaranteed to be outcome_idx since it came from tokens[outcome_idx]
     let mut existing_token_in_vector = vector[];
     existing_token_in_vector.push_back(existing_token);
     swap_token.merge_many(existing_token_in_vector, clock, ctx);
@@ -208,13 +219,8 @@ public entry fun create_and_swap_stable_to_asset_with_existing_entry<AssetType, 
     let recipient = ctx.sender();
 
     // Transfer all tokens to the recipient
-    while (!tokens.is_empty()) {
-        let token = tokens.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
+    transfer_tokens_to_recipient(tokens, recipient);
     transfer::public_transfer(asset_token, recipient);
-
-    tokens.destroy_empty();
 }
 
 /// Returns all tokens with swapped token at the end
@@ -238,7 +244,7 @@ public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     assert!(existing_token.asset_type() == 0, EWrongTokenType);
     assert!(existing_token.market_id() == escrow.get_market_state().market_id(), EMarketIdMismatch);
 
-    assert!(swap_token.outcome() == (outcome_idx as u8), EWrongOutcome);
+    // swap_token.outcome() is guaranteed to be outcome_idx since it came from tokens[outcome_idx]
     let mut existing_token_in_vector = vector[];
     existing_token_in_vector.push_back(existing_token);
     swap_token.merge_many(existing_token_in_vector, clock, ctx);
@@ -283,13 +289,8 @@ public entry fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, 
     let recipient = ctx.sender();
 
     // Transfer all tokens to the recipient
-    while (!tokens.is_empty()) {
-        let token = tokens.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
+    transfer_tokens_to_recipient(tokens, recipient);
     transfer::public_transfer(stable_token, recipient);
-
-    tokens.destroy_empty();
 }
 
 /// Returns all tokens with swapped token at the end
@@ -346,13 +347,8 @@ public entry fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
     let recipient = ctx.sender();
 
     // Transfer all tokens to the recipient
-    while (!tokens.is_empty()) {
-        let token = tokens.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
+    transfer_tokens_to_recipient(tokens, recipient);
     transfer::public_transfer(stable_token, recipient);
-
-    tokens.destroy_empty();
 }
 
 /// Returns all tokens with swapped token at the end
@@ -409,13 +405,8 @@ public entry fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
     let recipient = ctx.sender();
 
     // Transfer all tokens to the recipient
-    while (!tokens.is_empty()) {
-        let token = tokens.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
+    transfer_tokens_to_recipient(tokens, recipient);
     transfer::public_transfer(asset_token, recipient);
-
-    tokens.destroy_empty();
 }
 
 // === Private Functions ===

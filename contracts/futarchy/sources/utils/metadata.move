@@ -1,9 +1,8 @@
 module futarchy::metadata;
 
 use std::string::String;
-use std::vector;
 use sui::table::{Self, Table};
-use sui::tx_context::TxContext;
+use sui::bag::{Self, Bag};
 
 // === Errors ===
 const EInvalidMetadataLength: u64 = 0; // Keys and values vectors must have same length
@@ -85,9 +84,14 @@ public fun update_entry(
 ) {
     assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
     
-    // Remove old value and add new one
-    table::remove(metadata, key);
-    table::add(metadata, key, value);
+    // Update existing entry
+    if (table::contains(metadata, key)) {
+        let val_ref = table::borrow_mut(metadata, key);
+        *val_ref = value;
+    } else {
+        // Add new entry if it doesn't exist
+        add_entry(metadata, key, value);
+    }
 }
 
 /// Remove an entry from the metadata table
@@ -122,7 +126,8 @@ public fun length(metadata: &Table<String, String>): u64 {
 /// Validate metadata without creating a table (useful for pre-validation)
 public fun validate_metadata_vectors(
     keys: &vector<String>,
-    values: &vector<String>
+    values: &vector<String>,
+    ctx: &mut TxContext
 ) {
     let keys_len = keys.length();
     let values_len = values.length();
@@ -131,7 +136,7 @@ public fun validate_metadata_vectors(
     assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
     
     let mut i = 0;
-    let mut seen_keys = vector::empty<String>();
+    let mut seen_keys = bag::new(ctx);
     
     while (i < keys_len) {
         let key = &keys[i];
@@ -143,15 +148,12 @@ public fun validate_metadata_vectors(
         assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
         
         // Check for duplicates
-        let mut j = 0;
-        while (j < seen_keys.length()) {
-            assert!(seen_keys[j] != *key, EDuplicateKey);
-            j = j + 1;
-        };
+        assert!(!bag::contains(&seen_keys, *key), EDuplicateKey);
+        bag::add(&mut seen_keys, *key, true);
         
-        seen_keys.push_back(*key);
         i = i + 1;
     };
+    bag::destroy_empty(seen_keys);
 }
 
 // === Common Metadata Keys ===

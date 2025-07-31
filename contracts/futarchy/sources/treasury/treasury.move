@@ -26,6 +26,8 @@ const EInsufficientBalance: u64 = 12;
 const ECoinTypeNotFound: u64 = 14;
 const EInsufficientFee: u64 = 15;
 const EInvalidDepositAmount: u64 = 16;
+const EInvalidAuth: u64 = 19;
+const EUnauthorizedPlatformWithdraw: u64 = 20;
 
 // === Structs ===
 
@@ -49,7 +51,8 @@ public struct Treasury has key, store {
 }
 
 /// Authentication token for treasury actions
-public struct Auth has drop {
+/// SECURITY FIX: Made non-droppable to prevent forgery
+public struct Auth {
     /// Address of the treasury that created the auth
     treasury_addr: address,
 }
@@ -239,8 +242,13 @@ public entry fun deposit_coin_with_fee<CoinType: drop>(
         // Charge fee for new coin type
         assert!(fee_payment.value() >= NEW_COIN_TYPE_FEE, EInsufficientFee);
         
-        // Add the fee to treasury as SUI
-        deposit_sui(treasury, fee_payment, ctx);
+        // Add fee to treasury as SUI
+        if (coin_type_exists<SUI>(treasury)) {
+            let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<SUI>>(type_name::get<SUI>());
+            balance_mut.join(fee_payment.into_balance());
+        } else {
+            treasury.vault.add(type_name::get<SUI>(), fee_payment.into_balance());
+        };
         
         // Add new coin type
         treasury.vault.add(coin_type, coin.into_balance());
@@ -273,9 +281,10 @@ public fun withdraw<CoinType: drop>(
     auth: Auth,
     treasury: &mut Treasury,
     amount: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    verify_auth(treasury, auth);
+    verify_auth(treasury, &auth);
     
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists<CoinType>(treasury), ECoinTypeNotFound);
@@ -292,6 +301,9 @@ public fun withdraw<CoinType: drop>(
         recipient: ctx.sender(),
     });
     
+    // Consume auth token to prevent reuse
+    let Auth { treasury_addr: _ } = auth;
+    
     coin
 }
 
@@ -301,20 +313,25 @@ public fun withdraw_to<CoinType: drop>(
     treasury: &mut Treasury,
     amount: u64,
     recipient: address,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let coin = withdraw<CoinType>(auth, treasury, amount, ctx);
+    let coin = withdraw<CoinType>(auth, treasury, amount, clock, ctx);
     transfer::public_transfer(coin, recipient);
 }
 
 /// Withdraws coins from treasury without drop requirement (for LP tokens)
+/// SECURITY FIX: Added documentation for why this is needed and extra validation
 public (package) fun withdraw_without_drop<CoinType>(
     auth: Auth,
     treasury: &mut Treasury,
     amount: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    verify_auth(treasury, auth);
+    // This function is specifically for LP tokens which don't have the drop ability
+    // Extra care is taken to ensure it's only used within the package for authorized operations
+    verify_auth(treasury, &auth);
     
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
@@ -330,6 +347,9 @@ public (package) fun withdraw_without_drop<CoinType>(
         amount,
         recipient: ctx.sender(),
     });
+    
+    // Consume auth token to prevent reuse
+    let Auth { treasury_addr: _ } = auth;
     
     coin
 }
@@ -382,15 +402,19 @@ public fun coin_type_value<CoinType: drop>(treasury: &Treasury): u64 {
     }
 }
 
-/// Withdraws coins for platform fees (no auth needed, package-private)
+/// Withdraws coins for platform fees from proposals (requires ProposalExecutionContext)
+/// SECURITY FIX: Added authorization requirement via execution context
 public(package) fun platform_withdraw<CoinType>(
     treasury: &mut Treasury,
     amount: u64,
+    execution_context: &ProposalExecutionContext,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    // No auth token verification, protected by package privacy.
-    // This should only be called by trusted internal modules like `fee`.
+    // SECURITY FIX: Verify the execution context is for the DAO that owns this treasury
+    let context_dao_id = execution_context::dao_id(execution_context);
+    assert!(context_dao_id == treasury.config.dao_id, EUnauthorizedPlatformWithdraw);
+    
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
 
@@ -404,6 +428,37 @@ public(package) fun platform_withdraw<CoinType>(
         coin_type,
         amount,
         collector: ctx.sender(), // The address that initiated the collection
+        timestamp: clock.timestamp_ms(),
+    });
+
+    coin
+}
+
+/// Withdraws coins for platform fee collection
+/// SECURITY: This is specifically for fee collection and requires the DAO ID to match
+public(package) fun withdraw_platform_fee<CoinType>(
+    treasury: &mut Treasury,
+    amount: u64,
+    dao_id: ID,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    // SECURITY: Verify the DAO ID matches the treasury's DAO
+    assert!(dao_id == treasury.config.dao_id, EUnauthorizedPlatformWithdraw);
+    
+    let coin_type = type_name::get<CoinType>();
+    assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
+
+    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+    assert!(balance_mut.value() >= amount, EInsufficientBalance);
+
+    let coin = coin::from_balance(balance_mut.split(amount), ctx);
+
+    event::emit(PlatformFeeWithdrawn {
+        treasury_id: object::id(treasury),
+        coin_type,
+        amount,
+        collector: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
 
@@ -480,8 +535,9 @@ fun new_auth(treasury: &Treasury): Auth {
 }
 
 /// Verify auth token (public for use by other modules)
-public fun verify_auth(treasury: &Treasury, auth: Auth) {
-    assert!(object::id_address(treasury) == auth.treasury_addr, EWrongAccount);
+/// SECURITY FIX: Now takes reference to auth since Auth is non-droppable
+public fun verify_auth(treasury: &Treasury, auth: &Auth) {
+    assert!(object::id_address(treasury) == auth.treasury_addr, EInvalidAuth);
 }
 
 /// Create auth for proposals - requires ProposalExecutionContext as proof of authorization
@@ -491,6 +547,11 @@ public(package) fun create_auth_for_proposal(
 ): Auth {
     // The context proves this is an authorized execution from the DAO
     new_auth(treasury)
+}
+
+/// Consume an auth token to prevent reuse
+public fun consume_auth(auth: Auth) {
+    let Auth { treasury_addr: _ } = auth;
 }
 
 // === Test Functions ===

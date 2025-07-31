@@ -16,6 +16,16 @@ use futarchy::{
 
 // === Errors ===
 const EInvalidParameters: u64 = 0;
+const EInvalidPaymentInterval: u64 = 1;
+const EInvalidStartTimestamp: u64 = 2;
+const EInvalidTotalPayments: u64 = 3;
+const EPaymentAmountTooLarge: u64 = 4;
+const EArrayIndexOutOfBounds: u64 = 5;
+
+// === Constants ===
+const MIN_PAYMENT_INTERVAL_MS: u64 = 86400000; // 1 day minimum
+const MAX_PAYMENT_INTERVAL_MS: u64 = 365 * 86400000; // 1 year maximum
+const MAX_TOTAL_PAYMENTS: u64 = 1000; // Maximum number of payments in a stream
 
 
 // === Public Functions ===
@@ -75,8 +85,12 @@ public entry fun create_recurring_payment_proposal<AssetType, StableType, CoinTy
     let mut stable_amounts = vector[];
     let mut i = 0;
     while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        let asset_idx = i * 2;
+        let stable_idx = i * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
         i = i + 1;
     };
 
@@ -100,12 +114,33 @@ public entry fun create_recurring_payment_proposal<AssetType, StableType, CoinTy
     // 4. Initialize and register actions for each outcome
     treasury_actions::init_proposal_actions(registry, proposal_id, outcome_count, ctx);
     i = 0;
+    let current_time = clock.timestamp_ms();
     while (i < outcome_count) {
         if (amounts_per_payment[i] > 0) {
+            // Validate payment parameters
+            let payment_interval = payment_intervals_ms[i];
+            let total_payments = total_payments_list[i];
+            let start_timestamp = start_timestamps[i];
+            let amount_per_payment = amounts_per_payment[i];
+            
+            // Validate payment interval
+            assert!(payment_interval >= MIN_PAYMENT_INTERVAL_MS, EInvalidPaymentInterval);
+            assert!(payment_interval <= MAX_PAYMENT_INTERVAL_MS, EInvalidPaymentInterval);
+            
+            // Validate total payments
+            assert!(total_payments > 0 && total_payments <= MAX_TOTAL_PAYMENTS, EInvalidTotalPayments);
+            
+            // Validate start timestamp (must be in the future)
+            assert!(start_timestamp > current_time, EInvalidStartTimestamp);
+            
+            // Validate total commitment doesn't overflow
+            let total_commitment = amount_per_payment * total_payments;
+            assert!(total_commitment / total_payments == amount_per_payment, EPaymentAmountTooLarge);
+            
             // This outcome creates a payment stream.
             treasury_actions::add_recurring_payment_action<CoinType>(
-                registry, proposal_id, i, recipients[i], amounts_per_payment[i],
-                payment_intervals_ms[i], total_payments_list[i], start_timestamps[i],
+                registry, proposal_id, i, recipients[i], amount_per_payment,
+                payment_interval, total_payments, start_timestamp,
                 stream_descriptions[i], ctx
             );
         } else {

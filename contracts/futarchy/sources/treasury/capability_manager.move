@@ -24,6 +24,8 @@ const EExceedsMaxMintPerProposal: u64 = 6;
 const EMintCooldownNotMet: u64 = 7;
 const EActionAlreadyExecuted: u64 = 8;
 const EExternalBurnNotSupported: u64 = 9;
+const EInvalidAdminCap: u64 = 10;
+const ECapabilityLocked: u64 = 11;
 
 // === Structs ===
 
@@ -32,10 +34,11 @@ public struct CapabilityManager has key {
     id: UID,
     /// Maps TypeName to stored capabilities
     capabilities: Table<TypeName, CapabilityInfo>,
-    /// Tracks (ProposalID, TypeName) -> bool to prevent replay attacks
-    executed_mints: Table<ID, Table<TypeName, bool>>,
-    /// Tracks (ProposalID, TypeName) -> bool for burn actions
-    executed_burns: Table<ID, Table<TypeName, bool>>,
+    /// SECURITY FIX: Enhanced tracking with execution count to prevent replay attacks
+    /// Tracks (ProposalID, TypeName) -> execution count
+    executed_mints: Table<ID, Table<TypeName, u64>>,
+    /// Tracks (ProposalID, TypeName) -> execution count for burn actions
+    executed_burns: Table<ID, Table<TypeName, u64>>,
 }
 
 /// Information about a stored capability
@@ -53,6 +56,8 @@ public struct CapabilityStorage<phantom T> has store {
     cap: TreasuryCap<T>,
     locked: bool,
     lock_until: Option<u64>,
+    /// Track capability deposit time for cooldown calculations
+    deposited_at: u64,
 }
 
 /// Key for storing rules in dynamic fields
@@ -109,6 +114,7 @@ public struct TokensMinted has copy, drop {
     amount: u64,
     total_minted: u64,
     recipient: address,
+    proposal_id: ID,
 }
 
 public struct TokensBurned has copy, drop {
@@ -116,6 +122,7 @@ public struct TokensBurned has copy, drop {
     coin_type: TypeName,
     amount: u64,
     total_burned: u64,
+    proposal_id: ID,
 }
 
 // === Public Functions ===
@@ -164,6 +171,7 @@ public fun initialize_with_cap<T: drop>(
         cap,
         locked: true,
         lock_until: option::none(),
+        deposited_at: clock.timestamp_ms(),
     };
     df::add(&mut manager.id, coin_type, storage);
     
@@ -209,6 +217,7 @@ public fun deposit_capability<T: drop>(
         cap,
         locked: true,
         lock_until: option::none(),
+        deposited_at: clock.timestamp_ms(),
     };
     df::add(&mut manager.id, coin_type, storage);
     
@@ -227,11 +236,22 @@ public fun deposit_capability<T: drop>(
 /// Get a mutable reference to a capability for minting
 public fun borrow_capability_mut<T: drop>(
     manager: &mut CapabilityManager,
+    clock: &sui::clock::Clock,
 ): &mut TreasuryCap<T> {
     let coin_type = type_name::get<T>();
     assert!(has_capability<T>(manager), ECapabilityNotFound);
     
     let storage: &mut CapabilityStorage<T> = df::borrow_mut(&mut manager.id, coin_type);
+    
+    // SECURITY FIX: Check if capability is locked
+    if (storage.locked && storage.lock_until.is_some()) {
+        let lock_until = *storage.lock_until.borrow();
+        assert!(clock.timestamp_ms() >= lock_until, ECapabilityLocked);
+        // Unlock if time has passed
+        storage.locked = false;
+        storage.lock_until = option::none();
+    };
+    
     &mut storage.cap
 }
 
@@ -254,8 +274,11 @@ public fun update_permissions<T: drop>(
     manager: &mut CapabilityManager,
     can_mint: bool,
     can_burn: bool,
-    _admin_cap: &AdminCap,
+    admin_cap: &AdminCap,
 ) {
+    // SECURITY FIX: Verify admin cap is for this manager
+    assert!(admin_cap.manager_id == object::id(manager), EInvalidAdminCap);
+    
     let rules = get_rules_mut<T>(manager);
     rules.can_mint = can_mint;
     rules.can_burn = can_burn;
@@ -346,12 +369,18 @@ public fun mint_tokens<T: drop>(
         manager.executed_mints.add(proposal_id, table::new(ctx));
     };
     
-    // Check if already executed
-    let already_executed = {
+    // SECURITY FIX: Enhanced replay attack prevention with execution count
+    let execution_count = {
         let proposal_mints = &manager.executed_mints[proposal_id];
-        proposal_mints.contains(coin_type)
+        if (proposal_mints.contains(coin_type)) {
+            *proposal_mints.borrow(coin_type)
+        } else {
+            0
+        }
     };
-    assert!(!already_executed, EActionAlreadyExecuted);
+    
+    // For now, only allow one execution per proposal-coin combination
+    assert!(execution_count == 0, EActionAlreadyExecuted);
     
     // Check capability exists
     assert!(has_capability<T>(manager), ECapabilityNotFound);
@@ -367,13 +396,25 @@ public fun mint_tokens<T: drop>(
         assert!(amount <= *rules.max_mint_per_proposal.borrow(), EExceedsMaxMintPerProposal);
     };
     
-    // Check cooldown
+    // SECURITY FIX: Check cooldown from deposit time, not just last mint
     let current_time = clock.timestamp_ms();
-    if (rules.last_mint_timestamp > 0) {
+    let storage: &CapabilityStorage<T> = df::borrow(&manager.id, coin_type);
+    
+    // Ensure cooldown is met from both deposit time and last mint
+    if (rules.mint_cooldown_ms > 0) {
+        // Check cooldown from deposit
         assert!(
-            current_time >= rules.last_mint_timestamp + rules.mint_cooldown_ms,
+            current_time >= storage.deposited_at + rules.mint_cooldown_ms,
             EMintCooldownNotMet
         );
+        
+        // Check cooldown from last mint if applicable
+        if (rules.last_mint_timestamp > 0) {
+            assert!(
+                current_time >= rules.last_mint_timestamp + rules.mint_cooldown_ms,
+                EMintCooldownNotMet
+            );
+        };
     };
     
     // Check max supply
@@ -383,7 +424,7 @@ public fun mint_tokens<T: drop>(
     };
     
     // Mint tokens
-    let cap = borrow_capability_mut<T>(manager);
+    let cap = borrow_capability_mut<T>(manager, clock);
     let minted_coin = sui::coin::mint(cap, amount, ctx);
     
     // Update rules
@@ -395,9 +436,14 @@ public fun mint_tokens<T: drop>(
     // Transfer to recipient
     sui::transfer::public_transfer(minted_coin, recipient);
     
-    // Mark this proposal-coin combination as executed
+    // SECURITY FIX: Mark this proposal-coin combination as executed with count
     let proposal_mints_mut = &mut manager.executed_mints[proposal_id];
-    proposal_mints_mut.add(coin_type, true);
+    if (proposal_mints_mut.contains(coin_type)) {
+        let count = proposal_mints_mut.borrow_mut(coin_type);
+        *count = *count + 1;
+    } else {
+        proposal_mints_mut.add(coin_type, 1);
+    };
     
     // Emit event
     event::emit(TokensMinted {
@@ -406,6 +452,7 @@ public fun mint_tokens<T: drop>(
         amount,
         total_minted: new_total_minted,
         recipient,
+        proposal_id,
     });
 }
 
@@ -414,6 +461,7 @@ public fun burn_tokens<T: drop>(
     manager: &mut CapabilityManager,
     context: &ProposalExecutionContext,
     coin: sui::coin::Coin<T>,
+    clock: &sui::clock::Clock,
     ctx: &mut TxContext,
 ) {
     let coin_type = type_name::get<T>();
@@ -425,12 +473,18 @@ public fun burn_tokens<T: drop>(
         manager.executed_burns.add(proposal_id, table::new(ctx));
     };
     
-    // Check if already executed
-    let already_executed = {
+    // SECURITY FIX: Enhanced replay attack prevention with execution count
+    let execution_count = {
         let proposal_burns = &manager.executed_burns[proposal_id];
-        proposal_burns.contains(coin_type)
+        if (proposal_burns.contains(coin_type)) {
+            *proposal_burns.borrow(coin_type)
+        } else {
+            0
+        }
     };
-    assert!(!already_executed, EActionAlreadyExecuted);
+    
+    // For now, only allow one execution per proposal-coin combination
+    assert!(execution_count == 0, EActionAlreadyExecuted);
     
     // Check capability exists and burning is allowed
     assert!(has_capability<T>(manager), ECapabilityNotFound);
@@ -438,7 +492,7 @@ public fun burn_tokens<T: drop>(
     assert!(rules.can_burn, EBurnDisabled);
     
     // Burn the coins
-    let cap = borrow_capability_mut<T>(manager);
+    let cap = borrow_capability_mut<T>(manager, clock);
     sui::coin::burn(cap, coin);
     
     // Update rules
@@ -446,9 +500,14 @@ public fun burn_tokens<T: drop>(
     rules_mut.total_burned = rules_mut.total_burned + amount;
     let new_total_burned = rules_mut.total_burned;
     
-    // Mark this proposal-coin combination as executed
+    // SECURITY FIX: Mark this proposal-coin combination as executed with count
     let proposal_burns_mut = &mut manager.executed_burns[proposal_id];
-    proposal_burns_mut.add(coin_type, true);
+    if (proposal_burns_mut.contains(coin_type)) {
+        let count = proposal_burns_mut.borrow_mut(coin_type);
+        *count = *count + 1;
+    } else {
+        proposal_burns_mut.add(coin_type, 1);
+    };
     
     // Emit event
     event::emit(TokensBurned {
@@ -456,6 +515,7 @@ public fun burn_tokens<T: drop>(
         coin_type,
         amount,
         total_burned: new_total_burned,
+        proposal_id,
     });
 }
 

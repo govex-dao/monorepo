@@ -7,7 +7,6 @@ use std::string::String;
 use std::ascii::String as AsciiString;
 use sui::{
     table::{Self, Table},
-    bag::{Self, Bag},
     url::Url,
 };
 

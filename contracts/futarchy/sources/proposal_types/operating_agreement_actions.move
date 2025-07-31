@@ -26,6 +26,8 @@ const ACTION_UPDATE: u8 = 0;
 const ACTION_INSERT_AFTER: u8 = 1;
 const ACTION_INSERT_AT_BEGINNING: u8 = 2;
 const ACTION_REMOVE: u8 = 3;
+// BASIS_POINTS is used in difficulty calculations to avoid precision loss
+// Maximum difficulty is expected to be less than u64::MAX, so BASIS_POINTS + difficulty cannot overflow
 const BASIS_POINTS: u256 = 100_000;
 
 // === Structs ===
@@ -175,8 +177,12 @@ public entry fun execute_actions<AssetType, StableType>(
     let twap_reject = *twaps.borrow(0);
     let twap_accept = *twaps.borrow(1);
 
+    // Calculate with overflow protection
     let accept_val = (twap_accept as u256) * BASIS_POINTS;
-    let required_reject_val = (twap_reject as u256) * (BASIS_POINTS + (max_difficulty_in_batch as u256));
+    let difficulty_256 = (max_difficulty_in_batch as u256);
+    // Ensure difficulty doesn't cause overflow (should be much less than u256::MAX - BASIS_POINTS)
+    assert!(difficulty_256 < (std::u256::max_value!() - BASIS_POINTS), EThresholdNotMet);
+    let required_reject_val = (twap_reject as u256) * (BASIS_POINTS + difficulty_256);
     assert!(accept_val > required_reject_val, EThresholdNotMet);
 
     // === PHASE 3: EXECUTE ALL ACTIONS IN THE BATCH ===

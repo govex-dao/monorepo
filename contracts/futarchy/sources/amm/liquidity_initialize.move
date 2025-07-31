@@ -5,7 +5,6 @@ use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token as token;
 use sui::balance::Balance;
 use sui::clock::Clock;
-use sui::coin::TreasuryCap;
 
 // === Introduction ===
 // Method to initialize AMM liquidity
@@ -15,6 +14,7 @@ const EInitAssetReservesMismatch: u64 = 100;
 const EInitStableReservesMismatch: u64 = 101;
 const EInitPoolCountMismatch: u64 = 102;
 const EInitPoolOutcomeMismatch: u64 = 103;
+const EInitZeroLiquidity: u64 = 104;
 
 // === Public Functions ===
 public(package) fun create_outcome_markets<AssetType, StableType>(
@@ -30,6 +30,17 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ID>, vector<LiquidityPool>) {
+    assert!(asset_amounts.length() == outcome_count, EInitAssetReservesMismatch);
+    assert!(stable_amounts.length() == outcome_count, EInitStableReservesMismatch);
+    
+    // Validate that all amounts are non-zero to prevent division by zero in AMM calculations
+    let mut j = 0;
+    while (j < outcome_count) {
+        assert!(asset_amounts[j] > 0, EInitZeroLiquidity);
+        assert!(stable_amounts[j] > 0, EInitZeroLiquidity);
+        j = j + 1;
+    };
+
     let mut supply_ids = vector[];
     let mut amm_pools = vector[];
 
@@ -43,7 +54,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
             let stable_supply = token::new_supply(ms, 1, (i as u8), ctx);
             let lp_supply = token::new_supply(ms, 2, (i as u8), ctx);
 
-            // Record their IDs
+            // Record their IDs (asset, stable, lp for each outcome)
             let asset_supply_id = object::id(&asset_supply);
             let stable_supply_id = object::id(&stable_supply);
             let lp_supply_id = object::id(&lp_supply);

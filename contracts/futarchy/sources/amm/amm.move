@@ -6,12 +6,8 @@ use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
 use sui::clock::Clock;
-use sui::coin::{Self, Coin};
 use sui::event;
-use sui::object::{Self, ID, UID};
-use sui::transfer;
-use sui::tx_context::TxContext;
-use std::option;
+use std::u64;
 
 // === Introduction ===
 // This is a Uniswap V2-style XY=K AMM implementation for futarchy prediction markets.
@@ -48,6 +44,7 @@ const EMarketIdMismatch: u64 = 7; // Market ID doesn't match expected value
 const EInsufficientLPTokens: u64 = 8; // Not enough LP tokens to burn
 const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
 const EOverflow: u64 = 10; // Arithmetic overflow detected
+const EInvalidLiquidityRatio: u64 = 11; // Liquidity provided does not match pool ratio
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -81,6 +78,26 @@ public struct SwapEvent has copy, drop {
     sender: address,
     asset_reserve: u64,
     stable_reserve: u64,
+    timestamp: u64,
+}
+
+public struct LiquidityAdded has copy, drop {
+    market_id: ID,
+    outcome: u8,
+    asset_amount: u64,
+    stable_amount: u64,
+    lp_amount: u64,
+    sender: address,
+    timestamp: u64,
+}
+
+public struct LiquidityRemoved has copy, drop {
+    market_id: ID,
+    outcome: u8,
+    asset_amount: u64,
+    stable_amount: u64,
+    lp_amount: u64,
+    sender: address,
     timestamp: u64,
 }
 
@@ -143,12 +160,12 @@ public(package) fun swap_asset_to_stable(
     assert!(amount_in > 0, EZeroAmount);
 
     // When selling outcome tokens (asset -> stable):
-    // 1. We calculate the full swap output first (before fees)
-    // 2. Then collect fee from the stable output
-    //
-    // This approach is used because it:
-    // - Maintains accurate asset pricing through the entire reserve
-    // - Preserves the XY=K invariant for the actual pool tokens
+    // 1. Calculate the gross output amount (amount_out_before_fee) based on current reserves and amount_in.
+    // 2. Calculate the fee amount from this gross output.
+    // 3. The net output (amount_out) is the gross output minus the fee.
+    // 4. The fee is collected directly into `pool.protocol_fees` and does not enter the pool.
+    // 5. The pool's reserves are updated using the `amount_out_before_fee` to maintain the XY=K invariant for the actual swap,
+    //    as the fee was taken from the output *after* the swap calculation.
     let amount_out_before_fee = calculate_output(
         amount_in,
         pool.asset_reserve,
@@ -176,6 +193,16 @@ public(package) fun swap_asset_to_stable(
     let old_asset = pool.asset_reserve;
     let old_stable = pool.stable_reserve;
 
+    let timestamp = clock.timestamp_ms();
+    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    // Oracle observation is recorded using the reserves *before* the swap.
+    // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
+    write_observation(
+        &mut pool.oracle,
+        timestamp,
+        old_price,
+    );
+
     // Update reserves - include full asset in, but remove amount_out_before_fee
     // This ensures proper pool balance since we're taking fee outside the pool
     let new_asset_reserve = pool.asset_reserve + amount_in;
@@ -183,14 +210,6 @@ public(package) fun swap_asset_to_stable(
     
     pool.asset_reserve = new_asset_reserve;
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
-
-    let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
-    write_observation(
-        &mut pool.oracle,
-        timestamp,
-        old_price,
-    );
 
     let current_price = get_current_price(pool);
     check_price_under_max(current_price);
@@ -226,12 +245,11 @@ public(package) fun swap_stable_to_asset(
     assert!(amount_in > 0, EZeroAmount);
 
     // When buying outcome tokens (stable -> asset):
-    // 1. We collect fee from stable input first
-    // 2. Then execute swap with the remaining amount
-    //
-    // This approach is used because it:
-    // - Maintains consistent fee collection in stable tokens only
-    // - Prevents dilution of the outcome token reserves
+    // 1. Calculate the fee from the input amount (amount_in).
+    // 2. The actual amount used for the swap (amount_in_after_fee) is the original input minus the fee.
+    // 3. The fee is collected directly into `pool.protocol_fees` and does not enter the pool.
+    // 4. The output amount (amount_out) is calculated based on `amount_in_after_fee` and current reserves.
+    // 5. The pool's reserves are updated using `amount_in_after_fee` and `amount_out` to maintain the XY=K invariant.
     let fee_amount = calculate_fee(amount_in, pool.fee_percent);
     let amount_in_after_fee = amount_in - fee_amount;
 
@@ -259,20 +277,22 @@ public(package) fun swap_stable_to_asset(
     let old_asset = pool.asset_reserve;
     let old_stable = pool.stable_reserve;
 
+    let timestamp = clock.timestamp_ms();
+    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    // Oracle observation is recorded using the reserves *before* the swap.
+    // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
+    write_observation(
+        &mut pool.oracle,
+        timestamp,
+        old_price,
+    );
+
     // Update reserves with amount after fee
     let new_stable_reserve = pool.stable_reserve + amount_in_after_fee;
     assert!(new_stable_reserve >= pool.stable_reserve, EOverflow);
     
     pool.stable_reserve = new_stable_reserve;
     pool.asset_reserve = pool.asset_reserve - amount_out;
-
-    let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
-    write_observation(
-        &mut pool.oracle,
-        timestamp,
-        old_price,
-    );
 
     let current_price = get_current_price(pool);
     check_price_under_max(current_price);
@@ -304,6 +324,7 @@ public(package) fun add_liquidity_proportional<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_in: ConditionalToken,
     stable_in: ConditionalToken,
+    min_lp_out: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ConditionalToken {
@@ -324,16 +345,41 @@ public(package) fun add_liquidity_proportional<AssetType, StableType>(
         let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
         let k = (math::sqrt_u128(k_squared) as u64);
         assert!(k >= (MINIMUM_LIQUIDITY as u64), ELowLiquidity);
-        // First MINIMUM_LIQUIDITY LP tokens are permanently locked
-        pool.lp_supply = (MINIMUM_LIQUIDITY as u64);
-        k - (MINIMUM_LIQUIDITY as u64)
+        // For the first liquidity provider, a small amount of LP tokens (MINIMUM_LIQUIDITY)
+        // is intentionally burned and locked in the pool. This is a standard practice in Uniswap V2
+        // to prevent division-by-zero errors and to ensure that LP token prices are always well-defined.
+        // This amount is accounted for in the `lp_supply` but is not redeemable.
+        pool.lp_supply = k;
+        k
     } else {
         // Subsequent providers - mint proportionally
+        // The `math::min` function is used here, similar to Uniswap V2, to calculate the LP tokens to mint.
+        // This approach inherently protects against adding imbalanced liquidity by only considering the
+        // smaller of the two potential LP amounts derived from asset and stable contributions.
+        //
+        // Additionally, the `assert!` statement below provides explicit ratio validation (slippage protection)
+        // to ensure that the provided asset and stable amounts are close to the current pool ratio,
+        // preventing users from adding liquidity at highly unfavorable rates.
+        let expected_stable_amount = math::mul_div_to_64(asset_amount, pool.stable_reserve, pool.asset_reserve);
+        let expected_asset_amount = math::mul_div_to_64(stable_amount, pool.asset_reserve, pool.stable_reserve);
+
+        // Use a tolerance of 0.1% (10 basis points) to allow for small rounding differences
+        // while still preventing imbalanced liquidity attacks
+        let tolerance_bps = 10; // 0.1%
+        assert!(
+            math::within_tolerance(stable_amount, expected_stable_amount, tolerance_bps) || 
+            math::within_tolerance(asset_amount, expected_asset_amount, tolerance_bps), 
+            EInvalidLiquidityRatio
+        );
+
         let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
         let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
         // Use minimum to ensure proper ratio
         math::min(lp_from_asset, lp_from_stable)
     };
+    
+    // Slippage protection: ensure LP tokens minted meet minimum expectation
+    assert!(lp_to_mint >= min_lp_out, EExcessiveSlippage);
     
     // Update reserves with overflow checks
     let new_asset_reserve = pool.asset_reserve + asset_amount;
@@ -353,6 +399,16 @@ public(package) fun add_liquidity_proportional<AssetType, StableType>(
     coin_escrow::burn_single_conditional_token(escrow, asset_in, clock, ctx);
     coin_escrow::burn_single_conditional_token(escrow, stable_in, clock, ctx);
     
+    event::emit(LiquidityAdded {
+        market_id: pool.market_id,
+        outcome: pool.outcome_idx,
+        asset_amount,
+        stable_amount,
+        lp_amount: lp_to_mint,
+        sender: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+
     // Mint LP conditional tokens
     coin_escrow::mint_single_conditional_token(
         escrow,
@@ -381,8 +437,9 @@ public(package) fun remove_liquidity_proportional<AssetType, StableType>(
     assert!(lp_token.asset_type() == 2, EInvalidTokenType); // Must be LP token
     
     let lp_amount = lp_token.value();
-    assert!(lp_amount > 0, EZeroAmount);
+    // Check for zero liquidity in the pool first to provide a more accurate error message
     assert!(pool.lp_supply > 0, EZeroLiquidity);
+    assert!(lp_amount > 0, EZeroAmount);
     
     // Burn the LP token
     coin_escrow::burn_single_conditional_token(escrow, lp_token, clock, ctx);
@@ -406,6 +463,16 @@ public(package) fun remove_liquidity_proportional<AssetType, StableType>(
     pool.asset_reserve = pool.asset_reserve - asset_to_remove;
     pool.stable_reserve = pool.stable_reserve - stable_to_remove;
     pool.lp_supply = pool.lp_supply - lp_amount;
+
+    event::emit(LiquidityRemoved {
+        market_id: pool.market_id,
+        outcome: pool.outcome_idx,
+        asset_amount: asset_to_remove,
+        stable_amount: stable_to_remove,
+        lp_amount,
+        sender: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
     
     // Create conditional tokens to return using the escrow's mint function
     // Note: In the live-flow model, these tokens are temporary and will be
@@ -502,7 +569,19 @@ fun calculate_price_impact(
     amount_out: u64,
     reserve_out: u64,
 ): u128 {
-    let ideal_out = math::mul_div_to_128(amount_in, reserve_out, reserve_in);
+    // Use u256 for intermediate calculations to prevent overflow
+    let amount_in_256 = (amount_in as u256);
+    let reserve_out_256 = (reserve_out as u256);
+    let reserve_in_256 = (reserve_in as u256);
+    
+    // Calculate ideal output with u256 to prevent overflow
+    let ideal_out_256 = (amount_in_256 * reserve_out_256) / reserve_in_256;
+    assert!(ideal_out_256 <= (std::u128::max_value!() as u256), EOverflow);
+    let ideal_out = (ideal_out_256 as u128);
+    
+    // The assert below ensures that `ideal_out` is always greater than or equal to `amount_out`.
+    // This prevents underflow when calculating `ideal_out - (amount_out as u128)`.
+    assert!(ideal_out >= (amount_out as u128), EOverflow); // Ensure no underflow
     math::mul_div_mixed(ideal_out - (amount_out as u128), FEE_SCALE, ideal_out)
 }
 
@@ -546,8 +625,9 @@ public(package) fun calculate_output(
 
     let denominator = reserve_in + amount_in_with_fee;
     assert!(denominator > 0, EDivByZero);
-    let numerator = math::mul_div_to_128(amount_in_with_fee, reserve_out, 1);
-    let output = math::mul_div_mixed(numerator, 1, (denominator as u128));
+    let numerator = (amount_in_with_fee as u256) * (reserve_out as u256);
+    let output = numerator / (denominator as u256);
+    assert!(output <= (u64::max_value!() as u256), EOverflow);
     (output as u64)
 }
 

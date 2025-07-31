@@ -18,7 +18,7 @@ use futarchy::{
     recurring_payments,
     recurring_payment_registry::PaymentStreamRegistry,
     dao::{Self, DAO},
-    execution_context::{Self, ProposalExecutionContext},
+    execution_context::{ProposalExecutionContext},
 };
 
 // === Errors ===
@@ -32,6 +32,8 @@ const EInvalidVestingSchedule: u64 = 10;
 const ERecurringPaymentRegistryRequired: u64 = 11;
 const EInvalidAction: u64 = 12;
 const EActionAlreadyExecuted: u64 = 13;
+const EUnauthorizedActionAddition: u64 = 14;
+const ETooManyActions: u64 = 15;
 
 // === Constants ===
 const ACTION_TRANSFER: u8 = 0;
@@ -41,6 +43,9 @@ const ACTION_MINT: u8 = 5;
 const ACTION_BURN: u8 = 6;
 const ACTION_CAPABILITY_DEPOSIT: u8 = 7;
 
+// SECURITY FIX: Add maximum actions limit to prevent DOS
+const MAX_ACTIONS_PER_OUTCOME: u64 = 100;
+
 // === Structs ===
 
 /// Registry to store treasury actions with proper type mapping
@@ -48,10 +53,9 @@ public struct ActionRegistry has key {
     id: UID,
     // Map proposal_id -> ProposalActions
     actions: Table<ID, ProposalActions>,
-    // Track executed transfers: proposal_id -> action_index -> executed
-    executed_transfers: Table<ID, Table<u64, bool>>,
-    // Track executed payments: proposal_id -> action_index -> executed
-    executed_payments: Table<ID, Table<u64, bool>>,
+    // SECURITY FIX: Unified execution tracking to prevent bypass
+    // Track executed actions: proposal_id -> outcome -> action_index -> executed
+    executed_actions: Table<ID, Table<u64, Table<u64, bool>>>,
 }
 
 /// Actions for a proposal, stored by outcome using Bags for type safety
@@ -64,6 +68,8 @@ public struct ProposalActions has store {
     action_metadata: Table<u64, vector<ActionMetadata>>,
     // Track unique coin types that have actions
     coin_types: vector<AsciiString>,
+    // SECURITY FIX: Track proposal creator to ensure only they can add actions
+    creator: address,
 }
 
 /// Metadata to track action type and coin type for execution
@@ -145,8 +151,7 @@ public fun create_for_testing(ctx: &mut TxContext) {
     let registry = ActionRegistry {
         id: object::new(ctx),
         actions: table::new(ctx),
-        executed_transfers: table::new(ctx),
-        executed_payments: table::new(ctx),
+        executed_actions: table::new(ctx),
     };
     transfer::share_object(registry);
 }
@@ -177,6 +182,7 @@ public fun init_proposal_actions(
         executed,
         action_metadata,
         coin_types: vector[],
+        creator: ctx.sender(),
     };
     
     registry.actions.add(proposal_id, proposal_actions);
@@ -196,7 +202,7 @@ public fun add_transfer_action<CoinType>(
     outcome: u64,
     recipient: address,
     amount: u64,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
@@ -212,6 +218,10 @@ public fun add_transfer_action<CoinType>(
     
     let action_bag = &mut proposal_actions.outcome_actions[outcome];
     let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, action);
     
     // Add metadata
@@ -243,7 +253,7 @@ public fun add_no_op_action(
     registry: &mut ActionRegistry,
     proposal_id: ID,
     outcome: u64,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
@@ -251,6 +261,10 @@ public fun add_no_op_action(
     
     let action_bag = &mut proposal_actions.outcome_actions[outcome];
     let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, NoOpAction {});
     
     // Add metadata
@@ -280,12 +294,12 @@ public fun add_recurring_payment_action<CoinType>(
     total_payments: u64,
     start_timestamp: u64,
     description: String,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
     assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
-    
+
     // Validate parameters
     assert!(amount_per_payment > 0, EInvalidAmount);
     assert!(payment_interval_ms > 0, EInvalidAmount);
@@ -302,6 +316,10 @@ public fun add_recurring_payment_action<CoinType>(
         start_timestamp,
         description,
     };
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, action);
     
     // Add metadata
@@ -329,7 +347,7 @@ public fun add_mint_action<CoinType>(
     amount: u64,
     recipient: address,
     description: String,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
@@ -346,6 +364,10 @@ public fun add_mint_action<CoinType>(
     
     let action_bag = &mut proposal_actions.outcome_actions[outcome];
     let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, action);
     
     // Add metadata
@@ -378,7 +400,7 @@ public fun add_burn_action<CoinType>(
     amount: u64,
     from_treasury: bool,
     description: String,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
@@ -395,6 +417,10 @@ public fun add_burn_action<CoinType>(
     
     let action_bag = &mut proposal_actions.outcome_actions[outcome];
     let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, action);
     
     // Add metadata
@@ -427,7 +453,7 @@ public fun add_capability_deposit_action<CoinType>(
     max_supply: Option<u64>,
     max_mint_per_proposal: Option<u64>,
     mint_cooldown_ms: u64,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     assert!(registry.actions.contains(proposal_id), ENoActionsFound);
     let proposal_actions = &mut registry.actions[proposal_id];
@@ -441,6 +467,10 @@ public fun add_capability_deposit_action<CoinType>(
     
     let action_bag = &mut proposal_actions.outcome_actions[outcome];
     let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
     action_bag.add(index, action);
     
     // Add metadata
@@ -474,7 +504,7 @@ fun execute_transfer<AssetType, StableType, CoinType: drop>(
     treasury: &mut Treasury,
     auth: treasury::Auth,
     _dao: &DAO<AssetType, StableType>,
-    _clock: &Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     let TransferAction { recipient, amount } = 
@@ -493,8 +523,12 @@ fun execute_transfer<AssetType, StableType, CoinType: drop>(
             treasury,
             amount,
             recipient,
+            clock,
             ctx
         );
+    } else {
+        // If amount is 0, still need to consume auth token
+        treasury::consume_auth(auth);
     };
 }
 
@@ -504,7 +538,7 @@ fun execute_recurring_payment<AssetType, StableType, CoinType: drop>(
     action_bag: &mut Bag,
     index: u64,
     _treasury: &mut Treasury,
-    _auth: treasury::Auth,
+    auth: treasury::Auth,
     dao: &DAO<AssetType, StableType>,
     payment_registry: &mut PaymentStreamRegistry, // Required for creating a stream
     clock: &Clock,
@@ -540,6 +574,9 @@ fun execute_recurring_payment<AssetType, StableType, CoinType: drop>(
         clock,
         ctx,
     );
+    
+    // Consume auth token to prevent reuse
+    treasury::consume_auth(auth);
 }
 
 /// Execute no-op action
@@ -547,13 +584,16 @@ fun execute_no_op<AssetType, StableType>(
     action_bag: &mut Bag,
     index: u64,
     _treasury: &mut Treasury,
-    _auth: treasury::Auth,
+    auth: treasury::Auth,
     _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
     // Remove the action but do nothing
     let _action = bag::remove<u64, NoOpAction>(action_bag, index);
+    
+    // Consume auth token to prevent reuse
+    treasury::consume_auth(auth);
 }
 
 
@@ -563,7 +603,7 @@ fun execute_capability_deposit<AssetType, StableType, CoinType: drop>(
     action_bag: &mut Bag,
     index: u64,
     _treasury: &mut Treasury,
-    _auth: treasury::Auth,
+    auth: treasury::Auth,
     _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
     _ctx: &mut TxContext,
@@ -572,6 +612,9 @@ fun execute_capability_deposit<AssetType, StableType, CoinType: drop>(
     // the permissionless deposit_treasury_cap function
     let CapabilityDepositAction { max_supply: _, max_mint_per_proposal: _, mint_cooldown_ms: _ } = 
         bag::remove<u64, CapabilityDepositAction<CoinType>>(action_bag, index);
+    
+    // Consume auth token to prevent reuse
+    treasury::consume_auth(auth);
 }
 
 // === Private Helper Functions ===
@@ -616,6 +659,9 @@ fun process_action<AssetType, StableType, CoinType: drop>(
         let MintAction { amount, recipient, description: _ } = 
             bag::remove<u64, MintAction<CoinType>>(action_bag, index);
         
+        // Consume auth token (mint doesn't need treasury auth)
+        treasury::consume_auth(auth);
+        
         capability_manager::mint_tokens<CoinType>(
             cap_manager,
             execution_context,
@@ -636,17 +682,20 @@ fun process_action<AssetType, StableType, CoinType: drop>(
                 auth,
                 treasury,
                 amount,
+                clock,
                 ctx
             );
             capability_manager::burn_tokens<CoinType>(
                 cap_manager,
                 execution_context,
                 coins_to_burn,
+                clock,
                 ctx
             );
         } else {
             // For burning from other sources, we would need additional logic
             // For now, only treasury burns are supported
+            treasury::consume_auth(auth);
             abort EInvalidAction
         };
         true
@@ -662,6 +711,8 @@ fun process_action<AssetType, StableType, CoinType: drop>(
         );
         true
     } else {
+        // Unknown action type - consume auth and return false
+        treasury::consume_auth(auth);
         false
     }
 }
@@ -731,34 +782,30 @@ public fun execute_outcome_actions<AssetType, StableType, CoinType: drop>(
         if (coin_type_opt.is_some() && 
             *coin_type_opt.borrow() == coin_type_str) {
             
-            // Create auth for each action (auth is consumed)
-            let auth = treasury::create_auth_for_proposal(treasury, execution_context);
-            
             if (action_type == ACTION_RECURRING_PAYMENT) {
                 // Recurring payments need a registry - abort with error
                 abort ERecurringPaymentRegistryRequired
             };
             
-            let mut executed = false;
+            // Get mutable reference to action bag for this specific action
+            let proposal_actions_mut = &mut registry.actions[proposal_id];
+            let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
             
-            if (action_type != ACTION_RECURRING_PAYMENT) {
-                // Get mutable reference to action bag for this specific action
-                let proposal_actions_mut = &mut registry.actions[proposal_id];
-                let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
-                
-                executed = process_action<AssetType, StableType, CoinType>(
-                    action_type,
-                    action_bag,
-                    index,
-                    treasury,
-                    auth,
-                    dao,
-                    clock,
-                    ctx,
-                    cap_manager,
-                    execution_context
-                );
-            };
+            // Create auth for each action (auth is consumed)
+            let auth = treasury::create_auth_for_proposal(treasury, execution_context);
+            
+            let executed = process_action<AssetType, StableType, CoinType>(
+                action_type,
+                action_bag,
+                index,
+                treasury,
+                auth,
+                dao,
+                clock,
+                ctx,
+                cap_manager,
+                execution_context
+            );
             
             if (executed) {
                 action_count = action_count + 1;
@@ -984,7 +1031,7 @@ public fun execute_outcome_actions_usdc<AssetType, StableType, USDC: drop>(
     cap_manager: &mut CapabilityManager,
     execution_context: &ProposalExecutionContext,
 ) {
-    execute_outcome_actions<USDC>(
+    execute_outcome_actions<AssetType, StableType, USDC>(
         registry,
         treasury,
         dao,

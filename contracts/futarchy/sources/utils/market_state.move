@@ -15,6 +15,10 @@ const ETradingAlreadyEnded: u64 = 3;
 const ETradingNotEnded: u64 = 4;
 const ENotFinalized: u64 = 5;
 const ETradingNotStarted: u64 = 6;
+const EInvalidDuration: u64 = 7;
+
+// === Constants ===
+const MAX_TRADING_DURATION_MS: u64 = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 // === Structs ===
 public struct MarketStatus has copy, drop, store {
@@ -86,6 +90,7 @@ public(package) fun new(
 
 public(package) fun start_trading(state: &mut MarketState, duration_ms: u64, clock: &Clock) {
     assert!(!state.status.trading_started, ETradingAlreadyStarted);
+    assert!(duration_ms > 0 && duration_ms <= MAX_TRADING_DURATION_MS, EInvalidDuration);
 
     let start_time = clock.timestamp_ms();
     let end_time = start_time + duration_ms;
@@ -196,6 +201,10 @@ public(package) fun get_trading_end_time(state: &MarketState): Option<u64> {
 
 public fun get_trading_start(state: &MarketState): u64 {
     state.trading_start
+}
+
+public fun get_finalization_time(state: &MarketState): Option<u64> {
+    state.finalization_time
 }
 
 // === Test Functions ===

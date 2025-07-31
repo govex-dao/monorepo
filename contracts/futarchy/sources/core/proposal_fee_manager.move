@@ -4,10 +4,7 @@ use sui::{
     coin::{Self, Coin},
     balance::{Self, Balance},
     sui::SUI,
-    bag::{Self, Bag},
-    object::{Self, UID, ID},
-    tx_context::TxContext,
-    transfer,
+    bag::{Self, Bag}
 };
 
 // === Errors ===

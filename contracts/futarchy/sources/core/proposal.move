@@ -1,22 +1,16 @@
 module futarchy::proposal;
 
-use futarchy::amm::{Self, LiquidityPool};
+use futarchy::amm::{LiquidityPool};
 use futarchy::coin_escrow;
-use futarchy::dao;
 use futarchy::liquidity_initialize;
 use futarchy::market_state;
 use std::ascii::String as AsciiString;
-use std::option::{Self, Option};
 use std::string::String;
 use std::type_name;
-use std::vector;
-use sui::balance::{Self, Balance};
+use sui::balance::{Balance};
 use sui::clock::Clock;
-use sui::coin::{Self, Coin, TreasuryCap};
+use sui::coin::{Coin};
 use sui::event;
-use sui::object::{Self, UID, ID};
-use sui::transfer;
-use sui::tx_context::{Self, TxContext};
 
 // === Introduction ===
 // This defines the core proposal logic and details
@@ -168,8 +162,24 @@ public(package) fun initialize_market<AssetType, StableType>(
     
     let asset_per_outcome = total_asset_liquidity / outcome_count;
     let stable_per_outcome = total_stable_liquidity / outcome_count;
-    let initial_asset_amounts = vector::tabulate!(outcome_count, |_| asset_per_outcome);
-    let initial_stable_amounts = vector::tabulate!(outcome_count, |_| stable_per_outcome);
+    
+    // Calculate remainders from integer division
+    let asset_remainder = total_asset_liquidity % outcome_count;
+    let stable_remainder = total_stable_liquidity % outcome_count;
+    
+    // Distribute liquidity evenly, with remainder going to first outcomes
+    let mut initial_asset_amounts = vector::empty<u64>();
+    let mut initial_stable_amounts = vector::empty<u64>();
+    let mut i = 0;
+    while (i < outcome_count) {
+        // Add 1 extra token to first 'remainder' outcomes
+        let asset_amount = if (i < asset_remainder) { asset_per_outcome + 1 } else { asset_per_outcome };
+        let stable_amount = if (i < stable_remainder) { stable_per_outcome + 1 } else { stable_per_outcome };
+        
+        vector::push_back(&mut initial_asset_amounts, asset_amount);
+        vector::push_back(&mut initial_stable_amounts, stable_amount);
+        i = i + 1;
+    };
 
     // Validate minimum liquidity requirements
     assert!(asset_per_outcome >= min_asset_liquidity, EAssetLiquidityTooLow);

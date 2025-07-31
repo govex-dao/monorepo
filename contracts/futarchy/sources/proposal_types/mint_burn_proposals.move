@@ -16,6 +16,14 @@ use futarchy::{
 
 // === Errors ===
 const EInvalidAmount: u64 = 0;
+const EInvalidArrayLength: u64 = 1;
+const EArrayIndexOutOfBounds: u64 = 2;
+const EInvalidActionSpec: u64 = 3;
+const EInvalidRecipientIndex: u64 = 4;
+const ETotalMintAmountTooLarge: u64 = 5;
+
+// === Constants ===
+const MAX_TOTAL_MINT_AMOUNT: u64 = 1_000_000_000_000_000; // 1 quadrillion - reasonable max for any token
 
 // === Public Functions ===
 
@@ -55,8 +63,12 @@ public entry fun create_mint_proposal<AssetType, StableType, CoinType>(
     let mut stable_amounts = vector[];
     let mut i = 0;
     while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        let asset_idx = i * 2;
+        let stable_idx = i * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
         i = i + 1;
     };
     
@@ -141,8 +153,12 @@ public entry fun create_burn_proposal<AssetType, StableType, CoinType>(
     let mut stable_amounts = vector[];
     let mut i = 0;
     while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        let asset_idx = i * 2;
+        let stable_idx = i * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
         i = i + 1;
     };
     
@@ -221,8 +237,12 @@ public entry fun create_multi_outcome_mint_proposal<AssetType, StableType, CoinT
     let mut stable_amounts = vector[];
     let mut i = 0;
     while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        let asset_idx = i * 2;
+        let stable_idx = i * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
         i = i + 1;
     };
     
@@ -252,13 +272,26 @@ public entry fun create_multi_outcome_mint_proposal<AssetType, StableType, CoinT
     
     // Add actions based on specifications
     let mut i = 0;
+    let mut total_mint_amount = 0u64;
     while (i < mint_actions.length()) {
         let action_spec = &mint_actions[i];
+        // Validate action spec has correct length
+        assert!(action_spec.length() >= 3, EInvalidActionSpec);
+        
         let outcome = action_spec[0];
         let amount = action_spec[1];
         let recipient_idx = action_spec[2];
         
+        // Validate recipient index
+        assert!(recipient_idx < recipients.length(), EInvalidRecipientIndex);
+        // Validate outcome index
+        assert!(outcome < outcome_count, EArrayIndexOutOfBounds);
+        
         if (amount > 0) {
+            // Check total mint amount doesn't exceed limit
+            assert!(total_mint_amount <= MAX_TOTAL_MINT_AMOUNT - amount, ETotalMintAmountTooLarge);
+            total_mint_amount = total_mint_amount + amount;
+            
             treasury_actions::add_mint_action<CoinType>(
                 registry,
                 proposal_id,
@@ -309,8 +342,12 @@ public entry fun create_mint_and_burn_proposal<AssetType, StableType, CoinType>(
     let mut stable_amounts = vector[];
     let mut i = 0;
     while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
+        let asset_idx = i * 2;
+        let stable_idx = i * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
         i = i + 1;
     };
     

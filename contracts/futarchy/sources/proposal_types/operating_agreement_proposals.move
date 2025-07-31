@@ -16,6 +16,20 @@ use futarchy::{
     },
 };
 
+// === Errors ===
+const EUpdateVectorLengthMismatch: u64 = 0;
+const EInsertAfterVectorLengthMismatch: u64 = 1;
+const EInsertAfterDifficultyLengthMismatch: u64 = 2;
+const EInsertBeginningVectorLengthMismatch: u64 = 3;
+const EInsufficientOutcomes: u64 = 4;
+const EOutcomeDetailsLengthMismatch: u64 = 5;
+const EInvalidAmountsLength: u64 = 6;
+const EInvalidActionOutcomeIndex: u64 = 7;
+const EArrayIndexOutOfBounds: u64 = 8;
+const ETooManyActions: u64 = 9;
+
+// === Constants ===
+const MAX_ACTIONS_PER_PROPOSAL: u64 = 100; // Maximum total actions to prevent excessive gas usage
 
 // === Public Functions ===
 
@@ -47,10 +61,17 @@ public entry fun create_agreement_proposal<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Validate input vector lengths
-    assert!(update_line_ids.length() == update_texts.length(), 0);
-    assert!(insert_after_line_ids.length() == insert_after_texts.length(), 1);
-    assert!(insert_after_texts.length() == insert_after_difficulties.length(), 2);
-    assert!(insert_at_beginning_texts.length() == insert_at_beginning_difficulties.length(), 3);
+    assert!(update_line_ids.length() == update_texts.length(), EUpdateVectorLengthMismatch);
+    assert!(insert_after_line_ids.length() == insert_after_texts.length(), EInsertAfterVectorLengthMismatch);
+    assert!(insert_after_texts.length() == insert_after_difficulties.length(), EInsertAfterDifficultyLengthMismatch);
+    assert!(insert_at_beginning_texts.length() == insert_at_beginning_difficulties.length(), EInsertBeginningVectorLengthMismatch);
+    
+    // Validate total actions count
+    let total_actions = update_line_ids.length() + 
+                       insert_after_line_ids.length() + 
+                       insert_at_beginning_texts.length() + 
+                       remove_line_ids.length();
+    assert!(total_actions <= MAX_ACTIONS_PER_PROPOSAL, ETooManyActions);
     
     // Build the batch of actions from the input vectors.
     let mut actions_batch = vector::empty<Action>();
@@ -66,48 +87,52 @@ public entry fun create_agreement_proposal<AssetType, StableType>(
     };
     
     // Add insert after actions
-    i = 0;
-    while (i < insert_after_line_ids.length()) {
+    let mut j = 0;
+    while (j < insert_after_line_ids.length()) {
         actions_batch.push_back(new_insert_after_action(
-            *insert_after_line_ids.borrow(i),
-            *insert_after_texts.borrow(i),
-            *insert_after_difficulties.borrow(i)
+            *insert_after_line_ids.borrow(j),
+            *insert_after_texts.borrow(j),
+            *insert_after_difficulties.borrow(j)
         ));
-        i = i + 1;
+        j = j + 1;
     };
     
     // Add insert at beginning actions
-    i = 0;
-    while (i < insert_at_beginning_texts.length()) {
+    let mut k = 0;
+    while (k < insert_at_beginning_texts.length()) {
         actions_batch.push_back(new_insert_at_beginning_action(
-            *insert_at_beginning_texts.borrow(i),
-            *insert_at_beginning_difficulties.borrow(i)
+            *insert_at_beginning_texts.borrow(k),
+            *insert_at_beginning_difficulties.borrow(k)
         ));
-        i = i + 1;
+        k = k + 1;
     };
     
     // Add remove actions
-    i = 0;
-    while (i < remove_line_ids.length()) {
-        actions_batch.push_back(new_remove_action(*remove_line_ids.borrow(i)));
-        i = i + 1;
+    let mut l = 0;
+    while (l < remove_line_ids.length()) {
+        actions_batch.push_back(new_remove_action(*remove_line_ids.borrow(l)));
+        l = l + 1;
     };
 
     // Validate inputs
     let outcome_count = outcome_messages.length();
-    assert!(outcome_count >= 2, 4); // Need at least 2 outcomes
-    assert!(outcome_details.length() == outcome_count, 5); // Matching details
-    assert!(initial_outcome_amounts.length() == outcome_count * 2, 6); // asset + stable for each outcome
-    assert!(action_outcome_index < outcome_count, 7); // Valid outcome index
+    assert!(outcome_count >= 2, EInsufficientOutcomes); // Need at least 2 outcomes
+    assert!(outcome_details.length() == outcome_count, EOutcomeDetailsLengthMismatch); // Matching details
+    assert!(initial_outcome_amounts.length() == outcome_count * 2, EInvalidAmountsLength); // asset + stable for each outcome
+    assert!(action_outcome_index < outcome_count, EInvalidActionOutcomeIndex); // Valid outcome index
     
     // Split initial_outcome_amounts into asset and stable vectors
     let mut asset_amounts = vector[];
     let mut stable_amounts = vector[];
-    let mut i = 0;
-    while (i < outcome_count) {
-        vector::push_back(&mut asset_amounts, initial_outcome_amounts[i * 2]);
-        vector::push_back(&mut stable_amounts, initial_outcome_amounts[i * 2 + 1]);
-        i = i + 1;
+    let mut m = 0;
+    while (m < outcome_count) {
+        let asset_idx = m * 2;
+        let stable_idx = m * 2 + 1;
+        // Ensure indices are within bounds
+        assert!(stable_idx < initial_outcome_amounts.length(), EArrayIndexOutOfBounds);
+        vector::push_back(&mut asset_amounts, initial_outcome_amounts[asset_idx]);
+        vector::push_back(&mut stable_amounts, initial_outcome_amounts[stable_idx]);
+        m = m + 1;
     };
     
     let (proposal_id, _, _) = dao::create_proposal_internal<AssetType, StableType>(

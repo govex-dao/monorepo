@@ -1,7 +1,6 @@
 module futarchy::fee;
 
 use std::ascii::String as AsciiString;
-use std::option;
 use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
@@ -21,6 +20,8 @@ const EBadWitness: u64 = 2;
 const ERecurringFeeNotDue: u64 = 3;
 const EWrongStableTypeForFee: u64 = 4;
 const EInsufficientTreasuryBalance: u64 = 5;
+const EArithmeticOverflow: u64 = 6;
+const EInvalidAdminCap: u64 = 7;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
@@ -35,6 +36,7 @@ public struct FEE has drop {}
 
 public struct FeeManager has key, store {
     id: UID,
+    admin_cap_id: ID,
     dao_creation_fee: u64,
     proposal_creation_fee_per_outcome: u64,
     verification_fee: u64,
@@ -136,8 +138,13 @@ fun init(witness: FEE, ctx: &mut TxContext) {
     // Verify that the witness is valid and one-time only.
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
+    let fee_admin_cap = FeeAdminCap {
+        id: object::new(ctx),
+    };
+    
     let fee_manager = FeeManager {
         id: object::new(ctx),
+        admin_cap_id: object::id(&fee_admin_cap),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
         proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
         verification_fee: DEFAULT_VERIFICATION_FEE,
@@ -145,10 +152,6 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
-    };
-
-    let fee_admin_cap = FeeAdminCap {
-        id: object::new(ctx),
     };
 
     public_share_object(fee_manager);
@@ -234,10 +237,12 @@ public(package) fun deposit_verification_payment(
 // Admin function to withdraw fees
 public entry fun withdraw_all_fees(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Verify the admin cap belongs to this fee manager
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     let amount = fee_manager.sui_balance.value();
     let sender = ctx.sender();
 
@@ -255,7 +260,7 @@ public entry fun withdraw_all_fees(
 // Admin function to update DAO creation fee
 public entry fun update_dao_creation_fee(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     new_fee: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -274,7 +279,7 @@ public entry fun update_dao_creation_fee(
 // Admin function to update proposal creation fee
 public entry fun update_proposal_creation_fee(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     new_fee_per_outcome: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -293,7 +298,7 @@ public entry fun update_proposal_creation_fee(
 // Admin function to update verification fee
 public entry fun update_verification_fee(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     new_fee: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -312,13 +317,16 @@ public entry fun update_verification_fee(
 public(package) fun collect_dao_recurring_fee<StableType: drop>(
     fee_manager: &mut FeeManager,
     treasury: &mut futarchy::treasury::Treasury,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     dao_id: ID,
     dao_stable_type: &AsciiString,
     next_fee_due_timestamp: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (u64, bool) { // Returns (new_timestamp, collection_successful)
+    // Verify the admin cap belongs to this fee manager
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    
     // 1. Verify fee is due
     assert!(clock.timestamp_ms() >= next_fee_due_timestamp, ERecurringFeeNotDue);
 
@@ -332,6 +340,9 @@ public(package) fun collect_dao_recurring_fee<StableType: drop>(
     // 4. Calculate how many months of fees are due
     let current_time = clock.timestamp_ms();
     let months_overdue = ((current_time - next_fee_due_timestamp) / MONTHLY_FEE_PERIOD_MS) + 1;
+    
+    // Check for overflow before multiplication
+    assert!(months_overdue == 0 || fee_manager.dao_monthly_fee <= std::u64::max_value!() / months_overdue, EArithmeticOverflow);
     let total_fee_amount = fee_manager.dao_monthly_fee * months_overdue;
 
     // 5. Check if treasury has sufficient balance
@@ -342,7 +353,7 @@ public(package) fun collect_dao_recurring_fee<StableType: drop>(
     };
 
     // 6. Withdraw fee from DAO's treasury
-    let fee_coin = futarchy::treasury::platform_withdraw<StableType>(treasury, total_fee_amount, clock, ctx);
+    let fee_coin = futarchy::treasury::withdraw_platform_fee<StableType>(treasury, total_fee_amount, dao_id, clock, ctx);
 
     // 7. Deposit the collected fee into the FeeManager
     deposit_dao_platform_fee(fee_manager, fee_coin, dao_id, clock, ctx);
@@ -376,7 +387,7 @@ public(package) fun deposit_dao_platform_fee<StableType: drop>(
 
 public entry fun update_dao_monthly_fee(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     new_fee: u64,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -477,10 +488,13 @@ public(package) fun deposit_stable_fees<StableType>(
 
 public entry fun withdraw_stable_fees<StableType>(
     fee_manager: &mut FeeManager,
-    _admin_cap: &FeeAdminCap,
+    admin_cap: &FeeAdminCap,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Verify the admin cap belongs to this fee manager
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    
     // Check if the stable type exists in the registry
     if (!dynamic_field::exists_with_type<
             StableFeeRegistry<StableType>,

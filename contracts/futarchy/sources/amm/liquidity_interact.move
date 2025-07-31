@@ -9,6 +9,7 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
+use sui::transfer;
 
 // === Introduction ===
 // Methods to interact with AMM liquidity and escrow balances
@@ -21,7 +22,6 @@ const EInvalidState: u64 = 3;
 const EMarketIdMismatch: u64 = 4;
 const EAssetReservesMismatch: u64 = 5;
 const EStableReservesMismatch: u64 = 6;
-const EUnauthorized: u64 = 7;
 
 // === Events ===
 public struct ProtocolFeesCollected has copy, drop {
@@ -29,6 +29,15 @@ public struct ProtocolFeesCollected has copy, drop {
     winning_outcome: u64,
     fee_amount: u64,
     timestamp_ms: u64,
+}
+
+// === Helper Functions ===
+/// Efficiently transfers all tokens in a vector to the recipient
+fun transfer_tokens_to_recipient(mut tokens: vector<ConditionalToken>, recipient: address) {
+    while (!tokens.is_empty()) {
+        transfer::public_transfer(tokens.pop_back(), recipient);
+    };
+    tokens.destroy_empty();
 }
 
 /// Empties the winning AMM pool and transfers the underlying liquidity to the original provider.
@@ -94,9 +103,12 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
     outcome_idx: u64,
     ctx: &mut TxContext,
 ) {
+    // Perform all authorization and validation checks before any state mutation
+    assert!(ctx.sender() == *proposal.get_liquidity_provider().borrow(), EInvalidLiquidityTransfer);
     assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
     assert!(outcome_idx == proposal.get_winning_outcome(), EWrongOutcome);
-    assert!(ctx.sender() == *proposal.get_liquidity_provider().borrow(), EInvalidLiquidityTransfer);
+    assert!(proposal.is_finalized(), EInvalidState);
+    
     empty_amm_and_return_to_provider(proposal, escrow, ctx);
 }
 
@@ -107,6 +119,16 @@ public entry fun empty_all_amm_liquidity_to_dao_pool<AssetType, StableType>(
     dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
     ctx: &mut TxContext,
 ) {
+    // Perform all validation checks before any state mutation
+    assert!(proposal.is_finalized(), EInvalidState);
+    assert!(proposal.uses_dao_liquidity(), EInvalidState);
+    
+    // Additional validation to match internal function
+    let market_id = proposal.market_state_id();
+    let escrow_market_id = escrow.get_market_state_id();
+    assert!(market_id == escrow_market_id, EMarketIdMismatch);
+    escrow.get_market_state().assert_market_finalized();
+    
     empty_amm_and_return_to_dao_pool(proposal, escrow, dao_pool, ctx);
 }
 
@@ -138,6 +160,8 @@ public fun assert_all_reserves_consistency<AssetType, StableType>(
         assert!(amm_asset + asset_supply == escrow_asset, EAssetReservesMismatch);
 
         // Verify stable equation: AMM stable reserves + protocol fees + stable token supply = escrow stable
+        // Protocol fees are explicitly collected and held outside the AMM's stable reserve.
+        // Note: protocol_fees are tracked separately in pool.protocol_fees and are NOT included in amm_stable
         assert!(
             amm_stable + protocol_fees + stable_supply == escrow_stable,
             EStableReservesMismatch,
@@ -171,6 +195,7 @@ public fun assert_winning_reserves_consistency<AssetType, StableType>(
     assert!(amm_asset + asset_supply == escrow_asset, EAssetReservesMismatch);
 
     // Verify stable equation: AMM stable reserves + protocol fees + stable token supply = escrow stable
+    // Note: protocol_fees are tracked separately in pool.protocol_fees and are NOT included in amm_stable
     assert!(amm_stable + protocol_fees + stable_supply == escrow_stable, EStableReservesMismatch);
 }
 
@@ -198,17 +223,12 @@ public entry fun mint_complete_set_asset_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut tokens_out = escrow.mint_complete_set_asset(coin_in, clock, ctx);
+    let tokens_out = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     // Assert consistency
     assert_all_reserves_consistency(proposal, escrow);
 
-    let recipient = ctx.sender();
-    while (!tokens_out.is_empty()) {
-        let token = tokens_out.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
-    tokens_out.destroy_empty();
+    transfer_tokens_to_recipient(tokens_out, ctx.sender());
 }
 
 /// Wrapper for minting a complete set of stable tokens.
@@ -219,17 +239,11 @@ public entry fun mint_complete_set_stable_entry<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut tokens_out = escrow.mint_complete_set_stable(coin_in, clock, ctx);
+    let tokens_out = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert_all_reserves_consistency(proposal, escrow);
 
-    // Handle result (transfer tokens)
-    let recipient = ctx.sender();
-    while (!tokens_out.is_empty()) {
-        let token = tokens_out.pop_back();
-        transfer::public_transfer(token, recipient);
-    };
-    tokens_out.destroy_empty();
+    transfer_tokens_to_recipient(tokens_out, ctx.sender());
 }
 
 /// Wrapper for redeeming a complete set of asset tokens.

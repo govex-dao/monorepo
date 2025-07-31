@@ -2,19 +2,14 @@ module futarchy::advance_stage;
 
 use futarchy::coin_escrow;
 use futarchy::dao::{Self, DAO};
-use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
-use futarchy::fee::{Self, FeeManager};
+use futarchy::dao_liquidity_pool::{DAOLiquidityPool};
+use futarchy::fee::{FeeManager};
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
 use futarchy::proposal::{Self, Proposal};
-use std::option;
-use std::vector;
 use sui::clock::Clock;
-use sui::coin;
 use sui::event;
-use sui::transfer;
-use sui::object::{Self, UID, ID};
-use sui::tx_context::TxContext;
+use std::u128;
 
 // === Introduction ===
 // This handles advancing proposal stages
@@ -23,8 +18,10 @@ use sui::tx_context::TxContext;
 const EInvalidStateTransition: u64 = 0;
 const EInvalidState: u64 = 1;
 const EInTradingPeriod: u64 = 2;
+const EInvalidRecipient: u64 = 3;
 
 // === Constants ===
+const MAX_OUTCOMES: u64 = 3;
 const TWAP_BASIS_POINTS: u256 = 100_000;
 const STATE_PREMARKET: u8 = 0; // New state before market is live
 const STATE_REVIEW: u8 = 1; // Market initialized but not trading
@@ -70,6 +67,8 @@ public(package) fun try_advance_state<AssetType, StableType>(
     let old_state = proposal.state();
 
     if (proposal.state() == STATE_REVIEW && current_time >= proposal.get_market_initialized_at() + proposal.get_review_period_ms()) {
+        // Ensure the market is ready for trading
+        assert!(proposal.get_amm_pools().length() > 0, EInvalidState);
         proposal.set_state(STATE_TRADING); // Now transitions from REVIEW to TRADING
         state.start_trading(proposal.get_trading_period_ms(), clock);
     } else if (proposal.state() == STATE_TRADING) {
@@ -133,10 +132,13 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
             let fee_coin = fee_balance.into_coin(ctx);
             let winning_outcome = proposal.get_winning_outcome();
             if (winning_outcome == 0) { // Proposal was rejected or failed to meet threshold
-                transfer::public_transfer(fee_coin, proposal.treasury_address());
+                let treasury_address = proposal.treasury_address();
+                assert!(treasury_address != @0x0, EInvalidRecipient);
+                transfer::public_transfer(fee_coin, treasury_address);
             } else { // An outcome other than Reject won.
                 let outcome_creators = proposal.get_outcome_creators();
                 let rebate_recipient = *vector::borrow(outcome_creators, winning_outcome);
+                assert!(rebate_recipient != @0x0, EInvalidRecipient);
                 transfer::public_transfer(fee_coin, rebate_recipient);
             }
         } else {
@@ -172,44 +174,51 @@ public(package) fun finalize<AssetType, StableType>(
     let timestamp = clock.timestamp_ms();
     let mut final_twap_prices = vector[];
 
-    let mut i = 0;
-    let mut highest_twap = 0;
+    let mut outcome_idx = 0;
+    let mut highest_non_reject_twap = 0;
     let mut winning_outcome = 0;
-    let mut base_twap = 0;
+    let mut reject_outcome_twap = 0; // Outcome 0 is always "reject"
 
     // Get a mutable reference to pools and iterate
     let pools = proposal.get_amm_pools();
     let pools_count = pools.length();
-    while (i < pools_count) {
-        let pool = proposal.get_pool_mut_by_outcome((i as u8));
-        let twap = pool.get_twap(clock);
-        final_twap_prices.push_back(twap);
+    assert!(pools_count <= MAX_OUTCOMES, EInvalidState);
+    while (outcome_idx < pools_count) {
+        let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+        let current_outcome_twap = pool.get_twap(clock);
+        final_twap_prices.push_back(current_outcome_twap);
 
-        if (i == 0) {
-            base_twap = twap; // Store outcome 0's TWAP
+        if (outcome_idx == 0) {
+            reject_outcome_twap = current_outcome_twap; // Store reject outcome's TWAP as baseline
         } else {
-            // For non-zero outcomes, check if this TWAP beats the current highest
-            // and exceeds the threshold compared to outcome 0
+            // For non-reject outcomes, check if TWAP beats both:
+            // 1. The current highest non-reject TWAP
+            // 2. The reject outcome TWAP + threshold percentage
+            
+            // Calculate minimum required TWAP to beat reject option
+            // Example: if reject_twap=100 and threshold=5%, min_required_twap=105
             let threshold_price =
-                ((base_twap as u256) * (TWAP_BASIS_POINTS + (proposal.get_twap_threshold() as u256))) / TWAP_BASIS_POINTS;
-            if (twap > highest_twap && twap > (threshold_price as u128)) {
-                highest_twap = twap;
-                winning_outcome = i;
+                ((reject_outcome_twap as u256) * (TWAP_BASIS_POINTS + (proposal.get_twap_threshold() as u256))) / TWAP_BASIS_POINTS;
+            assert!(threshold_price <= (u128::max_value!() as u256), EInvalidState);
+            
+            if (current_outcome_twap > highest_non_reject_twap && current_outcome_twap > (threshold_price as u128)) {
+                highest_non_reject_twap = current_outcome_twap;
+                winning_outcome = outcome_idx;
             };
         };
 
         event::emit(TWAPHistoryEvent {
             proposal_id: proposal.get_id(),
-            outcome_idx: i,
-            twap_price: twap,
+            outcome_idx,
+            twap_price: current_outcome_twap,
             timestamp,
         });
 
-        i = i + 1;
+        outcome_idx = outcome_idx + 1;
     };
 
-    // If no outcome beats the threshold, outcome 0 wins
-    if (highest_twap == 0) {
+    // If no outcome beats the threshold, reject outcome (0) wins
+    if (highest_non_reject_twap == 0) {
         winning_outcome = 0;
     };
 

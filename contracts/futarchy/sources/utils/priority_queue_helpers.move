@@ -2,10 +2,10 @@ module futarchy::priority_queue_helpers;
 
 use futarchy::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue};
 use std::string::String;
-use std::vector;
-use std::option::{Self, Option};
-use sui::object::ID;
 use sui::coin::Coin;
+
+// === Errors ===
+const EQueueEmpty: u64 = 0;
 
 /// Creates proposal data for a queued proposal
 public fun new_proposal_data(
@@ -28,7 +28,9 @@ public fun new_proposal_data(
 
 /// Extracts the maximum priority proposal from the queue without activating it
 public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): QueuedProposal<StableCoin> {
-    priority_queue::try_activate_next(queue).destroy_some()
+    let result = priority_queue::try_activate_next(queue);
+    assert!(option::is_some(&result), EQueueEmpty);
+    option::destroy_some(result)
 }
 
 // === Getter functions for QueuedProposal ===

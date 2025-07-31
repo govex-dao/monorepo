@@ -272,6 +272,7 @@ fun multi_full_window_accumulation(
     num_new_windows: u64, // N_W
     timestamp: u64,
 ) {
+    // Notation: v_ = value, n_ = number/count, k_ = index, s_ = sum, g_ = gap
     // G_abs = |P - B|
     let g_abs: u128;
     if (price > oracle.last_window_twap) {
@@ -383,14 +384,10 @@ fun multi_full_window_accumulation(
     // P'_N_W = B + sign(P-B) * min(N_W * \Delta_M, G_abs)
     let p_n_w_effective: u128;
 
-    // Calculate N_W * \Delta_M, checking for overflow.
+    // Calculate N_W * \Delta_M
     // delta_max_per_step is > 0 here. num_new_windows > 0.
-    let nw_times_delta_m: u128;
-    if ((num_new_windows as u128) > u128::max_value!() / (oracle.twap_cap_step as u128)) {
-        nw_times_delta_m = u128::max_value!(); // Effectively infinity for the min operation
-    } else {
-        nw_times_delta_m = (num_new_windows as u128) * (oracle.twap_cap_step as u128);
-    };
+    // No overflow possible: num_new_windows is u64, twap_cap_step is u64
+    let nw_times_delta_m = (num_new_windows as u128) * (oracle.twap_cap_step as u128);
 
     let deviation_for_p_n_w = std::u128::min(nw_times_delta_m, g_abs);
 
@@ -435,7 +432,9 @@ public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
     let period = ( current_time - market_start_time_val) - oracle.twap_start_delay;
     assert!(period > 0, EZeroPeriod);
 
-    // Calculate and validate TWAP
+    // Calculate TWAP - dividing cumulative price by period gives average price
+    // Safe cast: For reasonable token prices over max 7-day proposals, 
+    // TWAP will be far below u128::MAX (even 10^18 price × 7 days / period ≈ 10^15)
     let twap = (oracle.total_cumulative_price) / (period as u256);
 
     (twap as u128)
