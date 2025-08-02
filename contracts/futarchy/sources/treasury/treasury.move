@@ -447,7 +447,7 @@ public entry fun claim_from_stream<CoinType: drop>(
     ctx: &mut TxContext,
 ) {
     // Verify the stream belongs to this DAO's treasury
-    let (_, _, _, _, _, _, dao_id) = recurring_payments::get_stream_info(stream);
+    let (_, _, _, _, _, dao_id) = recurring_payments::get_stream_info(stream);
     assert!(dao_id == treasury.config.dao_id, EWrongDAO);
     
     // Verify the stream is tracked in the registry
@@ -458,7 +458,7 @@ public entry fun claim_from_stream<CoinType: drop>(
     assert!(recurring_payments::is_payment_due(stream, clock), EPaymentNotDue);
     
     // Get payment details
-    let (recipient, amount_per_payment, _, _total_paid, active, _dao_id) = recurring_payments::get_stream_info(stream);
+    let (recipient, amount_per_payment, _, _total_paid, active, _) = recurring_payments::get_stream_info(stream);
     assert!(active, EStreamInactive);
     
     // Check treasury has sufficient balance

@@ -1565,4 +1565,183 @@ fun test_verify_token_set_different_amounts_fixed() {
 // `test_verify_token_set_duplicate_outcomes` above, which correctly expects EWRONG_OUTCOME.
 // Removing the redundant/mislabeled `_fixed` version for amounts.
 
+#[test]
+fun test_burn_unused_tokens() {
+    let mut ctx = create_test_context();
+    let outcome_count = 3; // Multiple outcomes to have winners and losers
+    let (ms, mut escrow) = setup_market_with_escrow(outcome_count, &mut ctx);
+
+    // Register supplies
+    register_all_supplies(&mut escrow, outcome_count, &mut ctx);
+
+    // Create clock for timestamps
+    let clock = clock::create_for_testing(&mut ctx);
+
+    // Initialize trading
+    market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
+
+    // Add balance
+    add_asset_balance(&mut escrow, 3000, &mut ctx);
+    add_stable_balance(&mut escrow, 3000, &mut ctx);
+
+    // Create tokens for all outcomes
+    let losing_token1 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow, 1, 500, &clock, &mut ctx
+    );
+    
+    let losing_token2 = coin_escrow::create_stable_token_for_testing(
+        &mut escrow, 2, 300, &clock, &mut ctx
+    );
+    
+    let losing_token3 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow, 2, 200, &clock, &mut ctx
+    );
+
+    // Also create a winning token to ensure it's not accidentally burned
+    let winning_token = coin_escrow::create_asset_token_for_testing(
+        &mut escrow, 0, 100, &clock, &mut ctx
+    );
+
+    // Finalize market with outcome 0 as winner
+    market_state::finalize_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
+
+    // Create vector of losing tokens to burn
+    let mut tokens_to_burn = vector::empty<ConditionalToken>();
+    vector::push_back(&mut tokens_to_burn, losing_token1);
+    vector::push_back(&mut tokens_to_burn, losing_token2);
+    vector::push_back(&mut tokens_to_burn, losing_token3);
+
+    // Burn the unused (losing) tokens
+    coin_escrow::burn_unused_tokens(
+        &mut escrow,
+        tokens_to_burn,
+        &clock,
+        &mut ctx
+    );
+
+    // Verify winning token can still be redeemed
+    let redeemed = coin_escrow::redeem_winning_tokens_asset(
+        &mut escrow,
+        winning_token,
+        &clock,
+        &mut ctx
+    );
+
+    assert!(balance::value(&redeemed) == 100, 0);
+
+    // Clean up
+    balance::destroy_for_testing(redeemed);
+    clock::destroy_for_testing(clock);
+    market_state::destroy_for_testing(ms);
+    test_utils::destroy(escrow);
+}
+
+#[test]
+fun test_mint_and_burn_single_conditional_token() {
+    let mut ctx = create_test_context();
+    let outcome_count = 2;
+    let (ms, mut escrow) = setup_market_with_escrow(outcome_count, &mut ctx);
+
+    // Register supplies
+    register_all_supplies(&mut escrow, outcome_count, &mut ctx);
+
+    // Create clock for timestamps
+    let clock = clock::create_for_testing(&mut ctx);
+
+    // Initialize trading
+    market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
+
+    // Test minting single asset token
+    let asset_token = coin_escrow::mint_single_conditional_token(
+        &mut escrow,
+        TOKEN_TYPE_ASSET,
+        0, // outcome
+        1000, // amount
+        tx_context::sender(&mut ctx), // recipient
+        &clock,
+        &mut ctx
+    );
+
+    // Verify token properties
+    assert!(token::value(&asset_token) == 1000, 0);
+    assert!(token::asset_type(&asset_token) == TOKEN_TYPE_ASSET, 1);
+    assert!(token::outcome(&asset_token) == 0, 2);
+
+    // Test minting single stable token
+    let stable_token = coin_escrow::mint_single_conditional_token(
+        &mut escrow,
+        TOKEN_TYPE_STABLE,
+        1, // different outcome
+        500, // amount
+        tx_context::sender(&mut ctx), // recipient
+        &clock,
+        &mut ctx
+    );
+
+    // Verify stable token properties
+    assert!(token::value(&stable_token) == 500, 3);
+    assert!(token::asset_type(&stable_token) == TOKEN_TYPE_STABLE, 4);
+    assert!(token::outcome(&stable_token) == 1, 5);
+
+    // Test minting LP token
+    let lp_token = coin_escrow::mint_single_conditional_token(
+        &mut escrow,
+        TOKEN_TYPE_LP,
+        0, // outcome
+        200, // amount
+        tx_context::sender(&mut ctx), // recipient
+        &clock,
+        &mut ctx
+    );
+
+    // Verify LP token properties
+    assert!(token::value(&lp_token) == 200, 6);
+    assert!(token::asset_type(&lp_token) == TOKEN_TYPE_LP, 7);
+
+    // Check supply tracking before burning
+    {
+        let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0);
+        assert!(token::total_supply(asset_supply) == 1000, 8);
+    };
+
+    // Burn the single asset token
+    coin_escrow::burn_single_conditional_token(
+        &mut escrow,
+        asset_token,
+        &clock,
+        &mut ctx
+    );
+
+    // Check supply after burning
+    {
+        let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0);
+        assert!(token::total_supply(asset_supply) == 0, 9);
+    };
+
+    // Burn the stable token
+    coin_escrow::burn_single_conditional_token(
+        &mut escrow,
+        stable_token,
+        &clock,
+        &mut ctx
+    );
+
+    // Burn the LP token
+    coin_escrow::burn_single_conditional_token(
+        &mut escrow,
+        lp_token,
+        &clock,
+        &mut ctx
+    );
+
+    // Clean up
+    clock::destroy_for_testing(clock);
+    market_state::destroy_for_testing(ms);
+    test_utils::destroy(escrow);
+}
+
+// Note: test_admin_sweep_escrow is not included because it requires an EscrowAdminCap
+// which is not exposed for testing. The admin sweep functionality would need
+// integration testing or a test-only version of the function.
+
 }

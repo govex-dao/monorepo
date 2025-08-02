@@ -544,6 +544,126 @@ fun test_split_edge_cases() {
     end(scenario);
 }
 
+// Note: test_split_and_return is not included because split_and_return is public(package)
+// and the test module doesn't have friend access to conditional_token module
+
+#[test]
+fun test_destroy_zero_value_token() {
+    let mut scenario = begin(ADMIN);
+    
+    // Setup
+    next_tx(&mut scenario, ADMIN);
+    {
+        let ctx = ctx(&mut scenario);
+        let (mut state) = init_market(ctx);
+        let mut clock = create_for_testing(ctx);
+        
+        market_state::init_trading_for_testing(&mut state);
+        
+        transfer::public_share_object(state);
+        share_for_testing(clock);
+    };
+    
+    // Create and split token to get a zero value token
+    next_tx(&mut scenario, ADMIN);
+    {
+        let state = take_shared<MarketState>(&scenario);
+        let clock = take_shared<Clock>(&scenario);
+        let ctx = ctx(&mut scenario);
+        
+        let mut supply = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let mut token = conditional_token::mint(
+            &state,
+            &mut supply,
+            100,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Burn the entire token to reduce supply
+        conditional_token::burn(token, &mut supply, &clock, ctx);
+        
+        // Create a new zero-balance token for testing destroy
+        let zero_token = conditional_token::mint_for_testing(
+            state.market_id(),
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            0, // zero balance
+            ctx
+        );
+        
+        // Now destroy the zero-value token
+        conditional_token::destroy(zero_token);
+        
+        transfer::public_transfer(supply, ADMIN);
+        
+        return_shared(state);
+        return_shared(clock);
+    };
+    
+    end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::conditional_token::ENonzeroBalance)]
+fun test_destroy_non_zero_value_token_fails() {
+    let mut scenario = begin(ADMIN);
+    
+    // Setup
+    next_tx(&mut scenario, ADMIN);
+    {
+        let ctx = ctx(&mut scenario);
+        let (mut state) = init_market(ctx);
+        let mut clock = create_for_testing(ctx);
+        
+        market_state::init_trading_for_testing(&mut state);
+        
+        transfer::public_share_object(state);
+        share_for_testing(clock);
+    };
+    
+    // Create token with non-zero value
+    next_tx(&mut scenario, ADMIN);
+    {
+        let state = take_shared<MarketState>(&scenario);
+        let clock = take_shared<Clock>(&scenario);
+        let ctx = ctx(&mut scenario);
+        
+        let mut supply = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let token = conditional_token::mint(
+            &state,
+            &mut supply,
+            100,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // This should fail because token has non-zero value
+        conditional_token::destroy(token);
+        
+        transfer::public_transfer(supply, ADMIN);
+        
+        return_shared(state);
+        return_shared(clock);
+    };
+    
+    end(scenario);
+}
+
 #[test]
 fun test_token_properties() {
     let mut scenario = begin(ADMIN);
@@ -592,6 +712,257 @@ fun test_token_properties() {
         share_for_testing(clock);
         
         return_shared(state);
+    };
+    
+    end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::conditional_token::EWrongMarket)]
+fun test_merge_many_wrong_market() {
+    let mut scenario = begin(ADMIN);
+    
+    // Setup two different markets
+    next_tx(&mut scenario, ADMIN);
+    {
+        let ctx = ctx(&mut scenario);
+        let (mut state1) = init_market(ctx);
+        let (mut state2) = init_market(ctx);
+        let mut clock = create_for_testing(ctx);
+        
+        market_state::init_trading_for_testing(&mut state1);
+        market_state::init_trading_for_testing(&mut state2);
+        
+        transfer::public_share_object(state1);
+        transfer::public_share_object(state2);
+        share_for_testing(clock);
+    };
+    
+    // Create tokens from different markets
+    next_tx(&mut scenario, ADMIN);
+    {
+        let state1 = take_shared<MarketState>(&scenario);
+        let state2 = take_shared<MarketState>(&scenario);
+        let clock = take_shared<Clock>(&scenario);
+        let ctx = ctx(&mut scenario);
+        
+        // Create supply and token from market 1
+        let mut supply1 = conditional_token::new_supply(
+            &state1,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let mut base_token = conditional_token::mint(
+            &state1,
+            &mut supply1,
+            100,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Create supply and token from market 2
+        let mut supply2 = conditional_token::new_supply(
+            &state2,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let wrong_market_token = conditional_token::mint(
+            &state2,
+            &mut supply2,
+            50,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Try to merge tokens from different markets - should fail
+        let mut tokens_to_merge = vector[];
+        tokens_to_merge.push_back(wrong_market_token);
+        
+        conditional_token::merge_many(
+            &mut base_token,
+            tokens_to_merge,
+            &clock,
+            ctx,
+        );
+        
+        // Cleanup (won't reach here due to expected failure)
+        return_to_sender(&scenario, base_token);
+        transfer::public_transfer(supply1, ADMIN);
+        transfer::public_transfer(supply2, ADMIN);
+        
+        return_shared(state1);
+        return_shared(state2);
+        return_shared(clock);
+    };
+    
+    end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::conditional_token::EWrongTokenType)]
+fun test_merge_many_wrong_asset_type() {
+    let mut scenario = begin(ADMIN);
+    
+    // Setup
+    next_tx(&mut scenario, ADMIN);
+    {
+        let ctx = ctx(&mut scenario);
+        let (mut state) = init_market(ctx);
+        let mut clock = create_for_testing(ctx);
+        
+        market_state::init_trading_for_testing(&mut state);
+        
+        transfer::public_share_object(state);
+        share_for_testing(clock);
+    };
+    
+    // Create tokens with different asset types
+    next_tx(&mut scenario, ADMIN);
+    {
+        let state = take_shared<MarketState>(&scenario);
+        let clock = take_shared<Clock>(&scenario);
+        let ctx = ctx(&mut scenario);
+        
+        // Create asset token
+        let mut supply_asset = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let mut base_token = conditional_token::mint(
+            &state,
+            &mut supply_asset,
+            100,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Create stable token (different asset type)
+        let mut supply_stable = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_STABLE,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let wrong_type_token = conditional_token::mint(
+            &state,
+            &mut supply_stable,
+            50,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Try to merge different asset types - should fail
+        let mut tokens_to_merge = vector[];
+        tokens_to_merge.push_back(wrong_type_token);
+        
+        conditional_token::merge_many(
+            &mut base_token,
+            tokens_to_merge,
+            &clock,
+            ctx,
+        );
+        
+        // Cleanup (won't reach here due to expected failure)
+        return_to_sender(&scenario, base_token);
+        transfer::public_transfer(supply_asset, ADMIN);
+        transfer::public_transfer(supply_stable, ADMIN);
+        
+        return_shared(state);
+        return_shared(clock);
+    };
+    
+    end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = futarchy::conditional_token::EWrongOutcome)]
+fun test_merge_many_wrong_outcome() {
+    let mut scenario = begin(ADMIN);
+    
+    // Setup
+    next_tx(&mut scenario, ADMIN);
+    {
+        let ctx = ctx(&mut scenario);
+        let (mut state) = init_market(ctx);
+        let mut clock = create_for_testing(ctx);
+        
+        market_state::init_trading_for_testing(&mut state);
+        
+        transfer::public_share_object(state);
+        share_for_testing(clock);
+    };
+    
+    // Create tokens with different outcomes
+    next_tx(&mut scenario, ADMIN);
+    {
+        let state = take_shared<MarketState>(&scenario);
+        let clock = take_shared<Clock>(&scenario);
+        let ctx = ctx(&mut scenario);
+        
+        // Create token for outcome YES
+        let mut supply_yes = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_ASSET,
+            OUTCOME_YES,
+            ctx,
+        );
+        
+        let mut base_token = conditional_token::mint(
+            &state,
+            &mut supply_yes,
+            100,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Create token for outcome NO (different outcome)
+        let mut supply_no = conditional_token::new_supply(
+            &state,
+            ASSET_TYPE_ASSET,
+            OUTCOME_NO,
+            ctx,
+        );
+        
+        let wrong_outcome_token = conditional_token::mint(
+            &state,
+            &mut supply_no,
+            50,
+            USER1,
+            &clock,
+            ctx,
+        );
+        
+        // Try to merge different outcomes - should fail
+        let mut tokens_to_merge = vector[];
+        tokens_to_merge.push_back(wrong_outcome_token);
+        
+        conditional_token::merge_many(
+            &mut base_token,
+            tokens_to_merge,
+            &clock,
+            ctx,
+        );
+        
+        // Cleanup (won't reach here due to expected failure)
+        return_to_sender(&scenario, base_token);
+        transfer::public_transfer(supply_yes, ADMIN);
+        transfer::public_transfer(supply_no, ADMIN);
+        
+        return_shared(state);
+        return_shared(clock);
     };
     
     end(scenario);
