@@ -1,6 +1,9 @@
 /// Module for execution context types to avoid circular dependencies
 module futarchy::execution_context;
 
+use sui::object::ID;
+use sui::tx_context::TxContext;
+
 // === Structs ===
 
 /// A one-shot witness object that proves a proposal's outcome
@@ -17,14 +20,21 @@ public struct ProposalExecutionContext has drop {
 /// Create a new execution context
 public(package) fun new(
     proposal_id: ID,
-    winning_outcome: u64,
     dao_id: ID,
+    winning_outcome: u64,
+    _timestamp: u64,
+    _ctx: &mut TxContext,
 ): ProposalExecutionContext {
     ProposalExecutionContext {
         proposal_id,
         winning_outcome,
         dao_id,
     }
+}
+
+/// Destroy the execution context
+public fun destroy(context: ProposalExecutionContext) {
+    let ProposalExecutionContext { proposal_id: _, winning_outcome: _, dao_id: _ } = context;
 }
 
 /// Get the proposal ID from the context

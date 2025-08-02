@@ -34,6 +34,8 @@ const STATE_FUNDING: u8 = 0;
 const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
+const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
+
 // === Structs ===
 
 /// A one-time witness for module initialization
@@ -285,6 +287,7 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
         params.amm_twap_step_max,
         params.amm_twap_initial_observation,
         params.twap_threshold,
+        DEFAULT_AMM_TOTAL_FEE_BPS,
         params.dao_description, // DAO description
         params.max_outcomes,
         params.agreement_lines,

@@ -17,10 +17,11 @@ use sui::event;
 use sui::clock::Clock;
 use sui::sui::SUI;
 
-use futarchy::dao::{Self, DAO};
+use futarchy::dao::{Self};
+use futarchy::dao_state::{Self, DAO};
 use futarchy::spot_liquidity_pool::{Self, SpotLiquidityPool, LP};
 use futarchy::execution_context::ProposalExecutionContext;
-use futarchy::treasury::{Treasury};
+use futarchy::treasury::{Self, Treasury};
 use futarchy::fee;
 use sui::table::{Self, Table};
 
@@ -532,16 +533,18 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
     let asset_coin = dao::withdraw_asset_from_treasury(
         dao,
         treasury,
-        asset_amount,
         execution_context,
+        asset_amount,
+        ctx.sender(),
         clock,
         ctx
     );
     let stable_coin = dao::withdraw_stable_from_treasury(
         dao,
         treasury,
-        stable_amount,
         execution_context,
+        stable_amount,
+        ctx.sender(),
         clock,
         ctx
     );
@@ -556,7 +559,7 @@ public(package) fun execute_add_liquidity<Asset: drop, Stable: drop>(
     );
     
     // The returned LP tokens need to be deposited back into the treasury
-    dao::deposit_lp_to_treasury<Asset, Stable, LP<Asset, Stable>>(
+    treasury::deposit_without_drop(
         treasury,
         lp_tokens,
         ctx
@@ -591,8 +594,9 @@ public(package) fun execute_remove_liquidity<Asset: drop, Stable: drop>(
     let lp_coin = dao::withdraw_lp_from_treasury<Asset, Stable, LP<Asset, Stable>>(
         dao,
         treasury,
-        lp_amount,
         execution_context,
+        lp_amount,
+        ctx.sender(),
         clock,
         ctx
     );
@@ -607,8 +611,8 @@ public(package) fun execute_remove_liquidity<Asset: drop, Stable: drop>(
     );
     
     // Deposit the withdrawn assets back into the DAO treasury
-    dao::deposit_asset_to_treasury<Asset, Stable>(treasury, asset_coin, ctx);
-    dao::deposit_stable_to_treasury<Asset, Stable>(treasury, stable_coin, ctx);
+    treasury::deposit_without_drop(treasury, asset_coin, ctx);
+    treasury::deposit_without_drop(treasury, stable_coin, ctx);
     
     // Mark as executed
     mark_executed(registry, proposal_id);
@@ -669,22 +673,24 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
     let asset_coin = dao::withdraw_asset_from_treasury(
         dao,
         treasury,
-        initial_asset,
         execution_context,
+        initial_asset,
+        ctx.sender(),
         clock,
         ctx
     );
     let stable_coin = dao::withdraw_stable_from_treasury(
         dao,
         treasury,
-        initial_stable,
         execution_context,
+        initial_stable,
+        ctx.sender(),
         clock,
         ctx
     );
     
     // Create the pool
-    let (pool, initial_lp, protocol_admin_cap) = spot_liquidity_pool::create_pool(
+    let (pool, initial_lp, protocol_admin_cap) = spot_liquidity_pool::create_pool<Asset, Stable>(
         dao,
         asset_coin,
         stable_coin,
@@ -696,13 +702,13 @@ public(package) fun execute_create_spot_pool<Asset: drop, Stable: drop>(
     // Transfer pool to DAO as a shared object
     transfer::public_share_object(pool);
     
-    // Transfer protocol admin cap to the sender (DAO creator) for now
-    // TODO: In production, this should be transferred to a governance-controlled address
-    // or stored in the DAO's capability manager
-    transfer::public_transfer(protocol_admin_cap, ctx.sender());
+    // Transfer the protocol admin cap to the DAO address for governance control
+    // This ensures the admin cap is controlled by DAO governance rather than an individual
+    // The DAO can later retrieve and use this cap through governance proposals
+    transfer::public_transfer(protocol_admin_cap, object::id_to_address(&object::id(dao)));
     
     // Deposit the newly minted LP tokens into the treasury
-    dao::deposit_lp_to_treasury<Asset, Stable, LP<Asset, Stable>>(treasury, initial_lp, ctx);
+    treasury::deposit_without_drop(treasury, initial_lp, ctx);
     
     // Mark as executed
     mark_executed(registry, proposal_id);

@@ -12,6 +12,7 @@ use sui::{
 };
 use futarchy::{
     recurring_payment_registry::{Self, PaymentStreamRegistry},
+    treasury::{Self, Treasury},
 };
 
 // === Constants ===
@@ -26,6 +27,7 @@ const EInvalidAmount: u64 = 5;
 const EOverflow: u64 = 6;
 const EInvalidRegistryMismatch: u64 = 7;
 const EMaxPaymentPerClaimExceeded: u64 = 8;
+const E_TREASURY_NOT_LIQUIDATING: u64 = 9;
 
 // === Structs ===
 
@@ -258,4 +260,29 @@ public fun get_remaining_payments<CoinType>(stream: &PaymentStream<CoinType>): O
     } else {
         option::none()
     }
+}
+
+/// A permissionless function that allows anyone to cancel a payment stream
+/// for a DAO that is in the process of dissolving. This must be called for all
+/// active streams before the redemption phase can begin.
+public entry fun permissionless_cancel_dissolving_stream<CoinType>(
+    treasury: &Treasury, // Pass immutably for state check
+    registry: &mut PaymentStreamRegistry,
+    stream: &mut PaymentStream<CoinType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // 1. Verify that the DAO's treasury is actually in the dissolution/liquidation phase.
+    assert!(treasury::get_state(treasury) == treasury::state_liquidating(), E_TREASURY_NOT_LIQUIDATING);
+
+    // 2. Verify the stream belongs to this DAO.
+    assert!(stream.dao_id == treasury::dao_id(treasury), EInvalidRegistryMismatch);
+    
+    // 3. If stream is already inactive, do nothing.
+    if (!stream.active) {
+        return
+    };
+
+    // 4. Call the existing internal cancel logic.
+    cancel_stream(stream, registry, clock, ctx);
 }

@@ -5,12 +5,14 @@ use std::u64;
 use std::u128;
 use std::vector;
 use sui::clock::{Self, Clock};
-use sui::coin::{Coin};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
 use std::option::{Self, Option};
 use sui::object::{Self, ID, UID};
 use sui::tx_context::TxContext;
 
 use sui::event;
+use futarchy::proposal_fee_manager::{Self, ProposalFeeManager};
 
 // === Events ===
 
@@ -22,6 +24,16 @@ public struct ProposalEvicted has copy, drop {
     evicted_by: ID,  // New proposal that caused eviction
     timestamp: u64,
     priority_score: u128,  // Priority score of evicted proposal
+}
+
+/// Emitted when a proposal's fee is updated
+public struct ProposalFeeUpdated has copy, drop {
+    proposal_id: ID,
+    proposer: address,
+    old_fee: u64,
+    new_fee: u64,
+    new_priority_score: u128,
+    timestamp: u64,
 }
 
 /// Emitted when a proposal is added to the queue
@@ -59,8 +71,12 @@ const EFeeExceedsMaximum: u64 = 9;
 const ECannotCancelProposal: u64 = 10;
 /// Insufficient fee for update
 const EInsufficientFeeForUpdate: u64 = 11;
+/// Proposal is within grace period and cannot be evicted
+const EProposalInGracePeriod: u64 = 12;
 
 // === Constants ===
+/// Grace period for new proposals (1 hour in milliseconds)
+const EVICTION_GRACE_PERIOD_MS: u64 = 3_600_000; // 1 hour
 /// Maximum total proposals allowed in queue to prevent unbounded gas costs
 const MAX_QUEUE_SIZE: u64 = 50;  // Limited for O(n) operations safety
 /// Default maximum queue size if not specified
@@ -360,6 +376,8 @@ public fun can_create_immediately<StableCoin>(queue: &ProposalQueue<StableCoin>,
 public fun insert<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     proposal: QueuedProposal<StableCoin>,
+    fee_manager: &mut ProposalFeeManager,
+    clock: &Clock,
     _ctx: &mut TxContext
 ) {
     // Check minimum fee requirement (DoS protection)
@@ -386,28 +404,32 @@ public fun insert<StableCoin>(
             let lowest_priority_idx = find_lowest_priority_proposer_funded(proposals);
             let lowest = vector::borrow(proposals, lowest_priority_idx);
             
+            // Check grace period
+            let current_time = clock::timestamp_ms(clock);
+            assert!(
+                current_time - lowest.timestamp >= EVICTION_GRACE_PERIOD_MS,
+                EProposalInGracePeriod
+            );
+            
             // New proposal must have higher priority to evict
             assert!(compare_priority_scores(&proposal.priority_score, &lowest.priority_score) == COMPARE_GREATER, EQueueFullAndFeeTooLow);
             
             // Remove the lowest priority proposal
             let evicted = vector::remove(proposals, lowest_priority_idx);
-            let QueuedProposal { bond, proposal_id, proposer, fee, timestamp, priority_score, .. } = evicted;
+            let QueuedProposal { bond, proposal_id: evicted_id, proposer, fee, timestamp, priority_score, .. } = evicted;
+            
+            // Immediately slash the fee atomically
+            proposal_fee_manager::slash_proposal_fee(fee_manager, evicted_id);
             
             // Emit eviction event
             event::emit(ProposalEvicted { 
-                proposal_id, 
+                proposal_id: evicted_id, 
                 proposer, 
                 fee,
                 evicted_by: proposal.proposal_id,
                 timestamp,
                 priority_score: priority_score_value(&priority_score),
             });
-            
-            // Handle refund if capability is available
-            if (option::is_some(&queue.refund_cap)) {
-                // The refund should be handled by external system listening to events
-                // We just ensure the bond is properly destroyed
-            };
             
             bond.destroy_none(); // Proposer-funded proposals have no bond
         };
@@ -498,6 +520,11 @@ public fun remove_from_queue<StableCoin>(
 
 // === View Functions ===
 
+/// Returns the DAO ID associated with this queue
+public fun dao_id<StableCoin>(queue: &ProposalQueue<StableCoin>): ID {
+    queue.dao_id
+}
+
 /// Returns the number of proposals in the queue
 public fun length<StableCoin>(queue: &ProposalQueue<StableCoin>): u64 {
     vector::length(&queue.proposals)
@@ -531,10 +558,11 @@ public fun get_top_n_ids<StableCoin>(queue: &ProposalQueue<StableCoin>, n: u64):
 /// Cancels a proposal and refunds the fee
 public fun cancel_proposal<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
+    fee_manager: &mut ProposalFeeManager,
     proposal_id: ID,
     proposer: address,
-    _ctx: &TxContext
-): (u64, Option<Coin<StableCoin>>) {
+    ctx: &mut TxContext
+): (Coin<SUI>, Option<Coin<StableCoin>>) {
     let proposals = &mut queue.proposals;
     let len = vector::length(proposals);
     let mut i = 0;
@@ -546,14 +574,21 @@ public fun cancel_proposal<StableCoin>(
             assert!(proposal.proposer == proposer, ECannotCancelProposal);
             
             let removed = vector::remove(proposals, i);
-            let QueuedProposal { fee, bond, uses_dao_liquidity, .. } = removed;
+            let QueuedProposal { proposal_id, bond, uses_dao_liquidity, .. } = removed;
+            
+            // Atomically get the fee refunded as a Coin
+            let refunded_fee = proposal_fee_manager::refund_proposal_fee(
+                fee_manager,
+                proposal_id,
+                ctx
+            );
             
             // Update cached count if needed
             if (!uses_dao_liquidity) {
                 // Proposer-funded proposal removed
             };
             
-            return (fee, bond)
+            return (refunded_fee, bond)
         };
         i = i + 1;
     };
@@ -566,39 +601,48 @@ public fun update_proposal_fee<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     proposal_id: ID,
     additional_fee: u64,
-    proposer: address,
     clock: &Clock,
-): u64 {
-    assert!(additional_fee >= MIN_FEE, EInsufficientFeeForUpdate);
-    
+    ctx: &TxContext,
+) {
+    assert!(additional_fee > 0, EInsufficientFeeForUpdate);
+
     let proposals = &mut queue.proposals;
     let len = vector::length(proposals);
     let mut i = 0;
-    
+
     while (i < len) {
         let proposal = vector::borrow(proposals, i);
         if (proposal.proposal_id == proposal_id) {
-            assert!(proposal.proposer == proposer, ECannotCancelProposal);
-            
+            assert!(proposal.proposer == ctx.sender(), ECannotCancelProposal);
+
             // Remove the proposal temporarily
             let mut removed = vector::remove(proposals, i);
-            
+            let old_fee = removed.fee;
+
             // Update fee and recalculate priority
             let new_fee = removed.fee + additional_fee;
             assert!(new_fee <= MAX_FEE, EFeeExceedsMaximum);
-            
+
             removed.fee = new_fee;
-            removed.priority_score = new_priority_score(new_fee, removed.timestamp, clock);
-            
+            removed.priority_score = new_priority_score(new_fee, clock::timestamp_ms(clock), clock);
+
+            event::emit(ProposalFeeUpdated {
+                proposal_id, 
+                proposer: removed.proposer, 
+                old_fee, 
+                new_fee,
+                new_priority_score: priority_score_value(&removed.priority_score),
+                timestamp: clock::timestamp_ms(clock),
+            });
+
             // Re-insert in sorted order
             let new_idx = find_insert_position(proposals, &removed.priority_score);
             vector::insert(proposals, removed, new_idx);
-            
-            return new_fee
+            return
         };
         i = i + 1;
     };
-    
+
     abort EProposalNotFound
 }
 
@@ -754,6 +798,35 @@ public fun get_timestamp<StableCoin>(proposal: &QueuedProposal<StableCoin>): u64
 /// Get priority score
 public fun get_priority_score<StableCoin>(proposal: &QueuedProposal<StableCoin>): &PriorityScore {
     &proposal.priority_score
+}
+
+// === Admin Functions (for DAO/Config Proposals) ===
+
+/// Updates the maximum number of proposer-funded proposals allowed
+public(package) fun update_max_proposer_funded<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    new_max: u64
+) {
+    assert!(new_max > 0, EInvalidProposalId); // Reusing error code for invalid parameter
+    queue.max_proposer_funded = new_max;
+}
+
+/// Updates the maximum concurrent proposals allowed
+public(package) fun update_max_concurrent_proposals<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    new_max: u64
+) {
+    assert!(new_max > 0, EInvalidProposalId); // Reusing error code for invalid parameter
+    queue.max_concurrent_proposals = new_max;
+}
+
+/// Updates the maximum queue size
+public(package) fun update_max_queue_size<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    new_max: u64
+) {
+    assert!(new_max >= MIN_QUEUE_SIZE && new_max <= MAX_QUEUE_SIZE, EQueueSizeExceeded);
+    queue.max_queue_size = new_max;
 }
 
 /// Extract bond (mutable)

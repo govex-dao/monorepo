@@ -28,8 +28,8 @@ const EInvalidOutcomeVectors: u64 = 8;
 // === Constants ===
 
 const STATE_PREMARKET: u8 = 0; // Proposal exists, outcomes can be added/mutated. No market yet.
-const STATE_REVIEW: u8 = 1;    // Market is initialized and liquidity is locked, but not yet trading.
-// const STATE_TRADING: u8 = 2;   // Market is live and trading. (currently unused)
+const STATE_REVIEW: u8 = 1;    // Market is initialized and locked for review. Not yet trading.
+const STATE_TRADING: u8 = 2;   // Market is live and trading.
 const STATE_FINALIZED: u8 = 3; // Market has resolved.
 
 // === Structs ===
@@ -70,6 +70,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     twap_initial_observation: u128,
     twap_step_max: u64,
     twap_threshold: u64,
+    amm_total_fee_bps: u64,
     winning_outcome: Option<u64>,
     fee_escrow: Balance<StableType>,
     treasury_address: address,
@@ -133,6 +134,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     twap_initial_observation: u128,
     twap_step_max: u64,
     twap_threshold: u64,
+    amm_total_fee_bps: u64,
     treasury_address: address,
     // Proposal specific parameters
     title: String,
@@ -215,6 +217,7 @@ public(package) fun initialize_market<AssetType, StableType>(
         twap_start_delay, 
         twap_initial_observation, 
         twap_step_max,
+        amm_total_fee_bps,
         asset_balance, 
         stable_balance, 
         clock, 
@@ -250,6 +253,7 @@ public(package) fun initialize_market<AssetType, StableType>(
         twap_initial_observation,
         twap_step_max,
         twap_threshold,
+        amm_total_fee_bps,
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
@@ -300,6 +304,7 @@ public(package) fun create<AssetType, StableType>(
     twap_initial_observation: u128,
     twap_step_max: u64,
     twap_threshold: u64,
+    amm_total_fee_bps: u64,
     uses_dao_liquidity: bool,
     treasury_address: address,
     clock: &Clock,
@@ -370,6 +375,7 @@ public(package) fun create<AssetType, StableType>(
         twap_initial_observation,
         twap_step_max,
         twap_threshold,
+        amm_total_fee_bps,
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
@@ -445,7 +451,7 @@ public(package) fun initialize_market_fields<AssetType, StableType>(
     // LP caps no longer needed - using conditional tokens
     option::fill(&mut proposal.market_initialized_at, initialized_at);
     option::fill(&mut proposal.liquidity_provider, liquidity_provider);
-    proposal.state = STATE_REVIEW; // Advance state
+    proposal.state = STATE_REVIEW; // Advance state to REVIEW
 }
 
 /// Emits the ProposalMarketInitialized event
@@ -615,6 +621,25 @@ public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     get_pool_mut(pools_mut, outcome_idx)
 }
 
+#[test_only]
+public fun get_pool_by_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_idx: u8,
+): &LiquidityPool {
+    assert!((outcome_idx as u64) < proposal.outcome_count, EOutcomeOutOfBounds);
+    let pools = proposal.amm_pools.borrow();
+    let mut i = 0;
+    let len = pools.length();
+    while (i < len) {
+        let pool = &pools[i];
+        if (pool.get_outcome_idx() == outcome_idx) {
+            return pool
+        };
+        i = i + 1;
+    };
+    abort EPoolNotFound
+}
+
 // LP caps no longer needed - using conditional tokens for LP
 
 // Pool and LP cap getter no longer needed - using conditional tokens for LP
@@ -680,6 +705,13 @@ public fun get_twap_step_max<AssetType, StableType>(proposal: &Proposal<AssetTyp
 public fun uses_dao_liquidity<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
     proposal.uses_dao_liquidity
 }
+
+public fun get_amm_total_fee_bps<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+): u64 {
+    proposal.amm_total_fee_bps
+}
+
 
 /// Returns the parameters needed to initialize the market after the premarket phase.
 public(package) fun get_market_init_params<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): (u64, &vector<String>, &vector<u64>, &vector<u64>) {

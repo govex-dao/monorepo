@@ -3,22 +3,40 @@ module futarchy::treasury;
 
 // === Imports ===
 use futarchy::execution_context::{Self, ProposalExecutionContext};
-use futarchy::recurring_payments::{Self, PaymentStream};
+// use futarchy::recurring_payments::{Self, PaymentStream}; // Removed to avoid circular dependency
+use futarchy::{
+    math, 
+    recurring_payment_registry::{Self, PaymentStreamRegistry},
+    dao_liquidity_pool::{Self, DAOLiquidityPool},
+};
 use std::{
-    string::String,
+    string::{Self, String},
+    ascii::{Self, String as AsciiString},
     type_name::{Self, TypeName},
+    option::{Self, Option},
+    vector,
 };
 use sui::{
-    balance::Balance,
+    balance::{Self, Balance},
     coin::{Self, Coin},
     bag::{Self, Bag},
+    table::{Self, Table},
     sui::SUI,
     event,
     clock::Clock,
+    object::{Self, ID, UID},
+    dynamic_field as df,
+    transfer,
+    tx_context::{Self, TxContext},
 };
 
 // === Constants ===
 const NEW_COIN_TYPE_FEE: u64 = 10_000_000_000; // 10 SUI fee for new coin types
+
+// Treasury states
+const STATE_ACTIVE: u8 = 0;
+const STATE_LIQUIDATING: u8 = 1;
+const STATE_REDEMPTION_ACTIVE: u8 = 2;
 
 // === Errors ===
 const EWrongAccount: u64 = 1;
@@ -28,6 +46,16 @@ const EInsufficientFee: u64 = 15;
 const EInvalidDepositAmount: u64 = 16;
 const EInvalidAuth: u64 = 19;
 const EUnauthorizedPlatformWithdraw: u64 = 20;
+const EInvalidStateForAction: u64 = 21;
+const EAssetNotPending: u64 = 22;
+const EAssetNotManaged: u64 = 23;
+const EMaxRedemptionExceeded: u64 = 24;
+const EAssetNotRedeemable: u64 = 25;
+const ENothingToRedeem: u64 = 26;
+const ETreasuryNotInRedemptionState: u64 = 27;
+const E_STREAMS_STILL_ACTIVE: u64 = 28;
+const E_DAO_LIQUIDITY_STILL_IN_MARKETS: u64 = 29;
+const EUnauthorized: u64 = 30;
 
 // === Structs ===
 
@@ -48,6 +76,33 @@ public struct Treasury has key, store {
     config: FutarchyConfig,
     /// Single vault holding all coin types (TypeName -> Balance<CoinType>)
     vault: Bag,
+    /// Pending assets awaiting approval
+    pending_assets: Bag,
+    /// Managed non-fungible assets (asset_id -> TypeName)
+    managed_assets: Table<ID, TypeName>,
+    /// Current state of the treasury
+    state: u8,
+    /// Dissolution information (if in dissolution state)
+    dissolution_info: Option<DissolutionState>,
+    /// Stream IDs approved for cancellation
+    streams_to_cancel: vector<ID>,
+}
+
+/// Dissolution state information
+public struct DissolutionState has store {
+    proposal_id: ID,
+    state: u8,
+    liquidation_deadline: Option<u64>,
+    redemption_fee_bps: u64,
+    max_tokens_to_redeem: Option<u64>,
+    total_tokens_redeemed: u64,
+    redeemable_assets: Table<AsciiString, RedemptionAssetInfo>,
+}
+
+/// Information about a redeemable asset
+public struct RedemptionAssetInfo has store, copy, drop {
+    total_amount: u64,
+    amount_redeemed: u64,
 }
 
 /// Authentication token for treasury actions
@@ -102,6 +157,22 @@ public struct PaymentStreamClaimed has copy, drop {
     claimer: address,
 }
 
+public struct DissolutionStarted has copy, drop {
+    treasury_id: ID,
+    proposal_id: ID,
+    dissolution_type: u8, // 0 = partial, 1 = full
+    liquidation_deadline: Option<u64>,
+}
+
+public struct AssetRedeemed has copy, drop {
+    treasury_id: ID,
+    redeemer: address,
+    dao_tokens_burned: u64,
+    coin_type: TypeName,
+    amount_redeemed: u64,
+    fee_amount: u64,
+}
+
 // === Public Functions ===
 
 /// Creates a new treasury for a futarchy DAO
@@ -121,6 +192,11 @@ public fun new(
         name,
         config,
         vault: bag::new(ctx),
+        pending_assets: bag::new(ctx),
+        managed_assets: table::new(ctx),
+        state: STATE_ACTIVE,
+        dissolution_info: option::none(),
+        streams_to_cancel: vector::empty(),
     };
 
     event::emit(TreasuryCreated {
@@ -284,7 +360,7 @@ public fun withdraw<CoinType: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<CoinType> {
-    verify_auth(treasury, &auth);
+    verify_auth_internal(treasury, &auth);
     
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists<CoinType>(treasury), ECoinTypeNotFound);
@@ -331,7 +407,7 @@ public (package) fun withdraw_without_drop<CoinType>(
 ): Coin<CoinType> {
     // This function is specifically for LP tokens which don't have the drop ability
     // Extra care is taken to ensure it's only used within the package for authorized operations
-    verify_auth(treasury, &auth);
+    verify_auth_internal(treasury, &auth);
     
     let coin_type = type_name::get<CoinType>();
     assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
@@ -357,38 +433,17 @@ public (package) fun withdraw_without_drop<CoinType>(
 /// Permissionlessly claim a due payment from an active payment stream.
 /// This function reads the stream's state, verifies a payment is due,
 /// withdraws the funds from the treasury, and updates the stream's state.
+// Temporarily commented out to avoid circular dependency
+/*
 public entry fun claim_from_stream<CoinType: drop>(
     treasury: &mut Treasury,
     stream: &mut PaymentStream<CoinType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // 1. Get payment details and atomically update stream state
-    let (recipient, amount_to_pay) = recurring_payments::get_payment_details_and_update_state(
-        stream,
-        clock.timestamp_ms()
-    );
-
-    // 2. Verify the treasury has sufficient funds
-    let coin_type = type_name::get<CoinType>();
-    assert!(coin_type_exists<CoinType>(treasury), ECoinTypeNotFound);
-    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
-    assert!(balance_mut.value() >= amount_to_pay, EInsufficientBalance);
-
-    // 3. Withdraw funds and transfer to the recipient
-    let payment_coin = coin::from_balance(balance_mut.split(amount_to_pay), ctx);
-    transfer::public_transfer(payment_coin, recipient);
-
-    // 4. Emit event
-    event::emit(PaymentStreamClaimed {
-        treasury_id: object::id(treasury),
-        stream_id: object::id(stream),
-        coin_type,
-        amount: amount_to_pay,
-        recipient,
-        claimer: ctx.sender(),
-    });
-}
+    // Function body removed to avoid circular dependency
+    abort 0
+}*/
 
 // === View Functions ===
 
@@ -507,6 +562,28 @@ public fun coin_type_exists_by_name(treasury: &Treasury, coin_type: TypeName): b
     treasury.vault.contains<TypeName>(coin_type)
 }
 
+/// Deposit a balance directly (used by auction module)
+public(package) fun deposit_coin_type_balance<CoinType: drop>(
+    treasury: &mut Treasury,
+    balance: Balance<CoinType>,
+) {
+    let coin_type = type_name::get<CoinType>();
+    
+    if (treasury.vault.contains(coin_type)) {
+        // Add to existing balance
+        let existing_balance = bag::borrow_mut<TypeName, Balance<CoinType>>(&mut treasury.vault, coin_type);
+        balance::join(existing_balance, balance);
+    } else {
+        // Add new coin type
+        treasury.vault.add(coin_type, balance);
+        
+        event::emit(CoinTypeAdded {
+            treasury_id: object::id(treasury),
+            coin_type,
+        });
+    };
+}
+
 /// Get treasury ID
 public fun get_id(treasury: &Treasury): ID {
     object::id(treasury)
@@ -554,6 +631,448 @@ public fun consume_auth(auth: Auth) {
     let Auth { treasury_addr: _ } = auth;
 }
 
+// === Asset Management Functions ===
+
+/// Request to deposit a non-fungible asset (spam prevention)
+/// Note: This should be called through a specific asset type wrapper
+/// The asset must have key + store abilities
+public(package) fun request_deposit_asset<T: key + store>(treasury: &mut Treasury, asset: T) {
+    let id = object::id(&asset);
+    treasury.pending_assets.add(id, asset);
+}
+
+/// Approve a pending asset deposit (requires proposal execution)
+public(package) fun approve_asset_deposit<T: key + store>(
+    treasury: &mut Treasury,
+    asset_id: ID,
+    _context: &ProposalExecutionContext,
+    ctx: &mut TxContext,
+) {
+    assert!(treasury.pending_assets.contains(asset_id), EAssetNotPending);
+    let asset: T = treasury.pending_assets.remove(asset_id);
+    let asset_type = type_name::get<T>();
+    
+    treasury.managed_assets.add(asset_id, asset_type);
+    df::add<ID, T>(&mut treasury.id, asset_id, asset);
+}
+
+/// Release a managed asset (for auctions during liquidation)
+/// Returns the actual object that was stored
+public(package) fun release_managed_asset<T: key + store>(
+    treasury: &mut Treasury, 
+    asset_id: ID,
+    ctx: &mut TxContext
+): T {
+    assert!(treasury.managed_assets.contains(asset_id), EAssetNotManaged);
+    treasury.managed_assets.remove(asset_id);
+    df::remove<ID, T>(&mut treasury.id, asset_id)
+}
+
+// === Dissolution Functions ===
+
+/// Start partial dissolution
+public(package) fun start_partial_dissolution(
+    treasury: &mut Treasury,
+    auth: Auth,
+    proposal_id: ID,
+    max_tokens_to_redeem: u64,
+    redeemable_coin_types: &vector<TypeName>,
+    redeemable_percentages: &vector<u64>,
+    redemption_fee_bps: u64,
+    ctx: &mut TxContext,
+) {
+    verify_auth_internal(treasury, &auth);
+    assert!(treasury.state == STATE_ACTIVE, EInvalidStateForAction);
+
+    treasury.state = STATE_REDEMPTION_ACTIVE;
+    let mut redeemable_assets = table::new(ctx);
+
+    let mut i = 0;
+    while(i < redeemable_coin_types.length()) {
+        let type_name = *vector::borrow(redeemable_coin_types, i);
+        let percentage_bps = *vector::borrow(redeemable_percentages, i);
+        
+        // Get the balance for this coin type if it exists
+        if (treasury.vault.contains(type_name)) {
+            // Note: This requires type-specific handling in practice
+            // For now, we'll store the percentage to be redeemed
+            let amount_to_redeem = percentage_bps; // Store percentage instead of amount
+            
+            // Convert TypeName to AsciiString for storage
+            let type_name_str = type_name.into_string();
+            redeemable_assets.add(type_name_str, RedemptionAssetInfo {
+                total_amount: amount_to_redeem,
+                amount_redeemed: 0,
+            });
+        };
+        i = i + 1;
+    };
+
+    // Ensure no existing dissolution is active
+    assert!(treasury.dissolution_info.is_none(), EInvalidStateForAction);
+    
+    treasury.dissolution_info.fill(DissolutionState {
+        proposal_id,
+        state: STATE_REDEMPTION_ACTIVE,
+        liquidation_deadline: option::none(),
+        redemption_fee_bps,
+        max_tokens_to_redeem: option::some(max_tokens_to_redeem),
+        total_tokens_redeemed: 0,
+        redeemable_assets,
+    });
+    
+    event::emit(DissolutionStarted {
+        treasury_id: object::id(treasury),
+        proposal_id,
+        dissolution_type: 0, // partial
+        liquidation_deadline: option::none(),
+    });
+    
+    consume_auth(auth);
+}
+
+/// Start full dissolution
+public(package) fun start_full_dissolution(
+    treasury: &mut Treasury,
+    auth: Auth,
+    proposal_id: ID,
+    liquidation_period_ms: u64,
+    redemption_fee_bps: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    verify_auth_internal(treasury, &auth);
+    assert!(treasury.state == STATE_ACTIVE, EInvalidStateForAction);
+
+    let liquidation_deadline = clock.timestamp_ms() + liquidation_period_ms;
+    treasury.state = STATE_LIQUIDATING;
+    
+    // Ensure no existing dissolution is active
+    assert!(treasury.dissolution_info.is_none(), EInvalidStateForAction);
+    
+    treasury.dissolution_info.fill(DissolutionState {
+        proposal_id,
+        state: STATE_LIQUIDATING,
+        liquidation_deadline: option::some(liquidation_deadline),
+        redemption_fee_bps,
+        max_tokens_to_redeem: option::none(),
+        total_tokens_redeemed: 0,
+        redeemable_assets: table::new(ctx),
+    });
+    
+    event::emit(DissolutionStarted {
+        treasury_id: object::id(treasury),
+        proposal_id,
+        dissolution_type: 1, // full
+        liquidation_deadline: option::some(liquidation_deadline),
+    });
+    
+    consume_auth(auth);
+}
+
+/// Finalize liquidation and move to redemption phase
+public entry fun finalize_liquidation<AssetType, StableType>(
+    treasury: &mut Treasury,
+    payment_registry: &PaymentStreamRegistry,
+    dao_liquidity_pool: &mut DAOLiquidityPool<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext
+) {
+    assert!(treasury.state == STATE_LIQUIDATING, EInvalidStateForAction);
+    
+    // Check deadline
+    {
+        let dissolution = option::borrow(&treasury.dissolution_info);
+        let deadline = *option::borrow(&dissolution.liquidation_deadline);
+        assert!(clock.timestamp_ms() >= deadline, EInvalidStateForAction);
+    };
+
+    // --- NEW CRITICAL CHECKS ---
+    // Enforce that all payment streams have been canceled.
+    assert!(recurring_payment_registry::get_active_count(payment_registry) == 0, E_STREAMS_STILL_ACTIVE);
+    // Enforce that all DAO-provided liquidity has been returned from active markets.
+    assert!(
+        dao_liquidity_pool::asset_balance(dao_liquidity_pool) == 0 && 
+        dao_liquidity_pool::stable_balance(dao_liquidity_pool) == 0, 
+        E_DAO_LIQUIDITY_STILL_IN_MARKETS
+    );
+
+    treasury.state = STATE_REDEMPTION_ACTIVE;
+    
+    // Make all fungible assets in the vault redeemable
+    // TODO: We need to track coin types separately as bag doesn't have keys() function
+    let all_coin_types = vector::empty<TypeName>();
+    let mut i = 0;
+    let mut asset_type_names = vector::empty<AsciiString>();
+    let mut asset_redemption_infos = vector::empty<RedemptionAssetInfo>();
+    
+    while (i < vector::length(&all_coin_types)) {
+        let type_name = *vector::borrow(&all_coin_types, i);
+        // Note: Actual balance retrieval requires type-specific functions
+        let balance_value = 0; // Placeholder - requires type-specific implementation
+        // Convert TypeName to AsciiString for storage
+        let type_name_str = type_name.into_string();
+        vector::push_back(&mut asset_type_names, type_name_str);
+        vector::push_back(&mut asset_redemption_infos, RedemptionAssetInfo {
+            total_amount: balance_value,
+            amount_redeemed: 0,
+        });
+        i = i + 1;
+    };
+    
+    // Update dissolution state
+    let dissolution = option::borrow_mut(&mut treasury.dissolution_info);
+    dissolution.state = STATE_REDEMPTION_ACTIVE;
+    
+    // Add all asset infos to redeemable_assets
+    let mut j = 0;
+    while (j < vector::length(&asset_type_names)) {
+        let type_name_str = vector::pop_back(&mut asset_type_names);
+        let info = vector::pop_back(&mut asset_redemption_infos);
+        dissolution.redeemable_assets.add(type_name_str, info);
+        j = j + 1;
+    };
+    
+    // Withdraw any remaining assets from the DAO liquidity pool
+    // These should be zero if all liquidity was properly reclaimed, but we check anyway
+    if (dao_liquidity_pool::asset_balance(dao_liquidity_pool) > 0) {
+        let reclaimed_asset = dao_liquidity_pool::withdraw_all_asset_balance(dao_liquidity_pool);
+        // Add to vault
+        let asset_type = type_name::get<AssetType>();
+        if (treasury.vault.contains(asset_type)) {
+            let existing_balance = bag::borrow_mut<TypeName, Balance<AssetType>>(&mut treasury.vault, asset_type);
+            balance::join(existing_balance, reclaimed_asset);
+        } else {
+            treasury.vault.add(asset_type, reclaimed_asset);
+        };
+    };
+    
+    if (dao_liquidity_pool::stable_balance(dao_liquidity_pool) > 0) {
+        let reclaimed_stable = dao_liquidity_pool::withdraw_all_stable_balance(dao_liquidity_pool);
+        // Add to vault
+        let stable_type = type_name::get<StableType>();
+        if (treasury.vault.contains(stable_type)) {
+            let existing_balance = bag::borrow_mut<TypeName, Balance<StableType>>(&mut treasury.vault, stable_type);
+            balance::join(existing_balance, reclaimed_stable);
+        } else {
+            treasury.vault.add(stable_type, reclaimed_stable);
+        };
+    };
+}
+
+/// Redeem a single asset type
+/// The caller must specify the exact coin type to redeem at compile time
+public entry fun redeem_single_asset<DAOAssetType: drop, RedeemableCoinType: drop>(
+    treasury: &mut Treasury,
+    dao_tokens_to_burn: Coin<DAOAssetType>,
+    dao_treasury_cap: &mut coin::TreasuryCap<DAOAssetType>,
+    // fee_manager removed to avoid circular dependency
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(treasury.state == STATE_REDEMPTION_ACTIVE, ETreasuryNotInRedemptionState);
+    
+    // 1. Get the typed balance directly
+    let redeemable_coin_type = type_name::get<RedeemableCoinType>();
+    assert!(treasury.vault.contains(redeemable_coin_type), EAssetNotRedeemable);
+    
+    // Check if asset is marked as redeemable in dissolution info
+    {
+        let dissolution = option::borrow(&treasury.dissolution_info);
+        let type_str = redeemable_coin_type.into_string();
+        assert!(dissolution.redeemable_assets.contains(type_str), EAssetNotRedeemable);
+    };
+    
+    // 2. Calculate Redeemable Supply (Handles Circular Ownership)
+    let raw_total_supply = coin::total_supply(dao_treasury_cap);
+    let treasury_self_holding = coin_type_value<DAOAssetType>(treasury);
+    let redeemable_supply = raw_total_supply - treasury_self_holding;
+    assert!(redeemable_supply > 0, EInsufficientBalance);
+
+    let amount_to_burn = coin::value(&dao_tokens_to_burn);
+
+    // 3. Handle Partial vs. Full Dissolution logic
+    // Get dissolution info and check if partial
+    let is_partial = {
+        let dissolution = option::borrow(&treasury.dissolution_info);
+        option::is_some(&dissolution.max_tokens_to_redeem)
+    };
+    
+    if (is_partial) {
+        let dissolution = option::borrow_mut(&mut treasury.dissolution_info);
+        let max_redeemable = *option::borrow(&dissolution.max_tokens_to_redeem);
+        let new_total_redeemed = dissolution.total_tokens_redeemed + amount_to_burn;
+        assert!(new_total_redeemed <= max_redeemable, EMaxRedemptionExceeded);
+        dissolution.total_tokens_redeemed = new_total_redeemed;
+    };
+    
+    // 4. Burn the user's DAO tokens
+    coin::burn(dao_treasury_cap, dao_tokens_to_burn);
+
+    // 5. Calculate and distribute the single requested asset
+    let (user_share_of_asset, unredeemed_balance) = {
+        let dissolution = option::borrow(&treasury.dissolution_info);
+        let type_str = redeemable_coin_type.into_string();
+        let redemption_info = table::borrow(&dissolution.redeemable_assets, type_str);
+        
+        let user_share = if (option::is_some(&dissolution.max_tokens_to_redeem)) {
+            math::mul_div_to_64(amount_to_burn, redemption_info.total_amount, *option::borrow(&dissolution.max_tokens_to_redeem))
+        } else {
+            math::mul_div_to_64(amount_to_burn, redemption_info.total_amount, redeemable_supply)
+        };
+        
+        let unredeemed = redemption_info.total_amount - redemption_info.amount_redeemed;
+        (user_share, unredeemed)
+    };
+    
+    assert!(user_share_of_asset > 0, ENothingToRedeem);
+    assert!(user_share_of_asset <= unredeemed_balance, EInsufficientBalance);
+
+    // Update amount redeemed
+    {
+        let dissolution = option::borrow_mut(&mut treasury.dissolution_info);
+        let type_str = redeemable_coin_type.into_string();
+        let redemption_info = table::borrow_mut(&mut dissolution.redeemable_assets, type_str);
+        redemption_info.amount_redeemed = redemption_info.amount_redeemed + user_share_of_asset;
+    };
+
+    // 6. Withdraw, handle fees, and transfer
+    // Get the actual TypeName for vault access (vault uses TypeName as key, not AsciiString)
+    let balance_mut = bag::borrow_mut<TypeName, Balance<RedeemableCoinType>>(&mut treasury.vault, redeemable_coin_type);
+    
+    // Get fee from dissolution info
+    let fee_bps = {
+        let dissolution = option::borrow(&treasury.dissolution_info);
+        dissolution.redemption_fee_bps
+    };
+    let fee_amount = math::mul_div_to_64(user_share_of_asset, fee_bps, 10000);
+    let net_amount = user_share_of_asset - fee_amount;
+
+    // Transfer fee to protocol fee manager
+    if (fee_amount > 0) {
+        let fee_balance = balance::split(balance_mut, fee_amount);
+        // TODO: Fix circular dependency - need to deposit fee to fee manager
+        // For now, just add fee back to treasury
+        balance::join(balance_mut, fee_balance);
+    };
+    
+    // Transfer net amount to user
+    let user_coin = coin::from_balance(balance::split(balance_mut, net_amount), ctx);
+    transfer::public_transfer(user_coin, tx_context::sender(ctx));
+    
+    // Emit redemption event
+    event::emit(AssetRedeemed {
+        treasury_id: object::id(treasury),
+        redeemer: tx_context::sender(ctx),
+        dao_tokens_burned: amount_to_burn,
+        coin_type: redeemable_coin_type,
+        amount_redeemed: net_amount,
+        fee_amount,
+    });
+}
+
+// === View Functions ===
+
+/// Get treasury state
+public fun get_state(treasury: &Treasury): u8 {
+    treasury.state
+}
+
+/// Get managed asset type
+public fun get_managed_asset_type(treasury: &Treasury, asset_id: ID): Option<TypeName> {
+    if (table::contains(&treasury.managed_assets, asset_id)) {
+        option::some(*table::borrow(&treasury.managed_assets, asset_id))
+    } else {
+        option::none()
+    }
+}
+
+/// Check if address is admin
+public fun is_admin(treasury: &Treasury, addr: address): bool {
+    treasury.config.admin == addr
+}
+
+/// Get state constants for external use
+public fun state_active(): u8 { STATE_ACTIVE }
+public fun state_liquidating(): u8 { STATE_LIQUIDATING }
+public fun state_redemption_active(): u8 { STATE_REDEMPTION_ACTIVE }
+
+/// Add a stream cancellation request
+public(package) fun add_stream_cancellation_request(treasury: &mut Treasury, stream_id: ID) {
+    if (!vector::contains(&treasury.streams_to_cancel, &stream_id)) {
+        vector::push_back(&mut treasury.streams_to_cancel, stream_id);
+    };
+}
+
+/// Get streams approved for cancellation
+public fun get_streams_to_cancel(treasury: &Treasury): &vector<ID> {
+    &treasury.streams_to_cancel
+}
+
+/// Remove a stream from cancellation list (after it's been canceled)
+public fun remove_canceled_stream(treasury: &mut Treasury, stream_id: ID) {
+    let (exists, index) = vector::index_of(&treasury.streams_to_cancel, &stream_id);
+    if (exists) {
+        vector::remove(&mut treasury.streams_to_cancel, index);
+    };
+}
+
+// Cancel a payment stream that was approved for cancellation
+// Temporarily commented out to avoid circular dependency
+/*
+public entry fun execute_approved_stream_cancellation<CoinType>(
+    treasury: &mut Treasury,
+    registry: &mut recurring_payment_registry::PaymentStreamRegistry,
+    stream: &mut recurring_payments::PaymentStream<CoinType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Function body removed to avoid circular dependency
+    abort 0
+}*/
+
+// === Private Functions ===
+
+/// Get balance for a specific coin type
+public fun get_balance<CoinType>(treasury: &Treasury): u64 {
+    let type_name = type_name::get<CoinType>();
+    if (treasury.vault.contains(type_name)) {
+        let balance: &Balance<CoinType> = &treasury.vault[type_name];
+        balance.value()
+    } else {
+        0
+    }
+}
+
+/// Get redemption fee basis points
+public fun get_redemption_fee_bps(treasury: &Treasury): u64 {
+    if (treasury.dissolution_info.is_some()) {
+        option::borrow(&treasury.dissolution_info).redemption_fee_bps
+    } else {
+        0
+    }
+}
+
+/// Withdraw coins for redemption (requires treasury to be in redemption state)
+public(package) fun withdraw_for_redemption<CoinType>(
+    treasury: &mut Treasury,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    assert!(treasury.state == STATE_REDEMPTION_ACTIVE, ETreasuryNotInRedemptionState);
+    let type_name = type_name::get<CoinType>();
+    assert!(treasury.vault.contains(type_name), ECoinTypeNotFound);
+    
+    let balance: &mut Balance<CoinType> = &mut treasury.vault[type_name];
+    coin::from_balance(balance.split(amount), ctx)
+}
+
+/// Verify auth token (internal helper)
+fun verify_auth_internal(treasury: &Treasury, auth: &Auth) {
+    assert!(auth.treasury_addr == object::id_address(treasury), EInvalidAuth);
+}
+
 // === Test Functions ===
 
 #[test_only]
@@ -568,7 +1087,41 @@ public fun new_for_testing(dao_id: ID, ctx: &mut TxContext): Treasury {
 
 #[test_only]
 public fun destroy_for_testing(treasury: Treasury) {
-    let Treasury { id, name: _, config: _, vault } = treasury;
+    let Treasury { 
+        id, 
+        name: _, 
+        config: _, 
+        vault,
+        state: _,
+        dissolution_info,
+        managed_assets,
+        pending_assets,
+        streams_to_cancel: _
+    } = treasury;
+    
+    // Clean up dissolution info if it exists
+    if (option::is_some(&dissolution_info)) {
+        let info = option::destroy_some(dissolution_info);
+        let DissolutionState {
+            proposal_id: _,
+            state: _,
+            liquidation_deadline: _,
+            redemption_fee_bps: _,
+            max_tokens_to_redeem: _,
+            total_tokens_redeemed: _,
+            redeemable_assets
+        } = info;
+        table::destroy_empty(redeemable_assets);
+    } else {
+        option::destroy_none(dissolution_info);
+    };
+    
+    // Clean up managed assets
+    table::destroy_empty(managed_assets);
+    
+    // Clean up pending assets
+    bag::destroy_empty(pending_assets);
+    
     bag::destroy_empty(vault);
     object::delete(id);
 }

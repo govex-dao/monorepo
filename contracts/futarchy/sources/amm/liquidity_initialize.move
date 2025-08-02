@@ -25,6 +25,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
     twap_start_delay: u64,
     twap_initial_observation: u128,
     twap_step_max: u64,
+    amm_total_fee_bps: u64,
     initial_asset: Balance<AssetType>,
     initial_stable: Balance<StableType>,
     clock: &Clock,
@@ -92,6 +93,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
             let pool = amm::new_pool(
                 ms,
                 (i as u8),
+                amm_total_fee_bps,
                 asset_amt,
                 stable_amt,
                 twap_initial_observation,

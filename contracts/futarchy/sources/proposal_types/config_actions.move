@@ -22,6 +22,7 @@ const CONFIG_TYPE_METADATA: u8 = 1;
 const CONFIG_TYPE_TWAP: u8 = 2;
 const CONFIG_TYPE_GOVERNANCE: u8 = 3;
 const CONFIG_TYPE_METADATA_TABLE: u8 = 4;
+const CONFIG_TYPE_QUEUE_PARAMS: u8 = 5;
 
 // === Structs ===
 
@@ -49,6 +50,7 @@ public struct ConfigAction has store, drop {
     twap_config: Option<TwapConfigUpdate>,
     governance: Option<GovernanceUpdate>,
     metadata_table: Option<MetadataTableUpdate>,
+    queue_params: Option<QueueParamsUpdate>,
 }
 
 /// Trading parameters update action
@@ -57,6 +59,7 @@ public struct TradingParamsUpdate has store, drop {
     min_stable_amount: Option<u64>,
     review_period_ms: Option<u64>,
     trading_period_ms: Option<u64>,
+    amm_total_fee_bps: Option<u64>,
 }
 
 /// DAO metadata update action
@@ -88,6 +91,13 @@ public struct MetadataTableUpdate has store, drop {
     keys_to_remove: vector<String>,
 }
 
+/// Queue parameters update action
+public struct QueueParamsUpdate has store, drop {
+    max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
+    max_queue_size: Option<u64>,
+}
+
 // === Public Functions ===
 
 /// Create a ConfigAction for trading params update
@@ -96,6 +106,7 @@ public fun create_trading_params_action(
     min_stable_amount: Option<u64>,
     review_period_ms: Option<u64>,
     trading_period_ms: Option<u64>,
+    amm_total_fee_bps: Option<u64>,
 ): ConfigAction {
     ConfigAction {
         config_type: CONFIG_TYPE_TRADING_PARAMS,
@@ -104,11 +115,13 @@ public fun create_trading_params_action(
             min_stable_amount,
             review_period_ms,
             trading_period_ms,
+            amm_total_fee_bps,
         }),
         metadata: option::none(),
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     }
 }
 
@@ -129,6 +142,7 @@ public fun create_metadata_action(
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     }
 }
 
@@ -151,6 +165,7 @@ public fun create_twap_config_action(
         }),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     }
 }
 
@@ -171,6 +186,7 @@ public fun create_governance_action(
             required_bond_amount,
         }),
         metadata_table: option::none(),
+        queue_params: option::none(),
     }
 }
 
@@ -191,6 +207,28 @@ public fun create_metadata_table_action(
             values,
             keys_to_remove,
         }),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a ConfigAction for queue parameters update
+public fun create_queue_params_action(
+    max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
+    max_queue_size: Option<u64>,
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_QUEUE_PARAMS,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::none(),
+        queue_params: option::some(QueueParamsUpdate {
+            max_proposer_funded,
+            max_concurrent_proposals,
+            max_queue_size,
+        }),
     }
 }
 
@@ -203,6 +241,7 @@ public fun create_no_op_action(): ConfigAction {
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     }
 }
 
@@ -255,12 +294,14 @@ public fun add_trading_params_update(
     min_stable_amount: Option<u64>,
     review_period_ms: Option<u64>,
     trading_period_ms: Option<u64>,
+    amm_total_fee_bps: Option<u64>,
 ) {
     let update = TradingParamsUpdate {
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
+        amm_total_fee_bps,
     };
     
     let action = ConfigAction {
@@ -270,6 +311,7 @@ public fun add_trading_params_update(
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -297,6 +339,7 @@ public fun add_metadata_update(
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -326,6 +369,7 @@ public fun add_twap_config_update(
         twap_config: option::some(update),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -352,6 +396,7 @@ public fun add_governance_update(
         twap_config: option::none(),
         governance: option::some(update),
         metadata_table: option::none(),
+        queue_params: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -370,6 +415,7 @@ public fun add_no_op_action(
         twap_config: option::none(),
         governance: option::none(),
         metadata_table: option::none(),
+        queue_params: option::none(),
     };
     
     add_config_action(registry, proposal_id, outcome, action);
@@ -420,6 +466,12 @@ public fun extract_metadata_table(action: &ConfigAction): &MetadataTableUpdate {
     action.metadata_table.borrow()
 }
 
+/// Extract queue params from config action
+public fun extract_queue_params(action: &ConfigAction): &QueueParamsUpdate {
+    assert!(action.config_type == CONFIG_TYPE_QUEUE_PARAMS, EInvalidOutcome);
+    action.queue_params.borrow()
+}
+
 /// Check if actions exist for a proposal
 public fun has_actions(registry: &ConfigActionRegistry, proposal_id: ID): bool {
     registry.actions.contains(proposal_id)
@@ -438,13 +490,15 @@ public fun get_trading_params_fields(update: &TradingParamsUpdate): (
     &Option<u64>,
     &Option<u64>,
     &Option<u64>,
+    &Option<u64>,
     &Option<u64>
 ) {
     (
         &update.min_asset_amount,
         &update.min_stable_amount,
         &update.review_period_ms,
-        &update.trading_period_ms
+        &update.trading_period_ms,
+        &update.amm_total_fee_bps
     )
 }
 
@@ -499,6 +553,19 @@ public fun get_metadata_table_fields(update: &MetadataTableUpdate): (
         &update.keys,
         &update.values,
         &update.keys_to_remove
+    )
+}
+
+/// Get queue params update fields
+public fun get_queue_params_fields(update: &QueueParamsUpdate): (
+    &Option<u64>,
+    &Option<u64>,
+    &Option<u64>
+) {
+    (
+        &update.max_proposer_funded,
+        &update.max_concurrent_proposals,
+        &update.max_queue_size
     )
 }
 

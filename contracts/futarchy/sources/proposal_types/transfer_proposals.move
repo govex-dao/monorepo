@@ -9,7 +9,8 @@ use sui::{
     sui::SUI,
 };
 use futarchy::{
-    dao::{Self, DAO},
+    dao::{Self}, 
+    dao_state::{Self, DAO},
     fee,
     treasury_actions::{Self, ActionRegistry},
 };

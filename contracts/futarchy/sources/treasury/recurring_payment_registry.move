@@ -11,6 +11,10 @@ use sui::{
 // === Errors ===
 const EUnauthorized: u64 = 0;
 const ERegistryAlreadyExists: u64 = 1;
+const E_MAX_STREAMS_REACHED: u64 = 2;
+
+// === Constants ===
+const MAX_ACTIVE_STREAMS: u64 = 100;
 
 // === Structs ===
 
@@ -46,6 +50,9 @@ public fun add_stream(
     registry: &mut PaymentStreamRegistry,
     stream_id: ID,
 ) {
+    // CRITICAL: Enforce the maximum number of active streams.
+    assert!(registry.active_count < MAX_ACTIVE_STREAMS, E_MAX_STREAMS_REACHED);
+
     if (!registry.active_streams.contains(stream_id)) {
         registry.active_streams.add(stream_id, true);
         registry.active_count = registry.active_count + 1;
@@ -82,4 +89,8 @@ public fun get_active_count(registry: &PaymentStreamRegistry): u64 {
 public fun get_dao_id(registry: &PaymentStreamRegistry): ID {
     registry.dao_id
 }
+
+// Note: Sui Move tables do not support key enumeration.
+// Off-chain indexers must track active streams by monitoring
+// add_stream and remove_stream events.
 

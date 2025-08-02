@@ -8,7 +8,8 @@ use sui::{
 };
 use futarchy::{
     proposal::Proposal,
-    dao::{Self, DAO},
+    dao::{Self},
+    dao_state::{Self, DAO},
 };
 
 
@@ -104,7 +105,7 @@ public entry fun execute_init<AssetType, StableType>(
     assert!(proposal.get_dao_id() == object::id(dao), EProposalDAOMismatch);
     
     // 3. Ensure DAO doesn't already have an operating agreement
-    assert!(!dao.has_operating_agreement(), EOperatingAgreementAlreadyExists);
+    assert!(dao_state::operating_agreement_id(dao).is_none(), EOperatingAgreementAlreadyExists);
 
     // 3. Get the winning outcome from the proposal object.
     let winning_outcome = proposal.get_winning_outcome();

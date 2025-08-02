@@ -45,12 +45,17 @@ const EInsufficientLPTokens: u64 = 8; // Not enough LP tokens to burn
 const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
 const EOverflow: u64 = 10; // Arithmetic overflow detected
 const EInvalidLiquidityRatio: u64 = 11; // Liquidity provided does not match pool ratio
+const EInvalidFeeRate: u64 = 12; // Fee rate is invalid (e.g., >= 100%)
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
 const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for saftey to values don't round to 0
 const MINIMUM_LIQUIDITY: u128 = 1000;
+
+// Fee split constants (in basis points)
+const LP_FEE_SHARE_BPS: u64 = 8000; // 80%
+const TOTAL_FEE_BPS: u64 = 10000; // 100%
 
 // === Structs ===
 
@@ -105,6 +110,7 @@ public struct LiquidityRemoved has copy, drop {
 public(package) fun new_pool(
     state: &MarketState,
     outcome_idx: u8,
+    fee_percent: u64,
     initial_asset: u64,
     initial_stable: u64,
     twap_initial_observation: u128,
@@ -115,6 +121,7 @@ public(package) fun new_pool(
     assert!(initial_asset > 0 && initial_stable > 0, EZeroAmount);
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELowLiquidity);
+    assert!(fee_percent < FEE_SCALE, EInvalidFeeRate); // Fee cannot be 100% or more
 
     let twap_initialization_price = twap_initial_observation;
     let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
@@ -137,7 +144,7 @@ public(package) fun new_pool(
         outcome_idx,
         asset_reserve: initial_asset,
         stable_reserve: initial_stable,
-        fee_percent: DEFAULT_FEE,
+        fee_percent,
         oracle,
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
@@ -162,10 +169,10 @@ public(package) fun swap_asset_to_stable(
     // When selling outcome tokens (asset -> stable):
     // 1. Calculate the gross output amount (amount_out_before_fee) based on current reserves and amount_in.
     // 2. Calculate the fee amount from this gross output.
-    // 3. The net output (amount_out) is the gross output minus the fee.
-    // 4. The fee is collected directly into `pool.protocol_fees` and does not enter the pool.
-    // 5. The pool's reserves are updated using the `amount_out_before_fee` to maintain the XY=K invariant for the actual swap,
-    //    as the fee was taken from the output *after* the swap calculation.
+    // 3. Split the fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
+    // 4. The `protocol_share` is moved to `pool.protocol_fees`.
+    // 5. The `lp_share` is left in the pool's stable reserve to reward LPs, causing `k` to grow.
+    // 6. The user receives the net output `amount_out = amount_out_before_fee - total_fee`.
     let amount_out_before_fee = calculate_output(
         amount_in,
         pool.asset_reserve,
@@ -173,11 +180,15 @@ public(package) fun swap_asset_to_stable(
     );
 
     // Calculate fee from stable output
-    let fee_amount = calculate_fee(amount_out_before_fee, pool.fee_percent);
-    let amount_out = amount_out_before_fee - fee_amount;
+    let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
+    let lp_share = math::mul_div_to_64(total_fee, LP_FEE_SHARE_BPS, TOTAL_FEE_BPS);
+    let protocol_share = total_fee - lp_share;
 
-    // Take fee directly as stable tokens (never enters pool)
-    pool.protocol_fees = pool.protocol_fees + fee_amount;
+    // Net amount for the user
+    let amount_out = amount_out_before_fee - total_fee;
+
+    // Send protocol's share to the fee collector
+    pool.protocol_fees = pool.protocol_fees + protocol_share;
 
     assert!(amount_out >= min_amount_out, EExcessiveSlippage);
     assert!(amount_out_before_fee < pool.stable_reserve, EPoolEmpty);
@@ -203,13 +214,13 @@ public(package) fun swap_asset_to_stable(
         old_price,
     );
 
-    // Update reserves - include full asset in, but remove amount_out_before_fee
-    // This ensures proper pool balance since we're taking fee outside the pool
-    let new_asset_reserve = pool.asset_reserve + amount_in;
-    assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);
-    
-    pool.asset_reserve = new_asset_reserve;
-    pool.stable_reserve = pool.stable_reserve - amount_out_before_fee;
+    // Update reserves.
+    pool.asset_reserve = pool.asset_reserve + amount_in;
+
+    // The stable reserve is reduced by the gross output, BUT the LPs' share is kept in the pool.
+    // So we add it back.
+    // This is equivalent to `pool.stable_reserve - (amount_out + protocol_share)`
+    pool.stable_reserve = pool.stable_reserve - amount_out_before_fee + lp_share;
 
     let current_price = get_current_price(pool);
     check_price_under_max(current_price);
@@ -247,14 +258,19 @@ public(package) fun swap_stable_to_asset(
     // When buying outcome tokens (stable -> asset):
     // 1. Calculate the fee from the input amount (amount_in).
     // 2. The actual amount used for the swap (amount_in_after_fee) is the original input minus the fee.
-    // 3. The fee is collected directly into `pool.protocol_fees` and does not enter the pool.
-    // 4. The output amount (amount_out) is calculated based on `amount_in_after_fee` and current reserves.
-    // 5. The pool's reserves are updated using `amount_in_after_fee` and `amount_out` to maintain the XY=K invariant.
-    let fee_amount = calculate_fee(amount_in, pool.fee_percent);
-    let amount_in_after_fee = amount_in - fee_amount;
+    // 3. Split the total fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
+    // 4. `protocol_share` is moved to `pool.protocol_fees`.
+    // 5. `amount_in_after_fee` is used to calculate the swap output.
+    // 6. The pool's stable reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
+    let total_fee = calculate_fee(amount_in, pool.fee_percent);
+    let lp_share = math::mul_div_to_64(total_fee, LP_FEE_SHARE_BPS, TOTAL_FEE_BPS);
+    let protocol_share = total_fee - lp_share;
 
-    // Take fee directly as stable tokens (never enters pool)
-    pool.protocol_fees = pool.protocol_fees + fee_amount;
+    // Amount used for the swap calculation
+    let amount_in_after_fee = amount_in - total_fee;
+
+    // Send protocol's share to the fee collector
+    pool.protocol_fees = pool.protocol_fees + protocol_share;
 
     // Calculate output based on amount after fee
     let amount_out = calculate_output(
@@ -287,10 +303,11 @@ public(package) fun swap_stable_to_asset(
         old_price,
     );
 
-    // Update reserves with amount after fee
-    let new_stable_reserve = pool.stable_reserve + amount_in_after_fee;
+    // Update reserves. The amount added to the stable reserve is the portion used for the swap
+    // PLUS the LP share of the fee. The protocol share was already removed.
+    let new_stable_reserve = pool.stable_reserve + amount_in_after_fee + lp_share;
     assert!(new_stable_reserve >= pool.stable_reserve, EOverflow);
-    
+
     pool.stable_reserve = new_stable_reserve;
     pool.asset_reserve = pool.asset_reserve - amount_out;
 
@@ -665,6 +682,7 @@ public(package) fun reset_protocol_fees(pool: &mut LiquidityPool) {
 public fun create_test_pool(
     market_id: ID,
     outcome_idx: u8,
+    fee_percent: u64,
     asset_reserve: u64,
     stable_reserve: u64,
     ctx: &mut TxContext,
@@ -675,10 +693,10 @@ public fun create_test_pool(
         outcome_idx,
         asset_reserve,
         stable_reserve,
-        fee_percent: DEFAULT_FEE,
+        fee_percent,
         oracle: oracle::new_oracle(
             math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
-            2_000,
+            0, // Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
             1_000,
             ctx, // Add ctx parameter here
         ),

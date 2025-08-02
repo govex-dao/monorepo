@@ -1,6 +1,10 @@
 module futarchy::factory;
 
 use futarchy::dao;
+use futarchy::dao_state;
+use futarchy::dao_governance;
+use futarchy::priority_queue;
+// use futarchy::dao_config; // removed - module doesn't exist
 use futarchy::fee;
 use std::ascii::String as AsciiString;
 use std::string::String as UTF8String;
@@ -35,6 +39,7 @@ const MAX_TRADING_TIME: u64 = 604_800_000; // 7 days in ms
 const MAX_REVIEW_TIME: u64 = 604_800_000; // 7 days in ms
 const MAX_TWAP_START_DELAY: u64 = 86_400_000; // 1 days in ms
 const MAX_TWAP_THRESHOLD: u64 = 1_000_000; //equivilant to requiring 10x increase in price to pass
+const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
 
 // === Structs ===
 /// One-time witness for factory initialization
@@ -137,6 +142,7 @@ public entry fun create_dao<AssetType: drop, StableType>(
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
+    amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
     // Optional operating agreement parameters
@@ -160,6 +166,7 @@ public entry fun create_dao<AssetType: drop, StableType>(
         amm_twap_step_max,
         amm_twap_initial_observation,
         twap_threshold,
+        amm_total_fee_bps,
         description,
         max_outcomes,
         agreement_lines,
@@ -185,6 +192,7 @@ public(package) fun create_dao_internal<AssetType: drop, StableType>(
     amm_twap_step_max: u64,
     amm_twap_initial_observation: u128,
     twap_threshold: u64,
+    amm_total_fee_bps: u64,
     description: UTF8String,
     max_outcomes: u64,
     agreement_lines: vector<UTF8String>,
@@ -225,6 +233,7 @@ public(package) fun create_dao_internal<AssetType: drop, StableType>(
         amm_twap_step_max,
         amm_twap_initial_observation,
         twap_threshold,
+        amm_total_fee_bps,
         description,
         max_outcomes,
         treasury_cap,
@@ -241,6 +250,9 @@ public(package) fun create_dao_internal<AssetType: drop, StableType>(
             ctx,
         );
     };
+    
+    // Initialize proposal queue
+    let queue_id = dao_governance::get_or_create_queue(&mut dao, ctx);
 
     // Share the DAO
     transfer::public_share_object(dao);
@@ -257,12 +269,12 @@ public entry fun toggle_pause(factory: &mut Factory, _cap: &FactoryOwnerCap) {
 public entry fun request_verification<AssetType, StableType>(
     fee_manager: &mut fee::FeeManager,
     payment: Coin<SUI>,
-    dao: &mut dao::DAO<AssetType, StableType>,
+    dao: &mut dao_state::DAO<AssetType, StableType>,
     attestation_url: UTF8String,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(!dao.is_verified(), EAlreadyVerified);
+    assert!(!dao_state::verified(dao), EAlreadyVerified);
 
     fee_manager.deposit_verification_payment(payment, clock, ctx);
 
@@ -272,7 +284,8 @@ public entry fun request_verification<AssetType, StableType>(
     verification_id.delete();
 
     // Set pending verification state
-    dao.set_pending_verification(attestation_url);
+    dao_state::set_attestation_url(dao, attestation_url);
+    dao_state::set_verification_pending(dao, true);
 
     // Emit event
     event::emit(VerificationRequested {
@@ -286,7 +299,7 @@ public entry fun request_verification<AssetType, StableType>(
 
 public entry fun verify_dao<AssetType, StableType>(
     _validator_cap: &ValidatorAdminCap,
-    dao: &mut dao::DAO<AssetType, StableType>,
+    dao: &mut dao_state::DAO<AssetType, StableType>,
     verification_id: ID,
     attestation_url: UTF8String,
     verified: bool,
@@ -295,7 +308,9 @@ public entry fun verify_dao<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Update verification status with optional new attestation URL
-    dao.set_verification(attestation_url, verified);
+    dao_state::set_attestation_url(dao, attestation_url);
+    dao_state::set_verified(dao, verified);
+    dao_state::set_verification_pending(dao, false);
 
     // Emit verification event
     event::emit(DAOReviewed {
@@ -375,8 +390,8 @@ public entry fun update_min_raise_amount<StableType>(
     *current_amount = new_min_raise_amount;
 }
 
-public entry fun disable_dao_proposals<AssetType, StableType>(dao: &mut dao::DAO<AssetType, StableType>, _cap: &FactoryOwnerCap) {
-    dao.disable_proposals();
+public entry fun disable_dao_proposals<AssetType, StableType>(dao: &mut dao_state::DAO<AssetType, StableType>, _cap: &FactoryOwnerCap) {
+    dao::disable_proposals(dao);
 }
 
 public entry fun burn_factory_owner_cap(cap: FactoryOwnerCap) {
@@ -420,18 +435,11 @@ public fun create_factory(ctx: &mut TxContext) {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
-        allowed_stable_types: {
-            let mut set = vec_set::empty<UTF8String>();
-            let stable_str = get_type_string<futarchy::stable_coin::STABLE_COIN>();
-            set.insert(stable_str);
-            set
-        },
+        allowed_stable_types: vec_set::empty<UTF8String>(),
         min_raise_amounts: table::new(ctx),
     };
     
-    // Add default min raise amount for test stable coin (100 tokens with 6 decimals)
-    let stable_str = get_type_string<futarchy::stable_coin::STABLE_COIN>();
-    factory.min_raise_amounts.add(stable_str, 100_000_000);
+    // Min raise amounts should be set via admin functions after deployment
 
     let owner_cap = FactoryOwnerCap {
         id: object::new(ctx),

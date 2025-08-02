@@ -4,7 +4,9 @@ use sui::{
     coin::{Self, Coin},
     balance::{Self, Balance},
     sui::SUI,
-    bag::{Self, Bag}
+    bag::{Self, Bag},
+    clock::Clock,
+    event
 };
 
 // === Errors ===
@@ -24,6 +26,23 @@ public struct ProposalFeeManager has key, store {
     pending_proposal_fees: Bag,
     /// Total fees collected by the protocol from evicted/slashed proposals
     protocol_revenue: Balance<SUI>,
+    /// Queue fees collected for proposals
+    queue_fees: Balance<SUI>,
+}
+
+// === Events ===
+
+public struct QueueFeeDeposited has copy, drop {
+    amount: u64,
+    depositor: address,
+    timestamp: u64,
+}
+
+public struct ProposalFeeUpdated has copy, drop {
+    proposal_id: ID,
+    additional_amount: u64,
+    new_total_amount: u64,
+    timestamp: u64,
 }
 
 // === Public Functions ===
@@ -34,6 +53,7 @@ public fun new(ctx: &mut TxContext): ProposalFeeManager {
         id: object::new(ctx),
         pending_proposal_fees: bag::new(ctx),
         protocol_revenue: balance::zero(),
+        queue_fees: balance::zero(),
     }
 }
 
@@ -46,6 +66,53 @@ public fun deposit_proposal_fee(
     assert!(fee_coin.value() > 0, EInvalidFeeAmount);
     let fee_balance = fee_coin.into_balance();
     manager.pending_proposal_fees.add(proposal_id, fee_balance);
+}
+
+/// Called when a proposal is submitted to the queue to pay the queue fee
+public fun deposit_queue_fee(
+    manager: &mut ProposalFeeManager,
+    fee_coin: Coin<SUI>,
+    clock: &Clock,
+    ctx: &TxContext
+) {
+    let amount = fee_coin.value();
+    if (amount > 0) {
+        manager.queue_fees.join(fee_coin.into_balance());
+        
+        event::emit(QueueFeeDeposited {
+            amount,
+            depositor: ctx.sender(),
+            timestamp: clock.timestamp_ms(),
+        });
+    } else {
+        fee_coin.destroy_zero();
+    }
+}
+
+/// Called when a user increases the fee for an existing queued proposal
+public fun add_to_proposal_fee(
+    manager: &mut ProposalFeeManager,
+    proposal_id: ID,
+    additional_fee: Coin<SUI>,
+    clock: &Clock
+) {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    assert!(additional_fee.value() > 0, EInvalidFeeAmount);
+
+    let additional_amount = additional_fee.value();
+    // Get the existing balance, join the new one, and put it back
+    let mut existing_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    existing_balance.join(additional_fee.into_balance());
+    let new_total = existing_balance.value();
+
+    event::emit(ProposalFeeUpdated {
+        proposal_id,
+        additional_amount,
+        new_total_amount: new_total,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    manager.pending_proposal_fees.add(proposal_id, existing_balance);
 }
 
 /// Called by the DAO when activating a proposal
@@ -65,15 +132,16 @@ public fun take_activator_reward(
     };
 
     // Give fixed reward to activator, rest goes to protocol
-    let reward_amount = if (total_fee >= FIXED_ACTIVATOR_REWARD) {
-        manager.protocol_revenue.join(fee_balance.split(total_fee - FIXED_ACTIVATOR_REWARD));
-        FIXED_ACTIVATOR_REWARD
+    if (total_fee >= FIXED_ACTIVATOR_REWARD) {
+        // Split off the protocol's share (everything except the fixed reward)
+        let protocol_share = fee_balance.split(total_fee - FIXED_ACTIVATOR_REWARD);
+        manager.protocol_revenue.join(protocol_share);
+        // Return the fixed reward to the activator
+        coin::from_balance(fee_balance, ctx)
     } else {
         // If fee is less than fixed reward, give entire fee to activator
-        total_fee
-    };
-    
-    coin::from_balance(fee_balance, ctx)
+        coin::from_balance(fee_balance, ctx)
+    }
 }
 
 /// Called by the DAO when a proposal is evicted from the queue
@@ -100,6 +168,19 @@ public(package) fun withdraw_protocol_revenue(
     ctx: &mut TxContext
 ): Coin<SUI> {
     coin::from_balance(manager.protocol_revenue.split(amount), ctx)
+}
+
+/// Called by the priority queue when a proposal is cancelled.
+/// Removes the pending fee from the manager and returns it as a Coin.
+/// This should be a friend function, callable only by the priority_queue module.
+public(package) fun refund_proposal_fee(
+    manager: &mut ProposalFeeManager,
+    proposal_id: ID,
+    ctx: &mut TxContext
+): Coin<SUI> {
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    let fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    coin::from_balance(fee_balance, ctx)
 }
 
 /// Check if a proposal fee exists

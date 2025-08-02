@@ -13,13 +13,15 @@ use sui::{
     event,
 };
 use futarchy::{
-    dao::{Self, DAO},
+    dao::{Self},
+    dao_state::{Self, DAO},
     fee,
     config_actions::{Self, ConfigActionRegistry, ConfigAction},
     coin_escrow::{Self},
     market_state,
     execution_context::ProposalExecutionContext,
     metadata,
+    priority_queue,
 };
 
 // === Errors ===
@@ -194,6 +196,7 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
     min_stable_amount: Option<u64>,
     review_period_ms: Option<u64>,
     trading_period_ms: Option<u64>,
+    amm_total_fee_bps: Option<u64>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -202,7 +205,8 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
         option::is_some(&min_asset_amount) || 
         option::is_some(&min_stable_amount) ||
         option::is_some(&review_period_ms) ||
-        option::is_some(&trading_period_ms),
+        option::is_some(&trading_period_ms) ||
+        option::is_some(&amm_total_fee_bps),
         ENoChangesSpecified
     );
     
@@ -223,7 +227,8 @@ public entry fun create_trading_params_proposal<AssetType, StableType>(
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
-        trading_period_ms
+        trading_period_ms,
+        amm_total_fee_bps
     ));
     
     // Call the unified function with binary setup
@@ -441,6 +446,66 @@ public entry fun create_governance_proposal<AssetType, StableType>(
     );
 }
 
+/// Create a queue parameters update proposal
+/// Updates proposal queue parameters including max proposer funded, max concurrent, and max queue size
+public entry fun create_queue_params_proposal<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    fee_manager: &mut fee::FeeManager,
+    config_registry: &mut ConfigActionRegistry,
+    payment: Coin<SUI>,
+    dao_fee_payment: Coin<StableType>,
+    title: String,
+    metadata: String,
+    initial_outcome_amounts: vector<u64>,
+    max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
+    max_queue_size: Option<u64>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate that at least one parameter is being changed
+    assert!(
+        option::is_some(&max_proposer_funded) || 
+        option::is_some(&max_concurrent_proposals) ||
+        option::is_some(&max_queue_size),
+        ENoChangesSpecified
+    );
+    
+    // Create binary outcome setup
+    let mut outcome_descriptions = vector[
+        b"Reject the queue parameter update".to_string(),
+        b"Accept the queue parameter update".to_string()
+    ];
+    
+    // Create config actions for each outcome
+    let mut actions = vector::empty<ConfigAction>();
+    // Outcome 0: Reject (no-op)
+    vector::push_back(&mut actions, config_actions::create_no_op_action());
+    // Outcome 1: Accept (apply changes)
+    vector::push_back(&mut actions, config_actions::create_queue_params_action(
+        max_proposer_funded,
+        max_concurrent_proposals,
+        max_queue_size
+    ));
+    
+    // Call the unified function with binary setup
+    create_config_proposal(
+        dao,
+        fee_manager,
+        config_registry,
+        payment,
+        dao_fee_payment,
+        title,
+        metadata,
+        outcome_descriptions,
+        vector[b"".to_string(), b"".to_string()], // Will be auto-filled as Reject/Accept
+        initial_outcome_amounts,
+        actions,
+        clock,
+        ctx
+    );
+}
+
 // === Execution Functions (called after proposal passes) ===
 
 /// Execute trading parameters update after proposal passes
@@ -466,7 +531,7 @@ public entry fun execute_trading_params_update<AssetType, StableType>(
     let update = config_actions::extract_trading_params(&config_action);
     
     // Get the fields from the update
-    let (min_asset_amount, min_stable_amount, review_period_ms, trading_period_ms) = 
+    let (min_asset_amount, min_stable_amount, review_period_ms, trading_period_ms, amm_total_fee_bps) = 
         config_actions::get_trading_params_fields(update);
     
     // Validate parameters from the stored config
@@ -477,14 +542,25 @@ public entry fun execute_trading_params_update<AssetType, StableType>(
         *trading_period_ms
     );
     
-    // Apply updates from the stored config
+    // Get current values for any None options
+    let (current_min_asset, current_min_stable) = dao::get_min_amounts(dao);
+    let current_review = dao_state::review_period_ms(dao);
+    let current_trading = dao_state::trading_period_ms(dao);
+    let current_amm_fee = dao_state::amm_total_fee_bps(dao);
+    
+    // Apply updates from the stored config, using current values for None options
     dao::update_trading_params(
         dao,
-        *min_asset_amount,
-        *min_stable_amount,
-        *review_period_ms,
-        *trading_period_ms
+        if (option::is_some(min_asset_amount)) { *option::borrow(min_asset_amount) } else { current_min_asset },
+        if (option::is_some(min_stable_amount)) { *option::borrow(min_stable_amount) } else { current_min_stable },
+        if (option::is_some(review_period_ms)) { *option::borrow(review_period_ms) } else { current_review },
+        if (option::is_some(trading_period_ms)) { *option::borrow(trading_period_ms) } else { current_trading }
     );
+    
+    // Update AMM fee if specified
+    if (option::is_some(amm_total_fee_bps)) {
+        dao_state::set_amm_total_fee_bps(dao, *option::borrow(amm_total_fee_bps));
+    };
     
     event::emit(ConfigUpdateExecuted {
         dao_id: object::id(dao),
@@ -494,7 +570,8 @@ public entry fun execute_trading_params_update<AssetType, StableType>(
             option::is_some(min_asset_amount),
             option::is_some(min_stable_amount),
             option::is_some(review_period_ms),
-            option::is_some(trading_period_ms)
+            option::is_some(trading_period_ms),
+            option::is_some(amm_total_fee_bps)
         ]),
         timestamp: clock.timestamp_ms(),
     });
@@ -523,19 +600,36 @@ public entry fun execute_metadata_update<AssetType, StableType>(
     let update = config_actions::extract_metadata(&config_action);
     
     // Get the fields from the update
-    let (dao_name, icon_url, description) = config_actions::get_metadata_fields(update);
+    let (dao_name_opt, icon_url_opt, description_opt) = config_actions::get_metadata_fields(update);
+    
+    // Get current values
+    let current_dao_name = *dao_state::dao_name(dao);
+    let current_icon_url = dao_state::icon_url(dao);
+    let current_description = dao_state::description(dao);
     
     // Apply updates from the stored config
-    dao::update_metadata(dao, *dao_name, *icon_url, *description);
+    if (option::is_some(dao_name_opt) || option::is_some(icon_url_opt) || option::is_some(description_opt)) {
+        dao::update_metadata(
+            dao, 
+            if (option::is_some(dao_name_opt)) { *option::borrow(dao_name_opt) } else { current_dao_name },
+            if (option::is_some(icon_url_opt)) { 
+                let url = option::borrow(icon_url_opt);
+                url::inner_url(url)
+            } else { 
+                url::inner_url(current_icon_url)
+            },
+            if (option::is_some(description_opt)) { *option::borrow(description_opt) } else { *current_description }
+        );
+    };
     
     event::emit(ConfigUpdateExecuted {
         dao_id: object::id(dao),
         proposal_id,
         update_type: b"metadata".to_string(),
         changes_count: count_options(&vector[
-            option::is_some(dao_name),
-            option::is_some(icon_url),
-            option::is_some(description)
+            option::is_some(dao_name_opt),
+            option::is_some(icon_url_opt),
+            option::is_some(description_opt)
         ]),
         timestamp: clock.timestamp_ms(),
     });
@@ -570,13 +664,19 @@ public entry fun execute_twap_config_update<AssetType, StableType>(
     // Validate TWAP config from the stored values
     validate_twap_config(*start_delay, *threshold);
     
+    // Get current values for any None options
+    let current_start_delay = dao_state::amm_twap_start_delay(dao);
+    let current_step_max = dao_state::amm_twap_step_max(dao);
+    let current_initial_observation = dao_state::amm_twap_initial_observation(dao);
+    let current_threshold = dao_state::twap_threshold(dao);
+    
     // Apply updates from the stored config
     dao::update_twap_config(
         dao,
-        *start_delay,
-        *step_max,
-        *initial_observation,
-        *threshold
+        if (option::is_some(start_delay)) { *option::borrow(start_delay) } else { current_start_delay },
+        if (option::is_some(step_max)) { *option::borrow(step_max) } else { current_step_max },
+        if (option::is_some(initial_observation)) { *option::borrow(initial_observation) } else { current_initial_observation },
+        if (option::is_some(threshold)) { *option::borrow(threshold) } else { current_threshold }
     );
     
     event::emit(ConfigUpdateExecuted {
@@ -600,7 +700,6 @@ public fun execute_metadata_table_update<AssetType, StableType>(
     config_registry: &mut ConfigActionRegistry,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     proposal_id: ID,
-    execution_context: &mut ProposalExecutionContext,
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
@@ -622,14 +721,14 @@ public fun execute_metadata_table_update<AssetType, StableType>(
     // Apply updates - add or update key-value pairs
     let mut i = 0;
     while (i < keys.length()) {
-        dao::update_metadata_entry(dao, keys[i], values[i], execution_context);
+        dao::update_metadata_entry(dao, keys[i], values[i]);
         i = i + 1;
     };
     
     // Remove specified keys
     let mut i = 0;
     while (i < keys_to_remove.length()) {
-        dao::remove_metadata_entry(dao, keys_to_remove[i], execution_context);
+        dao::remove_metadata_entry(dao, keys_to_remove[i]);
         i = i + 1;
     };
     
@@ -670,17 +769,28 @@ public entry fun execute_governance_update<AssetType, StableType>(
     // Validate governance settings from the stored values
     validate_governance_settings(*proposal_creation_enabled, *max_outcomes);
     
-    // Apply updates from the stored config
-    dao::update_governance(
-        dao,
-        *proposal_creation_enabled,
-        *max_outcomes,
-        option::none() // proposal_fee_per_outcome not updated through this config
-    );
+    // Handle proposal creation toggle separately
+    if (option::is_some(proposal_creation_enabled)) {
+        if (*option::borrow(proposal_creation_enabled)) {
+            dao::enable_proposals(dao);
+        } else {
+            dao::disable_proposals(dao);
+        };
+    };
     
-    // Apply bond amount update if specified
-    if (option::is_some(required_bond_amount)) {
-        dao::set_required_bond_amount(dao, *option::borrow(required_bond_amount));
+    // Only update governance params if we have values to update
+    if (option::is_some(max_outcomes) || option::is_some(required_bond_amount)) {
+        // Get current values to preserve unchanged parameters
+        let (current_max_outcomes, current_fee, current_max_concurrent, current_bond) = 
+            dao::get_governance_params(dao);
+        
+        dao::update_governance(
+            dao,
+            if (option::is_some(max_outcomes)) { *option::borrow(max_outcomes) } else { current_max_outcomes },
+            current_fee, // Keep current fee
+            current_max_concurrent, // Keep current max concurrent
+            if (option::is_some(required_bond_amount)) { *option::borrow(required_bond_amount) } else { current_bond }
+        );
     };
     
     event::emit(ConfigUpdateExecuted {
@@ -691,6 +801,59 @@ public entry fun execute_governance_update<AssetType, StableType>(
             option::is_some(proposal_creation_enabled),
             option::is_some(max_outcomes),
             option::is_some(required_bond_amount)
+        ]),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Execute queue parameters update after proposal passes
+/// This reads the exact config that was voted on from the registry
+public entry fun execute_queue_params_update<AssetType, StableType>(
+    dao: &mut DAO<AssetType, StableType>,
+    queue: &mut priority_queue::ProposalQueue<StableType>,
+    config_registry: &mut ConfigActionRegistry,
+    escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
+    proposal_id: ID,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Verify proposal passed
+    let proposal_info = dao::get_proposal_info(dao, proposal_id);
+    assert!(dao::is_executed(proposal_info), EProposalNotExecuted);
+    
+    // Get winning outcome from the market state
+    let market_state = coin_escrow::get_market_state(escrow);
+    let winning_outcome = market_state::get_winning_outcome(market_state);
+    
+    // Get the config action from registry (this also marks it as executed)
+    let config_action = config_actions::get_and_mark_executed(config_registry, proposal_id, winning_outcome);
+    let update = config_actions::extract_queue_params(&config_action);
+    
+    // Get the fields from the update
+    let (max_proposer_funded, max_concurrent_proposals, max_queue_size) = 
+        config_actions::get_queue_params_fields(update);
+    
+    // Apply updates from the stored config
+    if (option::is_some(max_proposer_funded)) {
+        priority_queue::update_max_proposer_funded(queue, *option::borrow(max_proposer_funded));
+    };
+    
+    if (option::is_some(max_concurrent_proposals)) {
+        priority_queue::update_max_concurrent_proposals(queue, *option::borrow(max_concurrent_proposals));
+    };
+    
+    if (option::is_some(max_queue_size)) {
+        priority_queue::update_max_queue_size(queue, *option::borrow(max_queue_size));
+    };
+    
+    event::emit(ConfigUpdateExecuted {
+        dao_id: object::id(dao),
+        proposal_id,
+        update_type: b"queue_params".to_string(),
+        changes_count: count_options(&vector[
+            option::is_some(max_proposer_funded),
+            option::is_some(max_concurrent_proposals),
+            option::is_some(max_queue_size)
         ]),
         timestamp: clock.timestamp_ms(),
     });

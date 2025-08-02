@@ -1,7 +1,9 @@
 module futarchy::advance_stage;
 
 use futarchy::coin_escrow;
-use futarchy::dao::{Self, DAO};
+use futarchy::dao::{Self};
+use futarchy::dao_state::{Self, DAO};
+use futarchy::dao_governance;
 use futarchy::dao_liquidity_pool::{DAOLiquidityPool};
 use futarchy::fee::{FeeManager};
 use futarchy::liquidity_interact;
@@ -152,8 +154,8 @@ public entry fun try_advance_state_entry<AssetType, StableType>(
             liquidity_interact::empty_amm_and_return_to_provider(proposal, escrow, ctx);
         };
         
-        // 3. Mark the proposal as completed in the DAO
-        dao::mark_proposal_completed(dao, proposal::get_id(proposal), proposal);
+        // 3. Mark the proposal as executed in the DAO
+        dao_governance::mark_proposal_executed(dao, proposal::get_id(proposal), clock);
     }
 }
 

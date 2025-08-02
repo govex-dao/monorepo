@@ -6,7 +6,8 @@ use sui::clock::Clock;
 use sui::event;
 use sui::table::{Self, Table};
 
-use futarchy::dao::{Self, DAO};
+use futarchy::dao::{Self};
+use futarchy::dao_state::{Self, DAO};
 use futarchy::proposal::{Self, Proposal};
 use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::amm;

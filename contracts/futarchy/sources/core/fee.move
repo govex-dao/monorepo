@@ -4,7 +4,7 @@ use std::ascii::String as AsciiString;
 use std::type_name;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
-use sui::coin::Coin;
+use sui::coin::{Self, Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
@@ -314,54 +314,8 @@ public entry fun update_verification_fee(
     });
 }
 
-public(package) fun collect_dao_recurring_fee<StableType: drop>(
-    fee_manager: &mut FeeManager,
-    treasury: &mut futarchy::treasury::Treasury,
-    admin_cap: &FeeAdminCap,
-    dao_id: ID,
-    dao_stable_type: &AsciiString,
-    next_fee_due_timestamp: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): (u64, bool) { // Returns (new_timestamp, collection_successful)
-    // Verify the admin cap belongs to this fee manager
-    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
-    
-    // 1. Verify fee is due
-    assert!(clock.timestamp_ms() >= next_fee_due_timestamp, ERecurringFeeNotDue);
-
-    // 2. Check and apply any pending fee updates
-    apply_pending_fee_if_due(fee_manager, clock);
-
-    // 3. Verify StableType matches the DAO's stable type for fee collection
-    let stable_type_str = type_name::get<StableType>().into_string();
-    assert!(&stable_type_str == dao_stable_type, EWrongStableTypeForFee);
-
-    // 4. Calculate how many months of fees are due
-    let current_time = clock.timestamp_ms();
-    let months_overdue = ((current_time - next_fee_due_timestamp) / MONTHLY_FEE_PERIOD_MS) + 1;
-    
-    // Check for overflow before multiplication
-    assert!(months_overdue == 0 || fee_manager.dao_monthly_fee <= std::u64::max_value!() / months_overdue, EArithmeticOverflow);
-    let total_fee_amount = fee_manager.dao_monthly_fee * months_overdue;
-
-    // 5. Check if treasury has sufficient balance
-    let treasury_balance = futarchy::treasury::coin_type_value<StableType>(treasury);
-    if (treasury_balance < total_fee_amount) {
-        // Insufficient funds - return failure
-        return (next_fee_due_timestamp, false)
-    };
-
-    // 6. Withdraw fee from DAO's treasury
-    let fee_coin = futarchy::treasury::withdraw_platform_fee<StableType>(treasury, total_fee_amount, dao_id, clock, ctx);
-
-    // 7. Deposit the collected fee into the FeeManager
-    deposit_dao_platform_fee(fee_manager, fee_coin, dao_id, clock, ctx);
-
-    // 8. Return the new next fee due timestamp (advance by number of months collected)
-    let new_timestamp = next_fee_due_timestamp + (months_overdue * MONTHLY_FEE_PERIOD_MS);
-    (new_timestamp, true)
-}
+// Function removed to avoid circular dependency with treasury module
+// This functionality should be moved to a separate module
 
 public(package) fun deposit_dao_platform_fee<StableType: drop>(
     fee_manager: &mut FeeManager,
@@ -582,8 +536,13 @@ public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
 // ======== Test Functions ========
 #[test_only]
 public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
+    let admin_cap = FeeAdminCap {
+        id: object::new(ctx),
+    };
+    
     let fee_manager = FeeManager {
         id: object::new(ctx),
+        admin_cap_id: object::id(&admin_cap),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
         proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
         verification_fee: DEFAULT_VERIFICATION_FEE,
@@ -591,10 +550,6 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
-    };
-
-    let admin_cap = FeeAdminCap {
-        id: object::new(ctx),
     };
 
     public_share_object(fee_manager);

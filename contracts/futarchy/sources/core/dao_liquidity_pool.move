@@ -74,6 +74,13 @@ public fun stable_balance<AssetType, StableType>(
     pool.stable_balance.value()
 }
 
+/// Get available liquidity (asset and stable balances)
+public fun get_available_liquidity<AssetType, StableType>(
+    pool: &DAOLiquidityPool<AssetType, StableType>
+): (u64, u64) {
+    (pool.asset_balance.value(), pool.stable_balance.value())
+}
+
 /// Get DAO ID
 public fun dao_id<AssetType, StableType>(
     pool: &DAOLiquidityPool<AssetType, StableType>

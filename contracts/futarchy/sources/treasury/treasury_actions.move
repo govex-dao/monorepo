@@ -2,9 +2,9 @@
 module futarchy::treasury_actions;
 
 // === Imports ===
-use std::string::String;
-use std::ascii::String as AsciiString;
-use std::type_name;
+use std::string::{Self, String};
+use std::ascii::{Self, String as AsciiString};
+use std::type_name::{Self, TypeName};
 use sui::{
     table::{Self, Table},
     bag::{Self, Bag},
@@ -15,10 +15,11 @@ use sui::{
 use futarchy::{
     treasury::{Self, Treasury},
     capability_manager::{Self, CapabilityManager},
-    recurring_payments,
-    recurring_payment_registry::PaymentStreamRegistry,
-    dao::{Self, DAO},
-    execution_context::{ProposalExecutionContext},
+    recurring_payments::{Self, PaymentStream},
+    recurring_payment_registry::{Self, PaymentStreamRegistry},
+    dao::{Self}, 
+    dao_state::{Self, DAO},
+    execution_context::{Self, ProposalExecutionContext},
 };
 
 // === Errors ===
@@ -42,6 +43,9 @@ const ACTION_RECURRING_PAYMENT: u8 = 4;
 const ACTION_MINT: u8 = 5;
 const ACTION_BURN: u8 = 6;
 const ACTION_CAPABILITY_DEPOSIT: u8 = 7;
+const ACTION_PARTIAL_DISSOLUTION: u8 = 8;
+const ACTION_FULL_DISSOLUTION: u8 = 9;
+const ACTION_CANCEL_STREAM: u8 = 10;
 
 // SECURITY FIX: Add maximum actions limit to prevent DOS
 const MAX_ACTIONS_PER_OUTCOME: u64 = 100;
@@ -122,6 +126,25 @@ public struct CapabilityDepositAction<phantom CoinType> has store {
     mint_cooldown_ms: u64,
 }
 
+/// Partial dissolution action - allows redeeming a portion of treasury assets
+public struct PartialDissolutionAction has store {
+    max_tokens_to_redeem: u64,
+    redeemable_coin_types: vector<AsciiString>,
+    redeemable_percentages: vector<u64>, // In basis points (10000 = 100%)
+    redemption_fee_bps: u64,
+}
+
+/// Full dissolution action - dissolves the entire DAO
+public struct FullDissolutionAction has store {
+    liquidation_period_ms: u64,
+    redemption_fee_bps: u64,
+}
+
+/// Action to cancel an existing payment stream
+public struct CancelStreamAction has store {
+    stream_id: ID,
+}
+
 
 // === Events ===
 
@@ -142,6 +165,24 @@ public struct ActionsExecuted has copy, drop {
     outcome: u64,
     action_count: u64,
     coin_type: AsciiString,
+}
+
+public struct StreamCancellationRequested has copy, drop {
+    proposal_id: ID,
+    stream_id: ID,
+    dao_id: ID,
+}
+
+// === Init Function ===
+
+/// Initialize the module by creating the action registry
+fun init(ctx: &mut TxContext) {
+    let registry = ActionRegistry {
+        id: object::new(ctx),
+        actions: table::new(ctx),
+        executed_actions: table::new(ctx),
+    };
+    transfer::share_object(registry);
 }
 
 // === Public Functions ===
@@ -495,6 +536,199 @@ public fun add_capability_deposit_action<CoinType>(
     });
 }
 
+/// Add a partial dissolution action with string type names
+public fun add_partial_dissolution_action_with_strings(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    max_tokens_to_redeem: u64,
+    redeemable_coin_type_strings: vector<String>,
+    redeemable_percentages: vector<u64>,
+    redemption_fee_bps: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    // Convert String vector to AsciiString vector
+    let mut coin_type_ascii_strings = vector[];
+    let mut i = 0;
+    while (i < redeemable_coin_type_strings.length()) {
+        let type_string = vector::borrow(&redeemable_coin_type_strings, i);
+        // Convert String to AsciiString - assuming valid ASCII
+        let ascii_str = (*type_string).to_ascii();
+        vector::push_back(&mut coin_type_ascii_strings, ascii_str);
+        i = i + 1;
+    };
+    
+    let action = PartialDissolutionAction {
+        max_tokens_to_redeem,
+        redeemable_coin_types: coin_type_ascii_strings,
+        redeemable_percentages,
+        redemption_fee_bps,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let metadata = ActionMetadata {
+        action_type: ACTION_PARTIAL_DISSOLUTION,
+        coin_type: option::none(), // No specific coin type for dissolution actions
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_PARTIAL_DISSOLUTION,
+        coin_type: option::none(),
+    });
+}
+
+/// Add a partial dissolution action
+public fun add_partial_dissolution_action(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    max_tokens_to_redeem: u64,
+    redeemable_coin_types: vector<TypeName>,
+    redeemable_percentages: vector<u64>,
+    redemption_fee_bps: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    // Convert TypeName vector to AsciiString vector
+    let mut coin_type_strings = vector[];
+    let mut i = 0;
+    while (i < redeemable_coin_types.length()) {
+        let type_name = vector::borrow(&redeemable_coin_types, i);
+        let type_name_borrowed = vector::borrow(&redeemable_coin_types, i);
+        vector::push_back(&mut coin_type_strings, (*type_name_borrowed).into_string());
+        i = i + 1;
+    };
+    
+    let action = PartialDissolutionAction {
+        max_tokens_to_redeem,
+        redeemable_coin_types: coin_type_strings,
+        redeemable_percentages,
+        redemption_fee_bps,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let metadata = ActionMetadata {
+        action_type: ACTION_PARTIAL_DISSOLUTION,
+        coin_type: option::none(), // No specific coin type for dissolution actions
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_PARTIAL_DISSOLUTION,
+        coin_type: option::none(),
+    });
+}
+
+/// Add a full dissolution action
+public fun add_full_dissolution_action(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    liquidation_period_ms: u64,
+    redemption_fee_bps: u64,
+    ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+    
+    let action = FullDissolutionAction {
+        liquidation_period_ms,
+        redemption_fee_bps,
+    };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
+    action_bag.add(index, action);
+    
+    // Add metadata
+    let metadata = ActionMetadata {
+        action_type: ACTION_FULL_DISSOLUTION,
+        coin_type: option::none(), // No specific coin type for dissolution actions
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_FULL_DISSOLUTION,
+        coin_type: option::none(),
+    });
+}
+
+/// Add a cancel stream action
+public fun add_cancel_stream_action(
+    registry: &mut ActionRegistry,
+    proposal_id: ID,
+    outcome: u64,
+    stream_id: ID,
+    ctx: &mut TxContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    let proposal_actions = &mut registry.actions[proposal_id];
+    assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+
+    let action = CancelStreamAction { stream_id };
+    
+    let action_bag = &mut proposal_actions.outcome_actions[outcome];
+    let index = action_bag.length();
+    
+    // SECURITY FIX: Limit number of actions per outcome to prevent DOS
+    assert!(index < MAX_ACTIONS_PER_OUTCOME, ETooManyActions);
+    
+    action_bag.add(index, action);
+
+    // Add metadata. Note: CoinType is None as this action is type-agnostic.
+    let metadata = ActionMetadata {
+        action_type: ACTION_CANCEL_STREAM,
+        coin_type: option::none(),
+        index,
+    };
+    proposal_actions.action_metadata[outcome].push_back(metadata);
+    
+    event::emit(ActionAdded {
+        proposal_id,
+        outcome,
+        action_type: ACTION_CANCEL_STREAM,
+        coin_type: option::none(),
+    });
+}
+
 // === Execution Functions ===
 
 /// Execute transfer action
@@ -587,7 +821,7 @@ fun execute_no_op<AssetType, StableType>(
     auth: treasury::Auth,
     _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     // Remove the action but do nothing
     let _action = bag::remove<u64, NoOpAction>(action_bag, index);
@@ -606,7 +840,7 @@ fun execute_capability_deposit<AssetType, StableType, CoinType: drop>(
     auth: treasury::Auth,
     _dao: &DAO<AssetType, StableType>,
     _clock: &Clock,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     // Just remove the action - the actual deposit happens through
     // the permissionless deposit_treasury_cap function
@@ -615,6 +849,104 @@ fun execute_capability_deposit<AssetType, StableType, CoinType: drop>(
     
     // Consume auth token to prevent reuse
     treasury::consume_auth(auth);
+}
+
+/// Execute partial dissolution action
+fun execute_partial_dissolution<AssetType, StableType>(
+    action_bag: &mut Bag,
+    index: u64,
+    treasury: &mut Treasury,
+    auth: treasury::Auth,
+    dao: &mut DAO<AssetType, StableType>,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+    execution_context: &ProposalExecutionContext,
+) {
+    let PartialDissolutionAction { 
+        max_tokens_to_redeem, 
+        redeemable_coin_types, 
+        redeemable_percentages, 
+        redemption_fee_bps 
+    } = bag::remove<u64, PartialDissolutionAction>(action_bag, index);
+    
+    // For now, pass empty vector as we need to redesign this
+    // to handle the string->TypeName conversion issue
+    let type_names = vector::empty<TypeName>();
+    
+    // Start partial dissolution in treasury
+    treasury::start_partial_dissolution(
+        treasury,
+        auth,
+        execution_context.proposal_id(),
+        max_tokens_to_redeem,
+        &type_names,
+        &redeemable_percentages,
+        redemption_fee_bps,
+        ctx
+    );
+    
+    // Set DAO state to dissolving to prevent new proposals
+    dao_state::set_operational_state(dao, dao_state::state_dissolving());
+}
+
+/// Execute full dissolution action
+fun execute_full_dissolution<AssetType, StableType>(
+    action_bag: &mut Bag,
+    index: u64,
+    treasury: &mut Treasury,
+    auth: treasury::Auth,
+    dao: &mut DAO<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+    execution_context: &ProposalExecutionContext,
+) {
+    let FullDissolutionAction { 
+        liquidation_period_ms, 
+        redemption_fee_bps 
+    } = bag::remove<u64, FullDissolutionAction>(action_bag, index);
+    
+    // Start full dissolution in treasury
+    treasury::start_full_dissolution(
+        treasury,
+        auth,
+        execution_context.proposal_id(),
+        liquidation_period_ms,
+        redemption_fee_bps,
+        clock,
+        ctx
+    );
+    
+    // Set DAO state to dissolving to prevent new proposals
+    dao_state::set_operational_state(dao, dao_state::state_dissolving());
+}
+
+/// Execute cancel stream action
+fun execute_cancel_stream<AssetType, StableType>(
+    action_bag: &mut Bag,
+    index: u64,
+    treasury: &mut Treasury,
+    auth: treasury::Auth,
+    dao: &DAO<AssetType, StableType>,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+    execution_context: &ProposalExecutionContext,
+) {
+    let CancelStreamAction { stream_id } =
+        bag::remove<u64, CancelStreamAction>(action_bag, index);
+    
+    // Consume auth token
+    treasury::consume_auth(auth);
+    
+    // Store the stream cancellation request in treasury
+    // This allows a separate function to actually cancel the stream
+    treasury::add_stream_cancellation_request(treasury, stream_id);
+    
+    // Emit event for tracking
+    event::emit(StreamCancellationRequested {
+        proposal_id: execution_context::proposal_id(execution_context),
+        stream_id,
+        dao_id: object::id(dao),
+    });
 }
 
 // === Private Helper Functions ===
@@ -626,7 +958,7 @@ fun process_action<AssetType, StableType, CoinType: drop>(
     index: u64,
     treasury: &mut Treasury,
     auth: treasury::Auth,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
     cap_manager: &mut CapabilityManager,
@@ -710,6 +1042,42 @@ fun process_action<AssetType, StableType, CoinType: drop>(
             ctx
         );
         true
+    } else if (action_type == ACTION_PARTIAL_DISSOLUTION) {
+        execute_partial_dissolution<AssetType, StableType>(
+            action_bag,
+            index,
+            treasury,
+            auth,
+            dao,
+            clock,
+            ctx,
+            execution_context
+        );
+        true
+    } else if (action_type == ACTION_FULL_DISSOLUTION) {
+        execute_full_dissolution<AssetType, StableType>(
+            action_bag,
+            index,
+            treasury,
+            auth,
+            dao,
+            clock,
+            ctx,
+            execution_context
+        );
+        true
+    } else if (action_type == ACTION_CANCEL_STREAM) {
+        execute_cancel_stream<AssetType, StableType>(
+            action_bag,
+            index,
+            treasury,
+            auth,
+            dao,
+            clock,
+            ctx,
+            execution_context
+        );
+        true
     } else {
         // Unknown action type - consume auth and return false
         treasury::consume_auth(auth);
@@ -741,7 +1109,7 @@ fun finish_execution(
 public fun execute_outcome_actions<AssetType, StableType, CoinType: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
@@ -840,7 +1208,7 @@ public fun execute_outcome_actions_with_payments<AssetType, StableType, CoinType
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     payment_stream_registry: &mut PaymentStreamRegistry,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,
@@ -949,7 +1317,7 @@ public fun execute_outcome_actions_with_payments<AssetType, StableType, CoinType
 public entry fun execute_outcome_actions_sui<AssetType, StableType>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
@@ -964,7 +1332,8 @@ public entry fun execute_outcome_actions_sui<AssetType, StableType>(
     let execution_context = dao::create_proposal_execution_context(
         dao,
         proposal_id,
-        outcome
+        outcome,
+        ctx
     );
     
     execute_outcome_actions<AssetType, StableType, SUI>(
@@ -985,7 +1354,7 @@ public entry fun execute_outcome_actions_sui_with_payments<AssetType, StableType
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
     payment_stream_registry: &mut PaymentStreamRegistry,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     cap_manager: &mut CapabilityManager,
     clock: &Clock,
     proposal_id: ID,
@@ -1000,7 +1369,8 @@ public entry fun execute_outcome_actions_sui_with_payments<AssetType, StableType
     let execution_context = dao::create_proposal_execution_context(
         dao,
         proposal_id,
-        outcome
+        outcome,
+        ctx
     );
     
     execute_outcome_actions_with_payments<AssetType, StableType, SUI>(
@@ -1017,13 +1387,87 @@ public entry fun execute_outcome_actions_sui_with_payments<AssetType, StableType
     );
 }
 
+/// Execute dissolution actions (partial or full)
+/// This function is called when a dissolution proposal passes
+public(package) fun execute_dissolution_actions<AssetType, StableType>(
+    registry: &mut ActionRegistry,
+    treasury: &mut Treasury,
+    dao: &mut DAO<AssetType, StableType>,
+    clock: &Clock,
+    proposal_id: ID,
+    outcome: u64,
+    ctx: &mut TxContext,
+    cap_manager: &mut CapabilityManager,
+    execution_context: &ProposalExecutionContext,
+) {
+    assert!(registry.actions.contains(proposal_id), ENoActionsFound);
+    
+    // First, check and mark as executed to prevent replay
+    {
+        let proposal_actions = &mut registry.actions[proposal_id];
+        assert!(proposal_actions.outcome_actions.contains(outcome), EInvalidOutcome);
+        assert!(!proposal_actions.executed[outcome], EAlreadyExecuted);
+        // CRITICAL: Mark as executed BEFORE processing to prevent replay attacks
+        *&mut proposal_actions.executed[outcome] = true;
+    };
+    
+    // Execute dissolution actions (no coin type needed)
+    let mut i = 0;
+    let metadata_vec_length = {
+        let proposal_actions = &registry.actions[proposal_id];
+        proposal_actions.action_metadata[outcome].length()
+    };
+    
+    while (i < metadata_vec_length) {
+        let (action_type, _, index) = {
+            let proposal_actions = &registry.actions[proposal_id];
+            let metadata = &proposal_actions.action_metadata[outcome][i];
+            (metadata.action_type, metadata.coin_type, metadata.index)
+        };
+        
+        // Only process dissolution actions
+        if (action_type == ACTION_PARTIAL_DISSOLUTION || action_type == ACTION_FULL_DISSOLUTION) {
+            // Get mutable reference to action bag for this specific action
+            let proposal_actions_mut = &mut registry.actions[proposal_id];
+            let action_bag = &mut proposal_actions_mut.outcome_actions[outcome];
+            
+            // Create auth for the action (auth is consumed)
+            let auth = treasury::create_auth_for_proposal(treasury, execution_context);
+            
+            if (action_type == ACTION_PARTIAL_DISSOLUTION) {
+                execute_partial_dissolution<AssetType, StableType>(
+                    action_bag,
+                    index,
+                    treasury,
+                    auth,
+                    dao,
+                    clock,
+                    ctx,
+                    execution_context
+                );
+            } else {
+                execute_full_dissolution<AssetType, StableType>(
+                    action_bag,
+                    index,
+                    treasury,
+                    auth,
+                    dao,
+                    clock,
+                    ctx,
+                    execution_context
+                );
+            };
+        };
+        i = i + 1;
+    };
+}
 
 /// Execute USDC-specific actions (for tests)
 #[test_only]
 public fun execute_outcome_actions_usdc<AssetType, StableType, USDC: drop>(
     registry: &mut ActionRegistry,
     treasury: &mut Treasury,
-    dao: &DAO<AssetType, StableType>,
+    dao: &mut DAO<AssetType, StableType>,
     clock: &Clock,
     proposal_id: ID,
     outcome: u64,

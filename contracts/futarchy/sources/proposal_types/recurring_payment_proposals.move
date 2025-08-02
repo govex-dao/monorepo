@@ -9,7 +9,8 @@ use sui::{
     sui::SUI,
 };
 use futarchy::{
-    dao::{Self, DAO},
+    dao::{Self},
+    dao_state::{Self, DAO},
     fee,
     treasury_actions::{Self, ActionRegistry},
 };
@@ -37,6 +38,11 @@ const MAX_TOTAL_PAYMENTS: u64 = 1000; // Maximum number of payments in a stream
 /// To specify that an outcome should NOT create a payment stream (e.g., for a "Reject" option),
 /// set the `amount_per_payment` for that outcome's index to `0`. All other parameters for that
 /// index will be ignored, and a no-op action will be registered instead.
+///
+/// # Note on Limits
+/// This function will fail if the target DAO already has the maximum number
+/// of active payment streams (currently 100), as enforced by the
+/// `PaymentStreamRegistry`.
 ///
 /// # Arguments
 /// * `dao`, `fee_manager`, etc. - Standard proposal creation arguments.

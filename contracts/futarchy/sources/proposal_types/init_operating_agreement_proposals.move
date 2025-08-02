@@ -7,7 +7,8 @@ use sui::{
     sui::SUI,
 };
 use futarchy::{
-    dao::{Self, DAO},
+    dao::{Self}, 
+    dao_state::{Self, DAO},
     fee,
     init_operating_agreement_actions::{Self, InitActionRegistry},
 };
@@ -37,7 +38,7 @@ public entry fun create_init_operating_agreement_proposal<AssetType, StableType>
     ctx: &mut TxContext,
 ) {
     // Ensure the DAO doesn't already have an operating agreement
-    assert!(!dao.has_operating_agreement(), 0); // EOperatingAgreementAlreadyExists
+    assert!(dao_state::operating_agreement_id(dao).is_none(), 0); // EOperatingAgreementAlreadyExists
 
     // Validate inputs
     let outcome_count = outcome_messages.length();

@@ -7,7 +7,8 @@ use sui::{
     sui::SUI,
 };
 use futarchy::{
-    dao::{Self, DAO},
+    dao::{Self},
+    dao_state::{Self, DAO},
     fee,
     operating_agreement_actions::{
         Self, ActionRegistry, Action,
