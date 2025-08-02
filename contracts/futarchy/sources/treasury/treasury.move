@@ -3,11 +3,12 @@ module futarchy::treasury;
 
 // === Imports ===
 use futarchy::execution_context::{Self, ProposalExecutionContext};
-// use futarchy::recurring_payments::{Self, PaymentStream}; // Removed to avoid circular dependency
+use futarchy::recurring_payments::{Self, PaymentStream};
 use futarchy::{
     math, 
     recurring_payment_registry::{Self, PaymentStreamRegistry},
     dao_liquidity_pool::{Self, DAOLiquidityPool},
+    fee::{Self, FeeManager},
 };
 use std::{
     string::{Self, String},
@@ -56,6 +57,11 @@ const ETreasuryNotInRedemptionState: u64 = 27;
 const E_STREAMS_STILL_ACTIVE: u64 = 28;
 const E_DAO_LIQUIDITY_STILL_IN_MARKETS: u64 = 29;
 const EUnauthorized: u64 = 30;
+const EWrongDAO: u64 = 31;
+const EStreamNotTracked: u64 = 32;
+const EPaymentNotDue: u64 = 33;
+const EStreamInactive: u64 = 34;
+const EStreamNotApprovedForCancellation: u64 = 35;
 
 // === Structs ===
 
@@ -433,17 +439,53 @@ public (package) fun withdraw_without_drop<CoinType>(
 /// Permissionlessly claim a due payment from an active payment stream.
 /// This function reads the stream's state, verifies a payment is due,
 /// withdraws the funds from the treasury, and updates the stream's state.
-// Temporarily commented out to avoid circular dependency
-/*
 public entry fun claim_from_stream<CoinType: drop>(
     treasury: &mut Treasury,
     stream: &mut PaymentStream<CoinType>,
+    registry: &PaymentStreamRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Function body removed to avoid circular dependency
-    abort 0
-}*/
+    // Verify the stream belongs to this DAO's treasury
+    let (_, _, _, _, _, _, dao_id) = recurring_payments::get_stream_info(stream);
+    assert!(dao_id == treasury.config.dao_id, EWrongDAO);
+    
+    // Verify the stream is tracked in the registry
+    let stream_id = object::id(stream);
+    assert!(recurring_payment_registry::is_stream_tracked(registry, stream_id), EStreamNotTracked);
+    
+    // Check if payment is due
+    assert!(recurring_payments::is_payment_due(stream, clock), EPaymentNotDue);
+    
+    // Get payment details
+    let (recipient, amount_per_payment, _, _total_paid, active, _dao_id) = recurring_payments::get_stream_info(stream);
+    assert!(active, EStreamInactive);
+    
+    // Check treasury has sufficient balance
+    let coin_type = type_name::get<CoinType>();
+    assert!(coin_type_exists_by_name(treasury, coin_type), ECoinTypeNotFound);
+    let balance = treasury.vault.borrow<TypeName, Balance<CoinType>>(coin_type);
+    assert!(balance.value() >= amount_per_payment, EInsufficientBalance);
+    
+    // Process the payment - withdraw directly from vault
+    let balance_mut = treasury.vault.borrow_mut<TypeName, Balance<CoinType>>(coin_type);
+    let coin = coin::from_balance(balance_mut.split(amount_per_payment), ctx);
+    transfer::public_transfer(coin, recipient);
+    
+    // Update stream state
+    recurring_payments::update_payment_timestamp(stream, clock);
+    recurring_payments::add_to_total_paid(stream, amount_per_payment);
+    
+    // Emit event
+    event::emit(PaymentStreamClaimed {
+        treasury_id: object::id(treasury),
+        stream_id,
+        coin_type,
+        amount: amount_per_payment,
+        recipient,
+        claimer: tx_context::sender(ctx),
+    });
+}
 
 // === View Functions ===
 
@@ -866,7 +908,7 @@ public entry fun redeem_single_asset<DAOAssetType: drop, RedeemableCoinType: dro
     treasury: &mut Treasury,
     dao_tokens_to_burn: Coin<DAOAssetType>,
     dao_treasury_cap: &mut coin::TreasuryCap<DAOAssetType>,
-    // fee_manager removed to avoid circular dependency
+    fee_manager: &mut FeeManager,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -951,9 +993,16 @@ public entry fun redeem_single_asset<DAOAssetType: drop, RedeemableCoinType: dro
     // Transfer fee to protocol fee manager
     if (fee_amount > 0) {
         let fee_balance = balance::split(balance_mut, fee_amount);
-        // TODO: Fix circular dependency - need to deposit fee to fee manager
-        // For now, just add fee back to treasury
-        balance::join(balance_mut, fee_balance);
+        let fee_coin = coin::from_balance(fee_balance, ctx);
+        
+        // Deposit the redemption fee to the fee manager
+        fee::deposit_dao_platform_fee<RedeemableCoinType>(
+            fee_manager,
+            fee_coin,
+            treasury.config.dao_id,
+            clock,
+            ctx
+        );
     };
     
     // Transfer net amount to user
@@ -1018,18 +1067,52 @@ public fun remove_canceled_stream(treasury: &mut Treasury, stream_id: ID) {
 }
 
 // Cancel a payment stream that was approved for cancellation
-// Temporarily commented out to avoid circular dependency
-/*
 public entry fun execute_approved_stream_cancellation<CoinType>(
     treasury: &mut Treasury,
-    registry: &mut recurring_payment_registry::PaymentStreamRegistry,
-    stream: &mut recurring_payments::PaymentStream<CoinType>,
+    registry: &mut PaymentStreamRegistry,
+    stream: &mut PaymentStream<CoinType>,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let stream_id = object::id(stream);
+    
+    // Check if this stream is approved for cancellation
+    let (exists, index) = vector::index_of(&treasury.streams_to_cancel, &stream_id);
+    assert!(exists, EStreamNotApprovedForCancellation);
+    
+    // Remove from the approval list
+    vector::remove(&mut treasury.streams_to_cancel, index);
+    
+    // Cancel the stream
+    recurring_payments::cancel_stream(stream, registry, clock, _ctx);
+}
+
+/// A permissionless function that allows anyone to cancel a payment stream
+/// for a DAO that is in the process of dissolving. This must be called for all
+/// active streams before the redemption phase can begin.
+public entry fun permissionless_cancel_dissolving_stream<CoinType>(
+    treasury: &mut Treasury,
+    registry: &mut PaymentStreamRegistry,
+    stream: &mut PaymentStream<CoinType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Function body removed to avoid circular dependency
-    abort 0
-}*/
+    // 1. Verify that the DAO's treasury is actually in the dissolution/liquidation phase.
+    assert!(treasury.state == STATE_LIQUIDATING, ETreasuryNotInRedemptionState);
+
+    // 2. Verify the stream belongs to this DAO.
+    let (_, _, _, _, _, stream_dao_id) = recurring_payments::get_stream_info(stream);
+    assert!(stream_dao_id == treasury.config.dao_id, EWrongDAO);
+    
+    // 3. Check if stream is active
+    let (_, _, _, _, active, _) = recurring_payments::get_stream_info(stream);
+    if (!active) {
+        return
+    };
+
+    // 4. Call the existing cancel logic.
+    recurring_payments::cancel_stream(stream, registry, clock, ctx);
+}
 
 // === Private Functions ===
 

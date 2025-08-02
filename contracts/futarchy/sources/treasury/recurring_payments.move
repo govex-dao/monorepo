@@ -10,10 +10,7 @@ use sui::{
     coin::{Self, Coin},
     balance::{Self, Balance},
 };
-use futarchy::{
-    recurring_payment_registry::{Self, PaymentStreamRegistry},
-    treasury::{Self, Treasury},
-};
+use futarchy::recurring_payment_registry::{Self, PaymentStreamRegistry};
 
 // === Constants ===
 const MAX_PAYMENTS_PER_CLAIM: u64 = 100; // Maximum payments that can be claimed in one transaction
@@ -241,14 +238,16 @@ public fun get_stream_info<CoinType>(stream: &PaymentStream<CoinType>): (
     u64,     // amount_per_payment
     u64,     // payment_interval
     u64,     // total_paid
-    bool     // active
+    bool,    // active
+    ID       // dao_id
 ) {
     (
         stream.recipient,
         stream.amount_per_payment,
         stream.payment_interval,
         stream.total_paid,
-        stream.active
+        stream.active,
+        stream.dao_id
     )
 }
 
@@ -262,27 +261,20 @@ public fun get_remaining_payments<CoinType>(stream: &PaymentStream<CoinType>): O
     }
 }
 
-/// A permissionless function that allows anyone to cancel a payment stream
-/// for a DAO that is in the process of dissolving. This must be called for all
-/// active streams before the redemption phase can begin.
-public entry fun permissionless_cancel_dissolving_stream<CoinType>(
-    treasury: &Treasury, // Pass immutably for state check
-    registry: &mut PaymentStreamRegistry,
+/// Update the last payment timestamp after a successful payment
+public(package) fun update_payment_timestamp<CoinType>(
     stream: &mut PaymentStream<CoinType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
+    clock: &Clock
 ) {
-    // 1. Verify that the DAO's treasury is actually in the dissolution/liquidation phase.
-    assert!(treasury::get_state(treasury) == treasury::state_liquidating(), E_TREASURY_NOT_LIQUIDATING);
-
-    // 2. Verify the stream belongs to this DAO.
-    assert!(stream.dao_id == treasury::dao_id(treasury), EInvalidRegistryMismatch);
-    
-    // 3. If stream is already inactive, do nothing.
-    if (!stream.active) {
-        return
-    };
-
-    // 4. Call the existing internal cancel logic.
-    cancel_stream(stream, registry, clock, ctx);
+    stream.last_payment = clock.timestamp_ms();
 }
+
+/// Add to the total amount paid from this stream
+public(package) fun add_to_total_paid<CoinType>(
+    stream: &mut PaymentStream<CoinType>,
+    amount: u64
+) {
+    stream.total_paid = stream.total_paid + amount;
+}
+
+// permissionless_cancel_dissolving_stream moved to treasury module to avoid circular dependency

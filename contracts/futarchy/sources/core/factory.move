@@ -4,7 +4,7 @@ use futarchy::dao;
 use futarchy::dao_state;
 use futarchy::dao_governance;
 use futarchy::priority_queue;
-// use futarchy::dao_config; // removed - module doesn't exist
+use futarchy::dao_config;
 use futarchy::fee;
 use std::ascii::String as AsciiString;
 use std::string::String as UTF8String;
