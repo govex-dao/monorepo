@@ -31,3 +31,10 @@ public struct Witness() has drop;
 public fun witness(): Witness {
     Witness()
 }
+
+#[test_only]
+/// Get a test version witness for the futarchy package
+public fun test_version(): VersionWitness {
+    // Create a proper version witness for testing
+    version_witness::new(V1())
+}

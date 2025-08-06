@@ -273,8 +273,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     futarchy_config::set_spot_pool_id(&mut config, spot_pool_id);
     futarchy_config::set_dao_pool_id(&mut config, temp_dao_pool_id);
     
-    // Create the account with Extensions
-    let mut account = futarchy_config::new_account_with_extensions(extensions, config, ctx);
+    // Create the account with unverified_allowed to bypass deps validation
+    let mut account = futarchy_config::new_account_unverified(extensions, config, ctx);
     
     // Now create the priority queue with the actual DAO ID
     let priority_queue_id = {
@@ -473,11 +473,11 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     };
     
     // Update the config with the actual priority queue ID
-    let config_mut = futarchy_config::internal_config_mut(&mut account);
+    let config_mut = futarchy_config::internal_config_mut_test(&mut account);
     futarchy_config::set_proposal_queue_id(config_mut, option::some(priority_queue_id));
     
-    // Initialize the vault
-    futarchy_vault::init_vault(&mut account, ctx);
+    // Initialize the vault (test version)
+    futarchy_vault::init_vault_test(&mut account, ctx);
     
     // If treasury cap provided, store it
     if (treasury_cap.is_some()) {
@@ -487,7 +487,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
             &mut account,
             b"treasury_cap".to_string(),
             cap,
-            version::current()
+            account_protocol::version_witness::new_for_testing(@account_protocol)
         );
     };
     // Destroy the empty option

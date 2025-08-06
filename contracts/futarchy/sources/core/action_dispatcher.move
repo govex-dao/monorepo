@@ -12,7 +12,7 @@ use account_protocol::{
     executable::{Self, Executable},
 };
 use futarchy::{
-    futarchy_config::{FutarchyConfig, FutarchyOutcome},
+    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     version,
 };
 use futarchy_actions::{
@@ -97,7 +97,8 @@ fun try_execute_config_action<IW: drop>(
 ): bool {
     // Check for basic config actions
     if (executable::contains_action<FutarchyOutcome, config_actions::SetProposalsEnabledAction>(executable)) {
-        config_actions::do_set_proposals_enabled<FutarchyConfig, FutarchyOutcome, IW>(
+        // Call the futarchy_config implementation directly
+        futarchy_config::execute_set_proposals_enabled<FutarchyOutcome, IW>(
             executable,
             account,
             version::current(),
@@ -108,7 +109,8 @@ fun try_execute_config_action<IW: drop>(
     };
     
     if (executable::contains_action<FutarchyOutcome, config_actions::UpdateNameAction>(executable)) {
-        config_actions::do_update_name<FutarchyConfig, FutarchyOutcome, IW>(
+        // Call the futarchy_config implementation directly
+        futarchy_config::execute_update_name<FutarchyOutcome, IW>(
             executable,
             account,
             version::current(),
@@ -120,7 +122,8 @@ fun try_execute_config_action<IW: drop>(
     
     // Check for advanced config actions
     if (executable::contains_action<FutarchyOutcome, advanced_config_actions::TradingParamsUpdateAction>(executable)) {
-        advanced_config_actions::do_update_trading_params<FutarchyConfig, FutarchyOutcome, IW>(
+        // Call the futarchy_config implementation directly
+        futarchy_config::execute_update_trading_params<FutarchyOutcome, IW>(
             executable,
             account,
             version::current(),
@@ -131,7 +134,8 @@ fun try_execute_config_action<IW: drop>(
     };
     
     if (executable::contains_action<FutarchyOutcome, advanced_config_actions::MetadataUpdateAction>(executable)) {
-        advanced_config_actions::do_update_metadata<FutarchyConfig, FutarchyOutcome, IW>(
+        // Call the futarchy_config implementation directly
+        futarchy_config::execute_update_metadata<FutarchyOutcome, IW>(
             executable,
             account,
             version::current(),
@@ -153,7 +157,8 @@ fun try_execute_config_action<IW: drop>(
     };
     
     if (executable::contains_action<FutarchyOutcome, advanced_config_actions::GovernanceUpdateAction>(executable)) {
-        advanced_config_actions::do_update_governance<FutarchyConfig, FutarchyOutcome, IW>(
+        // Call the futarchy_config implementation directly
+        futarchy_config::execute_update_governance<FutarchyOutcome, IW>(
             executable,
             account,
             version::current(),

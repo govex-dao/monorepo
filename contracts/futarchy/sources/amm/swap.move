@@ -4,7 +4,7 @@ use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token::ConditionalToken;
 use futarchy::liquidity_interact;
 use futarchy::market_state::MarketState;
-use futarchy::proposal::Proposal;
+use futarchy::proposal::{Self, Proposal};
 use sui::clock::Clock;
 use sui::coin::Coin;
 
@@ -19,7 +19,7 @@ const EInvalidState: u64 = 3;
 const EMarketIdMismatch: u64 = 4;
 
 // === Constants ===
-const STATE_TRADING: u8 = 1;
+const STATE_TRADING: u8 = 2; // Must match proposal.move STATE_TRADING
 
 // === Helper Functions ===
 /// Efficiently transfers all tokens in a vector to the recipient
@@ -41,7 +41,7 @@ public fun swap_asset_to_stable<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ConditionalToken {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     assert!(token_to_swap.asset_type() == 0, EWrongTokenType);
     let amount_in = token_to_swap.value();
 
@@ -101,7 +101,7 @@ public fun swap_stable_to_asset<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ConditionalToken {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     assert!(token_to_swap.asset_type() == 1, EWrongTokenType);
     let amount_in = token_to_swap.value();
 
@@ -163,7 +163,7 @@ public fun create_and_swap_stable_to_asset_with_existing<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     let mut tokens = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
@@ -234,7 +234,7 @@ public fun create_and_swap_asset_to_stable_with_existing<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     let mut tokens = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
@@ -303,7 +303,7 @@ public fun create_and_swap_asset_to_stable<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     let mut tokens = escrow.mint_complete_set_asset(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
@@ -361,7 +361,7 @@ public fun create_and_swap_stable_to_asset<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): (vector<ConditionalToken>, ConditionalToken) {
-    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(proposal::market_state_id(proposal) == escrow.get_market_state_id(), EMarketIdMismatch);
     let mut tokens = escrow.mint_complete_set_stable(coin_in, clock, ctx);
 
     assert!(outcome_idx < tokens.length(), EInvalidOutcome);
@@ -420,12 +420,12 @@ fun swap_asset_to_stable_internal<AssetType, StableType>(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    assert!(proposal.proposal_id() == state.market_id(), EMarketIdMismatch);
+    assert!(proposal::proposal_id(proposal) == state.market_id(), EMarketIdMismatch);
 
-    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    assert!(proposal.state() == STATE_TRADING, EInvalidState);
+    assert!(outcome_idx < proposal::outcome_count(proposal), EInvalidOutcome);
+    assert!(proposal::state(proposal) == STATE_TRADING, EInvalidState);
 
-    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
     pool.swap_asset_to_stable(state, amount_in, min_amount_out, clock, ctx)
 }
 
@@ -438,10 +438,10 @@ fun swap_stable_to_asset_internal<AssetType, StableType>(
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    assert!(proposal.proposal_id() == state.market_id(), EMarketIdMismatch);
-    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    assert!(proposal.state() == STATE_TRADING, EInvalidState);
+    assert!(proposal::proposal_id(proposal) == state.market_id(), EMarketIdMismatch);
+    assert!(outcome_idx < proposal::outcome_count(proposal), EInvalidOutcome);
+    assert!(proposal::state(proposal) == STATE_TRADING, EInvalidState);
 
-    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
     pool.swap_stable_to_asset(state, amount_in, min_amount_out, clock, ctx)
 }

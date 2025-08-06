@@ -22,6 +22,7 @@ use account_protocol::{
     executable::{Self, Executable},
     deps::{Self, Deps},
     intents::{Self, Intents},
+    version_witness::VersionWitness,
 };
 use account_extensions::extensions::Extensions;
 use futarchy::{
@@ -41,6 +42,41 @@ const OUTCOME_NO: u8 = 1;
 // === Errors ===
 const EProposalNotApproved: u64 = 1;
 const EInvalidAdmin: u64 = 2;
+
+// === Events ===
+
+/// Emitted when proposals are enabled or disabled
+public struct ProposalsEnabledChanged has copy, drop {
+    account_id: ID,
+    enabled: bool,
+    timestamp: u64,
+}
+
+/// Emitted when DAO name is updated
+public struct DaoNameChanged has copy, drop {
+    account_id: ID,
+    old_name: AsciiString,
+    new_name: AsciiString,
+    timestamp: u64,
+}
+
+/// Emitted when trading parameters are updated
+public struct TradingParamsChanged has copy, drop {
+    account_id: ID,
+    timestamp: u64,
+}
+
+/// Emitted when metadata is updated
+public struct MetadataChanged has copy, drop {
+    account_id: ID,
+    timestamp: u64,
+}
+
+/// Emitted when governance settings are updated
+public struct GovernanceSettingsChanged has copy, drop {
+    account_id: ID,
+    timestamp: u64,
+}
 
 // === Structs ===
 
@@ -528,9 +564,10 @@ public fun new_account_with_extensions(
     )
 }
 
-#[test_only]
-/// Create a test account without Extensions
-fun create_test_account(
+/// Create a new Account that allows unverified packages (for production use)
+/// IMPORTANT: @futarchy must be the real deployed address, not 0x0
+public fun new_account_unverified(
+    extensions: &Extensions,
     config: FutarchyConfig,
     ctx: &mut TxContext,
 ): Account<FutarchyConfig> {
@@ -539,11 +576,50 @@ fun create_test_account(
         deps,
     };
     
-    // For testing, we use a simple deps without Extensions
-    // This avoids the issue of not being able to share Extensions outside its module
+    // Create deps with futarchy included
+    // unverified_allowed = true bypasses Extensions registry check
+    // but the address still needs to be in the deps list for deps::check()
+    account_interface::create_account!(
+        config,
+        version::current(), // Use the real futarchy version witness
+        GovernanceWitness {},
+        ctx,
+        || deps::new(
+            extensions,
+            true, // unverified_allowed = true to bypass Extensions registry
+            vector[
+                b"AccountProtocol".to_string(),
+                b"Futarchy".to_string(),
+            ],
+            vector[
+                @account_protocol,
+                @futarchy, // MUST be the real deployed address, not 0x0
+            ],
+            vector[1, version::get()] // versions
+        )
+    )
+}
+
+#[test_only]
+/// Create a test account without Extensions
+/// IMPORTANT: Uses @account_protocol witness because @futarchy (0x0) is not deployed
+fun create_test_account(
+    config: FutarchyConfig,
+    ctx: &mut TxContext,
+): Account<FutarchyConfig> {
+    use account_protocol::{
+        account_interface,
+        deps,
+        version_witness,
+    };
+    
+    // Must use @account_protocol witness for testing because:
+    // 1. deps::check() always validates the address is in deps (ignores unverified_allowed)
+    // 2. @futarchy is 0x0 (not deployed) so can't be in deps
+    // 3. @account_protocol IS in the test deps
     let account = account_interface::create_account!(
         config,
-        version::current(),
+        version_witness::new_for_testing(@account_protocol),
         GovernanceWitness {},
         ctx,
         || deps::new_for_testing()
@@ -559,6 +635,15 @@ public(package) fun internal_config_mut(
     account: &mut Account<FutarchyConfig>
 ): &mut FutarchyConfig {
     account::config_mut(account, version::current(), GovernanceWitness {})
+}
+
+#[test_only]
+/// Get mutable access to config for tests (package-level only)
+public(package) fun internal_config_mut_test(
+    account: &mut Account<FutarchyConfig>
+): &mut FutarchyConfig {
+    use account_protocol::version_witness;
+    account::config_mut(account, version_witness::new_for_testing(@account_protocol), GovernanceWitness {})
 }
 
 /// Set DAO pool ID (package-level only)  
@@ -770,5 +855,168 @@ public fun execute_proposal_intent<AssetType, StableType>(
     
     // Return the executable for the caller to process the actions
     executable
+}
+
+// === Config Action Execution Functions ===
+// These functions implement the actual state modifications for config actions
+// They use FutarchyConfigWitness to access config_mut
+
+/// Execute a SetProposalsEnabledAction 
+public fun execute_set_proposals_enabled<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    use futarchy_actions::config_actions;
+    use sui::event;
+    use sui::clock;
+    
+    // Extract the action from the executable
+    let action: &config_actions::SetProposalsEnabledAction = executable.next_action(intent_witness);
+    let enabled = config_actions::get_proposals_enabled(action);
+    
+    // Get mutable config using our witness
+    let config = account.config_mut(version, FutarchyConfigWitness {});
+    
+    // Apply the state change
+    set_proposals_enabled_internal(config, enabled);
+    
+    // Emit event for audit trail
+    event::emit(ProposalsEnabledChanged {
+        account_id: object::id(account),
+        enabled,
+        timestamp: ctx.epoch_timestamp_ms(),
+    });
+}
+
+/// Execute an UpdateNameAction
+public fun execute_update_name<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    _ctx: &mut TxContext,
+) {
+    use futarchy_actions::config_actions;
+    
+    // Extract the action from the executable
+    let action: &config_actions::UpdateNameAction = executable.next_action(intent_witness);
+    let new_name = config_actions::get_new_name(action);
+    
+    // Get mutable config using our witness
+    let config = account.config_mut(version, FutarchyConfigWitness {});
+    
+    // Convert String to AsciiString if needed
+    // For now, assuming the name is ASCII-compatible
+    let ascii_name = new_name.to_ascii();
+    
+    // Apply the state change
+    set_dao_name(config, ascii_name);
+    
+    // Event emission could go here
+}
+
+/// Execute a TradingParamsUpdateAction
+public fun execute_update_trading_params<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    _ctx: &mut TxContext,
+) {
+    use futarchy_actions::advanced_config_actions;
+    
+    // Extract the action from the executable
+    let action: &advanced_config_actions::TradingParamsUpdateAction = executable.next_action(intent_witness);
+    
+    // Get the fields from the action
+    let (min_asset_opt, min_stable_opt, review_period_opt, trading_period_opt, fee_bps_opt) = 
+        advanced_config_actions::get_trading_params_fields(action);
+    
+    // Get mutable config using our witness
+    let config = account.config_mut(version, FutarchyConfigWitness {});
+    
+    // Apply each update if provided
+    if (min_asset_opt.is_some()) {
+        set_min_asset_amount(config, *min_asset_opt.borrow());
+    };
+    if (min_stable_opt.is_some()) {
+        set_min_stable_amount(config, *min_stable_opt.borrow());
+    };
+    if (review_period_opt.is_some()) {
+        set_review_period_ms(config, *review_period_opt.borrow());
+    };
+    if (trading_period_opt.is_some()) {
+        set_trading_period_ms(config, *trading_period_opt.borrow());
+    };
+    if (fee_bps_opt.is_some()) {
+        set_amm_total_fee_bps(config, *fee_bps_opt.borrow());
+    };
+}
+
+/// Execute a MetadataUpdateAction
+public fun execute_update_metadata<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    _ctx: &mut TxContext,
+) {
+    use futarchy_actions::advanced_config_actions;
+    
+    // Extract the action from the executable
+    let action: &advanced_config_actions::MetadataUpdateAction = executable.next_action(intent_witness);
+    
+    // Get the fields from the action
+    let (name_opt, icon_url_opt, description_opt) = 
+        advanced_config_actions::get_metadata_fields(action);
+    
+    // Get mutable config using our witness
+    let config = account.config_mut(version, FutarchyConfigWitness {});
+    
+    // Apply each update if provided
+    if (name_opt.is_some()) {
+        set_dao_name(config, *name_opt.borrow());
+    };
+    if (icon_url_opt.is_some()) {
+        set_icon_url(config, *icon_url_opt.borrow());
+    };
+    if (description_opt.is_some()) {
+        set_description(config, *description_opt.borrow());
+    };
+}
+
+/// Execute a GovernanceUpdateAction
+public fun execute_update_governance<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    _ctx: &mut TxContext,
+) {
+    use futarchy_actions::advanced_config_actions;
+    
+    // Extract the action from the executable
+    let action: &advanced_config_actions::GovernanceUpdateAction = executable.next_action(intent_witness);
+    
+    // Get the fields from the action
+    let (proposals_enabled_opt, max_outcomes_opt, bond_amount_opt) = 
+        advanced_config_actions::get_governance_fields(action);
+    
+    // Get mutable config using our witness
+    let config = account.config_mut(version, FutarchyConfigWitness {});
+    
+    // Apply each update if provided
+    if (proposals_enabled_opt.is_some()) {
+        set_proposals_enabled_internal(config, *proposals_enabled_opt.borrow());
+    };
+    if (max_outcomes_opt.is_some()) {
+        set_max_outcomes(config, *max_outcomes_opt.borrow());
+    };
+    if (bond_amount_opt.is_some()) {
+        set_required_bond_amount(config, *bond_amount_opt.borrow());
+    };
 }
 

@@ -1,7 +1,7 @@
 module futarchy::proposal;
 
-use futarchy::amm::{LiquidityPool};
-use futarchy::coin_escrow;
+use futarchy::amm::{Self, LiquidityPool};
+use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::liquidity_initialize;
 use futarchy::market_state;
 use std::ascii::String as AsciiString;
@@ -209,8 +209,50 @@ public(package) fun initialize_market<AssetType, StableType>(
     let escrow_id = object::id(&escrow);
 
     // Create AMM pools and initialize liquidity
-    let asset_balance = asset_coin.into_balance();
-    let stable_balance = stable_coin.into_balance();
+    let mut asset_balance = asset_coin.into_balance();
+    let mut stable_balance = stable_coin.into_balance();
+    
+    // Quantum liquidity: the same liquidity backs all outcomes conditionally
+    // We only need the MAX amount across outcomes since they share the same underlying liquidity
+    let mut max_asset = 0u64;
+    let mut max_stable = 0u64;
+    let mut j = 0;
+    while (j < outcome_count) {
+        let asset_amt = *initial_asset_amounts.borrow(j);
+        let stable_amt = *initial_stable_amounts.borrow(j);
+        if (asset_amt > max_asset) { max_asset = asset_amt };
+        if (stable_amt > max_stable) { max_stable = stable_amt };
+        j = j + 1;
+    };
+    
+    // Extract the exact amount needed for quantum liquidity
+    let asset_total = asset_balance.value();
+    let stable_total = stable_balance.value();
+    
+    let asset_for_pool = if (asset_total > max_asset) {
+        asset_balance.split(max_asset)
+    } else {
+        asset_balance.split(asset_total)
+    };
+    
+    let stable_for_pool = if (stable_total > max_stable) {
+        stable_balance.split(max_stable)
+    } else {
+        stable_balance.split(stable_total)
+    };
+    
+    // Return excess to proposer if any
+    if (asset_balance.value() > 0) {
+        transfer::public_transfer(asset_balance.into_coin(ctx), proposer);
+    } else {
+        asset_balance.destroy_zero();
+    };
+    
+    if (stable_balance.value() > 0) {
+        transfer::public_transfer(stable_balance.into_coin(ctx), proposer);
+    } else {
+        stable_balance.destroy_zero();
+    };
     
     let (_, amm_pools) = liquidity_initialize::create_outcome_markets(
         &mut escrow, 
@@ -221,8 +263,8 @@ public(package) fun initialize_market<AssetType, StableType>(
         twap_initial_observation, 
         twap_step_max,
         amm_total_fee_bps,
-        asset_balance, 
-        stable_balance, 
+        asset_for_pool, 
+        stable_for_pool, 
         clock, 
         ctx
     );
@@ -737,6 +779,57 @@ public(package) fun get_market_init_params<AssetType, StableType>(proposal: &Pro
 
 // === Package Functions ===
 
+/// Advances the proposal state based on elapsed time
+/// Transitions from REVIEW to TRADING when review period ends
+/// Returns true if state was changed
+public fun advance_state<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    clock: &Clock,
+): bool {
+    let current_time = clock.timestamp_ms();
+    let created_at = proposal.created_at;
+    
+    // Check if we should transition from REVIEW to TRADING
+    if (proposal.state == STATE_REVIEW) {
+        let review_end = created_at + proposal.review_period_ms;
+        if (current_time >= review_end) {
+            proposal.state = STATE_TRADING;
+            
+            // Start trading in the market state
+            let market = coin_escrow::get_market_state_mut(escrow);
+            market_state::start_trading(market, proposal.trading_period_ms, clock);
+            
+            // Set oracle start time for all pools when trading begins
+            let pools = proposal.amm_pools.borrow_mut();
+            let mut i = 0;
+            while (i < pools.length()) {
+                let pool = &mut pools[i];
+                amm::set_oracle_start_time(pool, market);
+                i = i + 1;
+            };
+            
+            return true
+        };
+    };
+    
+    // Check if we should transition from TRADING to ended
+    if (proposal.state == STATE_TRADING) {
+        let trading_end = created_at + proposal.review_period_ms + proposal.trading_period_ms;
+        if (current_time >= trading_end) {
+            // End trading in the market state
+            let market = coin_escrow::get_market_state_mut(escrow);
+            if (market_state::is_trading_active(market)) {
+                market_state::end_trading(market, clock);
+            };
+            // Note: Full finalization requires calculating winner and is done separately
+            return true
+        };
+    };
+    
+    false
+}
+
 public(package) fun set_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     new_state: u8,
@@ -763,6 +856,36 @@ public(package) fun set_winning_outcome<AssetType, StableType>(
     outcome: u64,
 ) {
     proposal.winning_outcome = option::some(outcome);
+}
+
+/// Finalize the proposal with the winning outcome
+/// This combines setting the winning outcome and updating state atomically
+public fun finalize_proposal<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    winning_outcome: u64,
+    clock: &Clock,
+) {
+    // Ensure we're in a state that can be finalized
+    assert!(proposal.state == STATE_TRADING || proposal.state == STATE_REVIEW, EInvalidState);
+    
+    // If still in trading, end trading first
+    if (proposal.state == STATE_TRADING) {
+        let market = coin_escrow::get_market_state_mut(escrow);
+        if (market_state::is_trading_active(market)) {
+            market_state::end_trading(market, clock);
+        };
+    };
+    
+    // Set the winning outcome
+    proposal.winning_outcome = option::some(winning_outcome);
+    
+    // Update state to finalized
+    proposal.state = STATE_FINALIZED;
+    
+    // Finalize the market state
+    let market = coin_escrow::get_market_state_mut(escrow);
+    market_state::finalize(market, winning_outcome, clock);
 }
 
 public fun get_outcome_creators<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &vector<address> {

@@ -323,7 +323,7 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     
     // Step 2: Fast forward through review and trading periods
     let config = account.config();
-    clock::increment_for_testing(clock, futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config) + 1000);
+    sui::clock::increment_for_testing(clock, futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config) + 1000);
     
     // Step 3: Get proposal and market state (would be shared objects in production)
     // For testing, we'll assume they're available
