@@ -1,0 +1,429 @@
+/// Operating agreement actions for futarchy DAOs
+/// This module defines action structs and execution logic for operating agreement changes
+module futarchy_actions::operating_agreement_actions;
+
+// === Imports ===
+use std::string::String;
+use account_protocol::{
+    account::{Self, Account},
+    executable::Executable,
+    intents::Expired,
+    version_witness::VersionWitness,
+};
+
+// === Errors ===
+const EInvalidLineId: u64 = 1;
+const EEmptyText: u64 = 2;
+const EInvalidDifficulty: u64 = 3;
+const EInvalidActionType: u64 = 4;
+const ENotImplemented: u64 = 5;
+
+// === Constants ===
+const ACTION_UPDATE: u8 = 0;
+const ACTION_INSERT_AFTER: u8 = 1;
+const ACTION_INSERT_AT_BEGINNING: u8 = 2;
+const ACTION_REMOVE: u8 = 3;
+
+// === Action Structs ===
+
+/// Represents a single atomic change to the operating agreement
+public struct OperatingAgreementAction has store, drop {
+    action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
+    // Only fields relevant to the action_type will be populated
+    line_id: Option<ID>, // Used for Update, Remove, and as the *previous* line for Insert After
+    text: Option<String>, // Used for Update and Insert operations
+    difficulty: Option<u64>, // Used for Insert operations
+}
+
+/// Action to update a line in the operating agreement
+public struct UpdateLineAction has store {
+    line_id: ID,
+    new_text: String,
+}
+
+/// Action to insert a line after another line
+public struct InsertLineAfterAction has store {
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+}
+
+/// Action to insert a line at the beginning
+public struct InsertLineAtBeginningAction has store {
+    text: String,
+    difficulty: u64,
+}
+
+/// Action to remove a line
+public struct RemoveLineAction has store {
+    line_id: ID,
+}
+
+/// Batch action for multiple operating agreement changes
+public struct BatchOperatingAgreementAction has store {
+    actions: vector<OperatingAgreementAction>,
+}
+
+// === Execution Functions ===
+
+/// Execute an update line action
+public fun do_update_line<Config, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    let action: &UpdateLineAction = executable.next_action(intent_witness);
+    
+    // The actual operating agreement update would be handled by a module
+    // that has access to the operating agreement storage
+    // For now, we validate the action and abort with ENotImplemented
+    // The implementing module should override this behavior
+    let _ = action; // Acknowledge we've processed the action
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    abort ENotImplemented
+}
+
+/// Execute an insert line after action
+public fun do_insert_line_after<Config, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    let action: &InsertLineAfterAction = executable.next_action(intent_witness);
+    
+    // Extract and validate parameters
+    let prev_line_id = action.prev_line_id;
+    let text = &action.text;
+    let difficulty = action.difficulty;
+    
+    assert!(text.length() > 0, EEmptyText);
+    assert!(difficulty > 0, EInvalidDifficulty);
+    
+    // This would:
+    // 1. Find the previous line
+    // 2. Insert new line after it
+    // 3. Update line numbering
+    // 4. Record the addition
+    
+    let _ = prev_line_id;
+    let _ = text;
+    let _ = difficulty;
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    
+    // Implementation requires operating agreement storage access
+    abort ENotImplemented
+}
+
+/// Execute an insert line at beginning action
+public fun do_insert_line_at_beginning<Config, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    let action: &InsertLineAtBeginningAction = executable.next_action(intent_witness);
+    
+    // Extract and validate parameters
+    let text = &action.text;
+    let difficulty = action.difficulty;
+    
+    assert!(text.length() > 0, EEmptyText);
+    assert!(difficulty > 0, EInvalidDifficulty);
+    
+    // This would:
+    // 1. Insert line at position 0
+    // 2. Shift all other lines down
+    // 3. Update line numbering
+    // 4. Record the addition
+    
+    let _ = text;
+    let _ = difficulty;
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    
+    // Implementation requires operating agreement storage access
+    abort ENotImplemented
+}
+
+/// Execute a remove line action
+public fun do_remove_line<Config, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    let action: &RemoveLineAction = executable.next_action(intent_witness);
+    
+    // Extract parameters
+    let line_id = action.line_id;
+    
+    // This would:
+    // 1. Verify the line exists
+    // 2. Check if removal is allowed (based on difficulty)
+    // 3. Remove the line
+    // 4. Update line numbering
+    // 5. Record the removal
+    
+    let _ = line_id;
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    
+    // Implementation requires operating agreement storage access
+    abort ENotImplemented
+}
+
+/// Execute a batch operating agreement action
+public fun do_batch_operating_agreement<Config, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    let action: &BatchOperatingAgreementAction = executable.next_action(intent_witness);
+    
+    // Validate all actions in the batch
+    let actions = &action.actions;
+    let mut i = 0;
+    while (i < actions.length()) {
+        let act = actions.borrow(i);
+        validate_operating_agreement_action(act);
+        i = i + 1;
+    };
+    
+    // This would:
+    // 1. Process each action in sequence
+    // 2. Apply all changes atomically
+    // 3. Ensure consistency across all updates
+    // 4. Record batch operation for audit
+    
+    let _ = actions;
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    
+    // Implementation requires operating agreement storage access
+    // and transaction atomicity guarantees
+    abort ENotImplemented
+}
+
+// === Cleanup Functions ===
+
+/// Delete an update line action from an expired intent
+public fun delete_update_line(expired: &mut Expired) {
+    let UpdateLineAction { line_id: _, new_text: _ } = expired.remove_action();
+}
+
+/// Delete an insert line after action from an expired intent
+public fun delete_insert_line_after(expired: &mut Expired) {
+    let InsertLineAfterAction { prev_line_id: _, text: _, difficulty: _ } = expired.remove_action();
+}
+
+/// Delete an insert line at beginning action from an expired intent
+public fun delete_insert_line_at_beginning(expired: &mut Expired) {
+    let InsertLineAtBeginningAction { text: _, difficulty: _ } = expired.remove_action();
+}
+
+/// Delete a remove line action from an expired intent
+public fun delete_remove_line(expired: &mut Expired) {
+    let RemoveLineAction { line_id: _ } = expired.remove_action();
+}
+
+/// Delete a batch operating agreement action from an expired intent
+public fun delete_batch_operating_agreement(expired: &mut Expired) {
+    let BatchOperatingAgreementAction { actions: _ } = expired.remove_action();
+}
+
+/// Delete an operating agreement action from an expired intent
+public fun delete_operating_agreement_action(expired: &mut Expired) {
+    let OperatingAgreementAction { action_type: _, line_id: _, text: _, difficulty: _ } = expired.remove_action();
+}
+
+// === Helper Functions ===
+
+/// Create a new update line action
+public fun new_update_line_action(line_id: ID, new_text: String): UpdateLineAction {
+    assert!(new_text.length() > 0, EEmptyText);
+    UpdateLineAction { line_id, new_text }
+}
+
+/// Create a new insert line after action
+public fun new_insert_line_after_action(
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+): InsertLineAfterAction {
+    assert!(text.length() > 0, EEmptyText);
+    assert!(difficulty > 0, EInvalidDifficulty);
+    InsertLineAfterAction { prev_line_id, text, difficulty }
+}
+
+/// Create a new insert line at beginning action
+public fun new_insert_line_at_beginning_action(
+    text: String,
+    difficulty: u64,
+): InsertLineAtBeginningAction {
+    assert!(text.length() > 0, EEmptyText);
+    assert!(difficulty > 0, EInvalidDifficulty);
+    InsertLineAtBeginningAction { text, difficulty }
+}
+
+/// Create a new remove line action
+public fun new_remove_line_action(line_id: ID): RemoveLineAction {
+    RemoveLineAction { line_id }
+}
+
+/// Create a new batch operating agreement action
+public fun new_batch_operating_agreement_action(
+    actions: vector<OperatingAgreementAction>
+): BatchOperatingAgreementAction {
+    BatchOperatingAgreementAction { actions }
+}
+
+/// Create a new operating agreement action (flexible type)
+public fun new_operating_agreement_action(
+    action_type: u8,
+    line_id: Option<ID>,
+    text: Option<String>,
+    difficulty: Option<u64>,
+): OperatingAgreementAction {
+    assert!(action_type <= ACTION_REMOVE, EInvalidActionType);
+    
+    // Validate based on action type
+    if (action_type == ACTION_UPDATE) {
+        assert!(line_id.is_some(), EInvalidLineId);
+        assert!(text.is_some() && text.borrow().length() > 0, EEmptyText);
+    } else if (action_type == ACTION_INSERT_AFTER) {
+        assert!(line_id.is_some(), EInvalidLineId);
+        assert!(text.is_some() && text.borrow().length() > 0, EEmptyText);
+        assert!(difficulty.is_some() && *difficulty.borrow() > 0, EInvalidDifficulty);
+    } else if (action_type == ACTION_INSERT_AT_BEGINNING) {
+        assert!(text.is_some() && text.borrow().length() > 0, EEmptyText);
+        assert!(difficulty.is_some() && *difficulty.borrow() > 0, EInvalidDifficulty);
+    } else if (action_type == ACTION_REMOVE) {
+        assert!(line_id.is_some(), EInvalidLineId);
+    };
+    
+    OperatingAgreementAction {
+        action_type,
+        line_id,
+        text,
+        difficulty,
+    }
+}
+
+/// Create a new update action using the flexible format
+public fun new_update_action(line_id: ID, new_text: String): OperatingAgreementAction {
+    new_operating_agreement_action(
+        ACTION_UPDATE,
+        option::some(line_id),
+        option::some(new_text),
+        option::none(),
+    )
+}
+
+/// Create a new insert after action using the flexible format
+public fun new_insert_after_action(prev_line_id: ID, text: String, difficulty: u64): OperatingAgreementAction {
+    new_operating_agreement_action(
+        ACTION_INSERT_AFTER,
+        option::some(prev_line_id),
+        option::some(text),
+        option::some(difficulty),
+    )
+}
+
+/// Create a new insert at beginning action using the flexible format
+public fun new_insert_at_beginning_action(text: String, difficulty: u64): OperatingAgreementAction {
+    new_operating_agreement_action(
+        ACTION_INSERT_AT_BEGINNING,
+        option::none(),
+        option::some(text),
+        option::some(difficulty),
+    )
+}
+
+/// Create a new remove action using the flexible format
+public fun new_remove_action(line_id: ID): OperatingAgreementAction {
+    new_operating_agreement_action(
+        ACTION_REMOVE,
+        option::some(line_id),
+        option::none(),
+        option::none(),
+    )
+}
+
+// === Getter Functions ===
+
+/// Get line ID and new text from UpdateLineAction
+public fun get_update_line_params(action: &UpdateLineAction): (ID, String) {
+    (action.line_id, action.new_text)
+}
+
+/// Get parameters from InsertLineAfterAction
+public fun get_insert_line_after_params(action: &InsertLineAfterAction): (ID, String, u64) {
+    (action.prev_line_id, action.text, action.difficulty)
+}
+
+/// Get parameters from InsertLineAtBeginningAction
+public fun get_insert_line_at_beginning_params(action: &InsertLineAtBeginningAction): (String, u64) {
+    (action.text, action.difficulty)
+}
+
+/// Get line ID from RemoveLineAction
+public fun get_remove_line_id(action: &RemoveLineAction): ID {
+    action.line_id
+}
+
+/// Get actions from BatchOperatingAgreementAction
+public fun get_batch_actions(action: &BatchOperatingAgreementAction): &vector<OperatingAgreementAction> {
+    &action.actions
+}
+
+/// Get parameters from OperatingAgreementAction
+public fun get_operating_agreement_action_params(action: &OperatingAgreementAction): (
+    u8,
+    &Option<ID>,
+    &Option<String>,
+    &Option<u64>,
+) {
+    (action.action_type, &action.line_id, &action.text, &action.difficulty)
+}
+
+/// Get action type constants for external use
+public fun action_update(): u8 { ACTION_UPDATE }
+public fun action_insert_after(): u8 { ACTION_INSERT_AFTER }
+public fun action_insert_at_beginning(): u8 { ACTION_INSERT_AT_BEGINNING }
+public fun action_remove(): u8 { ACTION_REMOVE }
+
+// === Internal Functions ===
+
+/// Validate an operating agreement action
+fun validate_operating_agreement_action(action: &OperatingAgreementAction) {
+    assert!(action.action_type <= ACTION_REMOVE, EInvalidActionType);
+    
+    if (action.action_type == ACTION_UPDATE) {
+        assert!(action.line_id.is_some(), EInvalidLineId);
+        assert!(action.text.is_some() && action.text.borrow().length() > 0, EEmptyText);
+    } else if (action.action_type == ACTION_INSERT_AFTER) {
+        assert!(action.line_id.is_some(), EInvalidLineId);
+        assert!(action.text.is_some() && action.text.borrow().length() > 0, EEmptyText);
+        assert!(action.difficulty.is_some() && *action.difficulty.borrow() > 0, EInvalidDifficulty);
+    } else if (action.action_type == ACTION_INSERT_AT_BEGINNING) {
+        assert!(action.text.is_some() && action.text.borrow().length() > 0, EEmptyText);
+        assert!(action.difficulty.is_some() && *action.difficulty.borrow() > 0, EInvalidDifficulty);
+    } else if (action.action_type == ACTION_REMOVE) {
+        assert!(action.line_id.is_some(), EInvalidLineId);
+    };
+}

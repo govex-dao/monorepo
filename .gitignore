@@ -1,5 +1,6 @@
 # Contracts
 contracts/futarchy/build/
+contracts/futarchy_actions/build/
 contracts/govex-coin/build/
 contracts/test_stable/build/
 contracts/test_asset/build/

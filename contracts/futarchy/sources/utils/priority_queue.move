@@ -13,6 +13,7 @@ use sui::tx_context::TxContext;
 
 use sui::event;
 use futarchy::proposal_fee_manager::{Self, ProposalFeeManager};
+use account_protocol::account;
 
 // === Events ===
 
@@ -43,6 +44,14 @@ public struct ProposalQueued has copy, drop {
     fee: u64,
     priority_score: u128,
     queue_position: u64,
+}
+
+/// Emitted when an evicted proposal has an associated intent that needs cleanup
+public struct EvictedIntentNeedsCleanup has copy, drop {
+    proposal_id: ID,
+    intent_key: String,
+    dao_id: ID,
+    timestamp: u64,
 }
 
 // === Errors ===
@@ -156,6 +165,7 @@ public struct QueuedProposal<phantom StableCoin> has store {
     priority_score: PriorityScore, // Proper type for priority scoring
     data: ProposalData,
     bond: Option<Coin<StableCoin>>, // Bond required for DAO-funded proposals
+    intent_key: Option<String>, // Key linking to the intent in account_protocol
 }
 
 /// Capability to handle proposal fee refunds
@@ -321,6 +331,7 @@ public fun new_queued_proposal<StableCoin>(
     proposer: address,
     data: ProposalData,
     bond: Option<Coin<StableCoin>>,
+    intent_key: Option<String>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock::timestamp_ms(clock);
@@ -339,6 +350,7 @@ public fun new_queued_proposal<StableCoin>(
         priority_score,
         data,
         bond,
+        intent_key,
     }
 }
 
@@ -416,10 +428,23 @@ public fun insert<StableCoin>(
             
             // Remove the lowest priority proposal
             let evicted = vector::remove(proposals, lowest_priority_idx);
-            let QueuedProposal { bond, proposal_id: evicted_id, proposer, fee, timestamp, priority_score, .. } = evicted;
+            let QueuedProposal { bond, proposal_id: evicted_id, dao_id, proposer, fee, timestamp, priority_score, mut intent_key, uses_dao_liquidity: _, data: _ } = evicted;
             
             // Immediately slash the fee atomically
             proposal_fee_manager::slash_proposal_fee(fee_manager, evicted_id);
+            
+            // Emit event for intent cleanup if intent_key exists
+            if (intent_key.is_some()) {
+                let key = intent_key.extract();
+                event::emit(EvictedIntentNeedsCleanup {
+                    proposal_id: evicted_id,
+                    intent_key: key,
+                    dao_id: dao_id,
+                    timestamp: current_time,
+                });
+                // Note: The actual intent cleanup must be handled by an external keeper
+                // or the DAO admin who knows the specific action types in the intent
+            };
             
             // Emit eviction event
             event::emit(ProposalEvicted { 
@@ -574,7 +599,7 @@ public fun cancel_proposal<StableCoin>(
             assert!(proposal.proposer == proposer, ECannotCancelProposal);
             
             let removed = vector::remove(proposals, i);
-            let QueuedProposal { proposal_id, bond, uses_dao_liquidity, .. } = removed;
+            let QueuedProposal { proposal_id, bond, uses_dao_liquidity, intent_key: _, .. } = removed;
             
             // Atomically get the fee refunded as a Coin
             let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -800,6 +825,11 @@ public fun get_priority_score<StableCoin>(proposal: &QueuedProposal<StableCoin>)
     &proposal.priority_score
 }
 
+/// Get intent key if present
+public fun get_intent_key<StableCoin>(proposal: &QueuedProposal<StableCoin>): &Option<String> {
+    &proposal.intent_key
+}
+
 // === Admin Functions (for DAO/Config Proposals) ===
 
 /// Updates the maximum number of proposer-funded proposals allowed
@@ -850,7 +880,8 @@ public(package) fun destroy_proposal<StableCoin>(proposal: QueuedProposal<Stable
         timestamp: _, 
         priority_score: _, 
         data: _, 
-        bond 
+        bond,
+        intent_key: _ 
     } = proposal;
     bond.destroy_none();
 }

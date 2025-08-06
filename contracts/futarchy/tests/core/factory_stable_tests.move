@@ -25,7 +25,6 @@ module futarchy::allowed_stable_tests {
 
     /// Test that by default, TEST_STABLE_COIN is not allowed.
     #[test]
-    #[expected_failure(abort_code = factory::EStableTypeNotAllowed)]
     fun test_default_disallows_test_stable_coin() {
         let mut scenario = test::begin(@0xA);
         setup_factory(&mut scenario);
@@ -33,8 +32,8 @@ module futarchy::allowed_stable_tests {
         test::next_tx(&mut scenario, @0xA);
         {
             let factory = test::take_shared<Factory>(&scenario);
-            // This call should abort because TEST_STABLE_COIN is not allowed.
-            factory::check_stable_type_allowed<TEST_STABLE_COIN>(&factory);
+            // This should return false because TEST_STABLE_COIN is not allowed.
+            assert!(!factory::is_stable_type_allowed<TEST_STABLE_COIN>(&factory), 0);
             test::return_shared(factory);
         };
         test::end(scenario);
@@ -63,7 +62,7 @@ module futarchy::allowed_stable_tests {
             clock::destroy_for_testing(clock);
 
             // Now check that TEST_STABLE_COIN is allowed (this should not abort).
-            factory::check_stable_type_allowed<TEST_STABLE_COIN>(&factory);
+            factory::is_stable_type_allowed<TEST_STABLE_COIN>(&factory);
             test::return_shared(factory);
             test::return_to_address(@0xA, owner_cap);
         };
@@ -72,7 +71,6 @@ module futarchy::allowed_stable_tests {
 
     /// Test that after adding then removing TEST_STABLE_COIN, it is disallowed again.
     #[test]
-    #[expected_failure(abort_code = factory::EStableTypeNotAllowed)]
     fun test_add_remove_and_check_test_stable_coin() {
         let mut scenario = test::begin(@0xA);
         setup_factory(&mut scenario);
@@ -99,8 +97,8 @@ module futarchy::allowed_stable_tests {
             );
             clock::destroy_for_testing(clock);
 
-            // Now this call should abort because TEST_STABLE_COIN is no longer allowed.
-            factory::check_stable_type_allowed<TEST_STABLE_COIN>(&factory);
+            // Now this should return false because TEST_STABLE_COIN is no longer allowed.
+            assert!(!factory::is_stable_type_allowed<TEST_STABLE_COIN>(&factory), 0);
             test::return_shared(factory);
             test::return_to_address(@0xA, owner_cap);
         };

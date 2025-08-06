@@ -7,7 +7,6 @@ use futarchy::market_state;
 use futarchy::liquidity_interact; 
 use futarchy::proposal::{Self, Proposal}; // Added
 use futarchy::fee; 
-use futarchy::advance_stage;
 use futarchy::swap;
 use sui::balance::{Self, Balance}; // Alias needed
 use sui::clock::{Self, Clock};

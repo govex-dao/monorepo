@@ -2,7 +2,7 @@
 module futarchy::fee_tests;
 
 use futarchy::fee::{Self, FeeManager, FeeAdminCap};
-use futarchy::treasury::{Self, Treasury};
+use futarchy::futarchy_vault::{Self};
 use futarchy::factory::{Self, Factory, FactoryOwnerCap};
 use std::ascii;
 use std::string;

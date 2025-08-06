@@ -74,6 +74,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     winning_outcome: Option<u64>,
     fee_escrow: Balance<StableType>,
     treasury_address: address,
+    /// Intent keys for each outcome - when outcome i wins, execute intent_keys[i]
+    intent_keys: vector<Option<String>>,
 }
 
 // === Events ===
@@ -146,6 +148,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     proposer: address, // The original proposer from the queue
     uses_dao_liquidity: bool,
     fee_escrow: Balance<StableType>, // DAO fees if any
+    intent_key_for_yes: Option<String>, // Intent key for YES outcome
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
@@ -257,6 +260,13 @@ public(package) fun initialize_market<AssetType, StableType>(
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
+        intent_keys: vector::tabulate!(outcome_count, |i| {
+            if (i == 0) { // YES outcome is index 0
+                intent_key_for_yes
+            } else {
+                option::none()
+            }
+        }),
         review_period_ms,
         trading_period_ms,
         twap_prices: vector::empty(),
@@ -307,6 +317,7 @@ public(package) fun create<AssetType, StableType>(
     amm_total_fee_bps: u64,
     uses_dao_liquidity: bool,
     treasury_address: address,
+    intent_keys: vector<Option<String>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
@@ -379,6 +390,7 @@ public(package) fun create<AssetType, StableType>(
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
+        intent_keys,
     };
 
     event::emit(ProposalCreated {
@@ -769,6 +781,31 @@ public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<Asset
     &proposal.outcome_messages
 }
 
+/// Get intent keys for all outcomes
+public fun get_intent_keys<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): &vector<Option<String>> {
+    &proposal.intent_keys
+}
+
+/// Get intent key for a specific outcome
+public fun get_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64
+): &Option<String> {
+    vector::borrow(&proposal.intent_keys, outcome_index)
+}
+
+/// Set intent key for a specific outcome
+public fun set_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64,
+    intent_key: String,
+) {
+    let intent_key_opt = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    *intent_key_opt = option::some(intent_key);
+}
+
 /// Emits the ProposalOutcomeMutated event
 public(package) fun emit_outcome_mutated(
     proposal_id: ID,
@@ -820,3 +857,13 @@ public fun test_get_market_state<AssetType, StableType>(
 ): &market_state::MarketState {
     escrow.get_market_state()
 }
+
+
+// === Additional View Functions ===
+
+/// Get proposal ID
+public fun id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
+    object::id(proposal)
+}
+
+/// Get market ID (already defined earlier in the file)
