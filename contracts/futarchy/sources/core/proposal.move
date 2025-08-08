@@ -37,6 +37,8 @@ const STATE_FINALIZED: u8 = 3; // Market has resolved.
 /// Core proposal object that owns AMM pools
 public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     id: UID,
+    /// The logical ID of the proposal from the priority queue.
+    queued_proposal_id: ID,
     created_at: u64,
     market_initialized_at: Option<u64>,
     state: u8,
@@ -126,6 +128,8 @@ public struct ProposalOutcomeAdded has copy, drop {
 /// This is the main entry point for creating a full proposal with market infrastructure.
 #[allow(lint(share_owned))]
 public(package) fun initialize_market<AssetType, StableType>(
+    // Proposal ID (generated when adding to queue)
+    proposal_id: ID,
     // Market parameters from DAO
     dao_id: ID,
     review_period_ms: u64,
@@ -153,8 +157,9 @@ public(package) fun initialize_market<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
 
+    // Create a new proposal UID
     let id = object::new(ctx);
-    let proposal_id = id.to_inner();
+    let actual_proposal_id = object::uid_to_inner(&id);
     let outcome_count = initial_outcome_messages.length();
 
     // Validate outcome count
@@ -195,7 +200,7 @@ public(package) fun initialize_market<AssetType, StableType>(
 
     // Create market state
     let market_state = market_state::new(
-        proposal_id, 
+        actual_proposal_id,  // Use the actual proposal ID, not the parameter
         dao_id, 
         outcome_count, 
         initial_outcome_messages, 
@@ -272,6 +277,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     // Create proposal object
     let proposal = Proposal<AssetType, StableType> {
         id,
+        queued_proposal_id: proposal_id,
         created_at: clock.timestamp_ms(),
         market_initialized_at: option::some(clock.timestamp_ms()),
         state: STATE_REVIEW, // Start in REVIEW state since market is initialized
@@ -316,7 +322,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     };
 
     event::emit(ProposalCreated {
-        proposal_id,
+        proposal_id: actual_proposal_id,
         dao_id,
         proposer,
         outcome_count,
@@ -333,130 +339,12 @@ public(package) fun initialize_market<AssetType, StableType>(
     transfer::public_share_object(proposal);
     transfer::public_share_object(escrow);
 
-    (proposal_id, market_state_id, STATE_REVIEW)
+    (actual_proposal_id, market_state_id, STATE_REVIEW)
 }
 
-#[allow(lint(share_owned))]
-public(package) fun create<AssetType, StableType>(
-    fee_escrow: Balance<StableType>,
-    dao_id: ID,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    min_asset_liquidity: u64,
-    min_stable_liquidity: u64,
-    title: String,
-    metadata: String,
-    // Initial outcome definitions
-    initial_outcome_messages: vector<String>,
-    initial_outcome_details: vector<String>,
-    initial_outcome_asset_amounts: vector<u64>,
-    initial_outcome_stable_amounts: vector<u64>,
-    // TWAP params
-    twap_start_delay: u64,
-    twap_initial_observation: u128,
-    twap_step_max: u64,
-    twap_threshold: u64,
-    amm_total_fee_bps: u64,
-    uses_dao_liquidity: bool,
-    treasury_address: address,
-    intent_keys: vector<Option<String>>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): (ID, ID, u8) {
-    let sender = tx_context::sender(ctx);
-    let id = object::new(ctx);
-    let proposal_id = id.to_inner();
-    let outcome_count = initial_outcome_messages.length();
-
-    // Validate all vectors have same length
-    assert!(outcome_count == initial_outcome_details.length(), EInvalidOutcomeVectors);
-    assert!(outcome_count == initial_outcome_asset_amounts.length(), EInvalidOutcomeVectors);
-    assert!(outcome_count == initial_outcome_stable_amounts.length(), EInvalidOutcomeVectors);
-
-    // Skip liquidity amount checks if using DAO liquidity, as they are placeholders.
-    if (!uses_dao_liquidity) {
-        // Validate each outcome's liquidity amounts
-        let mut i = 0;
-        while (i < outcome_count) {
-            let asset_amt = *vector::borrow(&initial_outcome_asset_amounts, i);
-            let stable_amt = *vector::borrow(&initial_outcome_stable_amounts, i);
-            
-            assert!(asset_amt >= min_asset_liquidity, EAssetLiquidityTooLow);
-            assert!(stable_amt >= min_stable_liquidity, EStableLiquidityTooLow);
-            
-            i = i + 1;
-        };
-    };
-
-    // Initialize all outcome creators to be the original proposer
-    let mut outcome_creators = vector::empty();
-    let mut i = 0;
-    while (i < outcome_count) {
-        vector::push_back(&mut outcome_creators, sender);
-        i = i + 1;
-    };
-
-    let proposal = Proposal<AssetType, StableType> {
-        id,
-        created_at: clock.timestamp_ms(),
-        market_initialized_at: option::none(),
-        state: STATE_PREMARKET,
-        outcome_count,
-        dao_id,
-        proposer: sender,
-        liquidity_provider: option::none(),
-        supply_ids: option::none(),
-        amm_pools: option::none(),
-        // LP tokens handled as conditional tokens
-        escrow_id: option::none(),
-        market_state_id: option::none(),
-        title,
-        details: initial_outcome_details,
-        metadata,
-        outcome_messages: initial_outcome_messages,
-        outcome_creators,
-        asset_amounts: initial_outcome_asset_amounts,
-        stable_amounts: initial_outcome_stable_amounts,
-        twap_prices: vector[],
-        last_twap_update: clock.timestamp_ms(),
-        review_period_ms,
-        trading_period_ms,
-        min_asset_liquidity,
-        min_stable_liquidity,
-        twap_start_delay,
-        uses_dao_liquidity,
-        twap_initial_observation,
-        twap_step_max,
-        twap_threshold,
-        amm_total_fee_bps,
-        winning_outcome: option::none(),
-        fee_escrow,
-        treasury_address,
-        intent_keys,
-    };
-
-    event::emit(ProposalCreated {
-        proposal_id,
-        dao_id,
-        proposer: sender,
-        outcome_count,
-        outcome_messages: initial_outcome_messages,
-        created_at: proposal.created_at,
-        asset_type: type_name::get<AssetType>().into_string(),
-        stable_type: type_name::get<StableType>().into_string(),
-        review_period_ms: proposal.review_period_ms,
-        trading_period_ms,
-        title,
-        metadata,
-    });
-
-    let state = proposal.state;
-
-    transfer::public_share_object(proposal);
-
-    // Return a dummy market state ID as it doesn't exist yet.
-    (proposal_id, object::id_from_address(@0x0), state)
-}
+// The create function has been removed as it's not used in production.
+// All proposals are created through initialize_market which properly handles proposal IDs
+// generated from the priority queue.
 
 /// Adds a new outcome during the premarket phase.
 public(package) fun add_outcome<AssetType, StableType>(

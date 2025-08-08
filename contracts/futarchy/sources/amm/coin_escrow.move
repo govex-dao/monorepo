@@ -61,8 +61,6 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     outcome_lp_supplies: vector<Supply>,
 }
 
-public struct EscrowAdminCap has key, store { id: UID }
-
 public struct COIN_ESCROW has drop {}
 
 // === Events ===
@@ -85,35 +83,11 @@ public struct TokenRedemption has copy, drop {
     token_type: u8,
     amount: u64,
 }
-
-public struct AdminEscrowSweep has copy, drop {
-    market_id: ID,
-    dao_id: ID,
-    asset_amount: u64,
-    stable_amount: u64,
-    admin: address,
-    timestamp: u64,
-}
-
-// === Public Functions ===
-
-// Module initialization function that runs when the module is published
-fun init(witness: COIN_ESCROW, ctx: &mut TxContext) {
-    // Verify this is a genuine one-time witness
-    assert!(types::is_one_time_witness(&witness), EBadWitness);
-
-    // Create admin capability
-    let admin_cap = EscrowAdminCap {
-        id: object::new(ctx),
-    };
-    transfer::public_transfer(admin_cap, ctx.sender());
-}
-
 // === New Functions for Live-Flow Model ===
 
 /// Mint a single conditional token for AMM liquidity removal
 /// This function is used by the AMM when removing liquidity proportionally
-public fun mint_single_conditional_token<AssetType, StableType>(
+public (package) fun mint_single_conditional_token<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_type: u8,
     outcome: u8,
@@ -167,7 +141,7 @@ public fun mint_single_conditional_token<AssetType, StableType>(
 }
 
 /// Burn a single conditional token - used by AMM when absorbing liquidity
-public fun burn_single_conditional_token<AssetType, StableType>(
+public (package) fun burn_single_conditional_token<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     token: ConditionalToken,
     clock: &Clock,
@@ -783,61 +757,6 @@ public entry fun get_escrow_balances_and_supply<AssetType, StableType>(
 
     // Return the tuple: (escrow_asset, escrow_stable, asset_supply, stable_supply)
     (escrowed_asset_balance, escrowed_stable_balance, asset_total_supply, stable_total_supply)
-}
-
-// === Admin Functions ===
-
-// Admin function to sweep funds from an escrow after MARKET_EXPIRY_PERIOD_MS from market creation
-public entry fun admin_sweep_escrow<AssetType, StableType>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    _admin_cap: &EscrowAdminCap, // Assuming ownership check happens elsewhere or via admin signature
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // First extract all needed information from market_state
-    let market_id = escrow.market_state.market_id();
-    let dao_id = escrow.market_state.dao_id();
-    let creation_time = escrow.market_state.get_creation_time();
-    let current_time = clock.timestamp_ms();
-    let admin = ctx.sender(); // Admin is the sender calling this
-
-    // Check if expiry period has passed since market creation
-    assert!(current_time >= creation_time + MARKET_EXPIRY_PERIOD_MS, EMarketNotExpired);
-
-    // Get current escrow balances
-    let (asset_amount, stable_amount) = get_balances(escrow);
-
-    // Only process if there are funds to sweep
-    if (asset_amount > 0 || stable_amount > 0) {
-        // Call the updated remove_liquidity function, which returns coins
-        let (asset_coin, stable_coin) = remove_liquidity(
-            escrow,
-            asset_amount,
-            stable_amount,
-            ctx,
-        );
-
-        // Transfer the returned coins to the admin (the caller)
-        transfer::public_transfer(asset_coin, admin);
-        transfer::public_transfer(stable_coin, admin);
-
-        // Emit event for the admin sweep (log the amounts swept)
-        event::emit(AdminEscrowSweep {
-            market_id,
-            dao_id,
-            asset_amount, // Amount swept
-            stable_amount, // Amount swept
-            admin,
-            timestamp: current_time,
-        });
-    }
-    // If balances are zero, do nothing.
-}
-
-public entry fun burn_admin_sweep_cap(admin_cap: EscrowAdminCap) {
-    // Destroy the admin cap by unpacking and deleting its ID
-    let EscrowAdminCap { id } = admin_cap;
-    id.delete();
 }
 
 // === Package Functions ===

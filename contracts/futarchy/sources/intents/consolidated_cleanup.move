@@ -19,7 +19,7 @@ use account_protocol::{
 use futarchy::{
     futarchy_config::{FutarchyConfig, FutarchyOutcome},
 };
-use futarchy_actions::{
+use futarchy::{
     config_actions,
     liquidity_actions,
     dissolution_actions,

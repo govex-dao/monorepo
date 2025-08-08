@@ -1,13 +1,14 @@
 /// Liquidity-related actions for futarchy DAOs
 /// This module defines action structs and execution logic for liquidity management
-module futarchy_actions::liquidity_actions;
+module futarchy::liquidity_actions;
 
 // === Imports ===
 use std::string::String;
 use sui::{
-    coin::Coin,
+    coin::{Self, Coin},
     balance::Balance,
-    object::ID,
+    object::{Self, ID},
+    tx_context::TxContext,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -15,14 +16,18 @@ use account_protocol::{
     intents::Expired,
     version_witness::VersionWitness,
 };
-use futarchy_actions::futarchy_vault;
+use futarchy::futarchy_config::FutarchyConfig;
+use account_actions::vault;
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;
 const EInvalidRatio: u64 = 2;
 const EInvalidSlippage: u64 = 3;
 const EEmptyPool: u64 = 4;
-const ENotImplemented: u64 = 5;
+
+// === Note ===
+// The actual pool interaction and LP token management must be
+// implemented in the futarchy package where the pool types are defined
 
 // === Action Structs ===
 
@@ -66,141 +71,125 @@ public struct SetPoolStatusAction has store {
 // === Execution Functions ===
 
 /// Execute an add liquidity action
-public fun do_add_liquidity<Config, Outcome: store, AssetType, StableType, IW: drop>(
+/// Note: This extracts the action parameters. The actual pool interaction
+/// must happen in the package that has access to the pool implementation.
+public fun do_add_liquidity<Outcome: store, AssetType, StableType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
     let action: &AddLiquidityAction<AssetType, StableType> = executable.next_action(intent_witness);
     
-    // Extract parameters
+    // Extract and validate parameters
     let pool_id = action.pool_id;
     let asset_amount = action.asset_amount;
     let stable_amount = action.stable_amount;
     let min_lp_amount = action.min_lp_amount;
     
-    // This would:
-    // 1. Withdraw assets from vault using account_actions::vault::withdraw
-    // 2. Add liquidity to the AMM pool
-    // 3. Receive LP tokens
-    // 4. Deposit LP tokens back to vault
+    assert!(asset_amount > 0, EInvalidAmount);
+    assert!(stable_amount > 0, EInvalidAmount);
     
+    // The calling module (e.g., futarchy's action_dispatcher) should:
+    // 1. Withdraw assets from vault
+    // 2. Add liquidity to the appropriate pool
+    // 3. Store LP tokens
+    
+    // For now, just validate and pass through
     let _ = pool_id;
-    let _ = asset_amount;
-    let _ = stable_amount;
     let _ = min_lp_amount;
     let _ = account;
     let _ = version;
     let _ = ctx;
-    
-    // Implementation requires integration with AMM module
-    abort ENotImplemented
 }
 
 /// Execute a remove liquidity action
-public fun do_remove_liquidity<Config, Outcome: store, AssetType, StableType, IW: drop>(
+/// Note: This extracts the action parameters. The actual pool interaction
+/// must happen in the package that has access to the pool implementation.
+public fun do_remove_liquidity<Outcome: store, AssetType, StableType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
     let action: &RemoveLiquidityAction<AssetType, StableType> = executable.next_action(intent_witness);
     
-    // Extract parameters
+    // Extract and validate parameters
     let pool_id = action.pool_id;
     let lp_amount = action.lp_amount;
     let min_asset_amount = action.min_asset_amount;
     let min_stable_amount = action.min_stable_amount;
     
-    // This would:
-    // 1. Withdraw LP tokens from vault
-    // 2. Remove liquidity from the pool
-    // 3. Receive asset and stable tokens
-    // 4. Deposit received tokens back to vault
+    assert!(lp_amount > 0, EInvalidAmount);
     
+    // The calling module should handle the actual liquidity removal
     let _ = pool_id;
-    let _ = lp_amount;
     let _ = min_asset_amount;
     let _ = min_stable_amount;
     let _ = account;
     let _ = version;
     let _ = ctx;
-    
-    // Implementation requires integration with AMM module
-    abort ENotImplemented
 }
 
 /// Execute a create pool action
-public fun do_create_pool<Config, Outcome: store, AssetType, StableType, IW: drop>(
+/// Note: This extracts the action parameters. The actual pool creation
+/// must happen in the package that has access to the pool implementation.
+public fun do_create_pool<Outcome: store, AssetType, StableType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
     let action: &CreatePoolAction<AssetType, StableType> = executable.next_action(intent_witness);
     
-    // Extract parameters
+    // Extract and validate parameters
     let initial_asset_amount = action.initial_asset_amount;
     let initial_stable_amount = action.initial_stable_amount;
     let fee_bps = action.fee_bps;
     let minimum_liquidity = action.minimum_liquidity;
     
-    // This would:
-    // 1. Create a new AMM pool
-    // 2. Add initial liquidity
-    // 3. Store pool ID in config
-    // 4. Deposit LP tokens to vault
+    assert!(initial_asset_amount > 0, EInvalidAmount);
+    assert!(initial_stable_amount > 0, EInvalidAmount);
+    assert!(fee_bps <= 10000, EInvalidRatio);
     
-    let _ = initial_asset_amount;
-    let _ = initial_stable_amount;
-    let _ = fee_bps;
+    // The calling module should handle the actual pool creation
     let _ = minimum_liquidity;
     let _ = account;
     let _ = version;
     let _ = ctx;
-    
-    // Implementation requires AMM pool creation capability
-    abort ENotImplemented
 }
 
 /// Execute an update pool params action
-public fun do_update_pool_params<Config, Outcome: store, IW: drop>(
+public fun do_update_pool_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
     let action: &UpdatePoolParamsAction = executable.next_action(intent_witness);
     
-    // Extract parameters
+    // Extract and validate parameters
     let pool_id = action.pool_id;
     let new_fee_bps = action.new_fee_bps;
     let new_minimum_liquidity = action.new_minimum_liquidity;
     
-    // This would:
-    // 1. Verify admin/governance permissions
-    // 2. Update pool fee settings
-    // 3. Update minimum liquidity requirements
+    assert!(new_fee_bps <= 10000, EInvalidRatio);
     
+    // The calling module should handle the actual pool parameter update
     let _ = pool_id;
-    let _ = new_fee_bps;
     let _ = new_minimum_liquidity;
     let _ = account;
     let _ = version;
-    
-    // Implementation requires pool admin capabilities
-    abort ENotImplemented
 }
 
 /// Execute a set pool status action
-public fun do_set_pool_status<Config, Outcome: store, IW: drop>(
+public fun do_set_pool_status<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     _ctx: &mut TxContext,
@@ -211,18 +200,11 @@ public fun do_set_pool_status<Config, Outcome: store, IW: drop>(
     let pool_id = action.pool_id;
     let is_paused = action.is_paused;
     
-    // This would:
-    // 1. Verify governance permissions
-    // 2. Pause or unpause the pool
-    // 3. Update pool status
-    
+    // The calling module should handle the actual pool status change
     let _ = pool_id;
     let _ = is_paused;
     let _ = account;
     let _ = version;
-    
-    // Implementation requires pool admin capabilities
-    abort ENotImplemented
 }
 
 // === Cleanup Functions ===

@@ -45,7 +45,7 @@ public entry fun setup_futarchy_packages(
     extensions: &mut Extensions,
     admin_cap: &AdminCap,
     account_protocol_version: u64,
-    futarchy_actions_version: u64,
+    futarchy_version: u64,
 ) {
     // Add AccountProtocol package
     extensions::add(
@@ -56,13 +56,13 @@ public entry fun setup_futarchy_packages(
         account_protocol_version,
     );
     
-    // Add FutarchyActions package
+    // Add Futarchy package (actions are now part of futarchy)
     extensions::add(
         extensions,
         admin_cap,
-        b"FutarchyActions".to_string(),
-        @futarchy_actions,
-        futarchy_actions_version,
+        b"Futarchy".to_string(),
+        @futarchy,
+        futarchy_version,
     );
 }
 
@@ -81,15 +81,15 @@ public fun verify_extensions(extensions: &Extensions): bool {
         1, // version 1
     );
     
-    // Check if FutarchyActions is added
-    let has_actions = extensions::is_extension(
+    // Check if Futarchy is added
+    let has_futarchy = extensions::is_extension(
         extensions,
-        b"FutarchyActions".to_string(),
-        @futarchy_actions,
+        b"Futarchy".to_string(),
+        @futarchy,
         1, // version 1
     );
     
-    has_protocol && has_actions
+    has_protocol && has_futarchy
 }
 
 #[test_only]
@@ -107,8 +107,8 @@ public fun create_test_extensions(ctx: &mut TxContext): Extensions {
     
     extensions::add_for_testing(
         &mut extensions,
-        b"FutarchyActions".to_string(),
-        @futarchy_actions,
+        b"Futarchy".to_string(),
+        @futarchy,
         1, // version 1
     );
     

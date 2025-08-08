@@ -1,15 +1,14 @@
 module futarchy::liquidity_interact;
 
+use futarchy::amm;
 use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token::ConditionalToken;
-use futarchy::dao_liquidity_pool::{Self, DAOLiquidityPool};
 use futarchy::fee::FeeManager;
 use futarchy::proposal::Proposal;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::event;
-use sui::transfer;
 
 // === Introduction ===
 // Methods to interact with AMM liquidity and escrow balances
@@ -70,14 +69,14 @@ public(package) fun empty_amm_and_return_to_provider<AssetType, StableType>(
     assert_winning_reserves_consistency(proposal, escrow);
 }
 
-/// Empties the winning AMM pool and deposits the liquidity back into the DAO's pool.
+/// Empties the winning AMM pool and returns the liquidity.
 /// Called internally by `advance_stage` when a DAO-funded proposal finalizes.
-public(package) fun empty_amm_and_return_to_dao_pool<AssetType, StableType>(
+/// Returns the asset and stable coins for the DAO to handle (e.g., deposit to vault).
+public(package) fun empty_amm_and_return_to_dao<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
     ctx: &mut TxContext,
-) {
+): (Coin<AssetType>, Coin<StableType>) {
     assert!(proposal.is_finalized(), EInvalidState);
     assert!(proposal.uses_dao_liquidity(), EInvalidState);
 
@@ -91,9 +90,9 @@ public(package) fun empty_amm_and_return_to_dao_pool<AssetType, StableType>(
     let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
 
     let (asset_coin, stable_coin) = escrow.remove_liquidity(asset_out, stable_out, ctx);
-
-    dao_liquidity_pool::join_asset_balance(dao_pool, asset_coin.into_balance());
-    dao_liquidity_pool::join_stable_balance(dao_pool, stable_coin.into_balance());
+    
+    // Return coins for the caller to handle (deposit to vault, add to spot pool, etc.)
+    (asset_coin, stable_coin)
 }
 
 /// Legacy entry point for user-funded proposals. New code should use advance_stage instead.
@@ -113,10 +112,10 @@ public entry fun empty_all_amm_liquidity<AssetType, StableType>(
 }
 
 /// Legacy entry point for DAO-funded proposals. New code should use advance_stage instead.
-public entry fun empty_all_amm_liquidity_to_dao_pool<AssetType, StableType>(
+/// This function empties the AMM and transfers the liquidity to the sender (typically the DAO).
+public entry fun empty_all_amm_liquidity_to_dao<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    dao_pool: &mut DAOLiquidityPool<AssetType, StableType>,
     ctx: &mut TxContext,
 ) {
     // Perform all validation checks before any state mutation
@@ -129,7 +128,12 @@ public entry fun empty_all_amm_liquidity_to_dao_pool<AssetType, StableType>(
     assert!(market_id == escrow_market_id, EMarketIdMismatch);
     escrow.get_market_state().assert_market_finalized();
     
-    empty_amm_and_return_to_dao_pool(proposal, escrow, dao_pool, ctx);
+    let (asset_coin, stable_coin) = empty_amm_and_return_to_dao(proposal, escrow, ctx);
+    
+    // Transfer the coins to the sender (should be the DAO)
+    // The DAO can then deposit these to its vault or spot pool as needed
+    transfer::public_transfer(asset_coin, ctx.sender());
+    transfer::public_transfer(stable_coin, ctx.sender());
 }
 
 public fun assert_all_reserves_consistency<AssetType, StableType>(
@@ -297,6 +301,137 @@ public entry fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
     // Handle result (transfer coin)
     let coin_out = coin::from_balance(balance_out, ctx);
     transfer::public_transfer(coin_out, ctx.sender());
+}
+
+// === AMM Liquidity Management Entry Points ===
+
+/// Add liquidity to an AMM pool for a specific outcome
+/// Takes asset and stable conditional tokens and returns LP tokens
+public entry fun add_liquidity_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    asset_in: ConditionalToken,
+    stable_in: ConditionalToken,
+    min_lp_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify market state consistency
+    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(!proposal.is_finalized(), EInvalidState);
+    
+    // Verify tokens match the pool's outcome
+    assert!(asset_in.market_id() == proposal.market_state_id(), EMarketIdMismatch);
+    assert!(stable_in.market_id() == proposal.market_state_id(), EMarketIdMismatch);
+    assert!(asset_in.outcome() == (outcome_idx as u8), EWrongOutcome);
+    assert!(stable_in.outcome() == (outcome_idx as u8), EWrongOutcome);
+    assert!(asset_in.asset_type() == 0, EInvalidState); // Must be asset token
+    assert!(stable_in.asset_type() == 1, EInvalidState); // Must be stable token
+    
+    let asset_amount = asset_in.value();
+    let stable_amount = stable_in.value();
+    
+    // Burn the conditional tokens (they'll be absorbed into the pool)
+    escrow.burn_single_conditional_token(asset_in, clock, ctx);
+    escrow.burn_single_conditional_token(stable_in, clock, ctx);
+    
+    // Get the pool for this outcome
+    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    
+    // Add liquidity through the AMM (only calculations and reserve updates)
+    let lp_amount = amm::add_liquidity_proportional(
+        pool,
+        asset_amount,
+        stable_amount,
+        min_lp_out,
+        clock,
+        ctx
+    );
+    
+    // Mint LP tokens
+    let lp_token = escrow.mint_single_conditional_token(
+        2, // TOKEN_TYPE_LP
+        (outcome_idx as u8),
+        lp_amount,
+        ctx.sender(),
+        clock,
+        ctx
+    );
+    
+    // Assert consistency after operation
+    assert_all_reserves_consistency(proposal, escrow);
+    
+    // Transfer LP token to the sender
+    transfer::public_transfer(lp_token, ctx.sender());
+}
+
+/// Remove liquidity from an AMM pool proportionally
+/// Takes LP tokens and returns asset and stable conditional tokens
+public entry fun remove_liquidity_entry<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_idx: u64,
+    lp_token: ConditionalToken,
+    min_asset_out: u64,
+    min_stable_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify market state consistency
+    assert!(proposal.market_state_id() == escrow.get_market_state_id(), EMarketIdMismatch);
+    assert!(!proposal.is_finalized(), EInvalidState);
+    
+    // Verify LP token is for the correct outcome and market
+    assert!(lp_token.market_id() == proposal.market_state_id(), EMarketIdMismatch);
+    assert!(lp_token.outcome() == (outcome_idx as u8), EWrongOutcome);
+    assert!(lp_token.asset_type() == 2, EInvalidState); // Must be LP token
+    
+    let lp_amount = lp_token.value();
+    
+    // Burn the LP token
+    escrow.burn_single_conditional_token(lp_token, clock, ctx);
+    
+    // Get the pool for this outcome
+    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    
+    // Remove liquidity through the AMM (only calculations and reserve updates)
+    let (asset_amount, stable_amount) = amm::remove_liquidity_proportional(
+        pool,
+        lp_amount,
+        clock,
+        ctx
+    );
+    
+    // Verify slippage protection
+    assert!(asset_amount >= min_asset_out, EInvalidState);
+    assert!(stable_amount >= min_stable_out, EInvalidState);
+    
+    // Mint the asset and stable tokens
+    let asset_token = escrow.mint_single_conditional_token(
+        0, // TOKEN_TYPE_ASSET
+        (outcome_idx as u8),
+        asset_amount,
+        ctx.sender(),
+        clock,
+        ctx
+    );
+    
+    let stable_token = escrow.mint_single_conditional_token(
+        1, // TOKEN_TYPE_STABLE
+        (outcome_idx as u8),
+        stable_amount,
+        ctx.sender(),
+        clock,
+        ctx
+    );
+    
+    // Assert consistency after operation
+    assert_all_reserves_consistency(proposal, escrow);
+    
+    // Transfer tokens to the sender
+    transfer::public_transfer(asset_token, ctx.sender());
+    transfer::public_transfer(stable_token, ctx.sender());
 }
 
 public fun redeem_winning_tokens_stable<AssetType, StableType>(

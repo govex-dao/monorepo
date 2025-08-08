@@ -6,8 +6,10 @@ use sui::{
     sui::SUI,
     bag::{Self, Bag},
     clock::Clock,
-    event
+    event,
+    transfer
 };
+use futarchy::futarchy_config::{Self, SlashDistribution};
 
 // === Errors ===
 const EInvalidFeeAmount: u64 = 0;
@@ -145,6 +147,71 @@ public fun take_activator_reward(
 }
 
 /// Called by the DAO when a proposal is evicted from the queue
+/// Distributes the slashed fee according to the SlashDistribution configuration
+/// Returns coins for slasher and DAO treasury
+public fun slash_proposal_fee_with_distribution(
+    manager: &mut ProposalFeeManager, 
+    proposal_id: ID,
+    slash_config: &SlashDistribution,
+    ctx: &mut TxContext
+): (Coin<SUI>, Coin<SUI>) { // Returns (slasher_reward, dao_treasury)
+    assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
+    
+    let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
+    let total_amount = fee_balance.value();
+    
+    if (total_amount == 0) {
+        fee_balance.destroy_zero();
+        return (coin::zero(ctx), coin::zero(ctx))
+    };
+    
+    // Calculate distributions using getter functions
+    let slasher_amount = (total_amount * (futarchy_config::slasher_reward_bps(slash_config) as u64)) / 10000;
+    let dao_amount = (total_amount * (futarchy_config::dao_treasury_bps(slash_config) as u64)) / 10000;
+    let protocol_amount = (total_amount * (futarchy_config::protocol_bps(slash_config) as u64)) / 10000;
+    let burn_amount = (total_amount * (futarchy_config::burn_bps(slash_config) as u64)) / 10000;
+    
+    // Handle rounding: give any remainder to protocol
+    let distributed = slasher_amount + dao_amount + protocol_amount + burn_amount;
+    let remainder = if (total_amount > distributed) { total_amount - distributed } else { 0 };
+    let final_protocol_amount = protocol_amount + remainder;
+    
+    // Create slasher reward coin
+    let slasher_reward = if (slasher_amount > 0) {
+        coin::from_balance(fee_balance.split(slasher_amount), ctx)
+    } else {
+        coin::zero(ctx)
+    };
+    
+    // Create DAO treasury coin
+    let dao_coin = if (dao_amount > 0) {
+        coin::from_balance(fee_balance.split(dao_amount), ctx)
+    } else {
+        coin::zero(ctx)
+    };
+    
+    // Add protocol's share to revenue
+    if (final_protocol_amount > 0) {
+        manager.protocol_revenue.join(fee_balance.split(final_protocol_amount));
+    };
+    
+    // Burn the burn amount
+    if (burn_amount > 0) {
+        let burn_balance = fee_balance.split(burn_amount);
+        burn_balance.destroy_zero();
+    };
+    
+    // Destroy any remaining dust
+    if (fee_balance.value() > 0) {
+        manager.protocol_revenue.join(fee_balance);
+    } else {
+        fee_balance.destroy_zero();
+    };
+    
+    (slasher_reward, dao_coin)
+}
+
+/// Legacy function - kept for backwards compatibility
 /// The entire fee is contributed to the protocol revenue
 public fun slash_proposal_fee(
     manager: &mut ProposalFeeManager, 

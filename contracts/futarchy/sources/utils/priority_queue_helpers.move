@@ -81,10 +81,10 @@ public fun get_outcome_details(data: &ProposalData): &vector<String> {
     priority_queue::get_outcome_details(data)
 }
 
-public fun get_initial_asset_amounts(data: &ProposalData): &vector<u64> {
+public fun get_initial_asset_amounts(data: &ProposalData): vector<u64> {
     priority_queue::get_initial_asset_amounts(data)
 }
 
-public fun get_initial_stable_amounts(data: &ProposalData): &vector<u64> {
+public fun get_initial_stable_amounts(data: &ProposalData): vector<u64> {
     priority_queue::get_initial_stable_amounts(data)
 }

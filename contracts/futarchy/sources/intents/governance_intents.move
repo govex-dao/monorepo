@@ -4,11 +4,15 @@ module futarchy::governance_intents;
 
 // === Imports ===
 use std::string::String;
-use sui::clock::Clock;
+use sui::{
+    clock::Clock,
+    tx_context::TxContext,
+};
 use account_protocol::{
     account::Account,
     executable::Executable,
     intents::{Self, Intent, Params},
+    intent_interface,
 };
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
@@ -16,6 +20,9 @@ use futarchy::{
     market_state::MarketState,
     version,
 };
+
+// === Aliases ===
+use fun intent_interface::build_intent as Account.build_intent;
 
 // === Witness ===
 /// Single witness for governance intents
@@ -216,7 +223,7 @@ public fun create_standard_params(
 // === Notes ===
 // For actual action execution, use the appropriate modules directly:
 // - Transfers: account_actions::vault_intents
-// - Config: futarchy_actions::config_intents
-// - Liquidity: futarchy_actions::liquidity_intents
-// - Dissolution: futarchy_actions::dissolution_intents
-// - Streaming: futarchy_actions::stream_intents
+// - Config: futarchy::config_intents
+// - Liquidity: futarchy::liquidity_intents
+// - Dissolution: futarchy::dissolution_intents
+// - Streaming: futarchy::stream_intents

@@ -2,7 +2,6 @@ module futarchy::amm;
 
 use futarchy::market_state::MarketState;
 use futarchy::conditional_token::ConditionalToken;
-use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
 use sui::clock::Clock;
@@ -334,27 +333,18 @@ public(package) fun swap_stable_to_asset(
 // === Liquidity Functions ===
 
 /// Add liquidity proportionally to the AMM pool
-/// This function is called by the spot pool when distributing liquidity across outcome AMMs
-/// Returns LP conditional tokens minted
-public(package) fun add_liquidity_proportional<AssetType, StableType>(
+/// Only handles calculations and reserve updates, no token operations
+/// Returns the amount of LP tokens to mint
+public fun add_liquidity_proportional(
     pool: &mut LiquidityPool,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    asset_in: ConditionalToken,
-    stable_in: ConditionalToken,
+    asset_amount: u64,
+    stable_amount: u64,
     min_lp_out: u64,
     clock: &Clock,
-    ctx: &mut TxContext,
-): ConditionalToken {
-    let asset_amount = asset_in.value();
-    let stable_amount = stable_in.value();
-    
-    // Verify tokens match this pool's outcome
-    assert!(asset_in.market_id() == pool.market_id, EMarketIdMismatch);
-    assert!(stable_in.market_id() == pool.market_id, EMarketIdMismatch);
-    assert!(asset_in.outcome() == pool.outcome_idx, EInvalidTokenType);
-    assert!(stable_in.outcome() == pool.outcome_idx, EInvalidTokenType);
-    assert!(asset_in.asset_type() == 0, EInvalidTokenType); // 0 = asset type
-    assert!(stable_in.asset_type() == 1, EInvalidTokenType); // 1 = stable type
+    ctx: &TxContext,
+): u64 {
+    assert!(asset_amount > 0, EZeroAmount);
+    assert!(stable_amount > 0, EZeroAmount);
     
     // Calculate LP tokens to mint based on current pool state
     let lp_to_mint = if (pool.lp_supply == 0) {
@@ -412,10 +402,6 @@ public(package) fun add_liquidity_proportional<AssetType, StableType>(
     pool.stable_reserve = new_stable_reserve;
     pool.lp_supply = new_lp_supply;
     
-    // Burn the conditional tokens (they're now absorbed into the pool's reserves)
-    coin_escrow::burn_single_conditional_token(escrow, asset_in, clock, ctx);
-    coin_escrow::burn_single_conditional_token(escrow, stable_in, clock, ctx);
-    
     event::emit(LiquidityAdded {
         market_id: pool.market_id,
         outcome: pool.outcome_idx,
@@ -426,40 +412,21 @@ public(package) fun add_liquidity_proportional<AssetType, StableType>(
         timestamp: clock.timestamp_ms(),
     });
 
-    // Mint LP conditional tokens
-    coin_escrow::mint_single_conditional_token(
-        escrow,
-        2, // TOKEN_TYPE_LP
-        pool.outcome_idx,
-        lp_to_mint,
-        ctx.sender(),
-        clock,
-        ctx
-    )
+    lp_to_mint
 }
 
 /// Remove liquidity proportionally from the AMM pool
-/// This function is called by the spot pool when collecting liquidity from outcome AMMs
-/// Takes LP conditional tokens and returns asset/stable conditional tokens
-public(package) fun remove_liquidity_proportional<AssetType, StableType>(
+/// Only handles calculations and reserve updates, no token operations
+/// Returns the amounts of asset and stable tokens to mint
+public fun remove_liquidity_proportional(
     pool: &mut LiquidityPool,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    lp_token: ConditionalToken,
+    lp_amount: u64,
     clock: &Clock,
-    ctx: &mut TxContext
-): (ConditionalToken, ConditionalToken) {
-    // Verify LP token is for this pool
-    assert!(lp_token.market_id() == pool.market_id, EMarketIdMismatch);
-    assert!(lp_token.outcome() == pool.outcome_idx, EInvalidTokenType);
-    assert!(lp_token.asset_type() == 2, EInvalidTokenType); // Must be LP token
-    
-    let lp_amount = lp_token.value();
+    ctx: &TxContext
+): (u64, u64) {
     // Check for zero liquidity in the pool first to provide a more accurate error message
     assert!(pool.lp_supply > 0, EZeroLiquidity);
     assert!(lp_amount > 0, EZeroAmount);
-    
-    // Burn the LP token
-    coin_escrow::burn_single_conditional_token(escrow, lp_token, clock, ctx);
     
     // Calculate proportional share to remove from this AMM
     let asset_to_remove = math::mul_div_to_64(lp_amount, pool.asset_reserve, pool.lp_supply);
@@ -491,30 +458,7 @@ public(package) fun remove_liquidity_proportional<AssetType, StableType>(
         timestamp: clock.timestamp_ms(),
     });
     
-    // Create conditional tokens to return using the escrow's mint function
-    // Note: In the live-flow model, these tokens are temporary and will be
-    // immediately redeemed for spot tokens by the calling function
-    let asset_token = coin_escrow::mint_single_conditional_token(
-        escrow,
-        0, // asset type
-        pool.outcome_idx,
-        asset_to_remove,
-        ctx.sender(),
-        clock,
-        ctx
-    );
-    
-    let stable_token = coin_escrow::mint_single_conditional_token(
-        escrow,
-        1, // stable type
-        pool.outcome_idx,
-        stable_to_remove,
-        ctx.sender(),
-        clock,
-        ctx
-    );
-    
-    (asset_token, stable_token)
+    (asset_to_remove, stable_to_remove)
 }
 
 public(package) fun empty_all_amm_liquidity(

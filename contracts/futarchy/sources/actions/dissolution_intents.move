@@ -1,7 +1,7 @@
 /// User-facing API for creating dissolution-related intents
 /// This module provides helper functions for creating dissolution actions
 /// The actual intent creation must be done by the governance system that provides the Outcome
-module futarchy_actions::dissolution_intents;
+module futarchy::dissolution_intents;
 
 // === Imports ===
 use std::string::String;
@@ -10,7 +10,7 @@ use account_protocol::{
     intents::{Self, Intent},
     metadata,
 };
-use futarchy_actions::dissolution_actions;
+use futarchy::dissolution_actions;
 
 // === Witness ===
 

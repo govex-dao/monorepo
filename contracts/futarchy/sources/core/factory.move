@@ -26,11 +26,11 @@ use account_protocol::{
 use account_extensions::extensions::Extensions;
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig, ConfigParams},
-    futarchy_vault,
+    futarchy_vault_init,
     fee::{Self, FeeManager},
     priority_queue::{Self, ProposalQueue},
     account_spot_pool::{Self, AccountSpotPool},
-    // dao_liquidity_pool::{Self, DAOLiquidityPool}, // Not used in new architecture
+    action_registry,
     version,
 };
 
@@ -99,6 +99,190 @@ public struct StableCoinTypeRemoved has copy, drop {
     type_str: UTF8String,
     admin: address,
     timestamp: u64,
+}
+
+// === Internal Helper Functions ===
+
+/// Register all native futarchy actions in the ActionRegistry
+fun register_native_actions(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext,
+) {
+    use futarchy::{
+        config_actions,
+        advanced_config_actions,
+        dissolution_actions,
+        operating_agreement_actions,
+        registry_actions,
+        futarchy_vault,
+    };
+    
+    // Register config actions
+    action_registry::register_native_action<config_actions::SetProposalsEnabledAction>(
+        account,
+        b"config_actions".to_string(),
+        b"do_set_proposals_enabled".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<config_actions::UpdateNameAction>(
+        account,
+        b"config_actions".to_string(),
+        b"do_update_name".to_string(),
+        ctx
+    );
+    
+    // Register advanced config actions
+    action_registry::register_native_action<advanced_config_actions::TradingParamsUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_trading_params".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<advanced_config_actions::MetadataUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_metadata".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<advanced_config_actions::TwapConfigUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_twap_config".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<advanced_config_actions::GovernanceUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_governance".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<advanced_config_actions::SlashDistributionUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_slash_distribution".to_string(),
+        ctx
+    );
+    
+    // Register dissolution actions
+    action_registry::register_native_action<dissolution_actions::InitiateDissolutionAction>(
+        account,
+        b"dissolution_actions".to_string(),
+        b"do_initiate_dissolution".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<dissolution_actions::CancelDissolutionAction>(
+        account,
+        b"dissolution_actions".to_string(),
+        b"do_cancel_dissolution".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<dissolution_actions::FinalizeDissolutionAction>(
+        account,
+        b"dissolution_actions".to_string(),
+        b"do_finalize_dissolution".to_string(),
+        ctx
+    );
+    
+    // Register operating agreement actions
+    action_registry::register_native_action<operating_agreement_actions::OperatingAgreementAction>(
+        account,
+        b"operating_agreement_actions".to_string(),
+        b"do_execute_operating_agreement".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<operating_agreement_actions::UpdateLineAction>(
+        account,
+        b"operating_agreement_actions".to_string(),
+        b"do_update_line".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<operating_agreement_actions::InsertLineAfterAction>(
+        account,
+        b"operating_agreement_actions".to_string(),
+        b"do_insert_line_after".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<operating_agreement_actions::RemoveLineAction>(
+        account,
+        b"operating_agreement_actions".to_string(),
+        b"do_remove_line".to_string(),
+        ctx
+    );
+    
+    // Note: Vault actions with generic coin types cannot be pre-registered
+    // They need specific coin types and are registered on demand
+    // Example: AddCoinTypeAction<SUI>, RemoveCoinTypeAction<USDC>
+    // These are handled dynamically when needed
+    
+    // Register registry management actions  
+    action_registry::register_native_action<registry_actions::RegisterActionAction>(
+        account,
+        b"registry_actions".to_string(),
+        b"do_register_action".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<registry_actions::SetActionStatusAction>(
+        account,
+        b"registry_actions".to_string(),
+        b"do_set_action_status".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action<registry_actions::DeregisterActionAction>(
+        account,
+        b"registry_actions".to_string(),
+        b"do_deregister_action".to_string(),
+        ctx
+    );
+}
+
+/// Test version of register_native_actions
+#[test_only]
+fun register_native_actions_for_testing(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext,
+) {
+    use futarchy::{
+        config_actions,
+        advanced_config_actions,
+        dissolution_actions,
+        operating_agreement_actions,
+        registry_actions,
+    };
+    
+    // Register config actions
+    action_registry::register_native_action_for_testing<config_actions::SetProposalsEnabledAction>(
+        account,
+        b"config_actions".to_string(),
+        b"do_set_proposals_enabled".to_string(),
+        ctx
+    );
+    
+    action_registry::register_native_action_for_testing<config_actions::UpdateNameAction>(
+        account,
+        b"config_actions".to_string(),
+        b"do_update_name".to_string(),
+        ctx
+    );
+    
+    // Register some essential actions for testing
+    action_registry::register_native_action_for_testing<advanced_config_actions::TradingParamsUpdateAction>(
+        account,
+        b"advanced_config_actions".to_string(),
+        b"do_update_trading_params".to_string(),
+        ctx
+    );
 }
 
 // === Public Functions ===
@@ -224,8 +408,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         ETwapInitialTooLarge,
     );
     
-    // Create config parameters first
-    let config_params = futarchy_config::new_config_params(
+    // Create config parameters using the new structured approach
+    let config_params = futarchy_config::new_config_params_from_values(
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
@@ -236,10 +420,15 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         twap_threshold,
         amm_total_fee_bps,
         max_outcomes,
-        0, // proposal_fee_per_outcome (use default)
+        1000000, // proposal_fee_per_outcome (1 token per outcome)
         50, // max_concurrent_proposals
         100_000_000, // required_bond_amount
+        2_592_000_000, // proposal_recreation_window_ms (30 days default)
+        5, // max_proposal_chain_depth
         100, // fee_escalation_basis_points
+        dao_name,
+        url::new_unsafe(icon_url_string),
+        description,
     );
     
     // Create a temporary priority queue ID (will create the actual queue later)
@@ -262,9 +451,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
         config_params,
-        dao_name,
-        url::new_unsafe(icon_url_string),
-        description,
         ctx
     );
     
@@ -296,8 +482,18 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     let config_mut = futarchy_config::internal_config_mut(&mut account);
     futarchy_config::set_proposal_queue_id(config_mut, option::some(priority_queue_id));
     
+    // Initialize the ActionRegistry for extensible actions
+    action_registry::init_registry(
+        &mut account,
+        false, // Don't require publisher verification by default
+        ctx
+    );
+    
+    // Register native futarchy actions
+    register_native_actions(&mut account, ctx);
+    
     // Initialize the vault
-    futarchy_vault::init_vault(&mut account, ctx);
+    futarchy_vault_init::initialize(&mut account, version::current(), ctx);
     
     // If treasury cap provided, store it
     if (treasury_cap.is_some()) {
@@ -331,33 +527,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         creator: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
-}
-
-/// Internal function to create a DAO with optional TreasuryCap (backward compatibility - aborts)
-public(package) fun create_dao_internal<AssetType: drop, StableType>(
-    _factory: &mut Factory,
-    _fee_manager: &mut FeeManager,
-    _payment: Coin<SUI>,
-    _min_asset_amount: u64,
-    _min_stable_amount: u64,
-    _dao_name: AsciiString,
-    _icon_url_string: AsciiString,
-    _review_period_ms: u64,
-    _trading_period_ms: u64,
-    _twap_start_delay: u64,
-    _twap_step_max: u64,
-    _twap_initial_observation: u128,
-    _twap_threshold: u64,
-    _amm_total_fee_bps: u64,
-    _description: UTF8String,
-    _max_outcomes: u64,
-    _agreement_lines: vector<UTF8String>,
-    _agreement_difficulties: vector<u64>,
-    _treasury_cap: Option<TreasuryCap<AssetType>>,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    abort 0 // Extensions required - use create_dao_internal_with_extensions
 }
 
 #[test_only]
@@ -407,8 +576,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         ETwapInitialTooLarge,
     );
     
-    // Create config parameters first
-    let config_params = futarchy_config::new_config_params(
+    // Create config parameters using the new structured approach
+    let config_params = futarchy_config::new_config_params_from_values(
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
@@ -419,10 +588,15 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         twap_threshold,
         amm_total_fee_bps,
         max_outcomes,
-        0, // proposal_fee_per_outcome (use default)
+        1000000, // proposal_fee_per_outcome (1 token per outcome)
         50, // max_concurrent_proposals
         100_000_000, // required_bond_amount
+        2_592_000_000, // proposal_recreation_window_ms (30 days default)
+        5, // max_proposal_chain_depth
         100, // fee_escalation_basis_points
+        dao_name,
+        url::new_unsafe(icon_url_string),
+        description,
     );
     
     // Create a temporary priority queue ID (will create the actual queue later)
@@ -445,9 +619,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
         config_params,
-        dao_name,
-        url::new_unsafe(icon_url_string),
-        description,
         ctx
     );
     
@@ -476,8 +647,25 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     let config_mut = futarchy_config::internal_config_mut_test(&mut account);
     futarchy_config::set_proposal_queue_id(config_mut, option::some(priority_queue_id));
     
-    // Initialize the vault (test version)
-    futarchy_vault::init_vault_test(&mut account, ctx);
+    // Initialize the ActionRegistry for testing
+    action_registry::init_registry_for_testing(
+        &mut account,
+        false,
+        ctx
+    );
+    
+    // Register native actions for testing
+    register_native_actions_for_testing(&mut account, ctx);
+    
+    // Initialize the vault (test version uses @account_protocol witness)
+    {
+        use account_protocol::version_witness;
+        futarchy_vault_init::initialize(
+            &mut account, 
+            version_witness::new_for_testing(@account_protocol), 
+            ctx
+        );
+    };
     
     // If treasury cap provided, store it
     if (treasury_cap.is_some()) {

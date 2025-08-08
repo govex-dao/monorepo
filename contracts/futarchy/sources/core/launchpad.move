@@ -11,6 +11,7 @@ use sui::dynamic_field as df;
 use futarchy::factory;
 use futarchy::fee;
 use futarchy::math;
+use account_extensions::extensions::Extensions;
 
 // === Errors ===
 const ERaiseStillActive: u64 = 0;
@@ -252,6 +253,7 @@ public entry fun contribute<RaiseToken, StableCoin>(
 public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     factory: &mut factory::Factory,
+    extensions: &Extensions,
     fee_manager: &mut fee::FeeManager,
     payment: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -273,8 +275,9 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
     // Create the DAO using the stored parameters. The DAO's Asset is the new governance
     // token, and its Stable is the coin used in the raise.
     let params = &raise.dao_params;
-    factory::create_dao_internal<RaiseToken, StableCoin>(
+    factory::create_dao_internal_with_extensions<RaiseToken, StableCoin>(
         factory,
+        extensions,
         fee_manager,
         payment,
         0, // min_asset_amount is not relevant for launchpad DAOs

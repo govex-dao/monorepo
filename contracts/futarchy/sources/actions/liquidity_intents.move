@@ -1,7 +1,7 @@
 /// User-facing API for creating liquidity-related intents
 /// This module provides helper functions for creating liquidity actions
 /// The actual intent creation must be done by the governance system that provides the Outcome
-module futarchy_actions::liquidity_intents;
+module futarchy::liquidity_intents;
 
 // === Imports ===
 use std::string::String;
@@ -12,7 +12,7 @@ use sui::{
 use account_protocol::{
     intents::Intent,
 };
-use futarchy_actions::liquidity_actions;
+use futarchy::liquidity_actions;
 
 // === Witness ===
 

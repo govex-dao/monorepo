@@ -29,6 +29,7 @@ use futarchy::{
     version,
     proposal::{Self, Proposal},
     market_state::{Self, MarketState},
+    dao_config::{Self, DaoConfig, TradingParams, TwapConfig, GovernanceConfig, MetadataConfig},
 };
 
 // === Constants ===
@@ -42,6 +43,7 @@ const OUTCOME_NO: u8 = 1;
 // === Errors ===
 const EProposalNotApproved: u64 = 1;
 const EInvalidAdmin: u64 = 2;
+const EInvalidSlashDistribution: u64 = 3;
 
 // === Events ===
 
@@ -80,59 +82,51 @@ public struct GovernanceSettingsChanged has copy, drop {
 
 // === Structs ===
 
+/// Configuration for how slashed proposal fees are distributed
+public struct SlashDistribution has store, drop, copy {
+    /// Percentage (in basis points) that goes to the slasher who evicted the proposal
+    slasher_reward_bps: u16,
+    /// Percentage (in basis points) that goes to the DAO treasury
+    dao_treasury_bps: u16,
+    /// Percentage (in basis points) that goes to protocol revenue
+    protocol_bps: u16,
+    /// Percentage (in basis points) that gets burned
+    burn_bps: u16,
+}
+
 /// Core Futarchy DAO configuration
-/// Contains all the configuration fields from the original DAO state
-/// but excludes id, metadata, and deps which are handled by Account wrapper
+/// Contains composed configuration from dao_config module plus state tracking
 public struct FutarchyConfig has store {
-    // Type information
+    // Type information (still belongs at top level)
     asset_type: String,
     stable_type: String,
     
-    // Trading parameters
-    min_asset_amount: u64,
-    min_stable_amount: u64,
-    review_period_ms: u64,
-    trading_period_ms: u64,
+    // Composed configuration from dao_config module
+    config: DaoConfig,
     
-    // AMM configuration
-    amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
-    amm_twap_initial_observation: u128,
-    twap_threshold: u64,
-    amm_total_fee_bps: u64,
-    
-    // Metadata
-    dao_name: AsciiString,
-    icon_url: Url,
-    description: String,
-    
-    // Governance parameters
-    max_outcomes: u64,
-    proposal_fee_per_outcome: u64,
+    // State tracking (does not belong in dao_config)
     operational_state: u8,
-    max_concurrent_proposals: u64,
-    required_bond_amount: u64,
-    
-    // State tracking
     active_proposals: u64,
     total_proposals: u64,
     
-    // References to other objects
-    liquidity_pool_id: Option<ID>,
+    // References to other objects (does not belong in dao_config)
     treasury_id: Option<ID>,
     operating_agreement_id: Option<ID>,
     
-    // Queue management (deprecated - using priority_queue module now)
-    queue_size: u64,
-    queue_head: Option<ID>,
-    queue_tail: Option<ID>,
-    fee_escalation_basis_points: u64,
+    // Slash distribution configuration
+    slash_distribution: SlashDistribution,
     
     // Proposal queue ID
     proposal_queue_id: Option<ID>,
     
     // Action registry ID for unified action system
     action_registry_id: Option<ID>,
+    
+    // Fee manager ID for proposal fee management
+    fee_manager_id: Option<ID>,
+    
+    // Spot AMM pool ID for the DAO's liquidity pool
+    spot_pool_id: Option<ID>,
     
     // Verification
     attestation_url: String,
@@ -141,21 +135,10 @@ public struct FutarchyConfig has store {
 }
 
 /// Helper struct for creating FutarchyConfig with default values
+/// Now simplified as we use DaoConfig for most parameters
 public struct ConfigParams has store, copy, drop {
-    min_asset_amount: u64,
-    min_stable_amount: u64,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
-    amm_twap_initial_observation: u128,
-    twap_threshold: u64,
-    amm_total_fee_bps: u64,
-    max_outcomes: u64,
-    proposal_fee_per_outcome: u64,
-    max_concurrent_proposals: u64,
-    required_bond_amount: u64,
-    fee_escalation_basis_points: u64,
+    dao_config: DaoConfig,
+    slash_distribution: SlashDistribution,
 }
 
 /// Witness struct for authentication and operations
@@ -166,50 +149,41 @@ public struct Witness has drop {}
 /// Creates a new FutarchyConfig with specified parameters
 public fun new<AssetType: drop, StableType>(
     params: ConfigParams,
-    dao_name: AsciiString,
-    icon_url: Url,
-    description: String,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ): FutarchyConfig {
     FutarchyConfig {
         asset_type: type_name::get<AssetType>().into_string().to_string(),
         stable_type: type_name::get<StableType>().into_string().to_string(),
-        min_asset_amount: params.min_asset_amount,
-        min_stable_amount: params.min_stable_amount,
-        review_period_ms: params.review_period_ms,
-        trading_period_ms: params.trading_period_ms,
-        amm_twap_start_delay: params.amm_twap_start_delay,
-        amm_twap_step_max: params.amm_twap_step_max,
-        amm_twap_initial_observation: params.amm_twap_initial_observation,
-        twap_threshold: params.twap_threshold,
-        amm_total_fee_bps: params.amm_total_fee_bps,
-        dao_name,
-        icon_url,
-        description,
-        max_outcomes: params.max_outcomes,
-        proposal_fee_per_outcome: params.proposal_fee_per_outcome,
+        config: params.dao_config,
         operational_state: DAO_STATE_ACTIVE,
-        max_concurrent_proposals: params.max_concurrent_proposals,
-        required_bond_amount: params.required_bond_amount,
         active_proposals: 0,
         total_proposals: 0,
-        liquidity_pool_id: option::none(),
         treasury_id: option::none(),
         operating_agreement_id: option::none(),
-        queue_size: 0,
-        queue_head: option::none(),
-        queue_tail: option::none(),
-        fee_escalation_basis_points: params.fee_escalation_basis_points,
+        slash_distribution: params.slash_distribution,
         proposal_queue_id: option::none(),
         action_registry_id: option::none(),
+        fee_manager_id: option::none(),
+        spot_pool_id: option::none(),
         attestation_url: b"".to_string(),
         verification_pending: false,
         verified: false,
     }
 }
 
-/// Creates default configuration parameters
+/// Creates configuration parameters from structured config objects
 public fun new_config_params(
+    dao_config: DaoConfig,
+    slash_distribution: SlashDistribution,
+): ConfigParams {
+    ConfigParams {
+        dao_config,
+        slash_distribution,
+    }
+}
+
+/// Creates configuration parameters from individual values (legacy support)
+public fun new_config_params_from_values(
     min_asset_amount: u64,
     min_stable_amount: u64,
     review_period_ms: u64,
@@ -223,93 +197,179 @@ public fun new_config_params(
     proposal_fee_per_outcome: u64,
     max_concurrent_proposals: u64,
     required_bond_amount: u64,
+    proposal_recreation_window_ms: u64,
+    max_proposal_chain_depth: u64,
     fee_escalation_basis_points: u64,
+    dao_name: AsciiString,
+    icon_url: Url,
+    description: String,
 ): ConfigParams {
-    ConfigParams {
+    // Create structured configs
+    let trading_params = dao_config::new_trading_params(
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
+        amm_total_fee_bps,
+    );
+    
+    let twap_config = dao_config::new_twap_config(
         amm_twap_start_delay,
         amm_twap_step_max,
         amm_twap_initial_observation,
         twap_threshold,
-        amm_total_fee_bps,
+    );
+    
+    let governance_config = dao_config::new_governance_config(
         max_outcomes,
         proposal_fee_per_outcome,
-        max_concurrent_proposals,
         required_bond_amount,
+        max_concurrent_proposals,
+        proposal_recreation_window_ms,
+        max_proposal_chain_depth,
         fee_escalation_basis_points,
+        true,  // proposal_creation_enabled (default)
+        true,  // accept_new_proposals (default)
+    );
+    
+    let metadata_config = dao_config::new_metadata_config(
+        dao_name,
+        icon_url,
+        description,
+    );
+    
+    let dao_config = dao_config::new_dao_config(
+        trading_params,
+        twap_config,
+        governance_config,
+        metadata_config,
+    );
+    
+    ConfigParams {
+        dao_config,
+        slash_distribution: default_slash_distribution(),
     }
 }
 
 /// Creates default configuration parameters with sensible defaults
 public fun default_config_params(): ConfigParams {
     ConfigParams {
-        min_asset_amount: 100_000_000_000, // 100 tokens
-        min_stable_amount: 100_000_000_000, // 100 stable
-        review_period_ms: 604_800_000, // 7 days
-        trading_period_ms: 604_800_000, // 7 days
-        amm_twap_start_delay: 60_000, // 1 minute
-        amm_twap_step_max: 10,
-        amm_twap_initial_observation: 1_000_000_000_000, // 1x price
-        twap_threshold: 100_000, // 1x
-        amm_total_fee_bps: 30, // 0.3%
-        max_outcomes: 10,
-        proposal_fee_per_outcome: 1_000_000, // 1 token per outcome
-        max_concurrent_proposals: 50,
-        required_bond_amount: 100_000_000, // 100 USDC default
-        fee_escalation_basis_points: 100, // 1% default
+        dao_config: dao_config::new_dao_config(
+            dao_config::default_trading_params(),
+            dao_config::default_twap_config(),
+            dao_config::default_governance_config(),
+            dao_config::new_metadata_config(
+                b"Default DAO".to_ascii_string(),
+                url::new_unsafe_from_bytes(b"https://example.com/icon.png"),
+                b"A default DAO configuration".to_string()
+            )
+        ),
+        slash_distribution: default_slash_distribution(),
+    }
+}
+
+// === Slash Distribution Functions ===
+
+/// Creates default slash distribution configuration
+public fun default_slash_distribution(): SlashDistribution {
+    SlashDistribution {
+        slasher_reward_bps: 3000,  // 30% to the slasher
+        dao_treasury_bps: 5000,     // 50% to DAO treasury
+        protocol_bps: 1500,         // 15% to protocol
+        burn_bps: 500,              // 5% burned
+    }
+}
+
+/// Creates custom slash distribution configuration with validation
+public fun new_slash_distribution(
+    slasher_reward_bps: u16,
+    dao_treasury_bps: u16,
+    protocol_bps: u16,
+    burn_bps: u16,
+): SlashDistribution {
+    // Ensure they sum to 10000 (100%)
+    assert!(
+        (slasher_reward_bps as u64) + (dao_treasury_bps as u64) + 
+        (protocol_bps as u64) + (burn_bps as u64) == 10000,
+        EInvalidSlashDistribution
+    );
+    
+    SlashDistribution {
+        slasher_reward_bps,
+        dao_treasury_bps,
+        protocol_bps,
+        burn_bps,
     }
 }
 
 // === Accessor Functions ===
+
+// Slash distribution
+public fun slash_distribution(config: &FutarchyConfig): &SlashDistribution {
+    &config.slash_distribution
+}
+
+public fun slasher_reward_bps(slash_config: &SlashDistribution): u16 {
+    slash_config.slasher_reward_bps
+}
+
+public fun dao_treasury_bps(slash_config: &SlashDistribution): u16 {
+    slash_config.dao_treasury_bps
+}
+
+public fun protocol_bps(slash_config: &SlashDistribution): u16 {
+    slash_config.protocol_bps
+}
+
+public fun burn_bps(slash_config: &SlashDistribution): u16 {
+    slash_config.burn_bps
+}
 
 // Type information
 public fun asset_type(config: &FutarchyConfig): &String { &config.asset_type }
 public fun stable_type(config: &FutarchyConfig): &String { &config.stable_type }
 
 // Trading parameters
-public fun min_asset_amount(config: &FutarchyConfig): u64 { config.min_asset_amount }
-public fun min_stable_amount(config: &FutarchyConfig): u64 { config.min_stable_amount }
-public fun review_period_ms(config: &FutarchyConfig): u64 { config.review_period_ms }
-public fun trading_period_ms(config: &FutarchyConfig): u64 { config.trading_period_ms }
+public fun min_asset_amount(config: &FutarchyConfig): u64 { dao_config::min_asset_amount(dao_config::trading_params(&config.config)) }
+public fun min_stable_amount(config: &FutarchyConfig): u64 { dao_config::min_stable_amount(dao_config::trading_params(&config.config)) }
+public fun review_period_ms(config: &FutarchyConfig): u64 { dao_config::review_period_ms(dao_config::trading_params(&config.config)) }
+public fun trading_period_ms(config: &FutarchyConfig): u64 { dao_config::trading_period_ms(dao_config::trading_params(&config.config)) }
+public fun proposal_recreation_window_ms(config: &FutarchyConfig): u64 { dao_config::proposal_recreation_window_ms(dao_config::governance_config(&config.config)) }
+public fun max_proposal_chain_depth(config: &FutarchyConfig): u64 { dao_config::max_proposal_chain_depth(dao_config::governance_config(&config.config)) }
 
 // AMM configuration
-public fun amm_twap_start_delay(config: &FutarchyConfig): u64 { config.amm_twap_start_delay }
-public fun amm_twap_step_max(config: &FutarchyConfig): u64 { config.amm_twap_step_max }
-public fun amm_twap_initial_observation(config: &FutarchyConfig): u128 { config.amm_twap_initial_observation }
-public fun twap_threshold(config: &FutarchyConfig): u64 { config.twap_threshold }
-public fun amm_total_fee_bps(config: &FutarchyConfig): u64 { config.amm_total_fee_bps }
+public fun amm_twap_start_delay(config: &FutarchyConfig): u64 { dao_config::start_delay(dao_config::twap_config(&config.config)) }
+public fun amm_twap_step_max(config: &FutarchyConfig): u64 { dao_config::step_max(dao_config::twap_config(&config.config)) }
+public fun amm_twap_initial_observation(config: &FutarchyConfig): u128 { dao_config::initial_observation(dao_config::twap_config(&config.config)) }
+public fun twap_threshold(config: &FutarchyConfig): u64 { dao_config::threshold(dao_config::twap_config(&config.config)) }
+public fun amm_total_fee_bps(config: &FutarchyConfig): u64 { dao_config::amm_total_fee_bps(dao_config::trading_params(&config.config)) }
 
 // Metadata
-public fun dao_name(config: &FutarchyConfig): &AsciiString { &config.dao_name }
-public fun icon_url(config: &FutarchyConfig): &Url { &config.icon_url }
-public fun description(config: &FutarchyConfig): &String { &config.description }
+public fun dao_name(config: &FutarchyConfig): &AsciiString { dao_config::dao_name(dao_config::metadata_config(&config.config)) }
+public fun icon_url(config: &FutarchyConfig): &Url { dao_config::icon_url(dao_config::metadata_config(&config.config)) }
+public fun description(config: &FutarchyConfig): &String { dao_config::description(dao_config::metadata_config(&config.config)) }
 
 // Governance parameters
-public fun max_outcomes(config: &FutarchyConfig): u64 { config.max_outcomes }
-public fun proposal_fee_per_outcome(config: &FutarchyConfig): u64 { config.proposal_fee_per_outcome }
+public fun max_outcomes(config: &FutarchyConfig): u64 { dao_config::max_outcomes(dao_config::governance_config(&config.config)) }
+public fun proposal_fee_per_outcome(config: &FutarchyConfig): u64 { dao_config::proposal_fee_per_outcome(dao_config::governance_config(&config.config)) }
 public fun operational_state(config: &FutarchyConfig): u8 { config.operational_state }
-public fun max_concurrent_proposals(config: &FutarchyConfig): u64 { config.max_concurrent_proposals }
-public fun required_bond_amount(config: &FutarchyConfig): u64 { config.required_bond_amount }
+public fun max_concurrent_proposals(config: &FutarchyConfig): u64 { dao_config::max_concurrent_proposals(dao_config::governance_config(&config.config)) }
+public fun required_bond_amount(config: &FutarchyConfig): u64 { dao_config::required_bond_amount(dao_config::governance_config(&config.config)) }
 
 // State tracking
 public fun active_proposals(config: &FutarchyConfig): u64 { config.active_proposals }
 public fun total_proposals(config: &FutarchyConfig): u64 { config.total_proposals }
 
 // References
-public fun liquidity_pool_id(config: &FutarchyConfig): &Option<ID> { &config.liquidity_pool_id }
+public fun spot_pool_id(config: &FutarchyConfig): &Option<ID> { &config.spot_pool_id }
 public fun treasury_id(config: &FutarchyConfig): &Option<ID> { &config.treasury_id }
 public fun operating_agreement_id(config: &FutarchyConfig): &Option<ID> { &config.operating_agreement_id }
 
-// Queue management
-public fun queue_size(config: &FutarchyConfig): u64 { config.queue_size }
-public fun queue_head(config: &FutarchyConfig): &Option<ID> { &config.queue_head }
-public fun queue_tail(config: &FutarchyConfig): &Option<ID> { &config.queue_tail }
-public fun fee_escalation_basis_points(config: &FutarchyConfig): u64 { config.fee_escalation_basis_points }
+// Queue management (deprecated - using priority_queue module now)
+public fun fee_escalation_basis_points(config: &FutarchyConfig): u64 { dao_config::fee_escalation_basis_points(dao_config::governance_config(&config.config)) }
 public fun proposal_queue_id(config: &FutarchyConfig): &Option<ID> { &config.proposal_queue_id }
 public fun action_registry_id(config: &FutarchyConfig): &Option<ID> { &config.action_registry_id }
+public fun fee_manager_id(config: &FutarchyConfig): &Option<ID> { &config.fee_manager_id }
 
 // Verification
 public fun attestation_url(config: &FutarchyConfig): &String { &config.attestation_url }
@@ -325,62 +385,204 @@ public fun state_paused(): u8 { DAO_STATE_PAUSED }
 
 // Trading parameters
 public(package) fun set_min_asset_amount(config: &mut FutarchyConfig, amount: u64) {
-    config.min_asset_amount = amount;
+    let current_trading = dao_config::trading_params(&config.config);
+    let new_trading = dao_config::new_trading_params(
+        amount,
+        dao_config::min_stable_amount(current_trading),
+        dao_config::review_period_ms(current_trading),
+        dao_config::trading_period_ms(current_trading),
+        dao_config::amm_total_fee_bps(current_trading),
+    );
+    config.config = dao_config::update_trading_params(&config.config, new_trading);
 }
 
 public(package) fun set_min_stable_amount(config: &mut FutarchyConfig, amount: u64) {
-    config.min_stable_amount = amount;
+    let current_trading = dao_config::trading_params(&config.config);
+    let new_trading = dao_config::new_trading_params(
+        dao_config::min_asset_amount(current_trading),
+        amount,
+        dao_config::review_period_ms(current_trading),
+        dao_config::trading_period_ms(current_trading),
+        dao_config::amm_total_fee_bps(current_trading),
+    );
+    config.config = dao_config::update_trading_params(&config.config, new_trading);
 }
 
 public(package) fun set_review_period_ms(config: &mut FutarchyConfig, period: u64) {
-    config.review_period_ms = period;
+    let current_trading = dao_config::trading_params(&config.config);
+    let new_trading = dao_config::new_trading_params(
+        dao_config::min_asset_amount(current_trading),
+        dao_config::min_stable_amount(current_trading),
+        period,
+        dao_config::trading_period_ms(current_trading),
+        dao_config::amm_total_fee_bps(current_trading),
+    );
+    config.config = dao_config::update_trading_params(&config.config, new_trading);
 }
 
 public(package) fun set_trading_period_ms(config: &mut FutarchyConfig, period: u64) {
-    config.trading_period_ms = period;
+    let current_trading = dao_config::trading_params(&config.config);
+    let new_trading = dao_config::new_trading_params(
+        dao_config::min_asset_amount(current_trading),
+        dao_config::min_stable_amount(current_trading),
+        dao_config::review_period_ms(current_trading),
+        period,
+        dao_config::amm_total_fee_bps(current_trading),
+    );
+    config.config = dao_config::update_trading_params(&config.config, new_trading);
+}
+
+public(package) fun set_proposal_recreation_window_ms(config: &mut FutarchyConfig, window: u64) {
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        window,
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
+}
+
+public(package) fun set_max_proposal_chain_depth(config: &mut FutarchyConfig, depth: u64) {
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        depth,
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 // AMM configuration
 public(package) fun set_amm_twap_start_delay(config: &mut FutarchyConfig, delay: u64) {
-    config.amm_twap_start_delay = delay;
+    let current_twap = dao_config::twap_config(&config.config);
+    let new_twap = dao_config::new_twap_config(
+        delay,
+        dao_config::step_max(current_twap),
+        dao_config::initial_observation(current_twap),
+        dao_config::threshold(current_twap),
+    );
+    config.config = dao_config::update_twap_config(&config.config, new_twap);
 }
 
 public(package) fun set_amm_twap_step_max(config: &mut FutarchyConfig, max: u64) {
-    config.amm_twap_step_max = max;
+    let current_twap = dao_config::twap_config(&config.config);
+    let new_twap = dao_config::new_twap_config(
+        dao_config::start_delay(current_twap),
+        max,
+        dao_config::initial_observation(current_twap),
+        dao_config::threshold(current_twap),
+    );
+    config.config = dao_config::update_twap_config(&config.config, new_twap);
 }
 
 public(package) fun set_amm_twap_initial_observation(config: &mut FutarchyConfig, obs: u128) {
-    config.amm_twap_initial_observation = obs;
+    let current_twap = dao_config::twap_config(&config.config);
+    let new_twap = dao_config::new_twap_config(
+        dao_config::start_delay(current_twap),
+        dao_config::step_max(current_twap),
+        obs,
+        dao_config::threshold(current_twap),
+    );
+    config.config = dao_config::update_twap_config(&config.config, new_twap);
 }
 
 public(package) fun set_twap_threshold(config: &mut FutarchyConfig, threshold: u64) {
-    config.twap_threshold = threshold;
+    let current_twap = dao_config::twap_config(&config.config);
+    let new_twap = dao_config::new_twap_config(
+        dao_config::start_delay(current_twap),
+        dao_config::step_max(current_twap),
+        dao_config::initial_observation(current_twap),
+        threshold,
+    );
+    config.config = dao_config::update_twap_config(&config.config, new_twap);
 }
 
 public(package) fun set_amm_total_fee_bps(config: &mut FutarchyConfig, fee_bps: u64) {
-    config.amm_total_fee_bps = fee_bps;
+    let current_trading = dao_config::trading_params(&config.config);
+    let new_trading = dao_config::new_trading_params(
+        dao_config::min_asset_amount(current_trading),
+        dao_config::min_stable_amount(current_trading),
+        dao_config::review_period_ms(current_trading),
+        dao_config::trading_period_ms(current_trading),
+        fee_bps,
+    );
+    config.config = dao_config::update_trading_params(&config.config, new_trading);
 }
 
 // Metadata
 public(package) fun set_dao_name(config: &mut FutarchyConfig, name: AsciiString) {
-    config.dao_name = name;
+    let current_meta = dao_config::metadata_config(&config.config);
+    let new_meta = dao_config::new_metadata_config(
+        name,
+        *dao_config::icon_url(current_meta),
+        *dao_config::description(current_meta),
+    );
+    config.config = dao_config::update_metadata_config(&config.config, new_meta);
 }
 
 public(package) fun set_icon_url(config: &mut FutarchyConfig, url: Url) {
-    config.icon_url = url;
+    let current_meta = dao_config::metadata_config(&config.config);
+    let new_meta = dao_config::new_metadata_config(
+        *dao_config::dao_name(current_meta),
+        url,
+        *dao_config::description(current_meta),
+    );
+    config.config = dao_config::update_metadata_config(&config.config, new_meta);
 }
 
 public(package) fun set_description(config: &mut FutarchyConfig, desc: String) {
-    config.description = desc;
+    let current_meta = dao_config::metadata_config(&config.config);
+    let new_meta = dao_config::new_metadata_config(
+        *dao_config::dao_name(current_meta),
+        *dao_config::icon_url(current_meta),
+        desc,
+    );
+    config.config = dao_config::update_metadata_config(&config.config, new_meta);
 }
 
 // Governance parameters
 public(package) fun set_max_outcomes(config: &mut FutarchyConfig, max: u64) {
-    config.max_outcomes = max;
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        max,
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 public(package) fun set_proposal_fee_per_outcome(config: &mut FutarchyConfig, fee: u64) {
-    config.proposal_fee_per_outcome = fee;
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        fee,
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 public(package) fun set_operational_state(config: &mut FutarchyConfig, new_state: u8) {
@@ -388,16 +590,40 @@ public(package) fun set_operational_state(config: &mut FutarchyConfig, new_state
 }
 
 public(package) fun set_max_concurrent_proposals(config: &mut FutarchyConfig, max: u64) {
-    config.max_concurrent_proposals = max;
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        max,
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 public(package) fun set_required_bond_amount(config: &mut FutarchyConfig, amount: u64) {
-    config.required_bond_amount = amount;
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        amount,
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 // State tracking
 public(package) fun increment_active_proposals(config: &mut FutarchyConfig) {
-    increment_active_proposals(config);
+    config.active_proposals = config.active_proposals + 1;
 }
 
 public(package) fun decrement_active_proposals(config: &mut FutarchyConfig) {
@@ -409,10 +635,6 @@ public(package) fun increment_total_proposals(config: &mut FutarchyConfig) {
 }
 
 // References
-public(package) fun set_liquidity_pool_id(config: &mut FutarchyConfig, id: Option<ID>) {
-    config.liquidity_pool_id = id;
-}
-
 public(package) fun set_treasury_id(config: &mut FutarchyConfig, id: Option<ID>) {
     config.treasury_id = id;
 }
@@ -421,22 +643,7 @@ public(package) fun set_operating_agreement_id(config: &mut FutarchyConfig, id: 
     config.operating_agreement_id = id;
 }
 
-// Queue management
-public(package) fun set_queue_head(config: &mut FutarchyConfig, head: Option<ID>) {
-    config.queue_head = head;
-}
-
-public(package) fun set_queue_tail(config: &mut FutarchyConfig, tail: Option<ID>) {
-    config.queue_tail = tail;
-}
-
-public(package) fun increment_queue_size(config: &mut FutarchyConfig) {
-    config.queue_size = config.queue_size + 1;
-}
-
-public(package) fun decrement_queue_size(config: &mut FutarchyConfig) {
-    config.queue_size = config.queue_size - 1;
-}
+// Queue management (deprecated - removed, using priority_queue module now)
 
 public(package) fun set_proposal_queue_id(config: &mut FutarchyConfig, id: Option<ID>) {
     config.proposal_queue_id = id;
@@ -461,7 +668,13 @@ public(package) fun set_verified(config: &mut FutarchyConfig, verified: bool) {
 
 // Metadata setters
 public(package) fun set_name(config: &mut FutarchyConfig, name: AsciiString) {
-    config.dao_name = name;
+    let current_meta = dao_config::metadata_config(&config.config);
+    let new_meta = dao_config::new_metadata_config(
+        name,
+        *dao_config::icon_url(current_meta),
+        *dao_config::description(current_meta),
+    );
+    config.config = dao_config::update_metadata_config(&config.config, new_meta);
 }
 
 public(package) fun set_admin(_config: &mut FutarchyConfig, admin: address) {
@@ -478,20 +691,8 @@ public(package) fun set_admin(_config: &mut FutarchyConfig, admin: address) {
 }
 
 public(package) fun set_config_params(config: &mut FutarchyConfig, params: ConfigParams) {
-    config.min_asset_amount = params.min_asset_amount;
-    config.min_stable_amount = params.min_stable_amount;
-    config.review_period_ms = params.review_period_ms;
-    config.trading_period_ms = params.trading_period_ms;
-    config.amm_twap_start_delay = params.amm_twap_start_delay;
-    config.amm_twap_step_max = params.amm_twap_step_max;
-    config.amm_twap_initial_observation = params.amm_twap_initial_observation;
-    config.twap_threshold = params.twap_threshold;
-    config.amm_total_fee_bps = params.amm_total_fee_bps;
-    config.max_outcomes = params.max_outcomes;
-    config.proposal_fee_per_outcome = params.proposal_fee_per_outcome;
-    config.max_concurrent_proposals = params.max_concurrent_proposals;
-    config.required_bond_amount = params.required_bond_amount;
-    config.fee_escalation_basis_points = params.fee_escalation_basis_points;
+    config.config = params.dao_config;
+    config.slash_distribution = params.slash_distribution;
 }
 
 public(package) fun set_proposals_enabled_internal(config: &mut FutarchyConfig, enabled: bool) {
@@ -503,32 +704,48 @@ public(package) fun set_proposals_enabled_internal(config: &mut FutarchyConfig, 
 }
 
 public(package) fun set_fee_manager_id(config: &mut FutarchyConfig, id: ID) {
-    // This would typically be stored in a separate field if needed
-    // For now, we can use action_registry_id as a placeholder
-    config.action_registry_id = option::some(id);
+    config.fee_manager_id = option::some(id);
+}
+
+public(package) fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        points,
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
 
 public(package) fun set_spot_pool_id(config: &mut FutarchyConfig, id: ID) {
-    config.liquidity_pool_id = option::some(id);
+    config.spot_pool_id = option::some(id);
+}
+
+/// Update the slash distribution configuration
+public(package) fun update_slash_distribution(
+    config: &mut FutarchyConfig,
+    slasher_reward_bps: u16,
+    dao_treasury_bps: u16,
+    protocol_bps: u16,
+    burn_bps: u16,
+) {
+    config.slash_distribution = new_slash_distribution(
+        slasher_reward_bps,
+        dao_treasury_bps,
+        protocol_bps,
+        burn_bps
+    );
 }
 
 // Removed authorized_members_mut - auth is managed by account protocol
 
 // === Account Creation ===
-
-/// Create a new Account with FutarchyConfig
-/// NOTE: This function requires Extensions to be passed in production
-/// For now, it aborts to indicate Extensions are required
-public fun new_account(
-    config: FutarchyConfig,
-    _ctx: &mut TxContext,
-): Account<FutarchyConfig> {
-    // This function exists for backward compatibility
-    // In production, Extensions must be obtained from the shared object
-    // and passed to new_account_with_extensions
-    abort 0 // Extensions required - use new_account_with_extensions
-}
-
 #[test_only]
 public fun new_account_test(
     config: FutarchyConfig,
@@ -558,7 +775,7 @@ public fun new_account_with_extensions(
             extensions, 
             vector[
                 b"AccountProtocol".to_string(),
-                b"FutarchyActions".to_string(),
+                b"Futarchy".to_string(),
             ]
         )
     )
@@ -651,8 +868,9 @@ public(package) fun set_dao_pool_id(
     config: &mut FutarchyConfig,
     pool_id: ID,
 ) {
-    config.liquidity_pool_id = option::some(pool_id);
+    config.spot_pool_id = option::some(pool_id);
 }
+
 
 // === Governance Core Functions ===
 
@@ -858,165 +1076,7 @@ public fun execute_proposal_intent<AssetType, StableType>(
 }
 
 // === Config Action Execution Functions ===
-// These functions implement the actual state modifications for config actions
-// They use FutarchyConfigWitness to access config_mut
-
-/// Execute a SetProposalsEnabledAction 
-public fun execute_set_proposals_enabled<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    ctx: &mut TxContext,
-) {
-    use futarchy_actions::config_actions;
-    use sui::event;
-    use sui::clock;
-    
-    // Extract the action from the executable
-    let action: &config_actions::SetProposalsEnabledAction = executable.next_action(intent_witness);
-    let enabled = config_actions::get_proposals_enabled(action);
-    
-    // Get mutable config using our witness
-    let config = account.config_mut(version, FutarchyConfigWitness {});
-    
-    // Apply the state change
-    set_proposals_enabled_internal(config, enabled);
-    
-    // Emit event for audit trail
-    event::emit(ProposalsEnabledChanged {
-        account_id: object::id(account),
-        enabled,
-        timestamp: ctx.epoch_timestamp_ms(),
-    });
-}
-
-/// Execute an UpdateNameAction
-public fun execute_update_name<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    _ctx: &mut TxContext,
-) {
-    use futarchy_actions::config_actions;
-    
-    // Extract the action from the executable
-    let action: &config_actions::UpdateNameAction = executable.next_action(intent_witness);
-    let new_name = config_actions::get_new_name(action);
-    
-    // Get mutable config using our witness
-    let config = account.config_mut(version, FutarchyConfigWitness {});
-    
-    // Convert String to AsciiString if needed
-    // For now, assuming the name is ASCII-compatible
-    let ascii_name = new_name.to_ascii();
-    
-    // Apply the state change
-    set_dao_name(config, ascii_name);
-    
-    // Event emission could go here
-}
-
-/// Execute a TradingParamsUpdateAction
-public fun execute_update_trading_params<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    _ctx: &mut TxContext,
-) {
-    use futarchy_actions::advanced_config_actions;
-    
-    // Extract the action from the executable
-    let action: &advanced_config_actions::TradingParamsUpdateAction = executable.next_action(intent_witness);
-    
-    // Get the fields from the action
-    let (min_asset_opt, min_stable_opt, review_period_opt, trading_period_opt, fee_bps_opt) = 
-        advanced_config_actions::get_trading_params_fields(action);
-    
-    // Get mutable config using our witness
-    let config = account.config_mut(version, FutarchyConfigWitness {});
-    
-    // Apply each update if provided
-    if (min_asset_opt.is_some()) {
-        set_min_asset_amount(config, *min_asset_opt.borrow());
-    };
-    if (min_stable_opt.is_some()) {
-        set_min_stable_amount(config, *min_stable_opt.borrow());
-    };
-    if (review_period_opt.is_some()) {
-        set_review_period_ms(config, *review_period_opt.borrow());
-    };
-    if (trading_period_opt.is_some()) {
-        set_trading_period_ms(config, *trading_period_opt.borrow());
-    };
-    if (fee_bps_opt.is_some()) {
-        set_amm_total_fee_bps(config, *fee_bps_opt.borrow());
-    };
-}
-
-/// Execute a MetadataUpdateAction
-public fun execute_update_metadata<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    _ctx: &mut TxContext,
-) {
-    use futarchy_actions::advanced_config_actions;
-    
-    // Extract the action from the executable
-    let action: &advanced_config_actions::MetadataUpdateAction = executable.next_action(intent_witness);
-    
-    // Get the fields from the action
-    let (name_opt, icon_url_opt, description_opt) = 
-        advanced_config_actions::get_metadata_fields(action);
-    
-    // Get mutable config using our witness
-    let config = account.config_mut(version, FutarchyConfigWitness {});
-    
-    // Apply each update if provided
-    if (name_opt.is_some()) {
-        set_dao_name(config, *name_opt.borrow());
-    };
-    if (icon_url_opt.is_some()) {
-        set_icon_url(config, *icon_url_opt.borrow());
-    };
-    if (description_opt.is_some()) {
-        set_description(config, *description_opt.borrow());
-    };
-}
-
-/// Execute a GovernanceUpdateAction
-public fun execute_update_governance<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    _ctx: &mut TxContext,
-) {
-    use futarchy_actions::advanced_config_actions;
-    
-    // Extract the action from the executable
-    let action: &advanced_config_actions::GovernanceUpdateAction = executable.next_action(intent_witness);
-    
-    // Get the fields from the action
-    let (proposals_enabled_opt, max_outcomes_opt, bond_amount_opt) = 
-        advanced_config_actions::get_governance_fields(action);
-    
-    // Get mutable config using our witness
-    let config = account.config_mut(version, FutarchyConfigWitness {});
-    
-    // Apply each update if provided
-    if (proposals_enabled_opt.is_some()) {
-        set_proposals_enabled_internal(config, *proposals_enabled_opt.borrow());
-    };
-    if (max_outcomes_opt.is_some()) {
-        set_max_outcomes(config, *max_outcomes_opt.borrow());
-    };
-    if (bond_amount_opt.is_some()) {
-        set_required_bond_amount(config, *bond_amount_opt.borrow());
-    };
-}
+// NOTE: These functions have been moved to the action modules themselves
+// The action modules now contain the full execution logic using direct config access
+// This follows the principle of having actions be self-contained command handlers
 

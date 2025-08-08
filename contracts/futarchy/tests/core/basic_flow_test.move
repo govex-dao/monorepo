@@ -202,7 +202,7 @@ fun test_proposal_with_market() {
             1_000_000,
             b"Test DAO".to_ascii_string(),
             b"https://test.com/icon.png".to_ascii_string(),
-            100, // short review period
+            1000, // short review period (minimum allowed)
             70_000, // trading period (must be > twap_start_delay + 60_000)
             0,
             1,
@@ -236,28 +236,34 @@ fun test_proposal_with_market() {
         let stable_coin = coin::mint_for_testing<STABLE>(2_000_000, ctx(&mut scenario));
         
         // Initialize a market for the proposal
+        // Generate a proposal ID for testing
+        let proposal_uid = object::new(ctx(&mut scenario));
+        let proposal_id = object::uid_to_inner(&proposal_uid);
+        object::delete(proposal_uid);
+        
         let (_proposal_id, _market_state_id, _state) = proposal::initialize_market<SUI, STABLE>(
-            object::id(&account),
-            100, // review_period_ms
+            proposal_id, // proposal_id
+            object::id(&account), // dao_id
+            1000, // review_period_ms (minimum allowed)
             70_000, // trading_period_ms
-            1_000_000, // Min per outcome
-            1_000_000, // Min per outcome
-            0,
-            1_000_000_000_000,
-            1,
-            100_000,
-            30,
-            ADMIN,
-            b"Test Proposal".to_string(),
-            b"Testing lifecycle".to_string(),
-            vector[b"YES".to_string(), b"NO".to_string()],  // YES at index 0, NO at index 1
-            vector[b"Execute action".to_string(), b"No action".to_string()],
-            asset_coin,
-            stable_coin,
-            USER,
-            false,
-            balance::zero<STABLE>(),
-            option::none(),
+            1_000_000, // min_asset_liquidity
+            1_000_000, // min_stable_liquidity
+            0, // twap_start_delay
+            1_000_000_000_000, // twap_initial_observation
+            1, // twap_step_max
+            100_000, // twap_threshold
+            30, // amm_total_fee_bps
+            ADMIN, // treasury_address
+            b"Test Proposal".to_string(), // title
+            b"Testing lifecycle".to_string(), // metadata
+            vector[b"YES".to_string(), b"NO".to_string()], // initial_outcome_messages
+            vector[b"Execute action".to_string(), b"No action".to_string()], // initial_outcome_details
+            asset_coin, // asset_coin
+            stable_coin, // stable_coin
+            USER, // proposer
+            false, // uses_dao_liquidity
+            balance::zero<STABLE>(), // fee_escrow
+            option::none(), // intent_key_for_yes
             &clock,
             ctx(&mut scenario),
         );
@@ -294,8 +300,8 @@ fun test_proposal_with_market() {
         let _review_period = proposal::get_review_period_ms(&proposal);
         assert!(proposal::state(&proposal) == 1, 30); // Should be in REVIEW initially
         
-        // Advance clock past review period (100ms review period)
-        clock::increment_for_testing(&mut clock, 101);
+        // Advance clock past review period (1000ms review period)
+        clock::increment_for_testing(&mut clock, 1001);
         
         // Use advance_state to properly transition from REVIEW to TRADING
         let state_changed = proposal::advance_state(&mut proposal, &mut escrow, &clock);

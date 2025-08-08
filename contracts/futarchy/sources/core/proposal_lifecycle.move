@@ -20,11 +20,10 @@ use futarchy::{
     market_state::{Self, MarketState},
     priority_queue::{Self, ProposalQueue, QueuedProposal},
     proposal_fee_manager::ProposalFeeManager,
-    fee::FeeManager,
     action_dispatcher,
     version,
 };
-use futarchy_actions::{
+use futarchy::{
     futarchy_vault,
 };
 
@@ -73,7 +72,6 @@ public struct ProposalIntentExecuted has copy, drop {
 public fun activate_proposal_from_queue<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
-    fee_manager: &mut FeeManager,
     proposal_fee_manager: &mut ProposalFeeManager,
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
@@ -115,7 +113,9 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     };
     
     // Initialize the market
-    let (proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
+    // Note: proposal_id_returned should match the input proposal_id
+    let (proposal_id_returned, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
+        proposal_id,  // Pass the proposal_id from the queue
         dao_id,
         futarchy_config::review_period_ms(config),
         futarchy_config::trading_period_ms(config),
@@ -168,6 +168,8 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         timestamp: clock.timestamp_ms(),
     });
     
+    // Return the proposal_id that was passed in
+    // Note: proposal_id_returned is the on-chain object ID, which differs from the queued proposal_id
     (proposal_id, market_state_id)
 }
 
@@ -301,7 +303,6 @@ public fun execute_approved_proposal_typed<AssetType, StableType, IW: copy + dro
 public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
-    fee_manager: &mut FeeManager,
     proposal_fee_manager: &mut ProposalFeeManager,
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
@@ -313,7 +314,6 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     let (proposal_id, market_state_id) = activate_proposal_from_queue(
         account,
         queue,
-        fee_manager,
         proposal_fee_manager,
         asset_liquidity,
         stable_liquidity,

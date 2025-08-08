@@ -1,13 +1,15 @@
-/// Advanced configuration intent creation using CORRECT build_intent! macro pattern
-/// This module provides configuration intents for futarchy governance
+/// Advanced configuration intents for complex DAO updates
 module futarchy::advanced_config_intents;
 
-// === Imports (Organized) ===
-use std::{string::String, ascii::String as AsciiString};
+// === Imports ===
+use std::{
+    string::String,
+    ascii::String as AsciiString,
+    option,
+};
 use sui::{
     clock::Clock,
     url::Url,
-    object::{Self, ID},
 };
 use account_protocol::{
     account::Account,
@@ -18,8 +20,6 @@ use account_protocol::{
 use futarchy::{
     futarchy_config::{FutarchyConfig, FutarchyOutcome},
     version,
-};
-use futarchy_actions::{
     advanced_config_actions,
 };
 
@@ -28,15 +28,14 @@ use fun intent_interface::build_intent as Account.build_intent;
 use fun intent_interface::process_intent as Account.process_intent;
 
 // === Errors ===
-const EInvalidPoolId: u64 = 1;
+const EInvalidParameter: u64 = 1;
 
-// === Single Witness ===
-/// Single witness for ALL advanced config intents (reduces boilerplate)
+// === Witness ===
 public struct AdvancedConfigIntent has copy, drop {}
 
 // === Intent Creation Functions ===
 
-/// Create intent to update DAO metadata using build_intent! macro
+/// Create intent to update DAO metadata
 public fun create_update_metadata_intent(
     account: &mut Account<FutarchyConfig>,
     params: Params,
@@ -49,18 +48,18 @@ public fun create_update_metadata_intent(
     account.build_intent!(
         params,
         outcome,
-        b"advanced_config_metadata".to_string(),
+        b"advanced_config_update_metadata".to_string(),
         version::current(),
         AdvancedConfigIntent {},
         ctx,
         |intent, iw| {
-            advanced_config_actions::new_update_metadata<FutarchyOutcome, AdvancedConfigIntent>(
-                intent,
-                name,
-                icon_url,
-                description,
-                iw
+            // Create the metadata update action directly
+            let action = advanced_config_actions::new_metadata_update_action(
+                option::some(name),
+                option::some(icon_url),
+                option::some(description)
             );
+            intent.add_action(action, iw);
         }
     );
 }
@@ -72,314 +71,210 @@ public fun create_update_trading_params_intent(
     outcome: FutarchyOutcome,
     review_period_ms: u64,
     trading_period_ms: u64,
-    proposal_fee_per_outcome: u64,
-    max_concurrent_proposals: u64,
+    min_asset_amount: u64,
+    min_stable_amount: u64,
     ctx: &mut TxContext
 ) {
     account.build_intent!(
         params,
         outcome,
-        b"advanced_config_trading".to_string(),
+        b"advanced_config_update_trading_params".to_string(),
         version::current(),
         AdvancedConfigIntent {},
         ctx,
         |intent, iw| {
-            advanced_config_actions::new_update_trading_params<FutarchyOutcome, AdvancedConfigIntent>(
-                intent,
-                review_period_ms,
-                trading_period_ms,
-                proposal_fee_per_outcome,
-                max_concurrent_proposals,
-                iw
+            // Create the trading params update action
+            let action = advanced_config_actions::new_trading_params_update_action(
+                option::some(min_asset_amount),
+                option::some(min_stable_amount),
+                option::some(review_period_ms),
+                option::some(trading_period_ms),
+                option::none() // amm_total_fee_bps
             );
+            intent.add_action(action, iw);
         }
     );
 }
 
-/// Create intent to update TWAP parameters
-public fun create_update_twap_params_intent(
+/// Create intent to update TWAP configuration
+public fun create_update_twap_config_intent(
     account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: FutarchyOutcome,
-    twap_start_delay: u64,
-    twap_step_max: u64,
-    twap_initial_observation: u128,
-    twap_threshold: u64,
+    start_delay: u64,
+    step_max: u64,
+    initial_observation: u128,
+    threshold: u64,
     ctx: &mut TxContext
 ) {
     account.build_intent!(
         params,
         outcome,
-        b"advanced_config_twap".to_string(),
+        b"advanced_config_update_twap".to_string(),
         version::current(),
         AdvancedConfigIntent {},
         ctx,
         |intent, iw| {
-            advanced_config_actions::new_update_twap_params<FutarchyOutcome, AdvancedConfigIntent>(
-                intent,
-                twap_start_delay,
-                twap_step_max,
-                twap_initial_observation,
-                twap_threshold,
-                iw
+            // Create the TWAP config update action
+            let action = advanced_config_actions::new_twap_config_update_action(
+                option::some(start_delay),
+                option::some(step_max),
+                option::some(initial_observation),
+                option::some(threshold)
             );
+            intent.add_action(action, iw);
         }
     );
 }
 
-/// Create intent to update fee parameters
-public fun create_update_fee_params_intent(
+/// Create intent to update governance settings
+public fun create_update_governance_intent(
     account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: FutarchyOutcome,
-    amm_total_fee_bps: u64,
-    fee_manager_address: address,
-    activator_reward_bps: u64,
+    proposals_enabled: bool,
+    max_outcomes: u64,
+    required_bond_amount: u64,
     ctx: &mut TxContext
 ) {
     account.build_intent!(
         params,
         outcome,
-        b"advanced_config_fees".to_string(),
+        b"advanced_config_update_governance".to_string(),
         version::current(),
         AdvancedConfigIntent {},
         ctx,
         |intent, iw| {
-            advanced_config_actions::new_update_fee_params<FutarchyOutcome, AdvancedConfigIntent>(
-                intent,
-                amm_total_fee_bps,
-                fee_manager_address,
-                activator_reward_bps,
-                iw
+            // Create the governance update action
+            let action = advanced_config_actions::new_governance_update_action(
+                option::some(proposals_enabled),
+                option::some(max_outcomes),
+                option::some(required_bond_amount)
             );
+            intent.add_action(action, iw);
         }
     );
 }
 
-/// Create intent to update pool references
-public fun create_update_pool_references_intent(
+/// Create intent to update slash distribution
+public fun create_update_slash_distribution_intent(
     account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: FutarchyOutcome,
-    spot_pool_id: ID,
-    dao_pool_id: ID,
+    slasher_reward_bps: u16,
+    dao_treasury_bps: u16,
+    protocol_bps: u16,
+    burn_bps: u16,
     ctx: &mut TxContext
 ) {
     account.build_intent!(
         params,
         outcome,
-        b"advanced_config_pools".to_string(),
+        b"advanced_config_update_slash_distribution".to_string(),
         version::current(),
         AdvancedConfigIntent {},
         ctx,
         |intent, iw| {
-            // Pool references update - validate pool IDs
-            assert!(spot_pool_id != object::id_from_address(@0x0), EInvalidPoolId);
-            assert!(dao_pool_id != object::id_from_address(@0x0), EInvalidPoolId);
-            // In the new architecture, pool management is handled through account protocol
-        }
-    );
-}
-
-// === Execution Functions ===
-
-/// Execute metadata update
-public fun execute_update_metadata(
-    executable: &mut Executable<FutarchyOutcome>,
-    account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext
-) {
-    account.process_intent!(
-        executable,
-        version::current(),
-        AdvancedConfigIntent {},
-        |executable, iw| {
-            advanced_config_actions::do_update_metadata<FutarchyConfig, FutarchyOutcome, AdvancedConfigIntent>(
-                executable,
-                account,
-                version::current(),
-                iw,
-                ctx
+            // Create the slash distribution update action
+            let action = advanced_config_actions::new_slash_distribution_update_action(
+                slasher_reward_bps,
+                dao_treasury_bps,
+                protocol_bps,
+                burn_bps
             );
+            intent.add_action(action, iw);
         }
     );
 }
 
-/// Execute trading params update
-public fun execute_update_trading_params(
-    executable: &mut Executable<FutarchyOutcome>,
+// === Intent Processing Functions ===
+
+/// Process update metadata intent
+public fun process_update_metadata_intent(
     account: &mut Account<FutarchyConfig>,
+    executable: Executable<FutarchyOutcome>,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    account.process_intent!(
+    // Simply delegate to action_dispatcher which will handle the execution
+    use futarchy::action_dispatcher;
+    action_dispatcher::execute_all_actions(
         executable,
-        version::current(),
+        account,
         AdvancedConfigIntent {},
-        |executable, iw| {
-            advanced_config_actions::do_update_trading_params<FutarchyConfig, FutarchyOutcome, AdvancedConfigIntent>(
-                executable,
-                account,
-                version::current(),
-                iw,
-                ctx
-            );
-        }
+        clock,
+        ctx
     );
 }
 
-/// Execute TWAP params update
-public fun execute_update_twap_params(
-    executable: &mut Executable<FutarchyOutcome>,
+/// Process update trading params intent
+public fun process_update_trading_params_intent(
     account: &mut Account<FutarchyConfig>,
+    executable: Executable<FutarchyOutcome>,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    account.process_intent!(
+    // Simply delegate to action_dispatcher which will handle the execution
+    use futarchy::action_dispatcher;
+    action_dispatcher::execute_all_actions(
         executable,
-        version::current(),
+        account,
         AdvancedConfigIntent {},
-        |executable, iw| {
-            advanced_config_actions::do_update_twap_params<FutarchyConfig, FutarchyOutcome, AdvancedConfigIntent>(
-                executable,
-                account,
-                version::current(),
-                iw,
-                ctx
-            );
-        }
+        clock,
+        ctx
     );
 }
 
-/// Execute fee params update
-public fun execute_update_fee_params(
-    executable: &mut Executable<FutarchyOutcome>,
+/// Process update TWAP config intent
+public fun process_update_twap_config_intent(
     account: &mut Account<FutarchyConfig>,
+    executable: Executable<FutarchyOutcome>,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    account.process_intent!(
+    // Simply delegate to action_dispatcher which will handle the execution
+    use futarchy::action_dispatcher;
+    action_dispatcher::execute_all_actions(
         executable,
-        version::current(),
+        account,
         AdvancedConfigIntent {},
-        |executable, iw| {
-            advanced_config_actions::do_update_fee_params<FutarchyConfig, FutarchyOutcome, AdvancedConfigIntent>(
-                executable,
-                account,
-                version::current(),
-                iw,
-                ctx
-            );
-        }
+        clock,
+        ctx
     );
 }
 
-/// Execute pool references update
-public fun execute_update_pool_references(
-    executable: &mut Executable<FutarchyOutcome>,
+/// Process update governance intent
+public fun process_update_governance_intent(
     account: &mut Account<FutarchyConfig>,
+    executable: Executable<FutarchyOutcome>,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    account.process_intent!(
+    // Simply delegate to action_dispatcher which will handle the execution
+    use futarchy::action_dispatcher;
+    action_dispatcher::execute_all_actions(
         executable,
-        version::current(),
+        account,
         AdvancedConfigIntent {},
-        |executable, iw| {
-            // Pool references update execution
-            // In the new architecture, pools are managed through account protocol
-            // This is a no-op for compatibility
-        }
+        clock,
+        ctx
     );
 }
 
-// === Helper Functions ===
-
-/// Add update metadata action to existing intent
-public fun add_update_metadata_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    name: AsciiString,
-    icon_url: Url,
-    description: String,
-    iw: IW
+/// Process update slash distribution intent
+public fun process_update_slash_distribution_intent(
+    account: &mut Account<FutarchyConfig>,
+    executable: Executable<FutarchyOutcome>,
+    clock: &Clock,
+    ctx: &mut TxContext
 ) {
-    advanced_config_actions::new_update_metadata(intent, name, icon_url, description, iw);
-}
-
-/// Add update trading params action to existing intent
-public fun add_update_trading_params_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    proposal_fee_per_outcome: u64,
-    max_concurrent_proposals: u64,
-    iw: IW
-) {
-    advanced_config_actions::new_update_trading_params(
-        intent,
-        review_period_ms,
-        trading_period_ms,
-        proposal_fee_per_outcome,
-        max_concurrent_proposals,
-        iw
+    // Simply delegate to action_dispatcher which will handle the execution
+    use futarchy::action_dispatcher;
+    action_dispatcher::execute_all_actions(
+        executable,
+        account,
+        AdvancedConfigIntent {},
+        clock,
+        ctx
     );
 }
-
-/// Add update TWAP params action to existing intent
-public fun add_update_twap_params_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    twap_start_delay: u64,
-    twap_step_max: u64,
-    twap_initial_observation: u128,
-    twap_threshold: u64,
-    iw: IW
-) {
-    advanced_config_actions::new_update_twap_params(
-        intent,
-        twap_start_delay,
-        twap_step_max,
-        twap_initial_observation,
-        twap_threshold,
-        iw
-    );
-}
-
-/// Add update fee params action to existing intent
-public fun add_update_fee_params_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    amm_total_fee_bps: u64,
-    fee_manager_address: address,
-    activator_reward_bps: u64,
-    iw: IW
-) {
-    advanced_config_actions::new_update_fee_params(
-        intent,
-        amm_total_fee_bps,
-        fee_manager_address,
-        activator_reward_bps,
-        iw
-    );
-}
-
-/// Add update pool references action to existing intent
-public fun add_update_pool_references_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    spot_pool_id: ID,
-    dao_pool_id: ID,
-    iw: IW
-) {
-    // Pool references update - validation only
-    assert!(spot_pool_id != object::id_from_address(@0x0), EInvalidPoolId);
-    assert!(dao_pool_id != object::id_from_address(@0x0), EInvalidPoolId);
-    // Pools are managed through account protocol now
-    //     intent,
-    //     spot_pool_id,
-    //     dao_pool_id,
-    //     iw
-    // );
-}
-
-// === Key Improvements ===
-// 1. ✅ Uses build_intent! macro (ACTUALLY creates intents)
-// 2. ✅ Single AdvancedConfigIntent witness for ALL functions
-// 3. ✅ Process_intent! macro for execution
-// 4. ✅ Clean, organized imports
-// 5. ✅ No manual key generation
-// 6. ✅ Consistent patterns throughout
-// 7. ✅ Helper functions to reduce boilerplate

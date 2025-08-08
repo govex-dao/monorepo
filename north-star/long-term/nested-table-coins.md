@@ -1,3 +1,7 @@
+Allow anyone to split up any coins along that multiverse?
+
+By making there own escrow fo rthat coin and have children knowing parent but no visa versa
+
 ```
 module futarchy::conditional_balances {
     use sui::table::{Self, Table};

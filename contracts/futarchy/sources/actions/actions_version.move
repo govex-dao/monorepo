@@ -1,5 +1,5 @@
 /// Version tracking for the futarchy_actions package
-module futarchy_actions::version;
+module futarchy::actions_version;
 
 // === Imports ===
 use account_protocol::version_witness::{Self, VersionWitness};

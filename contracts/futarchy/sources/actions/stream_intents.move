@@ -1,7 +1,7 @@
 /// User-facing API for creating stream-related intents
 /// This module provides helper functions for creating stream actions
 /// The actual intent creation must be done by the governance system that provides the Outcome
-module futarchy_actions::stream_intents;
+module futarchy::stream_intents;
 
 // === Imports ===
 use std::{
@@ -12,7 +12,7 @@ use sui::clock::Clock;
 use account_protocol::{
     intents::Intent,
 };
-use futarchy_actions::stream_actions;
+use futarchy::stream_actions;
 
 // === Witness ===
 

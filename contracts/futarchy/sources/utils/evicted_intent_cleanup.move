@@ -14,7 +14,7 @@ use futarchy::{
     futarchy_config::{FutarchyConfig, FutarchyOutcome},
     version,
 };
-use futarchy_actions::{
+use futarchy::{
     config_actions,
     dissolution_actions,
     liquidity_actions,

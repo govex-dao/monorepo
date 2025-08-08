@@ -20,7 +20,7 @@ use futarchy::{
     intent_witnesses,
     version,
 };
-use futarchy_actions::{
+use futarchy::{
     config_intents,
     liquidity_intents,
     dissolution_intents,
@@ -145,9 +145,8 @@ public fun create_treasury_transfer_intent<AssetType>(
         ctx
     );
     
-    // Add transfer action
-    // For transfers, use vault_intents::request_spend_and_transfer directly
-    // This function is deprecated - users should use Account Protocol directly
+    // Add transfer action using vault_intents::request_spend_and_transfer
+    // Note: Actual transfer action should be added by the caller
     
     (intent_key, intent)
 }
@@ -198,8 +197,7 @@ public fun create_config_update_intent(
         ctx
     );
     
-    // Config proposals should define specific actions based on the proposal
-    // This is just a placeholder - real config would be proposal-specific
+    // Config actions should be added based on specific proposal requirements
     
     (intent_key, intent)
 }
@@ -367,9 +365,7 @@ public fun create_batch_transfer_intent<AssetType>(
         ctx
     );
     
-    // Add batch transfer action
-    // For batch transfers, use vault_intents::request_spend_and_transfer directly
-    // This function is deprecated - users should use Account Protocol directly
+    // Batch transfer actions should be added by the caller
     
     (intent_key, intent)
 }

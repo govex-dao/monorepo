@@ -1,30 +1,45 @@
 /// Basic configuration actions for futarchy DAOs
-/// This module defines simple configuration actions that complement advanced_config_actions
-module futarchy_actions::config_actions;
+/// This module defines simple configuration actions and their execution logic
+module futarchy::config_actions;
 
 // === Imports ===
 use std::string::String;
-use sui::vec_set::VecSet;
+use std::ascii;
+use sui::{
+    event,
+    object,
+};
 use account_protocol::{
     account::{Self, Account},
     executable::Executable,
     intents::Expired,
     version_witness::VersionWitness,
 };
+use futarchy::{
+    futarchy_config::{Self, FutarchyConfig},
+    version,
+};
 
 // === Errors ===
-const EInvalidAddress: u64 = 1;
-const EInvalidParameter: u64 = 2;
-const EEmptyName: u64 = 3;
-const ENotImplemented: u64 = 4;
+const EEmptyName: u64 = 1;
+
+// === Events ===
+
+/// Emitted when proposals are enabled or disabled
+public struct ProposalsEnabledChanged has copy, drop {
+    account_id: ID,
+    enabled: bool,
+    timestamp: u64,
+}
+
+/// Emitted when DAO name is updated
+public struct DaoNameChanged has copy, drop {
+    account_id: ID,
+    new_name: String,
+    timestamp: u64,
+}
 
 // === Action Structs ===
-
-// NOTE: Admin-style actions (AddMember, RemoveMember, ChangeAdmin) have been removed
-// as they don't apply to DAOs which use token-based governance
-
-// NOTE: UpdateConfigParamsAction has been moved to advanced_config_actions.move
-// to avoid duplication and confusion
 
 /// Action to enable or disable proposals
 /// This is a protocol-level action that should only be used in emergencies
@@ -35,59 +50,75 @@ public struct SetProposalsEnabledAction has store {
 
 /// Action to update the DAO name
 /// This must go through the normal futarchy governance process
-/// There is no admin who can unilaterally change the name
 public struct UpdateNameAction has store {
     new_name: String,
 }
 
 // === Execution Functions ===
 
-// NOTE: Execution functions for removed actions have been deleted
-
 /// Execute a set proposals enabled action
-public fun do_set_proposals_enabled<Config, Outcome: store, IW: drop>(
+/// Now with actual implementation using direct access to futarchy_config
+public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
+    // Extract the action
     let action: &SetProposalsEnabledAction = executable.next_action(intent_witness);
+    let enabled = action.enabled;
     
-    // This would need to be implemented by the Config module that has access to config_mut
-    // For now, this serves as the interface that the config module would call
-    let _ = action;
-    let _ = account;
-    let _ = version;
+    // Get mutable config using internal function (no witness needed since we're in the same package)
+    let config = futarchy_config::internal_config_mut(account);
     
-    // The actual implementation would be in futarchy_config module which has ConfigWitness
-    // Example: futarchy_config::set_proposals_enabled(account, action.enabled, version)
-    abort ENotImplemented // Config module must implement this
+    // Apply the state change
+    if (enabled) {
+        futarchy_config::set_operational_state(config, futarchy_config::state_active());
+    } else {
+        futarchy_config::set_operational_state(config, futarchy_config::state_paused());
+    };
+    
+    // Emit event
+    event::emit(ProposalsEnabledChanged {
+        account_id: object::id(account),
+        enabled,
+        timestamp: ctx.epoch_timestamp_ms(),
+    });
 }
 
 /// Execute an update name action
-public fun do_update_name<Config, Outcome: store, IW: drop>(
+/// Now with actual implementation
+public fun do_update_name<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
+    account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
+    // Extract the action
     let action: &UpdateNameAction = executable.next_action(intent_witness);
+    let new_name = action.new_name;
     
-    // This would need to be implemented by the Config module
-    let _ = action;
-    let _ = account;
-    let _ = version;
+    // Get mutable config
+    let config = futarchy_config::internal_config_mut(account);
     
-    // The actual implementation would be in futarchy_config module
-    // Example: futarchy_config::set_dao_name(account, action.new_name, version)
-    abort ENotImplemented // Config module must implement this
+    // Convert String to AsciiString
+    // Note: This will abort if the string contains non-ASCII characters
+    let ascii_name = new_name.to_ascii();
+    
+    // Apply the change
+    futarchy_config::set_dao_name(config, ascii_name);
+    
+    // Emit event
+    event::emit(DaoNameChanged {
+        account_id: object::id(account),
+        new_name,
+        timestamp: ctx.epoch_timestamp_ms(),
+    });
 }
 
 // === Cleanup Functions ===
-
-// NOTE: Cleanup functions for removed actions have been deleted
 
 /// Delete a set proposals enabled action from an expired intent
 public fun delete_set_proposals_enabled(expired: &mut Expired) {
@@ -99,9 +130,7 @@ public fun delete_update_name(expired: &mut Expired) {
     let UpdateNameAction { new_name: _ } = expired.remove_action();
 }
 
-// === Helper Functions ===
-
-// NOTE: Constructor functions for removed actions have been deleted
+// === Constructor Functions ===
 
 /// Create a new set proposals enabled action
 public fun new_set_proposals_enabled_action(enabled: bool): SetProposalsEnabledAction {
@@ -115,8 +144,6 @@ public fun new_update_name_action(new_name: String): UpdateNameAction {
 }
 
 // === Getter Functions ===
-
-// NOTE: Getter functions for removed actions have been deleted
 
 /// Get enabled status from SetProposalsEnabledAction
 public fun get_proposals_enabled(action: &SetProposalsEnabledAction): bool {
