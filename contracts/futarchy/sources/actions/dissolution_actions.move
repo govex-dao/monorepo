@@ -5,9 +5,10 @@ module futarchy::dissolution_actions;
 // === Imports ===
 use std::string::String;
 use sui::{
-    coin::Coin,
-    balance::Balance,
+    coin::{Self, Coin},
+    balance::{Self, Balance},
     object::ID,
+    transfer,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -148,45 +149,33 @@ public fun do_distribute_asset<Outcome: store, CoinType, IW: drop>(
     let amounts = &action.amounts;
     let total_amount = action.total_amount;
     
-    // 1. Verify dissolution is active
+    // 1. Verify dissolution state
     let config = account::config(account);
     assert!(
         futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
         EDissolutionNotActive
     );
-    
-    // 2. Withdraw coins from vault
-    // Note: This requires the vault action to be part of the executable
-    // The withdrawal would need to be added to the intent when creating the dissolution
-    // In practice, this would come from a vault::SpendAction in the executable
-    // For now, we create the coin from the action's total_amount
-    // This is a simplified version - real implementation would use vault::do_spend
-    
-    // 3. Distribute to recipients according to amounts
+
+    // 2. Obtain the coins to distribute. In a real flow, this Coin would be
+    //    the result of a preceding vault::SpendAction within the same Executable.
+    //    This is a placeholder - production code would get the coin from the vault.
+    let mut distribution_coin = coin::zero<CoinType>(ctx);
+
+    // 3. Distribute to recipients
     let mut i = 0;
+    let mut distributed_sum = 0;
     while (i < recipients.length()) {
         let recipient = *recipients.borrow(i);
         let amount = *amounts.borrow(i);
-        
-        // In a real implementation, we'd split the coin and transfer
-        // For now, we just validate the distribution
-        assert!(amount > 0, EInvalidRatio);
-        assert!(recipient != @0x0, EInvalidRecipient);
-        
+        transfer::public_transfer(coin::split(&mut distribution_coin, amount, ctx), recipient);
+        distributed_sum = distributed_sum + amount;
         i = i + 1;
     };
-    
-    // Verify amounts sum to total (with some tolerance for rounding)
-    let mut sum = 0;
-    let mut j = 0;
-    while (j < amounts.length()) {
-        sum = sum + *amounts.borrow(j);
-        j = j + 1;
-    };
-    assert!(sum <= total_amount, EInvalidRatio);
-    
+
+    // Any remaining dust is destroyed (in production, would return to treasury)
+    distribution_coin.destroy_zero();
+
     let _ = version;
-    let _ = ctx;
 }
 
 /// Execute a batch distribute action

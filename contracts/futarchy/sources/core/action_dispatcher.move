@@ -81,13 +81,7 @@ public fun execute_all_actions<IW: copy + drop>(
             continue
         };
         
-        if (try_execute_liquidity_action(&mut executable, account, witness, ctx)) {
-            continue
-        };
-        
-        if (try_execute_stream_action(&mut executable, account, witness, clock, ctx)) {
-            continue
-        };
+        // Liquidity and stream actions require specific coin types - use execute_typed_actions instead
         
         // Additional action types can be added here
         
@@ -265,18 +259,7 @@ fun try_execute_dissolution_action<IW: drop>(
 }
 
 // === Liquidity Action Handlers ===
-
-fun try_execute_liquidity_action<IW: drop>(
-    _executable: &mut Executable<FutarchyOutcome>,
-    _account: &mut Account<FutarchyConfig>,
-    _witness: IW,
-    _ctx: &mut TxContext,
-): bool {
-    // Liquidity actions require specific coin types - cannot be executed generically
-    // Users should call execute_typed_actions with known types for validation
-    // or execute_add_liquidity_with_pool/execute_remove_liquidity_with_pool for actual execution
-    false
-}
+// Note: Liquidity actions require specific coin types and are handled by execute_typed_actions
 
 // === Operating Agreement Action Handlers ===
 
@@ -351,18 +334,7 @@ fun try_execute_operating_agreement_action<IW: drop>(
 }
 
 // === Stream/Recurring Payment Action Handlers ===
-
-fun try_execute_stream_action<IW: drop>(
-    _executable: &mut Executable<FutarchyOutcome>,
-    _account: &mut Account<FutarchyConfig>,
-    _witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-): bool {
-    // Stream actions require specific coin types - cannot be executed generically
-    // Users should call execute_typed_actions with known types
-    false
-}
+// Note: Stream actions require specific coin types and are handled by execute_typed_actions
 
 // === Move Framework Integration ===
 // For transfer operations, users should use Account Protocol directly:

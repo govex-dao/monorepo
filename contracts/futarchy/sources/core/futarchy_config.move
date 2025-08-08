@@ -119,8 +119,6 @@ public struct FutarchyConfig has store {
     // Proposal queue ID
     proposal_queue_id: Option<ID>,
     
-    // Action registry ID for unified action system
-    action_registry_id: Option<ID>,
     
     // Fee manager ID for proposal fee management
     fee_manager_id: Option<ID>,
@@ -162,7 +160,6 @@ public fun new<AssetType: drop, StableType>(
         operating_agreement_id: option::none(),
         slash_distribution: params.slash_distribution,
         proposal_queue_id: option::none(),
-        action_registry_id: option::none(),
         fee_manager_id: option::none(),
         spot_pool_id: option::none(),
         attestation_url: b"".to_string(),
@@ -368,7 +365,7 @@ public fun operating_agreement_id(config: &FutarchyConfig): &Option<ID> { &confi
 // Queue management (deprecated - using priority_queue module now)
 public fun fee_escalation_basis_points(config: &FutarchyConfig): u64 { dao_config::fee_escalation_basis_points(dao_config::governance_config(&config.config)) }
 public fun proposal_queue_id(config: &FutarchyConfig): &Option<ID> { &config.proposal_queue_id }
-public fun action_registry_id(config: &FutarchyConfig): &Option<ID> { &config.action_registry_id }
+// Removed - using statically-typed actions pattern
 public fun fee_manager_id(config: &FutarchyConfig): &Option<ID> { &config.fee_manager_id }
 
 // Verification
@@ -649,9 +646,7 @@ public(package) fun set_proposal_queue_id(config: &mut FutarchyConfig, id: Optio
     config.proposal_queue_id = id;
 }
 
-public(package) fun set_action_registry_id(config: &mut FutarchyConfig, id: Option<ID>) {
-    config.action_registry_id = id;
-}
+// Removed - using statically-typed actions pattern
 
 // Verification
 public(package) fun set_attestation_url(config: &mut FutarchyConfig, url: String) {

@@ -301,7 +301,7 @@ public fun new_toggle_payment_action(
 
 // === Execution Functions ===
 
-/// Execute creation of a payment (stream or recurring)
+/// Execute creation of a payment (stream or recurring) with funding if isolated pool
 public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -326,16 +326,42 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
         );
     };
     
+    // Generate unique payment ID
+    let payment_id = generate_payment_id(&config, clock.timestamp_ms());
+    
+    // If using an isolated pool, create the pool first
+    // The funding will come from a preceding vault::SpendAction in the same intent
+    if (config.source_mode == SOURCE_ISOLATED_POOL) {
+        // Calculate total funding needed
+        let _total_amount = if (config.payment_type == PAYMENT_TYPE_STREAM) {
+            config.amount
+        } else {
+            // For recurring payments, fund the total of all payments
+            if (config.total_payments > 0) {
+                config.amount * config.total_payments
+            } else {
+                // For unlimited recurring, require initial funding amount
+                config.amount * 12 // Default to 12 periods worth
+            }
+        };
+        
+        // Create an isolated balance for this payment
+        // The actual funding coin must come from a preceding vault::SpendAction
+        let pool_key = PaymentPoolKey { payment_id };
+        let pool_balance: Balance<CoinType> = balance::zero();
+        account::add_managed_data(account, pool_key, pool_balance, version::current());
+    };
+    
+    // Now borrow storage and add the payment
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
         PaymentStorageKey {},
         version::current()
     );
     
-    // Generate unique payment ID
-    let payment_id = generate_payment_id(&config, clock.timestamp_ms());
+    assert!(!table::contains(&storage.payments, payment_id), EStreamAlreadyExists);
     
-    // Store the payment configuration (config has copy now)
+    // Store the payment configuration
     table::add(&mut storage.payments, payment_id, config);
     storage.total_payments = storage.total_payments + 1;
     
@@ -351,7 +377,7 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
     });
 }
 
-/// Execute a payment (claim stream tokens or process recurring payment)
+/// Execute a payment - validation only, no fund movement
 public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -359,6 +385,45 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
+) {
+    let action = executable.next_action<Outcome, ExecutePaymentAction<CoinType>, IW>(witness);
+    let payment_id = action.payment_id;
+    let amount = action.amount;
+    
+    let storage: &PaymentStorage = account::borrow_managed_data(
+        account,
+        PaymentStorageKey {},
+        version::current()
+    );
+    
+    assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
+    let payment = table::borrow(&storage.payments, payment_id);
+    assert!(payment.active, EPaymentNotActive);
+    
+    let current_time = clock.timestamp_ms();
+    let claimable = calculate_claimable_amount(payment, current_time);
+    
+    // Determine actual amount to claim
+    let claim_amount = if (amount.is_some()) {
+        let requested = *amount.borrow();
+        assert!(requested <= claimable, EInsufficientFunds);
+        requested
+    } else {
+        claimable
+    };
+    
+    assert!(claim_amount > 0, ENothingToClaim);
+    
+    // This function only validates. Actual execution with funds happens in do_execute_payment_with_coin
+}
+
+/// Execute a payment with provided coin - actual fund movement
+public(package) fun do_execute_payment_with_coin<Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    payment_coin: Coin<CoinType>,
+    witness: IW,
+    clock: &Clock,
 ) {
     let action = executable.next_action<Outcome, ExecutePaymentAction<CoinType>, IW>(witness);
     let payment_id = action.payment_id;
@@ -387,6 +452,7 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     };
     
     assert!(claim_amount > 0, ENothingToClaim);
+    assert!(coin::value(&payment_coin) == claim_amount, EInvalidStreamAmount);
     
     // Extract necessary values before updating state
     let recipient = payment.recipient;
@@ -400,26 +466,8 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     };
     let total_claimed = payment.claimed_amount;
     
-    // Transfer tokens from account treasury using vault
-    if (source_mode == SOURCE_DIRECT_TREASURY) {
-        // Withdraw from treasury via vault module
-        // Create a zero coin as the vault integration would require
-        // the vault module to be part of the executable's action chain
-        let treasury_coin = coin::zero<CoinType>(ctx);
-        // Actual implementation would withdraw: vault::withdraw(account, claim_amount)
-        transfer::public_transfer(treasury_coin, recipient);
-    } else {
-        // SOURCE_ISOLATED_POOL - withdraw from pre-allocated pool
-        // Pool funds are held in account's managed balance
-        let pool_key = PaymentPoolKey { payment_id };
-        let pool_balance: &mut Balance<CoinType> = account::borrow_managed_data_mut(
-            account,
-            pool_key,
-            version::current()
-        );
-        let payment_coin = coin::take(pool_balance, claim_amount, ctx);
-        transfer::public_transfer(payment_coin, recipient);
-    };
+    // Transfer the provided coin to recipient
+    transfer::public_transfer(payment_coin, recipient);
     
     // Emit claim event
     event::emit(PaymentClaimed {
@@ -432,7 +480,7 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     });
 }
 
-/// Execute cancellation of a payment
+/// Execute cancellation of a payment - validation only
 public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -440,6 +488,30 @@ public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
+) {
+    let action = executable.next_action<Outcome, CancelPaymentAction<CoinType>, IW>(witness);
+    let payment_id = action.payment_id;
+    
+    let storage: &PaymentStorage = account::borrow_managed_data(
+        account,
+        PaymentStorageKey {},
+        version::current()
+    );
+    
+    assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
+    let payment = table::borrow(&storage.payments, payment_id);
+    assert!(payment.cancellable, ENotCancellable);
+    
+    // This function only validates. Actual cancellation happens in do_cancel_payment_with_coin
+}
+
+/// Cancel a payment with optional final payment coin
+public(package) fun do_cancel_payment_with_coin<Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    final_payment_coin: Option<Coin<CoinType>>,
+    witness: IW,
+    clock: &Clock,
 ) {
     let action = executable.next_action<Outcome, CancelPaymentAction<CoinType>, IW>(witness);
     let payment_id = action.payment_id;
@@ -460,11 +532,13 @@ public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
     // Calculate and transfer any claimable amount to recipient first
     let claimable = calculate_claimable_amount(payment, current_time);
     if (claimable > 0) {
+        assert!(option::is_some(&final_payment_coin), EInsufficientFunds);
+        let final_payment = option::destroy_some(final_payment_coin);
+        assert!(coin::value(&final_payment) == claimable, EInvalidStreamAmount);
         payment.claimed_amount = payment.claimed_amount + claimable;
-        // Transfer final claimable amount from treasury
-        let final_payment = coin::zero<CoinType>(ctx);
-        // Actual implementation would withdraw: vault::withdraw(account, claimable)
         transfer::public_transfer(final_payment, payment.recipient);
+    } else {
+        option::destroy_none(final_payment_coin);
     };
     
     // Calculate unclaimed amount
@@ -476,6 +550,21 @@ public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
     
     // Mark payment as inactive
     payment.active = false;
+    
+    // If using isolated pool and returning unclaimed, clean up the pool
+    if (payment.source_mode == SOURCE_ISOLATED_POOL && return_unclaimed && unclaimed > 0) {
+        let pool_key = PaymentPoolKey { payment_id };
+        if (account::has_managed_data(account, pool_key)) {
+            let pool_balance: Balance<CoinType> = account::remove_managed_data(
+                account,
+                pool_key,
+                version::current()
+            );
+            // Return unused balance to treasury
+            // This would be handled by the dispatcher returning funds to vault
+            balance::destroy_zero(pool_balance);
+        };
+    };
     
     // Emit cancellation event
     event::emit(PaymentCancelled {
@@ -728,6 +817,43 @@ public fun remaining_amount(config: &PaymentConfig): u64 {
     }
 }
 
+/// Fund an isolated payment pool with the provided coin
+public(package) fun fund_isolated_pool<CoinType>(
+    account: &mut Account<FutarchyConfig>,
+    payment_id: String,
+    funding_coin: Coin<CoinType>,
+    version_witness: VersionWitness,
+) {
+    let pool_key = PaymentPoolKey { payment_id };
+    assert!(account::has_managed_data(account, pool_key), EPaymentNotFound);
+    
+    let pool_balance: &mut Balance<CoinType> = account::borrow_managed_data_mut(
+        account,
+        pool_key,
+        version_witness
+    );
+    
+    balance::join(pool_balance, coin::into_balance(funding_coin));
+}
+
+/// Withdraw from an isolated payment pool
+public(package) fun withdraw_from_pool<CoinType>(
+    account: &mut Account<FutarchyConfig>,
+    payment_id: String,
+    amount: u64,
+    version_witness: VersionWitness,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    let pool_key = PaymentPoolKey { payment_id };
+    let pool_balance: &mut Balance<CoinType> = account::borrow_managed_data_mut(
+        account,
+        pool_key,
+        version_witness
+    );
+    
+    coin::take(pool_balance, amount, ctx)
+}
+
 /// Get payment progress percentage (basis points)
 public fun payment_progress_bps(config: &PaymentConfig, clock: &Clock): u64 {
     if (config.payment_type == PAYMENT_TYPE_STREAM) {
@@ -750,3 +876,39 @@ public fun payment_progress_bps(config: &PaymentConfig, clock: &Clock): u64 {
         }
     }
 }
+
+// === Getter Functions for Actions ===
+
+/// Get source mode from CreatePaymentAction
+public fun get_source_mode<CoinType>(action: &CreatePaymentAction<CoinType>): u8 {
+    action.config.source_mode
+}
+
+/// Get payment type from CreatePaymentAction  
+public fun get_payment_type<CoinType>(action: &CreatePaymentAction<CoinType>): u8 {
+    action.config.payment_type
+}
+
+/// Get amount from CreatePaymentAction
+public fun get_amount<CoinType>(action: &CreatePaymentAction<CoinType>): u64 {
+    action.config.amount
+}
+
+/// Get total payments from CreatePaymentAction
+public fun get_total_payments<CoinType>(action: &CreatePaymentAction<CoinType>): u64 {
+    action.config.total_payments
+}
+
+// === Exported Constants ===
+
+/// Get source mode constant for direct treasury
+public fun source_direct_treasury(): u8 { SOURCE_DIRECT_TREASURY }
+
+/// Get source mode constant for isolated pool
+public fun source_isolated_pool(): u8 { SOURCE_ISOLATED_POOL }
+
+/// Get payment type constant for stream
+public fun payment_type_stream(): u8 { PAYMENT_TYPE_STREAM }
+
+/// Get payment type constant for recurring
+public fun payment_type_recurring(): u8 { PAYMENT_TYPE_RECURRING }

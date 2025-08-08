@@ -113,8 +113,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     };
     
     // Initialize the market
-    // Note: proposal_id_returned should match the input proposal_id
-    let (proposal_id_returned, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
+    let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
         proposal_id,  // Pass the proposal_id from the queue
         dao_id,
         futarchy_config::review_period_ms(config),

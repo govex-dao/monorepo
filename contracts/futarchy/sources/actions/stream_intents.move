@@ -9,6 +9,7 @@ use std::{
     option::Option,
 };
 use sui::clock::Clock;
+use account_actions::vault;
 use account_protocol::{
     intents::Intent,
 };
@@ -26,7 +27,7 @@ public fun witness(): StreamIntent {
 
 // === Helper Functions ===
 
-/// Add a create stream action to an existing intent
+/// Add a create stream action to an existing intent with direct treasury funding
 public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
     recipient: address,
@@ -40,7 +41,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
     intent_witness: IW,
 ) {
     let action = stream_actions::new_create_stream_action<CoinType>(
-        0, // SOURCE_DIRECT_TREASURY = 0
+        stream_actions::source_direct_treasury(),
         recipient,
         total_amount,
         start_timestamp,
@@ -49,6 +50,116 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         cancellable,
         description,
         clock,
+    );
+    intent.add_action(action, intent_witness);
+    
+    // Direct treasury streams don't need upfront funding
+    // Funds will be withdrawn on each claim via vault::SpendAction
+}
+
+/// Add a create stream action with isolated pool funding
+/// Note: This requires two witnesses since we add two actions
+public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy + drop>(
+    intent: &mut Intent<Outcome>,
+    recipient: address,
+    total_amount: u64,
+    start_timestamp: u64,
+    end_timestamp: u64,
+    cliff_timestamp: Option<u64>,
+    cancellable: bool,
+    description: String,
+    clock: &Clock,
+    intent_witness: IW,
+) {
+    // First add the stream creation action
+    let action = stream_actions::new_create_stream_action<CoinType>(
+        stream_actions::source_isolated_pool(),
+        recipient,
+        total_amount,
+        start_timestamp,
+        end_timestamp,
+        cliff_timestamp,
+        cancellable,
+        description,
+        clock,
+    );
+    intent.add_action(action, intent_witness);
+    
+    // Then add a vault spend action to fund the isolated pool
+    vault::new_spend<Outcome, CoinType, IW>(
+        intent,
+        b"treasury".to_string(),
+        total_amount,
+        intent_witness
+    );
+}
+
+/// Add a create recurring payment with isolated pool
+public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
+    intent: &mut Intent<Outcome>,
+    recipient: address,
+    amount_per_payment: u64,
+    interval_ms: u64,
+    total_payments: u64,
+    end_timestamp: Option<u64>,
+    cancellable: bool,
+    description: String,
+    clock: &Clock,
+    intent_witness: IW,
+) {
+    // First add the recurring payment action
+    let action = stream_actions::new_create_recurring_payment_action<CoinType>(
+        stream_actions::source_isolated_pool(),
+        recipient,
+        amount_per_payment,
+        interval_ms,
+        total_payments,
+        end_timestamp,
+        cancellable,
+        description,
+        clock,
+    );
+    intent.add_action(action, intent_witness);
+    
+    // Calculate total funding needed
+    let total_funding = if (total_payments > 0) {
+        amount_per_payment * total_payments
+    } else {
+        // For unlimited payments, fund initial amount (e.g., 12 payments worth)
+        amount_per_payment * 12
+    };
+    
+    // Add vault spend action to fund the pool
+    vault::new_spend<Outcome, CoinType, IW>(
+        intent,
+        b"treasury".to_string(),
+        total_funding,
+        intent_witness
+    );
+}
+
+/// Add an execute payment action to an intent (claim from stream)
+public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
+    intent: &mut Intent<Outcome>,
+    payment_id: String,
+    amount: Option<u64>,
+    intent_witness: IW,
+) {
+    // For direct treasury payments, add a vault spend action first
+    // The dispatcher will coordinate passing the coin to the execution
+    if (amount.is_some()) {
+        vault::new_spend<Outcome, CoinType, IW>(
+            intent,
+            b"treasury".to_string(),
+            *amount.borrow(),
+            intent_witness
+        );
+    };
+    
+    // Then add the execute payment action
+    let action = stream_actions::new_execute_payment_action<CoinType>(
+        payment_id,
+        amount,
     );
     intent.add_action(action, intent_witness);
 }
@@ -60,6 +171,8 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
     return_unclaimed: bool,
     intent_witness: IW,
 ) {
+    // Note: If there's a final claimable amount, a vault::SpendAction
+    // should be added before this action to provide the final payment coin
     let action = stream_actions::new_cancel_payment_action<CoinType>(
         stream_id,
         return_unclaimed,

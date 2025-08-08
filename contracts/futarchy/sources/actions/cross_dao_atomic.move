@@ -35,6 +35,7 @@ const EInvalidState: u64 = 5;
 const EActionHashMismatch: u64 = 6;
 const EProposalAlreadyCommitted: u64 = 7;
 const ELockExpired: u64 = 8;
+const EParticipantAlreadyLocked: u64 = 9;
 
 // === Constants ===
 const STATE_PENDING: u8 = 0;
@@ -52,12 +53,13 @@ public struct LockForCrossDaoCommit has store {
 }
 
 /// Standalone shared object for coordinating cross-DAO actions
+/// Supports M-of-N threshold: e.g., 3 of 5 DAOs must approve
 public struct CrossDaoProposal has key, store {
     id: UID,
     state: u8,
     participants: vector<DaoParticipant>,
-    locked_count: u64,
-    total_required: u64,
+    locked_weight: u64,  // Total weight of locked participants
+    threshold: u64,  // M in M-of-N (minimum weight required to proceed)
     commit_deadline: u64,
     title: String,
     description: String,
@@ -67,7 +69,8 @@ public struct CrossDaoProposal has key, store {
 public struct DaoParticipant has store, copy, drop {
     dao_id: ID,
     expected_action_hash: vector<u8>,
-    required: bool,
+    weight: u64,  // Voting weight (1 for equal weight, higher for more influence)
+    locked: bool,  // Track lock status to prevent double-counting
 }
 
 // === Events ===
@@ -81,7 +84,7 @@ public struct ProposalCreated has copy, drop {
 public struct DaoLocked has copy, drop {
     proposal_id: ID,
     dao_id: ID,
-    remaining_required: u64,
+    weight_locked: u64,
 }
 
 public struct ProposalCommitted has copy, drop {
@@ -89,32 +92,75 @@ public struct ProposalCommitted has copy, drop {
     timestamp: u64,
 }
 
-// === Public Functions ===
+// === Public Helper Functions ===
 
-/// Create a new cross-DAO proposal
-public fun create_proposal(
-    participants: vector<DaoParticipant>,
+/// Create a simple M-of-N proposal where all DAOs have equal weight
+public fun create_equal_weight_proposal(
+    dao_ids: vector<ID>,
+    action_hashes: vector<vector<u8>>,
+    threshold: u64,  // How many DAOs must approve
     title: String,
     description: String,
     commit_deadline: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let mut total_required = 0u64;
+    let mut participants = vector::empty<DaoParticipant>();
     let mut i = 0;
-    while (i < vector::length(&participants)) {
-        if (vector::borrow(&participants, i).required) {
-            total_required = total_required + 1;
-        };
+    while (i < vector::length(&dao_ids)) {
+        vector::push_back(&mut participants, DaoParticipant {
+            dao_id: *vector::borrow(&dao_ids, i),
+            expected_action_hash: *vector::borrow(&action_hashes, i),
+            weight: 1,  // Equal weight for all
+            locked: false,
+        });
         i = i + 1;
     };
+    
+    create_proposal(
+        participants,
+        threshold,
+        title,
+        description,
+        commit_deadline,
+        clock,
+        ctx
+    );
+}
+
+
+// === Public Functions ===
+
+/// Create a new cross-DAO proposal with M-of-N threshold
+/// threshold: minimum weight needed to proceed (e.g., 3 for 3-of-5)
+/// participants: list of DAOs with their voting weights
+public fun create_proposal(
+    participants: vector<DaoParticipant>,
+    threshold: u64,  // Minimum weight needed to proceed
+    title: String,
+    description: String,
+    commit_deadline: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Calculate total possible weight
+    let mut total_weight = 0u64;
+    let mut i = 0;
+    while (i < vector::length(&participants)) {
+        total_weight = total_weight + vector::borrow(&participants, i).weight;
+        i = i + 1;
+    };
+    
+    // Ensure threshold is achievable
+    assert!(threshold <= total_weight, EInvalidState);
+    assert!(threshold > 0, EInvalidState);
     
     let proposal = CrossDaoProposal {
         id: object::new(ctx),
         state: STATE_PENDING,
         participants,
-        locked_count: 0,
-        total_required,
+        locked_weight: 0,
+        threshold,
         commit_deadline,
         title,
         description,
@@ -130,11 +176,8 @@ public fun create_proposal(
 }
 
 /// Lock a DAO's commitment to the proposal
-/// This function must be called by each participating DAO before the deadline
-/// Strong assertions ensure:
-/// - DAO cannot lock twice
-/// - Deadline is strictly enforced
-/// - State transitions are valid
+/// This function must be called by participating DAOs before the deadline
+/// Once threshold weight is reached, proposal becomes ready
 public fun lock_dao(
     proposal: &mut CrossDaoProposal,
     dao_id: ID,
@@ -147,28 +190,33 @@ public fun lock_dao(
     let current_time = clock::timestamp_ms(clock);
     assert!(current_time < proposal.commit_deadline, EDeadlineExpired);
     
-    // Verify DAO is participant
-    let mut is_participant = false;
-    let mut is_required = false;
+    // Find participant, get weight, and check lock status
+    let mut dao_weight = 0u64;
+    let mut participant_idx = 0;
+    let mut found = false;
     let mut i = 0;
     while (i < vector::length(&proposal.participants)) {
         let p = vector::borrow(&proposal.participants, i);
         if (p.dao_id == dao_id) {
-            is_participant = true;
-            is_required = p.required;
+            assert!(!p.locked, EParticipantAlreadyLocked); // Prevent double-locking
+            dao_weight = p.weight;
+            participant_idx = i;
+            found = true;
             break
         };
         i = i + 1;
     };
-    assert!(is_participant, ENotParticipant);
+    assert!(found, ENotParticipant);
     
-    // Update counts
-    if (is_required) {
-        proposal.locked_count = proposal.locked_count + 1;
-    };
+    // Mark participant as locked
+    let p_mut = vector::borrow_mut(&mut proposal.participants, participant_idx);
+    p_mut.locked = true;
     
-    // Check if ready
-    if (proposal.locked_count == proposal.total_required) {
+    // Add this DAO's weight to locked count
+    proposal.locked_weight = proposal.locked_weight + dao_weight;
+    
+    // Check if threshold is met
+    if (proposal.locked_weight >= proposal.threshold) {
         proposal.state = STATE_READY;
     } else if (proposal.state == STATE_PENDING) {
         proposal.state = STATE_PARTIALLY_LOCKED;
@@ -177,7 +225,7 @@ public fun lock_dao(
     event::emit(DaoLocked {
         proposal_id: object::id(proposal),
         dao_id,
-        remaining_required: proposal.total_required - proposal.locked_count,
+        weight_locked: dao_weight,
     });
 }
 
@@ -239,75 +287,60 @@ public fun execute_lock_action<Outcome: store, IW: drop>(
     lock_dao(proposal, dao_id, clock);
 }
 
-/// Execute all actions atomically when proposal is ready
-/// This ensures all DAOs execute their committed actions in a single transaction
-/// Each account must be passed in the same order as the executables
+/// Execute actions for all locked DAOs atomically when proposal is ready.
+/// This is a generic function that handles any number of locked participants.
+/// Accounts and executables must be provided in matching order corresponding to locked participants.
 public fun execute_atomic_actions<Outcome: drop + store>(
     proposal: &mut CrossDaoProposal,
+    mut accounts: vector<Account<FutarchyConfig>>,
     mut executables: vector<Executable<Outcome>>,
-    account1: &mut Account<FutarchyConfig>,
-    account2: &mut Account<FutarchyConfig>,
     clock: &Clock,
-    _ctx: &mut TxContext,
 ) {
+    // --- Pre-execution checks ---
     // Verify proposal is ready
     assert!(proposal.state == STATE_READY, ENotReady);
-    
     // Verify deadline hasn't passed
     assert!(clock::timestamp_ms(clock) < proposal.commit_deadline, EDeadlineExpired);
     
-    // Verify we have exactly 2 executables for the 2 accounts
-    assert!(vector::length(&executables) == 2, EInvalidState);
-    assert!(vector::length(&proposal.participants) == 2, EInvalidState);
+    // Count locked participants
+    let mut locked_count = 0u64;
+    let mut i = 0;
+    while (i < vector::length(&proposal.participants)) {
+        if (vector::borrow(&proposal.participants, i).locked) {
+            locked_count = locked_count + 1;
+        };
+        i = i + 1;
+    };
     
-    // Process first executable with first account
-    let executable1 = vector::pop_back(&mut executables);
-    account::confirm_execution(account1, executable1);
+    // Verify we have matching number of accounts and executables for locked participants
+    assert!(vector::length(&accounts) == locked_count, EInvalidState);
+    assert!(vector::length(&executables) == locked_count, EInvalidState);
     
-    // Process second executable with second account
-    let executable2 = vector::pop_back(&mut executables);
-    account::confirm_execution(account2, executable2);
+    // --- Atomic Execution Loop ---
+    // Process locked participants in order
+    let mut account_idx = 0;
+    let mut j = 0;
+    while (j < vector::length(&proposal.participants)) {
+        let participant = vector::borrow(&proposal.participants, j);
+        if (participant.locked) {
+            // Get the account and executable for this locked participant
+            let account = vector::borrow_mut(&mut accounts, account_idx);
+            let executable = vector::pop_back(&mut executables);
+            
+            // Ensure the account ID matches the participant's DAO ID
+            assert!(object::id(account) == participant.dao_id, ENotParticipant);
+            
+            // Execute the actions for this DAO
+            account::confirm_execution(account, executable);
+            account_idx = account_idx + 1;
+        };
+        j = j + 1;
+    };
     
-    // Ensure vector is now empty
+    // Clean up empty vectors
     vector::destroy_empty(executables);
-    
-    // Mark proposal as committed
-    mark_committed(proposal, clock);
-}
-
-/// Execute atomic actions for three DAOs
-/// This variant handles three participating DAOs
-public fun execute_atomic_actions_three<Outcome: drop + store>(
-    proposal: &mut CrossDaoProposal,
-    mut executables: vector<Executable<Outcome>>,
-    account1: &mut Account<FutarchyConfig>,
-    account2: &mut Account<FutarchyConfig>,
-    account3: &mut Account<FutarchyConfig>,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Verify proposal is ready
-    assert!(proposal.state == STATE_READY, ENotReady);
-    
-    // Verify deadline hasn't passed
-    assert!(clock::timestamp_ms(clock) < proposal.commit_deadline, EDeadlineExpired);
-    
-    // Verify we have exactly 3 executables for the 3 accounts
-    assert!(vector::length(&executables) == 3, EInvalidState);
-    assert!(vector::length(&proposal.participants) == 3, EInvalidState);
-    
-    // Process executables with their respective accounts
-    let executable1 = vector::pop_back(&mut executables);
-    account::confirm_execution(account1, executable1);
-    
-    let executable2 = vector::pop_back(&mut executables);
-    account::confirm_execution(account2, executable2);
-    
-    let executable3 = vector::pop_back(&mut executables);
-    account::confirm_execution(account3, executable3);
-    
-    // Ensure vector is now empty
-    vector::destroy_empty(executables);
+    // Accounts vector is consumed and will be dropped by caller
+    vector::destroy_empty(accounts);
     
     // Mark proposal as committed
     mark_committed(proposal, clock);
@@ -341,12 +374,13 @@ public fun create_lock_action(
 public fun create_participant(
     dao_id: ID,
     action_hash: vector<u8>,
-    required: bool,
+    weight: u64,
 ): DaoParticipant {
     DaoParticipant {
         dao_id,
         expected_action_hash: action_hash,
-        required,
+        weight,
+        locked: false,
     }
 }
 
@@ -402,12 +436,12 @@ public fun get_deadline(proposal: &CrossDaoProposal): u64 {
     proposal.commit_deadline
 }
 
-public fun get_locked_count(proposal: &CrossDaoProposal): u64 {
-    proposal.locked_count
+public fun get_locked_weight(proposal: &CrossDaoProposal): u64 {
+    proposal.locked_weight
 }
 
-public fun get_required_count(proposal: &CrossDaoProposal): u64 {
-    proposal.total_required
+public fun get_threshold(proposal: &CrossDaoProposal): u64 {
+    proposal.threshold
 }
 
 public fun get_proposal_id(action: &LockForCrossDaoCommit): ID {
@@ -454,7 +488,8 @@ public fun create_test_action(
     DaoParticipant {
         dao_id,
         expected_action_hash: std::hash::sha3_256(*string::bytes(&action_type)),
-        required: true,
+        weight: 1, // Default to weight 1 for tests
+        locked: false,
     }
 }
 
@@ -476,8 +511,8 @@ public fun create_cross_dao_proposal(
         id: object::new(ctx),
         state: STATE_PENDING,
         participants: actions,
-        locked_count: 0,
-        total_required: vector::length(&actions),
+        locked_weight: 0,
+        threshold: vector::length(&actions), // Default to all must approve for tests
         commit_deadline: deadline,
         title,
         description,
@@ -523,10 +558,13 @@ public fun approve_proposal(
     // Find and mark the participant as locked
     let mut i = 0;
     let mut found = false;
+    let mut participant_weight = 0u64;
+    let mut participant_idx = 0;
     while (i < vector::length(&proposal.participants)) {
         let participant = vector::borrow(&proposal.participants, i);
         if (participant.dao_id == dao_id) {
-            proposal.locked_count = proposal.locked_count + 1;
+            participant_weight = participant.weight;
+            participant_idx = i;
             found = true;
             break
         };
@@ -534,10 +572,15 @@ public fun approve_proposal(
     };
     assert!(found, ENotParticipant);
     
-    // Update state based on locked count
-    if (proposal.locked_count == proposal.total_required) {
+    // Now update the participant after the immutable borrow is done
+    let p_mut = vector::borrow_mut(&mut proposal.participants, participant_idx);
+    p_mut.locked = true;
+    proposal.locked_weight = proposal.locked_weight + participant_weight;
+    
+    // Update state based on locked weight
+    if (proposal.locked_weight >= proposal.threshold) {
         proposal.state = STATE_READY;
-    } else if (proposal.locked_count > 0) {
+    } else if (proposal.locked_weight > 0) {
         proposal.state = STATE_PARTIALLY_LOCKED;
     };
 }
@@ -583,6 +626,6 @@ public fun admin_veto(
     ctx: &mut TxContext,
 ) {
     let proposal = table::remove(&mut registry.proposals, proposal_id);
-    let CrossDaoProposal { id, state: _, participants: _, locked_count: _, total_required: _, commit_deadline: _, title: _, description: _ } = proposal;
+    let CrossDaoProposal { id, state: _, participants: _, locked_weight: _, threshold: _, commit_deadline: _, title: _, description: _ } = proposal;
     object::delete(id);
 }

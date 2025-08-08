@@ -339,7 +339,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     transfer::public_share_object(proposal);
     transfer::public_share_object(escrow);
 
-    (actual_proposal_id, market_state_id, STATE_REVIEW)
+    (proposal_id, market_state_id, STATE_REVIEW)
 }
 
 // The create function has been removed as it's not used in production.

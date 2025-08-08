@@ -457,8 +457,12 @@ public entry fun recreate_proposal_chain(
             ctx
         );
         
-        // Transfer fee to handle payment (would be integrated with fee_manager)
-        transfer::public_transfer(child_fee, @0x0);
+        // Deposit the fee for the child proposal
+        proposal_fee_manager::deposit_proposal_fee(
+            fee_manager,
+            child_proposal_id,
+            child_fee
+        );
         
         // Insert child proposal into queue
         let _eviction = priority_queue::insert(
