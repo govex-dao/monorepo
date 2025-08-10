@@ -211,18 +211,6 @@ public fun slash_proposal_fee_with_distribution(
     (slasher_reward, dao_coin)
 }
 
-/// Legacy function - kept for backwards compatibility
-/// The entire fee is contributed to the protocol revenue
-public fun slash_proposal_fee(
-    manager: &mut ProposalFeeManager, 
-    proposal_id: ID
-) {
-    if (manager.pending_proposal_fees.contains(proposal_id)) {
-        let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
-        manager.protocol_revenue.join(fee_balance);
-    };
-}
-
 /// Gets the current protocol revenue
 public fun protocol_revenue(manager: &ProposalFeeManager): u64 {
     manager.protocol_revenue.value()

@@ -46,7 +46,7 @@ const EInvalidProposalData: u64 = 2;
 
 /// Generate a unique intent key without requiring proposal ID
 /// Uses intent type, timestamp, and action-specific data
-fun generate_intent_key_v2(
+fun generate_intent_key(
     intent_type: String,
     recipient: address,
     amount: u64,
@@ -111,7 +111,7 @@ public fun create_treasury_transfer_intent<AssetType>(
     let config = account.config();
     
     // Generate a unique intent key
-    let intent_key = generate_intent_key_v2(
+    let intent_key = generate_intent_key(
         b"treasury_transfer".to_string(),
         recipient,
         amount,

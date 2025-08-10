@@ -95,47 +95,6 @@ public(package) fun empty_amm_and_return_to_dao<AssetType, StableType>(
     (asset_coin, stable_coin)
 }
 
-/// Legacy entry point for user-funded proposals. New code should use advance_stage instead.
-public entry fun empty_all_amm_liquidity<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    outcome_idx: u64,
-    ctx: &mut TxContext,
-) {
-    // Perform all authorization and validation checks before any state mutation
-    assert!(ctx.sender() == *proposal.get_liquidity_provider().borrow(), EInvalidLiquidityTransfer);
-    assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    assert!(outcome_idx == proposal.get_winning_outcome(), EWrongOutcome);
-    assert!(proposal.is_finalized(), EInvalidState);
-    
-    empty_amm_and_return_to_provider(proposal, escrow, ctx);
-}
-
-/// Legacy entry point for DAO-funded proposals. New code should use advance_stage instead.
-/// This function empties the AMM and transfers the liquidity to the sender (typically the DAO).
-public entry fun empty_all_amm_liquidity_to_dao<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    ctx: &mut TxContext,
-) {
-    // Perform all validation checks before any state mutation
-    assert!(proposal.is_finalized(), EInvalidState);
-    assert!(proposal.uses_dao_liquidity(), EInvalidState);
-    
-    // Additional validation to match internal function
-    let market_id = proposal.market_state_id();
-    let escrow_market_id = escrow.get_market_state_id();
-    assert!(market_id == escrow_market_id, EMarketIdMismatch);
-    escrow.get_market_state().assert_market_finalized();
-    
-    let (asset_coin, stable_coin) = empty_amm_and_return_to_dao(proposal, escrow, ctx);
-    
-    // Transfer the coins to the sender (should be the DAO)
-    // The DAO can then deposit these to its vault or spot pool as needed
-    transfer::public_transfer(asset_coin, ctx.sender());
-    transfer::public_transfer(stable_coin, ctx.sender());
-}
-
 public fun assert_all_reserves_consistency<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     escrow: &TokenEscrow<AssetType, StableType>,

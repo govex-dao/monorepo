@@ -6,7 +6,7 @@ module futarchy::factory;
 use std::{
     string::{String as UTF8String},
     ascii::String as AsciiString,
-    type_name,
+    type_name::{Self, TypeName},
     option::{Self, Option},
 };
 use sui::{
@@ -31,6 +31,7 @@ use futarchy::{
     priority_queue::{Self, ProposalQueue},
     account_spot_pool::{Self, AccountSpotPool},
     version,
+    policy_registry,
 };
 
 // === Errors ===
@@ -62,8 +63,8 @@ public struct Factory has key, store {
     id: UID,
     dao_count: u64,
     paused: bool,
-    allowed_stable_types: VecSet<UTF8String>,
-    min_raise_amounts: Table<UTF8String, u64>,
+    allowed_stable_types: VecSet<TypeName>,
+    min_raise_amounts: Table<TypeName, u64>,
 }
 
 /// Admin capability for factory operations
@@ -114,7 +115,7 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
-        allowed_stable_types: vec_set::empty<UTF8String>(),
+        allowed_stable_types: vec_set::empty<TypeName>(),
         min_raise_amounts: table::new(ctx),
     };
     
@@ -210,8 +211,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     assert!(!factory.paused, EPaused);
     
     // Check if StableType is allowed
-    let stable_type_str = get_type_string<StableType>();
-    assert!(factory.allowed_stable_types.contains(&stable_type_str), EStableTypeNotAllowed);
+    let stable_type_name = type_name::get<StableType>();
+    assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
     
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
@@ -251,8 +252,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         description,
     );
     
-    // Create a temporary priority queue ID (will create the actual queue later)
-    let temp_queue_id = object::id_from_address(@0x0);
+    // Priority queue will be created later, use None for now
     
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
@@ -265,8 +265,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     let spot_pool_id = object::id(&spot_pool);
     account_spot_pool::share(spot_pool);
     
-    // Create a temporary DAO pool ID (will create the actual pool later)
-    let temp_dao_pool_id = object::id_from_address(@0x0);
+    // DAO pool ID is the same as spot pool ID
     
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
@@ -275,12 +274,12 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     );
     
     // Set additional fields that aren't in the constructor
-    futarchy_config::set_proposal_queue_id(&mut config, option::some(temp_queue_id));
+    futarchy_config::set_proposal_queue_id(&mut config, option::none());
     futarchy_config::set_spot_pool_id(&mut config, spot_pool_id);
-    futarchy_config::set_dao_pool_id(&mut config, temp_dao_pool_id);
+    futarchy_config::set_dao_pool_id(&mut config, spot_pool_id);
     
-    // Create the account with unverified_allowed to bypass deps validation
-    let mut account = futarchy_config::new_account_unverified(extensions, config, ctx);
+    // Create the account with Extensions registry validation for security
+    let mut account = futarchy_config::new_account_with_extensions(extensions, config, ctx);
     
     // Now create the priority queue with the actual DAO ID
     let priority_queue_id = {
@@ -303,6 +302,9 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     futarchy_config::set_proposal_queue_id(config_mut, option::some(priority_queue_id));
     
     // Action registry removed - using statically-typed pattern
+    
+    // Initialize the policy registry
+    policy_registry::initialize(&mut account, version::current(), ctx);
     
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);
@@ -370,8 +372,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     assert!(!factory.paused, EPaused);
     
     // Check if StableType is allowed
-    let stable_type_str = get_type_string<StableType>();
-    assert!(factory.allowed_stable_types.contains(&stable_type_str), EStableTypeNotAllowed);
+    let stable_type_name = type_name::get<StableType>();
+    assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
     
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
@@ -411,8 +413,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         description,
     );
     
-    // Create a temporary priority queue ID (will create the actual queue later)
-    let temp_queue_id = object::id_from_address(@0x0);
+    // Priority queue will be created later, use None for now
     
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
@@ -425,8 +426,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     let spot_pool_id = object::id(&spot_pool);
     account_spot_pool::share(spot_pool);
     
-    // Create a temporary DAO pool ID (will create the actual pool later)
-    let temp_dao_pool_id = object::id_from_address(@0x0);
+    // DAO pool ID is the same as spot pool ID
     
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
@@ -435,9 +435,9 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     );
     
     // Set additional fields that aren't in the constructor
-    futarchy_config::set_proposal_queue_id(&mut config, option::some(temp_queue_id));
+    futarchy_config::set_proposal_queue_id(&mut config, option::none());
     futarchy_config::set_spot_pool_id(&mut config, spot_pool_id);
-    futarchy_config::set_dao_pool_id(&mut config, temp_dao_pool_id);
+    futarchy_config::set_dao_pool_id(&mut config, spot_pool_id);
     
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
@@ -520,15 +520,15 @@ public entry fun add_allowed_stable_type<StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let type_str = get_type_string<StableType>();
+    let type_name_val = type_name::get<StableType>();
     assert!(min_raise_amount > 0, 0);
     
-    if (!factory.allowed_stable_types.contains(&type_str)) {
-        factory.allowed_stable_types.insert(type_str);
-        factory.min_raise_amounts.add(type_str, min_raise_amount);
+    if (!factory.allowed_stable_types.contains(&type_name_val)) {
+        factory.allowed_stable_types.insert(type_name_val);
+        factory.min_raise_amounts.add(type_name_val, min_raise_amount);
         
         event::emit(StableCoinTypeAdded {
-            type_str,
+            type_str: get_type_string<StableType>(),
             admin: ctx.sender(),
             timestamp: clock.timestamp_ms(),
             min_raise_amount,
@@ -543,15 +543,15 @@ public entry fun remove_allowed_stable_type<StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let type_str = get_type_string<StableType>();
-    if (factory.allowed_stable_types.contains(&type_str)) {
-        factory.allowed_stable_types.remove(&type_str);
-        if (factory.min_raise_amounts.contains(type_str)) {
-            factory.min_raise_amounts.remove(type_str);
+    let type_name_val = type_name::get<StableType>();
+    if (factory.allowed_stable_types.contains(&type_name_val)) {
+        factory.allowed_stable_types.remove(&type_name_val);
+        if (factory.min_raise_amounts.contains(type_name_val)) {
+            factory.min_raise_amounts.remove(type_name_val);
         };
         
         event::emit(StableCoinTypeRemoved {
-            type_str,
+            type_str: get_type_string<StableType>(),
             admin: ctx.sender(),
             timestamp: clock.timestamp_ms(),
         });
@@ -566,11 +566,11 @@ public entry fun update_min_raise_amount<StableType>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let type_str = get_type_string<StableType>();
-    assert!(factory.allowed_stable_types.contains(&type_str), EStableTypeNotAllowed);
+    let type_name_val = type_name::get<StableType>();
+    assert!(factory.allowed_stable_types.contains(&type_name_val), EStableTypeNotAllowed);
     assert!(new_min_raise_amount > 0, 0);
     
-    let current_amount = factory.min_raise_amounts.borrow_mut(type_str);
+    let current_amount = factory.min_raise_amounts.borrow_mut(type_name_val);
     *current_amount = new_min_raise_amount;
 }
 
@@ -594,15 +594,15 @@ public fun is_paused(factory: &Factory): bool {
 
 /// Check if a stable type is allowed
 public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
-    let type_str = get_type_string<StableType>();
-    factory.allowed_stable_types.contains(&type_str)
+    let type_name_val = type_name::get<StableType>();
+    factory.allowed_stable_types.contains(&type_name_val)
 }
 
 /// Get minimum raise amount for a stable type
 public fun get_min_raise_amount<StableType>(factory: &Factory): u64 {
-    let type_str = get_type_string<StableType>();
-    assert!(factory.allowed_stable_types.contains(&type_str), EStableTypeNotAllowed);
-    *factory.min_raise_amounts.borrow(type_str)
+    let type_name_val = type_name::get<StableType>();
+    assert!(factory.allowed_stable_types.contains(&type_name_val), EStableTypeNotAllowed);
+    *factory.min_raise_amounts.borrow(type_name_val)
 }
 
 // === Private Functions ===
@@ -621,7 +621,7 @@ public fun create_factory(ctx: &mut TxContext) {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
-        allowed_stable_types: vec_set::empty<UTF8String>(),
+        allowed_stable_types: vec_set::empty<TypeName>(),
         min_raise_amounts: table::new(ctx),
     };
     

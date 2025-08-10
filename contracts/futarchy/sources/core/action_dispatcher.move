@@ -28,6 +28,8 @@ use futarchy::{
     liquidity_actions,
     dissolution_actions,
     stream_actions,
+    policy_actions,
+    policy_registry,
 };
 
 // === Constants ===
@@ -77,6 +79,10 @@ public fun execute_all_actions<IW: copy + drop>(
         };
         
         if (try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        if (try_execute_policy_action(&mut executable, account, witness, ctx)) {
             continue
         };
         
@@ -370,6 +376,37 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
+    false
+}
+
+// === Policy Registry Action Handlers ===
+
+fun try_execute_policy_action<IW: drop>(
+    executable: &mut Executable<FutarchyOutcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext,
+): bool {
+    // Check for set policy action
+    if (executable::contains_action<FutarchyOutcome, policy_actions::SetPolicyAction>(executable)) {
+        let action: &policy_actions::SetPolicyAction = executable.next_action(witness);
+        let account_id = object::id(account);
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
+        let (key, id, prefix) = policy_actions::get_set_policy_params(action);
+        policy_registry::set_policy(registry, account_id, *key, id, *prefix);
+        return true
+    };
+
+    // Check for remove policy action
+    if (executable::contains_action<FutarchyOutcome, policy_actions::RemovePolicyAction>(executable)) {
+        let action: &policy_actions::RemovePolicyAction = executable.next_action(witness);
+        let account_id = object::id(account);
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
+        let key = policy_actions::get_remove_policy_key(action);
+        policy_registry::remove_policy(registry, account_id, *key);
+        return true
+    };
+
     false
 }
 

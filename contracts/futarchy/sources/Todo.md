@@ -1,3 +1,4 @@
+- [ ] Figure out and remove if and why contracts/futarchy/sources/core/futarchy_config.move has legacy or old or V2 code ???
 - [ ] Sort out file locations / distributions in directories
 - [ ] Get summary of each file and make sure AIs stop getting tripped up
 

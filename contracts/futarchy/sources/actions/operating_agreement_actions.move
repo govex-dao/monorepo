@@ -66,6 +66,21 @@ public struct RemoveLineAction has store {
     line_id: ID,
 }
 
+/// Action to set a line as immutable (one-way lock)
+public struct SetLineImmutableAction has store {
+    line_id: ID,
+}
+
+/// Action to control whether insertions are allowed (one-way lock)
+public struct SetInsertAllowedAction has store {
+    allowed: bool,
+}
+
+/// Action to control whether removals are allowed (one-way lock)
+public struct SetRemoveAllowedAction has store {
+    allowed: bool,
+}
+
 /// Batch action for multiple operating agreement changes
 public struct BatchOperatingAgreementAction has store {
     actions: vector<OperatingAgreementAction>,
@@ -95,6 +110,21 @@ public fun delete_insert_line_at_beginning(expired: &mut Expired) {
 /// Delete a remove line action from an expired intent
 public fun delete_remove_line(expired: &mut Expired) {
     let RemoveLineAction { line_id: _ } = expired.remove_action();
+}
+
+/// Delete a set line immutable action from an expired intent
+public fun delete_set_line_immutable(expired: &mut Expired) {
+    let SetLineImmutableAction { line_id: _ } = expired.remove_action();
+}
+
+/// Delete a set insert allowed action from an expired intent
+public fun delete_set_insert_allowed(expired: &mut Expired) {
+    let SetInsertAllowedAction { allowed: _ } = expired.remove_action();
+}
+
+/// Delete a set remove allowed action from an expired intent
+public fun delete_set_remove_allowed(expired: &mut Expired) {
+    let SetRemoveAllowedAction { allowed: _ } = expired.remove_action();
 }
 
 /// Delete a batch operating agreement action from an expired intent
@@ -197,6 +227,21 @@ public fun new_remove_line_action(line_id: ID): RemoveLineAction {
     RemoveLineAction { line_id }
 }
 
+/// Create a new set line immutable action
+public fun new_set_line_immutable_action(line_id: ID): SetLineImmutableAction {
+    SetLineImmutableAction { line_id }
+}
+
+/// Create a new set insert allowed action
+public fun new_set_insert_allowed_action(allowed: bool): SetInsertAllowedAction {
+    SetInsertAllowedAction { allowed }
+}
+
+/// Create a new set remove allowed action
+public fun new_set_remove_allowed_action(allowed: bool): SetRemoveAllowedAction {
+    SetRemoveAllowedAction { allowed }
+}
+
 /// Create a new batch operating agreement action
 public fun new_batch_operating_agreement_action(
     actions: vector<OperatingAgreementAction>
@@ -296,6 +341,21 @@ public fun get_insert_line_at_beginning_params(action: &InsertLineAtBeginningAct
 /// Get line ID from RemoveLineAction
 public fun get_remove_line_id(action: &RemoveLineAction): ID {
     action.line_id
+}
+
+/// Get line ID from SetLineImmutableAction
+public fun get_set_line_immutable_id(action: &SetLineImmutableAction): ID {
+    action.line_id
+}
+
+/// Get allowed flag from SetInsertAllowedAction
+public fun get_set_insert_allowed(action: &SetInsertAllowedAction): bool {
+    action.allowed
+}
+
+/// Get allowed flag from SetRemoveAllowedAction
+public fun get_set_remove_allowed(action: &SetRemoveAllowedAction): bool {
+    action.allowed
 }
 
 /// Get actions from BatchOperatingAgreementAction

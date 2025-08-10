@@ -27,12 +27,18 @@ use futarchy::operating_agreement_actions::{
     InsertLineAfterAction,
     InsertLineAtBeginningAction,
     RemoveLineAction,
+    SetLineImmutableAction,
+    SetInsertAllowedAction,
+    SetRemoveAllowedAction,
     BatchOperatingAgreementAction,
     OperatingAgreementAction,
     get_update_line_params,
     get_insert_line_after_params,
     get_insert_line_at_beginning_params,
     get_remove_line_id,
+    get_set_line_immutable_id,
+    get_set_insert_allowed,
+    get_set_remove_allowed,
     get_batch_actions,
     get_operating_agreement_action_params,
     action_update,
@@ -57,6 +63,12 @@ const ETooManyLines: u64 = 2;
 const EInvalidActionType: u64 = 3;
 const EAgreementNotFound: u64 = 4;
 const EAgreementAlreadyExists: u64 = 5;
+const ELineIsImmutable: u64 = 6;
+const EInsertNotAllowed: u64 = 7;
+const ERemoveNotAllowed: u64 = 8;
+const ECannotReEnableInsert: u64 = 9;
+const ECannotReEnableRemove: u64 = 10;
+const EAlreadyImmutable: u64 = 11;
 
 // === Constants ===
 const MAX_LINES_PER_AGREEMENT: u64 = 1000;
@@ -69,6 +81,8 @@ public struct AgreementLine has store, drop {
     text: String,
     /// Difficulty required to change this line (in basis points)
     difficulty: u64,
+    /// Whether this line is immutable (one-way lock: false -> true only)
+    immutable: bool,
     /// Previous line in the linked list
     prev: Option<ID>,
     /// Next line in the linked list
@@ -84,6 +98,12 @@ public struct OperatingAgreement has key, store {
     head: Option<ID>,
     /// Tail of the linked list  
     tail: Option<ID>,
+    /// Whether new lines can be inserted (one-way lock: true -> false only)
+    allow_insert: bool,
+    /// Whether lines can be removed (one-way lock: true -> false only)
+    allow_remove: bool,
+    /// Number of lines in the agreement for O(1) counting
+    line_count: u64,
 }
 
 // === Creation and Management Functions ===
@@ -128,6 +148,9 @@ public struct AgreementRead has copy, drop {
     line_ids: vector<ID>,
     texts: vector<String>,
     difficulties: vector<u64>,
+    immutables: vector<bool>,
+    allow_insert: bool,
+    allow_remove: bool,
     timestamp_ms: u64,
 }
 
@@ -156,6 +179,28 @@ public struct LineRemoved has copy, drop {
     timestamp_ms: u64,
 }
 
+/// Emitted when a line's immutability status changes (one-way: false -> true only)
+public struct LineImmutabilityChanged has copy, drop {
+    dao_id: ID,
+    line_id: ID,
+    immutable: bool,
+    timestamp_ms: u64,
+}
+
+/// Emitted when OA's insert permission changes (one-way: true -> false only)
+public struct OAInsertAllowedChanged has copy, drop {
+    dao_id: ID,
+    allow_insert: bool,
+    timestamp_ms: u64,
+}
+
+/// Emitted when OA's remove permission changes (one-way: true -> false only)  
+public struct OARemoveAllowedChanged has copy, drop {
+    dao_id: ID,
+    allow_remove: bool,
+    timestamp_ms: u64,
+}
+
 // === Witness ===
 /// Witness for accessing the operating agreement
 public struct OperatingAgreementWitness has drop {}
@@ -177,6 +222,9 @@ public fun new(
         dao_id,
         head: option::none(),
         tail: option::none(),
+        allow_insert: true,  // Initially allow insertions
+        allow_remove: true,  // Initially allow removals
+        line_count: 0,
     };
     
     // Initialize with the provided lines
@@ -194,6 +242,7 @@ public fun new(
         let line = AgreementLine {
             text,
             difficulty,
+            immutable: false,  // Lines start as mutable
             prev: prev_id,
             next: option::none(),
         };
@@ -215,6 +264,7 @@ public fun new(
         
         prev_id = option::some(line_id);
         object::delete(line_uid);
+        agreement.line_count = agreement.line_count + 1;
         i = i + 1;
     };
     
@@ -337,6 +387,45 @@ public fun execute_batch_operating_agreement<IW: drop>(
     emit_current_state_event(agreement, clock);
 }
 
+/// Execute a set line immutable action
+public fun execute_set_line_immutable<IW: drop>(
+    executable: &mut Executable<FutarchyOutcome>,
+    agreement: &mut OperatingAgreement,
+    witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let action: &SetLineImmutableAction = executable.next_action(witness);
+    let line_id = get_set_line_immutable_id(action);
+    set_line_immutable(agreement, line_id, clock);
+}
+
+/// Execute a set insert allowed action
+public fun execute_set_insert_allowed<IW: drop>(
+    executable: &mut Executable<FutarchyOutcome>,
+    agreement: &mut OperatingAgreement,
+    witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let action: &SetInsertAllowedAction = executable.next_action(witness);
+    let allowed = get_set_insert_allowed(action);
+    set_insert_allowed(agreement, allowed, clock);
+}
+
+/// Execute a set remove allowed action
+public fun execute_set_remove_allowed<IW: drop>(
+    executable: &mut Executable<FutarchyOutcome>,
+    agreement: &mut OperatingAgreement,
+    witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let action: &SetRemoveAllowedAction = executable.next_action(witness);
+    let allowed = get_set_remove_allowed(action);
+    set_remove_allowed(agreement, allowed, clock);
+}
+
 // === Internal Functions ===
 
 fun update_line_internal(
@@ -347,6 +436,10 @@ fun update_line_internal(
 ) {
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
     let line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
+    
+    // Check if line is immutable
+    assert!(!line.immutable, ELineIsImmutable);
+    
     line.text = new_text;
     
     event::emit(LineUpdated {
@@ -365,10 +458,12 @@ fun insert_line_after_internal(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
+    // Check if insertions are allowed
+    assert!(agreement.allow_insert, EInsertNotAllowed);
+    
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     
-    let current_line_count = get_all_line_ids_ordered(agreement).length();
-    assert!(current_line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+    assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
@@ -383,6 +478,7 @@ fun insert_line_after_internal(
     let new_line = AgreementLine {
         text: new_text,
         difficulty: new_difficulty,
+        immutable: false,  // New lines start as mutable
         prev: option::some(prev_line_id),
         next: prev_line_next,
     };
@@ -405,6 +501,7 @@ fun insert_line_after_internal(
     
     df::add(&mut agreement.id, LineKey { id: new_line_id }, new_line);
     object::delete(line_uid);
+    agreement.line_count = agreement.line_count + 1;
     
     event::emit(LineInserted {
         dao_id: agreement.dao_id,
@@ -425,8 +522,10 @@ fun insert_line_at_beginning_internal(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
-    let current_line_count = get_all_line_ids_ordered(agreement).length();
-    assert!(current_line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+    // Check if insertions are allowed
+    assert!(agreement.allow_insert, EInsertNotAllowed);
+    
+    assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
@@ -434,6 +533,7 @@ fun insert_line_at_beginning_internal(
     let new_line = AgreementLine {
         text: new_text,
         difficulty: new_difficulty,
+        immutable: false,  // New lines start as mutable
         prev: option::none(),
         next: agreement.head,
     };
@@ -451,6 +551,7 @@ fun insert_line_at_beginning_internal(
     agreement.head = option::some(new_line_id);
     df::add(&mut agreement.id, LineKey { id: new_line_id }, new_line);
     object::delete(line_uid);
+    agreement.line_count = agreement.line_count + 1;
     
     event::emit(LineInserted {
         dao_id: agreement.dao_id,
@@ -469,7 +570,15 @@ fun remove_line_internal(
     line_id: ID,
     clock: &Clock,
 ) {
+    // Check if removals are allowed
+    assert!(agreement.allow_remove, ERemoveNotAllowed);
+    
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
+    
+    // Check if the line is immutable before removing
+    let line_immutable = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id }).immutable;
+    assert!(!line_immutable, ELineIsImmutable);
+    
     let line_to_remove = df::remove<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
     
     // Update the previous line's next pointer
@@ -492,11 +601,77 @@ fun remove_line_internal(
         agreement.tail = line_to_remove.prev;
     };
     
-    let AgreementLine { text: _, difficulty: _, prev: _, next: _ } = line_to_remove;
+    let AgreementLine { text: _, difficulty: _, immutable: _, prev: _, next: _ } = line_to_remove;
+    agreement.line_count = agreement.line_count - 1;
     
     event::emit(LineRemoved {
         dao_id: agreement.dao_id,
         line_id,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+// === Immutability Control Functions ===
+
+/// Set a line as immutable (one-way: can only go from false to true)
+public fun set_line_immutable(
+    agreement: &mut OperatingAgreement,
+    line_id: ID,
+    clock: &Clock,
+) {
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
+    
+    let line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
+    
+    // One-way lock: can only go from false to true
+    assert!(!line.immutable, EAlreadyImmutable);
+    
+    line.immutable = true;
+    
+    event::emit(LineImmutabilityChanged {
+        dao_id: agreement.dao_id,
+        line_id,
+        immutable: true,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+/// Set whether insertions are allowed (one-way: can only go from true to false)
+public fun set_insert_allowed(
+    agreement: &mut OperatingAgreement,
+    allowed: bool,
+    clock: &Clock,
+) {
+    // One-way lock: can only go from true to false
+    if (!allowed) {
+        agreement.allow_insert = false;
+    } else {
+        assert!(agreement.allow_insert, ECannotReEnableInsert);
+    };
+    
+    event::emit(OAInsertAllowedChanged {
+        dao_id: agreement.dao_id,
+        allow_insert: agreement.allow_insert,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+/// Set whether removals are allowed (one-way: can only go from true to false)
+public fun set_remove_allowed(
+    agreement: &mut OperatingAgreement,
+    allowed: bool,
+    clock: &Clock,
+) {
+    // One-way lock: can only go from true to false
+    if (!allowed) {
+        agreement.allow_remove = false;
+    } else {
+        assert!(agreement.allow_remove, ECannotReEnableRemove);
+    };
+    
+    event::emit(OARemoveAllowedChanged {
+        dao_id: agreement.dao_id,
+        allow_remove: agreement.allow_remove,
         timestamp_ms: clock::timestamp_ms(clock),
     });
 }
@@ -513,6 +688,32 @@ public fun get_difficulty(agreement: &OperatingAgreement, line_id: ID): u64 {
 public fun get_line_text(agreement: &OperatingAgreement, line_id: ID): String {
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
     df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id }).text
+}
+
+/// Check if a specific line is immutable
+public fun is_line_immutable(agreement: &OperatingAgreement, line_id: ID): bool {
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
+    df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id }).immutable
+}
+
+/// Check if insertions are allowed
+public fun is_insert_allowed(agreement: &OperatingAgreement): bool {
+    agreement.allow_insert
+}
+
+/// Check if removals are allowed
+public fun is_remove_allowed(agreement: &OperatingAgreement): bool {
+    agreement.allow_remove
+}
+
+/// Get OA policy flags in one call (allow_insert, allow_remove)
+public fun get_oa_policy(agreement: &OperatingAgreement): (bool, bool) {
+    (agreement.allow_insert, agreement.allow_remove)
+}
+
+/// Get the number of lines in the agreement (O(1) operation)
+public fun line_count(agreement: &OperatingAgreement): u64 {
+    agreement.line_count
 }
 
 /// Get all line IDs in order
@@ -544,6 +745,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
     
     let mut texts = vector[];
     let mut difficulties = vector[];
+    let mut immutables = vector[];
     
     let mut i = 0;
     while (i < ordered_ids.length()) {
@@ -551,6 +753,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
         let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
         texts.push_back(line.text);
         difficulties.push_back(line.difficulty);
+        immutables.push_back(line.immutable);
         i = i + 1;
     };
     
@@ -559,6 +762,9 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
         line_ids: ordered_ids,
         texts,
         difficulties,
+        immutables,
+        allow_insert: agreement.allow_insert,
+        allow_remove: agreement.allow_remove,
         timestamp_ms: clock::timestamp_ms(clock),
     });
 }

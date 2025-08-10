@@ -786,7 +786,8 @@ public fun new_account_with_extensions(
         deps,
     };
     
-    // Create the account using the macro
+    // Include AccountProtocol, Futarchy AND AccountActions as deps.
+    // This is required because we call account_actions::* modules (e.g. package_upgrade, owned...).
     account_interface::create_account!(
         config,
         version::current(),
@@ -797,6 +798,7 @@ public fun new_account_with_extensions(
             vector[
                 b"AccountProtocol".to_string(),
                 b"Futarchy".to_string(),
+                b"AccountActions".to_string(), // <--- added
             ]
         )
     )
@@ -1100,4 +1102,3 @@ public fun execute_proposal_intent<AssetType, StableType>(
 // NOTE: These functions have been moved to the action modules themselves
 // The action modules now contain the full execution logic using direct config access
 // This follows the principle of having actions be self-contained command handlers
-
