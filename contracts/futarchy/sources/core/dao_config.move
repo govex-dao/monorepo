@@ -54,6 +54,7 @@ public struct GovernanceConfig has store, drop, copy {
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
+    max_intents_per_outcome: u64,
 }
 
 /// Metadata configuration
@@ -129,6 +130,7 @@ public fun new_governance_config(
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
+    max_intents_per_outcome: u64,
 ): GovernanceConfig {
     // Validate inputs
     assert!(max_outcomes >= MIN_OUTCOMES, EInvalidMaxOutcomes);
@@ -136,6 +138,7 @@ public fun new_governance_config(
     assert!(required_bond_amount > 0, EInvalidBondAmount);
     assert!(max_concurrent_proposals > 0, EInvalidProposalFee);
     assert!(fee_escalation_basis_points <= MAX_FEE_BPS, EInvalidFee);
+    assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
     
     GovernanceConfig {
         max_outcomes,
@@ -147,6 +150,7 @@ public fun new_governance_config(
         fee_escalation_basis_points,
         proposal_creation_enabled,
         accept_new_proposals,
+        max_intents_per_outcome,
     }
 }
 
@@ -206,6 +210,7 @@ public fun max_proposal_chain_depth(gov: &GovernanceConfig): u64 { gov.max_propo
 public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 { gov.fee_escalation_basis_points }
 public fun proposal_creation_enabled(gov: &GovernanceConfig): bool { gov.proposal_creation_enabled }
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
+public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
@@ -290,5 +295,6 @@ public fun default_governance_config(): GovernanceConfig {
         fee_escalation_basis_points: 500, // 5%
         proposal_creation_enabled: true,
         accept_new_proposals: true,
+        max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
     }
 }

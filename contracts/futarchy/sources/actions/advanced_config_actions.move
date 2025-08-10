@@ -110,6 +110,7 @@ public struct GovernanceUpdateAction has store, drop {
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     required_bond_amount: Option<u64>,
+    max_intents_per_outcome: Option<u64>,
 }
 
 /// Metadata table update action
@@ -291,6 +292,9 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     if (action.required_bond_amount.is_some()) {
         futarchy_config::set_required_bond_amount(config, *action.required_bond_amount.borrow());
     };
+    if (action.max_intents_per_outcome.is_some()) {
+        futarchy_config::set_max_intents_per_outcome(config, *action.max_intents_per_outcome.borrow());
+    };
     
     // Emit event
     event::emit(GovernanceSettingsChanged {
@@ -440,6 +444,7 @@ public fun delete_governance_update(expired: &mut Expired) {
         proposal_creation_enabled: _,
         max_outcomes: _,
         required_bond_amount: _,
+        max_intents_per_outcome: _,
     } = expired.remove_action();
 }
 
@@ -563,11 +568,13 @@ public fun new_governance_update_action(
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
     required_bond_amount: Option<u64>,
+    max_intents_per_outcome: Option<u64>,
 ): GovernanceUpdateAction {
     let action = GovernanceUpdateAction {
         proposal_creation_enabled,
         max_outcomes,
         required_bond_amount,
+        max_intents_per_outcome,
     };
     validate_governance_update(&action);
     action
@@ -655,12 +662,14 @@ public fun get_twap_config_fields(update: &TwapConfigUpdateAction): (
 public fun get_governance_fields(update: &GovernanceUpdateAction): (
     &Option<bool>,
     &Option<u64>,
+    &Option<u64>,
     &Option<u64>
 ) {
     (
         &update.proposal_creation_enabled,
         &update.max_outcomes,
-        &update.required_bond_amount
+        &update.required_bond_amount,
+        &update.max_intents_per_outcome
     )
 }
 
@@ -744,6 +753,9 @@ fun validate_twap_config_update(action: &TwapConfigUpdateAction) {
 fun validate_governance_update(action: &GovernanceUpdateAction) {
     if (action.max_outcomes.is_some()) {
         assert!(*action.max_outcomes.borrow() >= 2, EInvalidParameter); // At least YES/NO
+    };
+    if (action.max_intents_per_outcome.is_some()) {
+        assert!(*action.max_intents_per_outcome.borrow() > 0, EInvalidParameter);
     };
 }
 

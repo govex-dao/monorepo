@@ -346,6 +346,214 @@ public(package) fun initialize_market<AssetType, StableType>(
 // All proposals are created through initialize_market which properly handles proposal IDs
 // generated from the priority queue.
 
+/// Create a PREMARKET proposal without market/escrow/liquidity.
+/// This reserves the proposal "as next" without consuming DAO/proposer liquidity.
+#[allow(lint(share_owned))]
+public(package) fun new_premarket<AssetType, StableType>(
+    // Proposal ID originating from queue
+    proposal_id_from_queue: ID,
+    dao_id: ID,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    min_asset_liquidity: u64,
+    min_stable_liquidity: u64,
+    twap_start_delay: u64,
+    twap_initial_observation: u128,
+    twap_step_max: u64,
+    twap_threshold: u64,
+    amm_total_fee_bps: u64,
+    treasury_address: address,
+    title: String,
+    metadata: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+    proposer: address,
+    uses_dao_liquidity: bool,
+    fee_escrow: Balance<StableType>,
+    intent_key_for_yes: Option<String>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    let id = object::new(ctx);
+    let actual_proposal_id = object::uid_to_inner(&id);
+    let outcome_count = outcome_messages.length();
+    
+    let proposal = Proposal<AssetType, StableType> {
+        id,
+        queued_proposal_id: proposal_id_from_queue,
+        created_at: clock.timestamp_ms(),
+        market_initialized_at: option::none(),
+        state: STATE_PREMARKET,
+        outcome_count,
+        dao_id,
+        proposer,
+        liquidity_provider: option::none(),
+        supply_ids: option::none(),
+        amm_pools: option::none(),
+        escrow_id: option::none(),
+        market_state_id: option::none(),
+        title,
+        details: outcome_details,
+        metadata,
+        outcome_messages,
+        outcome_creators: vector::tabulate!(outcome_count, |_| proposer),
+        // Will be computed at market initialization from coin inputs
+        asset_amounts: vector::empty(),
+        stable_amounts: vector::empty(),
+        min_asset_liquidity,
+        min_stable_liquidity,
+        twap_start_delay,
+        uses_dao_liquidity,
+        twap_initial_observation,
+        twap_step_max,
+        twap_threshold,
+        amm_total_fee_bps,
+        winning_outcome: option::none(),
+        fee_escrow,
+        treasury_address,
+        intent_keys: vector::tabulate!(outcome_count, |i| {
+            if (i == 0) { intent_key_for_yes } else { option::none() }
+        }),
+        review_period_ms,
+        trading_period_ms,
+        twap_prices: vector::empty(),
+        last_twap_update: 0,
+    };
+    
+    transfer::public_share_object(proposal);
+    actual_proposal_id
+}
+
+/// Initialize market/escrow/AMMs for a PREMARKET proposal.
+/// Consumes provided coins, sets state to REVIEW, and readies the market for the review timer.
+#[allow(lint(share_owned))]
+public(package) fun initialize_market_from_premarket<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    asset_coin: Coin<AssetType>,
+    stable_coin: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    assert!(proposal.state == STATE_PREMARKET, EInvalidState);
+    
+    // Evenly split liquidity across outcomes (same convention as initialize_market)
+    let outcome_count = proposal.outcome_count;
+    let total_asset_liquidity = asset_coin.value();
+    let total_stable_liquidity = stable_coin.value();
+    assert!(total_asset_liquidity > 0 && total_stable_liquidity > 0, EInvalidAmount);
+    
+    let asset_per = total_asset_liquidity / outcome_count;
+    let stable_per = total_stable_liquidity / outcome_count;
+    assert!(asset_per >= proposal.min_asset_liquidity, EAssetLiquidityTooLow);
+    assert!(stable_per >= proposal.min_stable_liquidity, EStableLiquidityTooLow);
+    
+    let asset_remainder = total_asset_liquidity % outcome_count;
+    let stable_remainder = total_stable_liquidity % outcome_count;
+    
+    let mut initial_asset_amounts = vector::empty<u64>();
+    let mut initial_stable_amounts = vector::empty<u64>();
+    let mut i = 0;
+    while (i < outcome_count) {
+        let a = if (i < asset_remainder) { asset_per + 1 } else { asset_per };
+        let s = if (i < stable_remainder) { stable_per + 1 } else { stable_per };
+        vector::push_back(&mut initial_asset_amounts, a);
+        vector::push_back(&mut initial_stable_amounts, s);
+        i = i + 1;
+    };
+    
+    // Market state
+    let ms = market_state::new(
+        object::id(proposal),
+        proposal.dao_id,
+        proposal.outcome_count,
+        proposal.outcome_messages,
+        clock,
+        ctx
+    );
+    let market_state_id = object::id(&ms);
+    
+    // Escrow
+    let mut escrow = coin_escrow::new<AssetType, StableType>(ms, ctx);
+    let escrow_id = object::id(&escrow);
+    
+    // Determine quantum liquidity amounts
+    let mut asset_balance = asset_coin.into_balance();
+    let mut stable_balance = stable_coin.into_balance();
+    
+    let mut max_asset = 0u64;
+    let mut max_stable = 0u64;
+    i = 0;
+    while (i < outcome_count) {
+        let a = *initial_asset_amounts.borrow(i);
+        let s = *initial_stable_amounts.borrow(i);
+        if (a > max_asset) { max_asset = a };
+        if (s > max_stable) { max_stable = s };
+        i = i + 1;
+    };
+    
+    let asset_total = asset_balance.value();
+    let stable_total = stable_balance.value();
+    
+    let asset_for_pool = if (asset_total > max_asset) {
+        asset_balance.split(max_asset)
+    } else {
+        asset_balance.split(asset_total)
+    };
+    
+    let stable_for_pool = if (stable_total > max_stable) {
+        stable_balance.split(max_stable)
+    } else {
+        stable_balance.split(stable_total)
+    };
+    
+    // Return any excess to liquidity provider (the activator who supplied coins)
+    let sender = ctx.sender();
+    if (asset_balance.value() > 0) {
+        transfer::public_transfer(asset_balance.into_coin(ctx), sender);
+    } else {
+        asset_balance.destroy_zero();
+    };
+    
+    if (stable_balance.value() > 0) {
+        transfer::public_transfer(stable_balance.into_coin(ctx), sender);
+    } else {
+        stable_balance.destroy_zero();
+    };
+    
+    // Create outcome markets
+    let (_supply_ids, amm_pools) = liquidity_initialize::create_outcome_markets(
+        &mut escrow,
+        proposal.outcome_count,
+        initial_asset_amounts,
+        initial_stable_amounts,
+        proposal.twap_start_delay,
+        proposal.twap_initial_observation,
+        proposal.twap_step_max,
+        proposal.amm_total_fee_bps,
+        asset_for_pool,
+        stable_for_pool,
+        clock,
+        ctx
+    );
+    
+    // Update proposal's liquidity amounts
+    proposal.asset_amounts = initial_asset_amounts;
+    proposal.stable_amounts = initial_stable_amounts;
+    
+    // Initialize market fields: PREMARKET → REVIEW
+    initialize_market_fields(
+        proposal,
+        market_state_id,
+        escrow_id,
+        amm_pools,
+        clock.timestamp_ms(),
+        sender
+    );
+    
+    transfer::public_share_object(escrow);
+    market_state_id
+}
+
 /// Adds a new outcome during the premarket phase.
 public(package) fun add_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,

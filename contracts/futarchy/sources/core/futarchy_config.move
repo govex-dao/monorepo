@@ -129,7 +129,7 @@ public struct FutarchyConfig has store {
     // Verification
     attestation_url: String,
     verification_pending: bool,
-    verified: bool,
+    verification_level: u8, // 0 = unverified, 1 = basic, 2 = standard, 3 = premium, etc.
 }
 
 /// Helper struct for creating FutarchyConfig with default values
@@ -164,7 +164,7 @@ public fun new<AssetType: drop, StableType>(
         spot_pool_id: option::none(),
         attestation_url: b"".to_string(),
         verification_pending: false,
-        verified: false,
+        verification_level: 0, // 0 = unverified
     }
 }
 
@@ -227,6 +227,7 @@ public fun new_config_params_from_values(
         fee_escalation_basis_points,
         true,  // proposal_creation_enabled (default)
         true,  // accept_new_proposals (default)
+        10,    // max_intents_per_outcome (default)
     );
     
     let metadata_config = dao_config::new_metadata_config(
@@ -371,7 +372,8 @@ public fun fee_manager_id(config: &FutarchyConfig): &Option<ID> { &config.fee_ma
 // Verification
 public fun attestation_url(config: &FutarchyConfig): &String { &config.attestation_url }
 public fun verification_pending(config: &FutarchyConfig): bool { config.verification_pending }
-public fun verified(config: &FutarchyConfig): bool { config.verified }
+public fun verification_level(config: &FutarchyConfig): u8 { config.verification_level }
+public fun is_verified(config: &FutarchyConfig): bool { config.verification_level > 0 }
 
 // State constants
 public fun state_active(): u8 { DAO_STATE_ACTIVE }
@@ -441,6 +443,7 @@ public(package) fun set_proposal_recreation_window_ms(config: &mut FutarchyConfi
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -457,6 +460,7 @@ public(package) fun set_max_proposal_chain_depth(config: &mut FutarchyConfig, de
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -562,6 +566,7 @@ public(package) fun set_max_outcomes(config: &mut FutarchyConfig, max: u64) {
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -578,6 +583,7 @@ public(package) fun set_proposal_fee_per_outcome(config: &mut FutarchyConfig, fe
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -598,6 +604,7 @@ public(package) fun set_max_concurrent_proposals(config: &mut FutarchyConfig, ma
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -614,6 +621,7 @@ public(package) fun set_required_bond_amount(config: &mut FutarchyConfig, amount
         dao_config::fee_escalation_basis_points(current_gov),
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -657,8 +665,8 @@ public(package) fun set_verification_pending(config: &mut FutarchyConfig, pendin
     config.verification_pending = pending;
 }
 
-public(package) fun set_verified(config: &mut FutarchyConfig, verified: bool) {
-    config.verified = verified;
+public(package) fun set_verification_level(config: &mut FutarchyConfig, level: u8) {
+    config.verification_level = level;
 }
 
 // Metadata setters
@@ -714,6 +722,24 @@ public(package) fun set_fee_escalation_basis_points(config: &mut FutarchyConfig,
         points,
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
+}
+
+public(package) fun set_max_intents_per_outcome(config: &mut FutarchyConfig, max: u64) {
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+        max,
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }

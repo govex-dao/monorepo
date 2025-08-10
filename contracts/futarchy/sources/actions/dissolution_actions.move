@@ -9,6 +9,8 @@ use sui::{
     balance::{Self, Balance},
     object::ID,
     transfer,
+    clock::Clock,
+    tx_context::TxContext,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -19,6 +21,7 @@ use account_protocol::{
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig},
     futarchy_vault,
+    stream_actions,
 };
 
 // === Errors ===
@@ -338,12 +341,13 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
 }
 
 /// Execute cancel all streams action
-public fun do_cancel_all_streams<Outcome: store, IW: drop>(
+public fun do_cancel_all_streams<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    _ctx: &mut TxContext,
+    clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     let action: &CancelAllStreamsAction = executable.next_action(intent_witness);
     
@@ -357,20 +361,29 @@ public fun do_cancel_all_streams<Outcome: store, IW: drop>(
         EDissolutionNotActive
     );
     
-    // Cancel all active streams
-    // In a real implementation, this would:
-    // 1. Iterate through all active streams stored in the account
-    // 2. Cancel each stream using stream_actions module
-    // 3. Return unclaimed amounts to treasury or distribute to recipients
-    //
-    // Since Move doesn't support dynamic iteration over heterogeneous collections,
-    // the actual implementation would need to:
-    // - Maintain a registry of active stream IDs
-    // - Create individual CancelPaymentAction for each stream
-    // - Add them to the executable when creating the dissolution intent
+    // Get all payment IDs that need to be cancelled
+    let payment_ids = stream_actions::get_all_payment_ids(account);
     
-    // For now, this serves as a coordinator action that validates the dissolution state
-    let _ = return_to_treasury;
+    // Cancel all payments and return funds to treasury
+    if (return_to_treasury) {
+        // This function handles:
+        // 1. Cancelling all cancellable streams
+        // 2. Returning isolated pool funds to treasury
+        // 3. Cancelling pending budget withdrawals
+        stream_actions::cancel_all_payments_for_dissolution<CoinType>(
+            account,
+            clock,
+            ctx
+        );
+    };
+    
+    // Note: In production, you would:
+    // 1. Get list of payment IDs from stream_actions
+    // 2. Create individual CancelPaymentAction for each
+    // 3. Process them to properly handle coin returns
+    // This simplified version provides the integration point
+    
+    let _ = payment_ids;
     let _ = version;
 }
 

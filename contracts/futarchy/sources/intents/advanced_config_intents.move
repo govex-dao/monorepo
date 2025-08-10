@@ -149,7 +149,8 @@ public fun create_update_governance_intent(
             let action = advanced_config_actions::new_governance_update_action(
                 option::some(proposals_enabled),
                 option::some(max_outcomes),
-                option::some(required_bond_amount)
+                option::some(required_bond_amount),
+                option::none() // max_intents_per_outcome - not specified
             );
             intent.add_action(action, iw);
         }

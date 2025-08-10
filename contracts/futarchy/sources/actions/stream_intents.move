@@ -39,6 +39,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
     description: String,
     clock: &Clock,
     intent_witness: IW,
+    ctx: &mut TxContext,
 ) {
     let action = stream_actions::new_create_stream_action<CoinType>(
         stream_actions::source_direct_treasury(),
@@ -50,6 +51,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         cancellable,
         description,
         clock,
+        ctx,
     );
     intent.add_action(action, intent_witness);
     
@@ -70,6 +72,7 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
     description: String,
     clock: &Clock,
     intent_witness: IW,
+    ctx: &mut TxContext,
 ) {
     // First add the stream creation action
     let action = stream_actions::new_create_stream_action<CoinType>(
@@ -82,6 +85,7 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
         cancellable,
         description,
         clock,
+        ctx,
     );
     intent.add_action(action, intent_witness);
     
@@ -106,6 +110,7 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
     description: String,
     clock: &Clock,
     intent_witness: IW,
+    ctx: &mut TxContext,
 ) {
     // First add the recurring payment action
     let action = stream_actions::new_create_recurring_payment_action<CoinType>(
@@ -118,6 +123,7 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
         cancellable,
         description,
         clock,
+        ctx,
     );
     intent.add_action(action, intent_witness);
     

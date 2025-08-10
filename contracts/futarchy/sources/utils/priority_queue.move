@@ -126,6 +126,8 @@ public struct ProposalQueue<phantom StableCoin> has key, store {
     max_proposer_funded: u64,
     /// Whether the DAO liquidity slot is occupied
     dao_liquidity_slot_occupied: bool,
+    /// Reserved next on-chain Proposal ID (if locked as the next one to go live)
+    reserved_next_proposal: Option<ID>,
 }
 
 /// Information about an evicted proposal
@@ -279,6 +281,7 @@ public fun new<StableCoin>(
         active_proposal_count: 0,
         max_proposer_funded,
         dao_liquidity_slot_occupied: false,
+        reserved_next_proposal: option::none(),
     }
 }
 
@@ -865,6 +868,27 @@ public fun get_stats<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, u64, 
         count_proposer_funded(&queue.heap, queue.size),
         queue.dao_liquidity_slot_occupied
     )
+}
+
+/// True if the queue already has a reserved next proposal
+public fun has_reserved<StableCoin>(queue: &ProposalQueue<StableCoin>): bool {
+    option::is_some(&queue.reserved_next_proposal)
+}
+
+/// Get reserved on-chain proposal ID (if any)
+public fun reserved_proposal_id<StableCoin>(queue: &ProposalQueue<StableCoin>): Option<ID> {
+    queue.reserved_next_proposal
+}
+
+/// Set the reserved next proposal (package)
+public(package) fun set_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>, id: ID) {
+    assert!(!has_reserved(queue), EHeapInvariantViolated);
+    queue.reserved_next_proposal = option::some(id);
+}
+
+/// Clear the reserved next proposal (package)
+public(package) fun clear_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>) {
+    queue.reserved_next_proposal = option::none();
 }
 
 /// Check if a specific proposal can be activated

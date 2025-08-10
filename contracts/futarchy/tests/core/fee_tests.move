@@ -69,7 +69,9 @@ fun test_fee_manager_initialization() {
         // Verify initial fees
         assert!(fee::get_dao_creation_fee(&fee_manager) == DEFAULT_DAO_CREATION_FEE, 0);
         assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME, 0);
-        assert!(fee::get_verification_fee(&fee_manager) == DEFAULT_VERIFICATION_FEE, 0);
+        // Check default verification level 1 exists
+        assert!(fee::has_verification_level(&fee_manager, 1), 0);
+        assert!(fee::get_verification_fee_for_level(&fee_manager, 1) == DEFAULT_VERIFICATION_FEE, 0);
         assert!(fee::get_sui_balance(&fee_manager) == 0, 0);
 
         test_scenario::return_shared(fee_manager);
@@ -148,7 +150,7 @@ fun test_deposit_verification_payment() {
         let ctx = test_scenario::ctx(&mut scenario);
         let payment = mint_sui(DEFAULT_VERIFICATION_FEE, ctx);
 
-        fee::deposit_verification_payment(&mut fee_manager, payment, &clock, ctx);
+        fee::deposit_verification_payment(&mut fee_manager, payment, 1u8, &clock, ctx);
         assert!(fee::get_sui_balance(&fee_manager) == DEFAULT_VERIFICATION_FEE, 0);
 
         test_scenario::return_shared(fee_manager);
@@ -288,15 +290,16 @@ fun test_update_fees() {
 
         let new_dao_fee = 20_000;
         let new_proposal_fee = 2000;
-        let new_verification_fee = 15_000;
+        let new_verification_fee = 15_000u64;
+        let verification_level = 1u8;
 
         fee::update_dao_creation_fee(&mut fee_manager, &admin_cap, new_dao_fee, &clock, test_scenario::ctx(&mut scenario));
         fee::update_proposal_creation_fee(&mut fee_manager, &admin_cap, new_proposal_fee, &clock, test_scenario::ctx(&mut scenario));
-        fee::update_verification_fee(&mut fee_manager, &admin_cap, new_verification_fee, &clock, test_scenario::ctx(&mut scenario));
+        fee::update_verification_fee(&mut fee_manager, &admin_cap, verification_level, new_verification_fee, &clock, test_scenario::ctx(&mut scenario));
 
         assert!(fee::get_dao_creation_fee(&fee_manager) == new_dao_fee, 0);
         assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == new_proposal_fee, 0);
-        assert!(fee::get_verification_fee(&fee_manager) == new_verification_fee, 0);
+        assert!(fee::get_verification_fee_for_level(&fee_manager, verification_level) == new_verification_fee, 0);
 
         test_scenario::return_shared(fee_manager);
         test_scenario::return_to_address(admin, admin_cap);
@@ -511,7 +514,8 @@ fun test_multiple_operations() {
 
         let new_dao_fee = 15_000;
         let new_proposal_fee = 20_000;
-        let new_verification_fee = 25_000;
+        let new_verification_fee = 25_000u64;
+        let verification_level = 1u8;
 
         fee::update_dao_creation_fee(
             &mut fee_manager,
@@ -530,6 +534,7 @@ fun test_multiple_operations() {
         fee::update_verification_fee(
             &mut fee_manager,
             &admin_cap,
+            verification_level,
             new_verification_fee,
             &clock,
             test_scenario::ctx(&mut scenario),

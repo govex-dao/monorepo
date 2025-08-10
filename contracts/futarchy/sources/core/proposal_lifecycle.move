@@ -65,6 +65,14 @@ public struct ProposalIntentExecuted has copy, drop {
     timestamp: u64,
 }
 
+/// Emitted when the next proposal is reserved (locked) into PREMARKET
+public struct ProposalReserved has copy, drop {
+    queued_proposal_id: ID,
+    premarket_proposal_id: ID,
+    dao_id: ID,
+    timestamp: u64,
+}
+
 // === Public Functions ===
 
 /// Activates a proposal from the queue and initializes its market
@@ -294,6 +302,126 @@ public fun execute_approved_proposal_typed<AssetType, StableType, IW: copy + dro
         intent_key,
         timestamp: clock.timestamp_ms(),
     });
+}
+
+/// Reserve the next proposal into PREMARKET (no liquidity), only if the current
+/// proposal's trading end is within the premarket threshold.
+public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableType>,
+    proposal_fee_manager: &mut ProposalFeeManager,
+    current_market: &MarketState,
+    premarket_threshold_ms: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    use futarchy::proposal as proposal_mod;
+    
+    // Prevent double reservation
+    assert!(!priority_queue::has_reserved(queue), EProposalNotActive);
+    
+    // Compute time remaining for the active trading market
+    let end_opt = market_state::get_trading_end_time(current_market);
+    assert!(end_opt.is_some(), EMarketNotFinalized);
+    let end_ts = *end_opt.borrow();
+    let now = clock.timestamp_ms();
+    assert!(now <= end_ts, EMarketNotFinalized);
+    let remaining = end_ts - now;
+    assert!(remaining <= premarket_threshold_ms, EInvalidWinningOutcome);
+    
+    // Pop top of queue
+    let mut qp_opt = priority_queue::try_activate_next(queue);
+    assert!(qp_opt.is_some(), EProposalNotActive);
+    let mut qp = qp_opt.extract();
+    qp_opt.destroy_none();
+    
+    let dao_id = priority_queue::dao_id(queue);
+    let queued_id = priority_queue::get_proposal_id(&qp);
+    let proposer = priority_queue::get_proposer(&qp);
+    let uses_dao_liquidity = priority_queue::uses_dao_liquidity(&qp);
+    let data = *priority_queue::get_proposal_data(&qp);
+    let intent_key = *priority_queue::get_intent_key(&qp);
+    
+    // Extract optional bond -> becomes fee_escrow in proposal
+    let mut bond = priority_queue::extract_bond(&mut qp);
+    let fee_escrow = if (bond.is_some()) {
+        bond.extract().into_balance()
+    } else {
+        balance::zero<StableType>()
+    };
+    bond.destroy_none();
+    
+    // Config from account
+    let cfg = account.config();
+    
+    // Build PREMARKET proposal (no liquidity)
+    let premarket_id = proposal_mod::new_premarket<AssetType, StableType>(
+        queued_id,
+        dao_id,
+        futarchy_config::review_period_ms(cfg),
+        futarchy_config::trading_period_ms(cfg),
+        futarchy_config::min_asset_amount(cfg),
+        futarchy_config::min_stable_amount(cfg),
+        futarchy_config::amm_twap_start_delay(cfg),
+        futarchy_config::amm_twap_initial_observation(cfg),
+        futarchy_config::amm_twap_step_max(cfg),
+        futarchy_config::twap_threshold(cfg),
+        futarchy_config::amm_total_fee_bps(cfg),
+        object::id_address(account),
+        *priority_queue::get_title(&data),
+        *priority_queue::get_metadata(&data),
+        *priority_queue::get_outcome_messages(&data),
+        *priority_queue::get_outcome_details(&data),
+        proposer,
+        uses_dao_liquidity,
+        fee_escrow,
+        intent_key,
+        clock,
+        ctx
+    );
+    
+    // Mark queue reserved and emit
+    priority_queue::set_reserved(queue, premarket_id);
+    priority_queue::destroy_proposal(qp);
+    
+    event::emit(ProposalReserved {
+        queued_proposal_id: queued_id,
+        premarket_proposal_id: premarket_id,
+        dao_id,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Initialize the reserved PREMARKET proposal into REVIEW by injecting liquidity now.
+public entry fun initialize_reserved_premarket_to_review<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
+    asset_liquidity: Coin<AssetType>,
+    stable_liquidity: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    use futarchy::proposal as proposal_mod;
+    
+    // Must have a reservation, and it must match this proposal's ID
+    assert!(priority_queue::has_reserved(queue), EProposalNotActive);
+    let reserved = priority_queue::reserved_proposal_id(queue);
+    assert!(reserved.is_some(), EProposalNotActive);
+    let reserved_id = *reserved.borrow();
+    assert!(reserved_id == object::id(proposal), EInvalidWinningOutcome);
+    
+    // Initialize market now (PREMARKET -> REVIEW)
+    let _market_state_id = proposal_mod::initialize_market_from_premarket<AssetType, StableType>(
+        proposal,
+        asset_liquidity,
+        stable_liquidity,
+        clock,
+        ctx
+    );
+    
+    // Clear reservation
+    priority_queue::clear_reserved(queue);
 }
 
 /// Complete lifecycle: Activate proposal, run market, finalize, and execute if approved

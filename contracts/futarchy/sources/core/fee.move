@@ -8,6 +8,7 @@ use sui::coin::{Self, Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
+use sui::table::{Self, Table};
 use sui::transfer::{public_share_object, public_transfer};
 
 // === Introduction ===
@@ -26,7 +27,7 @@ const EInvalidAdminCap: u64 = 7;
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
 const DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME: u64 = 1000;
-const DEFAULT_VERIFICATION_FEE: u64 = 10_000;
+const DEFAULT_VERIFICATION_FEE: u64 = 10_000; // Default fee for level 1
 const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
 const FEE_UPDATE_DELAY_MS: u64 = 15_552_000_000; // 6 months (180 days)
 
@@ -39,7 +40,7 @@ public struct FeeManager has key, store {
     admin_cap_id: ID,
     dao_creation_fee: u64,
     proposal_creation_fee_per_outcome: u64,
-    verification_fee: u64,
+    verification_fees: Table<u8, u64>, // Dynamic table mapping level -> fee
     dao_monthly_fee: u64,
     pending_dao_monthly_fee: Option<u64>,
     pending_fee_effective_timestamp: Option<u64>,
@@ -72,8 +73,22 @@ public struct ProposalCreationFeeUpdated has copy, drop {
 }
 
 public struct VerificationFeeUpdated has copy, drop {
+    level: u8,
     old_fee: u64,
     new_fee: u64,
+    admin: address,
+    timestamp: u64,
+}
+
+public struct VerificationLevelAdded has copy, drop {
+    level: u8,
+    fee: u64,
+    admin: address,
+    timestamp: u64,
+}
+
+public struct VerificationLevelRemoved has copy, drop {
+    level: u8,
     admin: address,
     timestamp: u64,
 }
@@ -91,6 +106,7 @@ public struct ProposalCreationFeeCollected has copy, drop {
 }
 
 public struct VerificationFeeCollected has copy, drop {
+    level: u8,
     amount: u64,
     payer: address,
     timestamp: u64,
@@ -142,12 +158,16 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         id: object::new(ctx),
     };
     
+    let mut verification_fees = table::new<u8, u64>(ctx);
+    // Start with just level 1 by default
+    table::add(&mut verification_fees, 1, DEFAULT_VERIFICATION_FEE);
+    
     let fee_manager = FeeManager {
         id: object::new(ctx),
         admin_cap_id: object::id(&fee_admin_cap),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
         proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
-        verification_fee: DEFAULT_VERIFICATION_FEE,
+        verification_fees,
         dao_monthly_fee: 10_000_000, // e.g. 10 of a 6-decimal stable coin
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
@@ -215,18 +235,21 @@ public(package) fun deposit_proposal_creation_payment(
     });
 }
 
-// Function to collect verification fee
+// Function to collect verification fee for a specific level
 public(package) fun deposit_verification_payment(
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
+    verification_level: u8,
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    let fee_amount = fee_manager.verification_fee;
+    assert!(table::contains(&fee_manager.verification_fees, verification_level), EInvalidPayment);
+    let fee_amount = *table::borrow(&fee_manager.verification_fees, verification_level);
     let payment_amount = deposit_payment(fee_manager, fee_amount, payment);
 
     // Emit event
     event::emit(VerificationFeeCollected {
+        level: verification_level,
         amount: payment_amount,
         payer: ctx.sender(),
         timestamp: clock.timestamp_ms(),
@@ -295,18 +318,65 @@ public entry fun update_proposal_creation_fee(
     });
 }
 
-// Admin function to update verification fee
+// Admin function to add a new verification level
+public entry fun add_verification_level(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    level: u8,
+    fee: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(!table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
+    
+    table::add(&mut fee_manager.verification_fees, level, fee);
+    
+    event::emit(VerificationLevelAdded {
+        level,
+        fee,
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// Admin function to remove a verification level
+public entry fun remove_verification_level(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    level: u8,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
+    
+    table::remove(&mut fee_manager.verification_fees, level);
+    
+    event::emit(VerificationLevelRemoved {
+        level,
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// Admin function to update verification fee for a specific level
 public entry fun update_verification_fee(
     fee_manager: &mut FeeManager,
     admin_cap: &FeeAdminCap,
+    level: u8,
     new_fee: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let old_fee = fee_manager.verification_fee;
-    fee_manager.verification_fee = new_fee;
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
+    
+    let old_fee = *table::borrow(&fee_manager.verification_fees, level);
+    *table::borrow_mut(&mut fee_manager.verification_fees, level) = new_fee;
 
     event::emit(VerificationFeeUpdated {
+        level,
         old_fee,
         new_fee,
         admin: ctx.sender(),
@@ -496,8 +566,13 @@ public fun get_proposal_creation_fee_per_outcome(fee_manager: &FeeManager): u64 
     fee_manager.proposal_creation_fee_per_outcome
 }
 
-public fun get_verification_fee(fee_manager: &FeeManager): u64 {
-    fee_manager.verification_fee
+public fun get_verification_fee_for_level(fee_manager: &FeeManager, level: u8): u64 {
+    assert!(table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
+    *table::borrow(&fee_manager.verification_fees, level)
+}
+
+public fun has_verification_level(fee_manager: &FeeManager, level: u8): bool {
+    table::contains(&fee_manager.verification_fees, level)
 }
 
 public fun get_dao_monthly_fee(fee_manager: &FeeManager): u64 {
@@ -540,12 +615,16 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
         id: object::new(ctx),
     };
     
+    let mut verification_fees = table::new<u8, u64>(ctx);
+    // Start with just level 1 by default
+    table::add(&mut verification_fees, 1, DEFAULT_VERIFICATION_FEE);
+    
     let fee_manager = FeeManager {
         id: object::new(ctx),
         admin_cap_id: object::id(&admin_cap),
         dao_creation_fee: DEFAULT_DAO_CREATION_FEE,
         proposal_creation_fee_per_outcome: DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
-        verification_fee: DEFAULT_VERIFICATION_FEE,
+        verification_fees,
         dao_monthly_fee: 10_000_000, // e.g. 10 of a 6-decimal stable coin
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
