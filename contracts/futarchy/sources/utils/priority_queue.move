@@ -351,7 +351,7 @@ public fun insert<StableCoin>(
             let lowest_idx = find_min_index(&queue.heap, queue.size);
             let lowest = vector::borrow(&queue.heap, lowest_idx);
             
-            // Check grace period
+            // Check grace period BEFORE removing
             assert!(
                 current_time - lowest.timestamp >= EVICTION_GRACE_PERIOD_MS,
                 EProposalInGracePeriod
@@ -363,28 +363,35 @@ public fun insert<StableCoin>(
                 EQueueFullAndFeeTooLow
             );
             
-            // Remove the lowest priority proposal - O(log n)!
+            // Now safe to remove - assertions have passed
             let evicted = remove_at(&mut queue.heap, lowest_idx, &mut queue.size);
+            
+            // Save eviction info before destructuring
+            let evicted_proposal_id = evicted.proposal_id;
+            let evicted_proposer = evicted.proposer;
+            let evicted_fee = evicted.fee;
+            let evicted_timestamp = evicted.timestamp;
+            let evicted_priority_value = evicted.priority_score.computed_value;
             
             // Handle eviction
             eviction_info = option::some(EvictionInfo {
-                proposal_id: evicted.proposal_id,
-                proposer: evicted.proposer,
+                proposal_id: evicted_proposal_id,
+                proposer: evicted_proposer,
             });
             
             // Emit eviction event with both priority scores for transparency
             event::emit(ProposalEvicted {
-                proposal_id: evicted.proposal_id,
-                proposer: evicted.proposer,
-                fee: evicted.fee,
+                proposal_id: evicted_proposal_id,
+                proposer: evicted_proposer,
+                fee: evicted_fee,
                 evicted_by: proposal.proposal_id,
-                timestamp: evicted.timestamp,
-                priority_score: evicted.priority_score.computed_value,
+                timestamp: evicted_timestamp,
+                priority_score: evicted_priority_value,
                 new_proposal_priority_score: proposal.priority_score.computed_value,
             });
             
             // Clean up evicted proposal
-            let QueuedProposal { bond, proposal_id, dao_id, proposer: _, fee: _, timestamp: _, priority_score: _, mut intent_key, uses_dao_liquidity: _, data: _ } = evicted;
+            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_key, uses_dao_liquidity: _, data: _ } = evicted;
             
             if (intent_key.is_some()) {
                 let key = intent_key.extract();
@@ -396,7 +403,12 @@ public fun insert<StableCoin>(
                 });
             };
             
-            bond.destroy_none();
+            // Handle bond properly - return to evicted proposer if it exists
+            if (option::is_some(&bond)) {
+                // Return the bond to the proposer who got evicted
+                transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
+            };
+            option::destroy_none(bond);
         };
     };
     

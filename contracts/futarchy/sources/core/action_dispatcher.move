@@ -36,8 +36,7 @@ use futarchy::{
 const EInvalidAmount: u64 = 4;
 const ENoSpotPool: u64 = 5;
 const EInvalidPoolId: u64 = 6;
-// Note: ESlippageExceeded, EUnknownActionType, ENoActionsToExecute, and EExecutionFailed
-// were removed as they're no longer used after simplifying the liquidity action handling
+const EUnknownActionType: u64 = 7;
 
 // === Public Functions ===
 
@@ -85,7 +84,12 @@ public fun execute_all_actions<IW: copy + drop>(
         
         // Additional action types can be added here
         
-        // If no action was executed, we're done
+        // If no action was executed, check if there are remaining actions
+        // confirm_execution will abort if there are, but let's be explicit
+        if (executable::contains_action<FutarchyOutcome, vector<u8>>(&mut executable)) {
+            // Unknown action type - abort to prevent partial execution
+            abort EUnknownActionType
+        };
         break
     };
     
@@ -330,6 +334,42 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
+    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetLineImmutableAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_line_immutable<IW>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetInsertAllowedAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_insert_allowed<IW>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetRemoveAllowedAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_remove_allowed<IW>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
     false
 }
 
@@ -419,7 +459,10 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
             continue
         };
         
-        // No more actions
+        // Check for unknown actions before breaking
+        if (executable::contains_action<FutarchyOutcome, vector<u8>>(&mut executable)) {
+            abort EUnknownActionType
+        };
         break
     };
     

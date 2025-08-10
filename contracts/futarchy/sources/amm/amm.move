@@ -351,13 +351,14 @@ public fun add_liquidity_proportional(
         // First liquidity provider - bootstrap the pool
         let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
         let k = (math::sqrt_u128(k_squared) as u64);
-        assert!(k >= (MINIMUM_LIQUIDITY as u64), ELowLiquidity);
+        assert!(k > (MINIMUM_LIQUIDITY as u64), ELowLiquidity);
         // For the first liquidity provider, a small amount of LP tokens (MINIMUM_LIQUIDITY)
         // is intentionally burned and locked in the pool. This is a standard practice in Uniswap V2
         // to prevent division-by-zero errors and to ensure that LP token prices are always well-defined.
         // This amount is accounted for in the `lp_supply` but is not redeemable.
         pool.lp_supply = k;
-        k
+        // Return k minus the locked minimum liquidity
+        k - (MINIMUM_LIQUIDITY as u64)
     } else {
         // Subsequent providers - mint proportionally
         // The `math::min` function is used here, similar to Uniswap V2, to calculate the LP tokens to mint.

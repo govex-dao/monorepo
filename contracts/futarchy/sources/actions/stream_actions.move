@@ -566,7 +566,7 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
     };
     
     // Generate unique payment ID
-    let payment_id = generate_payment_id(&config, clock.timestamp_ms());
+    let payment_id = generate_payment_id(&config, clock.timestamp_ms(), ctx);
     
     // If using an isolated pool, create the pool first
     // The funding will come from a preceding vault::SpendAction in the same intent
@@ -669,7 +669,7 @@ public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
     };
     
     // Generate unique payment ID
-    let payment_id = generate_payment_id(&config, clock.timestamp_ms());
+    let payment_id = generate_payment_id(&config, clock.timestamp_ms(), ctx);
     
     // Initialize payment storage if needed
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
@@ -1511,44 +1511,30 @@ fun calculate_claimable_amount(payment: &PaymentConfig, current_time: u64): u64 
     }
 }
 
-/// Generate a unique payment ID
-fun generate_payment_id(config: &PaymentConfig, timestamp: u64): String {
+/// Generate a unique payment ID using UID for guaranteed uniqueness
+fun generate_payment_id(config: &PaymentConfig, _timestamp: u64, ctx: &mut TxContext): String {
     use std::string;
+    use sui::object;
+    use sui::hex;
     
-    // Generate unique ID: type_timestamp_counter
+    // Create a new UID for guaranteed uniqueness
+    let uid = object::new(ctx);
+    let id_bytes = object::uid_to_bytes(&uid);
+    object::delete(uid);
+    
+    // Convert to hex string for readable ID
+    let hex_bytes = hex::encode(id_bytes);
+    let hex_str = string::utf8(hex_bytes);
+    
+    // Add prefix based on payment type for readability
     let mut id = if (config.payment_type == PAYMENT_TYPE_STREAM) {
         string::utf8(b"stream_")
     } else {
         string::utf8(b"recurring_")
     };
     
-    // Add timestamp for uniqueness
-    string::append(&mut id, string::utf8(b"t"));
-    let ts_mod = timestamp % 100000000; // Use more digits for better uniqueness
-    
-    // Convert timestamp mod to string-like representation
-    let mut temp = ts_mod;
-    let mut digit_count = 0;
-    while (temp > 0 && digit_count < 8) {
-        let digit = temp % 10;
-        if (digit < 5) {
-            string::append(&mut id, string::utf8(b"l"));
-        } else {
-            string::append(&mut id, string::utf8(b"h"));
-        };
-        temp = temp / 10;
-        digit_count = digit_count + 1;
-    };
-    
-    // Add random suffix based on amount for extra uniqueness
-    string::append(&mut id, string::utf8(b"_"));
-    if ((config.amount % 7) < 3) {
-        string::append(&mut id, string::utf8(b"a"));
-    } else if ((config.amount % 7) < 5) {
-        string::append(&mut id, string::utf8(b"b"));
-    } else {
-        string::append(&mut id, string::utf8(b"c"));
-    };
+    // Append the unique hex ID
+    string::append(&mut id, hex_str);
     
     id
 }

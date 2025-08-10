@@ -26,14 +26,14 @@ public fun mul_div_to_64(a: u64, b: u64, c: u64): u64 {
 
 public fun mul_div_to_128(a: u64, b: u64, c: u64): u128 {
     assert!(c != 0, EDivideByZero);
-    let a_128 = (a as u128);
-    let b_128 = (b as u128);
-    let c_128 = (c as u128);
-    // The intermediate product a_128 * b_128 can overflow u128, but the final result
-    // after division is expected to fit within u128. This is a common pattern for
-    // high-precision calculations where intermediate values exceed standard types.
-    let result = (a_128 * b_128) / c_128;
-    result
+    // Use u256 for intermediate calculation to avoid overflow
+    let a_256 = (a as u256);
+    let b_256 = (b as u256);
+    let c_256 = (c as u256);
+    let result_256 = (a_256 * b_256) / c_256;
+    // Ensure result fits in u128
+    assert!(result_256 <= (u128::max_value!() as u256), EOverflow);
+    (result_256 as u128)
 }
 
 public fun mul_div_mixed(a: u128, b: u64, c: u128): u128 {
