@@ -110,11 +110,11 @@ public struct ApprovePolicyChangeAction has store {
     expires_at: u64,
 }
 
-/// DAO-side approval of an UpgradeCap acceptance/lock (digest-based like OA).
-/// The digest MUST be computed as sha3(cap_id || package_name) using upgrade_digest::digest_for_upgrade_cap.
+/// DAO-side approval of an UpgradeCap acceptance/lock (typed).
 public struct ApproveUpgradeCapAction has store {
     dao_id: ID,
-    digest: vector<u8>,
+    cap_id: ID,
+    package_name: String,
     expires_at: u64,
 }
 
@@ -198,18 +198,19 @@ public fun delete_approve_policy_change(expired: &mut Expired) {
 
 public fun new_approve_upgrade_cap(
     dao_id: ID,
-    digest: vector<u8>,
+    cap_id: ID,
+    package_name: String,
     expires_at: u64,
 ): ApproveUpgradeCapAction {
-    ApproveUpgradeCapAction { dao_id, digest, expires_at }
+    ApproveUpgradeCapAction { dao_id, cap_id, package_name, expires_at }
 }
 
 public fun get_approve_upgrade_cap_params(
     a: &ApproveUpgradeCapAction
-): (ID, &vector<u8>, u64) {
-    (a.dao_id, &a.digest, a.expires_at)
+): (ID, ID, &String, u64) {
+    (a.dao_id, a.cap_id, &a.package_name, a.expires_at)
 }
 
 public fun delete_approve_upgrade_cap(expired: &mut Expired) {
-    let ApproveUpgradeCapAction { dao_id: _, digest: _, expires_at: _ } = expired.remove_action();
+    let ApproveUpgradeCapAction { dao_id: _, cap_id: _, package_name: _, expires_at: _ } = expired.remove_action();
 }

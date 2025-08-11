@@ -45,10 +45,30 @@ const STATE_COMMITTED: u8 = 3;
 
 // === Core Structs ===
 
-/// Action that signals this Executable should lock for cross-DAO coordination
+/// Typed manifest entry describing a participant's action plan.
+public struct ManifestEntry has store, copy, drop {
+    dao_id: ID,
+    package_addr: address,
+    module_name: String,
+    action_type: String,
+    note: String,
+}
+
+/// Typed manifest that all participants must match exactly.
+public struct CrossDaoManifest has store, copy, drop {
+    title: String,
+    description: String,
+    entries: vector<ManifestEntry>,
+}
+
+/// Participants must attach the exact manifest in their lock intent (first action).
+public struct AttachManifestAction has store {
+    manifest: CrossDaoManifest,
+}
+
+/// Then lock to the proposal (second action).
 public struct LockForCrossDaoCommit has store {
     cross_dao_proposal_id: ID,
-    action_hash: vector<u8>,
     lock_expiry: u64,
 }
 
@@ -63,12 +83,13 @@ public struct CrossDaoProposal has key, store {
     commit_deadline: u64,
     title: String,
     description: String,
+    /// Canonical typed manifest that must match exactly for all participants.
+    manifest: CrossDaoManifest,
 }
 
 /// Information about a participating DAO
 public struct DaoParticipant has store, copy, drop {
     dao_id: ID,
-    expected_action_hash: vector<u8>,
     weight: u64,  // Voting weight (1 for equal weight, higher for more influence)
     locked: bool,  // Track lock status to prevent double-counting
 }
@@ -97,11 +118,11 @@ public struct ProposalCommitted has copy, drop {
 /// Create a simple M-of-N proposal where all DAOs have equal weight
 public fun create_equal_weight_proposal(
     dao_ids: vector<ID>,
-    action_hashes: vector<vector<u8>>,
     threshold: u64,  // How many DAOs must approve
     title: String,
     description: String,
     commit_deadline: u64,
+    manifest: CrossDaoManifest,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -110,7 +131,6 @@ public fun create_equal_weight_proposal(
     while (i < vector::length(&dao_ids)) {
         vector::push_back(&mut participants, DaoParticipant {
             dao_id: *vector::borrow(&dao_ids, i),
-            expected_action_hash: *vector::borrow(&action_hashes, i),
             weight: 1,  // Equal weight for all
             locked: false,
         });
@@ -123,6 +143,7 @@ public fun create_equal_weight_proposal(
         title,
         description,
         commit_deadline,
+        manifest,
         clock,
         ctx
     );
@@ -134,12 +155,16 @@ public fun create_equal_weight_proposal(
 /// Create a new cross-DAO proposal with M-of-N threshold
 /// threshold: minimum weight needed to proceed (e.g., 3 for 3-of-5)
 /// participants: list of DAOs with their voting weights
+/// 
+/// IMPORTANT: The order of participants MUST match the order of manifest.entries exactly.
+/// This canonical ordering is enforced and must not change throughout the proposal lifecycle.
 public fun create_proposal(
     participants: vector<DaoParticipant>,
     threshold: u64,  // Minimum weight needed to proceed
     title: String,
     description: String,
     commit_deadline: u64,
+    manifest: CrossDaoManifest,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -155,6 +180,18 @@ public fun create_proposal(
     assert!(threshold <= total_weight, EInvalidState);
     assert!(threshold > 0, EInvalidState);
     
+    // Exact participant/manifest alignment
+    assert!(vector::length(&participants) == vector::length(&manifest.entries), EInvalidState);
+    {
+        let mut i = 0;
+        while (i < vector::length(&participants)) {
+            let p = vector::borrow(&participants, i);
+            let e = vector::borrow(&manifest.entries, i);
+            assert!(p.dao_id == e.dao_id, EInvalidState);
+            i = i + 1;
+        };
+    };
+    
     let proposal = CrossDaoProposal {
         id: object::new(ctx),
         state: STATE_PENDING,
@@ -164,6 +201,7 @@ public fun create_proposal(
         commit_deadline,
         title,
         description,
+        manifest,
     };
     
     event::emit(ProposalCreated {
@@ -173,6 +211,26 @@ public fun create_proposal(
     });
     
     transfer::share_object(proposal);
+}
+
+/// Manifest equality helpers (exact matching).
+fun eq_entry(a: &ManifestEntry, b: &ManifestEntry): bool {
+    a.dao_id == b.dao_id &&
+    a.package_addr == b.package_addr &&
+    a.module_name == b.module_name &&
+    a.action_type == b.action_type &&
+    a.note == b.note
+}
+
+fun eq_manifest(a: &CrossDaoManifest, b: &CrossDaoManifest): bool {
+    if (!(a.title == b.title && a.description == b.description)) return false;
+    if (vector::length(&a.entries) != vector::length(&b.entries)) return false;
+    let mut i = 0;
+    while (i < vector::length(&a.entries)) {
+        if (!eq_entry(vector::borrow(&a.entries, i), vector::borrow(&b.entries, i))) return false;
+        i = i + 1;
+    };
+    true
 }
 
 /// Lock a DAO's commitment to the proposal
@@ -244,17 +302,23 @@ public fun mark_committed(
     });
 }
 
-/// Execute the lock action from an Account's Executable
-/// This is called when a DAO's proposal passes and needs to lock for cross-DAO coordination
-public fun execute_lock_action<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
+/// Lock intent must contain two actions in order:
+/// 1) AttachManifestAction { manifest }
+/// 2) LockForCrossDaoCommit { cross_dao_proposal_id, lock_expiry }
+/// This function marks the DAO as locked and confirms the executable.
+public fun execute_lock_action<Outcome: drop + store, IW: drop + copy>(
+    mut executable: Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     proposal: &mut CrossDaoProposal,
     witness: IW,
     clock: &Clock,
 ) {
-    // Extract the lock action from the executable
-    let lock_action = executable.next_action<Outcome, LockForCrossDaoCommit, IW>(witness);
+    // 1) Manifest must match canonical proposal manifest.
+    let attach: &AttachManifestAction = executable.next_action(witness);
+    assert!(eq_manifest(&attach.manifest, &proposal.manifest), EActionHashMismatch);
+    
+    // 2) Lock action and expiry
+    let lock_action: &LockForCrossDaoCommit = executable.next_action(witness);
     
     // Verify the action is for this proposal
     assert!(lock_action.cross_dao_proposal_id == object::id(proposal), EActionHashMismatch);
@@ -265,17 +329,13 @@ public fun execute_lock_action<Outcome: store, IW: drop>(
     // Get the DAO ID from the account
     let dao_id = object::id(account);
     
-    // Verify action hash matches expected
+    // Verify participant exists
     let mut participant_found = false;
     let mut i = 0;
     while (i < vector::length(&proposal.participants)) {
         let participant = vector::borrow(&proposal.participants, i);
         if (participant.dao_id == dao_id) {
             participant_found = true;
-            assert!(
-                participant.expected_action_hash == lock_action.action_hash,
-                EActionHashMismatch
-            );
             break
         };
         i = i + 1;
@@ -285,11 +345,18 @@ public fun execute_lock_action<Outcome: store, IW: drop>(
     
     // Lock this DAO's commitment
     lock_dao(proposal, dao_id, clock);
+    
+    // Confirm the locking executable (must happen in same PTB since Executable can't be stored)
+    account::confirm_execution(account, executable);
 }
 
 /// Execute actions for all locked DAOs atomically when proposal is ready.
 /// This is a generic function that handles any number of locked participants.
 /// Accounts and executables must be provided in matching order corresponding to locked participants.
+/// 
+/// IMPORTANT: Before calling this function in the same PTB, you should:
+/// 1. Execute each DAO's actual actions (e.g., via futarchy::action_dispatcher)
+/// 2. Then call this function to confirm all executables atomically (all-or-nothing)
 public fun execute_atomic_actions<Outcome: drop + store>(
     proposal: &mut CrossDaoProposal,
     mut accounts: vector<Account<FutarchyConfig>>,
@@ -317,6 +384,9 @@ public fun execute_atomic_actions<Outcome: drop + store>(
     assert!(vector::length(&executables) == locked_count, EInvalidState);
     
     // --- Atomic Execution Loop ---
+    // Requirements: participants' action flows should already have been executed
+    // (via your normal dispatchers) in the same PTB(s) before confirm_execution,
+    // or be empty by design. Here we only confirm in lockstep for atomicity.
     // Process locked participants in order
     let mut account_idx = 0;
     let mut j = 0;
@@ -357,15 +427,13 @@ public fun confirm_single_execution<Outcome: drop + store>(
 
 // === Helper Functions ===
 
-/// Create a lock action
+/// Create a lock action (no hashes).
 public fun create_lock_action(
     proposal_id: ID,
-    action_hash: vector<u8>,
     lock_expiry: u64,
 ): LockForCrossDaoCommit {
     LockForCrossDaoCommit {
         cross_dao_proposal_id: proposal_id,
-        action_hash,
         lock_expiry,
     }
 }
@@ -373,12 +441,10 @@ public fun create_lock_action(
 /// Create a participant
 public fun create_participant(
     dao_id: ID,
-    action_hash: vector<u8>,
     weight: u64,
 ): DaoParticipant {
     DaoParticipant {
         dao_id,
-        expected_action_hash: action_hash,
         weight,
         locked: false,
     }
@@ -405,13 +471,12 @@ public fun handle_expired_proposal(
 public fun verify_participant(
     proposal: &CrossDaoProposal,
     dao_id: ID,
-    action_hash: vector<u8>,
 ): bool {
     let mut i = 0;
     while (i < vector::length(&proposal.participants)) {
         let participant = vector::borrow(&proposal.participants, i);
         if (participant.dao_id == dao_id) {
-            return participant.expected_action_hash == action_hash
+            return true
         };
         i = i + 1;
     };
@@ -448,12 +513,40 @@ public fun get_proposal_id(action: &LockForCrossDaoCommit): ID {
     action.cross_dao_proposal_id
 }
 
-public fun get_action_hash(action: &LockForCrossDaoCommit): &vector<u8> {
-    &action.action_hash
-}
 
 public fun get_lock_expiry(action: &LockForCrossDaoCommit): u64 {
     action.lock_expiry
+}
+
+/// View helper to get the canonical manifest from a proposal
+public fun get_manifest(proposal: &CrossDaoProposal): &CrossDaoManifest {
+    &proposal.manifest
+}
+
+/// Helpers to build manifests (optional)
+public fun new_manifest_entry(
+    dao_id: ID,
+    package_addr: address,
+    module_name: String,
+    action_type: String,
+    note: String,
+): ManifestEntry {
+    ManifestEntry { dao_id, package_addr, module_name, action_type, note }
+}
+
+public fun new_manifest(
+    title: String,
+    description: String,
+    entries: vector<ManifestEntry>,
+): CrossDaoManifest {
+    CrossDaoManifest { title, description, entries }
+}
+
+/// Create an attach manifest action
+public fun create_attach_manifest_action(
+    manifest: CrossDaoManifest,
+): AttachManifestAction {
+    AttachManifestAction { manifest }
 }
 
 // === Test Only Functions ===
@@ -481,13 +574,10 @@ public fun init_for_testing(ctx: &mut TxContext) {
 
 #[test_only]
 public fun create_test_action(
-    action_type: String,
     dao_id: ID,
-    proposal_id: ID,
 ): DaoParticipant {
     DaoParticipant {
         dao_id,
-        expected_action_hash: std::hash::sha3_256(*string::bytes(&action_type)),
         weight: 1, // Default to weight 1 for tests
         locked: false,
     }
@@ -507,6 +597,27 @@ public fun create_cross_dao_proposal(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
+    // Create a simple test manifest
+    let mut manifest_entries = vector::empty<ManifestEntry>();
+    let mut i = 0;
+    while (i < vector::length(&actions)) {
+        let participant = vector::borrow(&actions, i);
+        vector::push_back(&mut manifest_entries, ManifestEntry {
+            dao_id: participant.dao_id,
+            package_addr: @0x0,
+            module_name: string::utf8(b"test_module"),
+            action_type: string::utf8(b"test_action"),
+            note: string::utf8(b"test"),
+        });
+        i = i + 1;
+    };
+    
+    let manifest = CrossDaoManifest {
+        title,
+        description,
+        entries: manifest_entries,
+    };
+    
     let proposal = CrossDaoProposal {
         id: object::new(ctx),
         state: STATE_PENDING,
@@ -516,6 +627,7 @@ public fun create_cross_dao_proposal(
         commit_deadline: deadline,
         title,
         description,
+        manifest,
     };
     
     let proposal_id = object::uid_to_inner(&proposal.id);
@@ -626,6 +738,6 @@ public fun admin_veto(
     ctx: &mut TxContext,
 ) {
     let proposal = table::remove(&mut registry.proposals, proposal_id);
-    let CrossDaoProposal { id, state: _, participants: _, locked_weight: _, threshold: _, commit_deadline: _, title: _, description: _ } = proposal;
+    let CrossDaoProposal { id, state: _, participants: _, locked_weight: _, threshold: _, commit_deadline: _, title: _, description: _, manifest: _ } = proposal;
     object::delete(id);
 }

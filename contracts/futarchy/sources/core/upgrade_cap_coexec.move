@@ -41,11 +41,12 @@ public fun execute_accept_and_lock_with_council(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Extract DAO approval action
+    // Extract DAO approval action (typed)
     let approve: &security_council_actions::ApproveUpgradeCapAction =
         coexec_common::extract_action(&mut futarchy_exec, version::current());
-    let (dao_id_expected, digest_expected, expires_at) =
+    let (dao_id_expected, cap_id_expected, pkg_name_ref, expires_at) =
         security_council_actions::get_approve_upgrade_cap_params(approve);
+    let pkg_name_expected = *pkg_name_ref;
     
     // Extract Council accept/lock action
     let accept: &security_council_actions::AcceptAndLockUpgradeCapAction =
@@ -53,24 +54,18 @@ public fun execute_accept_and_lock_with_council(
             &mut council_exec,
             security_council_intents::accept_upgrade_cap_witness()
         );
-    let (cap_id, pkg_name_ref) = security_council_actions::get_accept_and_lock_cap_params(accept);
-    let pkg_name = *pkg_name_ref; // Copy the string before using council_exec
-
-    // Compute actual digest from cap_id || package_name
-    let mut actual_digest = object::id_to_bytes(&cap_id);
-    actual_digest.append(pkg_name.into_bytes());
+    let (cap_id_from_council, pkg_name_council_ref) =
+        security_council_actions::get_accept_and_lock_cap_params(accept);
+    let pkg_name_council = *pkg_name_council_ref;
     
-    // Validate all co-execution requirements using the standard pattern
-    coexec_common::validate_coexec_standard(
-        dao,
-        council,
-        b"UpgradeCap:Custodian".to_string(),
-        dao_id_expected,
-        expires_at,
-        digest_expected,
-        &actual_digest,
-        clock
-    );
+    // Policy and expiry checks (digest removed).
+    coexec_common::enforce_custodian_policy(dao, council, b"UpgradeCap:Custodian".to_string());
+    coexec_common::validate_dao_id(dao_id_expected, object::id(dao));
+    coexec_common::validate_expiry(clock, expires_at);
+    
+    // Typed equality for cap and package name.
+    assert!(cap_id_expected == cap_id_from_council, /* EActionTypeMismatch or dedicated code */ 5);
+    assert!(pkg_name_expected == pkg_name_council, /* EActionTypeMismatch or dedicated code */ 5);
     
     // 4) Withdraw the cap from the receipt and lock it into the council
     let cap = owned::do_withdraw(
@@ -79,9 +74,13 @@ public fun execute_accept_and_lock_with_council(
         cap_receipt,
         security_council_intents::accept_upgrade_cap_witness()
     );
+    
+    // Strong object identity check.
+    assert!(object::id(&cap) == cap_id_expected, /* Wrong object */ 6);
+    
     let auth = security_council::authenticate(council, ctx);
     // Lock under council-managed assets; version 0 for ruleset as before
-    package_upgrade::lock_cap(auth, council, cap, pkg_name, 0);
+    package_upgrade::lock_cap(auth, council, cap, pkg_name_expected, 0);
     
     // 5) Confirm both executables atomically
     coexec_common::confirm_both_executables(dao, council, futarchy_exec, council_exec);

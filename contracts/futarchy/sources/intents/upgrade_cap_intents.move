@@ -22,7 +22,6 @@ use futarchy::{
 public struct UpgradeCapIntent has copy, drop {}
 
 /// Create an intent that approves accepting/locking an UpgradeCap (2-of-2 co-exec).
-/// The digest is computed canonically from (cap_id || package_name).
 public fun create_approve_accept_upgrade_cap_intent(
     dao: &mut Account<FutarchyConfig>,
     params: Params,
@@ -34,10 +33,7 @@ public fun create_approve_accept_upgrade_cap_intent(
 ) {
     let dao_id = object::id(dao); // Get ID before the macro
     
-    // Compute digest from cap_id || package_name
-    let mut digest = object::id_to_bytes(&cap_id);
-    digest.append(package_name.into_bytes());
-    
+    // Use typed approval (cap_id, package_name)
     dao.build_intent!(
         params,
         outcome,
@@ -48,7 +44,8 @@ public fun create_approve_accept_upgrade_cap_intent(
         |intent, iw| {
             let action = security_council_actions::new_approve_upgrade_cap(
                 dao_id,
-                digest,
+                cap_id,
+                package_name,
                 expires_at
             );
             intent.add_action(action, iw);

@@ -53,15 +53,11 @@ fun test_basic_cross_dao_proposal() {
         
         // Create actions (referencing existing proposals in each DAO)
         let action1 = cross_dao_proposal::create_test_action(
-            string::utf8(b"MEMO"),
-            dao1_id,
-            object::id_from_address(@0x100), // Reference to DAO1's memo proposal
+            dao1_id
         );
         
         let action2 = cross_dao_proposal::create_test_action(
-            string::utf8(b"TRANSFER"),
-            dao2_id,
-            object::id_from_address(@0x200), // Reference to DAO2's transfer proposal
+            dao2_id
         );
         
         let dao_ids = vector[dao1_id, dao2_id];
@@ -118,14 +114,10 @@ fun test_approval_and_execution() {
         
         let actions = vector[
             cross_dao_proposal::create_test_action(
-                string::utf8(b"MEMO"),
-                dao1_id,
-                object::id_from_address(@0x100),
+                dao1_id
             ),
             cross_dao_proposal::create_test_action(
-                string::utf8(b"TRANSFER"),
-                dao2_id,
-                object::id_from_address(@0x200),
+                dao2_id
             ),
         ];
         
@@ -244,14 +236,10 @@ fun test_exploding_offer_timeout() {
             vector[dao1_id, dao2_id],
             vector[
                 cross_dao_proposal::create_test_action(
-                    string::utf8(b"ACTION"),
-                    dao1_id,
-                    object::id_from_address(@0x100),
+                    dao1_id
                 ),
                 cross_dao_proposal::create_test_action(
-                    string::utf8(b"ACTION"),
-                    dao2_id,
-                    object::id_from_address(@0x200),
+                    dao2_id
                 ),
             ],
             string::utf8(b"Exploding Offer Test"),
@@ -336,9 +324,7 @@ fun test_admin_veto() {
             vector[object::id_from_address(DAO1)],
             vector[
                 cross_dao_proposal::create_test_action(
-                    string::utf8(b"ACTION"),
-                    object::id_from_address(DAO1),
-                    object::id_from_address(@0x100),
+                    object::id_from_address(DAO1)
                 ),
             ],
             string::utf8(b"Veto Test"),
