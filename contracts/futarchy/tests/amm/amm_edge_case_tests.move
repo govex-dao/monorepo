@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::amm_edge_case_tests;
 
-use futarchy::amm::{Self};
+use futarchy::conditional_amm::{Self};
 use futarchy::math;
 use sui::test_scenario::{Self as test, next_tx, ctx};
 use sui::object;
@@ -23,7 +23,7 @@ fun test_swap_zero_amount_returns_zero() {
     
     // Create normal pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -33,15 +33,15 @@ fun test_swap_zero_amount_returns_zero() {
     );
     
     // Swap zero amount should return zero output
-    let quote = amm::quote_swap_asset_to_stable(&pool, 0);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, 0);
     assert!(quote == 0, 0);
     
     // Also test stable to asset
-    let quote_reverse = amm::quote_swap_stable_to_asset(&pool, 0);
+    let quote_reverse = conditional_amm::quote_swap_stable_to_asset(&pool, 0);
     assert!(quote_reverse == 0, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -52,7 +52,7 @@ fun test_pool_drain_protection() {
     
     // Create test pool with small reserves
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -64,7 +64,7 @@ fun test_pool_drain_protection() {
     // Try to swap an amount that would drain the pool
     // This should succeed but leave minimal reserves
     let huge_swap = 1_000_000_000; // Huge amount
-    let quote = amm::quote_swap_asset_to_stable(&pool, huge_swap);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, huge_swap);
     
     // Quote should be less than total stable reserve (can't fully drain)
     assert!(quote < 1_000, 0);
@@ -74,7 +74,7 @@ fun test_pool_drain_protection() {
     assert!(new_stable > 0, 1); // Should never reach exactly 0
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -86,7 +86,7 @@ fun test_extreme_swap_ratios() {
     let dummy_market_id = object::id_from_address(ADMIN);
     
     // Test 1: Extremely unbalanced pool
-    let unbalanced_pool = amm::create_test_pool(
+    let unbalanced_pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -97,24 +97,24 @@ fun test_extreme_swap_ratios() {
     
     // Small swap in the scarce direction should be very expensive
     let small_swap = 10;
-    let quote = amm::quote_swap_asset_to_stable(&unbalanced_pool, small_swap);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&unbalanced_pool, small_swap);
     
     // Due to extreme imbalance, output should be minimal
     assert!(quote == 0, 0); // Likely rounds to 0
     
     // Large swap should get some output
     let large_swap = 10_000_000; // 10% of asset reserve
-    let large_quote = amm::quote_swap_asset_to_stable(&unbalanced_pool, large_swap);
+    let large_quote = conditional_amm::quote_swap_asset_to_stable(&unbalanced_pool, large_swap);
     assert!(large_quote > 0, 1);
     
     // Test 2: Opposite direction with extreme ratio
     let reverse_swap = 10; // Try to get a lot of asset for little stable
-    let reverse_quote = amm::quote_swap_stable_to_asset(&unbalanced_pool, reverse_swap);
+    let reverse_quote = conditional_amm::quote_swap_stable_to_asset(&unbalanced_pool, reverse_swap);
     
     // Should get significant asset due to imbalance
     assert!(reverse_quote > reverse_swap * 1000, 2);
     
-    amm::destroy_for_testing(unbalanced_pool);
+    conditional_amm::destroy_for_testing(unbalanced_pool);
     test::end(scenario);
 }
 
@@ -127,10 +127,10 @@ fun test_rounding_and_precision() {
     
     // Create pools with different scales
     let mut pools = vector[
-        amm::create_test_pool(dummy_market_id, 0, SWAP_FEE_RATE, 10, 10, ctx(&mut scenario)),
-        amm::create_test_pool(dummy_market_id, 1, SWAP_FEE_RATE, 100, 100, ctx(&mut scenario)),
-        amm::create_test_pool(dummy_market_id, 2, SWAP_FEE_RATE, 1_000, 1_000, ctx(&mut scenario)),
-        amm::create_test_pool(dummy_market_id, 3, SWAP_FEE_RATE, 10_000, 10_000, ctx(&mut scenario)),
+        conditional_amm::create_test_pool(dummy_market_id, 0, SWAP_FEE_RATE, 10, 10, ctx(&mut scenario)),
+        conditional_amm::create_test_pool(dummy_market_id, 1, SWAP_FEE_RATE, 100, 100, ctx(&mut scenario)),
+        conditional_amm::create_test_pool(dummy_market_id, 2, SWAP_FEE_RATE, 1_000, 1_000, ctx(&mut scenario)),
+        conditional_amm::create_test_pool(dummy_market_id, 3, SWAP_FEE_RATE, 10_000, 10_000, ctx(&mut scenario)),
     ];
     
     // Test tiny swaps across different pool sizes
@@ -144,8 +144,8 @@ fun test_rounding_and_precision() {
                          else if (i == 2) { 100 }
                          else { 1000 };
         
-        let quote1 = amm::quote_swap_asset_to_stable(pool, swap_amount);
-        let quote2 = amm::quote_swap_stable_to_asset(pool, swap_amount);
+        let quote1 = conditional_amm::quote_swap_asset_to_stable(pool, swap_amount);
+        let quote2 = conditional_amm::quote_swap_stable_to_asset(pool, swap_amount);
         
         // Verify rounding behavior - tiny swaps may round to 0
         // For balanced 1:1 pools, we expect roughly 1:1 swaps minus fees
@@ -171,7 +171,7 @@ fun test_rounding_and_precision() {
     // Clean up
     while (vector::length(&pools) > 0) {
         let pool = vector::pop_back(&mut pools);
-        amm::destroy_for_testing(pool);
+        conditional_amm::destroy_for_testing(pool);
     };
     
     vector::destroy_empty(pools);
@@ -186,7 +186,7 @@ fun test_fee_edge_cases() {
     let dummy_market_id = object::id_from_address(ADMIN);
     
     // Test with different fee rates
-    let zero_fee_pool = amm::create_test_pool(
+    let zero_fee_pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         0, // 0% fee
@@ -195,7 +195,7 @@ fun test_fee_edge_cases() {
         ctx(&mut scenario)
     );
     
-    let high_fee_pool = amm::create_test_pool(
+    let high_fee_pool = conditional_amm::create_test_pool(
         dummy_market_id,
         1,
         9999, // 99.99% fee (maximum allowed)
@@ -207,10 +207,10 @@ fun test_fee_edge_cases() {
     let swap_amount = 10_000;
     
     // Zero fee should give best rate
-    let zero_fee_quote = amm::quote_swap_asset_to_stable(&zero_fee_pool, swap_amount);
+    let zero_fee_quote = conditional_amm::quote_swap_asset_to_stable(&zero_fee_pool, swap_amount);
     
     // High fee should give terrible rate
-    let high_fee_quote = amm::quote_swap_asset_to_stable(&high_fee_pool, swap_amount);
+    let high_fee_quote = conditional_amm::quote_swap_asset_to_stable(&high_fee_pool, swap_amount);
     
     // Zero fee output should be much higher
     assert!(zero_fee_quote > high_fee_quote * 10, 0);
@@ -219,7 +219,7 @@ fun test_fee_edge_cases() {
     assert!(high_fee_quote < swap_amount / 100, 1);
     
     // Clean up
-    amm::destroy_for_testing(zero_fee_pool);
-    amm::destroy_for_testing(high_fee_pool);
+    conditional_amm::destroy_for_testing(zero_fee_pool);
+    conditional_amm::destroy_for_testing(high_fee_pool);
     test::end(scenario);
 }

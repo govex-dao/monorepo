@@ -1,4 +1,4 @@
-module futarchy::amm;
+module futarchy::conditional_amm;
 
 use futarchy::market_state::MarketState;
 use futarchy::conditional_token::ConditionalToken;

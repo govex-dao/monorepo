@@ -1,6 +1,6 @@
 module futarchy::liquidity_interact;
 
-use futarchy::amm;
+use futarchy::conditional_amm;
 use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token::ConditionalToken;
 use futarchy::fee::FeeManager;
@@ -299,7 +299,7 @@ public entry fun add_liquidity_entry<AssetType, StableType>(
     let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
     
     // Add liquidity through the AMM (only calculations and reserve updates)
-    let lp_amount = amm::add_liquidity_proportional(
+    let lp_amount = conditional_amm::add_liquidity_proportional(
         pool,
         asset_amount,
         stable_amount,
@@ -355,7 +355,7 @@ public entry fun remove_liquidity_entry<AssetType, StableType>(
     let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
     
     // Remove liquidity through the AMM (only calculations and reserve updates)
-    let (asset_amount, stable_amount) = amm::remove_liquidity_proportional(
+    let (asset_amount, stable_amount) = conditional_amm::remove_liquidity_proportional(
         pool,
         lp_amount,
         clock,

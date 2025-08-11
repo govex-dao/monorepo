@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::test_helpers;
 
-use futarchy::amm::{Self, LiquidityPool};
+use futarchy::conditional_amm::{Self, LiquidityPool};
 use sui::{
     test_scenario::{Self as test, Scenario, ctx},
     coin::{Self, Coin},
@@ -25,7 +25,7 @@ public fun create_test_pool_with_reserves(
     scenario: &mut Scenario
 ): LiquidityPool {
     let dummy_market_id = object::id_from_address(ADMIN);
-    amm::create_test_pool(
+    conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         DEFAULT_SWAP_FEE,

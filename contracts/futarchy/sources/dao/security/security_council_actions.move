@@ -23,15 +23,6 @@ public struct ApproveOAChangeAction has store {
     expires_at: u64,
 }
 
-/// Action for the council to take an UpgradeCap from its owned objects ("inbox")
-/// and formally lock it as a managed asset, making it governable.
-public struct AcceptAndLockUpgradeCapAction has store {
-    /// The ID of the UpgradeCap object to be accepted.
-    cap_id: ID,
-    /// The canonical name for the package (e.g., "futarchy_v1"). Used as the key.
-    package_name: String,
-}
-
 // --- Constructors, Getters, Cleanup ---
 
 public fun new_create_council(
@@ -65,21 +56,6 @@ public fun delete_approve_oa_change(expired: &mut Expired) {
     let ApproveOAChangeAction { dao_id: _, digest: _, expires_at: _ } = expired.remove_action();
 }
 
-public fun new_accept_and_lock_cap(
-    cap_id: ID,
-    package_name: String,
-): AcceptAndLockUpgradeCapAction {
-    AcceptAndLockUpgradeCapAction { cap_id, package_name }
-}
-
-public fun get_accept_and_lock_cap_params(action: &AcceptAndLockUpgradeCapAction): (ID, &String) {
-    (action.cap_id, &action.package_name)
-}
-
-public fun delete_accept_and_lock_cap(expired: &mut Expired) {
-    let AcceptAndLockUpgradeCapAction {..} = expired.remove_action();
-}
-
 /// Action to update the rules for an already-managed UpgradeCap.
 public struct UpdateUpgradeRulesAction has store {
     package_name: String,
@@ -110,15 +86,7 @@ public struct ApprovePolicyChangeAction has store {
     expires_at: u64,
 }
 
-/// DAO-side approval of an UpgradeCap acceptance/lock (typed).
-public struct ApproveUpgradeCapAction has store {
-    dao_id: ID,
-    cap_id: ID,
-    package_name: String,
-    expires_at: u64,
-}
-
- // --- Constructors, Getters, Cleanup ---
+// --- Constructors, Getters, Cleanup ---
 public fun new_update_upgrade_rules(package_name: String): UpdateUpgradeRulesAction {
     UpdateUpgradeRulesAction { package_name }
 }
@@ -196,21 +164,3 @@ public fun delete_approve_policy_change(expired: &mut Expired) {
     let ApprovePolicyChangeAction {..} = expired.remove_action();
 }
 
-public fun new_approve_upgrade_cap(
-    dao_id: ID,
-    cap_id: ID,
-    package_name: String,
-    expires_at: u64,
-): ApproveUpgradeCapAction {
-    ApproveUpgradeCapAction { dao_id, cap_id, package_name, expires_at }
-}
-
-public fun get_approve_upgrade_cap_params(
-    a: &ApproveUpgradeCapAction
-): (ID, ID, &String, u64) {
-    (a.dao_id, a.cap_id, &a.package_name, a.expires_at)
-}
-
-public fun delete_approve_upgrade_cap(expired: &mut Expired) {
-    let ApproveUpgradeCapAction { dao_id: _, cap_id: _, package_name: _, expires_at: _ } = expired.remove_action();
-}

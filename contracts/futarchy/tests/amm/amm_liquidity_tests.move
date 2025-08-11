@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::amm_liquidity_tests;
 
-use futarchy::amm::{Self};
+use futarchy::conditional_amm::{Self};
 use futarchy::math;
 use sui::test_scenario::{Self as test, next_tx, ctx};
 use sui::object;
@@ -23,7 +23,7 @@ fun test_initial_liquidity_bootstrap() {
     
     // Create pool with initial liquidity
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -33,12 +33,12 @@ fun test_initial_liquidity_bootstrap() {
     );
     
     // Verify initial state
-    let (asset_reserve, stable_reserve) = amm::get_reserves(&pool);
+    let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(&pool);
     assert!(asset_reserve == INITIAL_RESERVE, 0);
     assert!(stable_reserve == INITIAL_RESERVE, 1);
     
     // Check LP supply (should be set to MINIMUM_LIQUIDITY)
-    let lp_supply = amm::get_lp_supply(&pool);
+    let lp_supply = conditional_amm::get_lp_supply(&pool);
     assert!(lp_supply > 0, 2);
     
     // Verify k constant
@@ -46,7 +46,7 @@ fun test_initial_liquidity_bootstrap() {
     assert!(k == (INITIAL_RESERVE as u128) * (INITIAL_RESERVE as u128), 3);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -57,7 +57,7 @@ fun test_proportional_liquidity_addition() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let mut pool = amm::create_test_pool(
+    let mut pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -67,8 +67,8 @@ fun test_proportional_liquidity_addition() {
     );
     
     // Record initial state
-    let (init_asset, init_stable) = amm::get_reserves(&pool);
-    let init_lp = amm::get_lp_supply(&pool);
+    let (init_asset, init_stable) = conditional_amm::get_reserves(&pool);
+    let init_lp = conditional_amm::get_lp_supply(&pool);
     let init_k = math::mul_div_to_128(init_asset, init_stable, 1);
     
     // Add proportional liquidity (50% more)
@@ -95,7 +95,7 @@ fun test_proportional_liquidity_addition() {
     assert!(new_k > init_k, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -106,7 +106,7 @@ fun test_imbalanced_liquidity_addition() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -132,7 +132,7 @@ fun test_imbalanced_liquidity_addition() {
     assert!(excess_stable == INITIAL_RESERVE / 2, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -143,7 +143,7 @@ fun test_liquidity_removal() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -153,8 +153,8 @@ fun test_liquidity_removal() {
     );
     
     // Get initial state
-    let (init_asset, init_stable) = amm::get_reserves(&pool);
-    let init_lp = amm::get_lp_supply(&pool);
+    let (init_asset, init_stable) = conditional_amm::get_reserves(&pool);
+    let init_lp = conditional_amm::get_lp_supply(&pool);
     
     // Remove 25% of liquidity
     let lp_to_remove = init_lp / 4;
@@ -181,7 +181,7 @@ fun test_liquidity_removal() {
     assert!(k_ratio >= 56 && k_ratio <= 57, 2);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -194,7 +194,7 @@ fun test_minimum_liquidity_enforcement() {
     let dummy_market_id = object::id_from_address(ADMIN);
     let small_reserve = 10_000; // Small amount
     
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -204,7 +204,7 @@ fun test_minimum_liquidity_enforcement() {
     );
     
     // Get LP supply
-    let lp_supply = amm::get_lp_supply(&pool);
+    let lp_supply = conditional_amm::get_lp_supply(&pool);
     
     // Even with small reserves, minimum LP tokens should be minted
     assert!(lp_supply >= 1000, 0); // MINIMUM_LIQUIDITY constant
@@ -213,7 +213,7 @@ fun test_minimum_liquidity_enforcement() {
     // Pool should maintain minimum liquidity locked forever
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -224,7 +224,7 @@ fun test_lp_token_value_tracking() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let mut pool = amm::create_test_pool(
+    let mut pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -234,8 +234,8 @@ fun test_lp_token_value_tracking() {
     );
     
     // Initial LP value
-    let init_lp = amm::get_lp_supply(&pool);
-    let (init_asset, init_stable) = amm::get_reserves(&pool);
+    let init_lp = conditional_amm::get_lp_supply(&pool);
+    let (init_asset, init_stable) = conditional_amm::get_reserves(&pool);
     
     // Value per LP token
     let init_asset_per_lp = (init_asset * 1_000_000) / init_lp;
@@ -248,7 +248,7 @@ fun test_lp_token_value_tracking() {
     
     let mut i = 0;
     while (i < swap_count) {
-        let quote = amm::quote_swap_asset_to_stable(&pool, swap_amount);
+        let quote = conditional_amm::quote_swap_asset_to_stable(&pool, swap_amount);
         let fee = (swap_amount * SWAP_FEE_RATE) / 10000;
         total_fees = total_fees + fee;
         i = i + 1;
@@ -259,7 +259,7 @@ fun test_lp_token_value_tracking() {
     // So each LP token represents more underlying assets
     
     // Clean up  
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -270,7 +270,7 @@ fun test_multiple_lp_providers() {
     // LP_1 provides initial liquidity
     next_tx(&mut scenario, LP_1);
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -279,7 +279,7 @@ fun test_multiple_lp_providers() {
         ctx(&mut scenario)
     );
     
-    let initial_lp = amm::get_lp_supply(&pool);
+    let initial_lp = conditional_amm::get_lp_supply(&pool);
     
     // LP_2 adds liquidity
     next_tx(&mut scenario, LP_2);
@@ -301,6 +301,6 @@ fun test_multiple_lp_providers() {
     assert!(lp2_share >= 33 && lp2_share <= 34, 0);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }

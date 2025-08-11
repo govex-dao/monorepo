@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::amm_composable_swap_tests;
 
-use futarchy::amm::{Self};
+use futarchy::conditional_amm::{Self};
 use futarchy::math;
 use sui::test_scenario::{Self as test, next_tx, ctx};
 use sui::object;
@@ -28,7 +28,7 @@ fun test_create_and_swap_basic_flow() {
     
     // Create pool to test against
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -50,14 +50,14 @@ fun test_create_and_swap_basic_flow() {
     let tokens_per_outcome = spot_amount;
     
     // Calculate swap on one outcome
-    let swap_quote = amm::quote_swap_asset_to_stable(&pool, tokens_per_outcome);
+    let swap_quote = conditional_amm::quote_swap_asset_to_stable(&pool, tokens_per_outcome);
     
     // Verify quote is reasonable
     assert!(swap_quote > 0, 0);
     assert!(swap_quote < tokens_per_outcome, 1); // Should get less due to fees
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -68,7 +68,7 @@ fun test_create_and_swap_with_slippage() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -79,7 +79,7 @@ fun test_create_and_swap_with_slippage() {
     
     // Large swap to test slippage
     let large_swap = INITIAL_RESERVE / 10; // 10% of reserves
-    let quote = amm::quote_swap_asset_to_stable(&pool, large_swap);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, large_swap);
     
     // Calculate slippage
     // Without slippage, we'd expect to get exactly large_swap out
@@ -95,7 +95,7 @@ fun test_create_and_swap_with_slippage() {
     assert!(quote >= min_output, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -108,7 +108,7 @@ fun test_create_and_swap_both_directions() {
     let dummy_market_id = object::id_from_address(ADMIN);
     
     // Pool for outcome 0
-    let pool0 = amm::create_test_pool(
+    let pool0 = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -118,7 +118,7 @@ fun test_create_and_swap_both_directions() {
     );
     
     // Pool for outcome 1 with different reserves
-    let pool1 = amm::create_test_pool(
+    let pool1 = conditional_amm::create_test_pool(
         dummy_market_id,
         1,
         SWAP_FEE_RATE,
@@ -130,16 +130,16 @@ fun test_create_and_swap_both_directions() {
     let swap_amount = 10_000;
     
     // Test asset to stable on outcome 0
-    let quote0_a2s = amm::quote_swap_asset_to_stable(&pool0, swap_amount);
+    let quote0_a2s = conditional_amm::quote_swap_asset_to_stable(&pool0, swap_amount);
     
     // Test stable to asset on outcome 0
-    let quote0_s2a = amm::quote_swap_stable_to_asset(&pool0, swap_amount);
+    let quote0_s2a = conditional_amm::quote_swap_stable_to_asset(&pool0, swap_amount);
     
     // Test asset to stable on outcome 1
-    let quote1_a2s = amm::quote_swap_asset_to_stable(&pool1, swap_amount);
+    let quote1_a2s = conditional_amm::quote_swap_asset_to_stable(&pool1, swap_amount);
     
     // Test stable to asset on outcome 1
-    let quote1_s2a = amm::quote_swap_stable_to_asset(&pool1, swap_amount);
+    let quote1_s2a = conditional_amm::quote_swap_stable_to_asset(&pool1, swap_amount);
     
     // Verify different pools give different quotes
     assert!(quote0_a2s != quote1_a2s, 0);
@@ -150,8 +150,8 @@ fun test_create_and_swap_both_directions() {
     assert!(quote1_s2a > quote0_s2a, 3); // Get more asset for stable
     
     // Clean up
-    amm::destroy_for_testing(pool0);
-    amm::destroy_for_testing(pool1);
+    conditional_amm::destroy_for_testing(pool0);
+    conditional_amm::destroy_for_testing(pool1);
     test::end(scenario);
 }
 
@@ -162,7 +162,7 @@ fun test_create_and_swap_with_existing_tokens() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -178,18 +178,18 @@ fun test_create_and_swap_with_existing_tokens() {
     let total_to_swap = existing_tokens + new_spot_tokens;
     
     // Get quote for total amount
-    let quote = amm::quote_swap_asset_to_stable(&pool, total_to_swap);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, total_to_swap);
     
     // Verify we can handle combined amounts
     assert!(quote > 0, 0);
     
     // The quote should be less than if we swapped separately due to slippage
-    let quote1 = amm::quote_swap_asset_to_stable(&pool, existing_tokens);
-    let quote2 = amm::quote_swap_asset_to_stable(&pool, new_spot_tokens);
+    let quote1 = conditional_amm::quote_swap_asset_to_stable(&pool, existing_tokens);
+    let quote2 = conditional_amm::quote_swap_asset_to_stable(&pool, new_spot_tokens);
     assert!(quote < quote1 + quote2, 1); // Combined swap has more slippage
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -202,7 +202,7 @@ fun test_optimal_swap_routing() {
     let dummy_market_id = object::id_from_address(ADMIN);
     
     // Highly liquid pool
-    let liquid_pool = amm::create_test_pool(
+    let liquid_pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -212,7 +212,7 @@ fun test_optimal_swap_routing() {
     );
     
     // Less liquid pool
-    let illiquid_pool = amm::create_test_pool(
+    let illiquid_pool = conditional_amm::create_test_pool(
         dummy_market_id,
         1,
         SWAP_FEE_RATE,
@@ -224,8 +224,8 @@ fun test_optimal_swap_routing() {
     // Test same swap amount on both
     let swap_amount = 50_000;
     
-    let quote_liquid = amm::quote_swap_asset_to_stable(&liquid_pool, swap_amount);
-    let quote_illiquid = amm::quote_swap_asset_to_stable(&illiquid_pool, swap_amount);
+    let quote_liquid = conditional_amm::quote_swap_asset_to_stable(&liquid_pool, swap_amount);
+    let quote_illiquid = conditional_amm::quote_swap_asset_to_stable(&illiquid_pool, swap_amount);
     
     // Liquid pool should give better price (less slippage)
     assert!(quote_liquid > quote_illiquid, 0);
@@ -238,8 +238,8 @@ fun test_optimal_swap_routing() {
     assert!(impact_illiquid > impact_liquid * 5, 1); // At least 5x worse
     
     // Clean up
-    amm::destroy_for_testing(liquid_pool);
-    amm::destroy_for_testing(illiquid_pool);
+    conditional_amm::destroy_for_testing(liquid_pool);
+    conditional_amm::destroy_for_testing(illiquid_pool);
     test::end(scenario);
 }
 
@@ -250,7 +250,7 @@ fun test_token_merging_scenarios() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -264,14 +264,14 @@ fun test_token_merging_scenarios() {
     let total = 10_000;
     
     // Quote for merged amount
-    let quote_merged = amm::quote_swap_asset_to_stable(&pool, total);
+    let quote_merged = conditional_amm::quote_swap_asset_to_stable(&pool, total);
     
     // Quote for individual swaps
     let mut total_individual = 0;
     let mut i = 0;
     while (i < vector::length(&amounts)) {
         let amount = *vector::borrow(&amounts, i);
-        let quote = amm::quote_swap_asset_to_stable(&pool, amount);
+        let quote = conditional_amm::quote_swap_asset_to_stable(&pool, amount);
         total_individual = total_individual + quote;
         i = i + 1;
     };
@@ -290,7 +290,7 @@ fun test_token_merging_scenarios() {
     assert!(diff < total_individual / 100, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -301,7 +301,7 @@ fun test_edge_case_tiny_spot_amount() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -312,21 +312,21 @@ fun test_edge_case_tiny_spot_amount() {
     
     // Test with tiny amount
     let tiny_amount = 1;
-    let quote = amm::quote_swap_asset_to_stable(&pool, tiny_amount);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, tiny_amount);
     
     // Might round to 0 due to fees
     assert!(quote <= 1, 0);
     
     // Test with amount just above fee threshold
     let small_amount = 100;
-    let quote2 = amm::quote_swap_asset_to_stable(&pool, small_amount);
+    let quote2 = conditional_amm::quote_swap_asset_to_stable(&pool, small_amount);
     
     // Should get something back
     assert!(quote2 > 0, 1);
     assert!(quote2 < small_amount, 2); // But less than input due to fees
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -337,7 +337,7 @@ fun test_maximum_efficient_swap_size() {
     
     // Create pool
     let dummy_market_id = object::id_from_address(ADMIN);
-    let pool = amm::create_test_pool(
+    let pool = conditional_amm::create_test_pool(
         dummy_market_id,
         0,
         SWAP_FEE_RATE,
@@ -360,7 +360,7 @@ fun test_maximum_efficient_swap_size() {
     
     while (i < vector::length(&test_amounts)) {
         let amount = *vector::borrow(&test_amounts, i);
-        let quote = amm::quote_swap_asset_to_stable(&pool, amount);
+        let quote = conditional_amm::quote_swap_asset_to_stable(&pool, amount);
         
         // Calculate efficiency (output/input ratio)
         let efficiency = (quote * 10000) / amount;
@@ -373,6 +373,6 @@ fun test_maximum_efficient_swap_size() {
     };
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }

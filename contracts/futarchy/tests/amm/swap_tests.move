@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::swap_tests;
 
-use futarchy::amm::{Self, LiquidityPool};
+use futarchy::conditional_amm::{Self, LiquidityPool};
 use futarchy::oracle::{Self};
 use futarchy::math;
 use futarchy::test_stable_coin::{TEST_STABLE_COIN};
@@ -25,7 +25,7 @@ fun create_test_pool_safe(
     let dummy_market_id = object::id_from_address(ADMIN);
     
     // Create pool with modified oracle parameters
-    amm::create_test_pool(
+    conditional_amm::create_test_pool(
         dummy_market_id,
         0, // outcome_idx
         SWAP_FEE_RATE, // fee_percent
@@ -50,7 +50,7 @@ fun test_swap_asset_to_stable_quote() {
     let swap_amount = 1000;
     
     // Get quote for swap
-    let quote = amm::quote_swap_asset_to_stable(&pool, swap_amount);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, swap_amount);
     
     // Calculate expected output using the AMM formula
     let k = INITIAL_RESERVE * INITIAL_RESERVE;
@@ -65,7 +65,7 @@ fun test_swap_asset_to_stable_quote() {
     
     // Test with larger swap amount
     let large_swap = 100_000;
-    let large_quote = amm::quote_swap_asset_to_stable(&pool, large_swap);
+    let large_quote = conditional_amm::quote_swap_asset_to_stable(&pool, large_swap);
     
     // Verify large swaps have worse price (more slippage)
     let price_small = (quote * 1000) / swap_amount;
@@ -73,7 +73,7 @@ fun test_swap_asset_to_stable_quote() {
     assert!(price_large < price_small, 1); // Price should be worse for larger swaps
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -92,7 +92,7 @@ fun test_swap_stable_to_asset_quote() {
     let swap_amount = 1000;
     
     // Get quote for swap
-    let quote = amm::quote_swap_stable_to_asset(&pool, swap_amount);
+    let quote = conditional_amm::quote_swap_stable_to_asset(&pool, swap_amount);
     
     // Calculate expected output using the AMM formula
     // For stable to asset swaps, fee is taken from input first
@@ -108,7 +108,7 @@ fun test_swap_stable_to_asset_quote() {
     
     // Test with larger swap amount
     let large_swap = 100_000;
-    let large_quote = amm::quote_swap_stable_to_asset(&pool, large_swap);
+    let large_quote = conditional_amm::quote_swap_stable_to_asset(&pool, large_swap);
     
     // Verify large swaps have worse price (more slippage)
     let price_small = (quote * 1000) / swap_amount;
@@ -116,7 +116,7 @@ fun test_swap_stable_to_asset_quote() {
     assert!(price_large < price_small, 1); // Price should be worse for larger swaps
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -128,14 +128,14 @@ fun test_swap_invariant_maintained() {
     let mut pool = create_test_pool_safe(&mut scenario);
     
     // Get initial reserves and calculate k
-    let (initial_asset, initial_stable) = amm::get_reserves(&pool);
+    let (initial_asset, initial_stable) = conditional_amm::get_reserves(&pool);
     let initial_k = initial_asset * initial_stable;
     
     // Simulate a swap by updating reserves directly
     // Note: In real tests, we'd use actual swap functions, but for testing invariant
     // we can verify the math works correctly
     let swap_amount = 10_000;
-    let quote = amm::quote_swap_asset_to_stable(&pool, swap_amount);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, swap_amount);
     
     // Calculate what the new reserves would be after swap
     let new_asset = initial_asset + swap_amount;
@@ -158,7 +158,7 @@ fun test_swap_invariant_maintained() {
     assert!(new_k < (initial_k * 1005) / 1000, 1); // But not by more than 0.5%
     
     // Test the other direction
-    let quote_reverse = amm::quote_swap_stable_to_asset(&pool, swap_amount);
+    let quote_reverse = conditional_amm::quote_swap_stable_to_asset(&pool, swap_amount);
     
     // For stable to asset swaps, calculate reserves after fee is taken from input
     let fee = (swap_amount * 30) / 10000;
@@ -175,7 +175,7 @@ fun test_swap_invariant_maintained() {
     assert!(new_k_2 < (initial_k * 1005) / 1000, 3); // But not by more than 0.5%
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -188,7 +188,7 @@ fun test_swap_fees_calculated_correctly() {
     
     // Test asset to stable swap fee calculation
     let swap_amount = 10_000;
-    let quote_with_fee = amm::quote_swap_asset_to_stable(&pool, swap_amount);
+    let quote_with_fee = conditional_amm::quote_swap_asset_to_stable(&pool, swap_amount);
     
     // Calculate output without fee
     let k = INITIAL_RESERVE * INITIAL_RESERVE;
@@ -203,7 +203,7 @@ fun test_swap_fees_calculated_correctly() {
     assert!(quote_with_fee >= expected_output - 1 && quote_with_fee <= expected_output + 1, 0);
     
     // Test stable to asset swap fee calculation
-    let quote_stable_to_asset = amm::quote_swap_stable_to_asset(&pool, swap_amount);
+    let quote_stable_to_asset = conditional_amm::quote_swap_stable_to_asset(&pool, swap_amount);
     
     // For stable to asset, fee is taken from input
     let input_fee = (swap_amount * SWAP_FEE_RATE) / 10000;
@@ -217,7 +217,7 @@ fun test_swap_fees_calculated_correctly() {
     assert!(quote_stable_to_asset >= expected_output_2 - 1 && quote_stable_to_asset <= expected_output_2 + 1, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -234,7 +234,7 @@ fun test_fees_always_in_stable() {
     // Test 1: Asset to Stable swap
     // User provides 10,000 asset tokens
     let asset_in = 10_000;
-    let quote_asset_to_stable = amm::quote_swap_asset_to_stable(&pool, asset_in);
+    let quote_asset_to_stable = conditional_amm::quote_swap_asset_to_stable(&pool, asset_in);
     
     // The quote is already after fees. To find the fee amount:
     // gross_output = quote / (1 - fee_rate) = quote / 0.997
@@ -253,7 +253,7 @@ fun test_fees_always_in_stable() {
     assert!(fee_from_stable_swap == 30, 1); // 0.3% of 10,000 = 30
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -265,7 +265,7 @@ fun test_protocol_fees_accumulation() {
     let pool = create_test_pool_safe(&mut scenario);
     
     // Get initial protocol fees (should be 0)
-    let initial_fees = amm::get_protocol_fees(&pool);
+    let initial_fees = conditional_amm::get_protocol_fees(&pool);
     assert!(initial_fees == 0, 0);
     
     // Simulate multiple swaps and verify protocol fees accumulate
@@ -277,7 +277,7 @@ fun test_protocol_fees_accumulation() {
         let amount = *swap_amounts.borrow(i);
         
         // Do an asset to stable swap
-        let quote = amm::quote_swap_asset_to_stable(&pool, amount);
+        let quote = conditional_amm::quote_swap_asset_to_stable(&pool, amount);
         let gross_output = (quote * 10000) / 9970;
         let fee = gross_output - quote;
         expected_total_fees = expected_total_fees + fee;
@@ -296,6 +296,6 @@ fun test_protocol_fees_accumulation() {
     assert!(expected_total_fees > 0, 1);
     
     // Clean up
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }

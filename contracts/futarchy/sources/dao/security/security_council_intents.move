@@ -21,7 +21,8 @@ use fun intent_interface::build_intent as Account.build_intent;
 use futarchy::{
     version,
     security_council,
-    security_council_actions::{Self, AcceptAndLockUpgradeCapAction, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
+    security_council_actions::{Self, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
+    custody_actions,
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     policy_registry,
@@ -33,10 +34,6 @@ use account_extensions::extensions::Extensions;
 public struct RequestPackageUpgradeIntent has copy, drop {}
 public struct AcceptUpgradeCapIntent has copy, drop {}
 
-/// Public constructor for AcceptUpgradeCapIntent witness
-public fun accept_upgrade_cap_witness(): AcceptUpgradeCapIntent {
-    AcceptUpgradeCapIntent {}
-}
 public struct RequestOAPolicyChangeIntent has copy, drop {}
 public struct UpdateCouncilMembershipIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
@@ -96,12 +93,14 @@ public fun execute_commit_request(
     security_council.confirm_execution(executable);
 }
 
+/// A council member proposes an intent to accept an UpgradeCap into custody.
+/// The object will be delivered as Receiving<UpgradeCap> at execution time.
 public fun request_accept_and_lock_cap(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
     params: Params,
     cap_id: ID,
-    package_name: String,
+    package_name: String, // used as resource_key
     ctx: &mut TxContext
 ) {
     use account_protocol::account;
@@ -114,7 +113,7 @@ public fun request_accept_and_lock_cap(
         security_council,           // &Account
         params,
         outcome,
-        b"access_control".to_string(),
+        b"accept_custody".to_string(),
         version::current(),
         AcceptUpgradeCapIntent{},    // witness
         ctx
@@ -122,31 +121,40 @@ public fun request_accept_and_lock_cap(
 
     // now it's safe to borrow &mut security_council to lock the object
     owned::new_withdraw(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
-    intent.add_action(
-        security_council_actions::new_accept_and_lock_cap(cap_id, package_name),
-        AcceptUpgradeCapIntent{}
-    );
+    
+    // Use generic custody accept action
+    {
+        let resource_key = package_name; // resource identifier
+        let action = custody_actions::new_accept_into_custody<UpgradeCap>(
+            cap_id,
+            resource_key,
+            b"".to_string()   // optional context
+        );
+        intent.add_action(
+            action,
+            AcceptUpgradeCapIntent{}
+        );
+    };
 
     // insert it back
     account::insert_intent(security_council, intent, version::current(), AcceptUpgradeCapIntent{});
 }
 
+/// Execute accept and lock cap with optional DAO enforcement
 public fun execute_accept_and_lock_cap(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
     cap_receipt: Receiving<UpgradeCap>,
     ctx: &mut TxContext
 ) {
-    let cap = owned::do_withdraw(
-        &mut executable,
-        security_council,
-        cap_receipt,
-        AcceptUpgradeCapIntent{} // <-- braces
-    );
-    let action: &AcceptAndLockUpgradeCapAction = executable.next_action(AcceptUpgradeCapIntent{}); // <-- braces
-    let (_cap_id, name_ref) = security_council_actions::get_accept_and_lock_cap_params(action);
-    let auth: Auth = security_council::authenticate(security_council, ctx);
-    package_upgrade::lock_cap(auth, security_council, cap, *name_ref, 0);
+    // Keep this for non-coexec single-side accept+lock (no DAO policy enforced).
+    // It now expects the new custody action instead of the legacy one.
+    let cap = owned::do_withdraw(&mut executable, security_council, cap_receipt, AcceptUpgradeCapIntent{});
+    let action: &custody_actions::AcceptIntoCustodyAction<UpgradeCap> =
+        executable.next_action(AcceptUpgradeCapIntent{});
+    let (_cap_id, pkg_name_ref, _ctx_ref) = custody_actions::get_accept_params(action);
+    let auth = security_council::authenticate(security_council, ctx);
+    package_upgrade::lock_cap(auth, security_council, cap, *pkg_name_ref, 0);
     security_council.confirm_execution(executable);
 }
 
@@ -178,7 +186,7 @@ public fun delete_accept_upgrade_cap(
     security_council: &mut Account<WeightedMultisig>
 ) {
     owned::delete_withdraw(expired, security_council); // <-- pass account too
-    security_council_actions::delete_accept_and_lock_cap(expired);
+    custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
 }
 
 /// A council member proposes an intent to update the council's own membership.

@@ -1,6 +1,6 @@
 module futarchy::liquidity_initialize;
 
-use futarchy::amm::{Self, LiquidityPool};
+use futarchy::conditional_amm::{Self, LiquidityPool};
 use futarchy::coin_escrow::TokenEscrow;
 use futarchy::conditional_token as token;
 use sui::balance::Balance;
@@ -90,7 +90,7 @@ public(package) fun create_outcome_markets<AssetType, StableType>(
         // Use same scoped borrow pattern as original
         {
             let ms = escrow.get_market_state(); // Immutable borrow
-            let pool = amm::new_pool(
+            let pool = conditional_amm::new_pool(
                 ms,
                 (i as u8),
                 amm_total_fee_bps,

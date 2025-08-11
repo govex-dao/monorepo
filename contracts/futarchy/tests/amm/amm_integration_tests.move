@@ -1,7 +1,7 @@
 #[test_only]
 module futarchy::amm_integration_tests;
 
-use futarchy::{test_helpers, amm};
+use futarchy::{test_helpers, conditional_amm};
 use sui::{test_scenario::{Self as test, next_tx}, object};
 
 const ADMIN: address = @0xA;
@@ -15,7 +15,7 @@ fun test_event_emission() {
     let pool = test_helpers::create_standard_test_pool(&mut scenario);
     
     // Perform swap that would emit events
-    let quote = amm::quote_swap_asset_to_stable(&pool, 10_000);
+    let quote = conditional_amm::quote_swap_asset_to_stable(&pool, 10_000);
     assert!(quote > 0, 0);
     
     // Check if any events were emitted
@@ -26,7 +26,7 @@ fun test_event_emission() {
     assert!(quote > 9_000 && quote < 10_000, 1); // Expect ~0.3% fee + slippage
     
     // Cleanup
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test::end(scenario);
 }
 
@@ -49,7 +49,7 @@ fun test_simple_integration_flow() {
     
     while (i < vector::length(&swap_amounts)) {
         let amount = *vector::borrow(&swap_amounts, i);
-        let quote = amm::quote_swap_asset_to_stable(&pool, amount);
+        let quote = conditional_amm::quote_swap_asset_to_stable(&pool, amount);
         total_output = total_output + quote;
         
         // Advance time between swaps
@@ -62,12 +62,12 @@ fun test_simple_integration_flow() {
     assert!(total_output > 0, 0);
     
     // Check final pool state
-    let (asset_res, stable_res) = amm::get_reserves(&pool);
+    let (asset_res, stable_res) = conditional_amm::get_reserves(&pool);
     assert!(asset_res == 1_000_000, 1); // No actual swaps executed, just quotes
     assert!(stable_res == 1_000_000, 2);
     
     // Cleanup
-    amm::destroy_for_testing(pool);
+    conditional_amm::destroy_for_testing(pool);
     test_helpers::destroy_test_clock(clock);
     test::end(scenario);
 }

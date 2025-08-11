@@ -1,6 +1,6 @@
 module futarchy::proposal;
 
-use futarchy::amm::{Self, LiquidityPool};
+use futarchy::conditional_amm::{Self, LiquidityPool};
 use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::liquidity_initialize;
 use futarchy::market_state;
@@ -909,7 +909,7 @@ public fun advance_state<AssetType, StableType>(
             let mut i = 0;
             while (i < pools.length()) {
                 let pool = &mut pools[i];
-                amm::set_oracle_start_time(pool, market);
+                conditional_amm::set_oracle_start_time(pool, market);
                 i = i + 1;
             };
             

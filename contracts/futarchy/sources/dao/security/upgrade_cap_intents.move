@@ -12,10 +12,11 @@ use sui::{
     tx_context::TxContext,
 };
 use std::string::{Self, String};
+use sui::package::UpgradeCap;
 use futarchy::{
     version,
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
-    security_council_actions,
+    custody_actions,
 };
 
 /// Intent witness for upgrade-cap approvals
@@ -27,13 +28,12 @@ public fun create_approve_accept_upgrade_cap_intent(
     params: Params,
     outcome: FutarchyOutcome,
     cap_id: ID,
-    package_name: String,
+    package_name: String, // resource_key
     expires_at: u64,
     ctx: &mut TxContext
 ) {
     let dao_id = object::id(dao); // Get ID before the macro
     
-    // Use typed approval (cap_id, package_name)
     dao.build_intent!(
         params,
         outcome,
@@ -42,10 +42,12 @@ public fun create_approve_accept_upgrade_cap_intent(
         UpgradeCapIntent{},
         ctx,
         |intent, iw| {
-            let action = security_council_actions::new_approve_upgrade_cap(
+            // Typed DAO-side approve custody for UpgradeCap
+            let action = custody_actions::new_approve_custody<UpgradeCap>(
                 dao_id,
                 cap_id,
                 package_name,
+                b"".to_string(),
                 expires_at
             );
             intent.add_action(action, iw);
