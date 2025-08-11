@@ -33,6 +33,11 @@ public fun create_approve_accept_upgrade_cap_intent(
     ctx: &mut TxContext
 ) {
     let dao_id = object::id(dao); // Get ID before the macro
+    
+    // Compute digest from cap_id || package_name
+    let mut digest = object::id_to_bytes(&cap_id);
+    digest.append(package_name.into_bytes());
+    
     dao.build_intent!(
         params,
         outcome,
@@ -43,6 +48,7 @@ public fun create_approve_accept_upgrade_cap_intent(
         |intent, iw| {
             let action = security_council_actions::new_approve_upgrade_cap(
                 dao_id,
+                digest,
                 expires_at
             );
             intent.add_action(action, iw);

@@ -56,6 +56,9 @@ public fun execute_accept_and_lock_with_council(
     let (cap_id, pkg_name_ref) = security_council_actions::get_accept_and_lock_cap_params(accept);
     let pkg_name = *pkg_name_ref; // Copy the string before using council_exec
 
+    // Compute actual digest from cap_id || package_name
+    let mut actual_digest = object::id_to_bytes(&cap_id);
+    actual_digest.append(pkg_name.into_bytes());
     
     // Validate all co-execution requirements using the standard pattern
     coexec_common::validate_coexec_standard(
@@ -65,6 +68,7 @@ public fun execute_accept_and_lock_with_council(
         dao_id_expected,
         expires_at,
         digest_expected,
+        &actual_digest,
         clock
     );
     

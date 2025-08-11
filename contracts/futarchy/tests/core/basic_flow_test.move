@@ -56,7 +56,6 @@ fun test_basic_dao_creation() {
         factory::add_allowed_stable_type<STABLE>(
             &mut factory,
             &owner_cap,
-            1_000_000, // min_raise_amount
             &clock,
             ctx(&mut scenario),
         );
@@ -175,7 +174,6 @@ fun test_proposal_with_market() {
         factory::add_allowed_stable_type<STABLE>(
             &mut factory,
             &owner_cap,
-            1_000_000,
             &clock,
             ctx(&mut scenario),
         );
