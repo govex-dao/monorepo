@@ -13,7 +13,7 @@ use futarchy::{
     policy_registry,
     policy_actions,
     coexec_common,
-    futarchy_config::{FutarchyConfig, FutarchyOutcome},
+    futarchy_config::FutarchyConfig,
     weighted_multisig::{WeightedMultisig, Approvals},
     security_council_actions,
 };
@@ -67,7 +67,7 @@ public fun is_critical_policy(resource_key: &String): bool {
 /// - Futarchy executable must contain RemovePolicyAction
 /// - Council executable must contain ApprovePolicyChangeAction with matching params
 /// Both executables are confirmed atomically.
-public fun execute_remove_policy_with_council(
+public fun execute_remove_policy_with_council<FutarchyOutcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     council: &mut Account<WeightedMultisig>,
     mut futarchy_exec: Executable<FutarchyOutcome>,
@@ -117,7 +117,7 @@ public fun execute_remove_policy_with_council(
 /// - Futarchy executable must contain SetPolicyAction
 /// - Council executable must contain ApprovePolicyChangeAction with matching params
 /// Both executables are confirmed atomically.
-public fun execute_set_policy_with_council(
+public fun execute_set_policy_with_council<FutarchyOutcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     council: &mut Account<WeightedMultisig>,
     mut futarchy_exec: Executable<FutarchyOutcome>,

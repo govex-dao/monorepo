@@ -25,10 +25,16 @@ const EWrongTotalSupply: u64 = 9;
 const EReentrancy: u64 = 10;
 const EArithmeticOverflow: u64 = 11;
 const ENotUSDC: u64 = 12;
+const EZeroContribution: u64 = 13;
+const EStableTypeNotAllowed: u64 = 14;
+const ENotTheCreator: u64 = 15;
 
 // === Constants ===
 /// The duration for every raise is fixed. 14 days in milliseconds.
 const LAUNCHPAD_DURATION_MS: u64 = 1_209_600_000;
+/// A fixed period after a successful raise for contributors to claim tokens
+/// before the creator can sweep any remaining dust. 14 days in milliseconds.
+const CLAIM_PERIOD_DURATION_MS: u64 = 1_209_600_000;
 
 const STATE_FUNDING: u8 = 0;
 const STATE_SUCCESSFUL: u8 = 1;
@@ -43,13 +49,13 @@ public struct LAUNCHPAD has drop {}
 
 // === IMPORTANT: Stable Coin Integration ===
 // This module supports any stable coin that has been allowed by the factory.
-// Each stable coin type has its own minimum raise amount configured at the factory level.
+// The creator of a raise sets the minimum raise amount for that specific launchpad.
 // 
 // Common stable coins and their addresses:
 // - USDC Mainnet: 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC
 // - USDC Testnet: 0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC
 // 
-// To add a new stable coin, use factory::add_allowed_stable_type with the desired minimum raise amount.
+// To add a new stable coin type that can be used in launchpads, use factory::add_allowed_stable_type.
 
 // === Scalability Design ===
 // This launchpad uses dynamic fields instead of tables for contributor storage.
@@ -162,7 +168,7 @@ fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
 // === Public Functions ===
 
 /// Create a raise that sells 100% of the token supply.
-/// StableCoin must be an allowed type in the factory with a configured minimum raise amount.
+/// `StableCoin` must be an allowed type in the factory.
 public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     factory: &factory::Factory,
     treasury_cap: TreasuryCap<RaiseToken>,
@@ -189,7 +195,7 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     assert!(tokens_for_raise.value() == treasury_cap.total_supply(), EWrongTotalSupply);
     
     // Check that StableCoin is allowed
-    assert!(factory::is_stable_type_allowed<StableCoin>(factory), 0);
+    assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
     
     let dao_params = DAOParameters {
         dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
@@ -214,6 +220,7 @@ public entry fun contribute<RaiseToken, StableCoin>(
 
     let contributor = ctx.sender();
     let amount = contribution.value();
+    assert!(amount > 0, EZeroContribution);
 
     raise.stable_coin_vault.join(contribution.into_balance());
     
@@ -257,6 +264,9 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.total_raised >= raise.min_raise_amount, EMinRaiseNotMet);
+    // Prevent division by zero in claim_tokens if the raise succeeded with 0 contributions.
+    // This case is only possible if min_raise_amount was also 0.
+    assert!(raise.total_raised > 0, EMinRaiseNotMet);
 
     raise.state = STATE_SUCCESSFUL;
 
@@ -381,6 +391,29 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
         contributor,
         refund_amount,
     });
+}
+
+/// After a successful raise and a claim period, the creator can sweep any remaining
+/// "dust" tokens that were left over from rounding during the distribution.
+public entry fun sweep_dust<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
+    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+
+    // Ensure the claim period has passed. The claim period starts after the raise deadline.
+    assert!(
+        clock.timestamp_ms() >= raise.deadline_ms + CLAIM_PERIOD_DURATION_MS,
+        EDeadlineNotReached // Reusing error, implies "claim deadline not reached"
+    );
+
+    let remaining_balance = raise.raise_token_vault.value();
+    if (remaining_balance > 0) {
+        let dust_tokens = coin::from_balance(raise.raise_token_vault.split(remaining_balance), ctx);
+        transfer::public_transfer(dust_tokens, raise.creator);
+    };
 }
 
 /// Internal function to initialize a raise.

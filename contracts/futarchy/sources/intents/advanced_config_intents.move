@@ -36,10 +36,10 @@ public struct AdvancedConfigIntent has copy, drop {}
 // === Intent Creation Functions ===
 
 /// Create intent to update DAO metadata
-public fun create_update_metadata_intent(
+public fun create_update_metadata_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     params: Params,
-    outcome: FutarchyOutcome,
+    outcome: Outcome,
     name: AsciiString,
     icon_url: Url,
     description: String,
@@ -65,10 +65,10 @@ public fun create_update_metadata_intent(
 }
 
 /// Create intent to update trading parameters
-public fun create_update_trading_params_intent(
+public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     params: Params,
-    outcome: FutarchyOutcome,
+    outcome: Outcome,
     review_period_ms: u64,
     trading_period_ms: u64,
     min_asset_amount: u64,
@@ -97,10 +97,10 @@ public fun create_update_trading_params_intent(
 }
 
 /// Create intent to update TWAP configuration
-public fun create_update_twap_config_intent(
+public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     params: Params,
-    outcome: FutarchyOutcome,
+    outcome: Outcome,
     start_delay: u64,
     step_max: u64,
     initial_observation: u128,
@@ -128,10 +128,10 @@ public fun create_update_twap_config_intent(
 }
 
 /// Create intent to update governance settings
-public fun create_update_governance_intent(
+public fun create_update_governance_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     params: Params,
-    outcome: FutarchyOutcome,
+    outcome: Outcome,
     proposals_enabled: bool,
     max_outcomes: u64,
     required_bond_amount: u64,
@@ -158,10 +158,10 @@ public fun create_update_governance_intent(
 }
 
 /// Create intent to update slash distribution
-public fun create_update_slash_distribution_intent(
+public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     params: Params,
-    outcome: FutarchyOutcome,
+    outcome: Outcome,
     slasher_reward_bps: u16,
     dao_treasury_bps: u16,
     protocol_bps: u16,
@@ -191,9 +191,9 @@ public fun create_update_slash_distribution_intent(
 // === Intent Processing Functions ===
 
 /// Process update metadata intent
-public fun process_update_metadata_intent(
+public fun process_update_metadata_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    executable: Executable<FutarchyOutcome>,
+    executable: Executable<Outcome>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
@@ -209,9 +209,9 @@ public fun process_update_metadata_intent(
 }
 
 /// Process update trading params intent
-public fun process_update_trading_params_intent(
+public fun process_update_trading_params_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    executable: Executable<FutarchyOutcome>,
+    executable: Executable<Outcome>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
@@ -227,9 +227,9 @@ public fun process_update_trading_params_intent(
 }
 
 /// Process update TWAP config intent
-public fun process_update_twap_config_intent(
+public fun process_update_twap_config_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    executable: Executable<FutarchyOutcome>,
+    executable: Executable<Outcome>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
@@ -245,9 +245,9 @@ public fun process_update_twap_config_intent(
 }
 
 /// Process update governance intent
-public fun process_update_governance_intent(
+public fun process_update_governance_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    executable: Executable<FutarchyOutcome>,
+    executable: Executable<Outcome>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
@@ -263,9 +263,9 @@ public fun process_update_governance_intent(
 }
 
 /// Process update slash distribution intent
-public fun process_update_slash_distribution_intent(
+public fun process_update_slash_distribution_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    executable: Executable<FutarchyOutcome>,
+    executable: Executable<Outcome>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {

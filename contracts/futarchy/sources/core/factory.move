@@ -62,6 +62,7 @@ public struct Factory has key, store {
     id: UID,
     dao_count: u64,
     paused: bool,
+    owner_cap_id: ID,
     allowed_stable_types: VecSet<TypeName>,
 }
 
@@ -108,15 +109,16 @@ public struct StableCoinTypeRemoved has copy, drop {
 fun init(witness: FACTORY, ctx: &mut TxContext) {
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
     
+    let owner_cap = FactoryOwnerCap {
+        id: object::new(ctx),
+    };
+    
     let factory = Factory {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
+        owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty<TypeName>(),
-    };
-    
-    let owner_cap = FactoryOwnerCap {
-        id: object::new(ctx),
     };
     
     let validator_cap = ValidatorAdminCap {
@@ -504,17 +506,19 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 // === Admin Functions ===
 
 /// Toggle factory pause state
-public entry fun toggle_pause(factory: &mut Factory, _cap: &FactoryOwnerCap) {
+public entry fun toggle_pause(factory: &mut Factory, cap: &FactoryOwnerCap) {
+    assert!(object::id(cap) == factory.owner_cap_id, EBadWitness);
     factory.paused = !factory.paused;
 }
 
 /// Add an allowed stable coin type
 public entry fun add_allowed_stable_type<StableType>(
     factory: &mut Factory,
-    _owner_cap: &FactoryOwnerCap,
+    owner_cap: &FactoryOwnerCap,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
     let type_name_val = type_name::get<StableType>();
     
     if (!factory.allowed_stable_types.contains(&type_name_val)) {
@@ -531,10 +535,11 @@ public entry fun add_allowed_stable_type<StableType>(
 /// Remove an allowed stable coin type
 public entry fun remove_allowed_stable_type<StableType>(
     factory: &mut Factory,
-    _owner_cap: &FactoryOwnerCap,
+    owner_cap: &FactoryOwnerCap,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
     let type_name_val = type_name::get<StableType>();
     if (factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.remove(&type_name_val);
@@ -548,7 +553,10 @@ public entry fun remove_allowed_stable_type<StableType>(
 }
 
 /// Burn the factory owner cap
-public entry fun burn_factory_owner_cap(cap: FactoryOwnerCap) {
+public entry fun burn_factory_owner_cap(factory: &Factory, cap: FactoryOwnerCap) {
+    // It is good practice to check ownership one last time before burning,
+    // even though only the owner can call this.
+    assert!(object::id(&cap) == factory.owner_cap_id, EBadWitness);
     let FactoryOwnerCap { id } = cap;
     id.delete();
 }
@@ -583,15 +591,16 @@ fun get_type_string<T>(): UTF8String {
 
 #[test_only]
 public fun create_factory(ctx: &mut TxContext) {
+    let owner_cap = FactoryOwnerCap {
+        id: object::new(ctx),
+    };
+    
     let factory = Factory {
         id: object::new(ctx),
         dao_count: 0,
         paused: false,
+        owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty<TypeName>(),
-    };
-    
-    let owner_cap = FactoryOwnerCap {
-        id: object::new(ctx),
     };
     
     let validator_cap = ValidatorAdminCap {

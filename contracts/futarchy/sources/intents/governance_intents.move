@@ -37,24 +37,19 @@ public fun witness(): GovernanceWitness {
 
 /// Create a simple treasury transfer intent
 /// For actual transfers, use vault_intents::request_spend_and_transfer directly
-public fun create_transfer_intent<CoinType>(
+public fun create_transfer_intent<CoinType, Outcome: store + drop + copy>(
     account: &Account<FutarchyConfig>,
     recipient: address,
     amount: u64,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext
-): Intent<FutarchyOutcome> {
+): Intent<Outcome> {
     // Generate intent key
     let mut intent_key = b"transfer_".to_string();
     intent_key.append(recipient.to_string());
     intent_key.append(b"_".to_string());
     intent_key.append(amount.to_string());
-    
-    // Create outcome
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + 86_400_000, // 24 hour execution window
-    );
     
     // Create intent parameters
     let params = intents::new_params(
@@ -81,23 +76,18 @@ public fun create_transfer_intent<CoinType>(
 }
 
 /// Create a config update intent
-public fun create_config_intent(
+public fun create_config_intent<Outcome: store + drop + copy>(
     account: &Account<FutarchyConfig>,
     update_type: String,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext
-): Intent<FutarchyOutcome> {
+): Intent<Outcome> {
     // Generate intent key
     let mut intent_key = b"config_".to_string();
     intent_key.append(update_type);
     intent_key.append(b"_".to_string());
     intent_key.append(clock.timestamp_ms().to_string());
-    
-    // Create outcome
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + 86_400_000,
-    );
     
     // Create intent parameters
     let params = intents::new_params(
@@ -123,20 +113,15 @@ public fun create_config_intent(
 }
 
 /// Create a dissolution intent
-public fun create_dissolution_intent(
+public fun create_dissolution_intent<Outcome: store + drop + copy>(
     account: &Account<FutarchyConfig>,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext
-): Intent<FutarchyOutcome> {
+): Intent<Outcome> {
     // Generate intent key
     let mut intent_key = b"dissolution_".to_string();
     intent_key.append(clock.timestamp_ms().to_string());
-    
-    // Create outcome
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + 86_400_000,
-    );
     
     // Create intent parameters
     let params = intents::new_params(
@@ -163,43 +148,29 @@ public fun create_dissolution_intent(
 
 // === Execution Functions ===
 
-/// Execute a governance intent from an approved proposal
+/// Execute a governance intent from an approved proposal (generic version)
 /// This is called after a proposal is approved and its market is finalized
 /// Note: The actual execution is delegated to futarchy_config::execute_proposal_intent
-public fun execute_proposal_intent<AssetType, StableType>(
+public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
+    outcome_index: u64,
     clock: &Clock,
     ctx: &mut TxContext
-): Executable<FutarchyOutcome> {
+): Executable<Outcome> {
     // Delegate to futarchy_config which has the proper implementation
     futarchy_config::execute_proposal_intent(
         account,
         proposal,
         market,
+        outcome_index,
         clock,
         ctx
     )
 }
 
 // === Helper Functions ===
-
-/// Create FutarchyOutcome from proposal and market data
-public fun create_outcome_from_proposal<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
-    market: &MarketState,
-    approved: bool,
-    clock: &Clock,
-): FutarchyOutcome {
-    futarchy_config::new_futarchy_outcome(
-        b"governance_proposal".to_string(),
-        option::some(object::id(proposal)),
-        option::some(object::id(market)),
-        approved,
-        clock.timestamp_ms() + 86_400_000, // 24 hour execution window
-    )
-}
 
 /// Helper to create intent params with standard settings
 public fun create_standard_params(

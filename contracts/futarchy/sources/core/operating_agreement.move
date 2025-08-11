@@ -21,7 +21,6 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use futarchy::{
-    futarchy_config::FutarchyOutcome,
     policy_registry,
     version,
 };
@@ -287,8 +286,8 @@ public fun new(
 /// Execute creation of a fresh OperatingAgreement and store it in the Account
 /// This creates an empty OA (no lines), with the allow_insert/remove flags set as requested.
 /// Abort if an agreement already exists.
-public fun execute_create_agreement<IW: drop, Config: store>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_create_agreement<IW: drop, Config: store, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     witness: IW,
     clock: &Clock,
@@ -316,8 +315,8 @@ public fun execute_create_agreement<IW: drop, Config: store>(
 }
 
 /// Execute an update line action
-public fun execute_update_line<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_update_line<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -330,8 +329,8 @@ public fun execute_update_line<IW: drop>(
 }
 
 /// Execute an insert line after action
-public fun execute_insert_line_after<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_insert_line_after<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -344,8 +343,8 @@ public fun execute_insert_line_after<IW: drop>(
 }
 
 /// Execute an insert line at beginning action
-public fun execute_insert_line_at_beginning<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_insert_line_at_beginning<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -358,8 +357,8 @@ public fun execute_insert_line_at_beginning<IW: drop>(
 }
 
 /// Execute a remove line action
-public fun execute_remove_line<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_remove_line<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -372,8 +371,8 @@ public fun execute_remove_line<IW: drop>(
 }
 
 /// Execute a batch operating agreement action
-public fun execute_batch_operating_agreement<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_batch_operating_agreement<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -425,8 +424,8 @@ public fun execute_batch_operating_agreement<IW: drop>(
 }
 
 /// Execute a set line immutable action
-public fun execute_set_line_immutable<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_set_line_immutable<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -438,8 +437,8 @@ public fun execute_set_line_immutable<IW: drop>(
 }
 
 /// Execute a set insert allowed action
-public fun execute_set_insert_allowed<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_set_insert_allowed<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,
@@ -451,8 +450,8 @@ public fun execute_set_insert_allowed<IW: drop>(
 }
 
 /// Execute a set remove allowed action
-public fun execute_set_remove_allowed<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_set_remove_allowed<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
     clock: &Clock,

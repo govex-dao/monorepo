@@ -20,7 +20,7 @@ use futarchy::{
     operating_agreement,
     operating_agreement_actions::{Self, BatchOperatingAgreementAction, OperatingAgreementAction},
     coexec_common,
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
+    futarchy_config::{Self, FutarchyConfig},
     weighted_multisig::{Self, WeightedMultisig, Approvals},
     security_council_actions,
 };
@@ -79,7 +79,7 @@ fun digest_batch(actions: &vector<OperatingAgreementAction>): vector<u8> {
 /// - Futarchy executable must contain BatchOperatingAgreementAction
 /// - Council executable must contain ApproveOAChangeAction whose digest matches
 /// Both executables are confirmed atomically.
-public fun execute_with_council(
+public fun execute_with_council<FutarchyOutcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     council: &mut Account<WeightedMultisig>,
     mut futarchy_exec: Executable<FutarchyOutcome>,

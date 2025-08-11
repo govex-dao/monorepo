@@ -18,7 +18,7 @@ use account_protocol::{
 use futarchy::{
     version,
     coexec_common,
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
+    futarchy_config::{Self, FutarchyConfig},
     security_council,
     security_council_actions,
     security_council_intents,
@@ -32,7 +32,7 @@ use account_actions::package_upgrade;
 /// - Council executable contains AcceptAndLockUpgradeCapAction, and the cap is delivered as Receiving<UpgradeCap>
 /// If checks pass, this function withdraws and locks the cap into the council under governance control,
 /// and confirms both executables atomically.
-public fun execute_accept_and_lock_with_council(
+public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     council: &mut Account<WeightedMultisig>,
     mut futarchy_exec: Executable<FutarchyOutcome>,

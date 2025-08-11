@@ -14,7 +14,7 @@ use account_protocol::{
     executable::{Self, Executable},
 };
 use futarchy::{
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
+    futarchy_config::{Self, FutarchyConfig},
     operating_agreement,
     version,
     account_spot_pool::{Self, AccountSpotPool, LPToken},
@@ -49,8 +49,8 @@ const ECriticalPolicyRequiresCouncil: u64 = 9;
 /// This function inspects the action types and routes them to appropriate handlers
 /// Note: This function consumes the executable (hot potato pattern)
 /// Note: Witness requires copy because it's used multiple times in the loop
-public fun execute_all_actions<IW: copy + drop>(
-    executable: Executable<FutarchyOutcome>,
+public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     clock: &Clock,
@@ -95,7 +95,7 @@ public fun execute_all_actions<IW: copy + drop>(
         
         // If no action was executed, check if there are remaining actions
         // confirm_execution will abort if there are, but let's be explicit
-        if (executable::contains_action<FutarchyOutcome, vector<u8>>(&mut executable)) {
+        if (executable::contains_action<Outcome, vector<u8>>(&mut executable)) {
             // Unknown action type - abort to prevent partial execution
             abort EUnknownActionType
         };
@@ -108,16 +108,16 @@ public fun execute_all_actions<IW: copy + drop>(
 
 // === Config Action Handlers ===
 
-fun try_execute_config_action<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_config_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
     // Check for basic config actions
-    if (executable::contains_action<FutarchyOutcome, config_actions::SetProposalsEnabledAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::SetProposalsEnabledAction>(executable)) {
         // Call the action module implementation
-        config_actions::do_set_proposals_enabled<FutarchyOutcome, IW>(
+        config_actions::do_set_proposals_enabled<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -127,9 +127,9 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, config_actions::UpdateNameAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::UpdateNameAction>(executable)) {
         // Call the action module implementation
-        config_actions::do_update_name<FutarchyOutcome, IW>(
+        config_actions::do_update_name<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -140,9 +140,9 @@ fun try_execute_config_action<IW: drop>(
     };
     
     // Check for advanced config actions
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::TradingParamsUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, advanced_config_actions::TradingParamsUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_trading_params<FutarchyOutcome, IW>(
+        advanced_config_actions::do_update_trading_params<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -152,9 +152,9 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::MetadataUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, advanced_config_actions::MetadataUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_metadata<FutarchyOutcome, IW>(
+        advanced_config_actions::do_update_metadata<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -164,8 +164,8 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::TwapConfigUpdateAction>(executable)) {
-        advanced_config_actions::do_update_twap_config<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, advanced_config_actions::TwapConfigUpdateAction>(executable)) {
+        advanced_config_actions::do_update_twap_config<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -175,9 +175,9 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::GovernanceUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, advanced_config_actions::GovernanceUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_governance<FutarchyOutcome, IW>(
+        advanced_config_actions::do_update_governance<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -187,8 +187,8 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::MetadataTableUpdateAction>(executable)) {
-        advanced_config_actions::do_update_metadata_table<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, advanced_config_actions::MetadataTableUpdateAction>(executable)) {
+        advanced_config_actions::do_update_metadata_table<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -198,8 +198,8 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::QueueParamsUpdateAction>(executable)) {
-        advanced_config_actions::do_update_queue_params<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, advanced_config_actions::QueueParamsUpdateAction>(executable)) {
+        advanced_config_actions::do_update_queue_params<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -209,9 +209,9 @@ fun try_execute_config_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, advanced_config_actions::SlashDistributionUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, advanced_config_actions::SlashDistributionUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_slash_distribution<FutarchyOutcome, IW>(
+        advanced_config_actions::do_update_slash_distribution<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -226,14 +226,14 @@ fun try_execute_config_action<IW: drop>(
 
 // === Dissolution Action Handlers ===
 
-fun try_execute_dissolution_action<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_dissolution_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
-    if (executable::contains_action<FutarchyOutcome, dissolution_actions::InitiateDissolutionAction>(executable)) {
-        dissolution_actions::do_initiate_dissolution<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, dissolution_actions::InitiateDissolutionAction>(executable)) {
+        dissolution_actions::do_initiate_dissolution<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -243,8 +243,8 @@ fun try_execute_dissolution_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, dissolution_actions::FinalizeDissolutionAction>(executable)) {
-        dissolution_actions::do_finalize_dissolution<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, dissolution_actions::FinalizeDissolutionAction>(executable)) {
+        dissolution_actions::do_finalize_dissolution<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -254,8 +254,8 @@ fun try_execute_dissolution_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, dissolution_actions::CancelDissolutionAction>(executable)) {
-        dissolution_actions::do_cancel_dissolution<FutarchyOutcome, IW>(
+    if (executable::contains_action<Outcome, dissolution_actions::CancelDissolutionAction>(executable)) {
+        dissolution_actions::do_cancel_dissolution<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -276,8 +276,8 @@ fun try_execute_dissolution_action<IW: drop>(
 
 // === Operating Agreement Action Handlers ===
 
-fun try_execute_operating_agreement_action<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_operating_agreement_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     clock: &Clock,
@@ -285,7 +285,7 @@ fun try_execute_operating_agreement_action<IW: drop>(
 ): bool {
     // Enforce 2-of-2 if OA has a council custodian policy set.
     // Skip this check for CreateOperatingAgreementAction since OA doesn't exist yet
-    if (!executable::contains_action<FutarchyOutcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+    if (!executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
         if (operating_agreement::has_agreement(account) && operating_agreement::requires_council_coapproval(account)) {
             // Disallow direct OA changes. Must use operating_agreement_coexec::execute_with_council
             abort EOARequiresCouncil
@@ -293,8 +293,8 @@ fun try_execute_operating_agreement_action<IW: drop>(
     };
     
     // Create OA if it doesn't exist yet
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
-        operating_agreement::execute_create_agreement<IW, FutarchyConfig>(
+    if (executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+        operating_agreement::execute_create_agreement<IW, FutarchyConfig, Outcome>(
             executable,
             account,
             witness,
@@ -304,9 +304,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::UpdateLineAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::UpdateLineAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_update_line<IW>(
+        operating_agreement::execute_update_line<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -316,9 +316,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::InsertLineAfterAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::InsertLineAfterAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_insert_line_after<IW>(
+        operating_agreement::execute_insert_line_after<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -328,9 +328,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::InsertLineAtBeginningAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::InsertLineAtBeginningAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_insert_line_at_beginning<IW>(
+        operating_agreement::execute_insert_line_at_beginning<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -340,9 +340,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::RemoveLineAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::RemoveLineAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_remove_line<IW>(
+        operating_agreement::execute_remove_line<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -352,9 +352,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::BatchOperatingAgreementAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::BatchOperatingAgreementAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_batch_operating_agreement<IW>(
+        operating_agreement::execute_batch_operating_agreement<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -364,9 +364,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetLineImmutableAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetLineImmutableAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_set_line_immutable<IW>(
+        operating_agreement::execute_set_line_immutable<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -376,9 +376,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetInsertAllowedAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetInsertAllowedAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_set_insert_allowed<IW>(
+        operating_agreement::execute_set_insert_allowed<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -388,9 +388,9 @@ fun try_execute_operating_agreement_action<IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::SetRemoveAllowedAction>(executable)) {
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetRemoveAllowedAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
-        operating_agreement::execute_set_remove_allowed<IW>(
+        operating_agreement::execute_set_remove_allowed<IW, Outcome>(
             executable,
             agreement,
             witness,
@@ -405,14 +405,14 @@ fun try_execute_operating_agreement_action<IW: drop>(
 
 // === Policy Registry Action Handlers ===
 
-fun try_execute_policy_action<IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_policy_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
     // Check for set policy action
-    if (executable::contains_action<FutarchyOutcome, policy_actions::SetPolicyAction>(executable)) {
+    if (executable::contains_action<Outcome, policy_actions::SetPolicyAction>(executable)) {
         let action: &policy_actions::SetPolicyAction = executable.next_action(witness);
         let account_id = object::id(account);
         let (key, id, prefix) = policy_actions::get_set_policy_params(action);
@@ -429,7 +429,7 @@ fun try_execute_policy_action<IW: drop>(
     };
 
     // Check for remove policy action
-    if (executable::contains_action<FutarchyOutcome, policy_actions::RemovePolicyAction>(executable)) {
+    if (executable::contains_action<Outcome, policy_actions::RemovePolicyAction>(executable)) {
         let action: &policy_actions::RemovePolicyAction = executable.next_action(witness);
         let account_id = object::id(account);
         let key = policy_actions::get_remove_policy_key(action);
@@ -473,8 +473,8 @@ fun try_execute_policy_action<IW: drop>(
 /// Execute actions with known coin types and pool
 /// This version validates liquidity actions but requires manual coin handling
 /// Note: Witness requires copy because it's used in the loop
-public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW: copy + drop>(
-    executable: Executable<FutarchyOutcome>,
+public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     _pool: &mut AccountSpotPool<AssetType, StableType>,
     witness: IW,
@@ -483,7 +483,7 @@ public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW
 ) {
     // Just use the regular typed actions since we can't automate pool operations
     // The pool parameter is kept for API compatibility
-    execute_typed_actions<AssetType, StableType, IW>(
+    execute_typed_actions<AssetType, StableType, IW, Outcome>(
         executable,
         account,
         witness,
@@ -495,8 +495,8 @@ public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW
 /// Execute actions with known coin types (without pool)
 /// This version can handle liquidity and stream actions that require specific types
 /// Note: Witness requires copy because it's used multiple times in the loop
-public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + drop>(
-    executable: Executable<FutarchyOutcome>,
+public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     clock: &Clock,
@@ -515,7 +515,7 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
             continue
         };
         
-        if (try_execute_typed_dissolution_action<AssetType, IW>(&mut executable, account, witness, ctx)) {
+        if (try_execute_typed_dissolution_action<AssetType, IW, Outcome>(&mut executable, account, witness, ctx)) {
             continue
         };
         
@@ -525,17 +525,17 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
         };
         
         // Try typed liquidity actions
-        if (try_execute_typed_liquidity_action<AssetType, StableType, IW>(&mut executable, account, witness, ctx)) {
+        if (try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(&mut executable, account, witness, ctx)) {
             continue
         };
         
         // Try typed stream actions (using AssetType as the coin type)
-        if (try_execute_typed_stream_action<AssetType, IW>(&mut executable, account, witness, clock, ctx)) {
+        if (try_execute_typed_stream_action<AssetType, IW, Outcome>(&mut executable, account, witness, clock, ctx)) {
             continue
         };
         
         // Check for unknown actions before breaking
-        if (executable::contains_action<FutarchyOutcome, vector<u8>>(&mut executable)) {
+        if (executable::contains_action<Outcome, vector<u8>>(&mut executable)) {
             abort EUnknownActionType
         };
         break
@@ -550,15 +550,15 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
 /// Execute liquidity actions with known types (without pool)
 /// only handles validation now
 /// Actual execution requires execute_add_liquidity_with_pool or execute_remove_liquidity_with_pool
-fun try_execute_typed_liquidity_action<AssetType: drop, StableType: drop, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_typed_liquidity_action<AssetType: drop, StableType: drop, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
     // For add liquidity actions, validate and document execution requirements
-    if (executable::contains_action<FutarchyOutcome, liquidity_actions::AddLiquidityAction<AssetType, StableType>>(executable)) {
-        validate_add_liquidity_action<AssetType, StableType, IW>(
+    if (executable::contains_action<Outcome, liquidity_actions::AddLiquidityAction<AssetType, StableType>>(executable)) {
+        validate_add_liquidity_action<AssetType, StableType, IW, Outcome>(
             executable,
             account,
             witness,
@@ -568,8 +568,8 @@ fun try_execute_typed_liquidity_action<AssetType: drop, StableType: drop, IW: dr
     };
     
     // For remove liquidity actions, validate and document execution requirements  
-    if (executable::contains_action<FutarchyOutcome, liquidity_actions::RemoveLiquidityAction<AssetType, StableType>>(executable)) {
-        validate_remove_liquidity_action<AssetType, StableType, IW>(
+    if (executable::contains_action<Outcome, liquidity_actions::RemoveLiquidityAction<AssetType, StableType>>(executable)) {
+        validate_remove_liquidity_action<AssetType, StableType, IW, Outcome>(
             executable,
             account,
             witness,
@@ -591,8 +591,8 @@ fun try_execute_typed_liquidity_action<AssetType: drop, StableType: drop, IW: dr
 /// - LP tokens are deposited to the custody registry automatically
 /// 
 /// Note: Requires copy on witness to create auth after using it for action
-public fun execute_add_liquidity_with_pool<AssetType: drop, StableType: drop, IW: copy + drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_add_liquidity_with_pool<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     pool: &mut AccountSpotPool<AssetType, StableType>,
     asset_coin: Coin<AssetType>,
@@ -646,8 +646,8 @@ public fun execute_add_liquidity_with_pool<AssetType: drop, StableType: drop, IW
 
 /// Validate add liquidity action parameters
 /// Replaces the old execute_add_liquidity validation-only function
-fun validate_add_liquidity_action<AssetType, StableType, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun validate_add_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &Account<FutarchyConfig>,
     witness: IW,
     _ctx: &mut TxContext,
@@ -694,8 +694,8 @@ fun validate_add_liquidity_action<AssetType, StableType, IW: drop>(
 /// - Resulting coins should be deposited via vault_intents::execute_deposit()
 /// 
 /// Note: Refactored to not require copy on witness - uses single auth pattern
-public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     pool: &mut AccountSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
@@ -746,8 +746,8 @@ public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop,
 
 /// Validate remove liquidity action parameters
 /// Replaces the old execute_remove_liquidity validation-only function
-fun validate_remove_liquidity_action<AssetType, StableType, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun validate_remove_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &Account<FutarchyConfig>,
     witness: IW,
     _ctx: &mut TxContext,
@@ -782,14 +782,14 @@ fun validate_remove_liquidity_action<AssetType, StableType, IW: drop>(
 }
 
 /// Execute typed dissolution actions with known coin type
-fun try_execute_typed_dissolution_action<CoinType, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_typed_dissolution_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
-    if (executable::contains_action<FutarchyOutcome, dissolution_actions::DistributeAssetAction<CoinType>>(executable)) {
-        dissolution_actions::do_distribute_asset<FutarchyOutcome, CoinType, IW>(
+    if (executable::contains_action<Outcome, dissolution_actions::DistributeAssetAction<CoinType>>(executable)) {
+        dissolution_actions::do_distribute_asset<Outcome, CoinType, IW>(
             executable,
             account,
             version::current(),
@@ -807,15 +807,15 @@ fun try_execute_typed_dissolution_action<CoinType, IW: drop>(
 // They will need to be properly implemented with actual pool integration
 
 /// Execute stream actions with known coin type
-fun try_execute_typed_stream_action<CoinType, IW: drop>(
-    executable: &mut Executable<FutarchyOutcome>,
+fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
-    if (executable::contains_action<FutarchyOutcome, stream_actions::CreatePaymentAction<CoinType>>(executable)) {
-        stream_actions::do_create_payment<FutarchyOutcome, CoinType, IW>(
+    if (executable::contains_action<Outcome, stream_actions::CreatePaymentAction<CoinType>>(executable)) {
+        stream_actions::do_create_payment<Outcome, CoinType, IW>(
             executable,
             account,
             version::current(),
@@ -826,8 +826,8 @@ fun try_execute_typed_stream_action<CoinType, IW: drop>(
         return true
     };
     
-    if (executable::contains_action<FutarchyOutcome, stream_actions::CancelPaymentAction<CoinType>>(executable)) {
-        stream_actions::do_cancel_payment<FutarchyOutcome, CoinType, IW>(
+    if (executable::contains_action<Outcome, stream_actions::CancelPaymentAction<CoinType>>(executable)) {
+        stream_actions::do_cancel_payment<Outcome, CoinType, IW>(
             executable,
             account,
             version::current(),

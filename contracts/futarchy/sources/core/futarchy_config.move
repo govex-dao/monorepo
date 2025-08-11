@@ -1027,8 +1027,9 @@ public fun register_proposal(
 }
 
 /// Execute a proposal's intent with generic outcome type
+/// Execute a proposal's intent with generic outcome type
 /// This allows standard intents to work with any outcome type
-public fun execute_proposal_intent_v2<AssetType, StableType, Outcome: store + drop + copy>(
+public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
@@ -1058,45 +1059,6 @@ public fun execute_proposal_intent_v2<AssetType, StableType, Outcome: store + dr
     executable
 }
 
-/// Legacy - Execute a proposal's intent after it has been approved
-public fun execute_proposal_intent<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
-    market: &MarketState,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Executable<FutarchyOutcome> {
-    // Verify the proposal was approved (YES outcome won)
-    // Convert u8 to u64 for comparison
-    assert!(market_state::get_winning_outcome(market) == (OUTCOME_YES as u64), EProposalNotApproved);
-    
-    // Get the intent key for the winning outcome (YES = 0)
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, (OUTCOME_YES as u64));
-    assert!(intent_key_opt.is_some(), EProposalNotApproved);
-    let intent_key = *intent_key_opt.borrow();
-    
-    // Create the outcome object
-    let outcome = FutarchyOutcome {
-        intent_key,
-        proposal_id: option::some(object::id(proposal)),
-        market_id: option::some(object::id(market)),
-        approved: true,
-        min_execution_time: clock.timestamp_ms(),
-    };
-    
-    // Execute the intent by creating an executable from the stored intent
-    // The intent should have been previously stored when the proposal was created
-    let (_outcome, executable) = account::create_executable<FutarchyConfig, FutarchyOutcome, FutarchyConfigWitness>(
-        account,
-        intent_key,
-        clock,
-        version::current(),
-        FutarchyConfigWitness {},
-    );
-    
-    // Return the executable for the caller to process the actions
-    executable
-}
 
 // === Config Action Execution Functions ===
 // NOTE: These functions have been moved to the action modules themselves

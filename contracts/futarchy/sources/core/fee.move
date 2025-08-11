@@ -288,6 +288,7 @@ public entry fun update_dao_creation_fee(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     let old_fee = fee_manager.dao_creation_fee;
     fee_manager.dao_creation_fee = new_fee;
 
@@ -307,6 +308,7 @@ public entry fun update_proposal_creation_fee(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     let old_fee = fee_manager.proposal_creation_fee_per_outcome;
     fee_manager.proposal_creation_fee_per_outcome = new_fee_per_outcome;
 
@@ -416,6 +418,7 @@ public entry fun update_dao_monthly_fee(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     let current_fee = fee_manager.dao_monthly_fee;
     let effective_timestamp = clock.timestamp_ms() + FEE_UPDATE_DELAY_MS;
     

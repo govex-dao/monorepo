@@ -15,7 +15,7 @@ use account_protocol::{
     intents::{Self, Intent},
 };
 use futarchy::{
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
+    futarchy_config::{Self, FutarchyConfig},
     governance_intents,
     intent_witnesses,
     version,
@@ -101,13 +101,14 @@ fun generate_liquidity_intent_key(
 }
 
 /// Create a treasury transfer intent
-public fun create_treasury_transfer_intent<AssetType>(
+public fun create_treasury_transfer_intent<AssetType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     recipient: address,
     amount: u64,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext,
-): (String, Intent<FutarchyOutcome>) {
+): (String, Intent<Outcome>) {
     let config = account.config();
     
     // Generate a unique intent key
@@ -118,18 +119,14 @@ public fun create_treasury_transfer_intent<AssetType>(
         clock
     );
     
-    // Create outcome object - no proposal ID needed yet
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config),
-    );
+    // Use the provided outcome
     
     // Create intent parameters
     let params = intents::new_params(
         intent_key,
         b"Treasury transfer proposal".to_string(),
-        vector[futarchy_config::outcome_min_execution_time(&outcome)],
-        futarchy_config::outcome_min_execution_time(&outcome) + 86_400_000, // 24 hour expiry
+        vector[clock.timestamp_ms() + 3_600_000], // 1 hour delay
+        clock.timestamp_ms() + 86_400_000, // 24 hour expiry // 24 hour expiry
         clock,
         ctx
     );
@@ -152,15 +149,16 @@ public fun create_treasury_transfer_intent<AssetType>(
 }
 
 /// Create a config update intent
-public fun create_config_update_intent(
+public fun create_config_update_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     min_asset_amount: u64,
     min_stable_amount: u64,
     review_period_ms: u64,
     trading_period_ms: u64,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext,
-): (String, Intent<FutarchyOutcome>) {
+): (String, Intent<Outcome>) {
     let config = account.config();
     
     // Generate intent key
@@ -170,18 +168,14 @@ public fun create_config_update_intent(
         clock
     );
     
-    // Create outcome object - no proposal ID needed yet
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config),
-    );
+    // Use the provided outcome
     
     // Create intent parameters
     let params = intents::new_params(
         intent_key,
         b"Config update proposal".to_string(),
-        vector[futarchy_config::outcome_min_execution_time(&outcome)],
-        futarchy_config::outcome_min_execution_time(&outcome) + 86_400_000,
+        vector[clock.timestamp_ms() + 3_600_000], // 1 hour delay
+        clock.timestamp_ms() + 86_400_000, // 24 hour expiry
         clock,
         ctx
     );
@@ -203,14 +197,15 @@ public fun create_config_update_intent(
 }
 
 /// Create a liquidity addition intent
-public fun create_liquidity_intent<AssetType, StableType>(
+public fun create_liquidity_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,
     asset_amount: u64,
     stable_amount: u64,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext,
-): (String, Intent<FutarchyOutcome>) {
+): (String, Intent<Outcome>) {
     let config = account.config();
     
     // Generate intent key
@@ -221,18 +216,14 @@ public fun create_liquidity_intent<AssetType, StableType>(
         clock
     );
     
-    // Create outcome object - no proposal ID needed yet
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config),
-    );
+    // Use the provided outcome
     
     // Create intent parameters
     let params = intents::new_params(
         intent_key,
         b"Liquidity addition proposal".to_string(),
-        vector[futarchy_config::outcome_min_execution_time(&outcome)],
-        futarchy_config::outcome_min_execution_time(&outcome) + 86_400_000,
+        vector[clock.timestamp_ms() + 3_600_000], // 1 hour delay
+        clock.timestamp_ms() + 86_400_000, // 24 hour expiry
         clock,
         ctx
     );
@@ -249,7 +240,7 @@ public fun create_liquidity_intent<AssetType, StableType>(
     );
     
     // Add liquidity action
-    liquidity_intents::add_liquidity_to_intent<FutarchyOutcome, AssetType, StableType, intent_witnesses::GovernanceWitness>(
+    liquidity_intents::add_liquidity_to_intent<Outcome, AssetType, StableType, intent_witnesses::GovernanceWitness>(
         &mut intent,
         pool_id,
         asset_amount,
@@ -262,29 +253,26 @@ public fun create_liquidity_intent<AssetType, StableType>(
 }
 
 /// Create a dissolution intent
-public fun create_dissolution_intent<CoinType>(
+public fun create_dissolution_intent<CoinType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext,
-): (String, Intent<FutarchyOutcome>) {
+): (String, Intent<Outcome>) {
     let config = account.config();
     
     // Generate intent key - dissolution is unique per timestamp
     let mut intent_key = b"dissolution_".to_string();
     intent_key.append(clock.timestamp_ms().to_string());
     
-    // Create outcome object - no proposal ID needed yet
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config),
-    );
+    // Use the provided outcome
     
     // Create intent parameters
     let params = intents::new_params(
         intent_key,
         b"DAO dissolution proposal".to_string(),
-        vector[futarchy_config::outcome_min_execution_time(&outcome)],
-        futarchy_config::outcome_min_execution_time(&outcome) + 86_400_000,
+        vector[clock.timestamp_ms() + 3_600_000], // 1 hour delay
+        clock.timestamp_ms() + 86_400_000, // 24 hour expiry
         clock,
         ctx
     );
@@ -301,7 +289,7 @@ public fun create_dissolution_intent<CoinType>(
     );
     
     // Add dissolution action
-    dissolution_intents::initiate_dissolution_in_intent<FutarchyOutcome, intent_witnesses::GovernanceWitness>(
+    dissolution_intents::initiate_dissolution_in_intent<Outcome, intent_witnesses::GovernanceWitness>(
         &mut intent,
         b"DAO dissolution proposal approved".to_string(),
         0, // distribution_method: 0 = pro rata
@@ -314,13 +302,14 @@ public fun create_dissolution_intent<CoinType>(
 }
 
 /// Create a batch transfer intent
-public fun create_batch_transfer_intent<AssetType>(
+public fun create_batch_transfer_intent<AssetType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
     recipients: vector<address>,
     amounts: vector<u64>,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext,
-): (String, Intent<FutarchyOutcome>) {
+): (String, Intent<Outcome>) {
     let config = account.config();
     
     // Generate intent key using recipient count and total amount
@@ -338,18 +327,14 @@ public fun create_batch_transfer_intent<AssetType>(
     intent_key.append(b"_".to_string());
     intent_key.append(clock.timestamp_ms().to_string());
     
-    // Create outcome object - no proposal ID needed yet
-    let outcome = futarchy_config::new_outcome_for_intent(
-        intent_key,
-        clock.timestamp_ms() + futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config),
-    );
+    // Use the provided outcome
     
     // Create intent parameters
     let params = intents::new_params(
         intent_key,
         b"Batch treasury transfer proposal".to_string(),
-        vector[futarchy_config::outcome_min_execution_time(&outcome)],
-        futarchy_config::outcome_min_execution_time(&outcome) + 86_400_000,
+        vector[clock.timestamp_ms() + 3_600_000], // 1 hour delay
+        clock.timestamp_ms() + 86_400_000, // 24 hour expiry
         clock,
         ctx
     );

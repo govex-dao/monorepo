@@ -228,11 +228,12 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     assert!(intent_key_opt.is_some(), ENoIntentKey);
     let intent_key = *intent_key_opt.borrow();
     
-    // Execute the proposal intent
-    let executable = futarchy_config::execute_proposal_intent(
+    // Execute the proposal intent using FutarchyOutcome
+    let executable = futarchy_config::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
         account,
         proposal,
         market,
+        winning_outcome,  // Pass the actual winning outcome
         clock,
         ctx
     );
@@ -257,7 +258,7 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
 
 /// Executes an approved proposal's intent with known asset types
 /// This version can handle all action types including those requiring specific coin types
-public fun execute_approved_proposal_typed<AssetType, StableType, IW: copy + drop>(
+public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW: copy + drop>(
     account: &mut Account<FutarchyConfig>,
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
@@ -272,22 +273,23 @@ public fun execute_approved_proposal_typed<AssetType, StableType, IW: copy + dro
     let winning_outcome = market_state::get_winning_outcome(market);
     assert!(winning_outcome == OUTCOME_YES, EProposalNotApproved);
     
-    // Get the intent key for the winning outcome (YES = 0)
+    // Get the intent key for the winning outcome (YES = 0)  
     let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_YES);
     assert!(intent_key_opt.is_some(), ENoIntentKey);
     let intent_key = *intent_key_opt.borrow();
     
-    // Execute the proposal intent
-    let executable = futarchy_config::execute_proposal_intent(
+    // Execute using FutarchyOutcome
+    let executable = futarchy_config::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
         account,
         proposal,
         market,
+        winning_outcome,  // Pass the actual winning outcome
         clock,
         ctx
     );
     
     // Execute all actions using the typed dispatcher
-    action_dispatcher::execute_all_actions<IW>(
+    action_dispatcher::execute_typed_actions<AssetType, StableType, IW, FutarchyOutcome>(
         executable,
         account,
         intent_witness,
@@ -488,6 +490,7 @@ public fun can_execute_proposal<AssetType, StableType>(
     
     true
 }
+
 
 /// Calculates the winning outcome based on TWAP prices
 /// Returns OUTCOME_YES if the YES price exceeds the threshold, OUTCOME_NO otherwise
