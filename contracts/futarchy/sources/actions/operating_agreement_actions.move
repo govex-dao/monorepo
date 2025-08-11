@@ -33,6 +33,15 @@ const ACTION_REMOVE: u8 = 3;
 
 // === Action Structs ===
 
+
+/// Create a new (empty) Operating Agreement and store it in the Account
+/// Lines can be inserted subsequently via Insert* actions.
+public struct CreateOperatingAgreementAction has store {
+    /// Optional policy flags to set immediately (defaults are true in OA::new)
+    allow_insert: bool,
+    allow_remove: bool,
+}
+
 /// Represents a single atomic change to the operating agreement
 public struct OperatingAgreementAction has store, drop {
     action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
@@ -91,6 +100,11 @@ public struct BatchOperatingAgreementAction has store {
 // operating_agreement module functions. Keeping struct definitions only.
 
 // === Cleanup Functions ===
+
+/// Delete a create OA action from an expired intent
+public fun delete_create_operating_agreement(expired: &mut Expired) {
+    let CreateOperatingAgreementAction { allow_insert: _, allow_remove: _ } = expired.remove_action();
+}
 
 /// Delete an update line action from an expired intent
 public fun delete_update_line(expired: &mut Expired) {
@@ -194,6 +208,14 @@ public fun new_batch_operating_agreement<Outcome: store, IW: drop>(
 }
 
 // === Helper Functions ===
+
+/// Create a new create OA action
+public fun new_create_operating_agreement_action(
+    allow_insert: bool,
+    allow_remove: bool
+): CreateOperatingAgreementAction {
+    CreateOperatingAgreementAction { allow_insert, allow_remove }
+}
 
 /// Create a new update line action
 public fun new_update_line_action(line_id: ID, new_text: String): UpdateLineAction {
@@ -371,6 +393,12 @@ public fun get_operating_agreement_action_params(action: &OperatingAgreementActi
     &Option<u64>,
 ) {
     (action.action_type, &action.line_id, &action.text, &action.difficulty)
+}
+
+
+/// Get parameters from CreateOperatingAgreementAction
+public fun get_create_operating_agreement_params(action: &CreateOperatingAgreementAction): (bool, bool) {
+    (action.allow_insert, action.allow_remove)
 }
 
 /// Get action type constants for external use

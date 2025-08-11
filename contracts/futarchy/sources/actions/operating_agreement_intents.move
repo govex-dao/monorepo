@@ -3,7 +3,11 @@ module futarchy::operating_agreement_intents;
 
 // === Imports ===
 use std::string::String;
-use sui::clock::Clock;
+use sui::{
+    clock::Clock,
+    object::ID,
+    tx_context::TxContext,
+};
 use account_protocol::{
     account::Account,
     executable::Executable,
@@ -153,6 +157,33 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
                 actions,
                 iw
             );
+        }
+    );
+}
+
+/// Create intent to initialize a brand-new Operating Agreement in the Account
+/// Creates an empty OA (no lines). Use insert actions afterwards.
+public fun create_create_agreement_intent<Config, Outcome: store>(
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    allow_insert: bool,
+    allow_remove: bool,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"operating_agreement_create".to_string(),
+        version::current(),
+        OperatingAgreementIntent {},
+        ctx,
+        |intent, iw| {
+            let action = operating_agreement_actions::new_create_operating_agreement_action(
+                allow_insert,
+                allow_remove
+            );
+            intent.add_action(action, iw);
         }
     );
 }

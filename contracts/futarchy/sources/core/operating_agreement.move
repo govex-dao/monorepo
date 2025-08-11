@@ -6,6 +6,7 @@ module futarchy::operating_agreement;
 use std::{
     string::String,
     option::{Self, Option},
+    vector,
 };
 use sui::{
     clock::{Self, Clock},
@@ -21,6 +22,8 @@ use account_protocol::{
 };
 use futarchy::{
     futarchy_config::FutarchyOutcome,
+    policy_registry,
+    version,
 };
 use futarchy::operating_agreement_actions::{
     UpdateLineAction,
@@ -32,6 +35,7 @@ use futarchy::operating_agreement_actions::{
     SetRemoveAllowedAction,
     BatchOperatingAgreementAction,
     OperatingAgreementAction,
+    CreateOperatingAgreementAction,
     get_update_line_params,
     get_insert_line_after_params,
     get_insert_line_at_beginning_params,
@@ -41,6 +45,7 @@ use futarchy::operating_agreement_actions::{
     get_set_remove_allowed,
     get_batch_actions,
     get_operating_agreement_action_params,
+    get_create_operating_agreement_params,
     action_update,
     action_insert_after,
     action_insert_at_beginning,
@@ -69,6 +74,7 @@ const ERemoveNotAllowed: u64 = 8;
 const ECannotReEnableInsert: u64 = 9;
 const ECannotReEnableRemove: u64 = 10;
 const EAlreadyImmutable: u64 = 11;
+const EUnauthorizedCustodian: u64 = 12;
 
 // === Constants ===
 const MAX_LINES_PER_AGREEMENT: u64 = 1000;
@@ -109,7 +115,7 @@ public struct OperatingAgreement has key, store {
 // === Creation and Management Functions ===
 
 /// Store the operating agreement in the Account using managed assets
-public fun store_in_account<Config>(
+public fun store_in_account<Config: store>(
     account: &mut Account<Config>,
     agreement: OperatingAgreement,
     version_witness: account_protocol::version_witness::VersionWitness,
@@ -118,7 +124,7 @@ public fun store_in_account<Config>(
 }
 
 /// Get a mutable reference to the operating agreement from the Account
-public fun get_agreement_mut<Config>(
+public fun get_agreement_mut<Config: store>(
     account: &mut Account<Config>,
     version_witness: account_protocol::version_witness::VersionWitness,
 ): &mut OperatingAgreement {
@@ -126,7 +132,7 @@ public fun get_agreement_mut<Config>(
 }
 
 /// Get a reference to the operating agreement from the Account
-public fun get_agreement<Config>(
+public fun get_agreement<Config: store>(
     account: &Account<Config>,
     version_witness: VersionWitness,
 ): &OperatingAgreement {
@@ -134,7 +140,7 @@ public fun get_agreement<Config>(
 }
 
 /// Check if an account has an operating agreement
-public fun has_agreement<Config>(
+public fun has_agreement<Config: store>(
     account: &Account<Config>,
 ): bool {
     account::has_managed_asset<Config, AgreementKey>(account, AgreementKey {})
@@ -277,6 +283,37 @@ public fun new(
 }
 
 // === Execution Functions (Called by action_dispatcher) ===
+
+/// Execute creation of a fresh OperatingAgreement and store it in the Account
+/// This creates an empty OA (no lines), with the allow_insert/remove flags set as requested.
+/// Abort if an agreement already exists.
+public fun execute_create_agreement<IW: drop, Config: store>(
+    executable: &mut Executable<FutarchyOutcome>,
+    account: &mut Account<Config>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    if (has_agreement(account)) {
+        abort EAgreementAlreadyExists
+    };
+
+    let action: &CreateOperatingAgreementAction = executable.next_action(witness);
+    let (allow_insert, allow_remove) = get_create_operating_agreement_params(action);
+
+    // Create an empty OA for this DAO ID
+    let dao_id = object::id(account);
+    let initial_lines: vector<String> = vector[];
+    let initial_difficulties: vector<u64> = vector[];
+    let mut agreement = new(dao_id, initial_lines, initial_difficulties, ctx);
+
+    // Apply policy flags as requested
+    set_insert_allowed(&mut agreement, allow_insert, clock);
+    set_remove_allowed(&mut agreement, allow_remove, clock);
+
+    // Store in account managed assets
+    store_in_account(account, agreement, version::current());
+}
 
 /// Execute an update line action
 public fun execute_update_line<IW: drop>(
@@ -739,7 +776,61 @@ public entry fun read_agreement(agreement: &OperatingAgreement, clock: &Clock) {
     emit_current_state_event(agreement, clock);
 }
 
-/// Emit the current state of the agreement
+/// True if OA is guarded by a Security Council custodial policy.
+/// If true, OA mutation must go through co-execution path (futarchy + council).
+public fun requires_council_coapproval<Config: store>(
+    account: &Account<Config>
+): bool {
+    let reg = policy_registry::borrow_registry(account, version::current());
+    policy_registry::has_policy(reg, b"OA:Custodian".to_string())
+}
+
+
+/// Apply a batch of OA actions directly (co-exec calls this after validation).
+/// Note: caller must have already enforced any policy/authorization checks.
+public(package) fun apply_actions(
+    agreement: &mut OperatingAgreement,
+    actions: &vector<OperatingAgreementAction>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let mut i = 0;
+    while (i < actions.length()) {
+        let act = actions.borrow(i);
+        let (t, lid_opt, text_opt, diff_opt) = get_operating_agreement_action_params(act);
+        if (t == action_update()) {
+            assert!(lid_opt.is_some() && text_opt.is_some(), EInvalidActionType);
+            update_line_internal(agreement, *lid_opt.borrow(), *text_opt.borrow(), clock);
+        } else if (t == action_insert_after()) {
+            assert!(lid_opt.is_some() && text_opt.is_some() && diff_opt.is_some(), EInvalidActionType);
+            insert_line_after_internal(
+                agreement,
+                *lid_opt.borrow(),
+                *text_opt.borrow(),
+                *diff_opt.borrow(),
+                clock,
+                ctx
+            );
+        } else if (t == action_insert_at_beginning()) {
+            assert!(text_opt.is_some() && diff_opt.is_some(), EInvalidActionType);
+            insert_line_at_beginning_internal(
+                agreement,
+                *text_opt.borrow(),
+                *diff_opt.borrow(),
+                clock,
+                ctx
+            );
+        } else if (t == action_remove()) {
+            assert!(lid_opt.is_some(), EInvalidActionType);
+            remove_line_internal(agreement, *lid_opt.borrow(), clock);
+        } else {
+            abort EInvalidActionType
+        };
+        i = i + 1;
+    };
+    emit_current_state_event(agreement, clock);
+}
+
 public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clock: &Clock) {
     let ordered_ids = get_all_line_ids_ordered(agreement);
     

@@ -16,7 +16,6 @@ use sui::{
     object::{Self, ID, UID},
     sui::SUI,
     vec_set::{Self, VecSet},
-    table::{Self, Table},
     transfer,
     url,
 };
@@ -64,7 +63,6 @@ public struct Factory has key, store {
     dao_count: u64,
     paused: bool,
     allowed_stable_types: VecSet<TypeName>,
-    min_raise_amounts: Table<TypeName, u64>,
 }
 
 /// Admin capability for factory operations
@@ -92,7 +90,6 @@ public struct StableCoinTypeAdded has copy, drop {
     type_str: UTF8String,
     admin: address,
     timestamp: u64,
-    min_raise_amount: u64,
 }
 
 public struct StableCoinTypeRemoved has copy, drop {
@@ -116,7 +113,6 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         dao_count: 0,
         paused: false,
         allowed_stable_types: vec_set::empty<TypeName>(),
-        min_raise_amounts: table::new(ctx),
     };
     
     let owner_cap = FactoryOwnerCap {
@@ -516,22 +512,18 @@ public entry fun toggle_pause(factory: &mut Factory, _cap: &FactoryOwnerCap) {
 public entry fun add_allowed_stable_type<StableType>(
     factory: &mut Factory,
     _owner_cap: &FactoryOwnerCap,
-    min_raise_amount: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     let type_name_val = type_name::get<StableType>();
-    assert!(min_raise_amount > 0, 0);
     
     if (!factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.insert(type_name_val);
-        factory.min_raise_amounts.add(type_name_val, min_raise_amount);
         
         event::emit(StableCoinTypeAdded {
             type_str: get_type_string<StableType>(),
             admin: ctx.sender(),
             timestamp: clock.timestamp_ms(),
-            min_raise_amount,
         });
     }
 }
@@ -546,9 +538,6 @@ public entry fun remove_allowed_stable_type<StableType>(
     let type_name_val = type_name::get<StableType>();
     if (factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.remove(&type_name_val);
-        if (factory.min_raise_amounts.contains(type_name_val)) {
-            factory.min_raise_amounts.remove(type_name_val);
-        };
         
         event::emit(StableCoinTypeRemoved {
             type_str: get_type_string<StableType>(),
@@ -556,22 +545,6 @@ public entry fun remove_allowed_stable_type<StableType>(
             timestamp: clock.timestamp_ms(),
         });
     }
-}
-
-/// Update minimum raise amount for a stable type
-public entry fun update_min_raise_amount<StableType>(
-    factory: &mut Factory,
-    _owner_cap: &FactoryOwnerCap,
-    new_min_raise_amount: u64,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    let type_name_val = type_name::get<StableType>();
-    assert!(factory.allowed_stable_types.contains(&type_name_val), EStableTypeNotAllowed);
-    assert!(new_min_raise_amount > 0, 0);
-    
-    let current_amount = factory.min_raise_amounts.borrow_mut(type_name_val);
-    *current_amount = new_min_raise_amount;
 }
 
 /// Burn the factory owner cap
@@ -598,13 +571,6 @@ public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
     factory.allowed_stable_types.contains(&type_name_val)
 }
 
-/// Get minimum raise amount for a stable type
-public fun get_min_raise_amount<StableType>(factory: &Factory): u64 {
-    let type_name_val = type_name::get<StableType>();
-    assert!(factory.allowed_stable_types.contains(&type_name_val), EStableTypeNotAllowed);
-    *factory.min_raise_amounts.borrow(type_name_val)
-}
-
 // === Private Functions ===
 
 fun get_type_string<T>(): UTF8String {
@@ -622,7 +588,6 @@ public fun create_factory(ctx: &mut TxContext) {
         dao_count: 0,
         paused: false,
         allowed_stable_types: vec_set::empty<TypeName>(),
-        min_raise_amounts: table::new(ctx),
     };
     
     let owner_cap = FactoryOwnerCap {

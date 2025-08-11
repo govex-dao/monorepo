@@ -19,6 +19,7 @@ use futarchy::{
     version,
     account_spot_pool::{Self, AccountSpotPool, LPToken},
     lp_token_custody,
+    policy_registry_coexec,
 };
 // Import action modules from local package
 use futarchy::{
@@ -39,6 +40,8 @@ const EInvalidAmount: u64 = 4;
 const ENoSpotPool: u64 = 5;
 const EInvalidPoolId: u64 = 6;
 const EUnknownActionType: u64 = 7;
+const EOARequiresCouncil: u64 = 8;
+const ECriticalPolicyRequiresCouncil: u64 = 9;
 
 // === Public Functions ===
 
@@ -280,6 +283,27 @@ fun try_execute_operating_agreement_action<IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
+    // Enforce 2-of-2 if OA has a council custodian policy set.
+    // Skip this check for CreateOperatingAgreementAction since OA doesn't exist yet
+    if (!executable::contains_action<FutarchyOutcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+        if (operating_agreement::has_agreement(account) && operating_agreement::requires_council_coapproval(account)) {
+            // Disallow direct OA changes. Must use operating_agreement_coexec::execute_with_council
+            abort EOARequiresCouncil
+        };
+    };
+    
+    // Create OA if it doesn't exist yet
+    if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+        operating_agreement::execute_create_agreement<IW, FutarchyConfig>(
+            executable,
+            account,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
     if (executable::contains_action<FutarchyOutcome, operating_agreement_actions::UpdateLineAction>(executable)) {
         let agreement = operating_agreement::get_agreement_mut(account, version::current());
         operating_agreement::execute_update_line<IW>(
@@ -391,8 +415,15 @@ fun try_execute_policy_action<IW: drop>(
     if (executable::contains_action<FutarchyOutcome, policy_actions::SetPolicyAction>(executable)) {
         let action: &policy_actions::SetPolicyAction = executable.next_action(witness);
         let account_id = object::id(account);
-        let registry = policy_registry::borrow_registry_mut(account, version::current());
         let (key, id, prefix) = policy_actions::get_set_policy_params(action);
+        
+        // Check if this is a critical policy that requires council co-approval
+        if (policy_registry_coexec::is_critical_policy(key)) {
+            // Critical policies must use policy_registry_coexec::execute_set_policy_with_council
+            abort ECriticalPolicyRequiresCouncil
+        };
+        
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
         policy_registry::set_policy(registry, account_id, *key, id, *prefix);
         return true
     };
@@ -401,8 +432,15 @@ fun try_execute_policy_action<IW: drop>(
     if (executable::contains_action<FutarchyOutcome, policy_actions::RemovePolicyAction>(executable)) {
         let action: &policy_actions::RemovePolicyAction = executable.next_action(witness);
         let account_id = object::id(account);
-        let registry = policy_registry::borrow_registry_mut(account, version::current());
         let key = policy_actions::get_remove_policy_key(action);
+        
+        // Check if this is a critical policy that requires council co-approval
+        if (policy_registry_coexec::is_critical_policy(key)) {
+            // Critical policies must use policy_registry_coexec::execute_remove_policy_with_council
+            abort ECriticalPolicyRequiresCouncil
+        };
+        
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
         policy_registry::remove_policy(registry, account_id, *key);
         return true
     };
