@@ -932,8 +932,8 @@ public(package) fun set_dao_pool_id(
 // === Governance Core Functions ===
 
 /// Authenticate and get an Auth token
-/// For now, this is permissionless - anyone can get one
-public fun authenticate(
+/// INTERNAL USE ONLY - must be called through action dispatcher
+public(package) fun authenticate(
     account: &Account<FutarchyConfig>,
     _ctx: &mut TxContext,
 ): Auth {
