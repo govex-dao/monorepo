@@ -17,6 +17,7 @@ const EInvalidTwapThreshold: u64 = 4; // TWAP threshold must be positive
 const EInvalidProposalFee: u64 = 5; // Proposal fee must be positive
 const EInvalidBondAmount: u64 = 6; // Bond amount must be positive
 const EInvalidTwapParams: u64 = 7; // Invalid TWAP parameters
+const EInvalidGracePeriod: u64 = 8; // Grace period too short
 
 // === Constants ===
 const MAX_FEE_BPS: u64 = 10000; // 100% in basis points
@@ -55,6 +56,7 @@ public struct GovernanceConfig has store, drop, copy {
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
+    eviction_grace_period_ms: u64,
 }
 
 /// Metadata configuration
@@ -131,6 +133,7 @@ public fun new_governance_config(
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
+    eviction_grace_period_ms: u64,
 ): GovernanceConfig {
     // Validate inputs
     assert!(max_outcomes >= MIN_OUTCOMES, EInvalidMaxOutcomes);
@@ -139,6 +142,7 @@ public fun new_governance_config(
     assert!(max_concurrent_proposals > 0, EInvalidProposalFee);
     assert!(fee_escalation_basis_points <= MAX_FEE_BPS, EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
+    assert!(eviction_grace_period_ms >= 300000, EInvalidGracePeriod); // Min 5 minutes
     
     GovernanceConfig {
         max_outcomes,
@@ -151,6 +155,7 @@ public fun new_governance_config(
         proposal_creation_enabled,
         accept_new_proposals,
         max_intents_per_outcome,
+        eviction_grace_period_ms,
     }
 }
 
@@ -211,6 +216,7 @@ public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 { gov.fee_es
 public fun proposal_creation_enabled(gov: &GovernanceConfig): bool { gov.proposal_creation_enabled }
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
+public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
@@ -296,5 +302,6 @@ public fun default_governance_config(): GovernanceConfig {
         proposal_creation_enabled: true,
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
+        eviction_grace_period_ms: 7200000, // 2 hours default
     }
 }

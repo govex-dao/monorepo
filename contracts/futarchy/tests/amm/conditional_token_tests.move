@@ -14,9 +14,9 @@ const USER2: address = @0xC;
 const ASSET_TYPE_ASSET: u8 = 0;
 #[allow(unused_const)]
 const ASSET_TYPE_STABLE: u8 = 1;
-const OUTCOME_YES: u8 = 0;
+const OUTCOME_ACCEPTED: u8 = 0;
 #[allow(unused_const)]
-const OUTCOME_NO: u8 = 1;
+const OUTCOME_REJECTED: u8 = 1;
 
 // Test helper struct
 public struct TestTradingCap has key, store {
@@ -49,7 +49,7 @@ fun test_supply_creation() {
         let supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
 
@@ -88,7 +88,7 @@ fun test_mint_and_burn() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
 
@@ -161,7 +161,7 @@ fun test_split_and_merge() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
 
@@ -232,7 +232,7 @@ fun test_merge_many() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
 
@@ -338,7 +338,7 @@ fun test_merge_large_number_of_tokens() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -446,7 +446,7 @@ fun test_mint_after_trading_closed() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -498,7 +498,7 @@ fun test_split_edge_cases() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -574,7 +574,7 @@ fun test_destroy_zero_value_token() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -594,7 +594,7 @@ fun test_destroy_zero_value_token() {
         let zero_token = conditional_token::mint_for_testing(
             state.market_id(),
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             0, // zero balance
             ctx
         );
@@ -639,7 +639,7 @@ fun test_destroy_non_zero_value_token_fails() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -688,7 +688,7 @@ fun test_token_properties() {
         let mut supply = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -704,7 +704,7 @@ fun test_token_properties() {
         // Verify token properties
         assert!(conditional_token::market_id(&token) == market_state::market_id(&state), 0);
         assert!(conditional_token::asset_type(&token) == ASSET_TYPE_ASSET, 1);
-        assert!(conditional_token::outcome(&token) == OUTCOME_YES, 2);
+        assert!(conditional_token::outcome(&token) == OUTCOME_ACCEPTED, 2);
         assert!(conditional_token::value(&token) == 100, 3);
         
         transfer::public_transfer(token, USER1);
@@ -750,7 +750,7 @@ fun test_merge_many_wrong_market() {
         let mut supply1 = conditional_token::new_supply(
             &state1,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -767,7 +767,7 @@ fun test_merge_many_wrong_market() {
         let mut supply2 = conditional_token::new_supply(
             &state2,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -833,7 +833,7 @@ fun test_merge_many_wrong_asset_type() {
         let mut supply_asset = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -850,7 +850,7 @@ fun test_merge_many_wrong_asset_type() {
         let mut supply_stable = conditional_token::new_supply(
             &state,
             ASSET_TYPE_STABLE,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -915,7 +915,7 @@ fun test_merge_many_wrong_outcome() {
         let mut supply_yes = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_YES,
+            OUTCOME_ACCEPTED,
             ctx,
         );
         
@@ -932,7 +932,7 @@ fun test_merge_many_wrong_outcome() {
         let mut supply_no = conditional_token::new_supply(
             &state,
             ASSET_TYPE_ASSET,
-            OUTCOME_NO,
+            OUTCOME_REJECTED,
             ctx,
         );
         

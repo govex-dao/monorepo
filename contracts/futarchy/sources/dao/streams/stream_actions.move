@@ -14,6 +14,7 @@ use std::{
     string::String,
     option::{Self, Option},
     vector,
+    type_name::{Self, TypeName},
 };
 use sui::{
     clock::Clock,
@@ -77,6 +78,11 @@ public struct PaymentPoolKey has copy, drop, store {
     payment_id: String,
 }
 
+/// Dynamic field key for dissolution return funds
+public struct DissolutionReturnKey has copy, drop, store {
+    coin_type: type_name::TypeName,
+}
+
 /// Storage for all payments in an account
 public struct PaymentStorage has store {
     payments: sui::table::Table<String, PaymentConfig>,
@@ -138,6 +144,23 @@ public struct RecipientUpdated has copy, drop {
     payment_id: String,
     old_recipient: address,
     new_recipient: address,
+    timestamp: u64,
+}
+
+public struct DissolutionFundsReturned has copy, drop {
+    account_id: ID,
+    coin_type: String,
+    total_amount: u64,
+    payment_count: u64,
+    timestamp: u64,
+}
+
+/// Event emitted when an isolated pool's funds are returned to treasury
+public struct IsolatedPoolReturned has copy, drop {
+    account_id: ID,
+    payment_id: String,
+    amount_returned: u64,
+    expected_amount: u64,
     timestamp: u64,
 }
 
@@ -757,6 +780,7 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
 }
 
 /// Execute a payment with provided coin - actual fund movement
+#[allow(lint(self_transfer))]
 public(package) fun do_execute_payment_with_coin<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -850,6 +874,7 @@ public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
 }
 
 /// Cancel a payment with optional final payment coin
+#[allow(lint(self_transfer))]
 public(package) fun do_cancel_payment_with_coin<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -1379,6 +1404,45 @@ public fun cancel_all_payments_for_dissolution<CoinType>(
     
     let account_id = object::id(account);  // Get ID before mutable borrow
     
+    // First pass: collect isolated pool payment IDs and amounts
+    let mut isolated_pool_payments = vector::empty<String>();
+    let mut isolated_pool_amounts = vector::empty<u64>();
+    
+    {
+        let storage: &PaymentStorage = account::borrow_managed_data(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+        
+        let mut i = 0;
+        let len = storage.payment_ids.length();
+        
+        while (i < len) {
+            let payment_id = *storage.payment_ids.borrow(i);
+            
+            if (table::contains(&storage.payments, payment_id)) {
+                let payment = table::borrow(&storage.payments, payment_id);
+                
+                if (payment.active && payment.cancellable && payment.source_mode == SOURCE_ISOLATED_POOL) {
+                    let unclaimed = if (payment.amount > payment.claimed_amount) {
+                        payment.amount - payment.claimed_amount
+                    } else {
+                        0
+                    };
+                    
+                    if (unclaimed > 0) {
+                        vector::push_back(&mut isolated_pool_payments, payment_id);
+                        vector::push_back(&mut isolated_pool_amounts, unclaimed);
+                    };
+                };
+            };
+            
+            i = i + 1;
+        };
+    };
+    
+    // Second pass: cancel all payments
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
         PaymentStorageKey {},
@@ -1409,13 +1473,7 @@ public fun cancel_all_payments_for_dissolution<CoinType>(
                     // Note: In production, properly iterate and remove from table
                 };
                 
-                // For isolated pool payments, mark that balance needs to be returned
-                // Note: In production, this would be handled in a separate pass
-                // to avoid double-mutable-borrow of account
-                if (payment.source_mode == SOURCE_ISOLATED_POOL) {
-                    // The actual balance return would happen in a second loop
-                    // after we're done with storage borrow
-                };
+                // Isolated pool payments are handled in the third pass
                 
                 // Calculate and record unclaimed amount for accounting
                 let unclaimed = if (payment.amount > payment.claimed_amount) {
@@ -1435,6 +1493,87 @@ public fun cancel_all_payments_for_dissolution<CoinType>(
         };
         
         i = i + 1;
+    };
+    
+    // Third pass: handle isolated pool funds
+    // Process each isolated pool payment to return funds to treasury
+    if (!isolated_pool_payments.is_empty()) {
+        let mut total_returned = 0u64;
+        let mut returned_balances: vector<Balance<CoinType>> = vector::empty();
+        let mut i = 0;
+        
+        while (i < isolated_pool_payments.length()) {
+            let payment_id = *isolated_pool_payments.borrow(i);
+            let expected_amount = *isolated_pool_amounts.borrow(i);
+            let pool_key = PaymentPoolKey { payment_id };
+            
+            // Check if the pool exists and retrieve remaining balance
+            if (account::has_managed_data(account, pool_key)) {
+                // Remove the pool balance entirely
+                let pool_balance: Balance<CoinType> = account::remove_managed_data(
+                    account,
+                    pool_key,
+                    version::current()
+                );
+                
+                let actual_amount = balance::value(&pool_balance);
+                
+                // Collect the balance to return later
+                if (actual_amount > 0) {
+                    total_returned = total_returned + actual_amount;
+                    vector::push_back(&mut returned_balances, pool_balance);
+                    
+                    // Emit event for this specific pool return
+                    event::emit(IsolatedPoolReturned {
+                        account_id,
+                        payment_id,
+                        amount_returned: actual_amount,
+                        expected_amount,
+                        timestamp: clock.timestamp_ms(),
+                    });
+                } else {
+                    // Destroy empty balance
+                    balance::destroy_zero(pool_balance);
+                };
+            };
+            
+            i = i + 1;
+        };
+        
+        // Combine all returned balances into one
+        if (!vector::is_empty(&returned_balances)) {
+            let mut combined_balance = vector::pop_back(&mut returned_balances);
+            while (!vector::is_empty(&returned_balances)) {
+                let next_balance = vector::pop_back(&mut returned_balances);
+                balance::join(&mut combined_balance, next_balance);
+            };
+            
+            // Store the combined balance back as managed data with a special key
+            // This will be available for the account to withdraw back to treasury
+            // The account protocol handles the actual treasury management
+            let return_key = DissolutionReturnKey { coin_type: type_name::get<CoinType>() };
+            if (account::has_managed_data(account, return_key)) {
+                let existing: &mut Balance<CoinType> = account::borrow_managed_data_mut(
+                    account,
+                    return_key,
+                    version::current()
+                );
+                balance::join(existing, combined_balance);
+            } else {
+                account::add_managed_data(account, return_key, combined_balance, version::current());
+            };
+        };
+        
+        vector::destroy_empty(returned_balances);
+        
+        // Emit summary event for all isolated pool returns
+        event::emit(DissolutionFundsReturned {
+            account_id,
+            coin_type: type_name::get<CoinType>().into_string().to_string(),
+            total_amount: total_returned,
+            payment_count: isolated_pool_payments.length(),
+            timestamp: clock.timestamp_ms(),
+        });
     };
 }
 

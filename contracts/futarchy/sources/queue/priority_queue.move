@@ -126,6 +126,8 @@ public struct ProposalQueue<phantom StableCoin> has key, store {
     max_proposer_funded: u64,
     /// Whether the DAO liquidity slot is occupied
     dao_liquidity_slot_occupied: bool,
+    /// Grace period in milliseconds before a proposal can be evicted
+    eviction_grace_period_ms: u64,
     /// Reserved next on-chain Proposal ID (if locked as the next one to go live)
     reserved_next_proposal: Option<ID>,
 }
@@ -270,6 +272,7 @@ public fun new<StableCoin>(
     dao_id: ID,
     max_concurrent_proposals: u64,
     max_proposer_funded: u64,
+    eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
 ): ProposalQueue<StableCoin> {
     ProposalQueue {
@@ -281,6 +284,7 @@ public fun new<StableCoin>(
         active_proposal_count: 0,
         max_proposer_funded,
         dao_liquidity_slot_occupied: false,
+        eviction_grace_period_ms,
         reserved_next_proposal: option::none(),
     }
 }
@@ -291,9 +295,10 @@ public fun new_with_config<StableCoin>(
     max_proposer_funded: u64,
     max_concurrent_proposals: u64,
     _max_queue_size: u64,  // Ignored - we use MAX_QUEUE_SIZE constant
+    eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
 ): ProposalQueue<StableCoin> {
-    new(dao_id, max_concurrent_proposals, max_proposer_funded, ctx)
+    new(dao_id, max_concurrent_proposals, max_proposer_funded, eviction_grace_period_ms, ctx)
 }
 
 /// Create priority score from fee and timestamp
@@ -353,7 +358,7 @@ public fun insert<StableCoin>(
             
             // Check grace period BEFORE removing
             assert!(
-                current_time - lowest.timestamp >= EVICTION_GRACE_PERIOD_MS,
+                current_time - lowest.timestamp >= queue.eviction_grace_period_ms,
                 EProposalInGracePeriod
             );
             

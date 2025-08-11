@@ -20,18 +20,24 @@ use futarchy::{
     custody_actions,
 };
 
+// Error codes
+const EObjectIdMismatch: u64 = 5;
+const EResourceKeyMismatch: u64 = 6;
+const EWithdrawnObjectIdMismatch: u64 = 7;
+
 /// Generic 2-of-2 custody accept:
 /// - DAO executable must contain ApproveCustodyAction<R>
 /// - Council executable must contain AcceptIntoCustodyAction<R> and a Receiving<R>
 /// - Enforces policy_key on DAO ("Custody:*" or domain-specific like "UpgradeCap:Custodian")
 /// Stores the object under council custody with a standard key.
-public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: key + store>(
+public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: key + store, W: copy + drop>(
     dao: &mut Account<FutarchyConfig>,
     council: &mut Account<WeightedMultisig>,
     mut futarchy_exec: Executable<FutarchyOutcome>,
     mut council_exec: Executable<Approvals>,
     receipt: Receiving<R>,
     policy_key: String,
+    intent_witness: W,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -43,7 +49,7 @@ public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: 
     
     // Council accepts
     let accept: &custody_actions::AcceptIntoCustodyAction<R> =
-        coexec_common::extract_action(&mut council_exec, version::current());
+        coexec_common::extract_action(&mut council_exec, intent_witness);
     let (obj_id_council, res_key_council_ref, _ctx2_ref) =
         custody_actions::get_accept_params(accept);
     
@@ -52,12 +58,12 @@ public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: 
     coexec_common::validate_dao_id(dao_id_expected, object::id(dao));
     coexec_common::validate_expiry(clock, expires_at);
     
-    assert!(obj_id_expected == obj_id_council, 5);
-    assert!(*res_key_ref == *res_key_council_ref, 5);
+    assert!(obj_id_expected == obj_id_council, EObjectIdMismatch);
+    assert!(*res_key_ref == *res_key_council_ref, EResourceKeyMismatch);
     
     // Withdraw the object (must match the withdraw action witness used when building the intent)
-    let obj = owned::do_withdraw(&mut council_exec, council, receipt, version::current());
-    assert!(object::id(&obj) == obj_id_expected, 6);
+    let obj = owned::do_withdraw(&mut council_exec, council, receipt, intent_witness);
+    assert!(object::id(&obj) == obj_id_expected, EWithdrawnObjectIdMismatch);
     
     // Store under council custody using a standard key
     let mut key = b"custody:".to_string();

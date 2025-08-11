@@ -427,7 +427,7 @@ public(package) fun new_premarket<AssetType, StableType>(
 
 /// Initialize market/escrow/AMMs for a PREMARKET proposal.
 /// Consumes provided coins, sets state to REVIEW, and readies the market for the review timer.
-#[allow(lint(share_owned))]
+#[allow(lint(share_owned, self_transfer))]
 public(package) fun initialize_market_from_premarket<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     asset_coin: Coin<AssetType>,

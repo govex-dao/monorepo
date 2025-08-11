@@ -36,6 +36,7 @@ fun test_create_queue() {
             dao_id,
             50, // max_concurrent_proposals
             30, // max_proposer_funded
+            300000, // eviction_grace_period_ms (5 minutes for testing)
             ctx(&mut scenario)
         );
         
@@ -84,7 +85,7 @@ fun test_insert_single_proposal() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -143,7 +144,7 @@ fun test_extract_max() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -254,7 +255,7 @@ fun test_eviction_when_queue_full() {
         let dao_id = uid.to_inner();
         uid.delete();
         // Small queue for testing eviction
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 2, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 2, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -343,7 +344,7 @@ fun test_eviction_grace_period_protection() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 1, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 1, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -410,7 +411,7 @@ fun test_dao_liquidity_slot() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 1, 5, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 1, 5, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -468,7 +469,7 @@ fun test_calculate_min_fee() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 10, 10, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 10, 10, 300000, ctx(&mut scenario));
         
         // Empty queue - base fee
         assert!(priority_queue::calculate_min_fee(&queue) == 1_000_000, 0);
@@ -549,7 +550,7 @@ fun test_update_proposal_fee() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -615,7 +616,7 @@ fun test_get_proposals_by_proposer() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -700,7 +701,7 @@ fun test_would_accept_proposal() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 2, 2, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 2, 2, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     

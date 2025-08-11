@@ -75,7 +75,7 @@ fun test_extract_max_helper() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         transfer::public_share_object(queue);
     };
     
@@ -134,7 +134,7 @@ fun test_extract_max_empty_queue() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let mut queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let mut queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         
         // Should fail on empty queue
         let extracted = priority_queue_helpers::extract_max(&mut queue);
@@ -167,7 +167,7 @@ fun test_proposal_getters() {
         let uid = object::new(ctx(&mut scenario));
         let dao_id = uid.to_inner();
         uid.delete();
-        let mut queue = priority_queue::new<STABLE>(dao_id, 50, 30, ctx(&mut scenario));
+        let mut queue = priority_queue::new<STABLE>(dao_id, 50, 30, 300000, ctx(&mut scenario));
         
         // Create proposal with bond
         let bond = coin::mint_for_testing<STABLE>(1000, ctx(&mut scenario));

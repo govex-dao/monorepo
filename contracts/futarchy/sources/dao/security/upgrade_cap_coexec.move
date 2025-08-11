@@ -21,9 +21,15 @@ use futarchy::{
     futarchy_config::{Self, FutarchyConfig},
     security_council,
     custody_actions,
+    security_council_intents,
     weighted_multisig::{Self, WeightedMultisig, Approvals},
 };
 use account_actions::package_upgrade;
+
+// Error codes
+const ECapIdMismatch: u64 = 1001;
+const EPackageNameMismatch: u64 = 1002;
+const EWrongCapObject: u64 = 1003;
 
 /// Require 2-of-2 for accepting/locking an UpgradeCap:
 /// - DAO must have policy "UpgradeCap:Custodian" pointing to Security Council
@@ -51,7 +57,7 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     let accept: &custody_actions::AcceptIntoCustodyAction<UpgradeCap> =
         coexec_common::extract_action(
             &mut council_exec,
-            version::current()
+            security_council_intents::new_accept_upgrade_cap_intent()
         );
     let (cap_id_from_council, pkg_name_council_ref, _ctx2_str_ref) =
         custody_actions::get_accept_params(accept);
@@ -63,19 +69,19 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::validate_expiry(clock, expires_at);
     
     // Typed equality for cap and package name.
-    assert!(cap_id_expected == cap_id_from_council, /* EActionTypeMismatch or dedicated code */ 5);
-    assert!(pkg_name_expected == pkg_name_council, /* EActionTypeMismatch or dedicated code */ 5);
+    assert!(cap_id_expected == cap_id_from_council, ECapIdMismatch);
+    assert!(pkg_name_expected == pkg_name_council, EPackageNameMismatch);
     
     // Withdraw the cap from the receipt and lock it into the council
     let cap = owned::do_withdraw(
         &mut council_exec,
         council,
         cap_receipt,
-        version::current()
+        security_council_intents::new_accept_upgrade_cap_intent()
     );
     
     // Strong object identity check.
-    assert!(object::id(&cap) == cap_id_expected, /* Wrong object */ 6);
+    assert!(object::id(&cap) == cap_id_expected, EWrongCapObject);
     
     let auth = security_council::authenticate(council, ctx);
     // Lock under council-managed assets; version 0 for ruleset as before

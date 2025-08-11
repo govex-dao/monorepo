@@ -181,6 +181,7 @@ public entry fun create_dao<AssetType: drop, StableType>(
 }
 
 /// Internal function to create a DAO with Extensions and optional TreasuryCap
+#[allow(lint(share_owned))]
 public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableType>(
     factory: &mut Factory,
     extensions: &Extensions,
@@ -276,11 +277,15 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create the account with Extensions registry validation for security
     let mut account = futarchy_config::new_account_with_extensions(extensions, config, ctx);
     
+    // Get eviction grace period from config for the queue
+    let eviction_grace_period_ms = futarchy_config::eviction_grace_period_ms(account::config(&account));
+    
     // Now create the priority queue but do not share it yet.
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
         30, // max_proposer_funded
         50, // max_concurrent_proposals
+        eviction_grace_period_ms,
         ctx
     );
     let priority_queue_id = object::id(&queue);
@@ -438,11 +443,15 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
     
+    // Get eviction grace period from config for the queue
+    let eviction_grace_period_ms = futarchy_config::eviction_grace_period_ms(account::config(&account));
+    
     // Now create the priority queue but do not share it yet.
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
         30, // max_proposer_funded
         50, // max_concurrent_proposals
+        eviction_grace_period_ms,
         ctx
     );
     let priority_queue_id = object::id(&queue);

@@ -8,6 +8,7 @@ use sui::coin::{Self, Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
+use std::u64;
 use sui::table::{Self, Table};
 use sui::transfer::{public_share_object, public_transfer};
 
@@ -222,7 +223,12 @@ public(package) fun deposit_proposal_creation_payment(
     clock: &Clock,
     ctx: &TxContext,
 ) {
-    let fee_amount = fee_manager.proposal_creation_fee_per_outcome * outcome_count;
+    // Use u128 arithmetic to prevent overflow
+    let fee_amount_u128 = (fee_manager.proposal_creation_fee_per_outcome as u128) * (outcome_count as u128);
+    
+    // Check that result fits in u64
+    assert!(fee_amount_u128 <= (u64::max_value!() as u128), EArithmeticOverflow); // u64::max_value()
+    let fee_amount = (fee_amount_u128 as u64);
 
     // deposit_payment asserts the payment amount is exactly the fee_amount
     let payment_amount = deposit_payment(fee_manager, fee_amount, payment);

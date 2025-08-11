@@ -39,6 +39,11 @@ public struct UpdateCouncilMembershipIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
 public struct ApprovePolicyChangeIntent has copy, drop {}
 
+// Public constructor for AcceptUpgradeCapIntent witness
+public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
+    AcceptUpgradeCapIntent{}
+}
+
 public fun request_package_upgrade(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_futarchy_dao: Auth,
@@ -281,6 +286,7 @@ public fun request_create_security_council(
 
 /// Execute the council creation with a provided Extensions registry.
 /// Creates the council, shares it, and optionally sets OA:Custodian policy.
+#[allow(lint(share_owned))]
 public fun execute_create_security_council(
     dao: &mut Account<FutarchyConfig>,
     extensions: &Extensions,

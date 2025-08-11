@@ -37,8 +37,8 @@ const DAO_STATE_ACTIVE: u8 = 0;
 const DAO_STATE_DISSOLVING: u8 = 1;
 const DAO_STATE_PAUSED: u8 = 2;
 
-const OUTCOME_YES: u8 = 0;
-const OUTCOME_NO: u8 = 1;
+const OUTCOME_ACCEPTED: u8 = 0;
+const OUTCOME_REJECTED: u8 = 1;
 
 // === Errors ===
 const EProposalNotApproved: u64 = 1;
@@ -239,6 +239,7 @@ public fun new_config_params_from_values(
         true,  // proposal_creation_enabled (default)
         true,  // accept_new_proposals (default)
         10,    // max_intents_per_outcome (default)
+        7200000, // eviction_grace_period_ms (2 hours default)
     );
     
     let metadata_config = dao_config::new_metadata_config(
@@ -351,6 +352,7 @@ public fun review_period_ms(config: &FutarchyConfig): u64 { dao_config::review_p
 public fun trading_period_ms(config: &FutarchyConfig): u64 { dao_config::trading_period_ms(dao_config::trading_params(&config.config)) }
 public fun proposal_recreation_window_ms(config: &FutarchyConfig): u64 { dao_config::proposal_recreation_window_ms(dao_config::governance_config(&config.config)) }
 public fun max_proposal_chain_depth(config: &FutarchyConfig): u64 { dao_config::max_proposal_chain_depth(dao_config::governance_config(&config.config)) }
+public fun eviction_grace_period_ms(config: &FutarchyConfig): u64 { dao_config::eviction_grace_period_ms(dao_config::governance_config(&config.config)) }
 
 // AMM configuration
 public fun amm_twap_start_delay(config: &FutarchyConfig): u64 { dao_config::start_delay(dao_config::twap_config(&config.config)) }
@@ -461,6 +463,7 @@ public(package) fun set_proposal_recreation_window_ms(config: &mut FutarchyConfi
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -478,6 +481,7 @@ public(package) fun set_max_proposal_chain_depth(config: &mut FutarchyConfig, de
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -584,6 +588,7 @@ public(package) fun set_max_outcomes(config: &mut FutarchyConfig, max: u64) {
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -601,6 +606,7 @@ public(package) fun set_proposal_fee_per_outcome(config: &mut FutarchyConfig, fe
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -622,6 +628,7 @@ public(package) fun set_max_concurrent_proposals(config: &mut FutarchyConfig, ma
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -639,6 +646,7 @@ public(package) fun set_required_bond_amount(config: &mut FutarchyConfig, amount
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -740,6 +748,7 @@ public(package) fun set_fee_escalation_basis_points(config: &mut FutarchyConfig,
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         dao_config::max_intents_per_outcome(current_gov),
+        dao_config::eviction_grace_period_ms(current_gov),
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }
@@ -757,6 +766,25 @@ public(package) fun set_max_intents_per_outcome(config: &mut FutarchyConfig, max
         dao_config::proposal_creation_enabled(current_gov),
         dao_config::accept_new_proposals(current_gov),
         max,
+        dao_config::eviction_grace_period_ms(current_gov),
+    );
+    config.config = dao_config::update_governance_config(&config.config, new_gov);
+}
+
+public(package) fun set_eviction_grace_period_ms(config: &mut FutarchyConfig, period: u64) {
+    let current_gov = dao_config::governance_config(&config.config);
+    let new_gov = dao_config::new_governance_config(
+        dao_config::max_outcomes(current_gov),
+        dao_config::proposal_fee_per_outcome(current_gov),
+        dao_config::required_bond_amount(current_gov),
+        dao_config::max_concurrent_proposals(current_gov),
+        dao_config::proposal_recreation_window_ms(current_gov),
+        dao_config::max_proposal_chain_depth(current_gov),
+        dao_config::fee_escalation_basis_points(current_gov),
+        dao_config::proposal_creation_enabled(current_gov),
+        dao_config::accept_new_proposals(current_gov),
+        dao_config::max_intents_per_outcome(current_gov),
+        period,
     );
     config.config = dao_config::update_governance_config(&config.config, new_gov);
 }

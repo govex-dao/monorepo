@@ -180,12 +180,13 @@ public(package) fun deposit_lp_token<AssetType, StableType>(
 
 /// Withdraw LP tokens from custody
 /// The token_id identifies which LP token to withdraw from managed assets
+/// The LP token is transferred to the account as a child object for safety
+/// Users can then transfer it from the account in a separate transaction
 public(package) fun withdraw_lp_token<AssetType, StableType>(
     auth: Auth,
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,
     token_id: ID,  // Changed from passing the token to just the ID
-    recipient: address,
     _ctx: &mut TxContext,
 ) {
     account::verify(account, auth);
@@ -244,15 +245,17 @@ public(package) fun withdraw_lp_token<AssetType, StableType>(
     let new_pool_total = *custody.pool_totals.borrow(pool_id);
     let new_total_value_locked = custody.total_value_locked;
     
-    // Transfer token to recipient
-    transfer::public_transfer(token, recipient);
+    // Transfer token to the account itself for safety
+    // Users can transfer it from the account in a separate transaction
+    let account_address = object::id_address(account);
+    transfer::public_transfer(token, account_address);
     
     event::emit(LPTokenWithdrawn {
         account_id,
         pool_id,
         token_id,
         amount,
-        recipient,
+        recipient: account_address,
         new_pool_total,
         new_total_value_locked,
     });

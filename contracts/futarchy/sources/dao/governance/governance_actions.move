@@ -34,6 +34,10 @@ const EInvalidReservationPeriod: u64 = 4;
 const EProposalAlreadyExists: u64 = 5;
 const EInsufficientFee: u64 = 6;
 const EMaxDepthExceeded: u64 = 7;
+const EInvalidTitle: u64 = 8;
+const ENoOutcomes: u64 = 9;
+const EOutcomeMismatch: u64 = 10;
+const EInvalidBucketDuration: u64 = 11;
 
 // === Constants ===
 // These are now just fallbacks - actual values come from DAO config
@@ -60,6 +64,12 @@ public struct CreateProposalAction has store, copy, drop {
     proposal_fee: u64,
     /// Optional: Override reservation period (if not set, uses DAO config)
     reservation_period_ms_override: Option<u64>,
+    /// The title of the proposal to be created
+    title: String,
+    /// The human-readable messages for each outcome
+    outcome_messages: vector<String>,
+    /// The detailed descriptions for each outcome
+    outcome_details: vector<String>,
 }
 
 /// Reservation for an nth-order proposal that was evicted
@@ -82,6 +92,12 @@ public struct ProposalReservation has store {
     initial_asset_amount: u64,
     initial_stable_amount: u64,
     use_dao_liquidity: bool,
+    /// The title of the proposal to be created
+    title: String,
+    /// The human-readable messages for each outcome
+    outcome_messages: vector<String>,
+    /// The detailed descriptions for each outcome
+    outcome_details: vector<String>,
     /// Original fee amount (for reference)
     original_fee: u64,
     /// Original proposer (from parent proposal)
@@ -95,11 +111,67 @@ public struct ProposalReservation has store {
     child_proposals: vector<CreateProposalAction>,
 }
 
+/// A "bucket" that holds all reservations expiring within the same time window (e.g., a day).
+public struct ReservationBucket has store {
+    /// The start timestamp of this bucket's time window (e.g., midnight UTC).
+    timestamp_ms: u64,
+    /// The keys of all reservations that expire within this bucket's window.
+    reservation_ids: vector<ID>,
+    /// Pointers for the doubly-linked list (bucket timestamps).
+    prev_bucket_timestamp: Option<u64>,
+    next_bucket_timestamp: Option<u64>,
+}
+
 /// Storage for proposal reservations
 public struct ProposalReservationRegistry has key {
     id: UID,
     /// Map from parent proposal ID to reservation
     reservations: Table<ID, ProposalReservation>,
+    /// Map from bucket timestamp to bucket
+    buckets: Table<u64, ReservationBucket>,
+    /// Head of the linked list (points to the OLDEST bucket timestamp).
+    head_bucket_timestamp: Option<u64>,
+    /// Tail of the linked list (points to the NEWEST bucket timestamp).
+    tail_bucket_timestamp: Option<u64>,
+    /// How large each time window is in milliseconds. A DAO-configurable value.
+    /// Example: 1 day = 86,400,000 ms.
+    bucket_duration_ms: u64,
+}
+
+// === Constructor Functions ===
+
+/// Create a new CreateProposalAction with validation
+public fun new_create_proposal_action(
+    proposal_type: String,
+    proposal_data: vector<u8>,
+    initial_asset_amount: u64,
+    initial_stable_amount: u64,
+    use_dao_liquidity: bool,
+    proposal_fee: u64,
+    reservation_period_ms_override: Option<u64>,
+    title: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+): CreateProposalAction {
+    use std::string;
+    
+    // Basic validation
+    assert!(string::length(&title) > 0, EInvalidTitle);
+    assert!(!vector::is_empty(&outcome_messages), ENoOutcomes);
+    assert!(vector::length(&outcome_messages) == vector::length(&outcome_details), EOutcomeMismatch);
+
+    CreateProposalAction {
+        proposal_type,
+        proposal_data,
+        initial_asset_amount,
+        initial_stable_amount,
+        use_dao_liquidity,
+        proposal_fee,
+        reservation_period_ms_override,
+        title,
+        outcome_messages,
+        outcome_details,
+    }
 }
 
 // === Action Execution ===
@@ -134,7 +206,17 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     
     // Check chain depth
     let max_depth = futarchy_config::max_proposal_chain_depth(config);
-    assert!(max_depth > 0, EMaxDepthExceeded);
+    
+    // Get parent's depth from the reservation registry
+    // A first-order proposal will not be in the registry, so its depth is 0
+    let parent_depth = if (table::contains(&registry.reservations, parent_proposal_id)) {
+        table::borrow(&registry.reservations, parent_proposal_id).chain_depth
+    } else {
+        0
+    };
+    
+    // Enforce the chain depth limit
+    assert!(parent_depth < max_depth, EMaxDepthExceeded);
     
     // Verify the fee coin matches the required fee amount
     assert!(coin::value(&fee_coin) >= action.proposal_fee, EInsufficientFee);
@@ -295,6 +377,7 @@ fun create_reservation(
     clock: &Clock,
     ctx: &TxContext,
 ) {
+
     // Check if parent is also a reserved proposal to get chain info
     let (root_id, depth) = if (table::contains(&registry.reservations, parent_proposal_id)) {
         let parent_reservation = table::borrow(&registry.reservations, parent_proposal_id);
@@ -307,6 +390,9 @@ fun create_reservation(
     // Extract child proposals if this proposal contains any
     let child_proposals = extract_child_proposals(&action.proposal_data);
     
+    // Calculate the expiration time for the new reservation
+    let expires_at = clock::timestamp_ms(clock) + reservation_period;
+    
     let reservation = ProposalReservation {
         parent_proposal_id,
         root_proposal_id: root_id,
@@ -318,14 +404,58 @@ fun create_reservation(
         initial_asset_amount: action.initial_asset_amount,
         initial_stable_amount: action.initial_stable_amount,
         use_dao_liquidity: action.use_dao_liquidity,
+        title: action.title,
+        outcome_messages: action.outcome_messages,
+        outcome_details: action.outcome_details,
         original_fee: action.proposal_fee,
         original_proposer: tx_context::sender(ctx),
-        recreation_expires_at: clock::timestamp_ms(clock) + reservation_period,
+        recreation_expires_at: expires_at,
         recreation_count: 0,
         child_proposals,
     };
     
+    // Add the reservation to the main table
     table::add(&mut registry.reservations, parent_proposal_id, reservation);
+    
+    // --- Add the reservation ID to the correct time bucket ---
+    let bucket_duration = registry.bucket_duration_ms;
+    assert!(bucket_duration > 0, EInvalidBucketDuration);
+    
+    // Calculate the timestamp for the bucket this reservation belongs to
+    let bucket_timestamp = expires_at - (expires_at % bucket_duration);
+    
+    if (table::contains(&registry.buckets, bucket_timestamp)) {
+        // Bucket already exists, just add the ID
+        let bucket = table::borrow_mut(&mut registry.buckets, bucket_timestamp);
+        vector::push_back(&mut bucket.reservation_ids, parent_proposal_id);
+    } else {
+        // Need to create a new bucket
+        let prev_timestamp = registry.tail_bucket_timestamp;
+        
+        let new_bucket = ReservationBucket {
+            timestamp_ms: bucket_timestamp,
+            reservation_ids: vector[parent_proposal_id],
+            prev_bucket_timestamp: prev_timestamp,
+            next_bucket_timestamp: option::none(),
+        };
+        
+        // Add the new bucket to the table
+        table::add(&mut registry.buckets, bucket_timestamp, new_bucket);
+        
+        // Update linked list pointers
+        if (option::is_some(&prev_timestamp)) {
+            // Update the old tail's next pointer
+            let old_tail_timestamp = *option::borrow(&prev_timestamp);
+            let old_tail = table::borrow_mut(&mut registry.buckets, old_tail_timestamp);
+            old_tail.next_bucket_timestamp = option::some(bucket_timestamp);
+        } else {
+            // This is the first bucket
+            registry.head_bucket_timestamp = option::some(bucket_timestamp);
+        };
+        
+        // Update the tail pointer
+        registry.tail_bucket_timestamp = option::some(bucket_timestamp);
+    }
 }
 
 /// Extract any CreateProposalActions from proposal data
@@ -352,14 +482,12 @@ fun create_queued_proposal_with_id(
     clock: &Clock,
     ctx: &TxContext,
 ): priority_queue::QueuedProposal<FutarchyConfig> {
-    use std::string;
-    
     // Create proposal data from action
     let proposal_data = priority_queue::new_proposal_data(
-        string::utf8(b"Child Proposal"),
+        action.title,
         action.proposal_type,
-        vector[string::utf8(b"Yes"), string::utf8(b"No")],
-        vector[string::utf8(b"Execute"), string::utf8(b"Reject")],
+        action.outcome_messages,
+        action.outcome_details,
         vector[action.initial_asset_amount, action.initial_asset_amount],
         vector[action.initial_stable_amount, action.initial_stable_amount]
     );
@@ -384,14 +512,12 @@ fun create_queued_proposal_from_reservation(
     clock: &Clock,
     ctx: &TxContext,
 ): priority_queue::QueuedProposal<FutarchyConfig> {
-    use std::string;
-    
     // Create proposal data from reservation
     let proposal_data = priority_queue::new_proposal_data(
-        string::utf8(b"Recreated Proposal"),
+        reservation.title,
         reservation.proposal_type,
-        vector[string::utf8(b"Yes"), string::utf8(b"No")],
-        vector[string::utf8(b"Execute"), string::utf8(b"Reject")],
+        reservation.outcome_messages,
+        reservation.outcome_details,
         vector[reservation.initial_asset_amount, reservation.initial_asset_amount],
         vector[reservation.initial_stable_amount, reservation.initial_stable_amount]
     );
@@ -416,6 +542,11 @@ public fun init_registry(ctx: &mut TxContext): ProposalReservationRegistry {
     ProposalReservationRegistry {
         id: object::new(ctx),
         reservations: table::new(ctx),
+        buckets: table::new(ctx),
+        head_bucket_timestamp: option::none(),
+        tail_bucket_timestamp: option::none(),
+        // Default to 1 day buckets. Can be made configurable per-DAO.
+        bucket_duration_ms: 86_400_000,
     }
 }
 
@@ -566,4 +697,93 @@ public fun get_proposal_chain(
     let mut chain = vector::empty<ID>();
     vector::push_back(&mut chain, root_proposal_id);
     chain
+}
+
+/// Prune the oldest expired bucket from the registry.
+/// This function is O(1) if there are no expired reservations, and O(k) where k is the number
+/// of reservations in a single bucket to prune.
+/// Called from proposal_lifecycle during finalization to clean up old reservations.
+public fun prune_oldest_expired_bucket(
+    registry: &mut ProposalReservationRegistry,
+    config: &futarchy_config::FutarchyConfig,
+    clock: &Clock,
+    _ctx: &TxContext,
+) {
+    // Check if we have any buckets to prune
+    if (option::is_none(&registry.head_bucket_timestamp)) {
+        return // No buckets at all
+    };
+    
+    let head_timestamp = *option::borrow(&registry.head_bucket_timestamp);
+    let current_time = clock::timestamp_ms(clock);
+    
+    // Add a safety buffer based on DAO configuration
+    let safety_buffer = futarchy_config::proposal_recreation_window_ms(config);
+    let prune_before = if (current_time > safety_buffer) {
+        current_time - safety_buffer
+    } else {
+        0
+    };
+    
+    // Check if the oldest bucket has expired
+    if (head_timestamp >= prune_before) {
+        return // Oldest bucket hasn't expired yet
+    };
+    
+    // Remove the head bucket
+    let bucket = table::remove(&mut registry.buckets, head_timestamp);
+    
+    // Update the head pointer
+    registry.head_bucket_timestamp = bucket.next_bucket_timestamp;
+    
+    // If there's a new head, update its prev pointer to none
+    if (option::is_some(&bucket.next_bucket_timestamp)) {
+        let next_timestamp = *option::borrow(&bucket.next_bucket_timestamp);
+        let next_bucket = table::borrow_mut(&mut registry.buckets, next_timestamp);
+        next_bucket.prev_bucket_timestamp = option::none();
+    } else {
+        // This was the last bucket, so tail should also be none
+        registry.tail_bucket_timestamp = option::none();
+    };
+    
+    // Clean up the expired reservations
+    let mut i = 0;
+    while (i < vector::length(&bucket.reservation_ids)) {
+        let reservation_id = *vector::borrow(&bucket.reservation_ids, i);
+        if (table::contains(&registry.reservations, reservation_id)) {
+            // Remove and properly destroy the reservation
+            let reservation = table::remove(&mut registry.reservations, reservation_id);
+            
+            // Destructure the reservation to avoid "value has drop ability" error
+            let ProposalReservation { 
+                parent_proposal_id: _,
+                root_proposal_id: _,
+                chain_depth: _,
+                parent_outcome: _,
+                parent_executed: _,
+                proposal_type: _,
+                proposal_data: _,
+                initial_asset_amount: _,
+                initial_stable_amount: _,
+                use_dao_liquidity: _,
+                title: _,
+                outcome_messages: _,
+                outcome_details: _,
+                original_fee: _,
+                original_proposer: _,
+                recreation_expires_at: _,
+                recreation_count: _,
+                child_proposals: _,
+            } = reservation;
+        };
+        i = i + 1;
+    };
+    
+    // Destructure the bucket to avoid "value has drop ability" error
+    let ReservationBucket {
+        timestamp_ms: _,
+        reservation_ids: _,
+        prev_bucket_timestamp: _,
+        next_bucket_timestamp: _,
+    } = bucket;
 }

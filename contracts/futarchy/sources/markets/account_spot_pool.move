@@ -115,6 +115,7 @@ public fun new<AssetType, StableType>(
 }
 
 /// Share the pool object
+#[allow(lint(custom_state_change, share_owned))]
 public fun share<AssetType, StableType>(pool: AccountSpotPool<AssetType, StableType>) {
     transfer::share_object(pool);
 }

@@ -2,7 +2,11 @@
 module futarchy::proposal_lifecycle;
 
 // === Imports ===
-use std::string::String;
+use std::{
+    string::String,
+    option,
+    vector,
+};
 use sui::{
     clock::Clock,
     coin::{Self, Coin},
@@ -20,6 +24,7 @@ use futarchy::{
     market_state::{Self, MarketState},
     priority_queue::{Self, ProposalQueue, QueuedProposal},
     proposal_fee_manager::ProposalFeeManager,
+    governance_actions::{Self, ProposalReservationRegistry},
     action_dispatcher,
     version,
 };
@@ -35,8 +40,8 @@ const ENoIntentKey: u64 = 4;
 const EInvalidWinningOutcome: u64 = 5;
 
 // === Constants ===
-const OUTCOME_YES: u64 = 0;
-const OUTCOME_NO: u64 = 1;
+const OUTCOME_ACCEPTED: u64 = 0;
+const OUTCOME_REJECTED: u64 = 1;
 
 // === Events ===
 
@@ -183,11 +188,13 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 /// Finalizes a proposal's market and determines the winning outcome
 /// This should be called after trading has ended and TWAP prices are calculated
 public fun finalize_proposal_market<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>, // Added: Account needed for intent cleanup
+    registry: &mut ProposalReservationRegistry, // Added: Registry for pruning
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
     winning_outcome: u64,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext, // Now needed for auth
 ) {
     // Set the winning outcome on the proposal
     proposal::set_winning_outcome(proposal, winning_outcome);
@@ -195,12 +202,61 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
     
+    // --- BEGIN INTENT CLEANUP LOGIC ---
+    // Clean up intents for ALL losing outcomes AND winning outcomes that aren't OUTCOME_ACCEPTED.
+    // This proactive cleanup ensures unused intents don't accumulate in the account.
+    // The correct logic is:
+    // 1. Delete intents for ALL losing outcomes (they will never be executed)
+    // 2. If the winning outcome is NOT OUTCOME_ACCEPTED, delete its intent too (it won't be executable)
+    let intent_keys = proposal::get_intent_keys(proposal);
+    let mut i = 0;
+    while (i < vector::length(intent_keys)) {
+        let should_delete = if (i == winning_outcome) {
+            // If this is the winning outcome, only delete if it's NOT OUTCOME_ACCEPTED
+            // because only OUTCOME_ACCEPTED intents are executable
+            winning_outcome != OUTCOME_ACCEPTED
+        } else {
+            // This is a losing outcome, always delete its intent
+            true
+        };
+        
+        if (should_delete && option::is_some(vector::borrow(intent_keys, i))) {
+            let intent_key_opt = vector::borrow(intent_keys, i);
+            let intent_key = *option::borrow(intent_key_opt);
+            
+            // Try to destroy the empty intent (it should have no remaining executions)
+            // This removes the intent from the Account to prevent state bloat.
+            // Note: We use FutarchyOutcome as the outcome type for all futarchy proposals
+            let account_intents = account::intents(account);
+            if (intents::contains(account_intents, intent_key)) {
+                // The intent should have no execution times since it won't be executed,
+                // so we can safely destroy it and clean up any associated actions
+                let expired = account::destroy_empty_intent<FutarchyConfig, FutarchyOutcome>(
+                    account,
+                    intent_key
+                );
+                // The expired object will be automatically cleaned up when dropped
+                // since all actions should auto-delete for non-executable outcomes
+                intents::destroy_empty_expired(expired);
+            }
+        };
+        i = i + 1;
+    };
+    // --- END INTENT CLEANUP LOGIC ---
+    
+    // --- BEGIN REGISTRY PRUNING ---
+    // Prune expired proposal reservations from the registry to prevent state bloat.
+    // This is done at the end of finalization when we have time to do cleanup.
+    let config = account::config(account);
+    governance_actions::prune_oldest_expired_bucket(registry, config, clock, ctx);
+    // --- END REGISTRY PRUNING ---
+    
     // Emit finalization event
     event::emit(ProposalMarketFinalized {
         proposal_id: proposal::get_id(proposal),
         dao_id: proposal::get_dao_id(proposal),
         winning_outcome,
-        approved: winning_outcome == OUTCOME_YES,
+        approved: winning_outcome == OUTCOME_ACCEPTED,
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -221,10 +277,10 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     
     // Verify proposal was approved (YES outcome won)
     let winning_outcome = market_state::get_winning_outcome(market);
-    assert!(winning_outcome == OUTCOME_YES, EProposalNotApproved);
+    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
     
     // Get the intent key for the winning outcome (YES = 0)
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_YES);
+    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
     assert!(intent_key_opt.is_some(), ENoIntentKey);
     let intent_key = *intent_key_opt.borrow();
     
@@ -271,10 +327,10 @@ public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW
     
     // Verify proposal was approved (YES outcome won)
     let winning_outcome = market_state::get_winning_outcome(market);
-    assert!(winning_outcome == OUTCOME_YES, EProposalNotApproved);
+    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
     
     // Get the intent key for the winning outcome (YES = 0)  
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_YES);
+    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
     assert!(intent_key_opt.is_some(), ENoIntentKey);
     let intent_key = *intent_key_opt.borrow();
     
@@ -459,6 +515,7 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     
     // Step 4: Finalize market
     // This would normally be done through the proper market finalization flow
+    // Note: Updated to pass account parameter for intent cleanup
     
     // Step 5: Execute if approved
     // This would normally check the winning outcome and execute if YES
@@ -478,12 +535,12 @@ public fun can_execute_proposal<AssetType, StableType>(
     
     // Proposal must have been approved (YES outcome)
     let winning_outcome = market_state::get_winning_outcome(market);
-    if (winning_outcome != OUTCOME_YES) {
+    if (winning_outcome != OUTCOME_ACCEPTED) {
         return false
     };
     
     // Proposal must have an intent key for YES outcome
-    let intent_key = proposal::get_intent_key_for_outcome(proposal, OUTCOME_YES);
+    let intent_key = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
     if (!intent_key.is_some()) {
         return false
     };
@@ -493,7 +550,7 @@ public fun can_execute_proposal<AssetType, StableType>(
 
 
 /// Calculates the winning outcome based on TWAP prices
-/// Returns OUTCOME_YES if the YES price exceeds the threshold, OUTCOME_NO otherwise
+/// Returns OUTCOME_ACCEPTED if the YES price exceeds the threshold, OUTCOME_REJECTED otherwise
 public fun calculate_winning_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     clock: &Clock,
@@ -503,17 +560,17 @@ public fun calculate_winning_outcome<AssetType, StableType>(
     
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
     if (twap_prices.length() >= 2) {
-        let yes_twap = *twap_prices.borrow(OUTCOME_YES);
+        let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
         let threshold = proposal::get_twap_threshold(proposal);
         
         // If YES TWAP exceeds threshold, YES wins
         if (yes_twap > (threshold as u128)) {
-            OUTCOME_YES
+            OUTCOME_ACCEPTED
         } else {
-            OUTCOME_NO
+            OUTCOME_REJECTED
         }
     } else {
         // Default to NO if we can't determine
-        OUTCOME_NO
+        OUTCOME_REJECTED
     }
 }

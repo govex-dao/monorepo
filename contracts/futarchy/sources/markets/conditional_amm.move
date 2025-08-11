@@ -375,7 +375,7 @@ public fun add_liquidity_proportional(
         // while still preventing imbalanced liquidity attacks
         let tolerance_bps = 10; // 0.1%
         assert!(
-            math::within_tolerance(stable_amount, expected_stable_amount, tolerance_bps) || 
+            math::within_tolerance(stable_amount, expected_stable_amount, tolerance_bps) && 
             math::within_tolerance(asset_amount, expected_asset_amount, tolerance_bps), 
             EInvalidLiquidityRatio
         );
