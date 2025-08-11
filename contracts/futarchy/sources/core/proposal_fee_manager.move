@@ -252,3 +252,52 @@ public fun get_proposal_fee(manager: &ProposalFeeManager, proposal_id: ID): u64 
         0
     }
 }
+
+/// Pay reward to proposal creator when proposal passes
+/// Takes from protocol revenue
+public fun pay_proposal_creator_reward(
+    manager: &mut ProposalFeeManager,
+    reward_amount: u64,
+    ctx: &mut TxContext
+): Coin<SUI> {
+    if (manager.protocol_revenue.value() >= reward_amount) {
+        coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
+    } else {
+        // If not enough in protocol revenue, pay what's available
+        let available = manager.protocol_revenue.value();
+        if (available > 0) {
+            coin::from_balance(manager.protocol_revenue.split(available), ctx)
+        } else {
+            coin::zero(ctx)
+        }
+    }
+}
+
+/// Pay reward to outcome creator when their outcome wins
+/// Takes from protocol revenue
+public fun pay_outcome_creator_reward(
+    manager: &mut ProposalFeeManager,
+    reward_amount: u64,
+    ctx: &mut TxContext
+): Coin<SUI> {
+    if (manager.protocol_revenue.value() >= reward_amount) {
+        coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
+    } else {
+        // If not enough in protocol revenue, pay what's available
+        let available = manager.protocol_revenue.value();
+        if (available > 0) {
+            coin::from_balance(manager.protocol_revenue.split(available), ctx)
+        } else {
+            coin::zero(ctx)
+        }
+    }
+}
+
+/// Collect fee for advancing proposal state
+/// Called when advancing from review to trading or when finalizing
+public fun collect_advancement_fee(
+    manager: &mut ProposalFeeManager,
+    fee_coin: Coin<SUI>
+) {
+    manager.protocol_revenue.join(fee_coin.into_balance());
+}

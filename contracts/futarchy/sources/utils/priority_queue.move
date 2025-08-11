@@ -530,6 +530,35 @@ public fun new_queued_proposal<StableCoin>(
     }
 }
 
+/// Create a new queued proposal with a specific ID
+public fun new_queued_proposal_with_id<StableCoin>(
+    proposal_id: ID,
+    dao_id: ID,
+    fee: u64,
+    uses_dao_liquidity: bool,
+    proposer: address,
+    data: ProposalData,
+    bond: Option<Coin<StableCoin>>,
+    intent_key: Option<String>,
+    clock: &Clock,
+): QueuedProposal<StableCoin> {
+    let timestamp = clock::timestamp_ms(clock);
+    let priority_score = create_priority_score(fee, timestamp);
+    
+    QueuedProposal {
+        bond,
+        proposal_id,
+        dao_id,
+        proposer,
+        fee,
+        timestamp,
+        priority_score,
+        intent_key,
+        uses_dao_liquidity,
+        data,
+    }
+}
+
 /// Create proposal data
 public fun new_proposal_data(
     title: String,
@@ -572,6 +601,10 @@ public fun get_intent_key<StableCoin>(proposal: &QueuedProposal<StableCoin>): &O
 public fun get_uses_dao_liquidity<StableCoin>(proposal: &QueuedProposal<StableCoin>): bool { proposal.uses_dao_liquidity }
 public fun get_data<StableCoin>(proposal: &QueuedProposal<StableCoin>): &ProposalData { &proposal.data }
 public fun get_dao_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): ID { proposal.dao_id }
+
+// Getter functions for EvictionInfo
+public fun eviction_proposal_id(info: &EvictionInfo): ID { info.proposal_id }
+public fun eviction_proposer(info: &EvictionInfo): address { info.proposer }
 
 // Getter functions for ProposalData
 public fun get_title(data: &ProposalData): &String { &data.title }

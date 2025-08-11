@@ -885,11 +885,18 @@ public fun advance_state<AssetType, StableType>(
     clock: &Clock,
 ): bool {
     let current_time = clock.timestamp_ms();
-    let created_at = proposal.created_at;
+    // Use market_initialized_at for timing calculations instead of created_at
+    // This ensures premarket proposals get proper review/trading periods after initialization
+    let base_timestamp = if (proposal.market_initialized_at.is_some()) {
+        *proposal.market_initialized_at.borrow()
+    } else {
+        // Fallback to created_at if market not initialized (shouldn't happen in normal flow)
+        proposal.created_at
+    };
     
     // Check if we should transition from REVIEW to TRADING
     if (proposal.state == STATE_REVIEW) {
-        let review_end = created_at + proposal.review_period_ms;
+        let review_end = base_timestamp + proposal.review_period_ms;
         if (current_time >= review_end) {
             proposal.state = STATE_TRADING;
             
@@ -912,7 +919,7 @@ public fun advance_state<AssetType, StableType>(
     
     // Check if we should transition from TRADING to ended
     if (proposal.state == STATE_TRADING) {
-        let trading_end = created_at + proposal.review_period_ms + proposal.trading_period_ms;
+        let trading_end = base_timestamp + proposal.review_period_ms + proposal.trading_period_ms;
         if (current_time >= trading_end) {
             // End trading in the market state
             let market = coin_escrow::get_market_state_mut(escrow);

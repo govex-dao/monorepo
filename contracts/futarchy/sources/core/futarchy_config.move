@@ -130,6 +130,12 @@ public struct FutarchyConfig has store {
     attestation_url: String,
     verification_pending: bool,
     verification_level: u8, // 0 = unverified, 1 = basic, 2 = standard, 3 = premium, etc.
+    
+    // Reward configurations
+    proposal_pass_reward: u64, // Reward for proposal creator when proposal passes (in SUI)
+    outcome_win_reward: u64,   // Reward for outcome creator when their outcome wins (in SUI)
+    review_to_trading_fee: u64, // Fee to advance from review to trading (in SUI)
+    finalization_fee: u64,      // Fee to finalize proposal after trading (in SUI)
 }
 
 /// Helper struct for creating FutarchyConfig with default values
@@ -165,6 +171,11 @@ public fun new<AssetType: drop, StableType>(
         attestation_url: b"".to_string(),
         verification_pending: false,
         verification_level: 0, // 0 = unverified
+        // Default reward configurations (can be updated later)
+        proposal_pass_reward: 10_000_000_000, // 10 SUI default
+        outcome_win_reward: 5_000_000_000,    // 5 SUI default  
+        review_to_trading_fee: 1_000_000_000, // 1 SUI default
+        finalization_fee: 1_000_000_000,      // 1 SUI default
     }
 }
 
@@ -306,6 +317,12 @@ public fun new_slash_distribution(
 public fun slash_distribution(config: &FutarchyConfig): &SlashDistribution {
     &config.slash_distribution
 }
+
+// Reward configurations
+public fun proposal_pass_reward(config: &FutarchyConfig): u64 { config.proposal_pass_reward }
+public fun outcome_win_reward(config: &FutarchyConfig): u64 { config.outcome_win_reward }
+public fun review_to_trading_fee(config: &FutarchyConfig): u64 { config.review_to_trading_fee }
+public fun finalization_fee(config: &FutarchyConfig): u64 { config.finalization_fee }
 
 public fun slasher_reward_bps(slash_config: &SlashDistribution): u16 {
     slash_config.slasher_reward_bps
@@ -762,6 +779,23 @@ public(package) fun update_slash_distribution(
         protocol_bps,
         burn_bps
     );
+}
+
+// Setters for reward configurations
+public(package) fun set_proposal_pass_reward(config: &mut FutarchyConfig, amount: u64) {
+    config.proposal_pass_reward = amount;
+}
+
+public(package) fun set_outcome_win_reward(config: &mut FutarchyConfig, amount: u64) {
+    config.outcome_win_reward = amount;
+}
+
+public(package) fun set_review_to_trading_fee(config: &mut FutarchyConfig, amount: u64) {
+    config.review_to_trading_fee = amount;
+}
+
+public(package) fun set_finalization_fee(config: &mut FutarchyConfig, amount: u64) {
+    config.finalization_fee = amount;
 }
 
 // Removed authorized_members_mut - auth is managed by account protocol

@@ -105,6 +105,7 @@ public struct ProposalReservationRegistry has key {
 // === Action Execution ===
 
 /// Execute the create proposal action
+/// The executor must provide the SUI fee upfront for the second-order proposal
 public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -114,6 +115,7 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    fee_coin: Coin<SUI>, // Executor must pay the fee upfront
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -134,18 +136,34 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     let max_depth = futarchy_config::max_proposal_chain_depth(config);
     assert!(max_depth > 0, EMaxDepthExceeded);
     
-    // Verify the proposal fee is sufficient (using a minimum threshold)
-    assert!(action.proposal_fee > 0, EInsufficientFee);
+    // Verify the fee coin matches the required fee amount
+    assert!(coin::value(&fee_coin) >= action.proposal_fee, EInsufficientFee);
     
-    // Try to insert the new proposal into the queue
-    let new_proposal = create_queued_proposal(
+    // Generate a unique proposal ID for the new proposal
+    // Using object::new ensures cryptographically unique IDs
+    let proposal_uid = object::new(ctx);
+    let proposal_id = object::uid_to_inner(&proposal_uid);
+    object::delete(proposal_uid);
+    
+    // Deposit the fee first (required for potential refunds)
+    // Note: bag::add will abort if proposal_id already exists, preventing duplicates
+    proposal_fee_manager::deposit_proposal_fee(
+        fee_manager,
+        proposal_id,
+        fee_coin
+    );
+    
+    // Create the proposal with the generated ID
+    let new_proposal = create_queued_proposal_with_id(
         action,
+        proposal_id,
         parent_proposal_id,
         reservation_period,
         clock,
         ctx
     );
     
+    // Try to insert into queue
     let eviction_info = priority_queue::insert(
         queue,
         new_proposal,
@@ -153,9 +171,31 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
         ctx
     );
     
-    // If the proposal was immediately evicted or might be evicted later,
-    // create a reservation for it
-    if (option::is_some(&eviction_info) || should_create_reservation(action)) {
+    // Handle eviction - refund fee if a proposal was evicted
+    if (option::is_some(&eviction_info)) {
+        let eviction = option::borrow(&eviction_info);
+        let evicted_proposal_id = priority_queue::eviction_proposal_id(eviction);
+        let evicted_proposer = priority_queue::eviction_proposer(eviction);
+        
+        // Refund the evicted proposal's fee
+        let refund_coin = proposal_fee_manager::refund_proposal_fee(
+            fee_manager,
+            evicted_proposal_id,
+            ctx
+        );
+        transfer::public_transfer(refund_coin, evicted_proposer);
+        
+        // Create a reservation for the current proposal since it caused an eviction
+        create_reservation(
+            registry,
+            parent_proposal_id,
+            *action,
+            reservation_period,
+            clock,
+            ctx
+        );
+    } else if (should_create_reservation(action)) {
+        // Create reservation if needed even without eviction
         create_reservation(
             registry,
             parent_proposal_id,
@@ -220,6 +260,23 @@ public entry fun recreate_evicted_proposal(
         clock,
         ctx
     );
+    
+    // If a proposal was evicted, refund its fee to prevent orphaned funds
+    if (option::is_some(&eviction_info)) {
+        let eviction = option::borrow(&eviction_info);
+        let evicted_proposal_id = priority_queue::eviction_proposal_id(eviction);
+        let evicted_proposer = priority_queue::eviction_proposer(eviction);
+        
+        // Refund the evicted proposal's fee from the fee manager
+        let refund_coin = proposal_fee_manager::refund_proposal_fee(
+            fee_manager,
+            evicted_proposal_id,
+            ctx
+        );
+        
+        // Transfer the refunded fee to the evicted proposer
+        transfer::public_transfer(refund_coin, evicted_proposer);
+    };
     
     // Update recreation count (just for tracking)
     reservation.recreation_count = reservation.recreation_count + 1;
@@ -287,8 +344,9 @@ fun should_create_reservation(action: &CreateProposalAction): bool {
     action.proposal_fee >= 1000000000 // High-value proposals get reservations
 }
 
-fun create_queued_proposal(
+fun create_queued_proposal_with_id(
     action: &CreateProposalAction,
+    proposal_id: ID,
     parent_proposal_id: ID,
     _reservation_period: u64,
     clock: &Clock,
@@ -306,8 +364,9 @@ fun create_queued_proposal(
         vector[action.initial_stable_amount, action.initial_stable_amount]
     );
     
-    // Create the queued proposal
-    priority_queue::new_queued_proposal(
+    // Create the queued proposal with the specific ID
+    priority_queue::new_queued_proposal_with_id(
+        proposal_id,
         parent_proposal_id, // Using parent as DAO ID for now
         action.proposal_fee,
         action.use_dao_liquidity,
@@ -448,10 +507,11 @@ public entry fun recreate_proposal_chain(
         let child_proposal_id = object::uid_to_inner(&child_id);
         object::delete(child_id);
         
-        // Create the child proposal
-        let child_proposal = create_queued_proposal(
+        // Create the child proposal with the specific ID
+        let child_proposal = create_queued_proposal_with_id(
             &child_action,
             child_proposal_id,
+            parent_proposal_id, // Use parent as the dao_id
             0, // No additional reservation period for children in batch
             clock,
             ctx
@@ -465,12 +525,29 @@ public entry fun recreate_proposal_chain(
         );
         
         // Insert child proposal into queue
-        let _eviction = priority_queue::insert(
+        let eviction_info = priority_queue::insert(
             queue,
             child_proposal,
             clock,
             ctx
         );
+        
+        // If a proposal was evicted, refund its fee to prevent orphaned funds
+        if (option::is_some(&eviction_info)) {
+            let eviction = option::borrow(&eviction_info);
+            let evicted_proposal_id = priority_queue::eviction_proposal_id(eviction);
+            let evicted_proposer = priority_queue::eviction_proposer(eviction);
+            
+            // Refund the evicted proposal's fee from the fee manager
+            let refund_coin = proposal_fee_manager::refund_proposal_fee(
+                fee_manager,
+                evicted_proposal_id,
+                ctx
+            );
+            
+            // Transfer the refunded fee to the evicted proposer
+            transfer::public_transfer(refund_coin, evicted_proposer);
+        };
         
         i = i + 1;
     };

@@ -250,20 +250,17 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         description,
     );
     
-    // Priority queue will be created later, use None for now
-    
+    // --- Phase 1: Create all objects in memory (no sharing) ---
+
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
     
-    // Create the spot pool
+    // Create the spot pool but do not share it yet.
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
         amm_total_fee_bps,
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
-    account_spot_pool::share(spot_pool);
-    
-    // DAO pool ID is the same as spot pool ID
     
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
@@ -279,19 +276,17 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create the account with Extensions registry validation for security
     let mut account = futarchy_config::new_account_with_extensions(extensions, config, ctx);
     
-    // Now create the priority queue with the actual DAO ID
-    let priority_queue_id = {
-        let queue = priority_queue::new<StableType>(
-            object::id(&account), // dao_id
-            30, // max_proposer_funded
-            50, // max_concurrent_proposals
-            ctx
-        );
-        let id = object::id(&queue);
-        transfer::public_share_object(queue);
-        id
-    };
+    // Now create the priority queue but do not share it yet.
+    let queue = priority_queue::new<StableType>(
+        object::id(&account), // dao_id
+        30, // max_proposer_funded
+        50, // max_concurrent_proposals
+        ctx
+    );
+    let priority_queue_id = object::id(&queue);
     
+    // --- Phase 2: Configure the objects and link them together ---
+
     // Note: DAO liquidity pool is not used in the new architecture
     // The spot pool handles all liquidity needs
     
@@ -324,9 +319,15 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Get account ID before sharing
     let account_id = object::id_address(&account);
     
-    // Share the account
+    // --- Phase 3: Final Atomic Sharing ---
+    // All objects are shared at the end of the function. If any step above failed,
+    // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
+    account_spot_pool::share(spot_pool);
+    transfer::public_share_object(queue);
     
+    // --- Phase 4: Update Factory State and Emit Event ---
+
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
     
@@ -411,20 +412,17 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         description,
     );
     
-    // Priority queue will be created later, use None for now
-    
+    // --- Phase 1: Create all objects in memory (no sharing) ---
+
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
     
-    // Create the spot pool
+    // Create the spot pool but do not share it yet.
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
         amm_total_fee_bps,
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
-    account_spot_pool::share(spot_pool);
-    
-    // DAO pool ID is the same as spot pool ID
     
     // Create the futarchy configuration
     let mut config = futarchy_config::new<AssetType, StableType>(
@@ -440,19 +438,17 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
     
-    // Now create the priority queue with the actual DAO ID
-    let priority_queue_id = {
-        let queue = priority_queue::new<StableType>(
-            object::id(&account), // dao_id
-            30, // max_proposer_funded
-            50, // max_concurrent_proposals
-            ctx
-        );
-        let id = object::id(&queue);
-        transfer::public_share_object(queue);
-        id
-    };
+    // Now create the priority queue but do not share it yet.
+    let queue = priority_queue::new<StableType>(
+        object::id(&account), // dao_id
+        30, // max_proposer_funded
+        50, // max_concurrent_proposals
+        ctx
+    );
+    let priority_queue_id = object::id(&queue);
     
+    // --- Phase 2: Configure the objects and link them together ---
+
     // Update the config with the actual priority queue ID
     let config_mut = futarchy_config::internal_config_mut_test(&mut account);
     futarchy_config::set_proposal_queue_id(config_mut, option::some(priority_queue_id));
@@ -486,9 +482,15 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Get account ID before sharing
     let account_id = object::id_address(&account);
     
-    // Share the account
+    // --- Phase 3: Final Atomic Sharing ---
+    // All objects are shared at the end of the function. If any step above failed,
+    // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
+    account_spot_pool::share(spot_pool);
+    transfer::public_share_object(queue);
     
+    // --- Phase 4: Update Factory State and Emit Event ---
+
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
     
