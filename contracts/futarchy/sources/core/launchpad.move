@@ -285,8 +285,8 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
         extensions,
         fee_manager,
         payment,
-        0, // min_asset_amount is not relevant for launchpad DAOs
-        0, // min_stable_amount is not relevant for launchpad DAOs
+        1, // min_asset_amount must be > 0. Set to a minimal value.
+        1, // min_stable_amount must be > 0. Set to a minimal value.
         params.dao_name,
         params.icon_url_string,
         params.review_period_ms,

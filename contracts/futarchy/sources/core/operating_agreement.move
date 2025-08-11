@@ -286,7 +286,7 @@ public fun new(
 /// Execute creation of a fresh OperatingAgreement and store it in the Account
 /// This creates an empty OA (no lines), with the allow_insert/remove flags set as requested.
 /// Abort if an agreement already exists.
-public fun execute_create_agreement<IW: drop, Config: store, Outcome: store + drop + copy>(
+public(package) fun execute_create_agreement<IW: drop, Config: store, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     witness: IW,
@@ -315,7 +315,7 @@ public fun execute_create_agreement<IW: drop, Config: store, Outcome: store + dr
 }
 
 /// Execute an update line action
-public fun execute_update_line<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_update_line<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -329,7 +329,7 @@ public fun execute_update_line<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute an insert line after action
-public fun execute_insert_line_after<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_insert_line_after<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -343,7 +343,7 @@ public fun execute_insert_line_after<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute an insert line at beginning action
-public fun execute_insert_line_at_beginning<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_insert_line_at_beginning<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -357,7 +357,7 @@ public fun execute_insert_line_at_beginning<IW: drop, Outcome: store + drop + co
 }
 
 /// Execute a remove line action
-public fun execute_remove_line<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_remove_line<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -371,7 +371,7 @@ public fun execute_remove_line<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute a batch operating agreement action
-public fun execute_batch_operating_agreement<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_batch_operating_agreement<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -424,7 +424,7 @@ public fun execute_batch_operating_agreement<IW: drop, Outcome: store + drop + c
 }
 
 /// Execute a set line immutable action
-public fun execute_set_line_immutable<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_set_line_immutable<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -437,7 +437,7 @@ public fun execute_set_line_immutable<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute a set insert allowed action
-public fun execute_set_insert_allowed<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_set_insert_allowed<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -450,7 +450,7 @@ public fun execute_set_insert_allowed<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute a set remove allowed action
-public fun execute_set_remove_allowed<IW: drop, Outcome: store + drop + copy>(
+public(package) fun execute_set_remove_allowed<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     agreement: &mut OperatingAgreement,
     witness: IW,
@@ -841,7 +841,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
     while (i < ordered_ids.length()) {
         let line_id = *ordered_ids.borrow(i);
         let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
-        texts.push_back(line.text);
+        texts.push_back(*&line.text);
         difficulties.push_back(line.difficulty);
         immutables.push_back(line.immutable);
         i = i + 1;
