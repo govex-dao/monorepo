@@ -441,7 +441,8 @@ public fun insert<StableCoin>(
 }
 
 /// Extract the highest priority proposal - O(log n) complexity!
-public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
+/// Made package-visible to prevent unauthorized extraction
+public(package) fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
     if (queue.size == 0) {
         return option::none()
     };
@@ -621,7 +622,8 @@ public fun get_outcome_details(data: &ProposalData): &vector<String> { &data.out
 public fun priority_score_value(score: &PriorityScore): u128 { score.computed_value }
 
 /// Tries to activate the next proposal from the queue
-public fun try_activate_next<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
+/// Made package-visible to prevent unauthorized activation
+public(package) fun try_activate_next<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
     extract_max(queue)
 }
 
@@ -765,7 +767,8 @@ public fun mark_proposal_completed<StableCoin>(
 }
 
 /// Remove a specific proposal from the queue
-public fun remove_from_queue<StableCoin>(
+/// Made package-visible to prevent unauthorized removal
+public(package) fun remove_from_queue<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     proposal_id: ID
 ): QueuedProposal<StableCoin> {
@@ -829,24 +832,27 @@ public(package) fun update_max_concurrent_proposals<StableCoin>(
     queue.max_concurrent_proposals = new_max;
 }
 
-/// Cancel a proposal and refund the fee
-public fun cancel_proposal<StableCoin>(
+/// Cancel a proposal and refund the fee - secured to prevent theft
+/// Now this is an entry function that transfers funds directly to the proposer
+public entry fun cancel_proposal<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     fee_manager: &mut ProposalFeeManager,
     proposal_id: ID,
-    proposer: address,
     ctx: &mut TxContext
-): (Coin<SUI>, Option<Coin<StableCoin>>) {
+) {
     let mut i = 0;
     
     while (i < queue.size) {
         let proposal = vector::borrow(&queue.heap, i);
         if (proposal.proposal_id == proposal_id) {
-            // Only proposer can cancel their own proposal
-            assert!(proposal.proposer == proposer, EProposalNotFound);
+            // Critical fix: Require that the transaction sender is the proposer
+            assert!(proposal.proposer == tx_context::sender(ctx), EProposalNotFound);
+            
+            // Store proposer address before removing
+            let proposer_addr = proposal.proposer;
             
             let removed = remove_at(&mut queue.heap, i, &mut queue.size);
-            let QueuedProposal { proposal_id, bond, .. } = removed;
+            let QueuedProposal { proposal_id, mut bond, .. } = removed;
             
             // Get the fee refunded as a Coin
             let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -855,7 +861,16 @@ public fun cancel_proposal<StableCoin>(
                 ctx
             );
             
-            return (refunded_fee, bond)
+            // Critical fix: Transfer the refunded fee directly to the proposer
+            transfer::public_transfer(refunded_fee, proposer_addr);
+            
+            // Critical fix: Transfer the bond directly to the proposer if it exists
+            if (option::is_some(&bond)) {
+                transfer::public_transfer(option::extract(&mut bond), proposer_addr);
+            };
+            option::destroy_none(bond);
+            
+            return
         };
         i = i + 1;
     };
@@ -965,7 +980,8 @@ public fun get_all_proposals<StableCoin>(queue: &ProposalQueue<StableCoin>): &ve
 }
 
 /// Extract bond from a queued proposal (mutable)
-public fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
+/// Made package-visible to prevent unauthorized bond extraction
+public(package) fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
     let bond_ref = &mut proposal.bond;
     if (option::is_some(bond_ref)) {
         option::some(option::extract(bond_ref))

@@ -405,11 +405,8 @@ fun test_proposal_with_market() {
         let state_changed = proposal::advance_state(&mut proposal, &mut escrow, &clock);
         assert!(state_changed, 12); // Verify trading was ended
         
-        // Calculate the winner based on TWAP prices
-        let winning_outcome = proposal_lifecycle::calculate_winning_outcome(&mut proposal, &clock);
-        
-        // Finalize the proposal and market atomically
-        proposal::finalize_proposal(&mut proposal, &mut escrow, winning_outcome, &clock);
+        // Finalize the proposal - it will calculate the winner internally
+        proposal::finalize_proposal(&mut proposal, &mut escrow, &clock);
         
         // Verify finalization
         let market = coin_escrow::get_market_state(&escrow);
@@ -417,6 +414,7 @@ fun test_proposal_with_market() {
         assert!(proposal::is_finalized(&proposal), 3);
         
         // Verify YES won (outcome 0) due to our trading
+        let winning_outcome = proposal::get_winning_outcome(&proposal);
         assert!(winning_outcome == 0, 13); // Verify YES won through trading
         
         test::return_shared(proposal);

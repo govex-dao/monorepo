@@ -340,6 +340,34 @@ public(package) fun register_supplies<AssetType, StableType>(
     escrow.outcome_lp_supplies.push_back(lp_supply);
 }
 
+/// Deposits initial liquidity into the escrow and implements "differential minting" mechanism.
+/// 
+/// ## Differential Minting Economics
+/// This function implements a critical economic mechanism called "differential minting" which maintains
+/// the complete-set conservation invariant. When initial liquidity is deposited:
+/// 
+/// 1. The function calculates the maximum liquidity needed across all outcomes
+/// 2. For outcomes that require less than the maximum liquidity, the difference is minted 
+///    as conditional tokens and transferred to the liquidity provider (market activator)
+/// 3. This ensures that the total value in the system remains conserved:
+///    - Escrow Balance + Outstanding Conditional Tokens = Initial Deposit
+/// 
+/// ## Economic Rationale
+/// The differential tokens represent the "unused" liquidity for specific outcomes. Since not all
+/// outcomes need the maximum amount of liquidity, the differential tokens allow the liquidity
+/// provider to reclaim this unused portion if needed, while still maintaining full collateralization.
+/// 
+/// ## Important Invariants
+/// - The sum of AMM reserves plus conditional token supplies always equals the escrow balance
+/// - Differential tokens are fully backed by the escrow and can be redeemed as part of a complete set
+/// - This mechanism prevents value leakage while optimizing capital efficiency
+/// 
+/// ## Example
+/// If outcome A needs 100 tokens and outcome B needs 80 tokens:
+/// - Maximum needed: 100 tokens
+/// - Escrow receives: 100 tokens  
+/// - Outcome B differential: 20 conditional tokens minted to the liquidity provider
+/// - These 20 tokens + 80 in the AMM = 100 total for outcome B
 #[allow(lint(self_transfer))]
 public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -375,12 +403,16 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     assert!(stable_amount == max_stable, EInsufficientStable);
 
     // 3. Mint differential tokens for each outcome
+    // DIFFERENTIAL MINTING: For outcomes that need less than the maximum liquidity,
+    // we mint the difference as conditional tokens to the liquidity provider.
+    // This maintains the invariant: AMM_reserves[i] + conditional_supply[i] = max_liquidity
     i = 0;
     while (i < outcome_count) {
         let asset_amt = asset_amounts[i];
         let stable_amt = stable_amounts[i];
 
-        // Mint asset tokens if necessary
+        // Mint differential asset tokens if this outcome needs less than max
+        // These tokens represent the "unused" asset liquidity for this outcome
         if (asset_amt < max_asset) {
             let diff = max_asset - asset_amt;
             let asset_supply = &mut escrow.outcome_asset_supplies[i];
@@ -392,10 +424,12 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
                 clock,
                 ctx,
             );
+            // Transfer differential tokens to the liquidity provider
             transfer::public_transfer(token, sender);
         };
 
-        // Mint stable tokens if necessary
+        // Mint differential stable tokens if this outcome needs less than max
+        // These tokens represent the "unused" stable liquidity for this outcome
         if (stable_amt < max_stable) {
             let diff = max_stable - stable_amt;
             let stable_supply = &mut escrow.outcome_stable_supplies[i];
@@ -407,6 +441,7 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
                 clock,
                 ctx,
             );
+            // Transfer differential tokens to the liquidity provider
             transfer::public_transfer(token, sender);
         };
 

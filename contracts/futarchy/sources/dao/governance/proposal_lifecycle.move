@@ -213,10 +213,12 @@ public fun finalize_proposal_market<AssetType, StableType>(
     registry: &mut ProposalReservationRegistry, // Added: Registry for pruning
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
-    winning_outcome: u64,
     clock: &Clock,
     ctx: &mut TxContext, // Now needed for auth
 ) {
+    // Critical fix: Calculate the winning outcome on-chain instead of accepting it from caller
+    let winning_outcome = calculate_winning_outcome(proposal, clock);
+    
     // Set the winning outcome on the proposal
     proposal::set_winning_outcome(proposal, winning_outcome);
     

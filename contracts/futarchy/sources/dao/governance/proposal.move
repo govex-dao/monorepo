@@ -32,6 +32,10 @@ const STATE_REVIEW: u8 = 1;    // Market is initialized and locked for review. N
 const STATE_TRADING: u8 = 2;   // Market is live and trading.
 const STATE_FINALIZED: u8 = 3; // Market has resolved.
 
+// Outcome constants for TWAP calculation
+const OUTCOME_ACCEPTED: u64 = 0;
+const OUTCOME_REJECTED: u64 = 1;
+
 // === Structs ===
 
 /// Core proposal object that owns AMM pools
@@ -957,12 +961,11 @@ public(package) fun set_winning_outcome<AssetType, StableType>(
     proposal.winning_outcome = option::some(outcome);
 }
 
-/// Finalize the proposal with the winning outcome
-/// This combines setting the winning outcome and updating state atomically
+/// Finalize the proposal with the winning outcome computed on-chain
+/// This combines computing the winner from TWAP, setting the winning outcome and updating state atomically
 public fun finalize_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    winning_outcome: u64,
     clock: &Clock,
 ) {
     // Ensure we're in a state that can be finalized
@@ -974,6 +977,27 @@ public fun finalize_proposal<AssetType, StableType>(
         if (market_state::is_trading_active(market)) {
             market_state::end_trading(market, clock);
         };
+    };
+    
+    // Critical fix: Compute the winning outcome on-chain from TWAP prices
+    // Get TWAP prices from all pools
+    let twap_prices = get_twaps_for_proposal(proposal, clock);
+    
+    // For a simple YES/NO proposal, compare the YES TWAP to the threshold
+    let winning_outcome = if (twap_prices.length() >= 2) {
+        let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
+        let threshold = get_twap_threshold(proposal);
+        
+        // If YES TWAP exceeds threshold, YES wins
+        if (yes_twap > (threshold as u128)) {
+            OUTCOME_ACCEPTED
+        } else {
+            OUTCOME_REJECTED
+        }
+    } else {
+        // For single-outcome or other configs, default to first outcome
+        // This should be revisited based on your specific requirements
+        0
     };
     
     // Set the winning outcome
