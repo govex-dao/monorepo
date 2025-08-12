@@ -66,12 +66,21 @@ public struct MetadataConfig has store, drop, copy {
     description: String,
 }
 
+/// Security configuration for dead-man switch and OA protection
+public struct SecurityConfig has store, drop, copy {
+    oa_custodian_immutable: bool,        // If true, OA:Custodian cannot be updated (council can still give up control)
+    deadman_enabled: bool,               // If true, dead-man switch recovery is enabled
+    recovery_liveness_ms: u64,           // Inactivity threshold for dead-man switch (e.g., 30 days)
+    require_deadman_council: bool,       // If true, all councils must support dead-man switch
+}
+
 /// Complete DAO configuration
 public struct DaoConfig has store, drop, copy {
     trading_params: TradingParams,
     twap_config: TwapConfig,
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
+    security_config: SecurityConfig,
 }
 
 // === Constructor Functions ===
@@ -172,18 +181,35 @@ public fun new_metadata_config(
     }
 }
 
+/// Create a new security configuration
+public fun new_security_config(
+    oa_custodian_immutable: bool,
+    deadman_enabled: bool,
+    recovery_liveness_ms: u64,
+    require_deadman_council: bool,
+): SecurityConfig {
+    SecurityConfig {
+        oa_custodian_immutable,
+        deadman_enabled,
+        recovery_liveness_ms,
+        require_deadman_council,
+    }
+}
+
 /// Create a complete DAO configuration
 public fun new_dao_config(
     trading_params: TradingParams,
     twap_config: TwapConfig,
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
+    security_config: SecurityConfig,
 ): DaoConfig {
     DaoConfig {
         trading_params,
         twap_config,
         governance_config,
         metadata_config,
+        security_config,
     }
 }
 
@@ -224,6 +250,13 @@ public fun dao_name(meta: &MetadataConfig): &AsciiString { &meta.dao_name }
 public fun icon_url(meta: &MetadataConfig): &Url { &meta.icon_url }
 public fun description(meta: &MetadataConfig): &String { &meta.description }
 
+// Security config getters
+public fun security_config(config: &DaoConfig): &SecurityConfig { &config.security_config }
+public fun oa_custodian_immutable(sec: &SecurityConfig): bool { sec.oa_custodian_immutable }
+public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
+public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
+public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
+
 // === Update Functions ===
 
 /// Update trading parameters (returns new config)
@@ -233,6 +266,7 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         twap_config: config.twap_config,
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
+        security_config: config.security_config,
     }
 }
 
@@ -243,6 +277,7 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         twap_config: new_twap,
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
+        security_config: config.security_config,
     }
 }
 
@@ -253,6 +288,7 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         twap_config: config.twap_config,
         governance_config: new_gov,
         metadata_config: config.metadata_config,
+        security_config: config.security_config,
     }
 }
 
@@ -263,6 +299,18 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         twap_config: config.twap_config,
         governance_config: config.governance_config,
         metadata_config: new_meta,
+        security_config: config.security_config,
+    }
+}
+
+/// Update security configuration (returns new config)
+public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: new_sec,
     }
 }
 
@@ -303,5 +351,15 @@ public fun default_governance_config(): GovernanceConfig {
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
         eviction_grace_period_ms: 7200000, // 2 hours default
+    }
+}
+
+/// Get default security configuration
+public fun default_security_config(): SecurityConfig {
+    SecurityConfig {
+        oa_custodian_immutable: false,  // Allow updates by default
+        deadman_enabled: false,          // Opt-in feature
+        recovery_liveness_ms: 2_592_000_000, // 30 days default
+        require_deadman_council: false,  // Optional
     }
 }

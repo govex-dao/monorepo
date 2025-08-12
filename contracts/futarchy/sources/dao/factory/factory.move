@@ -25,6 +25,7 @@ use account_protocol::{
 use account_extensions::extensions::Extensions;
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig, ConfigParams},
+    dao_config,
     futarchy_vault_init,
     fee::{Self, FeeManager},
     priority_queue::{Self, ProposalQueue},

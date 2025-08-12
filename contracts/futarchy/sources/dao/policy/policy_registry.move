@@ -12,6 +12,7 @@ use account_protocol::version_witness::VersionWitness;
 
 // === Errors ===
 const EPolicyNotFound: u64 = 1;
+const ECannotRemoveOACustodian: u64 = 2;  // DAO can never remove OA:Custodian
 
 // === Structs ===
 
@@ -83,6 +84,14 @@ public fun set_policy(
 /// Removes a policy for a resource.
 public fun remove_policy(registry: &mut PolicyRegistry, dao_id: ID, resource_key: String) {
     assert!(table::contains(&registry.policies, resource_key), EPolicyNotFound);
+    
+    // CRITICAL: DAO can NEVER remove OA:Custodian
+    // Only the security council can give up control through the coexec path
+    // This ensures the DAO always has an operating agreement
+    if (resource_key == b"OA:Custodian".to_string()) {
+        abort ECannotRemoveOACustodian
+    };
+    
     table::remove(&mut registry.policies, resource_key);
 
     event::emit(PolicyRemoved {

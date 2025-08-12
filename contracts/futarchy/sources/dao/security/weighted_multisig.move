@@ -5,8 +5,7 @@
 module futarchy::weighted_multisig;
 
 use std::string::String;
-use sui::vec_map::{Self, VecMap};
-use sui::vec_set::{Self, VecSet};
+use sui::{vec_map::{Self, VecMap}, vec_set::{Self, VecSet}, clock::Clock};
 
 // === Errors ===
 const EThresholdNotMet: u64 = 1;
@@ -30,6 +29,8 @@ public struct WeightedMultisig has store {
     threshold: u64,
     /// Total voting power in the council.
     total_weight: u64,
+    /// Last activity timestamp for dead-man switch tracking
+    last_activity_ms: u64,
 }
 
 /// The outcome object for a weighted multisig. Tracks approvals for a specific intent.
@@ -57,7 +58,7 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): 
     };
 
     assert!(threshold > 0 && threshold <= total_weight, EThresholdUnreachable);
-    WeightedMultisig { members: member_map, threshold, total_weight }
+    WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: 0 }
 }
 
 /// Create a fresh, empty Approvals outcome for a new intent.
@@ -144,4 +145,18 @@ public fun update_membership(
     config.members = new_member_map;
     config.threshold = new_threshold;
     config.total_weight = new_total_weight;
+    // Reset activity on membership update
+    config.last_activity_ms = 0;
+}
+
+// === Dead-man switch helpers ===
+
+/// Get the last activity timestamp
+public fun last_activity_ms(config: &WeightedMultisig): u64 {
+    config.last_activity_ms
+}
+
+/// Bump the last activity timestamp to the current time
+public fun bump_last_activity(config: &mut WeightedMultisig, clock: &Clock) {
+    config.last_activity_ms = clock.timestamp_ms();
 }

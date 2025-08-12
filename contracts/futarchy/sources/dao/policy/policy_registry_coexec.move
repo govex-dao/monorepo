@@ -13,7 +13,7 @@ use futarchy::{
     policy_registry,
     policy_actions,
     coexec_common,
-    futarchy_config::FutarchyConfig,
+    futarchy_config::{Self, FutarchyConfig},
     weighted_multisig::{WeightedMultisig, Approvals},
     security_council_actions,
 };
@@ -25,6 +25,7 @@ const EKeyMismatch: u64 = 4;
 const EActionTypeMismatch: u64 = 5;
 const EPolicyMismatch: u64 = 8;
 const ENotCriticalPolicy: u64 = 9;
+const ERemovalForbidden: u64 = 10;  // Cannot remove OA:Custodian
 
 // === Constants ===
 const ACTION_TYPE_REMOVE: u8 = 0;
@@ -82,6 +83,12 @@ public fun execute_remove_policy_with_council<FutarchyOutcome: store + drop + co
     // Verify this is a critical policy
     assert!(is_critical_policy(resource_key), ENotCriticalPolicy);
     
+    // OA:Custodian special handling:
+    // - Security council CAN give up control (remove the policy)
+    // - But the DAO can NEVER remove OA:Custodian entirely
+    // This is intentional - we want council to be able to relinquish control,
+    // but the DAO must always have an operating agreement
+    
     // Extract council ApprovePolicyChangeAction
     let approval: &security_council_actions::ApprovePolicyChangeAction = 
         coexec_common::extract_action_with_check(&mut council_exec, version::current(), EApprovalActionMissing);
@@ -124,11 +131,24 @@ public fun execute_set_policy_with_council<FutarchyOutcome: store + drop + copy>
     mut council_exec: Executable<Approvals>,
     clock: &Clock,
 ) {
+    // Optional immutability check for OA:Custodian updates
+    let cfg = account::config(dao);
+    
     // Extract futarchy SetPolicyAction
     let set_action: &policy_actions::SetPolicyAction = 
         coexec_common::extract_action_with_check(&mut futarchy_exec, version::current(), EPolicyActionMissing);
     let (resource_key, policy_account_id, intent_key_prefix) = 
         policy_actions::get_set_policy_params(set_action);
+    
+    // OA:Custodian update handling:
+    // - If immutability flag is set, prevent updates
+    // - Security council can still update if flag is not set
+    // - This allows council to transfer custodianship to another entity
+    if (futarchy_config::oa_custodian_immutable(cfg)) {
+        if (resource_key.bytes() == b"OA:Custodian") {
+            abort ERemovalForbidden
+        };
+    };
     
     // Verify this is a critical policy
     assert!(is_critical_policy(resource_key), ENotCriticalPolicy);

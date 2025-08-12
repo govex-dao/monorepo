@@ -24,7 +24,7 @@ use account_protocol::{
     account::{Self, Account},
     executable::Executable,
 };
-use futarchy::futarchy_config::FutarchyConfig;
+use futarchy::{futarchy_config::FutarchyConfig, weighted_multisig::{WeightedMultisig, Approvals}, coexec_common};
 
 // === Errors ===
 const ENotParticipant: u64 = 1;
@@ -348,6 +348,17 @@ public fun execute_lock_action<Outcome: drop + store, IW: drop + copy>(
     
     // Confirm the locking executable (must happen in same PTB since Executable can't be stored)
     account::confirm_execution(account, executable);
+}
+
+/// Confirm execution for a DAO+Council pair atomically
+/// This ensures both the DAO and its security council approve together
+public fun confirm_dao_council_pair<OutcomeD: drop + store>(
+    dao: &mut Account<FutarchyConfig>,
+    dao_exec: Executable<OutcomeD>,
+    council: &mut Account<WeightedMultisig>,
+    council_exec: Executable<Approvals>,
+) {
+    coexec_common::confirm_both_executables(dao, council, dao_exec, council_exec);
 }
 
 /// Execute actions for all locked DAOs atomically when proposal is ready.

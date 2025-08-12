@@ -76,6 +76,7 @@ public fun authenticate(
 public fun approve_intent(
     account: &mut Account<WeightedMultisig>,
     key: String,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Verify membership before the macro (this borrow ends at return)
@@ -91,6 +92,10 @@ public fun approve_intent(
             weighted_multisig::approve_sender_unchecked(outcome_mut, ctx.sender());
         }
     );
+    
+    // Bump activity after successful approval
+    let config = account::config_mut(account, version::current(), Witness{});
+    weighted_multisig::bump_last_activity(config, clock);
 }
 
 /// Execute an already-approved intent, returning the Executable hot-potato.
@@ -99,7 +104,7 @@ public fun execute_intent(
     key: String,
     clock: &Clock,
 ): Executable<Approvals> {
-    account_protocol::account_interface::execute_intent!(
+    let executable = account_protocol::account_interface::execute_intent!(
         account,
         key,
         clock,
@@ -109,5 +114,25 @@ public fun execute_intent(
             // final check before allowing execution
             weighted_multisig::validate_outcome(outcome, account.config(), b"".to_string());
         }
-    )
+    );
+    
+    // Bump activity after successful execution
+    let config = account::config_mut(account, version::current(), Witness{});
+    weighted_multisig::bump_last_activity(config, clock);
+    
+    executable
+}
+
+/// Optional explicit heartbeat to signal council is still active
+public entry fun heartbeat(
+    account: &mut Account<WeightedMultisig>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // Verify membership
+    weighted_multisig::assert_is_member(account.config(), ctx.sender());
+    
+    // Bump activity
+    let config = account::config_mut(account, version::current(), Witness{});
+    weighted_multisig::bump_last_activity(config, clock);
 }

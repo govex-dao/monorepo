@@ -253,6 +253,7 @@ public fun new_config_params_from_values(
         twap_config,
         governance_config,
         metadata_config,
+        dao_config::default_security_config(),  // Use default security config
     );
     
     ConfigParams {
@@ -272,7 +273,8 @@ public fun default_config_params(): ConfigParams {
                 b"Default DAO".to_ascii_string(),
                 url::new_unsafe_from_bytes(b"https://example.com/icon.png"),
                 b"A default DAO configuration".to_string()
-            )
+            ),
+            dao_config::default_security_config(),
         ),
         slash_distribution: default_slash_distribution(),
     }
@@ -324,6 +326,20 @@ public fun proposal_pass_reward(config: &FutarchyConfig): u64 { config.proposal_
 public fun outcome_win_reward(config: &FutarchyConfig): u64 { config.outcome_win_reward }
 public fun review_to_trading_fee(config: &FutarchyConfig): u64 { config.review_to_trading_fee }
 public fun finalization_fee(config: &FutarchyConfig): u64 { config.finalization_fee }
+
+// Security config getters (delegated to dao_config)
+public fun oa_custodian_immutable(config: &FutarchyConfig): bool { 
+    dao_config::oa_custodian_immutable(dao_config::security_config(&config.config)) 
+}
+public fun deadman_enabled(config: &FutarchyConfig): bool { 
+    dao_config::deadman_enabled(dao_config::security_config(&config.config)) 
+}
+public fun recovery_liveness_ms(config: &FutarchyConfig): u64 { 
+    dao_config::recovery_liveness_ms(dao_config::security_config(&config.config)) 
+}
+public fun require_deadman_council(config: &FutarchyConfig): bool { 
+    dao_config::require_deadman_council(dao_config::security_config(&config.config)) 
+}
 
 public fun slasher_reward_bps(slash_config: &SlashDistribution): u16 {
     slash_config.slasher_reward_bps
@@ -824,6 +840,51 @@ public(package) fun set_review_to_trading_fee(config: &mut FutarchyConfig, amoun
 
 public(package) fun set_finalization_fee(config: &mut FutarchyConfig, amount: u64) {
     config.finalization_fee = amount;
+}
+
+// Security config setters (update the entire SecurityConfig in dao_config)
+public(package) fun set_oa_custodian_immutable(config: &mut FutarchyConfig, val: bool) {
+    let current_sec = dao_config::security_config(&config.config);
+    let new_sec = dao_config::new_security_config(
+        val,
+        dao_config::deadman_enabled(current_sec),
+        dao_config::recovery_liveness_ms(current_sec),
+        dao_config::require_deadman_council(current_sec),
+    );
+    config.config = dao_config::update_security_config(&config.config, new_sec);
+}
+
+public(package) fun set_deadman_enabled(config: &mut FutarchyConfig, val: bool) {
+    let current_sec = dao_config::security_config(&config.config);
+    let new_sec = dao_config::new_security_config(
+        dao_config::oa_custodian_immutable(current_sec),
+        val,
+        dao_config::recovery_liveness_ms(current_sec),
+        dao_config::require_deadman_council(current_sec),
+    );
+    config.config = dao_config::update_security_config(&config.config, new_sec);
+}
+
+public(package) fun set_recovery_liveness_ms(config: &mut FutarchyConfig, ms: u64) {
+    let current_sec = dao_config::security_config(&config.config);
+    let new_sec = dao_config::new_security_config(
+        dao_config::oa_custodian_immutable(current_sec),
+        dao_config::deadman_enabled(current_sec),
+        ms,
+        dao_config::require_deadman_council(current_sec),
+    );
+    config.config = dao_config::update_security_config(&config.config, new_sec);
+}
+
+public(package) fun set_require_deadman_council(config: &mut FutarchyConfig, val: bool) {
+    let current_sec = dao_config::security_config(&config.config);
+    let new_sec = dao_config::new_security_config(
+        dao_config::oa_custodian_immutable(current_sec),
+        dao_config::deadman_enabled(current_sec),
+        dao_config::recovery_liveness_ms(current_sec),
+        val,
+    );
+    config.config = dao_config::update_security_config(&config.config, new_sec);
 }
 
 // Removed authorized_members_mut - auth is managed by account protocol

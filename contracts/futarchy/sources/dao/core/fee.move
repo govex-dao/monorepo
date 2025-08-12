@@ -24,6 +24,7 @@ const EWrongStableTypeForFee: u64 = 4;
 const EInsufficientTreasuryBalance: u64 = 5;
 const EArithmeticOverflow: u64 = 6;
 const EInvalidAdminCap: u64 = 7;
+const EInvalidRecoveryFee: u64 = 9;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
@@ -46,6 +47,7 @@ public struct FeeManager has key, store {
     pending_dao_monthly_fee: Option<u64>,
     pending_fee_effective_timestamp: Option<u64>,
     sui_balance: Balance<SUI>,
+    recovery_fee: u64,  // Fee for dead-man switch recovery
 }
 
 public struct FeeAdminCap has key, store {
@@ -150,6 +152,27 @@ public struct DaoPlatformFeeCollected has copy, drop {
     timestamp: u64,
 }
 
+public struct RecoveryFeeUpdated has copy, drop {
+    old_fee: u64,
+    new_fee: u64,
+    admin: address,
+    timestamp: u64,
+}
+
+public struct RecoveryRequested has copy, drop {
+    dao_id: ID,
+    council_id: ID,
+    fee: u64,
+    requester: address,
+    timestamp: u64,
+}
+
+public struct RecoveryExecuted has copy, drop {
+    dao_id: ID,
+    new_council_id: ID,
+    timestamp: u64,
+}
+
 // === Public Functions ===
 fun init(witness: FEE, ctx: &mut TxContext) {
     // Verify that the witness is valid and one-time only.
@@ -173,6 +196,7 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
+        recovery_fee: 5_000_000_000, // 5 SUI default (~$5k equivalent)
     };
 
     public_share_object(fee_manager);
@@ -237,6 +261,28 @@ public(package) fun deposit_proposal_creation_payment(
     event::emit(ProposalCreationFeeCollected {
         amount: payment_amount,
         payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// Function to collect recovery fee for dead-man switch
+public(package) fun deposit_recovery_payment(
+    fee_manager: &mut FeeManager,
+    dao_id: ID,
+    council_id: ID,
+    payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    let fee_due = fee_manager.recovery_fee;
+    assert!(payment.value() == fee_due, EInvalidPayment);
+    let bal = payment.into_balance();
+    fee_manager.sui_balance.join(bal);
+    event::emit(RecoveryRequested {
+        dao_id,
+        council_id,
+        fee: fee_due,
+        requester: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -390,6 +436,30 @@ public entry fun update_verification_fee(
         admin: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
+}
+
+// Admin function to update recovery fee
+public entry fun update_recovery_fee(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    new_fee: u64,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    let old_fee = fee_manager.recovery_fee;
+    fee_manager.recovery_fee = new_fee;
+    event::emit(RecoveryFeeUpdated {
+        old_fee,
+        new_fee,
+        admin: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// View function for recovery fee
+public fun get_recovery_fee(fee_manager: &FeeManager): u64 {
+    fee_manager.recovery_fee
 }
 
 // Function removed to avoid circular dependency with treasury module
@@ -638,6 +708,7 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
         pending_dao_monthly_fee: option::none(),
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
+        recovery_fee: 5_000_000_000, // 5 SUI default
     };
 
     public_share_object(fee_manager);
