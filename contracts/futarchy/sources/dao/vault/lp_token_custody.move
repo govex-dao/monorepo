@@ -36,6 +36,11 @@ const EUnauthorized: u64 = 3;
 /// Dynamic field key for LP token custody
 public struct LPCustodyKey has copy, drop, store {}
 
+/// Managed-asset key for storing LP tokens by ID (safer schema)
+public struct LPKey has copy, drop, store {
+    token_id: ID,
+}
+
 /// Enhanced LP token registry with better tracking capabilities
 public struct LPTokenCustody has store {
     // Pool ID -> vector of LP token IDs
@@ -160,10 +165,10 @@ public(package) fun deposit_lp_token<AssetType, StableType>(
     
     // Store LP token as a managed asset in the Account
     // This ensures proper custody under Account's policy engine and prevents accidental outflows
-    // The token_id is used as the key for retrieval
+    // The LPKey with token_id is used as the key for retrieval
     account::add_managed_asset(
         account,
-        token_id,  // Use token ID as unique key for this LP token
+        LPKey { token_id },
         token,
         version::current()
     );
@@ -197,7 +202,7 @@ public(package) fun withdraw_lp_token<AssetType, StableType>(
     // Retrieve the LP token from managed assets
     let token: LPToken<AssetType, StableType> = account::remove_managed_asset(
         account,
-        token_id,
+        LPKey { token_id },
         version::current()
     );
     

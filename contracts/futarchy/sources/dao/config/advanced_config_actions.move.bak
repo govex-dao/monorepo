@@ -12,6 +12,7 @@ use sui::{
     url::Url,
     event,
     object,
+    clock::Clock,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -111,6 +112,7 @@ public struct GovernanceUpdateAction has store, drop {
     max_outcomes: Option<u64>,
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
+    proposal_intent_expiry_ms: Option<u64>,
 }
 
 /// Metadata table update action
@@ -156,7 +158,8 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &TradingParamsUpdateAction = executable.next_action(intent_witness);
     
@@ -186,7 +189,7 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     // Emit event
     event::emit(TradingParamsChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -196,7 +199,8 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &MetadataUpdateAction = executable.next_action(intent_witness);
     
@@ -220,7 +224,7 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     // Emit event
     event::emit(MetadataChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -230,7 +234,8 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &TwapConfigUpdateAction = executable.next_action(intent_witness);
     
@@ -257,7 +262,7 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     // Emit event
     event::emit(TwapConfigChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -267,7 +272,8 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &GovernanceUpdateAction = executable.next_action(intent_witness);
     
@@ -295,11 +301,14 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     if (action.max_intents_per_outcome.is_some()) {
         futarchy_config::set_max_intents_per_outcome(config, *action.max_intents_per_outcome.borrow());
     };
+    if (action.proposal_intent_expiry_ms.is_some()) {
+        futarchy_config::set_proposal_intent_expiry_ms(config, *action.proposal_intent_expiry_ms.borrow());
+    };
     
     // Emit event
     event::emit(GovernanceSettingsChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -310,7 +319,8 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &MetadataTableUpdateAction = executable.next_action(intent_witness);
     
@@ -332,7 +342,7 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     // Emit event
     event::emit(MetadataChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -342,7 +352,8 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &QueueParamsUpdateAction = executable.next_action(intent_witness);
     
@@ -364,7 +375,7 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     // Emit event
     event::emit(GovernanceSettingsChanged {
         account_id: object::id(account),
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -374,7 +385,8 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
-    ctx: &mut TxContext,
+    clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
     let action: &SlashDistributionUpdateAction = executable.next_action(intent_witness);
     
@@ -402,7 +414,7 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
         dao_treasury_bps: action.dao_treasury_bps,
         protocol_bps: action.protocol_bps,
         burn_bps: action.burn_bps,
-        timestamp: ctx.epoch_timestamp_ms(),
+        timestamp: clock.timestamp_ms(),
     });
 }
 
@@ -445,6 +457,7 @@ public fun delete_governance_update(expired: &mut Expired) {
         max_outcomes: _,
         required_bond_amount: _,
         max_intents_per_outcome: _,
+        proposal_intent_expiry_ms: _,
     } = expired.remove_action();
 }
 
@@ -569,12 +582,14 @@ public fun new_governance_update_action(
     max_outcomes: Option<u64>,
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
+    proposal_intent_expiry_ms: Option<u64>,
 ): GovernanceUpdateAction {
     let action = GovernanceUpdateAction {
         proposal_creation_enabled,
         max_outcomes,
         required_bond_amount,
         max_intents_per_outcome,
+        proposal_intent_expiry_ms,
     };
     validate_governance_update(&action);
     action
@@ -663,13 +678,15 @@ public fun get_governance_fields(update: &GovernanceUpdateAction): (
     &Option<bool>,
     &Option<u64>,
     &Option<u64>,
+    &Option<u64>,
     &Option<u64>
 ) {
     (
         &update.proposal_creation_enabled,
         &update.max_outcomes,
         &update.required_bond_amount,
-        &update.max_intents_per_outcome
+        &update.max_intents_per_outcome,
+        &update.proposal_intent_expiry_ms
     )
 }
 
@@ -780,9 +797,10 @@ public fun do_update_twap_params<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     iw: IW,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    do_update_twap_config<Outcome, IW>(executable, account, version, iw, ctx);
+    do_update_twap_config<Outcome, IW>(executable, account, version, iw, clock, ctx);
 }
 
 /// Alias for queue params update (was called fee params)
@@ -791,7 +809,8 @@ public fun do_update_fee_params<Outcome: store, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     iw: IW,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
-    do_update_queue_params<Outcome, IW>(executable, account, version, iw, ctx);
+    do_update_queue_params<Outcome, IW>(executable, account, version, iw, clock, ctx);
 }

@@ -30,6 +30,8 @@ public struct Policy has store, copy, drop {
     policy_account_id: ID,
     /// A unique prefix for intents sent to this policy account, to prevent key collisions.
     intent_key_prefix: String,
+    /// Future-proof gating mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=AND, 3=OR (default to DAO_ONLY for now)
+    gating_mode: u8,
 }
 
 // === Events ===
@@ -66,7 +68,8 @@ public fun set_policy(
     policy_account_id: ID,
     intent_key_prefix: String,
 ) {
-    let policy = Policy { policy_account_id, intent_key_prefix };
+    // Default gating_mode to 0 (DAO_ONLY) for now
+    let policy = Policy { policy_account_id, intent_key_prefix, gating_mode: 0 };
     
     // Check if policy exists and update or insert accordingly
     if (table::contains(&registry.policies, resource_key)) {
@@ -119,6 +122,32 @@ public fun policy_account_id(policy: &Policy): ID {
 /// Getter for intent_key_prefix.
 public fun intent_key_prefix(policy: &Policy): &String {
     &policy.intent_key_prefix
+}
+
+/// Getter for gating_mode (future use).
+public fun gating_mode(policy: &Policy): u8 {
+    policy.gating_mode
+}
+
+/// Gating mode constants (future use)
+public fun gating_mode_dao_only(): u8 { 0 }
+public fun gating_mode_council_only(): u8 { 1 }
+public fun gating_mode_and(): u8 { 2 }
+public fun gating_mode_or(): u8 { 3 }
+
+/// Special surrender method for OA:Custodian that bypasses the DAO-side removal guard.
+/// Must be called only after verifying council co-exec approval.
+public fun surrender_oa_custodian(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+) {
+    let key = b"OA:Custodian".to_string();
+    assert!(table::contains(&registry.policies, key), EPolicyNotFound);
+    table::remove(&mut registry.policies, key);
+    event::emit(PolicyRemoved {
+        dao_id,
+        resource_key: key,
+    });
 }
 
 /// Helper function to get a mutable reference to the PolicyRegistry from an Account

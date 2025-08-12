@@ -24,6 +24,7 @@ const EStableLiquidityTooLow: u64 = 5;
 const EPoolNotFound: u64 = 6;
 const EOutcomeOutOfBounds: u64 = 7;
 const EInvalidOutcomeVectors: u64 = 8;
+const ERejectIntentsNotAllowed: u64 = 9;
 
 // === Constants ===
 
@@ -1029,6 +1030,10 @@ public fun set_intent_key_for_outcome<AssetType, StableType>(
     outcome_index: u64,
     intent_key: String,
 ) {
+    // Only allow intents for ACCEPTED outcome (index 0)
+    // REJECTED outcomes don't need intents as they maintain status quo
+    assert!(outcome_index == 0, ERejectIntentsNotAllowed);
+    
     let intent_key_opt = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
     *intent_key_opt = option::some(intent_key);
 }

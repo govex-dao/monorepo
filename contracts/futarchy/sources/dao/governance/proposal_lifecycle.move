@@ -12,6 +12,7 @@ use sui::{
     coin::{Self, Coin},
     balance::{Self, Balance},
     event,
+    object,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -77,6 +78,7 @@ public struct ProposalReserved has copy, drop {
     dao_id: ID,
     timestamp: u64,
 }
+
 
 // === Public Functions ===
 
@@ -202,47 +204,9 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
     
-    // --- BEGIN INTENT CLEANUP LOGIC ---
-    // Clean up intents for ALL losing outcomes AND winning outcomes that aren't OUTCOME_ACCEPTED.
-    // This proactive cleanup ensures unused intents don't accumulate in the account.
-    // The correct logic is:
-    // 1. Delete intents for ALL losing outcomes (they will never be executed)
-    // 2. If the winning outcome is NOT OUTCOME_ACCEPTED, delete its intent too (it won't be executable)
-    let intent_keys = proposal::get_intent_keys(proposal);
-    let mut i = 0;
-    while (i < vector::length(intent_keys)) {
-        let should_delete = if (i == winning_outcome) {
-            // If this is the winning outcome, only delete if it's NOT OUTCOME_ACCEPTED
-            // because only OUTCOME_ACCEPTED intents are executable
-            winning_outcome != OUTCOME_ACCEPTED
-        } else {
-            // This is a losing outcome, always delete its intent
-            true
-        };
-        
-        if (should_delete && option::is_some(vector::borrow(intent_keys, i))) {
-            let intent_key_opt = vector::borrow(intent_keys, i);
-            let intent_key = *option::borrow(intent_key_opt);
-            
-            // Try to destroy the empty intent (it should have no remaining executions)
-            // This removes the intent from the Account to prevent state bloat.
-            // Note: We use FutarchyOutcome as the outcome type for all futarchy proposals
-            let account_intents = account::intents(account);
-            if (intents::contains(account_intents, intent_key)) {
-                // The intent should have no execution times since it won't be executed,
-                // so we can safely destroy it and clean up any associated actions
-                let expired = account::destroy_empty_intent<FutarchyConfig, FutarchyOutcome>(
-                    account,
-                    intent_key
-                );
-                // The expired object will be automatically cleaned up when dropped
-                // since all actions should auto-delete for non-executable outcomes
-                intents::destroy_empty_expired(expired);
-            }
-        };
-        i = i + 1;
-    };
-    // --- END INTENT CLEANUP LOGIC ---
+    // Losing intents remain in storage but won't be executed
+    // Winning intents are automatically cleaned up after execution by confirm_execution_cleanup
+    // TODO: Consider creating intents only for winning outcomes to avoid any storage bloat
     
     // --- BEGIN REGISTRY PRUNING ---
     // Prune expired proposal reservations from the registry to prevent state bloat.

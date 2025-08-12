@@ -182,8 +182,11 @@ public fun dao_id(state: &MarketState): ID {
 }
 
 public fun get_winning_outcome(state: &MarketState): u64 {
+    use std::option;
     assert!(state.status.finalized, ENotFinalized);
-    state.winning_outcome.destroy_some()
+    let opt_ref = &state.winning_outcome;
+    assert!(option::is_some(opt_ref), ENotFinalized);
+    *option::borrow(opt_ref)
 }
 
 public fun get_outcome_message(state: &MarketState, outcome_idx: u64): String {

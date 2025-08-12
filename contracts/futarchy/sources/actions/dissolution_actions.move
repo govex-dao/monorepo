@@ -143,6 +143,7 @@ public fun do_distribute_asset<Outcome: store, CoinType, IW: drop>(
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
+    mut distribution_coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
     let action: &DistributeAssetAction<CoinType> = executable.next_action(intent_witness);
@@ -159,12 +160,7 @@ public fun do_distribute_asset<Outcome: store, CoinType, IW: drop>(
         EDissolutionNotActive
     );
 
-    // 2. Obtain the coins to distribute. In a real flow, this Coin would be
-    //    the result of a preceding vault::SpendAction within the same Executable.
-    //    This is a placeholder - production code would get the coin from the vault.
-    let mut distribution_coin = coin::zero<CoinType>(ctx);
-
-    // 3. Distribute to recipients
+    // 2. Distribute to recipients from provided coin
     let mut i = 0;
     let mut distributed_sum = 0;
     while (i < recipients.length()) {
@@ -175,8 +171,12 @@ public fun do_distribute_asset<Outcome: store, CoinType, IW: drop>(
         i = i + 1;
     };
 
-    // Any remaining dust is destroyed (in production, would return to treasury)
-    distribution_coin.destroy_zero();
+    // Return any remainder back to sender; if exactly zero, destroy_zero()
+    if (coin::value(&distribution_coin) > 0) {
+        transfer::public_transfer(distribution_coin, ctx.sender());
+    } else {
+        distribution_coin.destroy_zero();
+    };
 
     let _ = version;
 }

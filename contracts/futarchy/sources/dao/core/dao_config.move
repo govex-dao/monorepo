@@ -18,6 +18,7 @@ const EInvalidProposalFee: u64 = 5; // Proposal fee must be positive
 const EInvalidBondAmount: u64 = 6; // Bond amount must be positive
 const EInvalidTwapParams: u64 = 7; // Invalid TWAP parameters
 const EInvalidGracePeriod: u64 = 8; // Grace period too short
+const EInvalidMaxConcurrentProposals: u64 = 9; // Max concurrent proposals must be positive
 
 // === Constants ===
 const MAX_FEE_BPS: u64 = 10000; // 100% in basis points
@@ -57,6 +58,7 @@ public struct GovernanceConfig has store, drop, copy {
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
+    proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
 }
 
 /// Metadata configuration
@@ -143,12 +145,13 @@ public fun new_governance_config(
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
+    proposal_intent_expiry_ms: u64,
 ): GovernanceConfig {
     // Validate inputs
     assert!(max_outcomes >= MIN_OUTCOMES, EInvalidMaxOutcomes);
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
     assert!(required_bond_amount > 0, EInvalidBondAmount);
-    assert!(max_concurrent_proposals > 0, EInvalidProposalFee);
+    assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
     assert!(fee_escalation_basis_points <= MAX_FEE_BPS, EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
     assert!(eviction_grace_period_ms >= 300000, EInvalidGracePeriod); // Min 5 minutes
@@ -165,6 +168,7 @@ public fun new_governance_config(
         accept_new_proposals,
         max_intents_per_outcome,
         eviction_grace_period_ms,
+        proposal_intent_expiry_ms,
     }
 }
 
@@ -217,6 +221,7 @@ public fun new_dao_config(
 
 // Trading params getters
 public fun trading_params(config: &DaoConfig): &TradingParams { &config.trading_params }
+public(package) fun trading_params_mut(config: &mut DaoConfig): &mut TradingParams { &mut config.trading_params }
 public fun min_asset_amount(params: &TradingParams): u64 { params.min_asset_amount }
 public fun min_stable_amount(params: &TradingParams): u64 { params.min_stable_amount }
 public fun review_period_ms(params: &TradingParams): u64 { params.review_period_ms }
@@ -225,6 +230,7 @@ public fun amm_total_fee_bps(params: &TradingParams): u64 { params.amm_total_fee
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
+public(package) fun twap_config_mut(config: &mut DaoConfig): &mut TwapConfig { &mut config.twap_config }
 public fun start_delay(twap: &TwapConfig): u64 { twap.start_delay }
 public fun step_max(twap: &TwapConfig): u64 { twap.step_max }
 public fun initial_observation(twap: &TwapConfig): u128 { twap.initial_observation }
@@ -232,6 +238,7 @@ public fun threshold(twap: &TwapConfig): u64 { twap.threshold }
 
 // Governance config getters
 public fun governance_config(config: &DaoConfig): &GovernanceConfig { &config.governance_config }
+public(package) fun governance_config_mut(config: &mut DaoConfig): &mut GovernanceConfig { &mut config.governance_config }
 public fun max_outcomes(gov: &GovernanceConfig): u64 { gov.max_outcomes }
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
 public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
@@ -243,21 +250,161 @@ public fun proposal_creation_enabled(gov: &GovernanceConfig): bool { gov.proposa
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
 public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
+public fun proposal_intent_expiry_ms(gov: &GovernanceConfig): u64 { gov.proposal_intent_expiry_ms }
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
+public(package) fun metadata_config_mut(config: &mut DaoConfig): &mut MetadataConfig { &mut config.metadata_config }
 public fun dao_name(meta: &MetadataConfig): &AsciiString { &meta.dao_name }
 public fun icon_url(meta: &MetadataConfig): &Url { &meta.icon_url }
 public fun description(meta: &MetadataConfig): &String { &meta.description }
 
 // Security config getters
 public fun security_config(config: &DaoConfig): &SecurityConfig { &config.security_config }
+public(package) fun security_config_mut(config: &mut DaoConfig): &mut SecurityConfig { &mut config.security_config }
 public fun oa_custodian_immutable(sec: &SecurityConfig): bool { sec.oa_custodian_immutable }
 public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
 public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
 public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
 
 // === Update Functions ===
+
+// === Direct Field Setters (Package-level) ===
+// These functions provide efficient in-place field updates without struct copying
+
+// Trading params direct setters
+public(package) fun set_min_asset_amount(params: &mut TradingParams, amount: u64) {
+    assert!(amount > 0, EInvalidMinAmount);
+    params.min_asset_amount = amount;
+}
+
+public(package) fun set_min_stable_amount(params: &mut TradingParams, amount: u64) {
+    assert!(amount > 0, EInvalidMinAmount);
+    params.min_stable_amount = amount;
+}
+
+public(package) fun set_review_period_ms(params: &mut TradingParams, period: u64) {
+    assert!(period >= MIN_REVIEW_PERIOD_MS, EInvalidPeriod);
+    params.review_period_ms = period;
+}
+
+public(package) fun set_trading_period_ms(params: &mut TradingParams, period: u64) {
+    assert!(period >= MIN_TRADING_PERIOD_MS, EInvalidPeriod);
+    params.trading_period_ms = period;
+}
+
+public(package) fun set_amm_total_fee_bps(params: &mut TradingParams, fee_bps: u64) {
+    assert!(fee_bps <= MAX_FEE_BPS, EInvalidFee);
+    params.amm_total_fee_bps = fee_bps;
+}
+
+// TWAP config direct setters
+public(package) fun set_start_delay(twap: &mut TwapConfig, delay: u64) {
+    // Allow 0 for testing
+    twap.start_delay = delay;
+}
+
+public(package) fun set_step_max(twap: &mut TwapConfig, max: u64) {
+    assert!(max > 0, EInvalidTwapParams);
+    twap.step_max = max;
+}
+
+public(package) fun set_initial_observation(twap: &mut TwapConfig, obs: u128) {
+    assert!(obs > 0, EInvalidTwapParams);
+    twap.initial_observation = obs;
+}
+
+public(package) fun set_threshold(twap: &mut TwapConfig, threshold: u64) {
+    assert!(threshold > 0, EInvalidTwapThreshold);
+    twap.threshold = threshold;
+}
+
+// Governance config direct setters
+public(package) fun set_max_outcomes(gov: &mut GovernanceConfig, max: u64) {
+    assert!(max >= MIN_OUTCOMES, EInvalidMaxOutcomes);
+    gov.max_outcomes = max;
+}
+
+public(package) fun set_proposal_fee_per_outcome(gov: &mut GovernanceConfig, fee: u64) {
+    assert!(fee > 0, EInvalidProposalFee);
+    gov.proposal_fee_per_outcome = fee;
+}
+
+public(package) fun set_required_bond_amount(gov: &mut GovernanceConfig, amount: u64) {
+    assert!(amount > 0, EInvalidBondAmount);
+    gov.required_bond_amount = amount;
+}
+
+public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max: u64) {
+    assert!(max > 0, EInvalidMaxConcurrentProposals);
+    gov.max_concurrent_proposals = max;
+}
+
+public(package) fun set_proposal_recreation_window_ms(gov: &mut GovernanceConfig, window: u64) {
+    gov.proposal_recreation_window_ms = window;
+}
+
+public(package) fun set_max_proposal_chain_depth(gov: &mut GovernanceConfig, depth: u64) {
+    gov.max_proposal_chain_depth = depth;
+}
+
+public(package) fun set_fee_escalation_basis_points(gov: &mut GovernanceConfig, points: u64) {
+    assert!(points <= MAX_FEE_BPS, EInvalidFee);
+    gov.fee_escalation_basis_points = points;
+}
+
+public(package) fun set_proposal_creation_enabled(gov: &mut GovernanceConfig, enabled: bool) {
+    gov.proposal_creation_enabled = enabled;
+}
+
+public(package) fun set_accept_new_proposals(gov: &mut GovernanceConfig, accept: bool) {
+    gov.accept_new_proposals = accept;
+}
+
+public(package) fun set_max_intents_per_outcome(gov: &mut GovernanceConfig, max: u64) {
+    assert!(max > 0, EInvalidMaxOutcomes);
+    gov.max_intents_per_outcome = max;
+}
+
+public(package) fun set_eviction_grace_period_ms(gov: &mut GovernanceConfig, period: u64) {
+    assert!(period >= 300000, EInvalidGracePeriod); // Min 5 minutes
+    gov.eviction_grace_period_ms = period;
+}
+
+public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, period: u64) {
+    assert!(period >= 3600000, EInvalidGracePeriod); // Min 1 hour
+    gov.proposal_intent_expiry_ms = period;
+}
+
+// Metadata config direct setters
+public(package) fun set_dao_name(meta: &mut MetadataConfig, name: AsciiString) {
+    meta.dao_name = name;
+}
+
+public(package) fun set_icon_url(meta: &mut MetadataConfig, url: Url) {
+    meta.icon_url = url;
+}
+
+public(package) fun set_description(meta: &mut MetadataConfig, desc: String) {
+    meta.description = desc;
+}
+
+// Security config direct setters
+public(package) fun set_oa_custodian_immutable(sec: &mut SecurityConfig, val: bool) {
+    sec.oa_custodian_immutable = val;
+}
+
+public(package) fun set_deadman_enabled(sec: &mut SecurityConfig, val: bool) {
+    sec.deadman_enabled = val;
+}
+
+public(package) fun set_recovery_liveness_ms(sec: &mut SecurityConfig, ms: u64) {
+    sec.recovery_liveness_ms = ms;
+}
+
+public(package) fun set_require_deadman_council(sec: &mut SecurityConfig, val: bool) {
+    sec.require_deadman_council = val;
+}
 
 /// Update trading parameters (returns new config)
 public fun update_trading_params(config: &DaoConfig, new_params: TradingParams): DaoConfig {
@@ -351,6 +498,7 @@ public fun default_governance_config(): GovernanceConfig {
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
         eviction_grace_period_ms: 7200000, // 2 hours default
+        proposal_intent_expiry_ms: 2592000000, // 30 days default
     }
 }
 

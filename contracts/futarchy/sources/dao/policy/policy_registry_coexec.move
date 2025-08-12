@@ -110,10 +110,15 @@ public fun execute_remove_policy_with_council<FutarchyOutcome: store + drop + co
     let policy = policy_registry::get_policy(registry, *resource_key);
     assert!(policy_registry::policy_account_id(policy) == object::id(council), EPolicyMismatch);
     
-    // Execute the removal
+    // Execute the removal; OA:Custodian must be surrendered by council path
     let dao_id = object::id(dao);
     let registry_mut = policy_registry::borrow_registry_mut(dao, version::current());
-    policy_registry::remove_policy(registry_mut, dao_id, *resource_key);
+    if (*resource_key == b"OA:Custodian".to_string()) {
+        // Special surrender path
+        policy_registry::surrender_oa_custodian(registry_mut, dao_id);
+    } else {
+        policy_registry::remove_policy(registry_mut, dao_id, *resource_key);
+    };
     
     // Confirm both executables atomically
     coexec_common::confirm_both_executables(dao, council, futarchy_exec, council_exec);

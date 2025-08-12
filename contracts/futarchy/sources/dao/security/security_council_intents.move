@@ -39,6 +39,9 @@ public struct UpdateCouncilMembershipIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
 public struct ApprovePolicyChangeIntent has copy, drop {}
 
+// Named errors
+const ERequiresCoExecution: u64 = 100;
+
 // Public constructor for AcceptUpgradeCapIntent witness
 public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
     AcceptUpgradeCapIntent{}
@@ -178,7 +181,7 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     let key = b"UpgradeCap:Custodian".to_string();
     if (policy_registry::has_policy(reg, key)) {
         // If policy is set, enforce use of co-execution path
-        abort 100 // ERequiresCoExecution - must use upgrade_cap_coexec::execute_accept_and_lock_with_council
+        abort ERequiresCoExecution // must use upgrade_cap_coexec::execute_accept_and_lock_with_council
     };
     
     // If no policy, proceed with regular execution

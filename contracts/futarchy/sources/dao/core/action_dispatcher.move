@@ -13,6 +13,7 @@ use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
 };
+use account_actions::vault;
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig},
     operating_agreement,
@@ -24,7 +25,6 @@ use futarchy::{
 // Import action modules from local package
 use futarchy::{
     config_actions,
-    advanced_config_actions,
     operating_agreement_actions,
     liquidity_actions,
     dissolution_actions,
@@ -39,7 +39,6 @@ use futarchy::{
 const EInvalidAmount: u64 = 4;
 const ENoSpotPool: u64 = 5;
 const EInvalidPoolId: u64 = 6;
-const EUnknownActionType: u64 = 7;
 const EOARequiresCouncil: u64 = 8;
 const ECriticalPolicyRequiresCouncil: u64 = 9;
 const ECannotRemoveOACustodian: u64 = 10;
@@ -74,7 +73,7 @@ public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
         // 3. Execute actual liquidity operations with execute_add_liquidity_with_pool
         
         // Execute futarchy-specific actions
-        if (try_execute_config_action(&mut executable, account, witness, ctx)) {
+        if (try_execute_config_action(&mut executable, account, witness, clock, ctx)) {
             continue
         };
         
@@ -94,17 +93,12 @@ public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
         
         // Additional action types can be added here
         
-        // If no action was executed, check if there are remaining actions
-        // confirm_execution will abort if there are, but let's be explicit
-        if (executable::contains_action<Outcome, vector<u8>>(&mut executable)) {
-            // Unknown action type - abort to prevent partial execution
-            abort EUnknownActionType
-        };
+        // If no action was executed, all actions have been processed
         break
     };
     
-    // Confirm execution
-    account::confirm_execution(account, executable);
+    // Confirm execution and cleanup single-shot intents
+    account::confirm_execution_cleanup(account, executable);
 }
 
 // === Config Action Handlers ===
@@ -113,6 +107,7 @@ fun try_execute_config_action<IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
     // Check for basic config actions
@@ -123,6 +118,7 @@ fun try_execute_config_action<IW: drop, Outcome: store + drop + copy>(
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
@@ -135,88 +131,96 @@ fun try_execute_config_action<IW: drop, Outcome: store + drop + copy>(
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
     // Check for advanced config actions
-    if (executable::contains_action<Outcome, advanced_config_actions::TradingParamsUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::TradingParamsUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_trading_params<Outcome, IW>(
+        config_actions::do_update_trading_params<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::MetadataUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::MetadataUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_metadata<Outcome, IW>(
+        config_actions::do_update_metadata<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::TwapConfigUpdateAction>(executable)) {
-        advanced_config_actions::do_update_twap_config<Outcome, IW>(
+    if (executable::contains_action<Outcome, config_actions::TwapConfigUpdateAction>(executable)) {
+        config_actions::do_update_twap_config<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::GovernanceUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::GovernanceUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_governance<Outcome, IW>(
+        config_actions::do_update_governance<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::MetadataTableUpdateAction>(executable)) {
-        advanced_config_actions::do_update_metadata_table<Outcome, IW>(
+    if (executable::contains_action<Outcome, config_actions::MetadataTableUpdateAction>(executable)) {
+        config_actions::do_update_metadata_table<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::QueueParamsUpdateAction>(executable)) {
-        advanced_config_actions::do_update_queue_params<Outcome, IW>(
+    if (executable::contains_action<Outcome, config_actions::QueueParamsUpdateAction>(executable)) {
+        config_actions::do_update_queue_params<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
     };
     
-    if (executable::contains_action<Outcome, advanced_config_actions::SlashDistributionUpdateAction>(executable)) {
+    if (executable::contains_action<Outcome, config_actions::SlashDistributionUpdateAction>(executable)) {
         // Call the action module implementation
-        advanced_config_actions::do_update_slash_distribution<Outcome, IW>(
+        config_actions::do_update_slash_distribution<Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
+            clock,
             ctx
         );
         return true
@@ -513,7 +517,7 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
     
     loop {
         // Try config actions
-        if (try_execute_config_action(&mut executable, account, witness, ctx)) {
+        if (try_execute_config_action(&mut executable, account, witness, clock, ctx)) {
             continue
         };
         
@@ -541,14 +545,11 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
             continue
         };
         
-        // Check for unknown actions before breaking
-        if (executable::contains_action<Outcome, vector<u8>>(&mut executable)) {
-            abort EUnknownActionType
-        };
+        // If no action was executed, all actions have been processed
         break
     };
     
-    account::confirm_execution(account, executable);
+    account::confirm_execution_cleanup(account, executable);
 }
 
 // Note: try_execute_typed_liquidity_action_with_pool has been removed
@@ -700,8 +701,8 @@ fun validate_add_liquidity_action<AssetType, StableType, IW: drop, Outcome: stor
 /// - This function performs the actual pool operation
 /// - Resulting coins should be deposited via vault_intents::execute_deposit()
 /// 
-/// Note: Refactored to not require copy on witness - uses single auth pattern
-public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop, IW: drop, Outcome: store + drop + copy>(
+/// Note: Requires copy on witness to create multiple auth objects for vault deposits
+public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     pool: &mut AccountSpotPool<AssetType, StableType>,
@@ -739,16 +740,12 @@ public fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop,
         ctx
     );
     
-    // Store coins temporarily (to avoid multiple auth creation)
-    // In production, these should be deposited to vault through Move framework vault intents
-    transfer::public_transfer(asset_coin, object::id_address(account));
-    transfer::public_transfer(stable_coin, object::id_address(account));
-    
-    // Recommended Move framework integration pattern:
-    // 1. Create a batch deposit intent with vault_intents::new_deposit()
-    // 2. Add both asset_coin and stable_coin to the deposit intent
-    // 3. Execute the batch deposit with vault_intents::execute_deposit()
-    // This avoids needing multiple auth objects and follows framework patterns
+    // Deposit coins directly into the DAO vault (treasury)
+    let auth = account::new_auth(account, version::current(), witness);
+    vault::deposit(auth, account, b"treasury".to_string(), asset_coin);
+    // Create a new auth for the second deposit
+    let auth2 = account::new_auth(account, version::current(), witness);
+    vault::deposit(auth2, account, b"treasury".to_string(), stable_coin);
 }
 
 /// Validate remove liquidity action parameters
@@ -789,23 +786,17 @@ fun validate_remove_liquidity_action<AssetType, StableType, IW: drop, Outcome: s
 }
 
 /// Execute typed dissolution actions with known coin type
+/// Note: DistributeAssetAction now requires a Coin<CoinType> parameter to be passed
+/// This prevents automatic execution in the dispatcher until proper coin handling is added
 fun try_execute_typed_dissolution_action<CoinType, IW: drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
 ): bool {
-    if (executable::contains_action<Outcome, dissolution_actions::DistributeAssetAction<CoinType>>(executable)) {
-        dissolution_actions::do_distribute_asset<Outcome, CoinType, IW>(
-            executable,
-            account,
-            version::current(),
-            witness,
-            ctx
-        );
-        return true
-    };
-    
+    // Removed automatic execution of DistributeAssetAction
+    // This action now requires a Coin<CoinType> to be provided
+    // Use a dedicated executor that pairs vault::spend with dissolution::distribute
     false
 }
 

@@ -240,6 +240,7 @@ public fun new_config_params_from_values(
         true,  // accept_new_proposals (default)
         10,    // max_intents_per_outcome (default)
         7200000, // eviction_grace_period_ms (2 hours default)
+        2592000000, // proposal_intent_expiry_ms (30 days default)
     );
     
     let metadata_config = dao_config::new_metadata_config(
@@ -369,6 +370,7 @@ public fun trading_period_ms(config: &FutarchyConfig): u64 { dao_config::trading
 public fun proposal_recreation_window_ms(config: &FutarchyConfig): u64 { dao_config::proposal_recreation_window_ms(dao_config::governance_config(&config.config)) }
 public fun max_proposal_chain_depth(config: &FutarchyConfig): u64 { dao_config::max_proposal_chain_depth(dao_config::governance_config(&config.config)) }
 public fun eviction_grace_period_ms(config: &FutarchyConfig): u64 { dao_config::eviction_grace_period_ms(dao_config::governance_config(&config.config)) }
+public fun proposal_intent_expiry_ms(config: &FutarchyConfig): u64 { dao_config::proposal_intent_expiry_ms(dao_config::governance_config(&config.config)) }
 
 // AMM configuration
 public fun amm_twap_start_delay(config: &FutarchyConfig): u64 { dao_config::start_delay(dao_config::twap_config(&config.config)) }
@@ -419,212 +421,102 @@ public fun state_paused(): u8 { DAO_STATE_PAUSED }
 
 // Trading parameters
 public(package) fun set_min_asset_amount(config: &mut FutarchyConfig, amount: u64) {
-    let current_trading = dao_config::trading_params(&config.config);
-    let new_trading = dao_config::new_trading_params(
-        amount,
-        dao_config::min_stable_amount(current_trading),
-        dao_config::review_period_ms(current_trading),
-        dao_config::trading_period_ms(current_trading),
-        dao_config::amm_total_fee_bps(current_trading),
-    );
-    config.config = dao_config::update_trading_params(&config.config, new_trading);
+    // Use direct mutable reference for efficient in-place update
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_min_asset_amount(trading_params, amount);
 }
 
 public(package) fun set_min_stable_amount(config: &mut FutarchyConfig, amount: u64) {
-    let current_trading = dao_config::trading_params(&config.config);
-    let new_trading = dao_config::new_trading_params(
-        dao_config::min_asset_amount(current_trading),
-        amount,
-        dao_config::review_period_ms(current_trading),
-        dao_config::trading_period_ms(current_trading),
-        dao_config::amm_total_fee_bps(current_trading),
-    );
-    config.config = dao_config::update_trading_params(&config.config, new_trading);
+    // Use direct mutable reference for efficient in-place update
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_min_stable_amount(trading_params, amount);
 }
 
 public(package) fun set_review_period_ms(config: &mut FutarchyConfig, period: u64) {
-    let current_trading = dao_config::trading_params(&config.config);
-    let new_trading = dao_config::new_trading_params(
-        dao_config::min_asset_amount(current_trading),
-        dao_config::min_stable_amount(current_trading),
-        period,
-        dao_config::trading_period_ms(current_trading),
-        dao_config::amm_total_fee_bps(current_trading),
-    );
-    config.config = dao_config::update_trading_params(&config.config, new_trading);
+    // Use direct mutable reference for efficient in-place update
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_review_period_ms(trading_params, period);
 }
 
 public(package) fun set_trading_period_ms(config: &mut FutarchyConfig, period: u64) {
-    let current_trading = dao_config::trading_params(&config.config);
-    let new_trading = dao_config::new_trading_params(
-        dao_config::min_asset_amount(current_trading),
-        dao_config::min_stable_amount(current_trading),
-        dao_config::review_period_ms(current_trading),
-        period,
-        dao_config::amm_total_fee_bps(current_trading),
-    );
-    config.config = dao_config::update_trading_params(&config.config, new_trading);
+    // Use direct mutable reference for efficient in-place update
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_trading_period_ms(trading_params, period);
 }
 
 public(package) fun set_proposal_recreation_window_ms(config: &mut FutarchyConfig, window: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        window,
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_proposal_recreation_window_ms(governance_config, window);
 }
 
 public(package) fun set_max_proposal_chain_depth(config: &mut FutarchyConfig, depth: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        depth,
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_max_proposal_chain_depth(governance_config, depth);
 }
 
 // AMM configuration
 public(package) fun set_amm_twap_start_delay(config: &mut FutarchyConfig, delay: u64) {
-    let current_twap = dao_config::twap_config(&config.config);
-    let new_twap = dao_config::new_twap_config(
-        delay,
-        dao_config::step_max(current_twap),
-        dao_config::initial_observation(current_twap),
-        dao_config::threshold(current_twap),
-    );
-    config.config = dao_config::update_twap_config(&config.config, new_twap);
+    // Use direct mutable reference for efficient in-place update
+    let twap_config = dao_config::twap_config_mut(&mut config.config);
+    dao_config::set_start_delay(twap_config, delay);
 }
 
 public(package) fun set_amm_twap_step_max(config: &mut FutarchyConfig, max: u64) {
-    let current_twap = dao_config::twap_config(&config.config);
-    let new_twap = dao_config::new_twap_config(
-        dao_config::start_delay(current_twap),
-        max,
-        dao_config::initial_observation(current_twap),
-        dao_config::threshold(current_twap),
-    );
-    config.config = dao_config::update_twap_config(&config.config, new_twap);
+    // Use direct mutable reference for efficient in-place update
+    let twap_config = dao_config::twap_config_mut(&mut config.config);
+    dao_config::set_step_max(twap_config, max);
 }
 
 public(package) fun set_amm_twap_initial_observation(config: &mut FutarchyConfig, obs: u128) {
-    let current_twap = dao_config::twap_config(&config.config);
-    let new_twap = dao_config::new_twap_config(
-        dao_config::start_delay(current_twap),
-        dao_config::step_max(current_twap),
-        obs,
-        dao_config::threshold(current_twap),
-    );
-    config.config = dao_config::update_twap_config(&config.config, new_twap);
+    // Use direct mutable reference for efficient in-place update
+    let twap_config = dao_config::twap_config_mut(&mut config.config);
+    dao_config::set_initial_observation(twap_config, obs);
 }
 
 public(package) fun set_twap_threshold(config: &mut FutarchyConfig, threshold: u64) {
-    let current_twap = dao_config::twap_config(&config.config);
-    let new_twap = dao_config::new_twap_config(
-        dao_config::start_delay(current_twap),
-        dao_config::step_max(current_twap),
-        dao_config::initial_observation(current_twap),
-        threshold,
-    );
-    config.config = dao_config::update_twap_config(&config.config, new_twap);
+    // Use direct mutable reference for efficient in-place update
+    let twap_config = dao_config::twap_config_mut(&mut config.config);
+    dao_config::set_threshold(twap_config, threshold);
 }
 
 public(package) fun set_amm_total_fee_bps(config: &mut FutarchyConfig, fee_bps: u64) {
-    let current_trading = dao_config::trading_params(&config.config);
-    let new_trading = dao_config::new_trading_params(
-        dao_config::min_asset_amount(current_trading),
-        dao_config::min_stable_amount(current_trading),
-        dao_config::review_period_ms(current_trading),
-        dao_config::trading_period_ms(current_trading),
-        fee_bps,
-    );
-    config.config = dao_config::update_trading_params(&config.config, new_trading);
+    // Use direct mutable reference for efficient in-place update
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_amm_total_fee_bps(trading_params, fee_bps);
 }
 
 // Metadata
 public(package) fun set_dao_name(config: &mut FutarchyConfig, name: AsciiString) {
-    let current_meta = dao_config::metadata_config(&config.config);
-    let new_meta = dao_config::new_metadata_config(
-        name,
-        *dao_config::icon_url(current_meta),
-        *dao_config::description(current_meta),
-    );
-    config.config = dao_config::update_metadata_config(&config.config, new_meta);
+    // Use direct mutable reference for efficient in-place update
+    let metadata_config = dao_config::metadata_config_mut(&mut config.config);
+    dao_config::set_dao_name(metadata_config, name);
 }
 
 public(package) fun set_icon_url(config: &mut FutarchyConfig, url: Url) {
-    let current_meta = dao_config::metadata_config(&config.config);
-    let new_meta = dao_config::new_metadata_config(
-        *dao_config::dao_name(current_meta),
-        url,
-        *dao_config::description(current_meta),
-    );
-    config.config = dao_config::update_metadata_config(&config.config, new_meta);
+    // Use direct mutable reference for efficient in-place update
+    let metadata_config = dao_config::metadata_config_mut(&mut config.config);
+    dao_config::set_icon_url(metadata_config, url);
 }
 
 public(package) fun set_description(config: &mut FutarchyConfig, desc: String) {
-    let current_meta = dao_config::metadata_config(&config.config);
-    let new_meta = dao_config::new_metadata_config(
-        *dao_config::dao_name(current_meta),
-        *dao_config::icon_url(current_meta),
-        desc,
-    );
-    config.config = dao_config::update_metadata_config(&config.config, new_meta);
+    // Use direct mutable reference for efficient in-place update
+    let metadata_config = dao_config::metadata_config_mut(&mut config.config);
+    dao_config::set_description(metadata_config, desc);
 }
 
 // Governance parameters
 public(package) fun set_max_outcomes(config: &mut FutarchyConfig, max: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        max,
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_max_outcomes(governance_config, max);
 }
 
 public(package) fun set_proposal_fee_per_outcome(config: &mut FutarchyConfig, fee: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        fee,
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_proposal_fee_per_outcome(governance_config, fee);
 }
 
 public(package) fun set_operational_state(config: &mut FutarchyConfig, new_state: u8) {
@@ -632,39 +524,15 @@ public(package) fun set_operational_state(config: &mut FutarchyConfig, new_state
 }
 
 public(package) fun set_max_concurrent_proposals(config: &mut FutarchyConfig, max: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        max,
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_max_concurrent_proposals(governance_config, max);
 }
 
 public(package) fun set_required_bond_amount(config: &mut FutarchyConfig, amount: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        amount,
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_required_bond_amount(governance_config, amount);
 }
 
 // State tracking
@@ -712,13 +580,9 @@ public(package) fun set_verification_level(config: &mut FutarchyConfig, level: u
 
 // Metadata setters
 public(package) fun set_name(config: &mut FutarchyConfig, name: AsciiString) {
-    let current_meta = dao_config::metadata_config(&config.config);
-    let new_meta = dao_config::new_metadata_config(
-        name,
-        *dao_config::icon_url(current_meta),
-        *dao_config::description(current_meta),
-    );
-    config.config = dao_config::update_metadata_config(&config.config, new_meta);
+    // Use direct mutable reference for efficient in-place update
+    let metadata_config = dao_config::metadata_config_mut(&mut config.config);
+    dao_config::set_dao_name(metadata_config, name);
 }
 
 public(package) fun set_admin(_config: &mut FutarchyConfig, admin: address) {
@@ -752,57 +616,27 @@ public(package) fun set_fee_manager_id(config: &mut FutarchyConfig, id: ID) {
 }
 
 public(package) fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        points,
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_fee_escalation_basis_points(governance_config, points);
 }
 
 public(package) fun set_max_intents_per_outcome(config: &mut FutarchyConfig, max: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        max,
-        dao_config::eviction_grace_period_ms(current_gov),
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_max_intents_per_outcome(governance_config, max);
 }
 
 public(package) fun set_eviction_grace_period_ms(config: &mut FutarchyConfig, period: u64) {
-    let current_gov = dao_config::governance_config(&config.config);
-    let new_gov = dao_config::new_governance_config(
-        dao_config::max_outcomes(current_gov),
-        dao_config::proposal_fee_per_outcome(current_gov),
-        dao_config::required_bond_amount(current_gov),
-        dao_config::max_concurrent_proposals(current_gov),
-        dao_config::proposal_recreation_window_ms(current_gov),
-        dao_config::max_proposal_chain_depth(current_gov),
-        dao_config::fee_escalation_basis_points(current_gov),
-        dao_config::proposal_creation_enabled(current_gov),
-        dao_config::accept_new_proposals(current_gov),
-        dao_config::max_intents_per_outcome(current_gov),
-        period,
-    );
-    config.config = dao_config::update_governance_config(&config.config, new_gov);
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_eviction_grace_period_ms(governance_config, period);
+}
+
+public(package) fun set_proposal_intent_expiry_ms(config: &mut FutarchyConfig, period: u64) {
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_proposal_intent_expiry_ms(governance_config, period);
 }
 
 public(package) fun set_spot_pool_id(config: &mut FutarchyConfig, id: ID) {
@@ -842,49 +676,29 @@ public(package) fun set_finalization_fee(config: &mut FutarchyConfig, amount: u6
     config.finalization_fee = amount;
 }
 
-// Security config setters (update the entire SecurityConfig in dao_config)
+// Security config setters (use direct mutable references)
 public(package) fun set_oa_custodian_immutable(config: &mut FutarchyConfig, val: bool) {
-    let current_sec = dao_config::security_config(&config.config);
-    let new_sec = dao_config::new_security_config(
-        val,
-        dao_config::deadman_enabled(current_sec),
-        dao_config::recovery_liveness_ms(current_sec),
-        dao_config::require_deadman_council(current_sec),
-    );
-    config.config = dao_config::update_security_config(&config.config, new_sec);
+    // Use direct mutable reference for efficient in-place update
+    let security_config = dao_config::security_config_mut(&mut config.config);
+    dao_config::set_oa_custodian_immutable(security_config, val);
 }
 
 public(package) fun set_deadman_enabled(config: &mut FutarchyConfig, val: bool) {
-    let current_sec = dao_config::security_config(&config.config);
-    let new_sec = dao_config::new_security_config(
-        dao_config::oa_custodian_immutable(current_sec),
-        val,
-        dao_config::recovery_liveness_ms(current_sec),
-        dao_config::require_deadman_council(current_sec),
-    );
-    config.config = dao_config::update_security_config(&config.config, new_sec);
+    // Use direct mutable reference for efficient in-place update
+    let security_config = dao_config::security_config_mut(&mut config.config);
+    dao_config::set_deadman_enabled(security_config, val);
 }
 
 public(package) fun set_recovery_liveness_ms(config: &mut FutarchyConfig, ms: u64) {
-    let current_sec = dao_config::security_config(&config.config);
-    let new_sec = dao_config::new_security_config(
-        dao_config::oa_custodian_immutable(current_sec),
-        dao_config::deadman_enabled(current_sec),
-        ms,
-        dao_config::require_deadman_council(current_sec),
-    );
-    config.config = dao_config::update_security_config(&config.config, new_sec);
+    // Use direct mutable reference for efficient in-place update
+    let security_config = dao_config::security_config_mut(&mut config.config);
+    dao_config::set_recovery_liveness_ms(security_config, ms);
 }
 
 public(package) fun set_require_deadman_council(config: &mut FutarchyConfig, val: bool) {
-    let current_sec = dao_config::security_config(&config.config);
-    let new_sec = dao_config::new_security_config(
-        dao_config::oa_custodian_immutable(current_sec),
-        dao_config::deadman_enabled(current_sec),
-        dao_config::recovery_liveness_ms(current_sec),
-        val,
-    );
-    config.config = dao_config::update_security_config(&config.config, new_sec);
+    // Use direct mutable reference for efficient in-place update
+    let security_config = dao_config::security_config_mut(&mut config.config);
+    dao_config::set_require_deadman_council(security_config, val);
 }
 
 // Removed authorized_members_mut - auth is managed by account protocol

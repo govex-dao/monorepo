@@ -1,9 +1,17 @@
-/// Config intent creation - simplified version without non-existent helper functions
+/// Consolidated config intent creation module
+/// Combines basic and advanced configuration intent creation
 module futarchy::config_intents;
 
-// === Imports (Organized) ===
-use std::{string::String, ascii::String as AsciiString, option};
-use sui::{clock::Clock, url::Url};
+// === Imports ===
+use std::{
+    string::String,
+    ascii::String as AsciiString,
+    option,
+};
+use sui::{
+    clock::Clock,
+    url::Url,
+};
 use account_protocol::{
     account::Account,
     executable::Executable,
@@ -12,7 +20,7 @@ use account_protocol::{
 };
 use futarchy::{
     config_actions,
-    advanced_config_actions,
+    futarchy_config::{FutarchyConfig, FutarchyOutcome},
     version,
 };
 
@@ -23,11 +31,57 @@ use fun intent_interface::process_intent as Account.process_intent;
 // === Single Witness ===
 public struct ConfigIntent has copy, drop {}
 
-// === Intent Creation Functions ===
+// === Basic Intent Creation Functions ===
+
+/// Create intent to enable/disable proposals
+public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    enabled: bool,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_set_proposals_enabled".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_set_proposals_enabled_action(enabled);
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Create intent to update DAO name
+public fun create_update_name_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    new_name: String,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_name".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_update_name_action(new_name);
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+// === Advanced Intent Creation Functions ===
 
 /// Create intent to update DAO metadata
-public fun create_update_metadata_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
+public fun create_update_metadata_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: Outcome,
     name: AsciiString,
@@ -43,8 +97,7 @@ public fun create_update_metadata_intent<Config, Outcome: store>(
         ConfigIntent {},
         ctx,
         |intent, iw| {
-            // Create the metadata update action directly
-            let action = advanced_config_actions::new_metadata_update_action(
+            let action = config_actions::new_metadata_update_action(
                 option::some(name),
                 option::some(icon_url),
                 option::some(description)
@@ -54,15 +107,15 @@ public fun create_update_metadata_intent<Config, Outcome: store>(
     );
 }
 
-/// Create intent to update trading params
-public fun create_update_trading_params_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
+/// Create intent to update trading parameters
+public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: Outcome,
     review_period_ms: u64,
     trading_period_ms: u64,
-    proposal_fee_per_outcome: u64,
-    max_concurrent_proposals: u64,
+    min_asset_amount: u64,
+    min_stable_amount: u64,
     ctx: &mut TxContext
 ) {
     account.build_intent!(
@@ -73,25 +126,142 @@ public fun create_update_trading_params_intent<Config, Outcome: store>(
         ConfigIntent {},
         ctx,
         |intent, iw| {
-            // Create the trading params update action directly
-            let action = advanced_config_actions::new_trading_params_update_action(
-                option::none(), // min_asset_amount
-                option::none(), // min_stable_amount
+            let action = config_actions::new_trading_params_update_action(
+                option::some(min_asset_amount),
+                option::some(min_stable_amount),
                 option::some(review_period_ms),
                 option::some(trading_period_ms),
-                option::none()  // amm_total_fee_bps
+                option::none() // amm_total_fee_bps
             );
             intent.add_action(action, iw);
-            
-            // Note: proposal_fee_per_outcome and max_concurrent_proposals 
-            // would need to be handled separately as governance params
         }
     );
 }
 
-/// Create intent to update TWAP params
-public fun create_update_twap_params_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
+/// Create intent to update TWAP configuration
+public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    start_delay: u64,
+    step_max: u64,
+    initial_observation: u128,
+    threshold: u64,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_twap".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_twap_config_update_action(
+                option::some(start_delay),
+                option::some(step_max),
+                option::some(initial_observation),
+                option::some(threshold)
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Create intent to update governance settings
+public fun create_update_governance_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    proposals_enabled: bool,
+    max_outcomes: u64,
+    required_bond_amount: u64,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_governance".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_governance_update_action(
+                option::some(proposals_enabled),
+                option::some(max_outcomes),
+                option::some(required_bond_amount),
+                option::none(), // max_intents_per_outcome - not specified
+                option::none()  // proposal_intent_expiry_ms - not specified
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Create intent to update slash distribution
+public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    slasher_reward_bps: u16,
+    dao_treasury_bps: u16,
+    protocol_bps: u16,
+    burn_bps: u16,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_slash_distribution".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_slash_distribution_update_action(
+                slasher_reward_bps,
+                dao_treasury_bps,
+                protocol_bps,
+                burn_bps
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Create intent to update queue parameters
+public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    max_proposer_funded: u64,
+    max_concurrent_proposals: u64,
+    fee_escalation_basis_points: u64,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_queue_params".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_queue_params_update_action(
+                option::some(max_proposer_funded),
+                option::some(max_concurrent_proposals),
+                option::none(), // max_queue_size - not specified
+                option::some(fee_escalation_basis_points)
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+// === Backward compatibility aliases ===
+
+/// Alias for TWAP params intent (backward compatibility)
+public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: Outcome,
     twap_start_delay: u64,
@@ -100,61 +270,41 @@ public fun create_update_twap_params_intent<Config, Outcome: store>(
     twap_threshold: u64,
     ctx: &mut TxContext
 ) {
-    account.build_intent!(
+    create_update_twap_config_intent(
+        account,
         params,
         outcome,
-        b"config_update_twap_params".to_string(),
-        version::current(),
-        ConfigIntent {},
-        ctx,
-        |intent, iw| {
-            // Create the TWAP config update action directly
-            let action = advanced_config_actions::new_twap_config_update_action(
-                option::some(twap_start_delay),
-                option::some(twap_step_max),
-                option::some(twap_initial_observation),
-                option::some(twap_threshold)
-            );
-            intent.add_action(action, iw);
-        }
+        twap_start_delay,
+        twap_step_max,
+        twap_initial_observation,
+        twap_threshold,
+        ctx
     );
 }
 
-/// Create intent to update fee params (maps to queue params now)
-public fun create_update_fee_params_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
+/// Alias for fee params intent (backward compatibility)
+public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
     params: Params,
     outcome: Outcome,
-    amm_total_fee_bps: u64,
-    fee_manager_address: address,
-    activator_reward_bps: u64,
+    max_proposer_funded: u64,
+    max_concurrent_proposals: u64,
+    fee_escalation_basis_points: u64,
     ctx: &mut TxContext
 ) {
-    account.build_intent!(
+    create_update_queue_params_intent(
+        account,
         params,
         outcome,
-        b"config_update_fee_params".to_string(),
-        version::current(),
-        ConfigIntent {},
-        ctx,
-        |intent, iw| {
-            // Fee params don't map directly - using trading params for fee
-            let action = advanced_config_actions::new_trading_params_update_action(
-                option::none(), // min_asset_amount
-                option::none(), // min_stable_amount
-                option::none(), // review_period_ms
-                option::none(), // trading_period_ms
-                option::some(amm_total_fee_bps)
-            );
-            intent.add_action(action, iw);
-            
-            // Note: fee_manager_address and activator_reward_bps would need 
-            // separate handling as they don't map to current actions
-        }
+        max_proposer_funded,
+        max_concurrent_proposals,
+        fee_escalation_basis_points,
+        ctx
     );
 }
 
-// === Intent Processing Functions ===
-// Intent processing is handled through the action_dispatcher
-// Create intents with the functions above, then execute via:
-// action_dispatcher::execute_all_actions()
+// === Intent Processing ===
+// Note: Processing of config intents is handled by the action_dispatcher module
+// which executes all actions in the executable. The process_intent! macro is not
+// used here because it doesn't support passing additional parameters (account, clock, ctx)
+// that are needed by the action execution functions.
