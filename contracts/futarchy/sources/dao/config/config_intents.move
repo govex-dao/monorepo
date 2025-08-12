@@ -41,6 +41,7 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
     enabled: bool,
     ctx: &mut TxContext
 ) {
+    // Use standard DAO settings for intent params (expiry, etc.)
     account.build_intent!(
         params,
         outcome,

@@ -8,7 +8,7 @@ use account_protocol::intents::Params;
 
 /// Specification for creating an intent later
 /// Stores all the data needed to create an AccountProtocol intent
-public struct IntentSpec has store, drop, copy {
+public struct IntentSpec has store {
     /// Unique key for this intent
     key: String,
     /// Parameters for the intent (timing, expiry, etc.)

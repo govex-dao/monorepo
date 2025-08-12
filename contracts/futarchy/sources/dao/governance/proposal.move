@@ -24,7 +24,6 @@ const EStableLiquidityTooLow: u64 = 5;
 const EPoolNotFound: u64 = 6;
 const EOutcomeOutOfBounds: u64 = 7;
 const EInvalidOutcomeVectors: u64 = 8;
-const ERejectIntentsNotAllowed: u64 = 9;
 
 // === Constants ===
 
@@ -77,7 +76,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     winning_outcome: Option<u64>,
     fee_escrow: Balance<StableType>,
     treasury_address: address,
-    /// Intent keys for each outcome - when outcome i wins, execute intent_keys[i]
+    /// Intent keys for each outcome - when outcome i wins, create and execute intent with this key
+    /// Intents are NOT created in Account until the outcome wins
     intent_keys: vector<Option<String>>,
 }
 
@@ -309,13 +309,9 @@ public(package) fun initialize_market<AssetType, StableType>(
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
-        intent_keys: vector::tabulate!(outcome_count, |i| {
-            if (i == 0) { // YES outcome is index 0
-                intent_key_for_yes
-            } else {
-                option::none()
-            }
-        }),
+        // Initialize with no intent keys for each outcome
+        // Intent keys will be set separately if needed
+        intent_keys: vector::tabulate!(outcome_count, |_| option::none()),
         review_period_ms,
         trading_period_ms,
         twap_prices: vector::empty(),
@@ -413,9 +409,7 @@ public(package) fun new_premarket<AssetType, StableType>(
         winning_outcome: option::none(),
         fee_escrow,
         treasury_address,
-        intent_keys: vector::tabulate!(outcome_count, |i| {
-            if (i == 0) { intent_key_for_yes } else { option::none() }
-        }),
+        intent_keys: vector::tabulate!(outcome_count, |_| option::none()),
         review_period_ms,
         trading_period_ms,
         twap_prices: vector::empty(),
@@ -1009,14 +1003,7 @@ public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<Asset
     &proposal.outcome_messages
 }
 
-/// Get intent keys for all outcomes
-public fun get_intent_keys<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>
-): &vector<Option<String>> {
-    &proposal.intent_keys
-}
-
-/// Get intent key for a specific outcome
+/// Get the intent key for a specific outcome
 public fun get_intent_key_for_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     outcome_index: u64
@@ -1024,18 +1011,37 @@ public fun get_intent_key_for_outcome<AssetType, StableType>(
     vector::borrow(&proposal.intent_keys, outcome_index)
 }
 
-/// Set intent key for a specific outcome
+/// Set the intent key for a specific outcome
 public fun set_intent_key_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64,
     intent_key: String,
 ) {
-    // Only allow intents for ACCEPTED outcome (index 0)
-    // REJECTED outcomes don't need intents as they maintain status quo
-    assert!(outcome_index == 0, ERejectIntentsNotAllowed);
+    // Allow intents for any outcome - each outcome may need different actions
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
     
-    let intent_key_opt = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
-    *intent_key_opt = option::some(intent_key);
+    let key_slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    *key_slot = option::some(intent_key);
+}
+
+/// Clear the intent key for a specific outcome (if needed)
+public fun clear_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64
+) {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    
+    let key_slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    *key_slot = option::none();
+}
+
+/// Check if an outcome has an intent key
+public fun has_intent_key<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64
+): bool {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    option::is_some(vector::borrow(&proposal.intent_keys, outcome_index))
 }
 
 /// Emits the ProposalOutcomeMutated event

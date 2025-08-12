@@ -17,7 +17,7 @@ use sui::{
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
-    intents,
+    intents::{Self, Intent},
 };
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
@@ -31,6 +31,7 @@ use futarchy::{
 };
 use futarchy::{
     futarchy_vault,
+    intent_janitor,
 };
 
 // === Errors ===
@@ -39,6 +40,7 @@ const EMarketNotFinalized: u64 = 2;
 const EProposalNotApproved: u64 = 3;
 const ENoIntentKey: u64 = 4;
 const EInvalidWinningOutcome: u64 = 5;
+const EIntentExpiryTooLong: u64 = 6;
 
 // === Constants ===
 const OUTCOME_ACCEPTED: u64 = 0;
@@ -127,6 +129,23 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         balance::zero<StableType>()
     };
     
+    // If a YES intent key was provided, enforce a strict TTL bound now.
+    // This avoids long-lived stale intents bloating the account.
+    if (intent_key.is_some()) {
+        let key = *intent_key.borrow();
+        // Check if the account actually has this intent
+        let intents_store = account::intents(account);
+        if (intents::contains(intents_store, key)) {
+            // We standardize Futarchy proposal intents to FutarchyOutcome for typed access
+            let intent_ref = intents::get<FutarchyOutcome>(intents_store, key);
+            let max_expiry = clock.timestamp_ms() + futarchy_config::proposal_intent_expiry_ms(config);
+            assert!(
+                intents::expiration_time(intent_ref) <= max_expiry, 
+                EIntentExpiryTooLong
+            );
+        };
+    };
+    
     // Initialize the market
     let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
         proposal_id,  // Pass the proposal_id from the queue
@@ -208,6 +227,9 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // Winning intents are automatically cleaned up after execution by confirm_execution_cleanup
     // TODO: Consider creating intents only for winning outcomes to avoid any storage bloat
     
+    // Cleanup all expired intents during finalization
+    intent_janitor::cleanup_all_expired_intents(account, clock);
+    
     // --- BEGIN REGISTRY PRUNING ---
     // Prune expired proposal reservations from the registry to prevent state bloat.
     // This is done at the end of finalization when we have time to do cleanup.
@@ -267,6 +289,9 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
         ctx
     );
     
+    // Cleanup all expired intents after execution
+    intent_janitor::cleanup_all_expired_intents(account, clock);
+    
     // Emit execution event
     event::emit(ProposalIntentExecuted {
         proposal_id: proposal::get_id(proposal),
@@ -316,6 +341,9 @@ public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW
         clock,
         ctx
     );
+    
+    // Cleanup all expired intents after execution
+    intent_janitor::cleanup_all_expired_intents(account, clock);
     
     // Emit execution event
     event::emit(ProposalIntentExecuted {
