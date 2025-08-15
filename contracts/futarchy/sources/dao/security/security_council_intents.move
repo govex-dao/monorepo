@@ -351,12 +351,14 @@ public fun request_approve_policy_removal(
         ApprovePolicyChangeIntent{},
         ctx,
         |intent, iw| {
-            let action = security_council_actions::new_approve_policy_change(
+            // Create metadata for the policy removal approval
+            let metadata = vector::empty<String>();
+            
+            let action = security_council_actions::new_approve_generic(
                 dao_id,
+                b"policy_remove".to_string(),
                 resource_key,
-                0, // ACTION_TYPE_REMOVE
-                option::none(),
-                option::none(),
+                metadata,
                 expires_at
             );
             intent.add_action(action, iw);
@@ -387,12 +389,21 @@ public fun request_approve_policy_set(
         ApprovePolicyChangeIntent{},
         ctx,
         |intent, iw| {
-            let action = security_council_actions::new_approve_policy_change(
+            // Create metadata for the policy set approval
+            let mut metadata = vector::empty<String>();
+            metadata.push_back(b"policy_account_id".to_string());
+            // Convert ID to hex string
+            let id_bytes = object::id_to_bytes(&policy_account_id);
+            let id_hex = sui::hex::encode(id_bytes);
+            metadata.push_back(std::string::utf8(id_hex));
+            metadata.push_back(b"intent_key_prefix".to_string());
+            metadata.push_back(intent_key_prefix);
+            
+            let action = security_council_actions::new_approve_generic(
                 dao_id,
+                b"policy_set".to_string(),
                 resource_key,
-                1, // ACTION_TYPE_SET
-                option::some(policy_account_id),
-                option::some(intent_key_prefix),
+                metadata,
                 expires_at
             );
             intent.add_action(action, iw);
@@ -420,5 +431,5 @@ public fun delete_create_council(expired: &mut Expired) {
     security_council_actions::delete_create_council(expired);
 }
 public fun delete_approve_policy_change(expired: &mut Expired) {
-    security_council_actions::delete_approve_policy_change(expired);
+    security_council_actions::delete_approve_generic(expired);
 }

@@ -67,7 +67,7 @@ public fun delete_update_council_membership(expired: &mut Expired) {
 }
 
 public fun delete_approve_policy_change(expired: &mut Expired) {
-    futarchy::security_council_actions::delete_approve_policy_change(expired);
+    futarchy::security_council_actions::delete_approve_generic(expired);
 }
 
 // === Vault/Custody Actions ===

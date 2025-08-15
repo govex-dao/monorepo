@@ -23,6 +23,9 @@ const EWrongCouncil: u64 = 2;
 const EWrongDao: u64 = 3;
 const EExpired: u64 = 4;
 const EDigestMismatch: u64 = 5;
+const EActionTypeMismatch: u64 = 6;
+const EMetadataMissing: u64 = 7;
+const EDAOMismatch: u64 = 8;
 
 // === Policy Validation ===
 
@@ -141,3 +144,6 @@ public fun error_wrong_council(): u64 { EWrongCouncil }
 public fun error_wrong_dao(): u64 { EWrongDao }
 public fun error_expired(): u64 { EExpired }
 public fun error_digest_mismatch(): u64 { EDigestMismatch }
+public fun error_action_type_mismatch(): u64 { EActionTypeMismatch }
+public fun error_metadata_missing(): u64 { EMetadataMissing }
+public fun error_dao_mismatch(): u64 { EDAOMismatch }

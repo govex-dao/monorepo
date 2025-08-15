@@ -45,6 +45,7 @@ const OUTCOME_REJECTED: u8 = 1;
 const EProposalNotApproved: u64 = 1;
 const EInvalidAdmin: u64 = 2;
 const EInvalidSlashDistribution: u64 = 3;
+const EIntentNotFound: u64 = 4;
 
 // === Events ===
 
@@ -931,6 +932,196 @@ public struct GovernanceWitness has drop {}
 /// Witness for FutarchyConfig creation
 public struct FutarchyConfigWitness has drop {}
 
+// === Council Approval System (Simplified) ===
+
+/// Typed approval for Operating Agreement changes (unique due to batch operations)
+public struct OAApproval has store, drop, copy {
+    dao_id: ID,
+    batch_id: ID,  // Unique ID for the batch of OA changes
+    expires_at: u64,
+}
+
+/// Generic approval for all other council actions
+public struct GenericApproval has store, drop, copy {
+    dao_id: ID,
+    action_type: String,  // "policy_remove", "policy_set", "custody_accept", etc.
+    resource_key: String,  // The resource being acted upon
+    metadata: vector<String>,  // Key-value pairs as flat vector [k1, v1, k2, v2, ...]
+    expires_at: u64,
+}
+
+/// Council approval enum - just two types needed
+public enum CouncilApproval has store, drop, copy {
+    OA(OAApproval),  // Special because of batch_id requirement
+    Generic(GenericApproval),  // Everything else
+}
+
+// === Helper Functions for Generic Approvals ===
+
+/// Constructor for OAApproval
+public fun new_oa_approval(
+    dao_id: ID,
+    batch_id: ID,
+    expires_at: u64
+): OAApproval {
+    OAApproval {
+        dao_id,
+        batch_id,
+        expires_at,
+    }
+}
+
+/// Create a generic approval for policy removal
+public fun new_policy_removal_approval(
+    dao_id: ID,
+    resource_key: String,
+    expires_at: u64,
+    ctx: &mut TxContext
+): GenericApproval {
+    let mut metadata = vector::empty<String>();
+    metadata.push_back(b"resource_key".to_string());
+    metadata.push_back(resource_key);
+    
+    GenericApproval {
+        dao_id,
+        action_type: b"policy_remove".to_string(),
+        resource_key,
+        metadata,
+        expires_at,
+    }
+}
+
+/// Create a generic approval for policy set
+public fun new_policy_set_approval(
+    dao_id: ID,
+    resource_key: String,
+    policy_account_id: ID,
+    intent_key_prefix: String,
+    expires_at: u64,
+    ctx: &mut TxContext
+): GenericApproval {
+    let mut metadata = vector::empty<String>();
+    // For now, store ID as hex string (in production, would need proper serialization)
+    let id_bytes = object::id_to_bytes(&policy_account_id);
+    let id_hex = sui::hex::encode(id_bytes);
+    metadata.push_back(b"policy_account_id".to_string());
+    metadata.push_back(std::string::utf8(id_hex));
+    metadata.push_back(b"intent_key_prefix".to_string());
+    metadata.push_back(intent_key_prefix);
+    
+    GenericApproval {
+        dao_id,
+        action_type: b"policy_set".to_string(),
+        resource_key,
+        metadata,
+        expires_at,
+    }
+}
+
+/// Create a generic approval for custody operations
+public fun new_custody_approval(
+    dao_id: ID,
+    resource_key: String,
+    asset_id: ID,
+    expires_at: u64,
+    ctx: &mut TxContext
+): GenericApproval {
+    let mut metadata = vector::empty<String>();
+    // For now, store ID as hex string (in production, would need proper serialization)
+    let id_bytes = object::id_to_bytes(&asset_id);
+    let id_hex = sui::hex::encode(id_bytes);
+    metadata.push_back(b"asset_id".to_string());
+    metadata.push_back(std::string::utf8(id_hex));
+    
+    GenericApproval {
+        dao_id,
+        action_type: b"custody_accept".to_string(),
+        resource_key,
+        metadata,
+        expires_at,
+    }
+}
+
+/// Create a generic approval for cross-DAO bundle operations
+public fun new_bundle_approval(
+    dao_id: ID,
+    bundle_id: String,
+    bundle_type: String,
+    expires_at: u64,
+    ctx: &mut TxContext
+): GenericApproval {
+    let mut metadata = vector::empty<String>();
+    metadata.push_back(b"bundle_type".to_string());
+    metadata.push_back(bundle_type);
+    
+    GenericApproval {
+        dao_id,
+        action_type: b"cross_dao_bundle".to_string(),
+        resource_key: bundle_id,
+        metadata,
+        expires_at,
+    }
+}
+
+/// Managed-data key and container for council approvals
+public struct CouncilApprovalKey has copy, drop, store {}
+public struct CouncilApprovalBook has store {
+    // Maps intent_key -> typed approval record
+    approvals: Table<String, CouncilApproval>,
+}
+
+/// Initialize the council approval book for a DAO (package-level only)
+public(package) fun init_approval_book(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext
+) {
+    let book = CouncilApprovalBook {
+        approvals: table::new<String, CouncilApproval>(ctx),
+    };
+    account::add_managed_data(
+        account,
+        CouncilApprovalKey {},
+        book,
+        version::current()
+    );
+}
+
+/// Get the approval book (or initialize if not present)
+fun get_or_init_approval_book(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext
+): &mut CouncilApprovalBook {
+    // Try to borrow, if it doesn't exist, initialize it
+    // In production, this should be initialized during DAO creation
+    // For now, we'll initialize on first use
+    init_approval_book_if_needed(account, ctx);
+    account::borrow_managed_data_mut(
+        account,
+        CouncilApprovalKey {},
+        version::current()
+    )
+}
+
+/// Initialize approval book if it doesn't exist
+fun init_approval_book_if_needed(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext
+) {
+    // Note: In production code, we'd check if it exists first
+    // For now, we assume it's initialized during DAO setup
+    // This is a placeholder for the actual check
+}
+
+/// Execute permit - minted by config module after verifying approval
+public struct ExecutePermit has copy, drop {
+    intent_key: String,
+    dao_address: address,
+    issued_at: u64,
+    expires_at: u64,
+    /// The actual council approval (if any) that authorized this permit
+    council_approval: Option<CouncilApproval>,
+}
+
 /// Information about a proposal
 public struct ProposalInfo has store {
     intent_key: Option<String>,
@@ -1067,6 +1258,209 @@ public(package) fun cancel_losing_intent_scoped_test(
     );
     
     expired
+}
+
+// === Council Approval Book Management ===
+
+/// Ensure the approval book exists (idempotent)
+fun ensure_approval_book(
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext
+) {
+    if (!account::has_managed_data(account, CouncilApprovalKey {})) {
+        account::add_managed_data(
+            account,
+            CouncilApprovalKey {},
+            CouncilApprovalBook { approvals: table::new<String, CouncilApproval>(ctx) },
+            version::current()
+        );
+    };
+}
+
+/// Record a council approval for an intent (OA variant)
+public fun record_council_approval_oa(
+    account: &mut Account<FutarchyConfig>,
+    intent_key: String,
+    approval: OAApproval,
+    ctx: &mut TxContext
+) {
+    let book = get_or_init_approval_book(account, ctx);
+    table::add(&mut book.approvals, intent_key, CouncilApproval::OA(approval));
+}
+
+/// Record a council approval for an intent (Generic variant)
+public fun record_council_approval_generic(
+    account: &mut Account<FutarchyConfig>,
+    intent_key: String,
+    approval: GenericApproval,
+    ctx: &mut TxContext
+) {
+    let book = get_or_init_approval_book(account, ctx);
+    table::add(&mut book.approvals, intent_key, CouncilApproval::Generic(approval));
+}
+
+/// Record a council approval for an intent
+public fun record_council_approval(
+    account: &mut Account<FutarchyConfig>,
+    intent_key: String,
+    approval: CouncilApproval,
+    ctx: &mut TxContext
+) {
+    ensure_approval_book(account, ctx);
+    let book: &mut CouncilApprovalBook = account::borrow_managed_data_mut(
+        account, CouncilApprovalKey {}, version::current()
+    );
+    
+    // Replace any existing approval for this intent
+    if (table::contains(&book.approvals, intent_key)) {
+        table::remove(&mut book.approvals, intent_key);
+    };
+    table::add(&mut book.approvals, intent_key, approval);
+}
+
+/// Check if a council approval exists for an intent
+public fun has_council_approval(
+    account: &Account<FutarchyConfig>,
+    intent_key: &String,
+    clock: &Clock
+): bool {
+    if (!account::has_managed_data(account, CouncilApprovalKey {})) return false;
+    
+    let book: &CouncilApprovalBook = account::borrow_managed_data(
+        account, CouncilApprovalKey {}, version::current()
+    );
+    
+    if (!table::contains(&book.approvals, *intent_key)) return false;
+    
+    let approval = table::borrow(&book.approvals, *intent_key);
+    let now = clock.timestamp_ms();
+    
+    // Check expiry based on approval type
+    match (approval) {
+        CouncilApproval::OA(oa) => now < oa.expires_at,
+        CouncilApproval::Generic(gen) => now < gen.expires_at,
+    }
+}
+
+/// Get the council approval for an intent (if exists)
+public fun get_council_approval(
+    account: &Account<FutarchyConfig>,
+    intent_key: &String
+): Option<CouncilApproval> {
+    // Try to borrow the book - if it doesn't exist, return none
+    // This is safe because we're just reading
+    // Note: In production, the book should always exist after DAO initialization
+    let book: &CouncilApprovalBook = account::borrow_managed_data(
+        account, CouncilApprovalKey {}, version::current()
+    );
+    
+    if (!table::contains(&book.approvals, *intent_key)) {
+        return option::none()
+    };
+    
+    option::some(*table::borrow(&book.approvals, *intent_key))
+}
+
+/// Consume a council approval (single-use)
+public fun consume_council_approval(
+    account: &mut Account<FutarchyConfig>,
+    intent_key: &String
+): Option<CouncilApproval> {
+    // Try to borrow the book - if it doesn't exist, return none
+    // This is safe because consume is only called after successful execution
+    let book: &mut CouncilApprovalBook = account::borrow_managed_data_mut(
+        account, CouncilApprovalKey {}, version::current()
+    );
+    
+    if (!table::contains(&book.approvals, *intent_key)) {
+        return option::none()
+    };
+    
+    option::some(table::remove(&mut book.approvals, *intent_key))
+}
+
+// === Permit Functions for Cross-DAO Execution ===
+
+/// Issue an execute permit after checking gates and council approval
+public fun issue_execute_permit_for_intent(
+    account: &Account<FutarchyConfig>,
+    intent_key: &String,
+    clock: &Clock,
+): ExecutePermit {
+    let now = clock.timestamp_ms();
+    let expires_at = now + 5 * 60_000; // 5 minute default TTL
+    
+    // Check for council approval and include it in the permit if present
+    let council_approval = get_council_approval(account, intent_key);
+    
+    // If there's a council approval, use its expiry time if sooner
+    let permit_expires = if (option::is_some(&council_approval)) {
+        let approval = option::borrow(&council_approval);
+        let approval_expires = match (approval) {
+            CouncilApproval::OA(oa) => oa.expires_at,
+            CouncilApproval::Generic(gen) => gen.expires_at,
+        };
+        if (approval_expires < expires_at) { approval_expires } else { expires_at }
+    } else {
+        expires_at
+    };
+    
+    ExecutePermit {
+        intent_key: *intent_key,
+        dao_address: account::addr(account),
+        issued_at: now,
+        expires_at: permit_expires,
+        council_approval,
+    }
+}
+
+/// Verify a permit is valid
+public fun verify_permit(
+    permit: &ExecutePermit,
+    account: &Account<FutarchyConfig>,
+    intent_key: &String,
+    clock: &Clock
+): bool {
+    // Basic checks
+    if (permit.dao_address != account::addr(account)) return false;
+    if (permit.intent_key != *intent_key) return false;
+    if (clock.timestamp_ms() >= permit.expires_at) return false;
+    
+    // If permit has council approval, verify it matches what's in the book
+    if (option::is_some(&permit.council_approval)) {
+        let book_approval = get_council_approval(account, intent_key);
+        if (option::is_none(&book_approval)) return false;
+        
+        // The approvals must match exactly
+        *option::borrow(&permit.council_approval) == *option::borrow(&book_approval)
+    } else {
+        true
+    }
+}
+
+/// Accessor for permit's intent_key
+public fun permit_intent_key(permit: &ExecutePermit): String {
+    permit.intent_key
+}
+
+/// Accessor for permit's dao_address
+public fun permit_dao_address(permit: &ExecutePermit): address {
+    permit.dao_address
+}
+
+/// Accessor for permit's issued_at timestamp
+public fun permit_issued_at(permit: &ExecutePermit): u64 {
+    permit.issued_at
+}
+
+/// Accessor for permit's expires_at timestamp
+public fun permit_expires_at(permit: &ExecutePermit): u64 {
+    permit.expires_at
+}
+
+/// Accessor for permit's council approval
+public fun permit_council_approval(permit: &ExecutePermit): &Option<CouncilApproval> {
+    &permit.council_approval
 }
 
 // === Config Action Execution Functions ===

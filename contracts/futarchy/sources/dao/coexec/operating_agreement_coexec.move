@@ -13,19 +13,25 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
-    executable::Executable,
+    executable::{Self, Executable},
 };
 use futarchy::{
     version,
     operating_agreement,
     operating_agreement_actions::{Self, BatchOperatingAgreementAction, OperatingAgreementAction},
     coexec_common,
-    futarchy_config::{Self, FutarchyConfig},
+    futarchy_config::{Self, FutarchyConfig, OAApproval, CouncilApproval},
     weighted_multisig::{Self, WeightedMultisig, Approvals},
     security_council_actions,
+    policy_registry,
 };
 
 const ENoBatch: u64 = 1;
+const EDAOMismatch: u64 = 2;
+const EBatchMismatch: u64 = 3;
+const EExpired: u64 = 4;
+const ENoCustodian: u64 = 5;
+const EWrongCustodian: u64 = 6;
 
 /// Deterministically hash a batch OA action into a digest
 fun digest_batch(actions: &vector<OperatingAgreementAction>): vector<u8> {
@@ -77,7 +83,7 @@ fun digest_batch(actions: &vector<OperatingAgreementAction>): vector<u8> {
 /// Execute OA changes requiring 2-of-2: futarchy + council.
 /// - DAO must have OA:Custodian policy set to council_id
 /// - Futarchy executable must contain BatchOperatingAgreementAction
-/// - Council executable must contain ApproveOAChangeAction whose digest matches
+/// - Council executable must contain ApproveOAChangeAction with matching batch_id
 /// Both executables are confirmed atomically.
 public fun execute_with_council<FutarchyOutcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
@@ -90,29 +96,42 @@ public fun execute_with_council<FutarchyOutcome: store + drop + copy>(
     // Extract futarchy batch OA action
     let batch: &BatchOperatingAgreementAction = 
         coexec_common::extract_action_with_check(&mut futarchy_exec, version::current(), ENoBatch);
+    let batch_id = operating_agreement_actions::get_batch_id(batch);
     let actions = operating_agreement_actions::get_batch_actions(batch);
-    let digest = digest_batch(actions);
 
     // Extract council approval action
     let approval: &security_council_actions::ApproveOAChangeAction = 
         coexec_common::extract_action(&mut council_exec, version::current());
-    let (dao_id, cdigest, expires_at) = security_council_actions::get_approve_oa_change_params(approval);
+    let (dao_id, approved_batch_id, expires_at) = security_council_actions::get_approve_oa_change_params(approval);
     
-    // Validate all co-execution requirements using the standard pattern
-    coexec_common::validate_coexec_standard(
-        dao,
-        council,
-        b"OA:Custodian".to_string(),
-        dao_id,
-        expires_at,
-        cdigest,
-        &digest,
-        clock
-    );
+    // Validate all co-execution requirements
+    assert!(dao_id == object::id(dao), EDAOMismatch);
+    assert!(approved_batch_id == batch_id, EBatchMismatch);
+    assert!(clock.timestamp_ms() < expires_at, EExpired);
+    
+    // Verify council is the OA custodian
+    let registry = policy_registry::borrow_registry(dao, version::current());
+    assert!(policy_registry::has_policy(registry, b"OA:Custodian".to_string()), ENoCustodian);
+    let policy = policy_registry::get_policy(registry, b"OA:Custodian".to_string());
+    assert!(policy_registry::policy_account_id(policy) == object::id(council), EWrongCustodian);
 
     // Apply actions to OA
     let agreement = operating_agreement::get_agreement_mut(dao, version::current());
     operating_agreement::apply_actions(agreement, actions, clock, ctx);
+    
+    // Record the council approval for this intent
+    let intent_key = executable::intent(&futarchy_exec).key();
+    let oa_approval = futarchy_config::new_oa_approval(
+        object::id(dao),
+        batch_id,
+        expires_at
+    );
+    futarchy_config::record_council_approval_oa(
+        dao,
+        intent_key,
+        oa_approval,
+        ctx
+    );
 
     // Confirm both executables atomically
     coexec_common::confirm_both_executables(dao, council, futarchy_exec, council_exec);

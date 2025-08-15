@@ -152,8 +152,13 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
         OperatingAgreementIntent {},
         ctx,
         |intent, iw| {
+            // Generate a unique batch ID for this set of operations  
+            let batch_uid = object::new(ctx);
+            let batch_id = object::uid_to_inner(&batch_uid);
+            object::delete(batch_uid);
             operating_agreement_actions::new_batch_operating_agreement<Outcome, OperatingAgreementIntent>(
                 intent,
+                batch_id,
                 actions,
                 iw
             );

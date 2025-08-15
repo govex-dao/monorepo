@@ -16,10 +16,10 @@ public struct CreateSecurityCouncilAction has store {
     set_as_oa_custodian: bool,
 }
 
-/// Council's approval of a specific OA change digest for a given DAO.
+/// Council's approval for an Operating Agreement change
 public struct ApproveOAChangeAction has store {
     dao_id: ID,
-    digest: vector<u8>,
+    batch_id: ID,  // ID of the BatchOperatingAgreementAction
     expires_at: u64,
 }
 
@@ -44,16 +44,16 @@ public fun delete_create_council(expired: &mut Expired) {
     let CreateSecurityCouncilAction {..} = expired.remove_action();
 }
 
-public fun new_approve_oa_change(dao_id: ID, digest: vector<u8>, expires_at: u64): ApproveOAChangeAction {
-    ApproveOAChangeAction { dao_id, digest, expires_at }
+public fun new_approve_oa_change(dao_id: ID, batch_id: ID, expires_at: u64): ApproveOAChangeAction {
+    ApproveOAChangeAction { dao_id, batch_id, expires_at }
 }
 
-public fun get_approve_oa_change_params(a: &ApproveOAChangeAction): (ID, &vector<u8>, u64) {
-    (a.dao_id, &a.digest, a.expires_at)
+public fun get_approve_oa_change_params(a: &ApproveOAChangeAction): (ID, ID, u64) {
+    (a.dao_id, a.batch_id, a.expires_at)
 }
 
 public fun delete_approve_oa_change(expired: &mut Expired) {
-    let ApproveOAChangeAction { dao_id: _, digest: _, expires_at: _ } = expired.remove_action();
+    let ApproveOAChangeAction { dao_id: _, batch_id: _, expires_at: _ } = expired.remove_action();
 }
 
 /// Action to update the rules for an already-managed UpgradeCap.
@@ -75,14 +75,13 @@ public struct UnlockAndReturnUpgradeCapAction has store {
     return_vault_name: String,
 }
 
-/// Council's approval of a specific policy change for a given DAO.
-/// Used for bilateral approval of critical policy modifications.
-public struct ApprovePolicyChangeAction has store {
+/// Generic approval action for any non-OA council approval
+/// This replaces ApprovePolicyChangeAction, ApproveUpgradeCapAction, etc.
+public struct ApproveGenericAction has store {
     dao_id: ID,
-    resource_key: String,
-    action_type: u8, // 0 = remove, 1 = set
-    policy_account_id_opt: Option<ID>, // Some for set, None for remove
-    intent_key_prefix_opt: Option<String>, // Some for set, None for remove
+    action_type: String,  // "policy_remove", "policy_set", "custody_accept", etc.
+    resource_key: String,  // The resource being acted upon
+    metadata: vector<String>,  // Pairs of key-value strings [k1, v1, k2, v2, ...]
     expires_at: u64,
 }
 
@@ -129,38 +128,37 @@ public fun delete_unlock_and_return_cap(expired: &mut Expired) {
     let UnlockAndReturnUpgradeCapAction {..} = expired.remove_action();
 }
 
-public fun new_approve_policy_change(
+// --- Generic Approval Functions ---
+
+public fun new_approve_generic(
     dao_id: ID,
+    action_type: String,
     resource_key: String,
-    action_type: u8,
-    policy_account_id_opt: Option<ID>,
-    intent_key_prefix_opt: Option<String>,
+    metadata: vector<String>,
     expires_at: u64,
-): ApprovePolicyChangeAction {
-    ApprovePolicyChangeAction {
+): ApproveGenericAction {
+    ApproveGenericAction {
         dao_id,
-        resource_key,
         action_type,
-        policy_account_id_opt,
-        intent_key_prefix_opt,
+        resource_key,
+        metadata,
         expires_at,
     }
 }
 
-public fun get_approve_policy_change_params(
-    action: &ApprovePolicyChangeAction
-): (ID, &String, u8, &Option<ID>, &Option<String>, u64) {
+public fun get_approve_generic_params(
+    action: &ApproveGenericAction
+): (ID, &String, &String, &vector<String>, u64) {
     (
         action.dao_id,
+        &action.action_type,
         &action.resource_key,
-        action.action_type,
-        &action.policy_account_id_opt,
-        &action.intent_key_prefix_opt,
+        &action.metadata,
         action.expires_at,
     )
 }
 
-public fun delete_approve_policy_change(expired: &mut Expired) {
-    let ApprovePolicyChangeAction {..} = expired.remove_action();
+public fun delete_approve_generic(expired: &mut Expired) {
+    let ApproveGenericAction {..} = expired.remove_action();
 }
 

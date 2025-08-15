@@ -92,6 +92,7 @@ public struct SetRemoveAllowedAction has store {
 
 /// Batch action for multiple operating agreement changes
 public struct BatchOperatingAgreementAction has store {
+    batch_id: ID,  // Unique ID for this batch
     actions: vector<OperatingAgreementAction>,
 }
 
@@ -143,7 +144,7 @@ public fun delete_set_remove_allowed(expired: &mut Expired) {
 
 /// Delete a batch operating agreement action from an expired intent
 public fun delete_batch_operating_agreement(expired: &mut Expired) {
-    let BatchOperatingAgreementAction { actions: _ } = expired.remove_action();
+    let BatchOperatingAgreementAction { batch_id: _, actions: _ } = expired.remove_action();
 }
 
 /// Delete an operating agreement action from an expired intent
@@ -200,14 +201,20 @@ public fun new_remove_line<Outcome: store, IW: drop>(
 /// Create a new batch operating agreement action for intents
 public fun new_batch_operating_agreement<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
+    batch_id: ID,
     actions: vector<OperatingAgreementAction>,
     intent_witness: IW,
 ) {
-    let action = new_batch_operating_agreement_action(actions);
+    let action = new_batch_operating_agreement_action(batch_id, actions);
     intent.add_action(action, intent_witness);
 }
 
 // === Helper Functions ===
+
+/// Get the batch ID from a BatchOperatingAgreementAction
+public fun get_batch_id(batch: &BatchOperatingAgreementAction): ID {
+    batch.batch_id
+}
 
 /// Create a new create OA action
 public fun new_create_operating_agreement_action(
@@ -266,9 +273,10 @@ public fun new_set_remove_allowed_action(allowed: bool): SetRemoveAllowedAction 
 
 /// Create a new batch operating agreement action
 public fun new_batch_operating_agreement_action(
+    batch_id: ID,
     actions: vector<OperatingAgreementAction>
 ): BatchOperatingAgreementAction {
-    BatchOperatingAgreementAction { actions }
+    BatchOperatingAgreementAction { batch_id, actions }
 }
 
 /// Create a new operating agreement action (flexible type)

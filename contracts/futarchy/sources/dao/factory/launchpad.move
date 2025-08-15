@@ -3,11 +3,15 @@ module futarchy::launchpad;
 use std::ascii;
 use std::string::{String};
 use std::type_name;
+use std::option::{Self as option, Option};
+use std::vector;
 use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::clock::{Clock};
 use sui::event;
 use sui::dynamic_field as df;
+use sui::object::{Self, UID, ID};
+use sui::tx_context::TxContext;
 use futarchy::factory;
 use futarchy::fee;
 use futarchy::math;
@@ -28,6 +32,14 @@ const ENotUSDC: u64 = 12;
 const EZeroContribution: u64 = 13;
 const EStableTypeNotAllowed: u64 = 14;
 const ENotTheCreator: u64 = 15;
+const ESettlementNotStarted: u64 = 101;
+const ESettlementInProgress: u64 = 102;
+const ESettlementAlreadyDone: u64 = 103;
+const ENotEligibleForTokens: u64 = 104;
+const ECapChangeAfterDeadline: u64 = 105;
+const ECapHeapInvariant: u64 = 106;
+const ESettlementAlreadyStarted: u64 = 107;
+const EInvalidSettlementState: u64 = 108;
 
 // === Constants ===
 /// The duration for every raise is fixed. 14 days in milliseconds.
@@ -71,6 +83,33 @@ public struct ContributorKey has copy, drop, store {
     contributor: address,
 }
 
+/// Per-contributor record with amount and cap
+public struct Contribution has store, drop, copy {
+    amount: u64,
+    max_total: u64, // cap; u64::MAX means "no cap"
+}
+
+/// Cap-bin dynamic fields for aggregating contributions by cap
+public struct ThresholdKey has copy, drop, store { 
+    cap: u64 
+}
+
+public struct ThresholdBin has store, drop {
+    total: u64,  // sum of amounts for this cap
+    count: u64,  // number of contributors with this cap
+}
+
+/// Settlement crank state for processing caps
+public struct CapSettlement has key, store {
+    id: UID,
+    raise_id: ID,
+    heap: vector<u64>,   // max-heap of caps
+    size: u64,           // heap size
+    running_sum: u64,    // C_k as we walk from high cap to low
+    final_total: u64,    // T* once found
+    done: bool,
+}
+
 
 /// Main object for a DAO fundraising launchpad.
 /// RaiseToken is the governance token being sold.
@@ -97,6 +136,11 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
     /// Reentrancy guard flag
     claiming: bool,
+    /// Cap-aware accounting
+    thresholds: vector<u64>,       // unique caps we've seen
+    settlement_done: bool,
+    settlement_in_progress: bool,  // Track if settlement has started
+    final_total_eligible: u64,     // T* after enforcing caps
 }
 
 /// Stores all parameters needed for DAO creation to keep the Raise object clean.
@@ -133,6 +177,32 @@ public struct ContributionAdded has copy, drop {
     contributor: address,
     amount: u64,
     new_total_raised: u64,
+}
+
+public struct ContributionAddedCapped has copy, drop {
+    raise_id: ID,
+    contributor: address,
+    amount: u64,
+    cap: u64,                // max_total specified
+    new_naive_total: u64,    // naive running sum (pre-cap settlement)
+}
+
+public struct SettlementStarted has copy, drop {
+    raise_id: ID,
+    caps_count: u64,
+}
+
+public struct SettlementStep has copy, drop {
+    raise_id: ID,
+    processed_cap: u64,
+    added_amount: u64,
+    running_sum: u64,
+    next_cap: u64,
+}
+
+public struct SettlementFinalized has copy, drop {
+    raise_id: ID,
+    final_total: u64,
 }
 
 public struct RaiseSuccessful has copy, drop {
@@ -208,10 +278,12 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     );
 }
 
-/// Contribute to an active raise.
-public entry fun contribute<RaiseToken, StableCoin>(
+/// Contribute with a cap: max final total raise you accept.
+/// cap = u64::max_value() means "no cap".
+public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     contribution: Coin<StableCoin>,
+    cap: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -221,33 +293,299 @@ public entry fun contribute<RaiseToken, StableCoin>(
     let contributor = ctx.sender();
     let amount = contribution.value();
     assert!(amount > 0, EZeroContribution);
+    
+    // SECURITY: Cap must be reasonable (at least the contribution amount)
+    assert!(cap >= amount, EInvalidStateForAction);
 
+    // Deposit coins into vault + naive total accounting
     raise.stable_coin_vault.join(contribution.into_balance());
-    
-    // Check for overflow before addition
     assert!(raise.total_raised <= std::u64::max_value!() - amount, EArithmeticOverflow);
-    let new_total = raise.total_raised + amount;
-    raise.total_raised = new_total;
+    raise.total_raised = raise.total_raised + amount;
 
-    let contributor_key = ContributorKey { contributor };
-    
-    // Check if contributor exists using dynamic fields
-    if (df::exists_(&raise.id, contributor_key)) {
-        let current_contribution: &mut u64 = df::borrow_mut(&mut raise.id, contributor_key);
-        // Check for overflow before updating contributor amount
-        assert!(*current_contribution <= std::u64::max_value!() - amount, EArithmeticOverflow);
-        *current_contribution = *current_contribution + amount;
+    // Contributor DF: (amount, max_total)
+    let key = ContributorKey { contributor };
+
+    if (df::exists_(&raise.id, key)) {
+        let rec: &mut Contribution = df::borrow_mut(&mut raise.id, key);
+        // SECURITY: For existing contributors, cap must match or use update_cap
+        assert!(rec.max_total == cap, ECapChangeAfterDeadline);
+        assert!(rec.amount <= std::u64::max_value!() - amount, EArithmeticOverflow);
+        rec.amount = rec.amount + amount;
+        
+        // SECURITY: Updated total cap must still be reasonable
+        assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
     } else {
-        df::add(&mut raise.id, contributor_key, amount);
+        df::add(&mut raise.id, key, Contribution { amount, max_total: cap });
         raise.contributor_count = raise.contributor_count + 1;
+
+        // Ensure a cap-bin exists and index it if first time seen
+        let tkey = ThresholdKey { cap };
+        if (!df::exists_(&raise.id, tkey)) {
+            df::add(&mut raise.id, tkey, ThresholdBin { total: 0, count: 0 });
+            vector::push_back(&mut raise.thresholds, cap);
+        };
     };
 
-    event::emit(ContributionAdded {
+    // Update the cap-bin aggregate
+    {
+        let bin: &mut ThresholdBin = df::borrow_mut(&mut raise.id, ThresholdKey { cap });
+        assert!(bin.total <= std::u64::max_value!() - amount, EArithmeticOverflow);
+        bin.total = bin.total + amount;
+        bin.count = bin.count + 1;
+    };
+
+    event::emit(ContributionAddedCapped {
         raise_id: object::id(raise),
         contributor,
         amount,
-        new_total_raised: raise.total_raised,
+        cap,
+        new_naive_total: raise.total_raised,
     });
+}
+
+/// Backward compatibility: no-cap contribution just forwards with cap = MAX
+public entry fun contribute<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    contribution: Coin<StableCoin>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    contribute_with_cap<RaiseToken, StableCoin>(
+        raise, contribution, std::u64::max_value!(), clock, ctx
+    )
+}
+
+/// Optional: explicit cap update before deadline (moves contributor's amount across bins)
+public entry fun update_cap<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    new_cap: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(clock.timestamp_ms() < raise.deadline_ms, ECapChangeAfterDeadline);
+    // SECURITY: Cannot update caps after settlement started
+    assert!(!raise.settlement_in_progress && !raise.settlement_done, ESettlementAlreadyStarted);
+    
+    let who = ctx.sender();
+    let key = ContributorKey { contributor: who };
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    // Get the existing contribution
+    let rec: &Contribution = df::borrow(&raise.id, key);
+    let old_cap = rec.max_total;
+    let amount = rec.amount;
+    
+    if (old_cap == new_cap) return;
+    
+    // SECURITY: New cap must be at least the contribution amount
+    assert!(new_cap >= amount, EInvalidStateForAction);
+
+    // create bin for new cap if needed
+    let new_tk = ThresholdKey { cap: new_cap };
+    if (!df::exists_(&raise.id, new_tk)) {
+        df::add(&mut raise.id, new_tk, ThresholdBin { total: 0, count: 0 });
+        vector::push_back(&mut raise.thresholds, new_cap);
+    };
+
+    // move amount across bins
+    {
+        let old_bin: &mut ThresholdBin = df::borrow_mut(&mut raise.id, ThresholdKey { cap: old_cap });
+        assert!(old_bin.total >= amount, EArithmeticOverflow);
+        old_bin.total = old_bin.total - amount;
+        assert!(old_bin.count > 0, EArithmeticOverflow);
+        old_bin.count = old_bin.count - 1;
+    };
+    {
+        let new_bin: &mut ThresholdBin = df::borrow_mut(&mut raise.id, new_tk);
+        assert!(new_bin.total <= std::u64::max_value!() - amount, EArithmeticOverflow);
+        new_bin.total = new_bin.total + amount;
+        new_bin.count = new_bin.count + 1;
+    };
+
+    // Update the contributor's record
+    let rec_mut: &mut Contribution = df::borrow_mut(&mut raise.id, key);
+    rec_mut.max_total = new_cap;
+}
+
+// === Max-heap helpers over vector<u64> ===
+fun parent(i: u64): u64 { if (i == 0) 0 else (i - 1) / 2 }
+fun left(i: u64): u64 { 2 * i + 1 }
+fun right(i: u64): u64 { 2 * i + 2 }
+
+fun heapify_down(v: &mut vector<u64>, mut i: u64, size: u64) {
+    loop {
+        let l = left(i);
+        let r = right(i);
+        let mut largest = i;
+
+        if (l < size && *vector::borrow(v, l) > *vector::borrow(v, largest)) {
+            largest = l;
+        };
+        if (r < size && *vector::borrow(v, r) > *vector::borrow(v, largest)) {
+            largest = r;
+        };
+        if (largest == i) break;
+        vector::swap(v, i, largest);
+        i = largest;
+    }
+}
+
+fun build_max_heap(v: &mut vector<u64>) {
+    let sz = vector::length(v);
+    let mut i = if (sz == 0) { 0 } else { (sz - 1) / 2 };
+    loop {
+        heapify_down(v, i, sz);
+        if (i == 0) break;
+        i = i - 1;
+    };
+}
+
+fun heap_peek(v: &vector<u64>, size: u64): u64 {
+    if (size == 0) 0 else *vector::borrow(v, 0)
+}
+
+fun heap_pop(v: &mut vector<u64>, size_ref: &mut u64): u64 {
+    assert!(*size_ref > 0, ECapHeapInvariant);
+    let last = *size_ref - 1;
+    let top = *vector::borrow(v, 0);
+    if (last != 0) {
+        vector::swap(v, 0, last);
+    };
+    let _ = vector::pop_back(v);
+    *size_ref = last;
+    if (last > 0) {
+        heapify_down(v, 0, last);
+    };
+    top
+}
+
+/// Start settlement: snapshot caps into a heap
+public fun begin_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): CapSettlement {
+    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
+    assert!(!raise.settlement_done && !raise.settlement_in_progress, ESettlementAlreadyDone);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    
+    // SECURITY: Mark that settlement has started to prevent bin/cap manipulation
+    raise.settlement_in_progress = true;
+
+    // Copy caps vector into heap
+    let mut heap = raise.thresholds; // copy
+    build_max_heap(&mut heap);
+    let size = vector::length(&heap);
+
+    let s = CapSettlement {
+        id: object::new(ctx),
+        raise_id: object::id(raise),
+        heap,
+        size,
+        running_sum: 0,
+        final_total: 0,
+        done: false,
+    };
+
+    event::emit(SettlementStarted { raise_id: object::id(raise), caps_count: size });
+    s
+}
+
+/// Crank up to `steps` caps. Once done is true, final_total is T*.
+public entry fun crank_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    s: &mut CapSettlement,
+    steps: u64,
+) {
+    assert!(object::id(raise) == s.raise_id, EInvalidStateForAction);
+    assert!(!s.done, ESettlementInProgress);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(raise.settlement_in_progress, EInvalidSettlementState);
+    
+    // SECURITY: Limit steps to prevent DOS
+    let actual_steps = if (steps > 100) { 100 } else { steps };
+
+    let mut i = 0;
+    while (i < actual_steps && s.size > 0 && !s.done) {
+        // Pop the highest cap
+        let cap = heap_pop(&mut s.heap, &mut s.size);
+
+        // Pull bin total; remove bin to avoid double counting
+        let bin: ThresholdBin = df::remove(&mut raise.id, ThresholdKey { cap });
+        let added = bin.total;
+
+        // Update running sum
+        assert!(s.running_sum <= std::u64::max_value!() - added, EArithmeticOverflow);
+        s.running_sum = s.running_sum + added;
+
+        // Peek next cap (0 if none)
+        let next_cap = heap_peek(&s.heap, s.size);
+
+        // Check fixed-point window: M_{k+1} < C_k <= M_k
+        if (s.running_sum > next_cap && s.running_sum <= cap) {
+            s.final_total = s.running_sum;
+            s.done = true;
+        };
+
+        event::emit(SettlementStep {
+            raise_id: s.raise_id,
+            processed_cap: cap,
+            added_amount: added,
+            running_sum: s.running_sum,
+            next_cap,
+        });
+
+        i = i + 1;
+    };
+
+    // If heap exhausted but not done, no fixed point > 0 exists -> T* = 0
+    if (s.size == 0 && !s.done) {
+        s.final_total = 0;
+        s.done = true;
+    };
+}
+
+/// Finalize: record T* and lock settlement
+public fun finalize_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    s: CapSettlement,
+) {
+    assert!(object::id(raise) == s.raise_id, EInvalidStateForAction);
+    assert!(s.done, ESettlementNotStarted);
+    assert!(!raise.settlement_done, ESettlementAlreadyDone);
+    assert!(raise.settlement_in_progress, EInvalidSettlementState);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    
+    // SECURITY: Validate final total is reasonable
+    assert!(s.final_total <= raise.total_raised, EInvalidSettlementState);
+
+    raise.final_total_eligible = s.final_total;
+    raise.settlement_done = true;
+    raise.settlement_in_progress = false; // Settlement completed
+
+    event::emit(SettlementFinalized { raise_id: object::id(raise), final_total: s.final_total });
+
+    // Destroy the crank object
+    let CapSettlement { id, raise_id: _, heap: _, size: _, running_sum: _, final_total: _, done: _ } = s;
+    object::delete(id);
+}
+
+/// Entry function to start settlement and share the settlement object
+public entry fun start_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let settlement = begin_settlement(raise, clock, ctx);
+    transfer::public_share_object(settlement);
+}
+
+/// Entry function to finalize settlement
+public entry fun complete_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    s: CapSettlement,
+) {
+    finalize_settlement(raise, s);
 }
 
 /// If the raise was successful, this function creates the DAO and transfers funds to the creator.
@@ -263,10 +601,16 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
 ) {
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
-    assert!(raise.total_raised >= raise.min_raise_amount, EMinRaiseNotMet);
-    // Prevent division by zero in claim_tokens if the raise succeeded with 0 contributions.
-    // This case is only possible if min_raise_amount was also 0.
-    assert!(raise.total_raised > 0, EMinRaiseNotMet);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+
+    // Use FINAL eligible total, not naive total_raised
+    let final_total = raise.final_total_eligible;
+
+    assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
+    assert!(final_total > 0, EMinRaiseNotMet);
+    
+    // SECURITY: Final total cannot exceed total raised
+    assert!(final_total <= raise.total_raised, EInvalidSettlementState);
 
     raise.state = STATE_SUCCESSFUL;
 
@@ -305,13 +649,13 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
         ctx
     );
 
-    // Transfer the raised funds to the creator
-    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.total_raised), ctx);
+    // Transfer ONLY T* to the creator; remainder stays for refunds
+    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(final_total), ctx);
     transfer::public_transfer(raised_funds, raise.creator);
 
     event::emit(RaiseSuccessful {
         raise_id: object::id(raise),
-        total_raised: raise.total_raised,
+        total_raised: final_total, // interpret as final eligible
     });
 }
 
@@ -321,39 +665,82 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     ctx: &mut TxContext,
 ) {
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
-    
-    // Reentrancy guard
+    assert!(raise.settlement_done, ESettlementNotStarted);
+
     assert!(!raise.claiming, EReentrancy);
     raise.claiming = true;
-    
-    let contributor = ctx.sender();
-    let contributor_key = ContributorKey { contributor };
-    
-    // Check contributor exists
-    assert!(df::exists_(&raise.id, contributor_key), ENotAContributor);
-    
-    // Remove and get contribution amount
-    let contribution: u64 = df::remove(&mut raise.id, contributor_key);
 
-    // Calculate proportional share of tokens
+    let who = ctx.sender();
+    let key = ContributorKey { contributor: who };
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    // SECURITY: Remove and get contribution record to prevent double-claim
+    let rec: Contribution = df::remove(&mut raise.id, key);
+    
+    // SECURITY: Verify contribution integrity
+    assert!(rec.amount > 0, EInvalidStateForAction);
+    assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
+
+    // Eligibility: cap must be >= final_total
+    let final_total = raise.final_total_eligible;
+    if (!(rec.max_total >= final_total)) {
+        raise.claiming = false;
+        abort ENotEligibleForTokens
+    };
+
     let tokens_to_claim = math::mul_div_to_64(
-        contribution,
+        rec.amount,
         raise.tokens_for_sale_amount,
-        raise.total_raised
+        final_total
     );
 
     let tokens = coin::from_balance(raise.raise_token_vault.split(tokens_to_claim), ctx);
-    transfer::public_transfer(tokens, contributor);
+    transfer::public_transfer(tokens, who);
 
     event::emit(TokensClaimed {
         raise_id: object::id(raise),
-        contributor,
-        contribution_amount: contribution,
+        contributor: who,
+        contribution_amount: rec.amount,
         tokens_claimed: tokens_to_claim,
     });
-    
-    // Reset reentrancy guard
+
     raise.claiming = false;
+}
+
+/// Refund for contributors whose cap excluded them (after successful raise).
+public entry fun claim_refund_ineligible<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    ctx: &mut TxContext,
+) {
+    assert!(raise.settlement_done, ESettlementNotStarted);
+    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
+
+    let who = ctx.sender();
+    let key = ContributorKey { contributor: who };
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    let rec: Contribution = df::remove(&mut raise.id, key);
+    
+    // SECURITY: Verify contribution integrity
+    assert!(rec.amount > 0, EInvalidStateForAction);
+    assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
+
+    // Only for contributors who were excluded by their cap
+    if (rec.max_total >= raise.final_total_eligible) {
+        // They should claim tokens, not refund
+        // Reinsert their record to avoid bricking them
+        df::add(&mut raise.id, key, rec);
+        abort EInvalidStateForAction
+    };
+
+    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
+    transfer::public_transfer(refund_coin, who);
+
+    event::emit(RefundClaimed {
+        raise_id: object::id(raise),
+        contributor: who,
+        refund_amount: rec.amount,
+    });
 }
 
 /// If failed, contributors can call this to get a refund.
@@ -363,7 +750,18 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
     ctx: &mut TxContext,
 ) {
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
-    assert!(raise.total_raised < raise.min_raise_amount, EMinRaiseAlreadyMet);
+    
+    // For failed raises, check if settlement is done to determine if it failed
+    if (raise.settlement_done) {
+        // Settlement done, check if final total met minimum
+        if (raise.final_total_eligible >= raise.min_raise_amount) {
+            // Successful raise - use claim_refund_ineligible instead
+            abort EInvalidStateForAction
+        };
+    } else {
+        // No settlement done, check naive total
+        assert!(raise.total_raised < raise.min_raise_amount, EMinRaiseAlreadyMet);
+    };
 
     if (raise.state == STATE_FUNDING) {
         raise.state = STATE_FAILED;
@@ -381,15 +779,15 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
     // Check contributor exists
     assert!(df::exists_(&raise.id, contributor_key), ENotAContributor);
     
-    // Remove and get refund amount
-    let refund_amount: u64 = df::remove(&mut raise.id, contributor_key);
-    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_amount), ctx);
+    // Remove and get contribution record
+    let rec: Contribution = df::remove(&mut raise.id, contributor_key);
+    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
     transfer::public_transfer(refund_coin, contributor);
 
     event::emit(RefundClaimed {
         raise_id: object::id(raise),
         contributor,
-        refund_amount,
+        refund_amount: rec.amount,
     });
 }
 
@@ -443,6 +841,10 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
         dao_params,
         treasury_cap: option::some(treasury_cap),
         claiming: false,
+        thresholds: vector::empty<u64>(),
+        settlement_done: false,
+        settlement_in_progress: false,
+        final_total_eligible: 0,
     };
 
     event::emit(RaiseCreated {
@@ -466,12 +868,16 @@ public fun state<RT, SC>(r: &Raise<RT, SC>): u8 { r.state }
 public fun deadline<RT, SC>(r: &Raise<RT, SC>): u64 { r.deadline_ms }
 public fun description<RT, SC>(r: &Raise<RT, SC>): &String { &r.description }
 public fun contribution_of<RT, SC>(r: &Raise<RT, SC>, addr: address): u64 {
-    let contributor_key = ContributorKey { contributor: addr };
-    if (df::exists_(&r.id, contributor_key)) {
-        *df::borrow(&r.id, contributor_key)
+    let key = ContributorKey { contributor: addr };
+    if (df::exists_(&r.id, key)) {
+        let contribution: &Contribution = df::borrow(&r.id, key);
+        contribution.amount
     } else {
         0
     }
 }
 
+public fun final_total_eligible<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_total_eligible }
+public fun settlement_done<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_done }
+public fun settlement_in_progress<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_in_progress }
 public fun contributor_count<RT, SC>(r: &Raise<RT, SC>): u64 { r.contributor_count }
