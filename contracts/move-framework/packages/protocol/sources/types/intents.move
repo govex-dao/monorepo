@@ -2,6 +2,10 @@
 /// It provides the interface to create and execute intents which is used in the `account` module.
 /// The `locked` field tracks the owned objects used in an intent, to prevent state changes.
 /// e.g. withdraw coinA (value=10sui), coinA must not be split before intent is executed.
+///
+/// Fork modifications for DAO proposal platform hot-path losing intent cleanup:
+/// - Added per-intent lock tracking (locked_ids)
+/// - Added record_lock function for action-level lock recording
 
 module account_protocol::intents;
 
@@ -73,7 +77,9 @@ public struct Intent<Outcome> has store {
     // heterogenous array of actions to be executed in order
     actions: Bag,
     // Generic struct storing vote related data, depends on the config
-    outcome: Outcome
+    outcome: Outcome,
+    // NEW: track every object locked by actions in this intent
+    locked_ids: vector<ID>,
 }
 
 /// Hot potato wrapping actions from an intent that expired or has been executed
@@ -349,7 +355,9 @@ public(package) fun new_intent<Outcome, IW: drop>(
         expiration_time,
         role: new_role<IW>(managed_name),
         actions: bag::new(ctx),
-        outcome
+        outcome,
+        // NEW: initialize per-intent locks
+        locked_ids: vector[],
     }
 }
 
@@ -384,6 +392,14 @@ public(package) fun unlock(intents: &mut Intents, id: ID) {
     assert!(intents.locked.contains(&id), EObjectNotLocked);
     intents.locked.remove(&id);
 }
+
+// NEW: record a lock onto this intent (called when staging an action that locks an object)
+public(package) fun record_lock<Outcome>(intent: &mut Intent<Outcome>, id: ID) {
+    intent.locked_ids.push_back(id);
+}
+
+// Note: We keep locked_ids tracking for future use but don't expose accessors yet.
+// The deleters (like owned::delete_withdraw) handle unlocking in the current flow.
 
 /// Removes an intent being executed if the execution_time is reached
 /// Outcome must be validated in AccountMultisig to be destroyed

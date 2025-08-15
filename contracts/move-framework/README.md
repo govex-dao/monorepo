@@ -1,6 +1,8 @@
-# account.tech - Move Framework for Smart Accounts
+# account.tech - Move Framework for Smart Accounts (Futarchy Fork)
 
 ![account.tech logo](./assets/accountdottech_logo.png)
+
+> **Fork Notice**: This is a fork of [account.tech/move-framework](https://github.com/account-tech/move-framework) with modifications for DAO proposal platform hot-path losing intent cleanup.
 
 ## Project Overview
 
@@ -54,6 +56,7 @@ An intent is an on-chain operation that is executed in multiple steps:
 - a user creates an intent to do an action
 - the intent is resolved according to the Smart Account's `Config`
 - when the conditions are met, the intent can then be executed by anyone
+- **[Fork Addition]** intents can now be cancelled by config modules, automatically unlocking any locked objects
 
 Each Smart Account type has a specific `Config` and its associated intents have a specific `Outcome`.
 

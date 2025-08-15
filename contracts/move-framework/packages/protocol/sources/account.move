@@ -1,6 +1,9 @@
 /// This is the core module managing the account Account<Config>.
 /// It provides the apis to create, approve and execute intents with actions.
 /// 
+/// Fork modifications for DAO proposal platform hot-path losing intent cleanup:
+/// - Added cancel_intent function for config-authorized intent cancellation
+/// 
 /// The flow is as follows:
 ///   1. An intent is created by stacking actions into it. 
 ///      Actions are pushed from first to last, they must be executed then destroyed in the same order.
@@ -124,6 +127,18 @@ public fun delete_expired_intent<Config, Outcome: store + drop>(
 ): Expired {
     assert!(clock.timestamp_ms() >= account.intents.get<Outcome>(key).expiration_time(), EHasntExpired);
     account.intents.destroy_intent<Outcome>(key)
+}
+
+/// NEW: Config-only cancel. Returns Expired; caller drains via delete_* hooks, then destroys.
+public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
+    account: &mut Account<Config>,
+    key: String,
+    config_witness: CW,
+): Expired {
+    // Only the config module may cancel
+    account.assert_is_config_module(config_witness);
+    // Convert to Expired - deleters will handle unlocking during drain
+    account.intents.destroy_intent<Outcome>( key)
 }
 
 /// Helper function to transfer an object to the account.
