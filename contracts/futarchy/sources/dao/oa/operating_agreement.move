@@ -79,6 +79,12 @@ const EUnauthorizedCustodian: u64 = 12;
 const MAX_LINES_PER_AGREEMENT: u64 = 1000;
 const MAX_TRAVERSAL_LIMIT: u64 = 1000;
 
+// Line type constants
+const LINE_TYPE_PERMANENT: u8 = 0;
+const LINE_TYPE_SUNSET: u8 = 1;     // Auto-deactivates after expiry
+const LINE_TYPE_SUNRISE: u8 = 2;    // Activates after effective_from
+const LINE_TYPE_TEMPORARY: u8 = 3;  // Active only between effective_from and expires_at
+
 // === Structs ===
 
 /// Individual line in the operating agreement
@@ -92,6 +98,12 @@ public struct AgreementLine has store, drop {
     prev: Option<ID>,
     /// Next line in the linked list
     next: Option<ID>,
+    /// Type of time-based provision
+    line_type: u8,
+    /// Timestamp when line becomes inactive (milliseconds)
+    expires_at: Option<u64>,
+    /// Timestamp when line becomes active (milliseconds)
+    effective_from: Option<u64>,
 }
 
 /// The main operating agreement object - a shared object on chain
@@ -159,6 +171,22 @@ public struct AgreementRead has copy, drop {
     timestamp_ms: u64,
 }
 
+/// Enhanced event with time-based status
+public struct AgreementReadWithStatus has copy, drop {
+    dao_id: ID,
+    line_ids: vector<ID>,
+    texts: vector<String>,
+    difficulties: vector<u64>,
+    immutables: vector<bool>,
+    active_statuses: vector<bool>,      // Whether each line is currently active
+    line_types: vector<u8>,             // Type of each line
+    expires_at: vector<Option<u64>>,    // Expiry times
+    effective_from: vector<Option<u64>>, // Effective times
+    allow_insert: bool,
+    allow_remove: bool,
+    timestamp_ms: u64,
+}
+
 /// Emitted when a line is updated
 public struct LineUpdated has copy, drop {
     dao_id: ID,
@@ -175,6 +203,9 @@ public struct LineInserted has copy, drop {
     difficulty: u64,
     position_after: Option<ID>,
     timestamp_ms: u64,
+    line_type: u8,
+    expires_at: Option<u64>,
+    effective_from: Option<u64>,
 }
 
 /// Emitted when a line is removed
@@ -250,6 +281,9 @@ public fun new(
             immutable: false,  // Lines start as mutable
             prev: prev_id,
             next: option::none(),
+            line_type: LINE_TYPE_PERMANENT,  // Default to permanent
+            expires_at: option::none(),
+            effective_from: option::none(),
         };
         
         // Store line as dynamic field on the agreement
@@ -517,6 +551,9 @@ fun insert_line_after_internal(
         immutable: false,  // New lines start as mutable
         prev: option::some(prev_line_id),
         next: prev_line_next,
+        line_type: LINE_TYPE_PERMANENT,  // Default to permanent
+        expires_at: option::none(),
+        effective_from: option::none(),
     };
     
     // Update the next line's prev pointer if it exists
@@ -546,6 +583,9 @@ fun insert_line_after_internal(
         difficulty: new_difficulty,
         position_after: option::some(prev_line_id),
         timestamp_ms: clock::timestamp_ms(clock),
+        line_type: LINE_TYPE_PERMANENT,
+        expires_at: option::none(),
+        effective_from: option::none(),
     });
     
     new_line_id
@@ -572,6 +612,9 @@ fun insert_line_at_beginning_internal(
         immutable: false,  // New lines start as mutable
         prev: option::none(),
         next: agreement.head,
+        line_type: LINE_TYPE_PERMANENT,  // Default to permanent
+        expires_at: option::none(),
+        effective_from: option::none(),
     };
     
     // Update the current head's prev pointer if it exists
@@ -596,6 +639,9 @@ fun insert_line_at_beginning_internal(
         difficulty: new_difficulty,
         position_after: option::none(),
         timestamp_ms: clock::timestamp_ms(clock),
+        line_type: LINE_TYPE_PERMANENT,
+        expires_at: option::none(),
+        effective_from: option::none(),
     });
     
     new_line_id
@@ -637,7 +683,16 @@ fun remove_line_internal(
         agreement.tail = line_to_remove.prev;
     };
     
-    let AgreementLine { text: _, difficulty: _, immutable: _, prev: _, next: _ } = line_to_remove;
+    let AgreementLine { 
+        text: _, 
+        difficulty: _, 
+        immutable: _, 
+        prev: _, 
+        next: _,
+        line_type: _,
+        expires_at: _,
+        effective_from: _,
+    } = line_to_remove;
     agreement.line_count = agreement.line_count - 1;
     
     event::emit(LineRemoved {
@@ -858,3 +913,97 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
         timestamp_ms: clock::timestamp_ms(clock),
     });
 }
+// === Time-Based Line Functions ===
+
+/// Check if a line is currently active based on time
+/// NOTE: Immutability is separate from time-based activity. An immutable line
+/// can still have a sunset date (becomes inactive but remains unchangeable)
+public fun is_line_active(line: &AgreementLine, current_time_ms: u64): bool {
+    // Check effective_from
+    if (line.effective_from.is_some()) {
+        if (current_time_ms < *line.effective_from.borrow()) {
+            return false
+        }
+    };
+    
+    // Check expires_at
+    if (line.expires_at.is_some()) {
+        if (current_time_ms >= *line.expires_at.borrow()) {
+            return false
+        }
+    };
+    
+    true
+}
+
+/// Insert a line with sunset provision (auto-deactivates after expiry)
+/// The line can optionally be immutable - it will still sunset but cannot be changed before then
+public fun insert_sunset_line_after(
+    agreement: &mut OperatingAgreement,
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+    expires_at_ms: u64,
+    immutable: bool,  // Can be immutable AND have sunset
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    assert!(agreement.allow_insert, EInsertNotAllowed);
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
+    assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+    
+    let line_uid = object::new(ctx);
+    let new_line_id = object::uid_to_inner(&line_uid);
+    
+    let prev_line_next;
+    {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line_next = prev_line.next;
+    };
+    
+    let new_line = AgreementLine {
+        text,
+        difficulty,
+        immutable,  // Can be immutable with sunset
+        prev: option::some(prev_line_id),
+        next: prev_line_next,
+        line_type: LINE_TYPE_SUNSET,
+        expires_at: option::some(expires_at_ms),
+        effective_from: option::none(),
+    };
+    
+    // Update the next line's prev pointer if it exists
+    if (prev_line_next.is_some()) {
+        let next_line_id = *prev_line_next.borrow();
+        let next_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: next_line_id });
+        next_line.prev = option::some(new_line_id);
+    };
+    
+    // Update the previous line's next pointer
+    let prev_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: prev_line_id });
+    prev_line.next = option::some(new_line_id);
+    
+    // If we inserted after the tail, update tail
+    if (agreement.tail.is_some() && *agreement.tail.borrow() == prev_line_id) {
+        agreement.tail = option::some(new_line_id);
+    };
+    
+    df::add(&mut agreement.id, LineKey { id: new_line_id }, new_line);
+    object::delete(line_uid);
+    agreement.line_count = agreement.line_count + 1;
+    
+    event::emit(LineInserted {
+        dao_id: agreement.dao_id,
+        line_id: new_line_id,
+        text,
+        difficulty,
+        position_after: option::some(prev_line_id),
+        timestamp_ms: clock::timestamp_ms(clock),
+        line_type: LINE_TYPE_SUNSET,
+        expires_at: option::some(expires_at_ms),
+        effective_from: option::none(),
+    });
+    
+    new_line_id
+}
+
