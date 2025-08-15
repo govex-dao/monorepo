@@ -1,0 +1,16 @@
+[package]
+name = "AccountActions"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = [ "Thouny (thouny@tuta.io)" ]
+
+[dependencies]
+Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet" }
+Kiosk = { git = "https://github.com/thounyy/apps.git", subdir = "kiosk", rev = "testnet" }
+AccountProtocol = { local = "../protocol" }
+AccountExtensions = { local = "../extensions" }
+
+[addresses]
+account_actions = "0xf477dbfad6ab1de1fdcb6042c0afeda2aa5bf12eb7ef42d280059fc8d6c36c94"
+account_protocol = "0x10c87c29ea5d5674458652ababa246742a763f9deafed11608b7f0baea296484"
+account_extensions = "0x87bee60d3ea6dc5b42e1074134373af27733fb3c5ebc3ac8e013901426d85d53"

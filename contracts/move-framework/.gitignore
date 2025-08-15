@@ -1,0 +1,7 @@
+build
+.env
+node_modules
+bun.lockb
+.idea
+.trace
+.coverage_map.mvcov
