@@ -996,6 +996,19 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     executable
 }
 
+/// Helper function for canceling losing intents during finalization
+/// This wraps the cancel_intent call with the proper witness
+public(package) fun cancel_losing_intent(
+    account: &mut Account<FutarchyConfig>,
+    intent_key: String
+): account_protocol::intents::Expired {
+    // Use cancel_intent with the GovernanceWitness from this module
+    account::cancel_intent<FutarchyConfig, FutarchyOutcome, _>(
+        account,
+        intent_key,
+        GovernanceWitness {}
+    )
+}
 
 // === Config Action Execution Functions ===
 // NOTE: These functions have been moved to the action modules themselves

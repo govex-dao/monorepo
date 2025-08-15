@@ -7,6 +7,7 @@ use futarchy::market_state;
 use std::ascii::String as AsciiString;
 use std::string::String;
 use std::type_name;
+use std::option;
 use sui::balance::{Balance};
 use sui::clock::Clock;
 use sui::coin::{Coin};
@@ -82,7 +83,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     treasury_address: address,
     /// Intent keys for each outcome - when outcome i wins, create and execute intent with this key
     /// Intents are NOT created in Account until the outcome wins
-    intent_keys: vector<Option<String>>,
+    intent_keys: vector<option::Option<String>>,
 }
 
 // === Events ===
@@ -729,6 +730,11 @@ public fun outcome_count<AssetType, StableType>(proposal: &Proposal<AssetType, S
     proposal.outcome_count
 }
 
+/// Alias for outcome_count for better readability
+public fun get_num_outcomes<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u64 {
+    proposal.outcome_count
+}
+
 public fun proposer<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): address {
     proposal.proposer
 }
@@ -1031,8 +1037,30 @@ public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<Asset
 public fun get_intent_key_for_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     outcome_index: u64
-): &Option<String> {
+): &option::Option<String> {
     vector::borrow(&proposal.intent_keys, outcome_index)
+}
+
+/// Clear the intent key for a specific outcome (used after cancellation)
+public(package) fun clear_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64
+) {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    let intent_key_ref = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    *intent_key_ref = option::none();
+}
+
+/// Take (move out) the intent key for a specific outcome and clear the slot.
+public(package) fun take_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64
+): option::Option<String> {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    let slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    let old_value = *slot;
+    *slot = option::none();
+    old_value
 }
 
 /// Set the intent key for a specific outcome
@@ -1048,16 +1076,6 @@ public fun set_intent_key_for_outcome<AssetType, StableType>(
     *key_slot = option::some(intent_key);
 }
 
-/// Clear the intent key for a specific outcome (if needed)
-public fun clear_intent_key_for_outcome<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    outcome_index: u64
-) {
-    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
-    
-    let key_slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
-    *key_slot = option::none();
-}
 
 /// Check if an outcome has an intent key
 public fun has_intent_key<AssetType, StableType>(

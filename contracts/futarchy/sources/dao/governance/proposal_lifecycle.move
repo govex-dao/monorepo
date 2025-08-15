@@ -8,7 +8,7 @@ use std::{
     vector,
 };
 use sui::{
-    clock::Clock,
+    clock::{Self, Clock},
     coin::{Self, Coin},
     balance::{Self, Balance},
     event,
@@ -32,6 +32,10 @@ use futarchy::{
 use futarchy::{
     futarchy_vault,
     intent_janitor,
+    gc_janitor,
+    execute,
+    strategy,
+    events,
 };
 
 // === Errors ===
@@ -225,11 +229,30 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
     
-    // Losing intents remain in storage but won't be executed
-    // Winning intents are automatically cleaned up after execution by confirm_execution_cleanup
-    // TODO: Consider creating intents only for winning outcomes to avoid any storage bloat
+    // NEW: Cancel losing outcome intents using hot-path cleanup
+    // Iterate through all outcomes and cancel the losers
+    let num_outcomes = proposal::get_num_outcomes(proposal);
+    let mut i = 0u64;
+    while (i < num_outcomes) {
+        if (i != winning_outcome) {
+            // Take & clear key atomically; if Some, cancel + clean
+            let mut key_opt = proposal::take_intent_key_for_outcome(proposal, i);
+            if (option::is_some(&key_opt)) {
+                let intent_key = option::extract(&mut key_opt);
+                let mut expired = futarchy_config::cancel_losing_intent(account, intent_key);
+                gc_janitor::drain_all_public(account, &mut expired);
+                account_protocol::intents::destroy_empty_expired(expired);
+                events::emit_cleaned(
+                    b"losing_outcome".to_string(),
+                    b"losing_outcome".to_string(),
+                    clock::timestamp_ms(clock)
+                );
+            };
+        };
+        i = i + 1;
+    };
     
-    // Cleanup all expired intents during finalization
+    // Also cleanup any other expired intents during finalization
     intent_janitor::cleanup_all_expired_intents(account, clock);
     
     // --- BEGIN REGISTRY PRUNING ---
@@ -282,10 +305,15 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
         ctx
     );
     
-    // Execute all actions using the action dispatcher
-    action_dispatcher::execute_all_actions(
+    // NEW: Use the centralized execute::run_all with strategy gates
+    // For approved proposals, both futarchy (ok_a) and any council requirements (ok_b) are satisfied
+    // execute::run_all handles confirmation internally - consumes executable
+    execute::run_all(
         executable,
         account,
+        strategy::and(),  // Both conditions must be true
+        true,  // Futarchy approved (market resolved in favor)
+        true,  // Council approved (or not required)
         intent_witness,
         clock,
         ctx
@@ -335,10 +363,15 @@ public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW
         ctx
     );
     
-    // Execute all actions using the typed dispatcher
-    action_dispatcher::execute_typed_actions<AssetType, StableType, IW, FutarchyOutcome>(
+    // NEW: Use the centralized execute::run_typed for typed actions
+    // The typed dispatcher is called within execute::run_typed
+    // execute::run_typed handles confirmation internally - consumes executable
+    execute::run_typed<AssetType, StableType, IW>(
         executable,
         account,
+        strategy::and(),  // Both conditions must be true
+        true,  // Futarchy approved (market resolved in favor)
+        true,  // Council approved (or not required)
         intent_witness,
         clock,
         ctx

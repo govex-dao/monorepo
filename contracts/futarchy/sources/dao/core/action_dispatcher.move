@@ -47,7 +47,7 @@ const ECannotRemoveOACustodian: u64 = 10;
 
 /// Main dispatcher function that executes all actions in an executable
 /// This function inspects the action types and routes them to appropriate handlers
-/// Note: This function consumes the executable (hot potato pattern)
+/// Note: This function returns the executable for the caller to confirm
 /// Note: Witness requires copy because it's used multiple times in the loop
 public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
     executable: Executable<Outcome>,
@@ -55,7 +55,7 @@ public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): Executable<Outcome> {
     let mut executable = executable;
     
     // Process all actions in the executable
@@ -97,8 +97,9 @@ public fun execute_all_actions<IW: copy + drop, Outcome: store + drop + copy>(
         break
     };
     
-    // Confirm execution and cleanup single-shot intents
-    account::confirm_execution_cleanup(account, executable);
+    // Do NOT confirm here; the centralized runner (execute::run_*) owns confirmation.
+    // Return the executable for the caller to handle
+    executable
 }
 
 // === Config Action Handlers ===
@@ -491,7 +492,7 @@ public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): Executable<Outcome> {
     // Just use the regular typed actions since we can't automate pool operations
     // The pool parameter is kept for API compatibility
     execute_typed_actions<AssetType, StableType, IW, Outcome>(
@@ -500,7 +501,7 @@ public fun execute_typed_actions_with_pool<AssetType: drop, StableType: drop, IW
         witness,
         clock,
         ctx
-    );
+    )
 }
 
 /// Execute actions with known coin types (without pool)
@@ -512,7 +513,7 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): Executable<Outcome> {
     let mut executable = executable;
     
     loop {
@@ -549,7 +550,9 @@ public fun execute_typed_actions<AssetType: drop, StableType: drop, IW: copy + d
         break
     };
     
-    account::confirm_execution_cleanup(account, executable);
+    // Do NOT confirm here; the centralized runner (execute::run_*) owns confirmation.
+    // Return the executable for the caller to handle
+    executable
 }
 
 // Note: try_execute_typed_liquidity_action_with_pool has been removed
