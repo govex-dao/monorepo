@@ -30,6 +30,7 @@ use futarchy::{
     proposal::{Self, Proposal},
     market_state::{Self, MarketState},
     dao_config::{Self, DaoConfig, TradingParams, TwapConfig, GovernanceConfig, MetadataConfig},
+    events,
 };
 
 // === Constants ===
@@ -190,7 +191,7 @@ public fun new_config_params(
     }
 }
 
-/// Creates configuration parameters from individual values (legacy support)
+/// Creates configuration parameters from individual values
 public fun new_config_params_from_values(
     min_asset_amount: u64,
     min_stable_amount: u64,
@@ -855,8 +856,7 @@ public struct ApprovedProposal has store, drop, copy {
     outcome_index: u64,
 }
 
-/// Legacy outcome type - kept for backwards compatibility
-/// New intents should use ApprovedProposal or their own outcome types
+/// Primary outcome type for futarchy intents
 public struct FutarchyOutcome has store, drop, copy {
     // Intent key is the primary identifier - links to the intent in account storage
     intent_key: String,
@@ -996,18 +996,77 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     executable
 }
 
-/// Helper function for canceling losing intents during finalization
-/// This wraps the cancel_intent call with the proper witness
-public(package) fun cancel_losing_intent(
+/// Helper function for canceling losing intents during finalization.
+/// Requires a CancelWitness minted from the owning Proposal; prevents
+/// cross-proposal cancellation. Emits a keyed-hash cancel event.
+public(package) fun cancel_losing_intent_scoped(
     account: &mut Account<FutarchyConfig>,
-    intent_key: String
+    witness: proposal::CancelWitness,
+    clock: &Clock
 ): account_protocol::intents::Expired {
-    // Use cancel_intent with the GovernanceWitness from this module
-    account::cancel_intent<FutarchyConfig, FutarchyOutcome, _>(
+    let proposal = proposal::cancel_witness_proposal(&witness);
+    let outcome_index = proposal::cancel_witness_outcome_index(&witness);
+    let key = proposal::cancel_witness_key(&witness);
+    
+    // Hash the key for privacy
+    let key_bytes = std::bcs::to_bytes(&key);
+    let key_hash = sui::hash::keccak256(&key_bytes);
+    
+    // Cancel the intent
+    let expired = account::cancel_intent<FutarchyConfig, FutarchyOutcome, _>(
         account,
-        intent_key,
+        key,
+        version::current(),
         GovernanceWitness {}
-    )
+    );
+    
+    // Emit the cancellation event
+    events::emit_cancelled(
+        proposal,
+        outcome_index,
+        key_hash,
+        1, // CANCEL_LOSING_OUTCOME constant value
+        clock.timestamp_ms()
+    );
+    
+    expired
+}
+
+#[test_only]
+/// Test version that uses the correct version witness for test accounts
+public(package) fun cancel_losing_intent_scoped_test(
+    account: &mut Account<FutarchyConfig>,
+    witness: proposal::CancelWitness,
+    clock: &Clock
+): account_protocol::intents::Expired {
+    use account_protocol::version_witness;
+    
+    let proposal = proposal::cancel_witness_proposal(&witness);
+    let outcome_index = proposal::cancel_witness_outcome_index(&witness);
+    let key = proposal::cancel_witness_key(&witness);
+    
+    // Hash the key for privacy
+    let key_bytes = std::bcs::to_bytes(&key);
+    let key_hash = sui::hash::keccak256(&key_bytes);
+    
+    // Cancel the intent using test version witness
+    let expired = account::cancel_intent<FutarchyConfig, FutarchyOutcome, _>(
+        account,
+        key,
+        version_witness::new_for_testing(@account_protocol),
+        GovernanceWitness {}
+    );
+    
+    // Emit the cancellation event
+    events::emit_cancelled(
+        proposal,
+        outcome_index,
+        key_hash,
+        1, // CANCEL_LOSING_OUTCOME constant value
+        clock.timestamp_ms()
+    );
+    
+    expired
 }
 
 // === Config Action Execution Functions ===

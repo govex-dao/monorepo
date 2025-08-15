@@ -8,6 +8,7 @@ use std::ascii::String as AsciiString;
 use std::string::String;
 use std::type_name;
 use std::option;
+use std::vector;
 use sui::balance::{Balance};
 use sui::clock::Clock;
 use sui::coin::{Coin};
@@ -84,6 +85,28 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     /// Intent keys for each outcome - when outcome i wins, create and execute intent with this key
     /// Intents are NOT created in Account until the outcome wins
     intent_keys: vector<option::Option<String>>,
+}
+
+/// A scoped witness proving that a particular (proposal, outcome) owned the intent key.
+/// Only mintable by the module that has &mut Proposal and consumes the slot.
+/// This prevents cross-proposal cancellation attacks.
+public struct CancelWitness has drop {
+    proposal: address,
+    outcome_index: u64,
+    key: String,
+}
+
+// Getter functions for CancelWitness (for use in cancel_losing_intent_scoped)
+public fun cancel_witness_proposal(witness: &CancelWitness): address {
+    witness.proposal
+}
+
+public fun cancel_witness_outcome_index(witness: &CancelWitness): u64 {
+    witness.outcome_index
+}
+
+public fun cancel_witness_key(witness: &CancelWitness): String {
+    witness.key
 }
 
 // === Events ===
@@ -1063,6 +1086,24 @@ public(package) fun take_intent_key_for_outcome<AssetType, StableType>(
     old_value
 }
 
+/// Mint a scoped cancel witness by taking (moving) the key out of the slot.
+/// Returns None if no key was set for that outcome.
+/// This witness can only be created once per (proposal, outcome) pair.
+public(package) fun make_cancel_witness<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64
+): option::Option<CancelWitness> {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    let addr = object::uid_to_address(&proposal.id);
+    let mut key_opt = take_intent_key_for_outcome(proposal, outcome_index);
+    if (option::is_some(&key_opt)) {
+        let key = option::extract(&mut key_opt);
+        option::some(CancelWitness { proposal: addr, outcome_index, key })
+    } else {
+        option::none<CancelWitness>()
+    }
+}
+
 /// Set the intent key for a specific outcome
 public fun set_intent_key_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
@@ -1123,6 +1164,73 @@ public(package) fun get_details_mut<AssetType, StableType>(proposal: &mut Propos
 // === Test Functions ===
 
 #[test_only]
+/// Create a minimal proposal for testing
+public fun new_for_testing<AssetType, StableType>(
+    dao_id: address,
+    proposer: address,
+    liquidity_provider: Option<address>,
+    title: String,
+    metadata: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+    outcome_creators: vector<address>,
+    outcome_count: u8,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    min_asset_liquidity: u64,
+    min_stable_liquidity: u64,
+    twap_start_delay: u64,
+    twap_initial_observation: u128,
+    twap_step_max: u64,
+    twap_threshold: u64,
+    amm_total_fee_bps: u64,
+    winning_outcome: Option<u64>,
+    fee_escrow: Balance<StableType>,
+    treasury_address: address,
+    intent_keys: vector<option::Option<String>>,
+    ctx: &mut TxContext
+): Proposal<AssetType, StableType> {
+    Proposal {
+        id: object::new(ctx),
+        dao_id: object::id_from_address(dao_id),
+        queued_proposal_id: object::id_from_address(@0x0),
+        created_at: 0,
+        market_initialized_at: option::none(),
+        state: STATE_PREMARKET,
+        outcome_count: outcome_count as u64,
+        proposer,
+        liquidity_provider,
+        supply_ids: option::none(),
+        amm_pools: option::none(),
+        escrow_id: option::none(),
+        market_state_id: option::none(),
+        title,
+        details: outcome_details,
+        metadata,
+        outcome_messages,
+        outcome_creators,
+        asset_amounts: vector::empty(),
+        stable_amounts: vector::empty(),
+        twap_prices: vector::empty(),
+        last_twap_update: 0,
+        review_period_ms,
+        trading_period_ms,
+        min_asset_liquidity,
+        min_stable_liquidity,
+        twap_start_delay,
+        uses_dao_liquidity: false,
+        twap_initial_observation,
+        twap_step_max,
+        twap_threshold,
+        amm_total_fee_bps,
+        winning_outcome,
+        fee_escrow,
+        treasury_address,
+        intent_keys,
+    }
+}
+
+#[test_only]
 /// Gets a mutable reference to the token escrow of the proposal
 public fun test_get_coin_escrow<AssetType, StableType>(
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
@@ -1144,6 +1252,11 @@ public fun test_get_market_state<AssetType, StableType>(
 /// Get proposal ID
 public fun id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
     object::id(proposal)
+}
+
+/// Get proposal address (for testing)
+public fun id_address<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): address {
+    object::uid_to_address(&proposal.id)
 }
 
 /// Get market ID (already defined earlier in the file)

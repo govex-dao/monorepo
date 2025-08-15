@@ -2,11 +2,11 @@
 name = "AccountActions"
 edition = "2024"
 license = "Apache-2.0"
-authors = [ "Thouny (thouny@tuta.io)" ]
+authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
 AccountProtocol = { local = "../protocol" }
-AccountExtensions = { local = "../extensions" }
+Kiosk = { local = "../../deps/kiosk" }
 
 [addresses]
 account_actions = "0xf477dbfad6ab1de1fdcb6042c0afeda2aa5bf12eb7ef42d280059fc8d6c36c94"

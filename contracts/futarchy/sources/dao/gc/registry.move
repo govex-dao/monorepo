@@ -1,6 +1,15 @@
 module futarchy::gc_registry;
 
-use account_protocol::intents::Expired;
+use account_protocol::{
+    intents::Expired,
+    account::Account,
+    owned,
+};
+use account_actions::{
+    package_upgrade,
+    vault,
+};
+use futarchy::futarchy_config::FutarchyConfig;
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
@@ -126,15 +135,34 @@ public fun delete_cancel_dissolution(expired: &mut Expired) {
 }
 
 // === Package Upgrade Actions ===
-// Note: Some actions from account_protocol may need special handling
-// These are placeholders that will be filled in Phase 3
 public fun delete_upgrade_commit(expired: &mut Expired) {
-    // Will be wired to account_protocol upgrade actions
-    let _ = expired;
+    // Handle upgrade commit actions from account_actions
+    // These don't need Account parameter
+    if (expired.actions().length() > 0) {
+        account_actions::package_upgrade::delete_upgrade(expired);
+    }
 }
 
-public fun delete_owned_withdraw(expired: &mut Expired) {
-    // Will be wired to account_protocol owned actions
-    // Requires Account context, so will need special handling
-    let _ = expired;
+// === Owned Object Actions ===
+public fun delete_owned_withdraw(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
+    // Handle owned withdrawals - this unlocks the object
+    // We need to check if there's actually a withdraw action before calling
+    // For now we'll handle this carefully to avoid errors
+    if (expired.actions().length() > 0) {
+        // Try to delete owned withdraw if it exists
+        // The account_protocol::owned module handles the unlocking
+        account_protocol::owned::delete_withdraw(expired, account);
+    }
+}
+
+// === Vault Spending Actions ===
+public fun delete_vault_spend(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
+    // Handle vault spending which might involve locked coins
+    // Check with vault module if this needs special handling
+    let _ = account;
+    if (expired.actions().length() > 0) {
+        // account_actions::vault::delete_spend(expired);
+        // For now, just drain without special handling
+        let _ = expired;
+    }
 }

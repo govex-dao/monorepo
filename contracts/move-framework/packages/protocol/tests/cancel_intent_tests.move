@@ -75,6 +75,7 @@ fun test_cancel_intent_with_withdraw() {
     // Cancel the intent using config witness
     let mut expired = account.cancel_intent<Config, Outcome, Witness>(
         b"withdraw_test".to_string(),
+        version::current(),
         Witness {}
     );
     
@@ -140,6 +141,7 @@ fun test_cancel_intent_multiple_withdraws() {
     // Cancel the intent
     let mut expired = account.cancel_intent<Config, Outcome, Witness>(
         b"multi_withdraw".to_string(),
+        version::current(),
         Witness {}
     );
     
@@ -188,6 +190,7 @@ fun test_cancel_intent_wrong_witness() {
     // This should fail - using wrong witness (not config witness)
     let expired = account.cancel_intent<Config, Outcome, account::Witness>(
         b"test".to_string(),
+        version::current(),
         account::not_config_witness()
     );
     
@@ -206,6 +209,7 @@ fun test_cancel_nonexistent_intent() {
     // Try to cancel non-existent intent
     let expired = account.cancel_intent<Config, Outcome, Witness>(
         b"does_not_exist".to_string(),
+        version::current(),
         Witness {}
     );
     
@@ -249,6 +253,7 @@ fun test_cancel_intent_no_locks() {
     // Cancel the intent
     let expired = account.cancel_intent<Config, Outcome, Witness>(
         b"no_locks".to_string(),
+        version::current(),
         Witness {}
     );
     

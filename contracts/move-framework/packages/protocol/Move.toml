@@ -2,7 +2,7 @@
 name = "AccountProtocol"
 edition = "2024"
 license = "Apache-2.0"
-authors = [ "Thouny (thouny@tuta.io)" ]
+authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
 AccountExtensions = { local = "../extensions" }

@@ -4,13 +4,12 @@ use sui::{clock::Clock, tx_context::TxContext};
 use account_protocol::{
     account::{Self, Account},
     executable::Executable,
-    intent_interface,
+    intents,
 };
-use fun intent_interface::process_intent as Account.process_intent;
 
 use futarchy::{
-    version,
     strategy,
+    gc_janitor,
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     action_dispatcher,
 };
@@ -42,8 +41,23 @@ public fun run_all<IW: copy + drop>(
         ctx
     );
     
-    // Confirm execution (single place for confirmation)
+    // Get the key before consuming the executable
+    let key = executable.intent().key();
+    
+    // Confirm execution - re-adds the intent
     account::confirm_execution(account, executable);
+    
+    // Check if this was a one-shot intent (empty execution_times after popping one)
+    if (account::intents(account).contains(key)) {
+        let intent = account::intents(account).get<FutarchyOutcome>(key);
+        if (intent.execution_times().is_empty()) {
+            // One-shot intent - destroy it and clean up
+            let mut expired = account::destroy_empty_intent<FutarchyConfig, FutarchyOutcome>(account, key);
+            gc_janitor::drain_all_public(account, &mut expired);
+            intents::destroy_empty_expired(expired);
+        }
+        // else: recurring intent, leave it in storage
+    }
 }
 
 /// Typed runner calling typed dispatcher.
@@ -68,8 +82,23 @@ public fun run_typed<AssetType: drop, StableType: drop, IW: copy + drop>(
         ctx
     );
     
-    // Confirm execution (single place for confirmation)
+    // Get the key before consuming the executable
+    let key = executable.intent().key();
+    
+    // Confirm execution - re-adds the intent
     account::confirm_execution(account, executable);
+    
+    // Check if this was a one-shot intent (empty execution_times after popping one)
+    if (account::intents(account).contains(key)) {
+        let intent = account::intents(account).get<FutarchyOutcome>(key);
+        if (intent.execution_times().is_empty()) {
+            // One-shot intent - destroy it and clean up
+            let mut expired = account::destroy_empty_intent<FutarchyConfig, FutarchyOutcome>(account, key);
+            gc_janitor::drain_all_public(account, &mut expired);
+            intents::destroy_empty_expired(expired);
+        }
+        // else: recurring intent, leave it in storage
+    }
 }
 
 /// Simple execution without strategy gates (for backwards compatibility)

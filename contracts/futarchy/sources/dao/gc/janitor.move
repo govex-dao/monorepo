@@ -10,6 +10,7 @@ use sui::clock::Clock;
 use futarchy::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 
 /// Drain an `Expired` bag by invoking all futarchy delete hooks, then destroy.
+/// Internal version without Account parameter for non-owned actions
 fun drain_all(expired: &mut Expired) {
     // Call every delete_* you registered. Add more as you introduce actions.
     
@@ -51,9 +52,11 @@ fun drain_all(expired: &mut Expired) {
     futarchy::gc_registry::delete_finalize_dissolution(expired);
     futarchy::gc_registry::delete_cancel_dissolution(expired);
     
-    // Package upgrade and owned actions (placeholders)
+    // Package upgrade actions
     futarchy::gc_registry::delete_upgrade_commit(expired);
-    futarchy::gc_registry::delete_owned_withdraw(expired);
+    
+    // Note: owned::delete_withdraw is handled separately in drain_all_with_account
+    // since it requires the Account parameter to unlock objects
 }
 
 /// Delete a specific expired intent by key (one-shot flow).
@@ -65,7 +68,7 @@ public fun delete_expired_by_key(
     let mut expired = account::delete_expired_intent<FutarchyConfig, FutarchyOutcome>(
         account, key, clock
     );
-    drain_all(&mut expired);
+    drain_all_with_account(account, &mut expired);
     intents::destroy_empty_expired(expired);
 }
 
@@ -89,13 +92,23 @@ public fun delete_expired_by_key(
 //     }
 // }
 
+/// Drain with Account context for actions that need unlocking
+fun drain_all_with_account(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
+    // First drain all non-owned actions
+    drain_all(expired);
+    
+    // Then handle owned withdrawals which need Account for unlocking
+    // We need to check if there are owned withdrawals in the expired bag
+    // Since we can't inspect the bag directly, we try to delete and handle any errors
+    futarchy::gc_registry::delete_owned_withdraw(account, expired);
+    
+    // Handle vault spending actions that might need Account
+    futarchy::gc_registry::delete_vault_spend(account, expired);
+}
+
 /// Public export of drain_all for use in other modules
 /// This works on any Expired object, not just time-expired ones
-/// Accepts &mut Account in case any delete hooks need it
+/// Accepts &mut Account for actions that need unlocking
 public fun drain_all_public(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
-    // Some delete functions (like owned::delete_withdraw) need the account
-    // For now, we just pass it through in case it's needed
-    // The individual delete functions will use it if required
-    let _ = account;
-    drain_all(expired);
+    drain_all_with_account(account, expired);
 }

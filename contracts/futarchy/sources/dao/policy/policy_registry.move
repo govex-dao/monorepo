@@ -1,5 +1,7 @@
 /// Manages on-chain policies that require external account approval for critical actions.
 /// This registry links a protected resource (identified by a key) to a policy-enforcing Account.
+/// 
+/// Uses standardized resource keys from futarchy::resources for consistency.
 module futarchy::policy_registry;
 
 use std::string::{Self, String};
@@ -9,6 +11,7 @@ use sui::event;
 use sui::tx_context::TxContext;
 use account_protocol::account::{Self, Account};
 use account_protocol::version_witness::VersionWitness;
+use futarchy::resources;
 
 // === Errors ===
 const EPolicyNotFound: u64 = 1;
@@ -30,8 +33,12 @@ public struct Policy has store, copy, drop {
     policy_account_id: ID,
     /// A unique prefix for intents sent to this policy account, to prevent key collisions.
     intent_key_prefix: String,
-    /// Future-proof gating mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=AND, 3=OR (default to DAO_ONLY for now)
+    /// Gating mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=AND (both required), 3=OR (either)
     gating_mode: u8,
+    /// Optional time delay in milliseconds (0 = no delay)
+    time_delay_ms: u64,
+    /// Optional approval threshold (e.g., 3 for "3 of 5")
+    approval_threshold: u64,
 }
 
 // === Events ===
@@ -61,6 +68,7 @@ public fun initialize<Config>(account: &mut Account<Config>, version_witness: Ve
 }
 
 /// Sets or updates a policy for a specific resource.
+/// Resource keys should be generated using futarchy::resources functions.
 public fun set_policy(
     registry: &mut PolicyRegistry,
     dao_id: ID,
@@ -68,8 +76,14 @@ public fun set_policy(
     policy_account_id: ID,
     intent_key_prefix: String,
 ) {
-    // Default gating_mode to 0 (DAO_ONLY) for now
-    let policy = Policy { policy_account_id, intent_key_prefix, gating_mode: 0 };
+    // Default gating_mode to 0 (DAO_ONLY) with no delay or threshold
+    let policy = Policy { 
+        policy_account_id, 
+        intent_key_prefix, 
+        gating_mode: 0,
+        time_delay_ms: 0,
+        approval_threshold: 0
+    };
     
     // Check if policy exists and update or insert accordingly
     if (table::contains(&registry.policies, resource_key)) {
@@ -88,11 +102,14 @@ public fun set_policy(
 public fun remove_policy(registry: &mut PolicyRegistry, dao_id: ID, resource_key: String) {
     assert!(table::contains(&registry.policies, resource_key), EPolicyNotFound);
     
-    // CRITICAL: DAO can NEVER remove OA:Custodian
-    // Only the security council can give up control through the coexec path
-    // This ensures the DAO always has an operating agreement
-    if (resource_key == b"OA:Custodian".to_string()) {
-        abort ECannotRemoveOACustodian
+    // CRITICAL: DAO can NEVER remove certain critical policies
+    // Check if this is a critical resource that shouldn't be removed
+    if (resources::is_critical_resource(&resource_key)) {
+        // For now, we specifically protect the OA:Custodian for backward compatibility
+        if (resource_key == b"OA:Custodian".to_string() || 
+            resource_key == resources::operations_agreement()) {
+            abort ECannotRemoveOACustodian
+        }
     };
     
     table::remove(&mut registry.policies, resource_key);
@@ -124,12 +141,22 @@ public fun intent_key_prefix(policy: &Policy): &String {
     &policy.intent_key_prefix
 }
 
-/// Getter for gating_mode (future use).
+/// Getter for gating_mode.
 public fun gating_mode(policy: &Policy): u8 {
     policy.gating_mode
 }
 
-/// Gating mode constants (future use)
+/// Getter for time_delay_ms.
+public fun time_delay_ms(policy: &Policy): u64 {
+    policy.time_delay_ms
+}
+
+/// Getter for approval_threshold.
+public fun approval_threshold(policy: &Policy): u64 {
+    policy.approval_threshold
+}
+
+/// Gating mode constants
 public fun gating_mode_dao_only(): u8 { 0 }
 public fun gating_mode_council_only(): u8 { 1 }
 public fun gating_mode_and(): u8 { 2 }
@@ -164,4 +191,106 @@ public fun borrow_registry<Config>(
     version_witness: VersionWitness
 ): &PolicyRegistry {
     account::borrow_managed_data(account, PolicyRegistryKey {}, version_witness)
+}
+
+// === Convenience Functions for Common Policy Patterns ===
+
+/// Set a policy with time delay (e.g., for package upgrades)
+public fun set_policy_with_timelock(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    resource_key: String,
+    policy_account_id: ID,
+    intent_key_prefix: String,
+    delay_ms: u64,
+) {
+    let policy = Policy { 
+        policy_account_id, 
+        intent_key_prefix, 
+        gating_mode: gating_mode_and(), // Both DAO and council must approve
+        time_delay_ms: delay_ms,
+        approval_threshold: 0
+    };
+    
+    if (table::contains(&registry.policies, resource_key)) {
+        table::remove(&mut registry.policies, resource_key);
+    };
+    table::add(&mut registry.policies, resource_key, policy);
+
+    event::emit(PolicySet {
+        dao_id,
+        resource_key,
+        policy_account_id,
+    });
+}
+
+/// Set a policy requiring threshold approvals
+public fun set_policy_with_threshold(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    resource_key: String,
+    policy_account_id: ID,
+    intent_key_prefix: String,
+    threshold: u64,
+) {
+    let policy = Policy { 
+        policy_account_id, 
+        intent_key_prefix, 
+        gating_mode: gating_mode_council_only(), // Council handles threshold
+        time_delay_ms: 0,
+        approval_threshold: threshold
+    };
+    
+    if (table::contains(&registry.policies, resource_key)) {
+        table::remove(&mut registry.policies, resource_key);
+    };
+    table::add(&mut registry.policies, resource_key, policy);
+
+    event::emit(PolicySet {
+        dao_id,
+        resource_key,
+        policy_account_id,
+    });
+}
+
+/// Set an emergency policy (council only, no delay)
+public fun set_emergency_policy(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    resource_key: String,
+    policy_account_id: ID,
+    intent_key_prefix: String,
+) {
+    let policy = Policy { 
+        policy_account_id, 
+        intent_key_prefix, 
+        gating_mode: gating_mode_council_only(),
+        time_delay_ms: 0,
+        approval_threshold: 0
+    };
+    
+    if (table::contains(&registry.policies, resource_key)) {
+        table::remove(&mut registry.policies, resource_key);
+    };
+    table::add(&mut registry.policies, resource_key, policy);
+
+    event::emit(PolicySet {
+        dao_id,
+        resource_key,
+        policy_account_id,
+    });
+}
+
+/// Check if a resource requires policy approval based on the registry
+public fun requires_policy_approval<Config>(
+    account: &Account<Config>,
+    resource_key: String,
+    version_witness: VersionWitness,
+): bool {
+    if (!account::has_managed_data(account, PolicyRegistryKey {})) {
+        return false
+    };
+    
+    let registry = borrow_registry(account, version_witness);
+    has_policy(registry, resource_key)
 }

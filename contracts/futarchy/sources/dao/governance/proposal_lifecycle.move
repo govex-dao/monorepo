@@ -229,25 +229,26 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
     
-    // NEW: Cancel losing outcome intents using hot-path cleanup
-    // Iterate through all outcomes and cancel the losers
+    // NEW: Cancel losing outcome intents in the hot path using a scoped witness.
+    // This ensures per-proposal isolation and prevents cross-proposal cancellation
     let num_outcomes = proposal::get_num_outcomes(proposal);
     let mut i = 0u64;
     while (i < num_outcomes) {
         if (i != winning_outcome) {
-            // Take & clear key atomically; if Some, cancel + clean
-            let mut key_opt = proposal::take_intent_key_for_outcome(proposal, i);
-            if (option::is_some(&key_opt)) {
-                let intent_key = option::extract(&mut key_opt);
-                let mut expired = futarchy_config::cancel_losing_intent(account, intent_key);
+            // Mint a scoped cancel witness for this specific proposal/outcome
+            let mut cw_opt = proposal::make_cancel_witness(proposal, i);
+            if (option::is_some(&cw_opt)) {
+                let cw = option::extract(&mut cw_opt);
+                // Cancel with the scoped witness (emits a keyed-hash event)
+                let mut expired = futarchy_config::cancel_losing_intent_scoped(
+                    account,
+                    cw,
+                    clock
+                );
+                // Drain all actions immediately to prevent state bloat
                 gc_janitor::drain_all_public(account, &mut expired);
                 account_protocol::intents::destroy_empty_expired(expired);
-                events::emit_cleaned(
-                    b"losing_outcome".to_string(),
-                    b"losing_outcome".to_string(),
-                    clock::timestamp_ms(clock)
-                );
-            };
+            }
         };
         i = i + 1;
     };

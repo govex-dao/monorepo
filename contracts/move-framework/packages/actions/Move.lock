@@ -2,21 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "A49B8FD7BC8096C5B50558B33EA5CAA68782DA046AC73F7B08C2981A224E8B98"
+manifest_digest = "020E3C9F8D1674093A7E7D25C30AD6018B17B5C4B10F0BF365120A121FE9C42A"
 deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
-id = "AccountActions"
-source = { local = "../move-framework/packages/actions" }
-
 dependencies = [
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
@@ -28,7 +15,7 @@ dependencies = [
 
 [[move.package]]
 id = "AccountExtensions"
-source = { local = "../move-framework/packages/extensions" }
+source = { local = "../extensions" }
 
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -39,7 +26,7 @@ dependencies = [
 
 [[move.package]]
 id = "AccountProtocol"
-source = { local = "../move-framework/packages/protocol" }
+source = { local = "../protocol" }
 
 dependencies = [
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -61,7 +48,7 @@ dependencies = [
 
 [[move.package]]
 id = "Kiosk"
-source = { local = "../move-framework/deps/kiosk" }
+source = { local = "../../deps/kiosk" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },

@@ -1,9 +1,6 @@
 /// This module allows objects owned by the account to be accessed through intents in a secure way.
 /// The objects can be taken only via an WithdrawAction action which uses Transfer to Object (TTO).
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
-///
-/// Fork modifications for DAO proposal platform hot-path losing intent cleanup:
-/// - new_withdraw now records locks on the intent for cancel-time cleanup
 
 module account_protocol::owned;
 
@@ -44,8 +41,6 @@ public fun new_withdraw<Config, Outcome, IW: drop>(
     intent.assert_is_account(account.addr());
     
     account.lock_object(object_id);
-    // Also record the lock on the intent for potential future use
-    intent.record_lock(object_id);
     intent.add_action(WithdrawAction { object_id }, intent_witness);
 }
 

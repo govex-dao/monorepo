@@ -1,8 +1,24 @@
-# account.tech - Move Framework for Smart Accounts (Futarchy Fork)
+# account.tech - Move Framework for Smart Accounts (DAO Platform Fork)
 
 ![account.tech logo](./assets/accountdottech_logo.png)
 
 > **Fork Notice**: This is a fork of [account.tech/move-framework](https://github.com/account-tech/move-framework) with modifications for DAO proposal platform hot-path losing intent cleanup.
+
+## Fork Modifications
+
+### Why Hot-Path Intent Cleanup?
+
+When a DAO proposal resolves, **losing intents** no longer have economic purpose but still occupy on-chain storage. If cleanup is left to off-chain actors (keepers/MEV bots), you risk:
+
+- **State bloat**: Larger account state increases gas costs for everyone interacting with the DAO
+- **Liveness assumptions**: Cleanup timing depends on third parties
+- **Griefing surface**: Unbounded stale locks can degrade UX or create contention
+
+This fork adds `cancel_intent` functionality that allows config modules to cancel intents and automatically unlock any locked objects. This enables losing intents to be cancelled **in the finalization transaction** with all cleanup operations processed immediately. This keeps the account slim on the **hot path**, reduces gas for subsequent calls, and removes reliance on complex keeper infrastructure.
+
+### Changes Made
+
+1. **Added `cancel_intent` function** (`account.move`): Config-authorized cancellation that returns an `Expired` bag for cleanup. This enables losing intents to be cancelled in the finalization transaction with all cleanup hooks processed immediately.
 
 ## Project Overview
 
