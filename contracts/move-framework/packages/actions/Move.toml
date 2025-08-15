@@ -1,12 +1,10 @@
 [package]
 name = "AccountActions"
-edition = "2024.beta"
+edition = "2024"
 license = "Apache-2.0"
 authors = [ "Thouny (thouny@tuta.io)" ]
 
 [dependencies]
-Sui = { override = true, git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet" }
-Kiosk = { git = "https://github.com/thounyy/apps.git", subdir = "kiosk", rev = "testnet" }
 AccountProtocol = { local = "../protocol" }
 AccountExtensions = { local = "../extensions" }
 
