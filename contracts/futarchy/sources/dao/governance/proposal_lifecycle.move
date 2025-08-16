@@ -28,6 +28,8 @@ use futarchy::{
     governance_actions::{Self, ProposalReservationRegistry},
     action_dispatcher,
     version,
+    spot_amm::{Self, SpotAMM},
+    conditional_amm,
 };
 use futarchy::{
     futarchy_vault,
@@ -94,6 +96,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
+    spot_pool: &mut SpotAMM<AssetType, StableType>, // Added: For marking liquidity movement
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
     clock: &Clock,
@@ -148,6 +151,11 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
                 EIntentExpiryTooLong
             );
         };
+    };
+    
+    // If this proposal uses DAO liquidity, mark the spot pool
+    if (uses_dao_liquidity) {
+        spot_amm::mark_liquidity_to_proposal(spot_pool, clock);
     };
     
     // Initialize the market
@@ -217,6 +225,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
     registry: &mut ProposalReservationRegistry, // Added: Registry for pruning
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
+    spot_pool: &mut SpotAMM<AssetType, StableType>, // Added: For TWAP integration
     clock: &Clock,
     ctx: &mut TxContext, // Now needed for auth
 ) {
@@ -228,6 +237,16 @@ public fun finalize_proposal_market<AssetType, StableType>(
     
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
+    
+    // If this proposal used DAO liquidity, integrate the winning conditional TWAP
+    if (proposal::uses_dao_liquidity(proposal)) {
+        // Get the winning pool's TWAP
+        let winning_pool = proposal::get_pool_mut_by_outcome(proposal, winning_outcome as u8);
+        let conditional_twap = conditional_amm::get_twap(winning_pool, clock);
+        
+        // Integrate the conditional TWAP into the spot AMM's history
+        spot_amm::integrate_conditional_twap(spot_pool, conditional_twap, clock);
+    };
     
     // NEW: Cancel losing outcome intents in the hot path using a scoped witness.
     // This ensures per-proposal isolation and prevents cross-proposal cancellation
@@ -517,6 +536,7 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
     winning_outcome: u64,
@@ -528,6 +548,7 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
         account,
         queue,
         proposal_fee_manager,
+        spot_pool,
         asset_liquidity,
         stable_liquidity,
         clock,

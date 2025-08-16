@@ -157,6 +157,24 @@ public struct DAOParameters has store, drop, copy {
     max_outcomes: u64,
     agreement_lines: vector<String>,
     agreement_difficulties: vector<u64>,
+    // Founder reward parameters
+    founder_reward_params: Option<FounderRewardParams>,
+}
+
+/// Parameters for founder rewards based on price performance
+public struct FounderRewardParams has store, drop, copy {
+    /// Address to receive founder rewards
+    founder_address: address,
+    /// Percentage of tokens reserved for founder (in basis points, max 2000 = 20%)
+    founder_allocation_bps: u64,
+    /// Minimum price ratio to unlock rewards (scaled by 1e9, e.g., 2e9 = 2x)
+    min_price_ratio: u64,
+    /// Time after which rewards can be claimed (milliseconds from DAO creation)
+    unlock_delay_ms: u64,
+    /// Whether rewards vest linearly based on price performance
+    linear_vesting: bool,
+    /// Maximum price ratio for full vesting (if linear_vesting)
+    max_price_ratio: u64,
 }
 
 // === Events ===
@@ -237,15 +255,91 @@ fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
 
 // === Public Functions ===
 
-/// Create a raise that sells 100% of the token supply.
+/// Create a raise that sells tokens with optional founder rewards.
 /// `StableCoin` must be an allowed type in the factory.
-public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
+public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin: drop>(
     factory: &factory::Factory,
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
     description: String,
     // DAOParameters passed as individual fields for entry function compatibility
+    dao_name: ascii::String,
+    dao_description: String,
+    icon_url_string: ascii::String,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    amm_twap_start_delay: u64,
+    amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
+    twap_threshold: u64,
+    max_outcomes: u64,
+    agreement_lines: vector<String>,
+    agreement_difficulties: vector<u64>,
+    // Founder reward parameters
+    with_founder_rewards: bool,
+    founder_address: address,
+    founder_allocation_bps: u64,
+    min_price_ratio: u64,
+    unlock_delay_ms: u64,
+    linear_vesting: bool,
+    max_price_ratio: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate founder reward parameters if enabled
+    let founder_params = if (with_founder_rewards) {
+        assert!(founder_allocation_bps <= 2000, EInvalidStateForAction); // Max 20%
+        assert!(min_price_ratio >= 1_000_000_000, EInvalidStateForAction); // At least 1x
+        assert!(max_price_ratio >= min_price_ratio, EInvalidStateForAction);
+        
+        option::some(FounderRewardParams {
+            founder_address,
+            founder_allocation_bps,
+            min_price_ratio,
+            unlock_delay_ms,
+            linear_vesting,
+            max_price_ratio,
+        })
+    } else {
+        option::none()
+    };
+    
+    // Calculate actual tokens for sale (excluding founder allocation)
+    let total_supply = treasury_cap.total_supply();
+    let tokens_for_sale_amount = if (with_founder_rewards) {
+        // Reserve founder allocation
+        let founder_reserve = total_supply * founder_allocation_bps / 10000;
+        assert!(tokens_for_raise.value() == total_supply - founder_reserve, EWrongTotalSupply);
+        tokens_for_raise.value()
+    } else {
+        // Full supply for sale
+        assert!(tokens_for_raise.value() == total_supply, EWrongTotalSupply);
+        tokens_for_raise.value()
+    };
+    
+    // Check that StableCoin is allowed
+    assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
+    
+    let dao_params = DAOParameters {
+        dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
+        amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
+        twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
+        founder_reward_params: founder_params,
+    };
+    
+    init_raise_with_founder<RaiseToken, StableCoin>(
+        treasury_cap, tokens_for_raise, min_raise_amount, description, dao_params, clock, ctx
+    );
+}
+
+/// Create a raise that sells 100% of the token supply (backward compatibility).
+public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
+    factory: &factory::Factory,
+    treasury_cap: TreasuryCap<RaiseToken>,
+    tokens_for_raise: Coin<RaiseToken>,
+    min_raise_amount: u64,
+    description: String,
     dao_name: ascii::String,
     dao_description: String,
     icon_url_string: ascii::String,
@@ -271,6 +365,7 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
         dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
         amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
         twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
+        founder_reward_params: option::none(),
     };
     
     init_raise<RaiseToken, StableCoin>(
@@ -814,8 +909,53 @@ public entry fun sweep_dust<RaiseToken, StableCoin>(
     };
 }
 
-/// Internal function to initialize a raise.
-/// Assumes tokens_for_raise has already been validated to equal total supply
+/// Internal function to initialize a raise with founder rewards.
+fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
+    treasury_cap: TreasuryCap<RaiseToken>,
+    tokens_for_raise: Coin<RaiseToken>,
+    min_raise_amount: u64,
+    description: String,
+    dao_params: DAOParameters,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let tokens_for_sale = tokens_for_raise.value();
+    let raise = Raise<RaiseToken, StableCoin> {
+        id: object::new(ctx),
+        creator: ctx.sender(),
+        state: STATE_FUNDING,
+        total_raised: 0,
+        min_raise_amount,
+        deadline_ms: clock.timestamp_ms() + LAUNCHPAD_DURATION_MS,
+        raise_token_vault: tokens_for_raise.into_balance(),
+        tokens_for_sale_amount: tokens_for_sale,
+        stable_coin_vault: balance::zero(),
+        contributor_count: 0,
+        description,
+        dao_params,
+        treasury_cap: option::some(treasury_cap),
+        claiming: false,
+        thresholds: vector::empty<u64>(),
+        settlement_done: false,
+        settlement_in_progress: false,
+        final_total_eligible: 0,
+    };
+
+    event::emit(RaiseCreated {
+        raise_id: object::id(&raise),
+        creator: raise.creator,
+        raise_token_type: type_name::get<RaiseToken>().into_string().to_string(),
+        stable_coin_type: type_name::get<StableCoin>().into_string().to_string(),
+        min_raise_amount,
+        tokens_for_sale,
+        deadline_ms: raise.deadline_ms,
+        description: raise.description,
+    });
+
+    transfer::public_share_object(raise);
+}
+
+/// Internal function to initialize a raise (backward compatibility).
 fun init_raise<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,

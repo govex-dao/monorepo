@@ -1,14 +1,14 @@
 # Todo for V2
 - [ ] Get summary of each file and make sure AIs stop getting tripped up
-- [ ]  maybe should make conditional tokens have field that maps to escrow id. so can autoreclaim those without needing to index anything else. Can a single move fuction take conditional tokens and handle the auto reclaim? not sure thats possible in sui move? but still add that field.
-- [ ] Spot conditional amm router and quoter! Routes spot swap and quote through conditional tokens, auto recombines full set and also returns and excess conditional tokens left over
-- [ ] Make sure sequrity council have way to clean up account memory for intnets. Maybe should have sweep of delete intents thing they can sign????? idk come up with solutions for this, idealy hot path like with dao. but thing is security council are not foreced into proposasl like dao is, security counicil can kinda ignore stuff.
+- [x]  maybe should make conditional tokens have field that maps to escrow id. so can autoreclaim those without needing to index anything else. Can a single move fuction take conditional tokens and handle the auto reclaim? not sure thats possible in sui move? but still add that field.
+- [x] Spot conditional amm router and quoter! Routes spot swap and quote through conditional tokens, auto recombines full set and also returns and excess conditional tokens left over
+- [x] Make sure sequrity council have way to clean up account memory for intnets. Maybe should have sweep of delete intents thing they can sign????? idk come up with solutions for this, idealy hot path like with dao. but thing is security council are not foreced into proposasl like dao is, security counicil can kinda ignore stuff.
 
 V2 hard bit:
-- [ ] Add in oracle to spot. Make it read able eg have proposal action / intent type to read oracle and if above certain price mint tokens to an address. Should be simple uniswap style oracle. need to somehow integrate with conditional amm winning market TWAP. As if we have back to back propoals using dao liquidity there is not spot price. Means winning market TWAP must be TWAP initialization price for next market otherwise need to twap or TWAP is biased.
+- [x] Add in oracle to spot. Make it read able eg have proposal action / intent type to read oracle and if above certain price mint tokens to an address. Should be simple uniswap style oracle. need to somehow integrate with conditional amm winning market TWAP. As if we have back to back propoals using dao liquidity there is not spot price. Means winning market TWAP must be TWAP initialization price for next market otherwise need to twap or TWAP is biased.
 OK lets have a TWAP oracle but for time when proposal was live fill in using my winning outcome twap. twap initialization price should be taking by reading spot TWAP!!!! Use uni v2 style twap for spot where spot trading is live. I already have conditonal twap fully working. Must wait 1 hour after lauching before first proposal to aoid twap manipulation too much!! Use simple uniswap or raydium AMM TWAP
-- [ ]  add ability launchpad and code to create dao with this rule embeded e.g mint Y tokens to z address if after X time, price or amm ratio > x. This gives founder option to get shae while still have saftey of 100% raise for launhcapd investors. Maybe this is a long lived pre approved intent that doesnt have a single execution intent can be retried multiple times.
-- [ ] make twap step cap at % of twap initialization price
+- [x]  add ability launchpad and code to create dao with this rule embeded e.g mint Y tokens to z address if after X time, price or amm ratio > x. This gives founder option to get shae while still have saftey of 100% raise for launhcapd investors. Maybe this is a long lived pre approved intent that doesnt have a single execution intent can be retried multiple times.
+- [x] make twap step cap at % of twap initialization price
 
 
 

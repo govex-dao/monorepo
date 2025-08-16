@@ -26,6 +26,7 @@ const EStableLiquidityTooLow: u64 = 5;
 const EPoolNotFound: u64 = 6;
 const EOutcomeOutOfBounds: u64 = 7;
 const EInvalidOutcomeVectors: u64 = 8;
+const ESpotTwapNotReady: u64 = 9;
 
 // === Constants ===
 

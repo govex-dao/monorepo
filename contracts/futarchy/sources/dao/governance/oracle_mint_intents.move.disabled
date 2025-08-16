@@ -1,0 +1,349 @@
+module futarchy::oracle_mint_intents;
+
+use std::string::String;
+use sui::coin::{Self, TreasuryCap};
+use sui::clock::Clock;
+use sui::object::{Self, ID};
+use sui::tx_context::TxContext;
+use futarchy::spot_amm::SpotAMM;
+use futarchy::proposal::Proposal;
+use futarchy::oracle_mint_actions::{Self, ConditionalMintAction, RatioBasedMintAction};
+use futarchy::version;
+use account_protocol::{
+    account::{Self, Account, Auth},
+    intents::{Self, Intent, Params, Expired},
+    executable::Executable,
+    intent_interface,
+};
+use futarchy::futarchy_config::FutarchyConfig;
+use fun intent_interface::build_intent as Account.build_intent;
+
+// === Witnesses ===
+public struct OracleMintIntent has copy, drop {}
+public struct RecurringMintIntent has copy, drop {}
+public struct LaunchpadFounderRewardIntent has copy, drop {}
+
+// === Errors ===
+const EInvalidParams: u64 = 0;
+const ENotAuthorized: u64 = 1;
+const EIntentExpired: u64 = 2;
+const EMaxExecutionsReached: u64 = 3;
+const ECooldownNotMet: u64 = 4;
+
+// === Constants ===
+const MAX_RECURRING_EXECUTIONS: u64 = 365; // Max daily executions for 1 year
+const MIN_COOLDOWN_MS: u64 = 3_600_000; // Minimum 1 hour between executions
+
+// === Intent Creation Functions ===
+
+/// Create a single oracle-based conditional mint intent
+public fun create_oracle_mint_intent<AssetType, StableType, T>(
+    account: &mut Account<FutarchyConfig>,
+    auth: Auth,
+    params: Params,
+    recipient: address,
+    mint_amount: u64,
+    price_threshold: u128,
+    is_above_threshold: bool,
+    earliest_time: Option<u64>,
+    latest_time: Option<u64>,
+    description: String,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    
+    // Create the conditional mint action
+    let action = oracle_mint_actions::new_conditional_mint<T>(
+        recipient,
+        mint_amount,
+        price_threshold,
+        is_above_threshold,
+        earliest_time,
+        latest_time,
+        false, // Single execution
+        description,
+    );
+    
+    // Build the intent
+    account.build_intent!(
+        params,
+        action,
+        b"oracle_mint".to_string(),
+        version::current(),
+        OracleMintIntent{},
+        ctx,
+        |intent, _| {
+            // Intent contains the action, ready for execution
+        }
+    );
+}
+
+/// Create a recurring oracle-based mint intent that can execute multiple times
+public fun create_recurring_mint_intent<AssetType, StableType, T>(
+    account: &mut Account<FutarchyConfig>,
+    auth: Auth,
+    params: Params,
+    recipient: address,
+    mint_amount_per_execution: u64,
+    price_threshold: u128,
+    is_above_threshold: bool,
+    max_executions: u64,
+    cooldown_ms: u64,
+    earliest_time: Option<u64>,
+    latest_time: Option<u64>,
+    description: String,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    
+    // Validate parameters
+    assert!(max_executions > 0 && max_executions <= MAX_RECURRING_EXECUTIONS, EInvalidParams);
+    assert!(cooldown_ms >= MIN_COOLDOWN_MS, EInvalidParams);
+    
+    // Create the recurring mint action
+    let mut action = oracle_mint_actions::new_conditional_mint<T>(
+        recipient,
+        mint_amount_per_execution,
+        price_threshold,
+        is_above_threshold,
+        earliest_time,
+        latest_time,
+        true, // Repeatable
+        description,
+    );
+    
+    // Note: max_executions and cooldown_ms are already set in the constructor
+    // We passed them as parameters to new_conditional_mint
+    
+    // Build the intent
+    account.build_intent!(
+        params,
+        action,
+        b"recurring_mint".to_string(),
+        version::current(),
+        RecurringMintIntent{},
+        ctx,
+        |intent, _| {
+            // Intent ready for multiple executions
+        }
+    );
+}
+
+/// Create a launchpad founder reward intent based on price ratio
+public fun create_founder_reward_intent<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    auth: Auth,
+    params: Params,
+    founder_address: address,
+    base_amount: u64,
+    ratio_multiplier_bps: u64,
+    min_ratio: u64,
+    max_ratio: u64,
+    unlock_time: u64,
+    description: String,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    
+    // Create the ratio-based mint action
+    let action = oracle_mint_actions::new_ratio_based_mint<AssetType, StableType>(
+        founder_address,
+        base_amount,
+        ratio_multiplier_bps,
+        min_ratio,
+        max_ratio,
+        unlock_time,
+        description,
+    );
+    
+    // Build the intent
+    account.build_intent!(
+        params,
+        action,
+        b"founder_reward".to_string(),
+        version::current(),
+        LaunchpadFounderRewardIntent{},
+        ctx,
+        |intent, _| {
+            // Intent ready for founder reward execution
+        }
+    );
+}
+
+// === Intent Execution Functions ===
+
+/// Execute a single oracle mint intent
+public fun execute_oracle_mint<AssetType, StableType, T>(
+    executable: &mut Executable<ConditionalMintAction<T>>,
+    account: &mut Account<FutarchyConfig>,
+    treasury_cap: &mut TreasuryCap<T>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable.action_mut(
+        version::current(),
+        OracleMintIntent{}
+    );
+    
+    // Execute the conditional mint (removed active_proposal parameter)
+    oracle_mint_actions::execute_conditional_mint(
+        action,
+        treasury_cap,
+        spot_pool,
+        clock,
+        ctx
+    );
+    
+    // If not repeatable, mark as completed
+    if (!oracle_mint_actions::is_repeatable(action)) {
+        executable.complete(account, version::current(), OracleMintIntent{});
+    }
+}
+
+/// Execute a recurring mint intent (can be called multiple times)
+public fun execute_recurring_mint<AssetType, StableType, T>(
+    executable: &mut Executable<ConditionalMintAction<T>>,
+    account: &mut Account<FutarchyConfig>,
+    treasury_cap: &mut TreasuryCap<T>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable.action_mut(
+        version::current(),
+        RecurringMintIntent{}
+    );
+    
+    // Check if we've reached max executions using getter
+    if (oracle_mint_actions::is_max_executions_reached(action)) {
+        // Complete the intent
+        executable.complete(account, version::current(), RecurringMintIntent{});
+        abort EMaxExecutionsReached
+    };
+    
+    // Execute the conditional mint (removed active_proposal parameter)
+    oracle_mint_actions::execute_conditional_mint(
+        action,
+        treasury_cap,
+        spot_pool,
+        clock,
+        ctx
+    );
+    
+    // Check if this was the last execution
+    if (oracle_mint_actions::is_max_executions_reached(action)) {
+        executable.complete(account, version::current(), RecurringMintIntent{});
+    }
+}
+
+/// Execute a founder reward intent based on price ratio
+public fun execute_founder_reward<AssetType, StableType>(
+    mut executable: Executable<RatioBasedMintAction<AssetType, StableType>>,
+    account: &mut Account<FutarchyConfig>,
+    treasury_cap: &mut TreasuryCap<AssetType>,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable.action_mut(
+        version::current(),
+        LaunchpadFounderRewardIntent{}
+    );
+    
+    // Execute the ratio-based mint
+    oracle_mint_actions::execute_ratio_mint(
+        action,
+        treasury_cap,
+        spot_pool,
+        clock,
+        ctx
+    );
+    
+    // Complete the intent after execution
+    executable.complete(account, version::current(), LaunchpadFounderRewardIntent{});
+}
+
+// === View Functions ===
+
+/// Check if an oracle mint intent is ready to execute
+public fun is_oracle_mint_ready<AssetType, StableType, T>(
+    executable: &Executable<ConditionalMintAction<T>>,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+): bool {
+    let action = executable.action(version::current(), OracleMintIntent{});
+    oracle_mint_actions::is_conditional_mint_ready(
+        action,
+        spot_pool,
+        clock
+    )
+}
+
+/// Check if a recurring mint can execute again
+public fun can_execute_recurring<AssetType, StableType, T>(
+    executable: &Executable<ConditionalMintAction<T>>,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+): bool {
+    let action = executable.action(version::current(), RecurringMintIntent{});
+    
+    // Check max executions using getter
+    if (oracle_mint_actions::is_max_executions_reached(action)) {
+        return false
+    };
+    
+    // Check if conditions are met
+    oracle_mint_actions::is_conditional_mint_ready(
+        action,
+        spot_pool,
+        clock
+    )
+}
+
+/// Check if founder reward is ready
+public fun is_founder_reward_ready<AssetType, StableType>(
+    executable: &Executable<RatioBasedMintAction<AssetType, StableType>>,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+): bool {
+    let action = executable.action(version::current(), LaunchpadFounderRewardIntent{});
+    oracle_mint_actions::is_ratio_mint_ready(
+        action,
+        spot_pool,
+        clock
+    )
+}
+
+/// Get remaining executions for a recurring mint
+public fun get_remaining_executions<T>(
+    executable: &Executable<ConditionalMintAction<T>>,
+): u64 {
+    let action = executable.action(version::current(), RecurringMintIntent{});
+    oracle_mint_actions::get_remaining_executions(action)
+}
+
+/// Get next execution time for a recurring mint
+public fun get_next_execution_time<T>(
+    executable: &Executable<ConditionalMintAction<T>>,
+): Option<u64> {
+    let action = executable.action(version::current(), RecurringMintIntent{});
+    oracle_mint_actions::get_next_execution_time(action)
+}
+
+// === Cleanup Functions ===
+
+/// Clean up expired oracle mint intent
+public fun cleanup_oracle_mint<T>(expired: &mut Expired) {
+    oracle_mint_actions::delete_conditional_mint<T>(expired);
+}
+
+/// Clean up expired recurring mint intent
+public fun cleanup_recurring_mint<T>(expired: &mut Expired) {
+    oracle_mint_actions::delete_conditional_mint<T>(expired);
+}
+
+/// Clean up expired founder reward intent
+public fun cleanup_founder_reward<AssetType, StableType>(expired: &mut Expired) {
+    oracle_mint_actions::delete_ratio_mint<AssetType, StableType>(expired);
+}
