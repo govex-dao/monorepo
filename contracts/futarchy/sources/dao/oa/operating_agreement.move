@@ -74,6 +74,11 @@ const ECannotReEnableInsert: u64 = 9;
 const ECannotReEnableRemove: u64 = 10;
 const EAlreadyImmutable: u64 = 11;
 const EUnauthorizedCustodian: u64 = 12;
+const ELineHasNoExpiry: u64 = 13;
+const ELineNotExpired: u64 = 14;
+const EInvalidTimeOrder: u64 = 15;
+const EAgreementIsImmutable: u64 = 16;
+const EAlreadyGloballyImmutable: u64 = 17;
 
 // === Constants ===
 const MAX_LINES_PER_AGREEMENT: u64 = 1000;
@@ -121,6 +126,8 @@ public struct OperatingAgreement has key, store {
     allow_remove: bool,
     /// Number of lines in the agreement for O(1) counting
     line_count: u64,
+    /// Global immutable flag - when true, entire agreement is frozen (one-way lock: false -> true only)
+    immutable: bool,
 }
 
 // === Creation and Management Functions ===
@@ -168,6 +175,7 @@ public struct AgreementRead has copy, drop {
     immutables: vector<bool>,
     allow_insert: bool,
     allow_remove: bool,
+    global_immutable: bool,
     timestamp_ms: u64,
 }
 
@@ -184,6 +192,7 @@ public struct AgreementReadWithStatus has copy, drop {
     effective_from: vector<Option<u64>>, // Effective times
     allow_insert: bool,
     allow_remove: bool,
+    global_immutable: bool,
     timestamp_ms: u64,
 }
 
@@ -237,6 +246,13 @@ public struct OARemoveAllowedChanged has copy, drop {
     timestamp_ms: u64,
 }
 
+/// Emitted when OA becomes globally immutable (one-way: false -> true only)
+public struct OAGlobalImmutabilityChanged has copy, drop {
+    dao_id: ID,
+    immutable: bool,
+    timestamp_ms: u64,
+}
+
 // === Witness ===
 /// Witness for accessing the operating agreement
 public struct OperatingAgreementWitness has drop {}
@@ -261,6 +277,7 @@ public fun new(
         allow_insert: true,  // Initially allow insertions
         allow_remove: true,  // Initially allow removals
         line_count: 0,
+        immutable: false,  // Initially mutable
     };
     
     // Initialize with the provided lines
@@ -504,6 +521,9 @@ fun update_line_internal(
     new_text: String,
     clock: &Clock,
 ) {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
     let line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
     
@@ -528,6 +548,9 @@ fun insert_line_after_internal(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     // Check if insertions are allowed
     assert!(agreement.allow_insert, EInsertNotAllowed);
     
@@ -598,6 +621,9 @@ fun insert_line_at_beginning_internal(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     // Check if insertions are allowed
     assert!(agreement.allow_insert, EInsertNotAllowed);
     
@@ -647,11 +673,65 @@ fun insert_line_at_beginning_internal(
     new_line_id
 }
 
+/// Internal function to remove expired lines (bypasses immutability check since expired lines can be removed)
+fun remove_expired_line_internal(
+    agreement: &mut OperatingAgreement,
+    line_id: ID,
+    clock: &Clock,
+) {
+    // Note: allow_remove check is done by the caller
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
+    
+    // For expired lines, we don't check immutability - expiry overrides immutability
+    let line_to_remove = df::remove<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
+    
+    // Update the previous line's next pointer
+    if (line_to_remove.prev.is_some()) {
+        let prev_id = *line_to_remove.prev.borrow();
+        let prev_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: prev_id });
+        prev_line.next = line_to_remove.next;
+    } else {
+        // This was the head
+        agreement.head = line_to_remove.next;
+    };
+    
+    // Update the next line's prev pointer
+    if (line_to_remove.next.is_some()) {
+        let next_id = *line_to_remove.next.borrow();
+        let next_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: next_id });
+        next_line.prev = line_to_remove.prev;
+    } else {
+        // This was the tail
+        agreement.tail = line_to_remove.prev;
+    };
+    
+    let AgreementLine { 
+        text: _, 
+        difficulty: _, 
+        immutable: _, 
+        prev: _, 
+        next: _,
+        line_type: _,
+        expires_at: _,
+        effective_from: _,
+    } = line_to_remove;
+    agreement.line_count = agreement.line_count - 1;
+    
+    event::emit(LineRemoved {
+        dao_id: agreement.dao_id,
+        line_id,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
 fun remove_line_internal(
     agreement: &mut OperatingAgreement,
     line_id: ID,
     clock: &Clock,
 ) {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     // Check if removals are allowed
     assert!(agreement.allow_remove, ERemoveNotAllowed);
     
@@ -710,6 +790,9 @@ public fun set_line_immutable(
     line_id: ID,
     clock: &Clock,
 ) {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
     
     let line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: line_id });
@@ -733,6 +816,9 @@ public fun set_insert_allowed(
     allowed: bool,
     clock: &Clock,
 ) {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     // One-way lock: can only go from true to false
     if (!allowed) {
         agreement.allow_insert = false;
@@ -753,6 +839,9 @@ public fun set_remove_allowed(
     allowed: bool,
     clock: &Clock,
 ) {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    
     // One-way lock: can only go from true to false
     if (!allowed) {
         agreement.allow_remove = false;
@@ -763,6 +852,24 @@ public fun set_remove_allowed(
     event::emit(OARemoveAllowedChanged {
         dao_id: agreement.dao_id,
         allow_remove: agreement.allow_remove,
+        timestamp_ms: clock::timestamp_ms(clock),
+    });
+}
+
+/// Set the entire agreement as globally immutable (one-way: can only go from false to true)
+/// This is the ultimate lock - once set, NO changes can be made to the agreement
+public fun set_global_immutable(
+    agreement: &mut OperatingAgreement,
+    clock: &Clock,
+) {
+    // One-way lock: can only go from false to true
+    assert!(!agreement.immutable, EAlreadyGloballyImmutable);
+    
+    agreement.immutable = true;
+    
+    event::emit(OAGlobalImmutabilityChanged {
+        dao_id: agreement.dao_id,
+        immutable: true,
         timestamp_ms: clock::timestamp_ms(clock),
     });
 }
@@ -802,6 +909,16 @@ public fun get_oa_policy(agreement: &OperatingAgreement): (bool, bool) {
     (agreement.allow_insert, agreement.allow_remove)
 }
 
+/// Check if the agreement is globally immutable
+public fun is_global_immutable(agreement: &OperatingAgreement): bool {
+    agreement.immutable
+}
+
+/// Get all OA lock status in one call (allow_insert, allow_remove, global_immutable)
+public fun get_oa_full_policy(agreement: &OperatingAgreement): (bool, bool, bool) {
+    (agreement.allow_insert, agreement.allow_remove, agreement.immutable)
+}
+
 /// Get the number of lines in the agreement (O(1) operation)
 public fun line_count(agreement: &OperatingAgreement): u64 {
     agreement.line_count
@@ -828,6 +945,7 @@ public fun get_all_line_ids_ordered(agreement: &OperatingAgreement): vector<ID> 
 /// Read and emit the full operating agreement
 public entry fun read_agreement(agreement: &OperatingAgreement, clock: &Clock) {
     emit_current_state_event(agreement, clock);
+    emit_current_state_event_with_status(agreement, clock);
 }
 
 /// True if OA is guarded by a Security Council custodial policy.
@@ -896,7 +1014,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
     while (i < ordered_ids.length()) {
         let line_id = *ordered_ids.borrow(i);
         let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
-        texts.push_back(*&line.text);
+        texts.push_back(line.text);
         difficulties.push_back(line.difficulty);
         immutables.push_back(line.immutable);
         i = i + 1;
@@ -910,6 +1028,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
         immutables,
         allow_insert: agreement.allow_insert,
         allow_remove: agreement.allow_remove,
+        global_immutable: agreement.immutable,
         timestamp_ms: clock::timestamp_ms(clock),
     });
 }
@@ -936,6 +1055,34 @@ public fun is_line_active(line: &AgreementLine, current_time_ms: u64): bool {
     true
 }
 
+/// Public entry point for anyone to remove a specific expired line
+/// This is a cleanup function that can be called by anyone to remove expired sunset lines
+/// The line must actually be expired (expires_at < current_time) for this to succeed
+/// Respects allow_remove: if removals are disabled, even expired lines cannot be removed
+public entry fun remove_expired_line(
+    agreement: &mut OperatingAgreement,
+    line_id: ID,
+    clock: &Clock,
+) {
+    // Check if removals are allowed - if not, even expired lines can't be removed
+    assert!(agreement.allow_remove, ERemoveNotAllowed);
+    
+    // Check line exists
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: line_id }), ELineNotFound);
+    
+    // Get the line and check if it's expired
+    let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
+    let current_time = clock::timestamp_ms(clock);
+    
+    // Line must have an expiry date and be past it
+    assert!(line.expires_at.is_some(), ELineHasNoExpiry);
+    assert!(current_time >= *line.expires_at.borrow(), ELineNotExpired);
+    
+    // For expired lines, we bypass the immutability check in remove_line_internal
+    // by calling a special version that allows removing expired immutable lines
+    remove_expired_line_internal(agreement, line_id, clock);
+}
+
 /// Insert a line with sunset provision (auto-deactivates after expiry)
 /// The line can optionally be immutable - it will still sunset but cannot be changed before then
 public fun insert_sunset_line_after(
@@ -948,9 +1095,17 @@ public fun insert_sunset_line_after(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
     assert!(agreement.allow_insert, EInsertNotAllowed);
+    // Cannot add sunset lines if removals are disabled (since they can't be cleaned up)
+    assert!(agreement.allow_remove, ERemoveNotAllowed);
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+    
+    // Validate sunset time is in the future
+    let now = clock::timestamp_ms(clock);
+    assert!(expires_at_ms > now, EInvalidTimeOrder);
     
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
@@ -1005,5 +1160,190 @@ public fun insert_sunset_line_after(
     });
     
     new_line_id
+}
+
+/// Insert a line that becomes active only after `effective_from`
+public fun insert_sunrise_line_after(
+    agreement: &mut OperatingAgreement,
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+    effective_from_ms: u64,
+    immutable: bool,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    assert!(agreement.allow_insert, EInsertNotAllowed);
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
+    assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+
+    let line_uid = object::new(ctx);
+    let new_line_id = object::uid_to_inner(&line_uid);
+
+    let prev_line_next;
+    {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line_next = prev_line.next;
+    };
+
+    let new_line = AgreementLine {
+        text,
+        difficulty,
+        immutable,
+        prev: option::some(prev_line_id),
+        next: prev_line_next,
+        line_type: LINE_TYPE_SUNRISE,
+        expires_at: option::none(),
+        effective_from: option::some(effective_from_ms),
+    };
+
+    if (prev_line_next.is_some()) {
+        let next_line_id = *prev_line_next.borrow();
+        let next_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: next_line_id });
+        next_line.prev = option::some(new_line_id);
+    };
+    
+    let prev_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: prev_line_id });
+    prev_line.next = option::some(new_line_id);
+    
+    if (agreement.tail.is_some() && *agreement.tail.borrow() == prev_line_id) {
+        agreement.tail = option::some(new_line_id);
+    };
+
+    df::add(&mut agreement.id, LineKey { id: new_line_id }, new_line);
+    object::delete(line_uid);
+    agreement.line_count = agreement.line_count + 1;
+
+    event::emit(LineInserted {
+        dao_id: agreement.dao_id,
+        line_id: new_line_id,
+        text,
+        difficulty,
+        position_after: option::some(prev_line_id),
+        timestamp_ms: clock::timestamp_ms(clock),
+        line_type: LINE_TYPE_SUNRISE,
+        expires_at: option::none(),
+        effective_from: option::some(effective_from_ms),
+    });
+
+    new_line_id
+}
+
+/// Insert a line that is active only between [effective_from, expires_at)
+public fun insert_temporary_line_after(
+    agreement: &mut OperatingAgreement,
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+    effective_from_ms: u64,
+    expires_at_ms: u64,
+    immutable: bool,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    // Check if agreement is globally immutable
+    assert!(!agreement.immutable, EAgreementIsImmutable);
+    assert!(agreement.allow_insert, EInsertNotAllowed);
+    assert!(agreement.allow_remove, ERemoveNotAllowed); // must allow later cleanup
+    assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
+    assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
+    assert!(effective_from_ms < expires_at_ms, EInvalidTimeOrder);
+
+    let line_uid = object::new(ctx);
+    let new_line_id = object::uid_to_inner(&line_uid);
+
+    let prev_line_next;
+    {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line_next = prev_line.next;
+    };
+
+    let new_line = AgreementLine {
+        text,
+        difficulty,
+        immutable,
+        prev: option::some(prev_line_id),
+        next: prev_line_next,
+        line_type: LINE_TYPE_TEMPORARY,
+        expires_at: option::some(expires_at_ms),
+        effective_from: option::some(effective_from_ms),
+    };
+
+    if (prev_line_next.is_some()) {
+        let next_line_id = *prev_line_next.borrow();
+        let next_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: next_line_id });
+        next_line.prev = option::some(new_line_id);
+    };
+    
+    let prev_line = df::borrow_mut<LineKey, AgreementLine>(&mut agreement.id, LineKey { id: prev_line_id });
+    prev_line.next = option::some(new_line_id);
+    
+    if (agreement.tail.is_some() && *agreement.tail.borrow() == prev_line_id) {
+        agreement.tail = option::some(new_line_id);
+    };
+
+    df::add(&mut agreement.id, LineKey { id: new_line_id }, new_line);
+    object::delete(line_uid);
+    agreement.line_count = agreement.line_count + 1;
+
+    event::emit(LineInserted {
+        dao_id: agreement.dao_id,
+        line_id: new_line_id,
+        text,
+        difficulty,
+        position_after: option::some(prev_line_id),
+        timestamp_ms: clock::timestamp_ms(clock),
+        line_type: LINE_TYPE_TEMPORARY,
+        expires_at: option::some(expires_at_ms),
+        effective_from: option::some(effective_from_ms),
+    });
+
+    new_line_id
+}
+
+/// Emit the full state including activity and schedule
+public fun emit_current_state_event_with_status(agreement: &OperatingAgreement, clock: &Clock) {
+    let ordered_ids = get_all_line_ids_ordered(agreement);
+    let now = clock::timestamp_ms(clock);
+
+    let mut texts = vector[];
+    let mut difficulties = vector[];
+    let mut immutables = vector[];
+    let mut active_statuses = vector[];
+    let mut line_types = vector[];
+    let mut expires_vec = vector[];
+    let mut effective_vec = vector[];
+
+    let mut i = 0;
+    while (i < ordered_ids.length()) {
+        let line_id = *ordered_ids.borrow(i);
+        let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
+        texts.push_back(line.text);
+        difficulties.push_back(line.difficulty);
+        immutables.push_back(line.immutable);
+        active_statuses.push_back(is_line_active(line, now));
+        line_types.push_back(line.line_type);
+        expires_vec.push_back(line.expires_at);
+        effective_vec.push_back(line.effective_from);
+        i = i + 1;
+    };
+
+    event::emit(AgreementReadWithStatus {
+        dao_id: agreement.dao_id,
+        line_ids: ordered_ids,
+        texts,
+        difficulties,
+        immutables,
+        active_statuses,
+        line_types,
+        expires_at: expires_vec,
+        effective_from: effective_vec,
+        allow_insert: agreement.allow_insert,
+        allow_remove: agreement.allow_remove,
+        global_immutable: agreement.immutable,
+        timestamp_ms: now,
+    });
 }
 
