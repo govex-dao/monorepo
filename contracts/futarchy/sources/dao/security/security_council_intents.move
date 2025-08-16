@@ -10,7 +10,7 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account, Auth},
-    intents::{Intent, Params, Expired},
+    intents::{Self, Intent, Params, Expired},
     executable::Executable,
     intent_interface, // macros
     owned,            // withdraw/delete_withdraw
@@ -421,6 +421,160 @@ public fun execute_approve_policy_change(
     security_council.confirm_execution(executable);
 }
 
+// === Intent Cleanup Functions ===
+
+/// Security Council can clean up specific expired intents by key
+/// This is a hot path - council members can execute this without needing a proposal
+/// 
+/// Note: Due to Sui's Bag limitations, we cannot iterate through all intents.
+/// Callers must provide the specific intent keys to clean up.
+public fun cleanup_expired_council_intents(
+    security_council: &mut Account<WeightedMultisig>,
+    auth_from_member: Auth,
+    intent_keys: vector<String>,
+    clock: &Clock,
+) {
+    // Verify the caller is a council member
+    security_council.verify(auth_from_member);
+    
+    // Clean up each specified intent if it's expired
+    let mut i = 0;
+    let len = intent_keys.length();
+    
+    while (i < len) {
+        let key = *intent_keys.borrow(i);
+        
+        // Check if the intent exists and is expired
+        let intents_store = account::intents(security_council);
+        if (intents::contains(intents_store, key)) {
+            // Get the intent to check expiration
+            let intent = intents::get<Approvals>(intents_store, key);
+            
+            // If expired, delete it
+            if (clock.timestamp_ms() >= intents::expiration_time(intent)) {
+                let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
+                    security_council,
+                    key,
+                    clock
+                );
+                
+                // Drain the expired intent's actions
+                drain_council_expired(&mut expired, security_council);
+                
+                // Destroy the empty expired object
+                intents::destroy_empty_expired(expired);
+            };
+        };
+        
+        i = i + 1;
+    };
+}
+
+/// Helper function to drain expired Security Council intent actions
+fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<WeightedMultisig>) {
+    // Delete all possible Security Council action types
+    security_council_actions::delete_update_council_membership(expired);
+    security_council_actions::delete_create_council(expired);
+    security_council_actions::delete_approve_generic(expired);
+    security_council_actions::delete_sweep_intents(expired);
+    
+    // Delete package upgrade actions
+    package_upgrade::delete_upgrade(expired);
+    package_upgrade::delete_commit(expired);
+    
+    // Delete owned withdraw if present
+    owned::delete_withdraw(expired, security_council);
+    
+    // Delete custody actions
+    custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
+}
+
+/// Security Council can propose a sweep of specific expired intents
+/// This requires multisig approval but can clean up many intents at once
+/// 
+/// Note: The intent_keys must be stored in the action since we need them
+/// at execution time to identify which intents to clean.
+public fun request_sweep_expired_intents(
+    security_council: &mut Account<WeightedMultisig>,
+    auth_from_member: Auth,
+    params: Params,
+    intent_keys: vector<String>,
+    ctx: &mut TxContext
+) {
+    security_council.verify(auth_from_member);
+    let outcome: Approvals = multisig::new_approvals(security_council.config());
+    
+    security_council.build_intent!(
+        params,
+        outcome,
+        b"sweep_expired_intents".to_string(),
+        version::current(),
+        SweepExpiredIntentsIntent{},
+        ctx,
+        |intent, iw| {
+            // Store the keys in the action so we know what to clean at execution
+            let action = security_council_actions::new_sweep_intents_with_keys(intent_keys);
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Execute the sweep of expired intents
+/// This will clean up all the intents specified in the approved action
+public fun execute_sweep_expired_intents(
+    mut executable: Executable<Approvals>,
+    security_council: &mut Account<WeightedMultisig>,
+    clock: &Clock,
+) {
+    let action: &security_council_actions::SweepIntentsAction = 
+        executable.next_action(SweepExpiredIntentsIntent{});
+    let intent_keys = security_council_actions::get_sweep_keys(action);
+    
+    // Clean up the specified expired intents
+    cleanup_expired_council_intents_internal(security_council, intent_keys, clock);
+    
+    security_council.confirm_execution(executable);
+}
+
+// Internal helper for cleaning up expired intents
+fun cleanup_expired_council_intents_internal(
+    security_council: &mut Account<WeightedMultisig>,
+    intent_keys: &vector<String>,
+    clock: &Clock,
+) {
+    // Process each intent key
+    let mut i = 0;
+    let len = intent_keys.length();
+    
+    while (i < len) {
+        let key = *intent_keys.borrow(i);
+        
+        // Check if the intent exists and is expired
+        let intents_store = account::intents(security_council);
+        if (intents::contains(intents_store, key)) {
+            // Get the intent to check expiration
+            let intent = intents::get<Approvals>(intents_store, key);
+            
+            // If expired, delete it
+            if (clock.timestamp_ms() >= intents::expiration_time(intent)) {
+                let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
+                    security_council,
+                    key,
+                    clock
+                );
+                
+                // Drain the expired intent's actions
+                drain_council_expired(&mut expired, security_council);
+                
+                // Destroy the empty expired object
+                intents::destroy_empty_expired(expired);
+            };
+        };
+        
+        i = i + 1;
+    };
+}
+
 // Optional no-ops for symmetry
 public fun delete_request_package_upgrade(_expired: &mut Expired) {}
 public fun delete_request_oa_policy_change(_expired: &mut Expired) {}
@@ -433,3 +587,9 @@ public fun delete_create_council(expired: &mut Expired) {
 public fun delete_approve_policy_change(expired: &mut Expired) {
     security_council_actions::delete_approve_generic(expired);
 }
+public fun delete_sweep_expired_intents(expired: &mut Expired) {
+    security_council_actions::delete_sweep_intents(expired);
+}
+
+// Witness for sweep intents
+public struct SweepExpiredIntentsIntent has copy, drop {}

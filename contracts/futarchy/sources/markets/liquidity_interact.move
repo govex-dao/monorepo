@@ -1,7 +1,7 @@
 module futarchy::liquidity_interact;
 
 use futarchy::conditional_amm;
-use futarchy::coin_escrow::TokenEscrow;
+use futarchy::coin_escrow::{Self, TokenEscrow};
 use futarchy::conditional_token::ConditionalToken;
 use futarchy::fee::FeeManager;
 use futarchy::proposal::Proposal;
@@ -59,6 +59,9 @@ public(package) fun empty_amm_and_return_to_provider<AssetType, StableType>(
 
     let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
     let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
+    
+    // Record the final amounts for LP conversion invariance
+    coin_escrow::record_winning_pool_final_amounts(escrow, asset_out, stable_out);
 
     let (asset_coin, stable_coin) = escrow.remove_liquidity(asset_out, stable_out, ctx);
     
@@ -88,6 +91,9 @@ public(package) fun empty_amm_and_return_to_dao<AssetType, StableType>(
     let winning_outcome = proposal.get_winning_outcome();
     let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
     let (asset_out, stable_out) = pool.empty_all_amm_liquidity(ctx);
+    
+    // Record the final amounts for LP conversion invariance
+    coin_escrow::record_winning_pool_final_amounts(escrow, asset_out, stable_out);
 
     let (asset_coin, stable_coin) = escrow.remove_liquidity(asset_out, stable_out, ctx);
     

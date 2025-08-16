@@ -53,6 +53,7 @@ public struct ConditionalToken has key, store {
     asset_type: u8, // 0 for asset, 1 for stable, 2 for LP
     outcome: u8, // outcome index
     balance: u64,
+    escrow_id: Option<ID>, // Optional escrow ID for auto-reclaim
 }
 
 // === Events ===
@@ -138,7 +139,7 @@ public(package) fun update_supply(supply: &mut Supply, amount: u64, increase: bo
 
 /// Destroys a ConditionalToken. The token's balance must be zero.
 public(package) fun destroy(token: ConditionalToken) {
-    let ConditionalToken { id, market_id: _, asset_type: _, outcome: _, balance } = token;
+    let ConditionalToken { id, market_id: _, asset_type: _, outcome: _, balance, escrow_id: _ } = token;
     assert!(balance == 0, ENonzeroBalance);
     id.delete();
 }
@@ -162,6 +163,7 @@ public(package) fun split(
         asset_type: token.asset_type,
         outcome: token.outcome,
         balance: amount,
+        escrow_id: token.escrow_id,
     };
 
     // Emit split event
@@ -199,6 +201,7 @@ public(package) fun split_and_return(
         asset_type: token.asset_type,
         outcome: token.outcome,
         balance: amount,
+        escrow_id: token.escrow_id,
     };
 
     // Emit split event
@@ -256,6 +259,7 @@ public(package) fun merge_many(
             asset_type: _,
             outcome: _,
             balance,
+            escrow_id: _,
         } = token;
 
         // Add to totals and the ID list
@@ -310,6 +314,7 @@ public(package) fun burn(
         asset_type,
         outcome,
         balance,
+        escrow_id: _,
     } = token;
 
     // Update supply
@@ -354,6 +359,7 @@ public(package) fun mint(
         asset_type: supply.asset_type,
         outcome: supply.outcome,
         balance: amount,
+        escrow_id: option::none(),
     };
 
     // Emit event
@@ -397,8 +403,63 @@ public fun value(token: &ConditionalToken): u64 {
     token.balance
 }
 
+public fun escrow_id(token: &ConditionalToken): Option<ID> {
+    token.escrow_id
+}
+
 public fun total_supply(supply: &Supply): u64 {
     supply.total_supply
+}
+
+// === Package Functions for Escrow Management ===
+
+/// Set the escrow ID for a conditional token (can only be set once)
+public(package) fun set_escrow_id(token: &mut ConditionalToken, escrow_id: ID) {
+    assert!(token.escrow_id.is_none(), 0); // Can only set once
+    token.escrow_id = option::some(escrow_id);
+}
+
+/// Create a token with a specific escrow ID
+public(package) fun mint_with_escrow(
+    state: &market_state::MarketState,
+    supply: &mut Supply,
+    amount: u64,
+    recipient: address,
+    escrow_id: ID,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ConditionalToken {
+    // Verify market state and trading period
+    market_state::assert_in_trading_or_pre_trading(state);
+    assert!(amount > 0, EZeroAmount);
+
+    assert!(state.market_id() == supply.market_id, EWrongMarket);
+    // Update supply
+    update_supply(supply, amount, true);
+
+    // Create new token with escrow ID
+    let token = ConditionalToken {
+        id: object::new(ctx),
+        market_id: supply.market_id,
+        asset_type: supply.asset_type,
+        outcome: supply.outcome,
+        balance: amount,
+        escrow_id: option::some(escrow_id),
+    };
+
+    // Emit event
+    event::emit(TokenMinted {
+        id: object::id(&token),
+        market_id: supply.market_id,
+        asset_type: supply.asset_type,
+        outcome: supply.outcome,
+        amount,
+        recipient,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Return token instead of transferring
+    token
 }
 
 // === Test Functions ===
@@ -419,5 +480,6 @@ public fun mint_for_testing(
         asset_type,
         outcome,
         balance,
+        escrow_id: option::none(),
     }
 }

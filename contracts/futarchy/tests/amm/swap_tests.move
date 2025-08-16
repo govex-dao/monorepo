@@ -15,7 +15,7 @@ const USER_1: address = @0x1;
 const INITIAL_RESERVE: u64 = 1_000_000;
 const SWAP_FEE_RATE: u64 = 30; // 0.3% = 30/10000
 const TWAP_START_DELAY: u64 = 60_000; // Must be multiple of TWAP_PRICE_CAP_WINDOW (60000)
-const TWAP_STEP_MAX: u64 = 1_000;
+const TWAP_STEP_MAX: u64 = 100_000; // 10% of price (100,000 PPM = 10%)
 
 // Helper to create test pool with proper TWAP parameters
 fun create_test_pool_safe(

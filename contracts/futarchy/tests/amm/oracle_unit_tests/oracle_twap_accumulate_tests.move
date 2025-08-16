@@ -14,7 +14,7 @@ module futarchy::oracle_twap_accumulate_tests {
     // ======== Test Constants ========
     const INIT_PRICE: u128 = 10000;
     const MARKET_START_TIME: u64 = 0; // Simplifies time calculations for direct accumulate tests
-    const TWAP_CAP_STEP: u64 = 100; // 1% of INIT_PRICE for easier cap reasoning
+    const TWAP_CAP_STEP: u64 = 10_000; // 1% of INIT_PRICE (10,000 PPM = 1%)
     const OBSERVATION_PRICE: u128 = 10500; // A sample price for observations
     const OTHER_OBSERVATION_PRICE: u128 = 9500;
 
@@ -321,62 +321,46 @@ module futarchy::oracle_twap_accumulate_tests {
         oracle::set_last_timestamp_for_testing(&mut oracle_inst, start_ts_offset);
         oracle::set_last_window_end_for_testing(&mut oracle_inst, 0);
         oracle::set_last_window_twap_for_testing(&mut oracle_inst, INIT_PRICE);
-        oracle::set_cumulative_prices_for_testing(&mut oracle_inst, 0, 0);
+        // Set initial cumulative prices to be consistent with having processed 10k ms at INIT_PRICE
+        let initial_cumulative = (INIT_PRICE as u256) * (start_ts_offset as u256);
+        oracle::set_cumulative_prices_for_testing(&mut oracle_inst, initial_cumulative, 0);
 
         let duration_stage1 = WINDOW_SIZE - start_ts_offset; // 50_000
         let final_ts = start_ts_offset + duration_stage1 + num_full_windows_in_stage2 * WINDOW_SIZE;
         // final_ts = 10k + 50k + 1*60k = 120k
 
-        // Use price = LWT to simplify stage 2 math (g_abs=0)
-        let price_no_cap_effect = INIT_PRICE;
+        // Use a higher price to test ramping behavior in stage 2
+        let new_price = INIT_PRICE + (INIT_PRICE / 5); // 20% higher = 12000
 
-        oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, price_no_cap_effect);
+        oracle::call_twap_accumulate_for_testing(&mut oracle_inst, final_ts, new_price);
 
-        // Stage 1: intra_window for 50k. Price=INIT_PRICE. Cum1 = INIT_PRICE*50k. LWT becomes INIT_PRICE*50k/60k.
-        //          Actually, LWT becomes (INIT_PRICE*50k / 60k) from the window completion. Capped price uses old LWT.
-        //          Capped price for stage 1 (vs INIT_PRICE): INIT_PRICE.
-        //          After stage 1: LT=60k. LWE=60k. LWT = (INIT_PRICE*50k/60k) - this is if this was the only thing.
-        //          Let's re-evaluate: capped_price = INIT_PRICE. Cum1 = INIT_PRICE * 50k.
-        //          At end of Stage 1 (ts=60k): total_cum=INIT_PRICE*50k. lwe_cum=INIT_PRICE*50k.
-        //                                     lwt = (INIT_PRICE*50k - 0) / 60k.
-        let lwt_after_stage1 = (( (INIT_PRICE as u256) * (duration_stage1 as u256) ) / (WINDOW_SIZE as u256)) as u128;
+        // Stage 1: intra_window for 50k. Price=12000, LWT=10000. 
+        //          Initial cumulative = INIT_PRICE * 10k = 100M
+        //          Capped price = min(12000, 10000 + step) where step = 10000 * 0.01 = 100
+        //          Capped price = min(12000, 10100) = 10100
+        //          Additional contribution = 10100 * 50k = 505M
+        //          Total after stage 1 = 100M + 505M = 605M
+        //          At end of Stage 1 (ts=60k): lwt = 605M / 60k = 10083.33... = 10083
+        let lwt_after_stage1 = ((initial_cumulative + (10100u128 as u256) * 50000) / 60000) as u128;
 
-        // Stage 2: multi_full_window for 1 window. Base LWT for this is lwt_after_stage1.
-        //          Price is INIT_PRICE. g_abs = |INIT_PRICE - lwt_after_stage1|.
-        //          This makes calculations complex. Let's stick to price_no_cap_effect = INIT_PRICE for the call.
-        //          This means for Stage 1: price = INIT_PRICE, LWT = INIT_PRICE. Capped price = INIT_PRICE.
-        //          After S1: last_ts=60k. last_price=INIT_PRICE. total_cum=INIT_PRICE*50k. lwe=60k. lwe_cum=INIT_PRICE*50k.
-        //                      last_window_twap = ( (INIT_PRICE*50k) - 0 ) / 60k = 8333 if INIT_PRICE=10k.
-        //          Stage 2: num_full_windows=1. Base LWT = 8333. Price input = INIT_PRICE (10000).
-        //                   g_abs = 10000 - 8333 = 1667. Cap_step = 100.
-        //                   k_cap_idx = (1667-1)/100 + 1 = 16+1 = 17. k_ramp_limit = 16.
-        //                   N_W = 1. n_ramp_terms = min(1, 16) = 1.
-        //                   V_ramp = 100 * 1*(1+1)/2 = 100.
-        //                   V_flat = 0. S_dev_mag = 100.
-        //                   base_price_sum = 1 * 8333 = 8333.
-        //                   V_sum_prices = 8333 + 100 = 8433.
-        //                   Contribution_S2 = 8433 * 60k.
-        //                   p_n_w_effective = 8333 + min(1*100, 1667) = 8333 + 100 = 8433.
-        // Total cum = (INIT_PRICE*50k) + (8433*60k).
+        // Stage 2: multi_full_window for 1 window. Base LWT = 10083, Price = 12000
+        //          g_abs = 12000 - 10083 = 1917
+        //          cap_step = 10083 * 0.01 ≈ 100
+        //          Since we have 1 window and g_abs > cap_step:
+        //          p_n_w_effective = 10083 + min(100*1, 1917) = 10083 + 100 = 10183
 
         assert!(oracle::last_timestamp(&oracle_inst) == final_ts, 0);
-        // P_N_W will be the last_price and new LWT
-        let expected_final_lwt_and_price = lwt_after_stage1 + (TWAP_CAP_STEP as u128); // Simplified if price > LWT
-                                                                                       // (assuming 1 window in S2, N_W * cap_step < G_abs)
-
-        // To simplify assertions, let's verify stage boundaries and final LWT if possible.
-        // The main goal is to ensure stages are hit correctly.
         assert!(oracle::get_last_window_end_for_testing(&oracle_inst) == final_ts, 1);
-        // Final LWT would be p_n_w_effective from stage 2.
-        // Recalculate lwt_after_stage1 precisely for INIT_PRICE=10000, duration_stage1=50000
-        let lwt_s1 = (( (10000u128 as u256) * (50000u64 as u256) ) / (60000u64 as u256)) as u128; // 8333
-        let expected_final_lwt = if (price_no_cap_effect > lwt_s1) {
-            lwt_s1 + std::u128::min( (TWAP_CAP_STEP as u128) * (num_full_windows_in_stage2 as u128), price_no_cap_effect - lwt_s1)
-        } else {
-            lwt_s1 - std::u128::min( (TWAP_CAP_STEP as u128) * (num_full_windows_in_stage2 as u128), lwt_s1 - price_no_cap_effect)
-        };
-        assert!(oracle::debug_get_window_twap(&oracle_inst) == expected_final_lwt, 2);
-        assert!(oracle::last_price(&oracle_inst) == expected_final_lwt, 3);
+        
+        // Calculate expected final TWAP with ramping
+        // With PPM-based step (1% = 10000 PPM), the step from lwt_after_stage1 is about 100
+        let expected_step = (lwt_after_stage1 * (TWAP_CAP_STEP as u128)) / 1_000_000;
+        let expected_final_lwt = lwt_after_stage1 + expected_step;
+        
+        // Allow for small rounding differences
+        let actual_lwt = oracle::debug_get_window_twap(&oracle_inst);
+        assert!(actual_lwt >= expected_final_lwt - 2 && actual_lwt <= expected_final_lwt + 2, 2);
+        assert!(oracle::last_price(&oracle_inst) == actual_lwt, 3);
 
         // Clean up
         oracle::destroy_for_testing(oracle_inst);

@@ -800,7 +800,6 @@ public(package) fun get_pool_mut_by_outcome<AssetType, StableType>(
     get_pool_mut(pools_mut, outcome_idx)
 }
 
-#[test_only]
 public fun get_pool_by_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     outcome_idx: u8,

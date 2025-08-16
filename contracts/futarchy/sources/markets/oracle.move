@@ -12,6 +12,7 @@ use sui::event;
 // === Constants ===
 const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
 const ONE_WEEK_MS: u64 = 604_800_000;
+const PPM_DENOMINATOR: u64 = 1_000_000; // 100% = 1_000_000 ppm; floor = 10 ppm (1/100,000)
 
 // === Errors ===
 const ETimestampRegression: u64 = 0;
@@ -30,6 +31,8 @@ const EInternalTwapError: u64 = 12;
 const ENoneFullWindowTwapDelay: u64 = 13;
 const EMarketNotStarted: u64 = 14;
 const EMarketAlreadyStarted: u64 = 15;
+const EInvalidCapPpm: u64 = 16;
+const EStepOverflow: u64 = 17;
 
 // === Structs ===
 public struct Oracle has key, store {
@@ -49,7 +52,7 @@ public struct Oracle has key, store {
     twap_start_delay: u64,
     // Reduces attacker advantage with surprise proposals
     twap_cap_step: u64,
-    // Maximum absolute step size for TWAP calculations
+    // Scaled relative maximum step size for TWAP calculations
     market_start_time: Option<u64>,
     twap_initialization_price: u128,
 }
@@ -64,13 +67,29 @@ public struct PriceEvent has copy, drop {
 public(package) fun new_oracle(
     twap_initialization_price: u128,
     twap_start_delay: u64,
-    twap_cap_step: u64,
+    twap_cap_ppm: u64,
     ctx: &mut TxContext,
 ): Oracle {
     assert!(twap_initialization_price > 0, EZeroInitialization);
-    assert!(twap_cap_step > 0, EZeroStep);
+    assert!(twap_cap_ppm > 0, EZeroStep);
+    assert!(twap_cap_ppm <= PPM_DENOMINATOR, EInvalidCapPpm);
     assert!(twap_start_delay < ONE_WEEK_MS, ELongDelay); // One week in milliseconds
     assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, ENoneFullWindowTwapDelay);
+    
+    // Calculate the absolute step from PPM and initialization price
+    // Use checked multiplication to avoid overflow
+    let step_u128 = if (twap_cap_ppm > 0 && twap_initialization_price > (u128::max_value!() / (twap_cap_ppm as u128))) {
+        // Would overflow, use max u64 as step
+        (u64::max_value!() as u128)
+    } else {
+        twap_initialization_price * (twap_cap_ppm as u128) / (PPM_DENOMINATOR as u128)
+    };
+    assert!(step_u128 <= (std::u64::max_value!() as u128), EStepOverflow);
+    let mut twap_cap_step = step_u128 as u64;
+    // Ensure step is at least 1 to avoid division by zero
+    if (twap_cap_step == 0) {
+        twap_cap_step = 1;
+    };
 
     Oracle {
         id: object::new(ctx),
@@ -284,6 +303,9 @@ fun multi_full_window_accumulation(
     let k_cap_idx_u128: u128;
     if (g_abs == 0) {
         k_cap_idx_u128 = 0;
+    } else if (oracle.twap_cap_step == 0) {
+        // If step is 0 (from very small PPM), treat as unlimited steps
+        k_cap_idx_u128 = (u64::max_value!() as u128);
     } else {
         k_cap_idx_u128 = (g_abs - 1) / (oracle.twap_cap_step as u128) + 1;
     };
@@ -500,8 +522,8 @@ public fun test_oracle(ctx: &mut TxContext): Oracle {
     new_oracle(
         10000, // twap_initialization_price
         60_000, // twap_start_delay
-        1000, // max_bps_per_step
-        ctx, // sixth argument (TxContext)
+        1000, // twap_cap_ppm (0.1% of initialization price)
+        ctx,
     )
 }
 

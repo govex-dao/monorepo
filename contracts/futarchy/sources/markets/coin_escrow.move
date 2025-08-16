@@ -46,6 +46,7 @@ const EOverflow: u64 = 15; // Arithmetic overflow protection
 const TOKEN_TYPE_ASSET: u8 = 0;
 const TOKEN_TYPE_STABLE: u8 = 1;
 const TOKEN_TYPE_LP: u8 = 2;
+const ETokenTypeMismatch: u64 = 100;
 const MARKET_EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in ms
 
 // === Structs ===
@@ -59,6 +60,13 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     outcome_asset_supplies: vector<Supply>,
     outcome_stable_supplies: vector<Supply>,
     outcome_lp_supplies: vector<Supply>,
+    // Track final amounts from winning pool for LP conversion invariance
+    winning_pool_final_asset: u64,
+    winning_pool_final_stable: u64,
+    // Track original winning LP supply for conversion invariant
+    winning_lp_supply_at_finalization: u64,
+    // Track total LP converted so far to ensure no over-conversion
+    winning_lp_converted: u64,
 }
 
 public struct COIN_ESCROW has drop {}
@@ -107,33 +115,37 @@ public (package) fun mint_single_conditional_token<AssetType, StableType>(
     assert!(outcome_idx < escrow.market_state.outcome_count(), EOutcomeOutOfBounds);
     
     // Get the appropriate supply based on token type
+    let escrow_id = object::id(escrow);
     if (asset_type == TOKEN_TYPE_ASSET) {
         let supply = &mut escrow.outcome_asset_supplies[outcome_idx];
-        token::mint(
+        token::mint_with_escrow(
             &escrow.market_state,
             supply,
             amount,
             recipient,
+            escrow_id,
             clock,
             ctx
         )
     } else if (asset_type == TOKEN_TYPE_STABLE) {
         let supply = &mut escrow.outcome_stable_supplies[outcome_idx];
-        token::mint(
+        token::mint_with_escrow(
             &escrow.market_state,
             supply,
             amount,
             recipient,
+            escrow_id,
             clock,
             ctx
         )
     } else {
         let supply = &mut escrow.outcome_lp_supplies[outcome_idx];
-        token::mint(
+        token::mint_with_escrow(
             &escrow.market_state,
             supply,
             amount,
             recipient,
+            escrow_id,
             clock,
             ctx
         )
@@ -193,13 +205,15 @@ public fun mint_complete_set_asset<AssetType, StableType>(
     let outcome_count = escrow.outcome_asset_supplies.length();
     let mut i = 0;
     
+    let escrow_id = object::id(escrow);
     while (i < outcome_count) {
         let supply = &mut escrow.outcome_asset_supplies[i];
-        let token = token::mint(
+        let token = token::mint_with_escrow(
             &escrow.market_state,
             supply,
             amount,
             ctx.sender(),
+            escrow_id,
             _clock,
             ctx
         );
@@ -232,13 +246,15 @@ public fun mint_complete_set_stable<AssetType, StableType>(
     let outcome_count = escrow.outcome_stable_supplies.length();
     let mut i = 0;
     
+    let escrow_id = object::id(escrow);
     while (i < outcome_count) {
         let supply = &mut escrow.outcome_stable_supplies[i];
-        let token = token::mint(
+        let token = token::mint_with_escrow(
             &escrow.market_state,
             supply,
             amount,
             ctx.sender(),
+            escrow_id,
             _clock,
             ctx
         );
@@ -321,6 +337,10 @@ public(package) fun new<AssetType, StableType>(
         outcome_asset_supplies: vector[],
         outcome_stable_supplies: vector[],
         outcome_lp_supplies: vector[],
+        winning_pool_final_asset: 0,
+        winning_pool_final_stable: 0,
+        winning_lp_supply_at_finalization: 0,
+        winning_lp_converted: 0,
     }
 }
 
@@ -406,6 +426,7 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
     // DIFFERENTIAL MINTING: For outcomes that need less than the maximum liquidity,
     // we mint the difference as conditional tokens to the liquidity provider.
     // This maintains the invariant: AMM_reserves[i] + conditional_supply[i] = max_liquidity
+    let escrow_id = object::id(escrow);
     i = 0;
     while (i < outcome_count) {
         let asset_amt = asset_amounts[i];
@@ -416,11 +437,12 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
         if (asset_amt < max_asset) {
             let diff = max_asset - asset_amt;
             let asset_supply = &mut escrow.outcome_asset_supplies[i];
-            let token = token::mint(
+            let token = token::mint_with_escrow(
                 &escrow.market_state,
                 asset_supply,
                 diff,
                 sender,
+                escrow_id,
                 clock,
                 ctx,
             );
@@ -433,11 +455,12 @@ public(package) fun deposit_initial_liquidity<AssetType, StableType>(
         if (stable_amt < max_stable) {
             let diff = max_stable - stable_amt;
             let stable_supply = &mut escrow.outcome_stable_supplies[i];
-            let token = token::mint(
+            let token = token::mint_with_escrow(
                 &escrow.market_state,
                 stable_supply,
                 diff,
                 sender,
+                escrow_id,
                 clock,
                 ctx,
             );
@@ -665,15 +688,18 @@ public(package) fun swap_token_asset_to_stable<AssetType, StableType>(
     assert!(token_in.outcome() == (outcome_idx as u8), EWrongOutcome);
     assert!(token_in.asset_type() == TOKEN_TYPE_ASSET, EWrongTokenType);
 
+    let escrow_id = object::id(escrow);
+    
     let asset_supply = &mut escrow.outcome_asset_supplies[outcome_idx];
     token_in.burn(asset_supply, clock, ctx);
 
     let stable_supply = &mut escrow.outcome_stable_supplies[outcome_idx];
-    let token = token::mint(
+    let token = token::mint_with_escrow(
         ms,
         stable_supply,
         amount_out,
         ctx.sender(),
+        escrow_id,
         clock,
         ctx,
     );
@@ -697,15 +723,18 @@ public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     assert!(token_in.outcome() == (outcome_idx as u8), EWrongOutcome);
     assert!(token_in.asset_type() == TOKEN_TYPE_STABLE, EWrongTokenType);
 
+    let escrow_id = object::id(escrow);
+    
     let stable_supply = &mut escrow.outcome_stable_supplies[outcome_idx];
     token_in.burn(stable_supply, clock, ctx);
 
     let asset_supply = &mut escrow.outcome_asset_supplies[outcome_idx];
-    let token = token::mint(
+    let token = token::mint_with_escrow(
         ms,
         asset_supply,
         amount_out,
         ctx.sender(),
+        escrow_id,
         clock,
         ctx,
     );
@@ -764,6 +793,43 @@ public(package) fun burn_unused_tokens<AssetType, StableType>(
     };
     // 4. Destroy the now empty vector
     tokens_to_burn.destroy_empty();
+}
+
+// === LP Invariant Checking ===
+
+/// Assert LP supply invariants for all operations
+/// Called after minting, burning, or converting LP tokens
+public(package) fun assert_lp_supply_invariants<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+) {
+    // If market is finalized, check conversion invariants
+    if (escrow.market_state.is_finalized()) {
+        // Total converted cannot exceed original winning supply
+        assert!(
+            escrow.winning_lp_converted <= escrow.winning_lp_supply_at_finalization,
+            EOverflow
+        );
+        
+        // Current winning LP supply + converted should equal original
+        let winning_outcome = escrow.market_state.get_winning_outcome();
+        let current_winning_supply = escrow.outcome_lp_supplies[winning_outcome].total_supply();
+        assert!(
+            current_winning_supply + escrow.winning_lp_converted == escrow.winning_lp_supply_at_finalization,
+            EOverflow
+        );
+    };
+    
+    // Check that all LP supplies are non-negative (implicit through u64)
+    // and that minting/burning operations maintain consistency
+    let outcome_count = escrow.outcome_lp_supplies.length();
+    let mut i = 0;
+    while (i < outcome_count) {
+        let supply = &escrow.outcome_lp_supplies[i];
+        // Supply should always be >= 0 (guaranteed by u64 type)
+        // Could add additional checks here if needed
+        let _ = supply.total_supply();
+        i = i + 1;
+    };
 }
 
 // === View Functions ===
@@ -832,6 +898,220 @@ public(package) fun get_asset_supply<AssetType, StableType>(
     outcome_idx: u64,
 ): &mut Supply {
     &mut escrow.outcome_asset_supplies[outcome_idx]
+}
+
+// === LP Token Finalization Functions ===
+
+/// Convert winning outcome conditional LP tokens to spot LP tokens
+/// 
+/// SECURITY CRITICAL: This function maintains the invariant that:
+/// 1. The proportion of LP ownership is preserved
+/// 2. The total value in the system remains constant
+/// 3. Each conditional LP token can only be converted once (enforced by burning)
+/// 
+/// INVARIANCE CHECK:
+/// - Before: User owns X% of conditional LP supply for winning outcome
+/// - After: User owns X% of the liquidity that was in that pool (now in spot)
+/// 
+/// The escrow tracks the final liquidity amounts that were extracted from the winning pool
+/// during finalization. This ensures we can verify the conversion is correct.
+// TODO: Re-enable when spot_amm is fixed
+/*
+public fun convert_winning_lp_to_spot_lp<AssetType, StableType, SpotAMM>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_amm: &mut SpotAMM,
+    conditional_lp_token: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID { // Returns the ID of the minted spot LP token
+    // Step 1: Verify market is finalized
+    assert!(escrow.market_state.is_finalized(), EMarketNotExpired);
+    
+    // Step 2: Verify this is the winning outcome
+    let winning_outcome = escrow.market_state.get_winning_outcome();
+    let token_outcome = conditional_lp_token.outcome();
+    assert!((token_outcome as u64) == winning_outcome, EOutcomeOutOfBounds);
+    
+    // Step 3: Verify this is an LP token
+    assert!(conditional_lp_token.asset_type() == TOKEN_TYPE_LP, ETokenTypeMismatch);
+    
+    let lp_amount = conditional_lp_token.value();
+    assert!(lp_amount > 0, EZeroAmount);
+    
+    // Step 4: Get the total LP supply and final reserves for invariance check
+    let outcome_idx = (token_outcome as u64);
+    let lp_supply = &escrow.outcome_lp_supplies[outcome_idx];
+    let total_lp_supply = lp_supply.total_supply();
+    
+    // Step 5: Get the final liquidity amounts that were in the winning pool
+    // These should have been recorded when the pool was emptied during finalization
+    let (final_asset_amount, final_stable_amount) = get_winning_pool_final_amounts(escrow);
+    
+    // Step 6: Calculate the user's proportional share
+    // user_share = lp_amount / total_lp_supply
+    // user_asset = final_asset_amount * user_share
+    // user_stable = final_stable_amount * user_share
+    let user_asset_share = (lp_amount as u128) * (final_asset_amount as u128) / (total_lp_supply as u128);
+    let user_stable_share = (lp_amount as u128) * (final_stable_amount as u128) / (total_lp_supply as u128);
+    
+    // Step 7: INVARIANCE CHECK - Verify we haven't over-converted
+    assert!(escrow.winning_lp_converted + lp_amount <= escrow.winning_lp_supply_at_finalization, EOverflow);
+    
+    // Step 8: INVARIANCE CHECK - Record state before burn
+    let supply_before = lp_supply.total_supply();
+    
+    // Step 9: Burn the conditional LP token (this updates the supply)
+    burn_single_conditional_token(escrow, conditional_lp_token, clock, ctx);
+    
+    // Step 10: INVARIANCE CHECK - Verify supply decreased correctly
+    let supply_after = escrow.outcome_lp_supplies[outcome_idx].total_supply();
+    assert!(supply_before - supply_after == lp_amount, EOverflow);
+    
+    // Step 11: Update conversion tracking
+    escrow.winning_lp_converted = escrow.winning_lp_converted + lp_amount;
+    
+    // Step 12: INVARIANCE CHECK - Verify total conversions don't exceed original supply
+    assert!(escrow.winning_lp_converted <= escrow.winning_lp_supply_at_finalization, EOverflow);
+    
+    // Step 13: Call spot AMM to mint equivalent spot LP tokens
+    // The spot AMM should verify these amounts match its expectations
+    let spot_lp_id = futarchy::spot_amm::mint_lp_for_conversion<AssetType, StableType, SpotAMM>(
+        spot_amm,
+        (user_asset_share as u64),
+        (user_stable_share as u64),
+        lp_amount,
+        total_lp_supply,
+        escrow.market_state.market_id(),
+        ctx
+    );
+    
+    spot_lp_id
+}
+*/
+
+/// Track the final amounts that were in the winning pool before it was emptied
+/// This is called during finalization when the pool is emptied
+public(package) fun record_winning_pool_final_amounts<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_amount: u64,
+    stable_amount: u64,
+) {
+    // Store these amounts for LP conversion calculations
+    escrow.winning_pool_final_asset = asset_amount;
+    escrow.winning_pool_final_stable = stable_amount;
+    
+    // Also record the winning LP supply at finalization for invariant checking
+    let winning_outcome = escrow.market_state.get_winning_outcome();
+    let winning_lp_supply = &escrow.outcome_lp_supplies[winning_outcome];
+    escrow.winning_lp_supply_at_finalization = winning_lp_supply.total_supply();
+    
+    // Reset converted counter
+    escrow.winning_lp_converted = 0;
+}
+
+/// Get the final amounts that were in the winning pool
+fun get_winning_pool_final_amounts<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>
+): (u64, u64) {
+    // Return the recorded amounts
+    (escrow.winning_pool_final_asset, escrow.winning_pool_final_stable)
+}
+
+
+/// Burn losing outcome LP tokens
+/// 
+/// After finalization, LP tokens from losing outcomes have no value.
+/// This function allows holders to burn these worthless tokens.
+public fun burn_losing_lp_tokens<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    conditional_lp_token: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify market is finalized
+    assert!(escrow.market_state.is_finalized(), EMarketNotExpired);
+    
+    // Verify this is NOT the winning outcome
+    let winning_outcome = escrow.market_state.get_winning_outcome();
+    let token_outcome = conditional_lp_token.outcome();
+    assert!((token_outcome as u64) != winning_outcome, EOutcomeOutOfBounds);
+    
+    // Verify this is an LP token
+    assert!(conditional_lp_token.asset_type() == TOKEN_TYPE_LP, ETokenTypeMismatch);
+    
+    // Burn the worthless LP token
+    burn_single_conditional_token(escrow, conditional_lp_token, clock, ctx);
+}
+
+/// Batch burn multiple losing LP tokens
+public fun burn_losing_lp_tokens_batch<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    mut conditional_lp_tokens: vector<ConditionalToken>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify market is finalized once
+    assert!(escrow.market_state.is_finalized(), EMarketNotExpired);
+    let winning_outcome = escrow.market_state.get_winning_outcome();
+    
+    while (!conditional_lp_tokens.is_empty()) {
+        let token = conditional_lp_tokens.pop_back();
+        
+        // Verify this is a losing outcome LP token
+        let token_outcome = token.outcome();
+        assert!((token_outcome as u64) != winning_outcome, EOutcomeOutOfBounds);
+        assert!(token.asset_type() == TOKEN_TYPE_LP, ETokenTypeMismatch);
+        
+        // Burn the token
+        burn_single_conditional_token(escrow, token, clock, ctx);
+    };
+    
+    conditional_lp_tokens.destroy_empty();
+}
+
+// TODO: Fix this entry function to match the new spot_amm integration
+// /// Entry point for converting winning LP to spot claim
+// public entry fun convert_winning_lp_to_spot_claim_entry<AssetType, StableType>(
+//     escrow: &mut TokenEscrow<AssetType, StableType>,
+//     conditional_lp_token: ConditionalToken,
+//     clock: &Clock,
+//     ctx: &mut TxContext,
+// ) {
+//     let (lp_amount, total_supply) = convert_winning_lp_to_spot_lp(
+//         escrow,
+//         conditional_lp_token,
+//         clock,
+//         ctx
+//     );
+//     
+//     // Emit event with the claim details
+//     event::emit(WinningLPConverted {
+//         market_id: escrow.market_state.market_id(),
+//         lp_amount_burned: lp_amount,
+//         total_lp_supply: total_supply,
+//         sender: ctx.sender(),
+//         timestamp: clock.timestamp_ms(),
+//     });
+// }
+
+/// Entry point for burning losing LP tokens
+public entry fun burn_losing_lp_tokens_entry<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    conditional_lp_token: ConditionalToken,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    burn_losing_lp_tokens(escrow, conditional_lp_token, clock, ctx);
+}
+
+// === Events for LP Finalization ===
+
+public struct WinningLPConverted has copy, drop {
+    market_id: ID,
+    lp_amount_burned: u64,
+    total_lp_supply: u64,
+    sender: address,
+    timestamp: u64,
 }
 
 // === Test Functions ===

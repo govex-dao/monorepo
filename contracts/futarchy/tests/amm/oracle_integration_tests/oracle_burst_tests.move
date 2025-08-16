@@ -7,7 +7,7 @@ use sui::clock;
 use sui::test_scenario::{Self as test, Scenario};
 
 // ======== Test Constants ========
-const TWAP_STEP_MAX: u64 = 1000; // Allow 10% movement
+const TWAP_STEP_MAX: u64 = 100_000; // Allow 10% movement (100,000 PPM = 10%)
 const TWAP_START_DELAY: u64 = 120_000;
 const MARKET_START_TIME: u64 = 1000;
 const INIT_PRICE: u128 = 10000;

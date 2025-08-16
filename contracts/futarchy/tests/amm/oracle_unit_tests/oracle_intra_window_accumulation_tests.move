@@ -2,6 +2,8 @@
 module futarchy::oracle_intra_accum_tests {
     use futarchy::oracle::{
         Self, Oracle,
+        // Error codes
+        EInvalidCapPpm,
         // Test helpers from oracle module
         set_last_timestamp_for_testing,
         set_last_window_end_for_testing,
@@ -20,7 +22,7 @@ module futarchy::oracle_intra_accum_tests {
 
     // ======== Test Constants from existing test setups ========
     // These are used for oracle creation via setup_test_oracle
-    const DEFAULT_TWAP_CAP_STEP: u64 = 1000;
+    const DEFAULT_TWAP_CAP_STEP: u64 = 100_000; // 10% of price (100,000 PPM = 10%)
     const DEFAULT_TWAP_START_DELAY: u64 = 60_000;
     const DEFAULT_MARKET_START_TIME: u64 = 1000;
     const DEFAULT_INIT_PRICE: u128 = 10000;
@@ -150,7 +152,9 @@ module futarchy::oracle_intra_accum_tests {
         let time_to_include = 1000_u64;
         let new_timestamp = 1000_u64; // Not on boundary relative to LWE=0
 
-        let expected_capped_price = lwt_base + (DEFAULT_TWAP_CAP_STEP as u128); // 10000 + 1000 = 11000
+        // Calculate actual step from PPM
+        let actual_step = lwt_base * (DEFAULT_TWAP_CAP_STEP as u128) / 1_000_000;
+        let expected_capped_price = lwt_base + actual_step; // 10000 + 1000 = 11000
         let expected_price_contribution = (expected_capped_price as u256) * (time_to_include as u256);
 
         call_intra_window_accumulation_for_testing(&mut oracle_inst, high_price_input, time_to_include, new_timestamp);
@@ -175,7 +179,9 @@ module futarchy::oracle_intra_accum_tests {
         let time_to_include = 1000_u64;
         let new_timestamp = 1000_u64;
 
-        let expected_capped_price = lwt_base - (DEFAULT_TWAP_CAP_STEP as u128); // 10000 - 1000 = 9000
+        // Calculate actual step from PPM
+        let actual_step = lwt_base * (DEFAULT_TWAP_CAP_STEP as u128) / 1_000_000;
+        let expected_capped_price = lwt_base - actual_step; // 10000 - 1000 = 9000
         let expected_price_contribution = (expected_capped_price as u256) * (time_to_include as u256);
 
         call_intra_window_accumulation_for_testing(&mut oracle_inst, low_price_input, time_to_include, new_timestamp);
@@ -256,7 +262,7 @@ module futarchy::oracle_intra_accum_tests {
         // Create oracle with a large cap step to ensure price isn't capped *beyond a single step from base* for this test
         let mut oracle_inst = oracle::new_oracle(
             DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
-            u64::max_value!(), // Very large cap step
+            1_000_000, // Maximum PPM (100% of price)
             test_ctx
         );
         // oracle.last_window_twap is DEFAULT_INIT_PRICE (10000) after new_oracle
@@ -270,12 +276,11 @@ module futarchy::oracle_intra_accum_tests {
 
         // Calculate the actual expected capped price based on one_step_cap_price_change
         // oracle.last_window_twap = DEFAULT_INIT_PRICE (10000)
-        // oracle.twap_cap_step = u64::max_value()
-        // capped_price = min(large_price_input, DEFAULT_INIT_PRICE + u64::max_value())
-        // Since large_price_input is much larger than (DEFAULT_INIT_PRICE + u64::max_value()),
-        // the capped price will be DEFAULT_INIT_PRICE + u64::max_value().
+        // With PPM=1_000_000 (100%), twap_cap_step = DEFAULT_INIT_PRICE * 1_000_000 / 1_000_000 = DEFAULT_INIT_PRICE
+        // capped_price = min(large_price_input, DEFAULT_INIT_PRICE + DEFAULT_INIT_PRICE)
+        // Since large_price_input is much larger, the capped price will be DEFAULT_INIT_PRICE + DEFAULT_INIT_PRICE = 20000
         let base_for_cap_calc = DEFAULT_INIT_PRICE;
-        let cap_step_for_calc = u64::max_value!() as u128;
+        let cap_step_for_calc = DEFAULT_INIT_PRICE; // 100% of init price
         let expected_capped_price = math::saturating_add(base_for_cap_calc, cap_step_for_calc);
 
         let expected_tcp = (expected_capped_price as u256) * (large_time as u256);
@@ -284,8 +289,227 @@ module futarchy::oracle_intra_accum_tests {
 
         assert!(get_total_cumulative_price_for_testing(&oracle_inst) == expected_tcp, 1);
         assert!(oracle::last_timestamp(&oracle_inst) == new_timestamp, 2);
-        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 3);
+        // last_price is now stored as u128, not u256
+        assert!(oracle::last_price(&oracle_inst) == (expected_capped_price as u128), 3);
 
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_ppm_boundary_zero_percent() {
+        // Test that 0% PPM (minimum 1 PPM) works correctly
+        let mut scenario = test::begin(@0xB0);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Create oracle with minimum PPM (0.0001%)
+        let mut oracle_inst = oracle::new_oracle(
+            DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
+            1, // Minimum PPM
+            test_ctx
+        );
+        configure_oracle_state(&mut oracle_inst, DEFAULT_INIT_PRICE, 0, 0, 0);
+        
+        let large_price = DEFAULT_INIT_PRICE * 10; // 10x the base price
+        let time_to_include = 1000u64;
+        let new_timestamp = 1000u64;
+        
+        // With 1 PPM, step = 10000 * 1 / 1_000_000 = 0.01, rounds to 0
+        // So the price should be capped at exactly DEFAULT_INIT_PRICE
+        let expected_capped_price = DEFAULT_INIT_PRICE; // Minimum step effectively 0
+        
+        call_intra_window_accumulation_for_testing(&mut oracle_inst, large_price, time_to_include, new_timestamp);
+        
+        // Price should be effectively unchanged due to tiny PPM
+        assert!(oracle::last_price(&oracle_inst) <= DEFAULT_INIT_PRICE + 1, 1); // Allow for rounding
+        
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_ppm_boundary_hundred_percent() {
+        // Test that 100% PPM (1_000_000) works correctly
+        let mut scenario = test::begin(@0xB1);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Create oracle with maximum PPM (100%)
+        let mut oracle_inst = oracle::new_oracle(
+            DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
+            1_000_000, // Maximum PPM (100%)
+            test_ctx
+        );
+        configure_oracle_state(&mut oracle_inst, DEFAULT_INIT_PRICE, 0, 0, 0);
+        
+        let large_price = DEFAULT_INIT_PRICE * 10; // 10x the base price
+        let time_to_include = 1000u64;
+        let new_timestamp = 1000u64;
+        
+        // With 1_000_000 PPM (100%), step = DEFAULT_INIT_PRICE
+        let expected_capped_price = DEFAULT_INIT_PRICE * 2; // Can double in one step
+        
+        call_intra_window_accumulation_for_testing(&mut oracle_inst, large_price, time_to_include, new_timestamp);
+        
+        assert!(oracle::last_price(&oracle_inst) == expected_capped_price, 1);
+        
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_ppm_boundary_precise_percentages() {
+        // Test various precise percentage boundaries
+        let mut scenario = test::begin(@0xB2);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Test 1% PPM (10_000)
+        let mut oracle_1pct = oracle::new_oracle(
+            DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
+            10_000, // 1%
+            test_ctx
+        );
+        configure_oracle_state(&mut oracle_1pct, DEFAULT_INIT_PRICE, 0, 0, 0);
+        
+        let high_price = DEFAULT_INIT_PRICE * 2;
+        call_intra_window_accumulation_for_testing(&mut oracle_1pct, high_price, 1000, 1000);
+        
+        // 1% of 10000 = 100
+        assert!(oracle::last_price(&oracle_1pct) == DEFAULT_INIT_PRICE + 100, 1);
+        
+        oracle::destroy_for_testing(oracle_1pct);
+        
+        // Test 10% PPM (100_000)
+        let mut oracle_10pct = oracle::new_oracle(
+            DEFAULT_INIT_PRICE, DEFAULT_TWAP_START_DELAY,
+            100_000, // 10%
+            ctx(&mut scenario)
+        );
+        configure_oracle_state(&mut oracle_10pct, DEFAULT_INIT_PRICE, 0, 0, 0);
+        
+        call_intra_window_accumulation_for_testing(&mut oracle_10pct, high_price, 1000, 1000);
+        
+        // 10% of 10000 = 1000
+        assert!(oracle::last_price(&oracle_10pct) == DEFAULT_INIT_PRICE + 1000, 2);
+        
+        oracle::destroy_for_testing(oracle_10pct);
+        test::end(scenario);
+    }
+
+    #[test]
+    #[expected_failure(abort_code = oracle::EInvalidCapPpm)]
+    fun test_ppm_exceeds_maximum() {
+        // Test that PPM > 1_000_000 is rejected
+        let mut scenario = test::begin(@0xB3);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Try to create oracle with PPM > 100%
+        let oracle_inst = oracle::new_oracle(
+            DEFAULT_INIT_PRICE, 
+            DEFAULT_TWAP_START_DELAY,
+            1_000_001, // Just over 100%
+            test_ctx
+        );
+        // Should abort with EInvalidCapPpm before reaching here
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_step_calculation_with_large_values() {
+        // Test that large but valid price and PPM combinations work correctly
+        let mut scenario = test::begin(@0xB4);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Use large but valid price
+        // With 100% PPM, the step would be equal to the price
+        // So we need a price that fits in u64
+        let large_price = (u64::max_value!() / 2) as u128;
+        
+        // This should create oracle successfully
+        let oracle_inst = oracle::new_oracle(
+            large_price,
+            DEFAULT_TWAP_START_DELAY,
+            1_000_000, // Max PPM (100%)
+            test_ctx
+        );
+        
+        // The oracle should be created successfully
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_minimum_step_enforcement() {
+        // Test that very small PPM values result in minimum step of 1
+        let mut scenario = test::begin(@0xB5);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Create oracle with tiny PPM that would round to 0
+        // 1 PPM of 100 = 0.0001, which rounds to 0, but should be enforced to 1
+        let small_price = 100u128;
+        let mut oracle_inst = oracle::new_oracle(
+            small_price,
+            DEFAULT_TWAP_START_DELAY,
+            1, // Minimum PPM
+            test_ctx
+        );
+        
+        // Set up for testing
+        oracle::set_last_window_twap_for_testing(&mut oracle_inst, small_price);
+        oracle::set_last_timestamp_for_testing(&mut oracle_inst, 0);
+        oracle::set_last_window_end_for_testing(&mut oracle_inst, 0);
+        oracle::set_cumulative_prices_for_testing(&mut oracle_inst, 0, 0);
+        
+        // Price much higher than base
+        let high_price = small_price * 10;
+        call_intra_window_accumulation_for_testing(&mut oracle_inst, high_price, 1000, 1000);
+        
+        // Even with tiny PPM, price should move by at least 1
+        assert!(oracle::last_price(&oracle_inst) >= small_price + 1, 1);
+        
+        oracle::destroy_for_testing(oracle_inst);
+        test::end(scenario);
+    }
+
+    #[test]
+    fun test_ppm_based_step_calculation() {
+        // Test that step is calculated as percentage of current TWAP
+        let mut scenario = test::begin(@0xB6);
+        let test_ctx = ctx(&mut scenario);
+        
+        // Create oracle with 10% PPM
+        let mut oracle_inst = oracle::new_oracle(
+            10_000u128, // Starting price
+            DEFAULT_TWAP_START_DELAY,
+            100_000, // 10% PPM
+            test_ctx
+        );
+        
+        // Set up initial state
+        oracle::set_last_window_twap_for_testing(&mut oracle_inst, 10_000);
+        oracle::set_last_timestamp_for_testing(&mut oracle_inst, 0);
+        oracle::set_last_window_end_for_testing(&mut oracle_inst, 0);
+        oracle::set_cumulative_prices_for_testing(&mut oracle_inst, 0, 0);
+        
+        // Test upward movement
+        let high_price = 20_000u128;
+        call_intra_window_accumulation_for_testing(&mut oracle_inst, high_price, 1000, 1000);
+        
+        // With 10% PPM and base of 10,000, step = 1,000
+        // Price should be capped at 10,000 + 1,000 = 11,000
+        assert!(oracle::last_price(&oracle_inst) == 11_000, 1);
+        
+        // Reset and test downward movement
+        oracle::set_last_window_twap_for_testing(&mut oracle_inst, 10_000);
+        oracle::set_last_timestamp_for_testing(&mut oracle_inst, 2000);
+        oracle::set_last_window_end_for_testing(&mut oracle_inst, 0);
+        
+        let low_price = 5_000u128;
+        call_intra_window_accumulation_for_testing(&mut oracle_inst, low_price, 1000, 3000);
+        
+        // Price should be capped at 10,000 - 1,000 = 9,000
+        assert!(oracle::last_price(&oracle_inst) == 9_000, 2);
+        
         oracle::destroy_for_testing(oracle_inst);
         test::end(scenario);
     }

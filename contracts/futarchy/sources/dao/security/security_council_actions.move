@@ -85,6 +85,11 @@ public struct ApproveGenericAction has store {
     expires_at: u64,
 }
 
+/// Action to sweep/cleanup expired intents from the Security Council account
+public struct SweepIntentsAction has store {
+    intent_keys: vector<String>,  // Specific intent keys to clean up
+}
+
 // --- Constructors, Getters, Cleanup ---
 public fun new_update_upgrade_rules(package_name: String): UpdateUpgradeRulesAction {
     UpdateUpgradeRulesAction { package_name }
@@ -160,5 +165,19 @@ public fun get_approve_generic_params(
 
 public fun delete_approve_generic(expired: &mut Expired) {
     let ApproveGenericAction {..} = expired.remove_action();
+}
+
+// --- Sweep Intents Functions ---
+
+public fun new_sweep_intents_with_keys(intent_keys: vector<String>): SweepIntentsAction {
+    SweepIntentsAction { intent_keys }
+}
+
+public fun get_sweep_keys(action: &SweepIntentsAction): &vector<String> {
+    &action.intent_keys
+}
+
+public fun delete_sweep_intents(expired: &mut Expired) {
+    let SweepIntentsAction {..} = expired.remove_action();
 }
 

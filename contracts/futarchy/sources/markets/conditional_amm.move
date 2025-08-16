@@ -347,7 +347,7 @@ public fun add_liquidity_proportional(
     assert!(stable_amount > 0, EZeroAmount);
     
     // Calculate LP tokens to mint based on current pool state
-    let lp_to_mint = if (pool.lp_supply == 0) {
+    let (lp_to_mint, new_lp_supply) = if (pool.lp_supply == 0) {
         // First liquidity provider - bootstrap the pool
         let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
         let k = (math::sqrt_u128(k_squared) as u64);
@@ -356,9 +356,10 @@ public fun add_liquidity_proportional(
         // is intentionally burned and locked in the pool. This is a standard practice in Uniswap V2
         // to prevent division-by-zero errors and to ensure that LP token prices are always well-defined.
         // This amount is accounted for in the `lp_supply` but is not redeemable.
-        pool.lp_supply = k;
-        // Return k minus the locked minimum liquidity
-        k - (MINIMUM_LIQUIDITY as u64)
+        let locked = (MINIMUM_LIQUIDITY as u64);
+        let minted = k - locked;
+        // Return the minted amount and the resulting total supply
+        (minted, k)
     } else {
         // Subsequent providers - mint proportionally
         // The `math::min` function is used here, similar to Uniswap V2, to calculate the LP tokens to mint.
@@ -383,7 +384,8 @@ public fun add_liquidity_proportional(
         let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
         let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
         // Use minimum to ensure proper ratio
-        math::min(lp_from_asset, lp_from_stable)
+        let minted = math::min(lp_from_asset, lp_from_stable);
+        (minted, pool.lp_supply + minted)
     };
     
     // Slippage protection: ensure LP tokens minted meet minimum expectation
@@ -392,7 +394,7 @@ public fun add_liquidity_proportional(
     // Update reserves with overflow checks
     let new_asset_reserve = pool.asset_reserve + asset_amount;
     let new_stable_reserve = pool.stable_reserve + stable_amount;
-    let new_lp_supply = pool.lp_supply + lp_to_mint;
+    // Use the precomputed total supply
     
     // Check for overflow
     assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);

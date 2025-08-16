@@ -8,7 +8,7 @@ module futarchy::oracle_multi_window_tests {
         ETimestampRegression, ETwapNotStarted, EZeroPeriod, EZeroInitialization, EZeroStep,
         ELongDelay, EStaleTwap, EOverflowVRamp, EOverflowVFlat, EOverflowSDevMag,
         EOverflowBasePriceSumFinal, EOverflowVSumPricesAdd, EInternalTwapError,
-        ENoneFullWindowTwapDelay // Import all error codes
+        ENoneFullWindowTwapDelay, EInvalidCapPpm // Import all error codes
     };
 
     use std::u64;
@@ -16,7 +16,7 @@ module futarchy::oracle_multi_window_tests {
     use futarchy::math; // For u256 if needed, though not directly here for construction
 
     const DEFAULT_LAST_WINDOW_TWAP: u128 = 10_000;
-    const DEFAULT_CAP_STEP: u64 = 100; // Default: 1% of 10k
+    const DEFAULT_CAP_STEP: u64 = 10_000; // Default: 1% of 10k (10,000 PPM = 1%)
     const MARKET_START_TIME_FOR_TESTS: u64 = 0;
     const DEFAULT_INIT_PRICE: u128 = DEFAULT_LAST_WINDOW_TWAP; // For oracle creation
     const TWAP_PRICE_CAP_WINDOW_TIME: u64 = 60_000;
@@ -31,10 +31,29 @@ module futarchy::oracle_multi_window_tests {
         initial_total_cumulative: u256,
         initial_lwe_cumulative: u256
     ): Oracle {
+        // Convert desired absolute step to PPM based on DEFAULT_INIT_PRICE
+        // cap_step_val is the desired absolute step, convert to PPM
+        let cap_step_ppm = if (cap_step_val == 0 || DEFAULT_INIT_PRICE == 0) {
+            1 // Minimum PPM
+        } else {
+            // For very large cap_step_val, calculate PPM carefully to avoid overflow
+            // PPM = (cap_step_val * 1_000_000) / DEFAULT_INIT_PRICE
+            // If cap_step_val is very large (like 2^60), we need to be careful
+            let max_step_for_ppm = u64::max_value!() / 1_000_000; // Maximum value that won't overflow when multiplied by 1M
+            if (cap_step_val > max_step_for_ppm) {
+                // cap_step_val is too large for direct multiplication
+                // Since it's so large, just use max PPM
+                1_000_000
+            } else {
+                let ppm_calc = cap_step_val * 1_000_000 / (DEFAULT_INIT_PRICE as u64);
+                if (ppm_calc == 0) { 1 } else if (ppm_calc > 1_000_000) { 1_000_000 } else { ppm_calc }
+            }
+        };
+        
         let mut oracle_inst = oracle::new_oracle(
             DEFAULT_INIT_PRICE,
             0, // twap_start_delay, keep simple for these tests
-            cap_step_val,
+            cap_step_ppm,
             ctx(scenario),
         );
         oracle::set_last_window_twap_for_testing(&mut oracle_inst, last_window_twap_val);
@@ -291,32 +310,45 @@ module futarchy::oracle_multi_window_tests {
         test::end(scenario);
     }
 
+    // The old test_multi_v_ramp_overflow has been removed as the PPM-based system
+    // inherently prevents the extreme step values that would cause overflow.
+    // Instead, we test that the PPM system correctly bounds the step values.
+    
     #[test]
-    #[expected_failure(abort_code = EOverflowVRamp)]
-    fun test_multi_v_ramp_overflow() {
+    fun test_ppm_prevents_extreme_steps() {
+        // Test that the PPM-based system correctly limits step values
+        // even with extreme inputs that would have caused overflow in the old system
         let mut scenario = test::begin(@0x1);
-        let base_twap = 1u128;
-
-        let n_ramp_terms_target = (1u64 << 35); // sum_indices_part ~ 2^69
-        let cap_step_val = (1u64 << 60); // cap_step is u64, 2^60 fits.
-        let num_windows = n_ramp_terms_target;
-
-        let g_abs_min_required = (n_ramp_terms_target as u128) * (cap_step_val as u128) + 1;
-        let price = base_twap + g_abs_min_required;
-
+        
+        // Try to create conditions that would overflow in old system
+        let base_twap = 10000u128;
+        let extreme_num_windows = (1u64 << 20); // 1M windows
+        
+        // With max PPM (100%), step = base_twap
+        let cap_step_val = base_twap as u64;
+        
+        // Price far from base to maximize ramping
+        let price = base_twap * 1000; // 1000x base
+        
         let start_ts = 0u64;
         let initial_cumulative = 0u256;
         let mut oracle_inst = setup_oracle_for_multi_test(
             &mut scenario, base_twap, cap_step_val, start_ts,
             initial_cumulative, initial_cumulative
         );
-
-        let end_ts = start_ts + num_windows * TWAP_PRICE_CAP_WINDOW_TIME; // ~2^50.8, fits u64.
-
+        
+        let end_ts = start_ts + extreme_num_windows * TWAP_PRICE_CAP_WINDOW_TIME;
+        
+        // This should complete without overflow due to PPM bounds
         oracle::call_multi_full_window_accumulation_for_testing(
-            &mut oracle_inst, price, num_windows, end_ts
+            &mut oracle_inst, price, extreme_num_windows, end_ts
         );
-
+        
+        // Verify the final price is bounded by PPM system
+        // After many windows with max PPM, price should reach the target
+        let final_price = oracle::last_price(&oracle_inst);
+        assert!(final_price <= price, 0); // Price capped by input
+        
         oracle::destroy_for_testing(oracle_inst);
         test::end(scenario);
     }

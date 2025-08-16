@@ -35,7 +35,7 @@ const REVIEW_PERIOD_MS: u64 = 2_000; // Short for testing
 const TRADING_PERIOD_MS: u64 = 2_000; // Short for testing
 const TWAP_START_DELAY: u64 = 180_000;
 const TWAP_INITIAL_OBSERVATION: u128 = 1_000_000;
-const TWAP_STEP_MAX: u64 = 10000;
+const TWAP_STEP_MAX: u64 = 10_000; // 1% of price (10,000 PPM = 1%)
 const TWAP_THRESHOLD: u64 = 1_000;
 
 // Create a dummy MarketState instance for testing.

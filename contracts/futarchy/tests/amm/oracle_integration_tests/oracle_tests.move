@@ -8,7 +8,7 @@ use sui::clock;
 use sui::test_scenario::{Self as test, Scenario};
 
 // ======== Test Constants ========
-const TWAP_STEP_MAX: u64 = 1000; // Allow 10% movement
+const TWAP_STEP_MAX: u64 = 100_000; // Allow 10% movement (100,000 PPM = 10%)
 const TWAP_START_DELAY: u64 = 60_000;
 const MARKET_START_TIME: u64 = 1000;
 const INIT_PRICE: u128 = 10000;
@@ -21,7 +21,8 @@ const U64_MAX: u64 = 18446744073709551615;
 // Define a high price constant for testing
 const HIGH_INIT_PRICE: u128 = 1_000_000_000_000_000u128; // 1 quadrillion
 // Define a very large step size to prevent capping for this high price
-const LARGE_TWAP_STEP: u64 = 20_000_000_000_000;
+// 2% of the price as PPM (20,000 PPM = 2%)
+const LARGE_TWAP_STEP: u64 = 20_000;
 
 // ======== Helper Functions ========
 fun setup_test_oracle(ctx: &mut TxContext): Oracle {
@@ -57,8 +58,9 @@ fun test_new_oracle() {
         assert!(oracle::last_timestamp(&oracle_inst) == MARKET_START_TIME, 1);
         let (delay, step) = oracle::config(&oracle_inst);
         assert!(delay == TWAP_START_DELAY, 3);
-        assert!(step == TWAP_STEP_MAX, 4);
-        assert!(step == TWAP_STEP_MAX, 4); // Error code 4 for this line
+        // Step is calculated from PPM: INIT_PRICE * TWAP_STEP_MAX / 1_000_000
+        let expected_step = (INIT_PRICE * (TWAP_STEP_MAX as u128) / 1_000_000) as u64;
+        assert!(step == expected_step, 4);
         assert!(oracle::market_start_time(&oracle_inst) == option::some(MARKET_START_TIME), 5);
         assert!(oracle::twap_initialization_price(&oracle_inst) == INIT_PRICE, 6);
         oracle::destroy_for_testing(oracle_inst);
@@ -181,7 +183,9 @@ fun test_write_observation_no_time_progress() {
 
         // Expect that last_price remains at INIT_PRICE and cumulative price remains 0.
         let _price = oracle::last_price(&oracle_inst);
-        assert!(oracle::last_price(&oracle_inst) == (INIT_PRICE + (TWAP_STEP_MAX as u128)), 0);
+        // Price is capped by PPM-based step
+        let expected_step = INIT_PRICE * (TWAP_STEP_MAX as u128) / 1_000_000;
+        assert!(oracle::last_price(&oracle_inst) == (INIT_PRICE + expected_step), 0);
         assert!(oracle::last_timestamp(&oracle_inst) == delay_threshold, 1);
         let (_, _, cumulative) = oracle::debug_get_state(&oracle_inst);
         assert!(cumulative == 0, 2);
@@ -338,7 +342,7 @@ fun test_cumulative_price_overflow() {
     let mut scenario = test::begin(@0x1);
     test::next_tx(&mut scenario, @0x1);
     let ctx = test::ctx(&mut scenario);
-    let mut extreme_oracle = oracle::new_oracle(u128::max_value!(), 0, U64_MAX, ctx);
+    let mut extreme_oracle = oracle::new_oracle(u128::max_value!(), 0, 1_000_000, ctx); // Max PPM
 
     oracle::set_oracle_start_time(&mut extreme_oracle, MARKET_START_TIME);
 

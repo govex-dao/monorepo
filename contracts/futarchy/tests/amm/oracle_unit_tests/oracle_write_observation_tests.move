@@ -14,7 +14,7 @@ module futarchy::oracle_write_observation_tests {
     const TWAP_START_DELAY: u64 = 60_000; // Must be a multiple of TWAP_PRICE_CAP_WINDOW
     const TWAP_PRICE_CAP_WINDOW_CONST: u64 = 60_000; // Matches constant in oracle module
     const INIT_PRICE: u128 = 10_000;
-    const TWAP_STEP_MAX: u64 = 1000; // 10% of price
+    const TWAP_STEP_MAX: u64 = 100_000; // 10% of price (100,000 PPM = 10%)
 
     // Calculated constant
     const DELAY_THRESHOLD: u64 = MARKET_START_TIME + TWAP_START_DELAY; // 160_000
@@ -53,11 +53,13 @@ module futarchy::oracle_write_observation_tests {
     }
 
     // Helper to get capped price for manual calculation checks
-    fun manual_cap_price(base_twap: u128, new_price: u128, cap_step: u64): u128 {
+    fun manual_cap_price(base_twap: u128, new_price: u128, cap_step_ppm: u64): u128 {
+        // Calculate actual step from PPM
+        let actual_step = base_twap * (cap_step_ppm as u128) / 1_000_000;
         if (new_price > base_twap) {
-            u128::min(new_price, base_twap + (cap_step as u128))
+            u128::min(new_price, base_twap + actual_step)
         } else {
-            u128::max(new_price, base_twap - (cap_step as u128))
+            u128::max(new_price, base_twap - actual_step)
         }
     }
 
