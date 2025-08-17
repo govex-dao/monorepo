@@ -1107,9 +1107,8 @@ fun init_approval_book_if_needed(
     account: &mut Account<FutarchyConfig>,
     ctx: &mut TxContext
 ) {
-    // Note: In production code, we'd check if it exists first
-    // For now, we assume it's initialized during DAO setup
-    // This is a placeholder for the actual check
+    // Properly initialize the approval book if it doesn't exist
+    ensure_approval_book(account, ctx);
 }
 
 /// Execute permit - minted by config module after verifying approval
@@ -1347,9 +1346,11 @@ public fun get_council_approval(
     account: &Account<FutarchyConfig>,
     intent_key: &String
 ): Option<CouncilApproval> {
-    // Try to borrow the book - if it doesn't exist, return none
-    // This is safe because we're just reading
-    // Note: In production, the book should always exist after DAO initialization
+    // Check if the approval book exists
+    if (!account::has_managed_data(account, CouncilApprovalKey {})) {
+        return option::none()
+    };
+    
     let book: &CouncilApprovalBook = account::borrow_managed_data(
         account, CouncilApprovalKey {}, version::current()
     );
@@ -1364,10 +1365,12 @@ public fun get_council_approval(
 /// Consume a council approval (single-use)
 public fun consume_council_approval(
     account: &mut Account<FutarchyConfig>,
-    intent_key: &String
+    intent_key: &String,
+    ctx: &mut TxContext
 ): Option<CouncilApproval> {
-    // Try to borrow the book - if it doesn't exist, return none
-    // This is safe because consume is only called after successful execution
+    // Ensure the approval book exists
+    ensure_approval_book(account, ctx);
+    
     let book: &mut CouncilApprovalBook = account::borrow_managed_data_mut(
         account, CouncilApprovalKey {}, version::current()
     );

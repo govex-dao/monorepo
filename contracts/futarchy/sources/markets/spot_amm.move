@@ -90,6 +90,7 @@ use sui::event;
 use futarchy::math;
 use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
 use futarchy::conditional_amm;
+use futarchy::constants;
 
 // Basic errors
 const EZeroAmount: u64 = 1;
@@ -103,7 +104,7 @@ const EAlreadyInitialized: u64 = 8;
 const ETwapNotReady: u64 = 9;
 const EPoolLockedForProposal: u64 = 10;
 
-const MAX_FEE_BPS: u64 = 10000;
+// MAX_FEE_BPS moved to constants module
 const MINIMUM_LIQUIDITY: u64 = 1000;
 
 // TWAP constants
@@ -167,7 +168,7 @@ public struct SpotTwapUpdate has copy, drop {
 
 /// Create a new pool (simple Uniswap V2 style)
 public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAMM<AssetType, StableType> {
-    assert!(fee_bps <= MAX_FEE_BPS, EInvalidFee);
+    assert!(fee_bps <= constants::max_fee_bps(), EInvalidFee);
     SpotAMM<AssetType, StableType> {
         id: object::new(ctx),
         asset_reserve: balance::zero<AssetType>(),
@@ -413,7 +414,7 @@ public entry fun swap_asset_for_stable<AssetType, StableType>(
     assert!(amount_in > 0, EZeroAmount);
     
     // Apply fee
-    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, MAX_FEE_BPS));
+    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, constants::max_fee_bps()));
     
     // Calculate output using constant product formula (x * y = k)
     let asset_reserve = pool.asset_reserve.value();
@@ -447,7 +448,7 @@ public entry fun swap_stable_for_asset<AssetType, StableType>(
     assert!(amount_in > 0, EZeroAmount);
     
     // Apply fee
-    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, MAX_FEE_BPS));
+    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, constants::max_fee_bps()));
     
     // Calculate output using constant product formula (x * y = k)
     let asset_reserve = pool.asset_reserve.value();

@@ -109,6 +109,11 @@ public struct BudgetStreamConfig has store {
     pending_count: u64,
     total_pending_amount: u64,  // Track total pending to prevent budget overflow
     next_withdrawal_id: u64,    // Counter for unique withdrawal IDs
+    // Budget period reset fields
+    budget_period_ms: Option<u64>,  // If set, budget resets every period (e.g., 30 days)
+    current_period_start: u64,      // When the current budget period started
+    current_period_claimed: u64,    // Amount claimed in current period
+    max_per_period: Option<u64>,    // Max claimable per period (if different from stream rate)
 }
 
 // === Events ===
@@ -275,6 +280,8 @@ public struct CreateBudgetStreamAction<phantom CoinType> has store {
     pending_period_ms: u64,
     cancellable: bool,
     description: String,
+    budget_period_ms: Option<u64>,  // Optional periodic budget reset (e.g., 30 days)
+    max_per_period: Option<u64>,    // Optional max amount per period
 }
 
 /// Action to claim/execute a payment
@@ -393,6 +400,8 @@ public fun new_create_budget_stream_action<CoinType>(
     pending_period_ms: u64,
     cancellable: bool,
     description: String,
+    budget_period_ms: Option<u64>,
+    max_per_period: Option<u64>,
     clock: &Clock,
     _ctx: &mut TxContext,
 ): CreateBudgetStreamAction<CoinType> {
@@ -403,6 +412,20 @@ public fun new_create_budget_stream_action<CoinType>(
     assert!(project_name.length() > 0, EMissingProjectName);
     assert!(pending_period_ms > 0, EInvalidStreamDuration);
     
+    // Validate budget period if provided
+    if (budget_period_ms.is_some()) {
+        let period = *budget_period_ms.borrow();
+        assert!(period >= 86_400_000, EInvalidStreamDuration); // Min 1 day
+        
+        // If max_per_period is set, validate it makes sense
+        if (max_per_period.is_some()) {
+            let max = *max_per_period.borrow();
+            let duration = end_timestamp - start_timestamp;
+            let num_periods = (duration / period) + 1;
+            assert!(max * num_periods >= total_amount, EInvalidStreamAmount);
+        };
+    };
+    
     CreateBudgetStreamAction {
         recipient,
         amount: total_amount,
@@ -412,6 +435,8 @@ public fun new_create_budget_stream_action<CoinType>(
         pending_period_ms,
         cancellable,
         description,
+        budget_period_ms,
+        max_per_period,
     }
 }
 
@@ -669,6 +694,11 @@ public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
         pending_count: 0,
         total_pending_amount: 0,
         next_withdrawal_id: 1,  // Start IDs from 1
+        // Period reset fields (optional feature)
+        budget_period_ms: action.budget_period_ms,
+        current_period_start: clock.timestamp_ms(),
+        current_period_claimed: 0,
+        max_per_period: action.max_per_period,
     };
     
     let config = PaymentConfig {
@@ -1153,10 +1183,29 @@ public fun do_request_withdrawal<Outcome: store, CoinType, IW: drop>(
     // Get budget config
     let budget_config = payment.budget_config.borrow_mut();
     
+    // Check if we need to reset the budget period
+    if (budget_config.budget_period_ms.is_some()) {
+        let period_ms = *budget_config.budget_period_ms.borrow();
+        let time_in_period = clock.timestamp_ms() - budget_config.current_period_start;
+        
+        // Reset period if we've exceeded the period duration
+        if (time_in_period >= period_ms) {
+            budget_config.current_period_start = clock.timestamp_ms();
+            budget_config.current_period_claimed = 0;
+        };
+        
+        // Check period budget limit if max_per_period is set
+        if (budget_config.max_per_period.is_some()) {
+            let max_period = *budget_config.max_per_period.borrow();
+            let new_period_total = budget_config.current_period_claimed + action.amount;
+            assert!(new_period_total <= max_period, EBudgetExceeded);
+        };
+    };
+    
     // Check we haven't exceeded max pending withdrawals
     assert!(budget_config.pending_count < MAX_PENDING_WITHDRAWALS, ETooManyPendingWithdrawals);
     
-    // CRITICAL: Check budget won't be exceeded
+    // CRITICAL: Check budget won't be exceeded (overall stream limit)
     let new_total_pending = budget_config.total_pending_amount + action.amount;
     assert!(
         payment.claimed_amount + new_total_pending <= payment.amount,
@@ -1299,6 +1348,11 @@ public(package) fun do_process_pending_withdrawal_with_coin<Outcome: store, Coin
     payment.claimed_amount = payment.claimed_amount + withdrawal_amount;
     budget_config.pending_count = budget_config.pending_count - 1;
     budget_config.total_pending_amount = budget_config.total_pending_amount - withdrawal_amount;
+    
+    // Update period tracking if budget periods are enabled
+    if (budget_config.budget_period_ms.is_some()) {
+        budget_config.current_period_claimed = budget_config.current_period_claimed + withdrawal_amount;
+    };
     
     // Transfer the coin to withdrawer
     transfer::public_transfer(payment_coin, withdrawer_address);

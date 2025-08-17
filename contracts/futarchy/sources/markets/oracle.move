@@ -34,6 +34,7 @@
 module futarchy::oracle;
 
 use futarchy::math;
+use futarchy::constants;
 use std::u128;
 use std::u64;
 use sui::clock::Clock;
@@ -43,9 +44,8 @@ use sui::event;
 // Crankless Time Weighted Average Price (TWAP) Oracle
 
 // === Constants ===
-const TWAP_PRICE_CAP_WINDOW: u64 = 60_000; // 60 seconds in milliseconds
-const ONE_WEEK_MS: u64 = 604_800_000;
-const PPM_DENOMINATOR: u64 = 1_000_000; // 100% = 1_000_000 ppm; floor = 10 ppm (1/100,000)
+// Constants moved to constants module
+// Using constants::twap_price_cap_window(), constants::one_week_ms(), constants::ppm_denominator()
 
 // === Errors ===
 const ETimestampRegression: u64 = 0;
@@ -105,9 +105,9 @@ public(package) fun new_oracle(
 ): Oracle {
     assert!(twap_initialization_price > 0, EZeroInitialization);
     assert!(twap_cap_ppm > 0, EZeroStep);
-    assert!(twap_cap_ppm <= PPM_DENOMINATOR, EInvalidCapPpm);
-    assert!(twap_start_delay < ONE_WEEK_MS, ELongDelay); // One week in milliseconds
-    assert!((twap_start_delay % TWAP_PRICE_CAP_WINDOW) == 0, ENoneFullWindowTwapDelay);
+    assert!(twap_cap_ppm <= constants::ppm_denominator(), EInvalidCapPpm);
+    assert!(twap_start_delay < constants::one_week_ms(), ELongDelay); // One week in milliseconds
+    assert!((twap_start_delay % constants::twap_price_cap_window()) == 0, ENoneFullWindowTwapDelay);
     
     // Calculate the absolute step from PPM and initialization price
     // Use checked multiplication to avoid overflow
@@ -115,7 +115,7 @@ public(package) fun new_oracle(
         // Would overflow, use max u64 as step
         (u64::max_value!() as u128)
     } else {
-        twap_initialization_price * (twap_cap_ppm as u128) / (PPM_DENOMINATOR as u128)
+        twap_initialization_price * (twap_cap_ppm as u128) / (constants::ppm_denominator() as u128)
     };
     assert!(step_u128 <= (std::u64::max_value!() as u128), EStepOverflow);
     let mut twap_cap_step = step_u128 as u64;
@@ -217,9 +217,9 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
     // 2. The final input timestamp.
 
     let diff_from_last_boundary = oracle.last_timestamp - oracle.last_window_end;
-    let elapsed_in_current_segment = diff_from_last_boundary % TWAP_PRICE_CAP_WINDOW;
+    let elapsed_in_current_segment = diff_from_last_boundary % constants::twap_price_cap_window();
 
-    let time_to_next_boundary = TWAP_PRICE_CAP_WINDOW - elapsed_in_current_segment;
+    let time_to_next_boundary = constants::twap_price_cap_window() - elapsed_in_current_segment;
 
     let duration_stage1 = std::u64::min(
         time_to_next_boundary, // Limit by the time until the next window boundary
@@ -244,12 +244,12 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
 
     let time_remaining_after_stage1 = timestamp - oracle.last_timestamp; // Use updated oracle.last_timestamp
 
-    if (time_remaining_after_stage1 >= TWAP_PRICE_CAP_WINDOW) {
-        let num_full_windows = time_remaining_after_stage1 / TWAP_PRICE_CAP_WINDOW;
+    if (time_remaining_after_stage1 >= constants::twap_price_cap_window()) {
+        let num_full_windows = time_remaining_after_stage1 / constants::twap_price_cap_window();
 
         // Calculate the end timestamp after processing these full windows.
         // Start from the *current* oracle.last_timestamp (end of Stage 1 segment).
-        let end_timestamp_stage2 = oracle.last_timestamp + num_full_windows * TWAP_PRICE_CAP_WINDOW;
+        let end_timestamp_stage2 = oracle.last_timestamp + num_full_windows * constants::twap_price_cap_window();
 
         multi_full_window_accumulation(
             oracle, // Passes mutable reference, state will be updated
@@ -306,12 +306,12 @@ fun intra_window_accumulation(
         last_price: oracle.last_price,
     });
 
-    if (time_since_last_window_end == TWAP_PRICE_CAP_WINDOW) {
+    if (time_since_last_window_end == constants::twap_price_cap_window()) {
         // Update last window data on window boundary
         oracle.last_window_end = timestamp;
         oracle.last_window_twap = (
             (
-                (oracle.total_cumulative_price - oracle.last_window_end_cumulative_price) / (TWAP_PRICE_CAP_WINDOW as u256),
+                (oracle.total_cumulative_price - oracle.last_window_end_cumulative_price) / (constants::twap_price_cap_window() as u256),
             ) as u128,
         );
         oracle.last_window_end_cumulative_price = oracle.total_cumulative_price
@@ -455,7 +455,7 @@ fun multi_full_window_accumulation(
 
     oracle.last_timestamp = timestamp;
     oracle.last_window_end = timestamp;
-    let cumulative_price_contribution = (v_sum_prices as u256) * (TWAP_PRICE_CAP_WINDOW as u256);
+    let cumulative_price_contribution = (v_sum_prices as u256) * (constants::twap_price_cap_window() as u256);
     oracle.last_window_end_cumulative_price =
         oracle.total_cumulative_price + cumulative_price_contribution;
     oracle.total_cumulative_price = oracle.total_cumulative_price + cumulative_price_contribution;

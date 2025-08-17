@@ -146,7 +146,7 @@ public fun run_with_permit(
     );
     
     // Consume the council approval if there was one (single-use)
-    let _ = futarchy_config::consume_council_approval(account, &intent_key);
+    let _ = futarchy_config::consume_council_approval(account, &intent_key, ctx);
     
     // Confirm and cleanup using helper function
     confirm_and_cleanup(executable, account);

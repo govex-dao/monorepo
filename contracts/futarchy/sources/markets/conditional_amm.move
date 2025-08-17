@@ -5,6 +5,7 @@ use futarchy::conditional_token::ConditionalToken;
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
 use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
+use futarchy::constants;
 use sui::clock::Clock;
 use sui::event;
 use std::u64;
@@ -50,12 +51,8 @@ const EInvalidFeeRate: u64 = 12; // Fee rate is invalid (e.g., >= 100%)
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
 const DEFAULT_FEE: u64 = 30; // 0.3%
-const BASIS_POINTS: u64 = 1_000_000_000_000; // 10^12 we need to keep this for saftey to values don't round to 0
 const MINIMUM_LIQUIDITY: u128 = 1000;
-
-// Fee split constants (in basis points)
-const LP_FEE_SHARE_BPS: u64 = 8000; // 80%
-const TOTAL_FEE_BPS: u64 = 10000; // 100%
+// Other constants moved to constants module
 
 // === Structs ===
 
@@ -125,7 +122,7 @@ public(package) fun new_pool(
     assert!(fee_percent < FEE_SCALE, EInvalidFeeRate); // Fee cannot be 100% or more
 
     let twap_initialization_price = twap_initial_observation;
-    let initial_price = math::mul_div_to_128(initial_stable, BASIS_POINTS, initial_asset);
+    let initial_price = math::mul_div_to_128(initial_stable, constants::basis_points(), initial_asset);
 
     check_price_under_max(initial_price);
     check_price_under_max(twap_initialization_price);
@@ -190,7 +187,7 @@ public(package) fun swap_asset_to_stable(
 
     // Calculate fee from stable output
     let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, LP_FEE_SHARE_BPS, TOTAL_FEE_BPS);
+    let lp_share = math::mul_div_to_64(total_fee, constants::lp_fee_share_bps(), constants::total_fee_bps());
     let protocol_share = total_fee - lp_share;
 
     // Net amount for the user
@@ -214,7 +211,7 @@ public(package) fun swap_asset_to_stable(
     let old_stable = pool.stable_reserve;
 
     let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    let old_price = math::mul_div_to_128(old_stable, constants::basis_points(), old_asset);
     // Oracle observation is recorded using the reserves *before* the swap.
     // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
     write_observation(
@@ -275,7 +272,7 @@ public(package) fun swap_stable_to_asset(
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's stable reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, LP_FEE_SHARE_BPS, TOTAL_FEE_BPS);
+    let lp_share = math::mul_div_to_64(total_fee, constants::lp_fee_share_bps(), constants::total_fee_bps());
     let protocol_share = total_fee - lp_share;
 
     // Amount used for the swap calculation
@@ -306,7 +303,7 @@ public(package) fun swap_stable_to_asset(
     let old_stable = pool.stable_reserve;
 
     let timestamp = clock.timestamp_ms();
-    let old_price = math::mul_div_to_128(old_stable, BASIS_POINTS, old_asset);
+    let old_price = math::mul_div_to_128(old_stable, constants::basis_points(), old_asset);
     // Oracle observation is recorded using the reserves *before* the swap.
     // This ensures that the TWAP accurately reflects the price at the beginning of the swap.
     write_observation(
@@ -579,7 +576,7 @@ public fun get_current_price(pool: &LiquidityPool): u128 {
 
     let price = math::mul_div_to_128(
         pool.stable_reserve,
-        BASIS_POINTS,
+        constants::basis_points(),
         pool.asset_reserve,
     );
 
@@ -632,7 +629,7 @@ public fun get_k(pool: &LiquidityPool): u128 {
 }
 
 public fun check_price_under_max(price: u128) {
-    let max_price = (0xFFFFFFFFFFFFFFFFu64 as u128) * (BASIS_POINTS as u128);
+    let max_price = (0xFFFFFFFFFFFFFFFFu64 as u128) * (constants::basis_points() as u128);
     assert!(price <= max_price, EPriceTooHigh)
 }
 

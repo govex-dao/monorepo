@@ -25,6 +25,7 @@ const EInsufficientTreasuryBalance: u64 = 5;
 const EArithmeticOverflow: u64 = 6;
 const EInvalidAdminCap: u64 = 7;
 const EInvalidRecoveryFee: u64 = 9;
+const EFeeExceedsHardCap: u64 = 10;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
@@ -32,6 +33,10 @@ const DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME: u64 = 1000;
 const DEFAULT_VERIFICATION_FEE: u64 = 10_000; // Default fee for level 1
 const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
 const FEE_UPDATE_DELAY_MS: u64 = 15_552_000_000; // 6 months (180 days)
+const MAX_FEE_COLLECTION_PERIOD_MS: u64 = 7_776_000_000; // 90 days (3 months) - max retroactive collection
+// Remove ABSOLUTE_MAX_MONTHLY_FEE in V3 this is jsut here to build up trust
+// Dont want to limit fee as platform gets more mature
+const ABSOLUTE_MAX_MONTHLY_FEE: u64 = 10_000_000_000; // 10,000 USDC (6 decimals)
 
 // === Structs ===
 
@@ -52,6 +57,13 @@ public struct FeeManager has key, store {
 
 public struct FeeAdminCap has key, store {
     id: UID,
+}
+
+/// Tracks fee collection history for each DAO
+public struct DaoFeeRecord has store {
+    last_collection_timestamp: u64,
+    total_collected: u64,
+    last_fee_rate: u64,  // Fee rate at last collection to prevent retroactive increases
 }
 
 // === Events ===
@@ -465,6 +477,78 @@ public fun get_recovery_fee(fee_manager: &FeeManager): u64 {
 // Function removed to avoid circular dependency with treasury module
 // This functionality should be moved to a separate module
 
+/// Collect platform fee from a DAO's vault with 3-month retroactive limit
+/// IMPORTANT: Uses the fee rate from when periods were incurred, not current rate
+public(package) fun collect_dao_platform_fee<StableType: drop>(
+    fee_manager: &mut FeeManager,
+    dao_id: ID,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (u64, u64) { // Returns (fee_amount, periods_collected)
+    let current_time = clock.timestamp_ms();
+    
+    // Apply pending fee if due (before we calculate anything)
+    apply_pending_fee_if_due(fee_manager, clock);
+    
+    // Get current fee rate
+    let current_fee_rate = fee_manager.dao_monthly_fee;
+    
+    // Get or create fee record for this DAO
+    let record_key = dao_id;
+    let (last_collection, last_rate, is_new) = if (dynamic_field::exists_(&fee_manager.id, record_key)) {
+        let record: &DaoFeeRecord = dynamic_field::borrow(&fee_manager.id, record_key);
+        (record.last_collection_timestamp, record.last_fee_rate, false)
+    } else {
+        // First time collecting from this DAO - initialize with current rate
+        let new_record = DaoFeeRecord {
+            last_collection_timestamp: current_time,
+            total_collected: 0,
+            last_fee_rate: current_fee_rate,
+        };
+        dynamic_field::add(&mut fee_manager.id, record_key, new_record);
+        return (0, 0) // No retroactive fees on first collection
+    };
+    
+    // Calculate how many periods we can collect
+    let time_since_last = if (current_time > last_collection) {
+        current_time - last_collection
+    } else {
+        0
+    };
+    
+    // Cap at 3 months max
+    let collectible_time = if (time_since_last > MAX_FEE_COLLECTION_PERIOD_MS) {
+        MAX_FEE_COLLECTION_PERIOD_MS
+    } else {
+        time_since_last
+    };
+    
+    // Calculate number of monthly periods to collect
+    let periods_to_collect = collectible_time / MONTHLY_FEE_PERIOD_MS;
+    
+    if (periods_to_collect == 0) {
+        return (0, 0)
+    };
+    
+    // CRITICAL: Use the LOWER of last rate or current rate to prevent retroactive increases
+    // DAOs benefit from fee decreases immediately but are protected from increases
+    let fee_per_period = if (last_rate < current_fee_rate) {
+        last_rate  // Protect DAO from retroactive fee increases
+    } else {
+        current_fee_rate  // Allow DAO to benefit from fee decreases
+    };
+    
+    let total_fee = fee_per_period * periods_to_collect;
+    
+    // Update the record with new timestamp and current rate for future collections
+    let record: &mut DaoFeeRecord = dynamic_field::borrow_mut(&mut fee_manager.id, record_key);
+    record.last_collection_timestamp = current_time;
+    record.total_collected = record.total_collected + total_fee;
+    record.last_fee_rate = current_fee_rate;  // Store current rate for next time
+    
+    (total_fee, periods_to_collect)
+}
+
 public(package) fun deposit_dao_platform_fee<StableType: drop>(
     fee_manager: &mut FeeManager,
     fee_coin: Coin<StableType>,
@@ -495,6 +579,10 @@ public entry fun update_dao_monthly_fee(
     ctx: &mut TxContext,
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    
+    // V2 Hard cap enforcement - prevents excessive fees while protocol matures
+    assert!(new_fee <= ABSOLUTE_MAX_MONTHLY_FEE, EFeeExceedsHardCap);
+    
     let current_fee = fee_manager.dao_monthly_fee;
     let effective_timestamp = clock.timestamp_ms() + FEE_UPDATE_DELAY_MS;
     
@@ -685,6 +773,11 @@ public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
     } else {
         0
     }
+}
+
+/// Get the hard cap for monthly fees (V2 safety limit)
+public fun get_max_monthly_fee_cap(): u64 {
+    ABSOLUTE_MAX_MONTHLY_FEE
 }
 
 // ======== Test Functions ========

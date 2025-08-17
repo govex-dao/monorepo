@@ -290,7 +290,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
     };
     
     // Also cleanup any other expired intents during finalization
-    intent_janitor::cleanup_all_expired_intents(account, clock);
+    intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
     
     // --- BEGIN REGISTRY PRUNING ---
     // Prune expired proposal reservations from the registry to prevent state bloat.
@@ -357,7 +357,7 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     );
     
     // Cleanup all expired intents after execution
-    intent_janitor::cleanup_all_expired_intents(account, clock);
+    intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
     
     // Emit execution event
     event::emit(ProposalIntentExecuted {
@@ -415,7 +415,7 @@ public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW
     );
     
     // Cleanup all expired intents after execution
-    intent_janitor::cleanup_all_expired_intents(account, clock);
+    intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
     
     // Emit execution event
     event::emit(ProposalIntentExecuted {

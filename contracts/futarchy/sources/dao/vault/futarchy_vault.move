@@ -98,6 +98,11 @@ public fun init_vault<Config>(
 public fun is_coin_type_allowed<Config, CoinType>(
     account: &Account<Config>,
 ): bool {
+    // Check if the allowed coins list exists
+    if (!account::has_managed_data(account, ALLOWED_COINS_KEY)) {
+        return false
+    };
+    
     let allowed: &AllowedCoinTypes = account::borrow_managed_data(
         account,
         ALLOWED_COINS_KEY,
