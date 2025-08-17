@@ -433,7 +433,8 @@ public fun is_tier_ready<AssetType, StableType, T>(
     if (!spot_amm::is_twap_ready(spot_pool, clock)) return false;
     
     // Check price condition
-    let current_price = spot_amm::get_twap(spot_pool, clock);
+    // For minting, we use the longest possible TWAP from ring buffer
+    let current_price = spot_amm::get_longest_twap_for_minting(spot_pool, clock);
     if (tier.is_above_threshold) {
         current_price >= tier.price_threshold
     } else {

@@ -4,6 +4,7 @@ use futarchy::market_state::MarketState;
 use futarchy::conditional_token::ConditionalToken;
 use futarchy::math;
 use futarchy::oracle::{Self, Oracle};
+use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
 use sui::clock::Clock;
 use sui::event;
 use std::u64;
@@ -65,7 +66,8 @@ public struct LiquidityPool has key, store {
     asset_reserve: u64,
     stable_reserve: u64,
     fee_percent: u64,
-    oracle: Oracle,
+    oracle: Oracle,  // Original write-through oracle for futarchy
+    ring_buffer_oracle: RingBufferOracle,  // Ring buffer oracle for lending protocols
     protocol_fees: u64, // Track accumulated stable fees
     lp_supply: u64, // Track total LP shares for this pool
 }
@@ -145,11 +147,19 @@ public(package) fun new_pool(
         stable_reserve: initial_stable,
         fee_percent,
         oracle,
+        ring_buffer_oracle: ring_buffer_oracle::new(1440), // 24 hours of observations
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
     };
 
     pool
+}
+
+// === Getter Functions ===
+
+/// Get ring buffer oracle reference (for spot_oracle_interface)
+public fun get_ring_buffer_oracle(pool: &LiquidityPool): &RingBufferOracle {
+    &pool.ring_buffer_oracle
 }
 
 // === Core Swap Functions ===
@@ -212,6 +222,9 @@ public(package) fun swap_asset_to_stable(
         timestamp,
         old_price,
     );
+    
+    // Also update ring buffer oracle for continuous price feeds
+    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, old_price, clock);
 
     // Update reserves.
     pool.asset_reserve = pool.asset_reserve + amount_in;
@@ -301,6 +314,9 @@ public(package) fun swap_stable_to_asset(
         timestamp,
         old_price,
     );
+    
+    // Also update ring buffer oracle for continuous price feeds
+    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, old_price, clock);
 
     // Update reserves. The amount added to the stable reserve is the portion used for the swap
     // PLUS the LP share of the fee. The protocol share was already removed.
@@ -405,6 +421,10 @@ public fun add_liquidity_proportional(
     pool.stable_reserve = new_stable_reserve;
     pool.lp_supply = new_lp_supply;
     
+    // Update ring buffer oracle with new price after liquidity change
+    let new_price = get_current_price(pool);
+    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, new_price, clock);
+    
     event::emit(LiquidityAdded {
         market_id: pool.market_id,
         outcome: pool.outcome_idx,
@@ -450,6 +470,10 @@ public fun remove_liquidity_proportional(
     pool.asset_reserve = pool.asset_reserve - asset_to_remove;
     pool.stable_reserve = pool.stable_reserve - stable_to_remove;
     pool.lp_supply = pool.lp_supply - lp_amount;
+    
+    // Update ring buffer oracle with new price after liquidity change
+    let new_price = get_current_price(pool);
+    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, new_price, clock);
 
     event::emit(LiquidityRemoved {
         market_id: pool.market_id,
@@ -647,6 +671,7 @@ public fun create_test_pool(
             1_000,
             ctx, // Add ctx parameter here
         ),
+        ring_buffer_oracle: ring_buffer_oracle::new(1440), // 24 hours of observations
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
     }
@@ -662,9 +687,11 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         stable_reserve: _,
         fee_percent: _,
         oracle,
+        ring_buffer_oracle,
         protocol_fees: _,
         lp_supply: _,
     } = pool;
     id.delete();
     oracle.destroy_for_testing();
+    ring_buffer_oracle::destroy_for_testing(ring_buffer_oracle);
 }

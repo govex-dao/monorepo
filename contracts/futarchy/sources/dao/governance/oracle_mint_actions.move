@@ -425,7 +425,8 @@ public fun is_conditional_mint_ready<AssetType, StableType, T>(
     };
     
     // Check price threshold
-    let oracle_price = spot_amm::get_twap(spot_pool, clock);
+    // For minting, we use the longest possible TWAP from ring buffer
+    let oracle_price = spot_amm::get_longest_twap_for_minting(spot_pool, clock);
     
     if (action.is_above_threshold) {
         oracle_price >= action.price_threshold
@@ -443,7 +444,8 @@ public fun is_ratio_mint_ready<AssetType, StableType>(
     if (clock.timestamp_ms() < action.unlock_time) return false;
     if (!spot_amm::is_twap_ready(spot_pool, clock)) return false;
     
-    let current_price = spot_amm::get_twap(spot_pool, clock);
+    // For minting, we use the longest possible TWAP from ring buffer
+    let current_price = spot_amm::get_longest_twap_for_minting(spot_pool, clock);
     let price_ratio_u128 = current_price / 1000;
     
     // Convert to u64 for comparison

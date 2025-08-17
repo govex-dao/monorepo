@@ -1,3 +1,36 @@
+/// ============================================================================
+/// FUTARCHY ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS
+/// ============================================================================
+/// 
+/// PURPOSE: Core oracle for futarchy decision-making and proposal resolution
+/// 
+/// USED BY:
+/// - Conditional AMMs during proposals (outcome evaluation)
+/// - Proposal resolution (determining winners based on TWAP)
+/// - SpotAMM for governance TWAP (base fair value)
+/// - NOT for lending protocols (use ring_buffer_oracle instead)
+/// 
+/// KEY FEATURES:
+/// - Write-through pattern (MUST update before reading)
+/// - Price capping to prevent manipulation
+/// - Complex window-based accumulation
+/// - Designed specifically for futarchy mechanics
+/// - Does NOT merge with ring buffer data (separate concerns)
+/// 
+/// BEHAVIOR:
+/// - During proposals: Each conditional AMM maintains its own oracle
+/// - After finalization: Winning outcome's TWAP fills gap in spot oracle
+/// - Ring buffer handles continuous feeds, this handles governance
+/// 
+/// WHY IT EXISTS:
+/// Futarchy needs precise, manipulation-resistant price discovery during
+/// proposals. This oracle enforces atomic write-then-read to ensure prices
+/// are always fresh and prevents time-based manipulation attacks.
+/// The separation from ring_buffer_oracle ensures governance decisions
+/// cannot be influenced by lending protocol requirements.
+/// 
+/// ============================================================================
+
 module futarchy::oracle;
 
 use futarchy::math;
@@ -435,14 +468,34 @@ fun multi_full_window_accumulation(
     oracle.last_window_twap = p_n_w_effective;
 }
 
+/// ARCHITECTURAL DECISION: Mutation-Required TWAP Oracle
+/// 
+/// This oracle REQUIRES write_observation() before get_twap() in the same transaction.
+/// The assertion `current_time == oracle.last_timestamp` is INTENTIONAL.
+/// 
+/// Why this differs from read-only TWAP patterns:
+/// - Stale prices are attack vectors, not features
+/// - Interpolation adds complexity and manipulation surface  
+/// - The AMM determines prices; the oracle just tracks them
+/// - Every TWAP read MUST reflect current AMM state
+/// 
+/// This design makes it IMPOSSIBLE to:
+/// ✗ Read stale/manipulated TWAPs
+/// ✗ Forget to update before critical operations
+/// ✗ Have price inconsistency within a transaction
+/// 
+/// This pattern differs from typical read-only oracles by design.
+/// Serving stale TWAPs for "cleaner interfaces" is how protocols get exploited.
+/// 
+/// The AMM's get_twap() handles the update + read atomically. 
+/// The oracle just validates freshness. This is correct.
 public(package) fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
     assert!(oracle.market_start_time.is_some(), EMarketNotStarted);
     let market_start_time_val = *oracle.market_start_time.borrow();
     let current_time = clock.timestamp_ms();
 
-    // TWAP is only allowed to be read in the same instance, after a write has occured
-    // So no logic is needed to extrapolate TWAP for last write to current timestamp
-    // Check reading in same instance as last write
+    // REQUIRED: Caller must have called write_observation() in this same transaction
+    // This ensures TWAP is always fresh and prevents stale price exploitation
     assert!(current_time == oracle.last_timestamp, EStaleTwap);
 
     // Time checks

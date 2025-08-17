@@ -1,3 +1,81 @@
+/// ============================================================================
+/// SPOT AMM WITH BASE FAIR VALUE TWAP - CRITICAL ARCHITECTURE NOTES
+/// ============================================================================
+/// 
+/// This is a specialized spot AMM designed for Hanson-style futarchy with quantum
+/// liquidity splitting. The TWAP here serves as the "base fair value" price for
+/// internal protocol functions like founder token minting based on price targets.
+/// 
+/// KEY ARCHITECTURAL DECISIONS:
+/// 
+/// 1. QUANTUM LIQUIDITY MODEL (Hanson Futarchy)
+///    - When a proposal uses DAO liquidity, 1 spot dollar becomes 1 conditional 
+///      dollar in EACH outcome (not split, but quantum - exists in all states)
+///    - Spot pool becomes COMPLETELY EMPTY during these proposals
+///    - Only the highest-priced conditional market determines the winner
+/// 
+/// 2. TWAP CONTINUITY ACROSS TRANSITIONS
+///    The spot TWAP must maintain continuity even when liquidity moves to conditional AMMs:
+///    
+///    Timeline example:
+///    [Spot Active: N seconds] → [Proposal Live: M seconds] → [Spot Active Again]
+///    
+///    - N could be >> M (spot active much longer than proposal)
+///    - M could be >> N (long proposal, short spot history)
+///    - We don't know relative durations in advance
+/// 
+/// 3. LOCKING MECHANISM
+///    When proposal starts:
+///    - Spot pool is LOCKED (last_proposal_usage timestamp set)
+///    - No TWAP updates allowed while locked
+///    - All liquidity moves to conditional AMMs
+///    
+///    During proposal (spot locked):
+///    - get_twap() reads from WINNING conditional AMM (highest price)
+///    - Adds conditional TWAP for the missing time period
+///    - Maintains continuous price history
+///    
+///    When proposal ends:
+///    - Winning conditional's TWAP fills the gap in spot history
+///    - Pool unlocks and resumes normal operation
+///    - Liquidity returns from winning conditional
+/// 
+/// 4. TWAP CALCULATION LOGIC
+///    
+///    Normal operation (no active proposal):
+///    - Standard rolling 3-day window
+///    - Accumulates price × time
+///    - Updates on swaps and liquidity events
+///    
+///    During live proposal:
+///    - Spot accumulator frozen at proposal start time
+///    - get_twap() adds: winning_conditional_twap × time_since_proposal_start
+///    - Returns combined TWAP over full window
+///    
+///    After proposal (hot path):
+///    - fill_twap_gap_from_proposal() writes: winning_twap × proposal_duration
+///    - Adds to window_cumulative_price permanently
+///    - Resumes from winning conditional's final price
+/// 
+/// 5. NOT FOR EXTERNAL PROTOCOLS
+///    This TWAP is NOT suitable for:
+///    - Lending protocols (need continuous updates)
+///    - External price oracles (too specialized)
+///    - High-frequency trading (updates only on major events)
+///    
+///    It IS designed for:
+///    - Founder token minting based on price milestones
+///    - Long-term protocol health metrics
+///    - Base fair value for protocol decisions
+/// 
+/// 6. SECURITY CONSIDERATIONS
+///    - Manipulation requires attacking the WINNING conditional market
+///    - Historical segments cannot be modified after writing
+///    - Lock prevents TWAP updates during proposals (no double-counting)
+///    - Window sliding uses last_window_twap (stable reference) not current price
+/// 
+/// ============================================================================
+
 module futarchy::spot_amm;
 
 use std::option::{Self, Option};
@@ -10,6 +88,8 @@ use sui::tx_context::{Self, TxContext};
 use sui::clock::{Self, Clock};
 use sui::event;
 use futarchy::math;
+use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
+use futarchy::conditional_amm;
 
 // Basic errors
 const EZeroAmount: u64 = 1;
@@ -21,6 +101,7 @@ const EImbalancedLiquidity: u64 = 6;
 const ENotInitialized: u64 = 7;
 const EAlreadyInitialized: u64 = 8;
 const ETwapNotReady: u64 = 9;
+const EPoolLockedForProposal: u64 = 10;
 
 const MAX_FEE_BPS: u64 = 10000;
 const MINIMUM_LIQUIDITY: u64 = 1000;
@@ -37,14 +118,16 @@ public struct PriceSegment has store, drop, copy {
     avg_price: u128,          // Average price for quick access
 }
 
-/// Simple spot AMM for <AssetType, StableType> with TWAP oracle (Uniswap V2 style)
+/// Simple spot AMM for <AssetType, StableType> with dual oracle system
 public struct SpotAMM<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     asset_reserve: Balance<AssetType>,
     stable_reserve: Balance<StableType>,
     lp_supply: u64,
     fee_bps: u64,
-    // TWAP oracle fields - maintains rolling 3-day window
+    // Ring buffer oracle for lending protocols (continuous updates)
+    ring_buffer_oracle: RingBufferOracle,
+    // Base fair value TWAP oracle fields - maintains rolling 3-day window
     initialized_at: Option<u64>,
     last_price: u128,
     last_timestamp: u64,
@@ -91,6 +174,8 @@ public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAM
         stable_reserve: balance::zero<StableType>(),
         lp_supply: 0,
         fee_bps,
+        // Ring buffer oracle for lending
+        ring_buffer_oracle: ring_buffer_oracle::new(1440), // 24 hours of observations at 1 per minute
         // TWAP fields initially unset
         initialized_at: option::none(),
         last_price: 0,
@@ -134,6 +219,13 @@ fun update_twap<AssetType, StableType>(
     
     // Skip if no time has passed
     if (now == pool.last_timestamp) return;
+    
+    // Update ring buffer oracle for lending protocols
+    let current_price = calculate_spot_price(
+        pool.asset_reserve.value(),
+        pool.stable_reserve.value()
+    );
+    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, current_price, clock);
     
     // Accumulate price for the elapsed time BEFORE updating the window
     // This ensures we capture the price impact over the time period
@@ -449,9 +541,12 @@ public fun get_twap_mut<AssetType, StableType>(
     }
 }
 
-/// Get current TWAP (read-only, no automatic update)
+/// Get current TWAP with live conditional integration
+/// During proposals: adds winning conditional's TWAP for missing time
+/// Normal operation: returns standard spot TWAP
 public fun get_twap<AssetType, StableType>(
     pool: &SpotAMM<AssetType, StableType>,
+    winning_conditional_twap: Option<u128>, // Pass Some(twap) if proposal is live, None otherwise
     clock: &Clock,
 ): u128 {
     assert!(pool.initialized_at.is_some(), ENotInitialized);
@@ -461,23 +556,55 @@ public fun get_twap<AssetType, StableType>(
     // Require at least 3 days of trading before TWAP is valid
     assert!(now >= init_time + THREE_DAYS_MS, ETwapNotReady);
     
-    // Calculate what the cumulative would be if updated to now
-    let time_since_last_update = now - pool.last_timestamp;
-    let projected_cumulative = pool.window_cumulative_price + 
-        ((pool.last_price as u256) * (time_since_last_update as u256));
-    
-    // Calculate window duration
-    let window_age = now - pool.window_start_timestamp;
-    let effective_duration = if (window_age > THREE_DAYS_MS) {
-        THREE_DAYS_MS // Cap at 3 days
+    // If proposal is live and we have winning conditional TWAP, integrate it
+    if (pool.last_proposal_usage.is_some() && winning_conditional_twap.is_some()) {
+        let proposal_start = *pool.last_proposal_usage.borrow();
+        let conditional_twap = *winning_conditional_twap.borrow();
+        
+        // Calculate spot TWAP up to proposal start
+        let spot_duration = proposal_start - pool.window_start_timestamp;
+        let spot_cumulative = pool.window_cumulative_price; // Frozen at proposal start
+        
+        // Calculate conditional contribution for time since proposal started
+        let gap_duration = now - proposal_start;
+        let gap_contribution = (conditional_twap as u256) * (gap_duration as u256);
+        
+        // Combine spot and conditional portions
+        let total_cumulative = spot_cumulative + gap_contribution;
+        let total_duration = now - pool.window_start_timestamp;
+        
+        // Handle rolling window
+        let effective_duration = if (total_duration > THREE_DAYS_MS) {
+            THREE_DAYS_MS
+        } else {
+            total_duration
+        };
+        
+        if (effective_duration > 0) {
+            (total_cumulative / (effective_duration as u256)) as u128
+        } else {
+            conditional_twap
+        }
     } else {
-        window_age
-    };
-    
-    if (effective_duration > 0) {
-        (projected_cumulative / (effective_duration as u256)) as u128
-    } else {
-        pool.last_price
+        // No active proposal - return normal spot TWAP
+        // Calculate what the cumulative would be if updated to now
+        let time_since_last_update = now - pool.last_timestamp;
+        let projected_cumulative = pool.window_cumulative_price + 
+            ((pool.last_price as u256) * (time_since_last_update as u256));
+        
+        // Calculate window duration
+        let window_age = now - pool.window_start_timestamp;
+        let effective_duration = if (window_age > THREE_DAYS_MS) {
+            THREE_DAYS_MS // Cap at 3 days
+        } else {
+            window_age
+        };
+        
+        if (effective_duration > 0) {
+            (projected_cumulative / (effective_duration as u256)) as u128
+        } else {
+            pool.last_price
+        }
     }
 }
 
@@ -522,6 +649,29 @@ public fun is_twap_ready<AssetType, StableType>(
     let now = clock.timestamp_ms();
     // Require 3 full days of price data for valid TWAP
     now >= init_time + THREE_DAYS_MS
+}
+
+/// Check if pool is locked for a proposal
+public fun is_locked_for_proposal<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): bool {
+    pool.last_proposal_usage.is_some()
+}
+
+/// Get ring buffer oracle reference (for spot_oracle_interface)
+public fun get_ring_buffer_oracle<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): &RingBufferOracle {
+    &pool.ring_buffer_oracle
+}
+
+/// Get longest possible TWAP for governance/minting
+/// This uses the ring buffer oracle which has continuous history
+public fun get_longest_twap_for_minting<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+): u128 {
+    ring_buffer_oracle::get_longest_twap(&pool.ring_buffer_oracle, clock)
 }
 
 /// Get pool reserves
@@ -631,33 +781,66 @@ public(package) fun mark_liquidity_to_proposal<AssetType, StableType>(
     pool.last_proposal_usage = option::some(clock.timestamp_ms());
 }
 
-/// Write conditional TWAP when proposal finalizes and liquidity returns
-/// This integrates the winning conditional AMM's TWAP into spot history
-public(package) fun integrate_conditional_twap<AssetType, StableType>(
+/// Merge winning conditional's ring buffer observations into spot after proposal finalizes
+/// This ensures continuous price history for lending protocols
+public(package) fun merge_winning_conditional_oracle<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
-    conditional_twap: u128,
+    winning_conditional: &conditional_amm::LiquidityPool,
+    proposal_start_ms: u64,
+    proposal_end_ms: u64,
+) {
+    // Get the winning conditional's ring buffer oracle
+    let conditional_oracle = conditional_amm::get_ring_buffer_oracle(winning_conditional);
+    
+    // Merge observations from the proposal period into spot's ring buffer
+    ring_buffer_oracle::merge_observations(
+        &mut pool.ring_buffer_oracle,
+        conditional_oracle,
+        proposal_start_ms,
+        proposal_end_ms,
+    );
+}
+
+/// Fill TWAP gap when proposal finalizes (hot path)
+/// This is called when a proposal ends and we need to fill the gap in spot TWAP
+/// with the winning conditional AMM's TWAP
+public(package) fun fill_twap_gap_from_proposal<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    winning_conditional_twap: u128,
+    winning_conditional_price: u128,
     clock: &Clock,
 ) {
     let now = clock.timestamp_ms();
     
-    // If we have a recorded timestamp when liquidity left, write the conditional TWAP
+    // Only fill gap if pool was locked for proposal
     if (pool.last_proposal_usage.is_some()) {
         let proposal_start = *pool.last_proposal_usage.borrow();
+        let gap_duration = now - proposal_start;
         
-        // Write the conditional AMM's TWAP for the period liquidity was in proposals
-        write_conditional_twap(pool, proposal_start, now, conditional_twap, clock);
-    };
-    
-    // Clear the proposal usage timestamp
-    pool.last_proposal_usage = option::none();
-    
-    // Resume normal TWAP updates from this point forward
-    if (pool.initialized_at.is_some()) {
-        // Continue accumulation with the conditional TWAP as starting point
-        pool.last_price = conditional_twap;
-        pool.last_window_twap = conditional_twap; // Also update stable reference
+        // Fill the gap in spot TWAP with winning conditional's TWAP
+        if (gap_duration > 0) {
+            let gap_contribution = (winning_conditional_twap as u256) * (gap_duration as u256);
+            
+            // Add to the spot's cumulative window
+            pool.window_cumulative_price = pool.window_cumulative_price + gap_contribution;
+            
+            // Also write to historical segments for long-term tracking
+            let segment = PriceSegment {
+                start_timestamp: proposal_start,
+                end_timestamp: now,
+                cumulative_price: gap_contribution,
+                avg_price: winning_conditional_twap,
+            };
+            pool.historical_segments.push_back(segment);
+        };
+        
+        // Update timestamps and price to reflect filled gap
         pool.last_timestamp = now;
-        // Don't reset the window, just continue accumulating
+        pool.last_price = winning_conditional_price; // Resume from winning price
+        pool.last_window_twap = winning_conditional_twap; // Update stable reference
+        
+        // Unlock the pool - clear proposal lock
+        pool.last_proposal_usage = option::none();
     };
 }
 

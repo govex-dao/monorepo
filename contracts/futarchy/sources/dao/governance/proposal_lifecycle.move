@@ -240,12 +240,29 @@ public fun finalize_proposal_market<AssetType, StableType>(
     
     // If this proposal used DAO liquidity, integrate the winning conditional TWAP
     if (proposal::uses_dao_liquidity(proposal)) {
+        // Get proposal timing info before borrowing the pool
+        let proposal_start = proposal::get_market_initialized_at(proposal);
+        let proposal_end = clock.timestamp_ms();
+        
         // Get the winning pool's TWAP
         let winning_pool = proposal::get_pool_mut_by_outcome(proposal, winning_outcome as u8);
         let conditional_twap = conditional_amm::get_twap(winning_pool, clock);
         
-        // Integrate the conditional TWAP into the spot AMM's history
-        spot_amm::integrate_conditional_twap(spot_pool, conditional_twap, clock);
+        // Fill the TWAP gap with the winning conditional's TWAP (for futarchy oracle)
+        spot_amm::fill_twap_gap_from_proposal(
+            spot_pool, 
+            conditional_twap,
+            conditional_twap, // Use same value for both TWAP and final price
+            clock
+        );
+        
+        // Merge the winning conditional's ring buffer observations into spot (for lending oracle)
+        spot_amm::merge_winning_conditional_oracle(
+            spot_pool,
+            winning_pool,
+            proposal_start,
+            proposal_end
+        );
     };
     
     // NEW: Cancel losing outcome intents in the hot path using a scoped witness.
