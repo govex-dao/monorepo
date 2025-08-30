@@ -1,12 +1,29 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
 import { Resvg } from '@resvg/resvg-js';
-import { generateDaoSvg, generateProposalOG, generateGeneralOG } from '../../utils/dynamic-image';
+import { generateDaoSvg, generateProposalOG, generateGeneralOG, FONT_FAMILY, CACHE_DURATION } from '../../utils/dynamic-image';
 import { validateId, logSecurityError } from '../../utils/security';
 import path from 'path';
 import fs from 'fs/promises';
 
 const router = Router();
+
+// Helper Functions
+function renderSvgToPng(svg: string, options = {}) {
+  const resvg = new Resvg(svg, { font: FONT_FAMILY, ...options });
+  return resvg.render().asPng();
+}
+
+function sendPngResponse(res: Response, png: Buffer, cacheControl: string = CACHE_DURATION.image) {
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', cacheControl);
+  res.send(png);
+}
+
+function sendErrorResponse(res: Response, error: any, message = 'Internal server error') {
+  console.error(message, error);
+  res.status(500).json({ error: message });
+}
 
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {

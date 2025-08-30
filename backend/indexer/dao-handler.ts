@@ -1,19 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
-import path from 'path';
-import fs from 'fs/promises';
-import crypto from 'crypto';
-import { validateAndCompressImage } from '../utils/image-processing';
-
-// Constants for safety limits
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-]);
+import { imageService } from '../services/ImageService';
 
 interface DAOCreated {
     dao_id: string;
@@ -39,188 +27,6 @@ interface DAOCreated {
     amm_twap_initial_observation: string;
     twap_threshold: string;
     description: string;
-}
-
-async function validateAndSanitizeUrl(url: string): Promise<URL> {
-    try {
-        const sanitizedUrl = new URL(url);
-        // Only allow HTTPS URLs
-        if (sanitizedUrl.protocol !== 'https:') {
-            throw new Error('Only HTTPS URLs are allowed');
-        }
-        return sanitizedUrl;
-    } catch (error: unknown) {
-        throw new Error(`Invalid URL`);
-    }
-}
-
-async function cacheDAOImage(iconUrl: string, daoId: string): Promise<string | null> {
-    try {
-        console.log(`Starting image caching for DAO ${daoId}`, {
-            url: iconUrl
-        });
-
-        // Validate URL
-        const sanitizedUrl = await validateAndSanitizeUrl(iconUrl);
-        console.log('URL validation passed:', sanitizedUrl.toString());
-
-        // Setup cache directory
-        const cacheDir = path.join(process.cwd(), 'public', 'dao-images');
-        await fs.mkdir(cacheDir, { recursive: true, mode: 0o755 });
-        console.log('Cache directory ensured:', cacheDir);
-
-        // Create filename
-        const hash = crypto
-            .createHash('sha256')
-            .update(`${daoId}-${iconUrl}`)
-            .digest('hex')
-            .slice(0, 12);
-
-        // Always use .png as we standardize the output format in validateAndCompressImage.
-        const filename = `${daoId}-${hash}.png`;
-        const filePath = path.join(cacheDir, filename);
-        const tempPath = `${filePath}.temp`;
-        console.log('File paths generated:', {
-            filename,
-            filePath,
-            tempPath
-        });
-
-        // Fetch with timeout
-        console.log('Fetching image...');
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        try {
-            const response = await fetch(sanitizedUrl.toString(), {
-                signal: controller.signal,
-                headers: {
-                    'User-Agent': 'DAOImageCache/1.0'
-                }
-            });
-
-            console.log('Fetch response:', {
-                status: response.status,
-                statusText: response.statusText,
-                headers: Object.fromEntries(response.headers.entries())
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const contentType = response.headers.get('content-type');
-            console.log('Content type:', contentType);
-
-            if (!contentType) {
-                throw new Error('Missing content type');
-            }
-
-            const [mainType] = contentType.toLowerCase().split(';').map(s => s.trim());
-            console.log('Parsed content type:', {
-                main: mainType,
-                allowed: Array.from(ALLOWED_MIME_TYPES)
-            });
-
-            if (!ALLOWED_MIME_TYPES.has(mainType)) {
-                throw new Error(`Invalid content type: ${contentType}`);
-            }
-
-            const contentLength = response.headers.get('content-length');
-            console.log('Content length:', {
-                raw: contentLength,
-                parsed: contentLength ? parseInt(contentLength) : 'unknown',
-                limit: MAX_IMAGE_SIZE
-            });
-
-            if (contentLength && parseInt(contentLength) > MAX_IMAGE_SIZE) {
-                throw new Error(`Image size exceeds maximum allowed size of 5MB`);
-            }
-
-            const arrayBuffer = await response.arrayBuffer();
-            let imageBuffer = Buffer.from(arrayBuffer);
-            console.log('Image buffer created:', `${imageBuffer.length / 1024}KB`);
-
-            if (imageBuffer.length > MAX_IMAGE_SIZE) {
-                throw new Error('File size exceeds maximum allowed size');
-            }
-
-            const compressedImage = await validateAndCompressImage(imageBuffer);
-            if (!compressedImage) {
-                throw new Error('Image validation or compression failed');
-            }
-
-            imageBuffer = Buffer.from(compressedImage);
-
-            // Write to temporary file
-            console.log('Writing to temporary file:', tempPath);
-            await fs.writeFile(tempPath, imageBuffer, { mode: 0o644 });
-
-            // Move to final destination
-            console.log('Moving to final location:', filePath);
-            await fs.rename(tempPath, filePath);
-
-            const finalPath = `/dao-images/${filename}`;
-            console.log('Image successfully cached:', finalPath);
-
-            // Cleanup in background
-            cleanupOldImages(cacheDir).catch(err => {
-                console.error('Background cleanup failed:', err);
-            });
-
-            return finalPath;
-
-        } catch (error) {
-            console.error('Image processing failed:', {
-                error: error instanceof Error ? error.message : 'Unknown error',
-                stack: error instanceof Error ? error.stack : undefined
-            });
-            return null;
-        } finally {
-            clearTimeout(timeout);
-            try {
-                await fs.unlink(tempPath);
-                console.log('Temporary file cleaned up:', tempPath);
-            } catch (err) {
-                // Ignore cleanup errors
-                console.warn('Failed to cleanup temp file:', {
-                    path: tempPath,
-                    error: err instanceof Error ? err.message : 'Unknown error'
-                });
-            }
-        }
-    } catch (error) {
-        console.error(`Failed to cache image for DAO ${daoId}:`, {
-            error: error instanceof Error ? error.message : 'Unknown error',
-            stack: error instanceof Error ? error.stack : undefined,
-            url: iconUrl
-        });
-        return null;
-    }
-}
-
-async function cleanupOldImages(
-    cacheDir: string, 
-    maxAge: number = 180 * 24 * 60 * 60 * 1000 // 7 days
-): Promise<void> {
-    try {
-        const files = await fs.readdir(cacheDir);
-        const now = Date.now();
-
-        for (const file of files) {
-            const filePath = path.join(cacheDir, file);
-            try {
-                const stats = await fs.stat(filePath);
-                if (now - stats.mtimeMs > maxAge) {
-                    await fs.unlink(filePath);
-                }
-            } catch (error) {
-                console.error(`Error processing file ${file}:`, error);
-            }
-        }
-    } catch (error) {
-        console.error('Error cleaning up old cached images:', error);
-    }
 }
 
 function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
@@ -292,15 +98,9 @@ export const handleDAOObjects = async (events: SuiEvent[], type: string) => {
                 data.icon_url = "https://raw.githubusercontent.com/govex-dao/monorepo/refs/heads/main/frontend/public/images/govex-icon.png";
                 console.log(`Replaced legacy govex-icon.png URL for DAO ID: ${data.dao_id} with new GitHub URL.`);
             }
-
-            let cachedImagePath = null;
-            let finalIconUrl = data.icon_url;
             
-            try {
-                cachedImagePath = await cacheDAOImage(data.icon_url, data.dao_id);
-            } catch (error) {
-                finalIconUrl = ''; // Clear the URL if validation/caching fails
-            }
+            // Fetch and cache all image versions (single fetch, 3 outputs)
+            const cachedPaths = await imageService.fetchAndCacheAllVersions(data.icon_url, data.dao_id);
 
             daos.push({
                 dao_id: data.dao_id,
@@ -309,8 +109,10 @@ export const handleDAOObjects = async (events: SuiEvent[], type: string) => {
                 timestamp: safeBigInt(data.timestamp),
                 assetType: data.asset_type,
                 stableType: data.stable_type,
-                icon_url: finalIconUrl,
-                icon_cache_path: cachedImagePath || null,
+                icon_url: data.icon_url, // Keep original URL for reference
+                icon_cache_path: cachedPaths.icon, // 64x64 PNG icon
+                icon_cache_medium: cachedPaths.medium, // 256x256 JPEG  
+                icon_cache_large: cachedPaths.large, // 512x512 JPEG
                 dao_name: data.dao_name,
                 asset_decimals: parseInt(data.asset_decimals),
                 stable_decimals: parseInt(data.stable_decimals),
