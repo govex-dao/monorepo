@@ -18,6 +18,20 @@ export const FONT_CONFIG = {
   lineSpacing: 6,
 } as const;
 
+// Configuration
+export const FONT_FAMILY = {
+  loadSystemFonts: true,
+  defaultFontFamily: 'DejaVu Sans',
+  sansSerifFamily: 'DejaVu Sans',
+  serifFamily: 'DejaVu Serif',
+  monospaceFamily: 'DejaVu Sans Mono'
+} as const;
+
+export const CACHE_DURATION = {
+  image: process.env.NODE_ENV === 'development' ? 'no-store, no-cache, must-revalidate' : 'public, max-age=900', // 15 minutes in prod, no cache in dev
+  static: process.env.NODE_ENV === 'development' ? 'no-store, no-cache, must-revalidate' : 'public, max-age=604800' // 7 days in prod, no cache in dev
+} as const;
+
 export const COLORS = {
   background: {
     primary: '#0F172A',
