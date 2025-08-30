@@ -47,8 +47,9 @@ export function validateImageUrl(urlString: string): ValidationResult {
   try {
     const url = new URL(urlString);
 
-    // Check protocol
-    if (!['http:', 'https:'].includes(url.protocol)) {
+    // Check protocol - Enforce HTTPS for external resources
+    // This is the critical security fix, adopting the strict check from daoHandler
+    if (url.protocol !== 'https:') {
       return { isValid: false, error: `Invalid protocol: ${url.protocol}` };
     }
 
@@ -106,18 +107,27 @@ export function escapeXml(unsafe: string): string {
  * Validates content type is an allowed image format
  */
 export function validateImageContentType(contentType: string | null): boolean {
-  if (!contentType) return false;
-  
-  const allowedTypes = [
+  if (!contentType) return false;  
+
+  // Use a Set for performance and to consolidate all allowed types
+  const allowedTypes = new Set([
     'image/jpeg',
     'image/jpg',
     'image/png',
     'image/gif',
     'image/webp',
     'image/svg+xml',
-  ];
-  
-  return allowedTypes.includes(contentType.toLowerCase());
+  ]);
+
+  const mainType = contentType.toLowerCase().split(';')[0].trim();
+  return allowedTypes.has(mainType);
+}
+
+/**
+ * Validates if an image buffer size is within a given limit.
+ */
+export function validateImageSize(sizeInBytes: number, maxSizeInBytes: number): boolean {
+  return sizeInBytes <= maxSizeInBytes;
 }
 
 /**
