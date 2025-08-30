@@ -34,7 +34,7 @@ public struct WeightedMultisig has store {
 }
 
 /// The outcome object for a weighted multisig. Tracks approvals for a specific intent.
-public struct Approvals has store, copy, drop {
+public struct Approvals has store, drop {
     /// The set of addresses that have approved. The weight is looked up from the config.
     approvers: VecSet<address>,
 }

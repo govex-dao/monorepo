@@ -24,7 +24,6 @@ find . -type f -name '*.move' -exec cat {} + > all_moves.txt
 
 ```
 find \
-  contracts/futarchy/sources \
   contracts/move-framework/examples/sources \
   contracts/move-framework/packages/actions/sources \
   contracts/move-framework/packages/extensions/sources \

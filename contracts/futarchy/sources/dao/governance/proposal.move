@@ -992,6 +992,8 @@ public(package) fun set_winning_outcome<AssetType, StableType>(
 
 /// Finalize the proposal with the winning outcome computed on-chain
 /// This combines computing the winner from TWAP, setting the winning outcome and updating state atomically
+/// @deprecated Use proposal_lifecycle::finalize_proposal_market instead - this version lacks critical intent cleanup
+#[test_only]
 public fun finalize_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
