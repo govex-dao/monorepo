@@ -1,6 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { safeBigInt } from '../utils/bigint';
 
 interface ProposalStateChanged {
     proposal_id: string;
@@ -16,15 +17,6 @@ type ProposalStateChangeCreate = Prisma.ProposalStateChangeCreateInput & {
         };
     };
 };
-
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
-}
 
 function validateStateChangeData(data: any): data is ProposalStateChanged {
     const requiredFields = [

@@ -2,6 +2,7 @@ import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { imageService } from '../services/ImageService';
+import { safeBigInt } from '../utils/bigint';
 
 interface DAOCreated {
     dao_id: string;
@@ -27,15 +28,6 @@ interface DAOCreated {
     amm_twap_initial_observation: string;
     twap_threshold: string;
     description: string;
-}
-
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
 }
 
 function validateDAOData(data: any): data is DAOCreated {

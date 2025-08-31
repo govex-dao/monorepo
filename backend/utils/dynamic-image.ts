@@ -618,8 +618,8 @@ export async function generateGeneralOG(): Promise<string> {
   const { lines: descLines, fontSize: descFontSize } = wrapText(
     description,
     width - 400,
-    28,
-    80
+    40,
+    200
   );
 
   // Use a hardcoded base64 logo or cached version for Govex
@@ -673,10 +673,10 @@ export async function generateGeneralOG(): Promise<string> {
     <!-- Content section - right aligned -->
     <g transform="translate(320, 60)">
       <!-- Brand name -->
-      <text x="0" y="60" font-family="Arial, Helvetica, sans-serif" font-size="110" font-weight="800" fill="${COLORS.text.primary}" letter-spacing="-0.02em" filter="url(#glow)">Govex</text>
+      <text x="0" y="20" font-family="Arial, Helvetica, sans-serif" font-size="110" font-weight="800" fill="${COLORS.text.primary}" letter-spacing="-0.02em" filter="url(#glow)">Govex</text>
       
       <!-- Tagline -->
-      <text x="0" y="120" font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="500" fill="${COLORS.accent.blue}" letter-spacing="0.04em" opacity="0.9">Futarchy on Sui</text>
+      <text x="0" y="80" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="500" fill="${COLORS.accent.blue}" letter-spacing="0.04em" opacity="0.9">DAO governance on SUI</text>
       
       <!-- Description -->
       <g transform="translate(0, 160)">
@@ -696,17 +696,14 @@ export async function generateGeneralOG(): Promise<string> {
     <!-- Feature items with balanced positioning -->
     <g transform="translate(240, 40)">
       <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Prediction Markets</text>
-      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Futarchy governance</text>
     </g>
     
     <g transform="translate(${width / 2}, 40)">
-      <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Sui Blockchain</text>
-      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Fast transactions</text>
+      <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Built on SUI</text>
     </g>
     
     <g transform="translate(960, 40)">
       <text x="0" y="35" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700" fill="${COLORS.text.primary}" text-anchor="middle">Multiple Outcomes</text>
-      <text x="0" y="65" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="400" fill="${COLORS.text.tertiary}" opacity="0.9" text-anchor="middle">Complex decisions</text>
     </g>
   </g>
   </svg>`;

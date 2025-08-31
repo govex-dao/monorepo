@@ -19,6 +19,18 @@ class ImageCache {
    * Get image from cache or load from disk
    */
   async getImage(imagePath: string): Promise<string | null> {
+    // Bypass cache in development
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const fullPath = path.join(process.cwd(), 'public', imagePath.substring(1));
+        const imageBuffer = await fs.readFile(fullPath);
+        return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      } catch (err) {
+        logSecurityError('readCachedImage', err);
+        return null;
+      }
+    }
+
     const cacheKey = imagePath;
     const now = Date.now();
 
