@@ -28,7 +28,7 @@ function sendErrorResponse(res: Response, error: any, message = 'Internal server
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
     const { daoId } = req.params;
-    
+
     // Validate input
     if (!validateId(daoId)) {
       res.status(400).json({ error: 'Invalid DAO ID format' });
@@ -96,13 +96,14 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
 router.get('/proposal-image', async (req: Request, res: Response) => {
   try {
     const {
-      title, daoName, daoLogo, currentState,
-      winningOutcome, outcomeMessages, traders, trades,
+      title, description, daoName, daoLogo, currentState,
+      winningOutcome, outcomeMessages, traders, trades, volume,
       tradingStartDate, tradingPeriodMs
     } = req.query;
 
     const svg = await generateProposalOG({
       title: title as string,
+      description: description as string || "",
       daoName: daoName as string,
       daoLogo: daoLogo as string || "placeholder",
       currentState: Number(currentState) || 0,
@@ -110,6 +111,7 @@ router.get('/proposal-image', async (req: Request, res: Response) => {
       outcomeMessages: outcomeMessages ? JSON.parse(outcomeMessages as string) : undefined,
       traders: Number(traders) || 0,
       trades: Number(trades) || 0,
+      volume: Number(volume) || 0,
       tradingStartDate: new Date(tradingStartDate as string),
       tradingPeriodMs: Number(tradingPeriodMs) || 0
     });
@@ -162,12 +164,10 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       }
     });
 
-    if (!proposal) {
-      res.status(404).json({ error: 'Proposal not found' });
-      return;
-    }
-    
-    const [swapCount, uniqueTraders] = await Promise.all([
+    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+
+    // Get trading statistics
+    const [swapCount, uniqueTraders, volumeData] = await Promise.all([
       prisma.swapEvent.count({
         where: { market_id: proposal.proposal_id }
       }),
@@ -175,6 +175,13 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         by: ['sender'],
         where: { market_id: proposal.proposal_id },
         _count: { sender: true }
+      }),
+      prisma.swapEvent.aggregate({
+        where: { market_id: proposal.proposal_id },
+        _sum: {
+          amount_in: true,
+          amount_out: true
+        }
       })
     ]);
 
@@ -186,9 +193,33 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       logSecurityError('parseOutcomeMessages', parseError);
       outcomeMessages = undefined;
     }
+    // Calculate total volume (sum of amount_in and amount_out divided by 2 to avoid double counting)
+    const totalVolume = Math.floor(((Number(volumeData._sum.amount_in) || 0) + (Number(volumeData._sum.amount_out) || 0)) / 2);
+
+
+    // Return JSON if requested
+    if (returnJson) {
+      return res.json({
+        id: proposal.proposal_id,
+        title: proposal.title,
+        details: proposal.details,
+        dao_name: proposal.dao?.dao_name || "DAO",
+        dao_icon_url: proposal.dao?.icon_url,
+        current_state: proposal.current_state || 0,
+        winning_outcome: Number(proposal.result?.winning_outcome) || 0,
+        outcome_messages: outcomeMessages,
+        traders: uniqueTraders.length,
+        trades: swapCount,
+        volume: totalVolume,
+        created_at: proposal.created_at?.toString(),
+        trading_period_ms: proposal.trading_period_ms?.toString(),
+        review_period_ms: proposal.review_period_ms?.toString()
+      });
+    }
 
     const svg = await generateProposalOG({
       title: proposal.title,
+      description: proposal.details || "",
       daoName: proposal.dao?.dao_name || "DAO",
       daoLogo: proposal.dao?.icon_cache_large || proposal.dao?.icon_url || "placeholder",
       currentState: proposal.current_state || 0,
@@ -196,6 +227,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       outcomeMessages,
       traders: uniqueTraders.length,
       trades: swapCount,
+      volume: totalVolume,
       tradingStartDate: new Date(Number(proposal.created_at) + Number(proposal.review_period_ms)),
       tradingPeriodMs: Number(proposal.trading_period_ms)
     });
