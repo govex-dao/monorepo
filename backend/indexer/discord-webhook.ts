@@ -115,7 +115,7 @@ export async function sendDiscordWebhook(options: DiscordWebhookOptions): Promis
             headers: {
                 'Content-Type': `multipart/form-data; boundary=${boundary}`,
             },
-            body: body as BodyInit
+            body: new Blob([Uint8Array.from(body)])
         });
     } else {
         // Send without attachment
