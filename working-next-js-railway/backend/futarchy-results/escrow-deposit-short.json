@@ -1,8 +1,0 @@
-{
-  "escrowId": "0xb4a85e5b3dafcb584c669aedcce578793d8448cf8a00ce3f478ddcd63b7c58cc",
-  "assetType": "0x53569224990d5d54daef0228f5b6ad708baebbf9d6a87db71dabbd79c3fee1fa::my_asset::MY_ASSET",
-  "stableType": "0x1309b63dd680b25f4f8158f85f3dc3252c1cb8406c2452eedba32d3204a1ae22::my_stable::MY_STABLE",
-  "conditionalTokenType": "0x253b6c7c66722fa70bebc32d481b37e3e2153d5826ac9d588b0ebc6c4039fb76::conditional_token::ConditionalToken",
-  "outcomeToken0": "0x60ac46b26395a268862c55ce6299f87b0df4ec61cbd03197c21c3b2504710bb8",
-  "outcomeToken1": "0xc0ff8ef45b20bf2a165ee6a40405e8c5585f5661e1ecf62c3ad72242962014d3"
-}
