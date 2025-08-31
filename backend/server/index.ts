@@ -14,6 +14,7 @@ import {
 	WhereParamTypes,
 } from '../utils/api-queries';
 import { swapCache, SWAP_CACHE_TTL, cleanupExpiredCache, getCacheStats } from '../utils/cache-utils';
+import { serializeBigInt } from '../utils/bigint';
 
 // Clean up expired cache entries every minute
 setInterval(() => {
@@ -24,23 +25,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Rate limiter for OG image generation
-const ogImageLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 50, // Limit each IP to 50 requests per window
-	standardHeaders: true,
-	legacyHeaders: false,
-	message: 'Too many OG image requests, please try again later',
-	handler: (req, res) => {
-		res.status(429).json({ error: 'Too many requests, please try again later' });
-	}
-});
-
 // Mount AI Review routes
 app.use(aiReviewRouter);
 
-// Mount OG routes with rate limiting
-app.use('/og', ogImageLimiter, ogRouter);
+// Mount OG routes with rate limiting only in production
+if (process.env.NODE_ENV === 'production') {
+  const ogImageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // Limit each IP to 50 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many OG image requests, please try again later',
+    handler: (req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later' });
+    }
+  });
+  app.use('/og', ogImageLimiter, ogRouter);
+} else {
+  app.use('/og', ogRouter);
+}
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
@@ -628,10 +631,6 @@ app.get('/proposals/:id', async (req, res) => {
         res.status(404).send({ message: 'Proposal not found' });
         return;
       }
-  
-      // Helper function to serialize BigInt values
-      const serializeBigInt = (value: any): any =>
-        typeof value === 'bigint' ? value.toString() : value;
   
       // Build the transformed proposal,
       // manually converting necessary fields to ensure JSON compatibility.
