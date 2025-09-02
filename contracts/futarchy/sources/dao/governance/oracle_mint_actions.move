@@ -1,15 +1,27 @@
 module futarchy::oracle_mint_actions;
 
-use std::string::String;
+use std::string::{Self, String};
 use std::option::{Self, Option};
 use sui::coin::{Self, Coin, TreasuryCap};
 use sui::clock::Clock;
 use sui::transfer;
 use sui::tx_context::TxContext;
-use futarchy::spot_amm::{Self, SpotAMM};
-use futarchy::proposal::Proposal;
-use futarchy::spot_conditional_quoter;
-use account_protocol::intents::{Expired};
+use sui::object;
+use account_protocol::{
+    intents::{Expired},
+    executable::{Self, Executable},
+    account::{Self, Account},
+    version_witness::VersionWitness,
+};
+use futarchy::{
+    futarchy_config::FutarchyConfig,
+    version,
+    spot_amm::{Self, SpotAMM},
+    spot_conditional_quoter,
+    resource_requests::{Self, ResourceRequest, ResourceReceipt},
+    proposal::Proposal,
+    conditional_amm,
+};
 
 // === Errors ===
 const EPriceThresholdNotMet: u64 = 0;
@@ -22,6 +34,7 @@ const EAlreadyExecuted: u64 = 6;
 const EInvalidThreshold: u64 = 7;
 const EOverflow: u64 = 8;
 const EDivisionByZero: u64 = 9;
+const ECannotExecuteWithoutTreasuryCap: u64 = 10;
 
 // === Constants ===
 const MAX_MINT_PERCENTAGE: u64 = 500; // 5% max mint per execution (in basis points)
@@ -31,7 +44,7 @@ const COOLDOWN_PERIOD_MS: u64 = 86_400_000; // 24 hours between mints
 
 /// Action to read oracle price and conditionally mint tokens
 /// This is used for founder rewards, liquidity incentives, etc.
-public struct ConditionalMintAction<phantom T> has store {
+public struct ConditionalMintAction<phantom T> has store, copy, drop {
     /// Address to receive minted tokens
     recipient: address,
     /// Amount of tokens to mint if condition is met
@@ -60,7 +73,7 @@ public struct ConditionalMintAction<phantom T> has store {
 
 /// Action to read oracle and mint based on AMM ratio
 /// Used for launchpad founder rewards based on market performance
-public struct RatioBasedMintAction<phantom AssetType, phantom StableType> has store {
+public struct RatioBasedMintAction<phantom AssetType, phantom StableType> has store, copy, drop {
     /// Address to receive minted tokens
     recipient: address,
     /// Base amount to calculate mint from
@@ -203,6 +216,18 @@ public fun new_founder_reward_mint<T>(
 
 // === Execution Functions ===
 
+/// Execute all oracle mint actions in the executable
+public fun execute_all_oracle_mint_actions<Outcome: store, AssetType>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    amm_pool: &mut conditional_amm::LiquidityPool,
+    ctx: &mut TxContext,
+) {
+    // Process oracle mint actions until none remain
+    // This function currently does nothing as oracle mint requires treasury caps
+    // which must be stored in Account during DAO setup
+}
+
 /// Execute conditional mint based on oracle price
 public fun execute_conditional_mint<AssetType, StableType, T>(
     action: &mut ConditionalMintAction<T>,
@@ -339,6 +364,100 @@ public fun execute_ratio_mint<AssetType, StableType>(
     
     // Mark as executed
     action.executed = true;
+}
+
+// === Hot Potato Pattern Functions ===
+
+/// Create a resource request for conditional mint action
+public fun do_conditional_mint<T, Outcome: store, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceRequest<ConditionalMintAction<T>> {
+    // Get the action from the executable (returns a reference)
+    let action_ref = executable.next_action<Outcome, ConditionalMintAction<T>, IW>(witness);
+    
+    // Copy the action value since we need to store it
+    let action = *action_ref;
+    
+    // Create resource request
+    let mut request = resource_requests::new_request<ConditionalMintAction<T>>(ctx);
+    
+    // Store action context in dynamic fields
+    resource_requests::add_context(&mut request, std::string::utf8(b"action"), action);
+    resource_requests::add_context(&mut request, std::string::utf8(b"timestamp"), clock.timestamp_ms());
+    
+    request
+}
+
+/// Fulfill the conditional mint with actual resources
+public fun fulfill_conditional_mint<AssetType, StableType, T>(
+    request: ResourceRequest<ConditionalMintAction<T>>,
+    treasury_cap: &mut TreasuryCap<T>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceReceipt<ConditionalMintAction<T>> {
+    // Extract action from request
+    let mut action = resource_requests::get_context<ConditionalMintAction<T>, ConditionalMintAction<T>>(
+        &request, 
+        std::string::utf8(b"action")
+    );
+    
+    // Execute the actual mint logic
+    execute_conditional_mint(&mut action, treasury_cap, spot_pool, clock, ctx);
+    
+    // Return receipt
+    resource_requests::fulfill(request)
+}
+
+/// Create a resource request for ratio-based mint action
+public fun do_ratio_mint<AssetType, StableType, Outcome: store, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceRequest<RatioBasedMintAction<AssetType, StableType>> {
+    // Get the action from the executable (returns a reference)
+    let action_ref = executable.next_action<Outcome, RatioBasedMintAction<AssetType, StableType>, IW>(witness);
+    
+    // Copy the action value since we need to store it
+    let action = *action_ref;
+    
+    // Create resource request
+    let mut request = resource_requests::new_request<RatioBasedMintAction<AssetType, StableType>>(ctx);
+    
+    // Store action context in dynamic fields
+    resource_requests::add_context(&mut request, std::string::utf8(b"action"), action);
+    resource_requests::add_context(&mut request, std::string::utf8(b"timestamp"), clock.timestamp_ms());
+    
+    request
+}
+
+/// Fulfill the ratio-based mint with actual resources
+public fun fulfill_ratio_mint<AssetType, StableType>(
+    request: ResourceRequest<RatioBasedMintAction<AssetType, StableType>>,
+    treasury_cap: &mut TreasuryCap<AssetType>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceReceipt<RatioBasedMintAction<AssetType, StableType>> {
+    // Extract action from request
+    let mut action = resource_requests::get_context<RatioBasedMintAction<AssetType, StableType>, RatioBasedMintAction<AssetType, StableType>>(
+        &request,
+        std::string::utf8(b"action")
+    );
+    
+    // Execute the actual mint logic
+    execute_ratio_mint(&mut action, treasury_cap, spot_pool, clock, ctx);
+    
+    // Return receipt
+    resource_requests::fulfill(request)
 }
 
 // === Safe Math Functions ===

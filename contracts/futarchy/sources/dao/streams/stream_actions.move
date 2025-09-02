@@ -1298,6 +1298,49 @@ public fun do_challenge_withdrawals<Outcome: store, IW: drop>(
     });
 }
 
+/// Execute processing a pending withdrawal (validates but doesn't transfer)
+public fun do_process_pending_withdrawal<Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    clock: &Clock,
+    _ctx: &TxContext,
+) {
+    let action = executable.next_action<Outcome, ProcessPendingWithdrawalAction<CoinType>, IW>(witness);
+    let payment_id = action.payment_id;
+    let withdrawal_id = action.withdrawal_id;
+    
+    let account_id = object::id(account);
+    let current_time = clock.timestamp_ms();
+    
+    let storage: &PaymentStorage = account::borrow_managed_data(
+        account,
+        PaymentStorageKey {},
+        version::current()
+    );
+    
+    assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
+    let payment = table::borrow(&storage.payments, payment_id);
+    
+    // Verify this is a budget stream
+    assert!(payment.is_budget_stream, EInvalidBudgetStream);
+    assert!(payment.budget_config.is_some(), EInvalidBudgetStream);
+    
+    let budget_config = payment.budget_config.borrow();
+    
+    // Get and validate withdrawal
+    assert!(table::contains(&budget_config.pending_withdrawals, withdrawal_id), EPaymentNotFound);
+    let withdrawal = table::borrow(&budget_config.pending_withdrawals, withdrawal_id);
+    
+    // Verify withdrawal is ready and not challenged
+    assert!(current_time >= withdrawal.processes_at, EWithdrawalNotReady);
+    assert!(!withdrawal.is_challenged, EWithdrawalChallenged);
+    
+    // Note: Actual coin transfer would need to be handled by a specialized executor
+    // that provides the coin, similar to dissolution actions
+}
+
 /// Execute processing a single matured pending withdrawal with coin
 public(package) fun do_process_pending_withdrawal_with_coin<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,

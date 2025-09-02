@@ -118,9 +118,6 @@ public fun delete_initiate_dissolution(expired: &mut Expired) {
     futarchy::dissolution_actions::delete_initiate_dissolution(expired);
 }
 
-public fun delete_distribute_asset<CoinType>(expired: &mut Expired) {
-    futarchy::dissolution_actions::delete_distribute_asset<CoinType>(expired);
-}
 
 public fun delete_batch_distribute(expired: &mut Expired) {
     futarchy::dissolution_actions::delete_batch_distribute(expired);

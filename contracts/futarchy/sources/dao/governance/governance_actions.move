@@ -3,7 +3,7 @@
 module futarchy::governance_actions;
 
 // === Imports ===
-use std::string::String;
+use std::string::{Self, String};
 use std::option::{Self, Option};
 use std::vector::{Self};
 use sui::{
@@ -24,6 +24,7 @@ use futarchy::{
     futarchy_config::{Self, FutarchyConfig},
     priority_queue,
     proposal_fee_manager::{Self, ProposalFeeManager},
+    resource_requests::{Self, ResourceRequest, ResourceReceipt},
 };
 
 // === Errors ===
@@ -138,6 +139,13 @@ public struct ProposalReservationRegistry has key {
     bucket_duration_ms: u64,
 }
 
+// === Getter Functions ===
+
+/// Get the proposal fee from a CreateProposalAction
+public fun get_proposal_fee(action: &CreateProposalAction): u64 {
+    action.proposal_fee
+}
+
 // === Constructor Functions ===
 
 /// Create a new CreateProposalAction with validation
@@ -176,21 +184,17 @@ public fun new_create_proposal_action(
 
 // === Action Execution ===
 
-/// Execute the create proposal action
-/// The executor must provide the SUI fee upfront for the second-order proposal
+/// Execute the create proposal action - creates a resource request
+/// Returns a hot potato that must be fulfilled with governance resources
 public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version_witness: VersionWitness,
     witness: IW,
     parent_proposal_id: ID,
-    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
-    fee_manager: &mut ProposalFeeManager,
-    registry: &mut ProposalReservationRegistry,
-    fee_coin: Coin<SUI>, // Executor must pay the fee upfront
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): ResourceRequest<CreateProposalAction> {
     let action = executable.next_action<Outcome, CreateProposalAction, IW>(witness);
     
     // Get reservation period from DAO config or use override
@@ -204,11 +208,42 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
         futarchy_config::proposal_recreation_window_ms(config)
     };
     
-    // Check chain depth
+    // Check chain depth (we'll need to pass registry to fulfill function)
     let max_depth = futarchy_config::max_proposal_chain_depth(config);
     
-    // Get parent's depth from the reservation registry
-    // A first-order proposal will not be in the registry, so its depth is 0
+    // Create resource request with all needed context
+    let mut request = resource_requests::new_request<CreateProposalAction>(ctx);
+    
+    // Add all the context data needed for fulfillment
+    resource_requests::add_context(&mut request, string::utf8(b"action"), *action);
+    resource_requests::add_context(&mut request, string::utf8(b"parent_proposal_id"), parent_proposal_id);
+    resource_requests::add_context(&mut request, string::utf8(b"reservation_period"), reservation_period);
+    resource_requests::add_context(&mut request, string::utf8(b"max_depth"), max_depth);
+    resource_requests::add_context(&mut request, string::utf8(b"account_id"), object::id(account));
+    
+    let _ = version_witness;
+    
+    request
+}
+
+/// Fulfill the resource request by providing the governance resources
+/// This completes the proposal creation with all required resources
+public fun fulfill_create_proposal(
+    request: ResourceRequest<CreateProposalAction>,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    fee_coin: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceReceipt<CreateProposalAction> {
+    // Extract context from the request
+    let action: CreateProposalAction = resource_requests::get_context(&request, string::utf8(b"action"));
+    let parent_proposal_id: ID = resource_requests::get_context(&request, string::utf8(b"parent_proposal_id"));
+    let reservation_period: u64 = resource_requests::get_context(&request, string::utf8(b"reservation_period"));
+    let max_depth: u64 = resource_requests::get_context(&request, string::utf8(b"max_depth"));
+    
+    // Check chain depth using registry
     let parent_depth = if (table::contains(&registry.reservations, parent_proposal_id)) {
         table::borrow(&registry.reservations, parent_proposal_id).chain_depth
     } else {
@@ -222,13 +257,11 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     assert!(coin::value(&fee_coin) >= action.proposal_fee, EInsufficientFee);
     
     // Generate a unique proposal ID for the new proposal
-    // Using object::new ensures cryptographically unique IDs
     let proposal_uid = object::new(ctx);
     let proposal_id = object::uid_to_inner(&proposal_uid);
     object::delete(proposal_uid);
     
     // Deposit the fee first (required for potential refunds)
-    // Note: bag::add will abort if proposal_id already exists, preventing duplicates
     proposal_fee_manager::deposit_proposal_fee(
         fee_manager,
         proposal_id,
@@ -237,7 +270,7 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     
     // Create the proposal with the generated ID
     let new_proposal = create_queued_proposal_with_id(
-        action,
+        &action,
         proposal_id,
         parent_proposal_id,
         reservation_period,
@@ -271,24 +304,25 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
         create_reservation(
             registry,
             parent_proposal_id,
-            *action,
+            action,
             reservation_period,
             clock,
             ctx
         );
-    } else if (should_create_reservation(action)) {
+    } else if (should_create_reservation(&action)) {
         // Create reservation if needed even without eviction
         create_reservation(
             registry,
             parent_proposal_id,
-            *action,
+            action,
             reservation_period,
             clock,
             ctx
         );
     };
     
-    let _ = version_witness;
+    // Consume the request and return receipt
+    resource_requests::fulfill(request)
 }
 
 /// Execute recreation of an evicted second-order proposal

@@ -2,7 +2,23 @@
 - [ ] Get summary of each file and make sure AIs stop getting tripped up
 - [ ] Compare to other large quality move packages
 like walrus deep book and leading lending protocols etc
-main ones on defi lama that are new!
+main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
+
+- [ ]  Make sure owner dao and its secuity council can control admin thingy to change platform fees / fee collector
+
+- [ ] Optional Security council with optimisitic proosal action creation, can be challenged with X period like how stream sub actions work
+Second their of investors that get paid first of paid set % of all incoming revenue of Vector X% of vecotor first Y amounts
+
+- [ ] Way to create double memo proposal or proposal that requires x% increase to pass not just dao threshold %. So founder agree to lock tokens if increases price of stock… either need profile for that founder to act as their own ado or something else???
+
+- [ ] Need deposit revenue endpoint for daos
+
+- [ ] Also maybe shard all daos based on number e.g give certain dao number label to admins
+
+- [ ] Collect fee require admin cap and be able to only take less than max so can give discounts 
+
+
+
 - [x]  maybe should make conditional tokens have field that maps to escrow id. so can autoreclaim those without needing to index anything else. Can a single move fuction take conditional tokens and handle the auto reclaim? not sure thats possible in sui move? but still add that field.
 - [x] Spot conditional amm router and quoter! Routes spot swap and quote through conditional tokens, auto recombines full set and also returns and excess conditional tokens left over
 - [x] Make sure sequrity council have way to clean up account memory for intnets. Maybe should have sweep of delete intents thing they can sign????? idk come up with solutions for this, idealy hot path like with dao. but thing is security council are not foreced into proposasl like dao is, security counicil can kinda ignore stuff.
@@ -19,12 +35,12 @@ OK lets have a TWAP oracle but for time when proposal was live fill in using my 
 # Consider for V3
 - [ ] Should operating agreements or another object e.g registry be able to make policy rules regarding actions types e.g. preventing them or setting what authority they need
 - [ ] Sort out twap i itializatkon prices and handle spot oracle given 24 7 proposals if no spot trading dueot back to back proposals
-- [ ] multiverse finance Token splitting?
+- [ ] multiverse finance Token splitting? https://www.paradigm.xyz/2025/05/multiverse-finance
 - [ ] Amm routing abstraction Redeeming condition toke redeem type dispatcher for burn or redeem winning
 - [ ]  Way to generate dao onchain spending data?
 - [ ]  Make whole code not rely so much on off chain indexing, like keep last n proposals discoverable from dao and every other object properly discoverable
 - [ ] Procurement proposal type
-- [ ] The Automated Cash Flow Statement (The "Must-Have")
+- [ ] The Automated Cash Flow Statement (The "Must-Have")- [ ] Change opperating agreement to make line by line require multiple coex or and OR et 
 Income Statement
 What it answers: Are we profitable?
 Simple Idea: Incomes - Expenses = Profit

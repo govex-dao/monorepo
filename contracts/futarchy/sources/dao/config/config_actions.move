@@ -509,6 +509,39 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     });
 }
 
+/// Execute a batch config action that can contain any type of config update
+/// This delegates to the appropriate handler based on config_type
+public fun do_batch_config<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    intent_witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let action: &ConfigAction = executable.next_action(intent_witness);
+    
+    // Validate that the correct field is populated for the config_type
+    if (action.config_type == CONFIG_TYPE_TRADING_PARAMS) {
+        assert!(action.trading_params.is_some(), EInvalidConfigType);
+    } else if (action.config_type == CONFIG_TYPE_METADATA) {
+        assert!(action.metadata.is_some(), EInvalidConfigType);
+    } else if (action.config_type == CONFIG_TYPE_TWAP) {
+        assert!(action.twap_config.is_some(), EInvalidConfigType);
+    } else if (action.config_type == CONFIG_TYPE_GOVERNANCE) {
+        assert!(action.governance.is_some(), EInvalidConfigType);
+    } else if (action.config_type == CONFIG_TYPE_METADATA_TABLE) {
+        assert!(action.metadata_table.is_some(), EInvalidConfigType);
+    } else if (action.config_type == CONFIG_TYPE_QUEUE_PARAMS) {
+        assert!(action.queue_params.is_some(), EInvalidConfigType);
+    } else {
+        abort EInvalidConfigType
+    };
+    
+    // Note: The actual config updates should be handled by the individual
+    // do_ functions for each action type. This wrapper provides type safety.
+}
+
 // === Cleanup Functions ===
 
 /// Delete a set proposals enabled action from an expired intent
@@ -848,6 +881,96 @@ public fun get_queue_params_fields(update: &QueueParamsUpdateAction): (
         &update.max_queue_size,
         &update.fee_escalation_basis_points
     )
+}
+
+/// Create a config action for trading params updates
+public fun new_config_action_trading_params(
+    params: TradingParamsUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_TRADING_PARAMS,
+        trading_params: option::some(params),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::none(),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a config action for metadata updates  
+public fun new_config_action_metadata(
+    metadata: MetadataUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_METADATA,
+        trading_params: option::none(),
+        metadata: option::some(metadata),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::none(),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a config action for TWAP config updates
+public fun new_config_action_twap(
+    twap: TwapConfigUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_TWAP,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::some(twap),
+        governance: option::none(),
+        metadata_table: option::none(),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a config action for governance updates
+public fun new_config_action_governance(
+    gov: GovernanceUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_GOVERNANCE,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::some(gov),
+        metadata_table: option::none(),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a config action for metadata table updates
+public fun new_config_action_metadata_table(
+    table: MetadataTableUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_METADATA_TABLE,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::some(table),
+        queue_params: option::none(),
+    }
+}
+
+/// Create a config action for queue params updates
+public fun new_config_action_queue_params(
+    queue: QueueParamsUpdateAction
+): ConfigAction {
+    ConfigAction {
+        config_type: CONFIG_TYPE_QUEUE_PARAMS,
+        trading_params: option::none(),
+        metadata: option::none(),
+        twap_config: option::none(),
+        governance: option::none(),
+        metadata_table: option::none(),
+        queue_params: option::some(queue),
+    }
 }
 
 // === Internal Validation Functions ===

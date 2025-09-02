@@ -1,0 +1,1754 @@
+/// Dispatcher for routing and executing different types of futarchy actions
+/// This module acts as the central hub for executing approved proposal actions
+module futarchy::action_dispatcher;
+
+// === Imports ===
+use std::{
+    string::{Self, String},
+    option::{Self, Option},
+};
+use sui::{
+    clock::Clock,
+    object::{Self, ID},
+    coin::{Self, Coin, TreasuryCap},
+    sui::SUI,
+    event,
+    transfer,
+    tx_context::{Self, TxContext},
+};
+use account_protocol::{
+    account::{Self, Account},
+    executable::{Self, Executable},
+    intents::{Self, Intent},
+};
+use account_actions::vault;
+use futarchy::{
+    futarchy_config::{Self, FutarchyConfig},
+    operating_agreement,
+    version,
+    account_spot_pool::{Self, AccountSpotPool, LPToken},
+    lp_token_custody,
+    policy_registry_coexec,
+    oracle_mint_actions,
+    futarchy_vault,
+    priority_queue,
+    proposal_fee_manager::ProposalFeeManager,
+    spot_amm::SpotAMM,
+    conditional_amm,
+};
+// Import action modules from local package
+use futarchy::{
+    config_actions,
+    operating_agreement_actions,
+    liquidity_actions,
+    dissolution_actions,
+    stream_actions,
+    policy_actions,
+    policy_registry,
+    memo_actions,
+    governance_actions::{Self, ProposalReservationRegistry},
+};
+
+// === Constants ===
+/// Operating Agreement Custodian policy key - critical policy that cannot be removed by DAO
+const OA_CUSTODIAN_POLICY: vector<u8> = b"OA:Custodian";
+
+// === Errors ===
+const EInvalidAmount: u64 = 4;
+const ENoSpotPool: u64 = 5;
+const EInvalidPoolId: u64 = 6;
+const EOARequiresCouncil: u64 = 8;
+const ECriticalPolicyRequiresCouncil: u64 = 9;
+const ECannotRemoveOACustodian: u64 = 10;
+const EActionNotFound: u64 = 11;
+const EQueueDAOMismatch: u64 = 12;
+const EProposalCreationSkipped: u64 = 13;
+const EResourceRequestPending: u64 = 14;
+const ECannotExecuteInHotPath: u64 = 15;
+
+// === Events ===
+
+/// Emitted when a CreateProposalAction is skipped due to missing fee coin
+public struct ProposalCreationSkipped has copy, drop {
+    parent_proposal_id: ID,
+    timestamp: u64,
+    reason: String,
+}
+
+// === Public Functions ===
+
+// === Entry Functions for Composable Execution ===
+
+/// Execute standard futarchy actions that don't require special resources
+/// Includes: config updates, governance settings, memos, etc.
+public(package) fun execute_standard_actions<IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Process all standard actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = 
+            try_execute_config_action(&mut executable, account, witness, clock, ctx) ||
+            try_execute_governance_actions(&mut executable, account, witness, clock, ctx) ||
+            try_execute_memo_action(&mut executable, account, witness, clock, ctx) ||
+            try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx);
+            
+        if (!processed) break  // Unknown action type
+    };
+    
+    // Destroy the executable
+    executable
+}
+
+/// Execute vault spend and transfer actions
+public(package) fun execute_vault_spend<Outcome: store + drop + copy, CoinType: drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Use Move framework's vault intent execution for spend/transfer
+    account_actions::vault_intents::execute_spend_and_transfer<FutarchyConfig, Outcome, CoinType>(
+        &mut executable,
+        account,
+        ctx
+    );
+    
+    executable
+}
+
+/// Execute vault coin type management actions (add/remove allowed coin types)
+public(package) fun execute_vault_management<Outcome: store + drop + copy, CoinType: drop, IW: copy + drop>(
+    mut executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    // Process vault coin type management actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        if (try_execute_typed_vault_action<CoinType, IW, Outcome>(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        break // Unknown action type
+    };
+    
+    executable
+}
+
+// Currency minting is handled by Move framework's currency module
+// Treasury caps are stored via currency::lock_cap() during DAO creation
+// Minting happens through currency_intents::request_mint_and_transfer()
+// No custom implementation needed here - use Move framework directly!
+
+/// Execute oracle mint actions (conditional or ratio-based)
+public(package) fun execute_oracle_mint<Outcome: store + drop + copy, AssetType>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    amm_pool: &mut conditional_amm::LiquidityPool,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    oracle_mint_actions::execute_all_oracle_mint_actions<Outcome, AssetType>(
+        &mut executable,
+        account,
+        amm_pool,
+        ctx
+    );
+    
+    executable
+}
+
+/// Execute mixed vault and standard actions
+public(package) fun execute_vault_and_standard<Outcome: store + drop + copy, CoinType: drop, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute vault operations first
+    account_actions::vault_intents::execute_spend_and_transfer<FutarchyConfig, Outcome, CoinType>(
+        &mut executable,
+        account,
+        ctx
+    );
+    
+    // Then standard actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = 
+            try_execute_config_action(&mut executable, account, witness, clock, ctx) ||
+            try_execute_governance_actions(&mut executable, account, witness, clock, ctx) ||
+            try_execute_memo_action(&mut executable, account, witness, clock, ctx);
+            
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute mixed oracle mint and standard actions  
+public(package) fun execute_oracle_mint_and_standard<Outcome: store + drop + copy, AssetType, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    amm_pool: &mut conditional_amm::LiquidityPool,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute oracle mint first
+    oracle_mint_actions::execute_all_oracle_mint_actions<Outcome, AssetType>(
+        &mut executable,
+        account,
+        amm_pool,
+        ctx
+    );
+    
+    // Then standard actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = 
+            try_execute_config_action(&mut executable, account, witness, clock, ctx) ||
+            try_execute_governance_actions(&mut executable, account, witness, clock, ctx);
+            
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute all three: vault, oracle mint, and standard actions
+public(package) fun execute_full_mixed<Outcome: store + drop + copy, CoinType: drop, AssetType, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    amm_pool: &mut conditional_amm::LiquidityPool,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute in order: vault -> oracle mint -> standard
+    account_actions::vault_intents::execute_spend_and_transfer<FutarchyConfig, Outcome, CoinType>(
+        &mut executable,
+        account,
+        ctx
+    );
+    
+    oracle_mint_actions::execute_all_oracle_mint_actions<Outcome, AssetType>(
+        &mut executable,
+        account,
+        amm_pool,
+        ctx
+    );
+    
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = 
+            try_execute_config_action(&mut executable, account, witness, clock, ctx) ||
+            try_execute_governance_actions(&mut executable, account, witness, clock, ctx);
+            
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute liquidity operations (add/remove liquidity)
+public(package) fun execute_liquidity_operations<Outcome: store + drop + copy, AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute standard actions first
+    executable = execute_standard_actions(
+        executable,
+        account,
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Process liquidity actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(
+            &mut executable,
+            account,
+            witness,
+            ctx
+        );
+        
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute stream operations (create/cancel payments)
+public(package) fun execute_stream_operations<Outcome: store + drop + copy, CoinType: drop, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute standard actions first
+    executable = execute_standard_actions(
+        executable,
+        account,
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Process stream actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = try_execute_typed_stream_action<CoinType, IW, Outcome>(
+            &mut executable,
+            account,
+            witness,
+            clock,
+            ctx
+        );
+        
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute dissolution operations (distribute assets)
+public(package) fun execute_dissolution_operations<Outcome: store + drop + copy, AssetType: drop + store, StableType: drop + store, CoinType: drop, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute standard actions first
+    executable = execute_standard_actions(
+        executable,
+        account,
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Process dissolution actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        let processed = 
+            try_execute_dissolution_action(&mut executable, account, witness, ctx) ||
+            try_execute_typed_dissolution_action<CoinType, IW, Outcome>(
+                &mut executable,
+                account,
+                witness,
+                clock,
+                ctx
+            ) ||
+            try_execute_typed_dissolution_action_dual<AssetType, StableType, IW, Outcome>(
+                &mut executable,
+                account,
+                witness,
+                ctx
+            );
+        
+        if (!processed) break
+    };
+    
+    executable
+}
+
+/// Execute governance operations (create proposals)
+public(package) fun execute_governance_operations<Outcome: store + drop + copy, IW: copy + drop>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    parent_proposal_id: ID,
+    fee_coin: Coin<SUI>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Execute standard actions first
+    executable = execute_standard_actions(
+        executable,
+        account,
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Process governance actions that need special resources
+    if (executable::contains_action<Outcome, governance_actions::CreateProposalAction>(&mut executable)) {
+        let request = governance_actions::do_create_proposal<Outcome, IW>(
+            &mut executable,
+            account,
+            version::current(),
+            witness,
+            parent_proposal_id,
+            clock,
+            ctx
+        );
+        
+        let _receipt = governance_actions::fulfill_create_proposal(
+            request,
+            queue,
+            fee_manager,
+            registry,
+            fee_coin,
+            clock,
+            ctx
+        );
+    } else {
+        // Return unused fee coin to sender
+        transfer::public_transfer(fee_coin, ctx.sender());
+    };
+    
+    executable
+}
+
+// === Helper Functions for Action Execution ===
+// These check if an action exists and execute it if found
+
+fun try_execute_governance_actions<IW: drop, Outcome: store + drop + copy>(
+    _executable: &mut Executable<Outcome>,
+    _account: &mut Account<FutarchyConfig>,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+): bool {
+    // Governance actions require special resources (queue, fee_manager, etc.)
+    // These should be handled via specialized entry functions
+    // For now, return false to indicate not handled
+    false
+}
+
+// === Config Action Handlers ===
+
+fun try_execute_config_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): bool {
+    // Check for basic config actions
+    if (executable::contains_action<Outcome, config_actions::SetProposalsEnabledAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_set_proposals_enabled<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::UpdateNameAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_update_name<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Check for advanced config actions
+    if (executable::contains_action<Outcome, config_actions::TradingParamsUpdateAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_update_trading_params<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::MetadataUpdateAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_update_metadata<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::TwapConfigUpdateAction>(executable)) {
+        config_actions::do_update_twap_config<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::GovernanceUpdateAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_update_governance<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::MetadataTableUpdateAction>(executable)) {
+        config_actions::do_update_metadata_table<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::QueueParamsUpdateAction>(executable)) {
+        config_actions::do_update_queue_params<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, config_actions::SlashDistributionUpdateAction>(executable)) {
+        // Call the action module implementation
+        config_actions::do_update_slash_distribution<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute ConfigAction (batch wrapper)
+    if (executable::contains_action<Outcome, config_actions::ConfigAction>(executable)) {
+        config_actions::do_batch_config<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+// === Dissolution Action Handlers ===
+
+fun try_execute_dissolution_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext,
+): bool {
+    if (executable::contains_action<Outcome, dissolution_actions::InitiateDissolutionAction>(executable)) {
+        dissolution_actions::do_initiate_dissolution<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, dissolution_actions::FinalizeDissolutionAction>(executable)) {
+        dissolution_actions::do_finalize_dissolution<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, dissolution_actions::CancelDissolutionAction>(executable)) {
+        dissolution_actions::do_cancel_dissolution<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute BatchDistributeAction
+    if (executable::contains_action<Outcome, dissolution_actions::BatchDistributeAction>(executable)) {
+        dissolution_actions::do_batch_distribute<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute CalculateProRataSharesAction
+    if (executable::contains_action<Outcome, dissolution_actions::CalculateProRataSharesAction>(executable)) {
+        dissolution_actions::do_calculate_pro_rata_shares<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Note: DistributeAssetsAction and CancelAllStreamsAction require specific coin types
+    // They are handled in the typed execution functions
+    
+    false
+}
+
+// === Liquidity Action Handlers ===
+fun try_execute_liquidity_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext
+): bool {
+    // Try to execute UpdatePoolParamsAction
+    if (executable::contains_action<Outcome, liquidity_actions::UpdatePoolParamsAction>(executable)) {
+        liquidity_actions::do_update_pool_params<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute SetPoolStatusAction
+    if (executable::contains_action<Outcome, liquidity_actions::SetPoolStatusAction>(executable)) {
+        liquidity_actions::do_set_pool_status<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Note: AddLiquidityAction, RemoveLiquidityAction, and CreatePoolAction require specific coin types
+    // and are handled in execute_typed_actions
+    
+    false
+}
+
+// === Operating Agreement Action Handlers ===
+
+fun try_execute_operating_agreement_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): bool {
+    // Enforce 2-of-2 if OA has a council custodian policy set.
+    // Skip this check for CreateOperatingAgreementAction since OA doesn't exist yet
+    if (!executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+        if (operating_agreement::has_agreement(account) && operating_agreement::requires_council_coapproval(account)) {
+            // Disallow direct OA changes. Must use operating_agreement_coexec::execute_with_council
+            abort EOARequiresCouncil
+        };
+    };
+    
+    // Create OA if it doesn't exist yet
+    if (executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+        operating_agreement::execute_create_agreement<IW, FutarchyConfig, Outcome>(
+            executable,
+            account,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::UpdateLineAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_update_line<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::InsertLineAfterAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_insert_line_after<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::InsertLineAtBeginningAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_insert_line_at_beginning<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::RemoveLineAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_remove_line<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::BatchOperatingAgreementAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_batch_operating_agreement<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetLineImmutableAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_line_immutable<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetInsertAllowedAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_insert_allowed<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetRemoveAllowedAction>(executable)) {
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_remove_allowed<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+// === Policy Registry Action Handlers ===
+
+fun try_execute_policy_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    _ctx: &mut TxContext,
+): bool {
+    // Check for set policy action
+    if (executable::contains_action<Outcome, policy_actions::SetPolicyAction>(executable)) {
+        let action: &policy_actions::SetPolicyAction = executable.next_action(witness);
+        let account_id = object::id(account);
+        let (key, id, prefix) = policy_actions::get_set_policy_params(action);
+        
+        // Check if this is a critical policy that requires council co-approval
+        if (policy_registry_coexec::is_critical_policy(key)) {
+            // Critical policies must use policy_registry_coexec::execute_set_policy_with_council
+            abort ECriticalPolicyRequiresCouncil
+        };
+        
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
+        policy_registry::set_policy(registry, account_id, *key, id, *prefix);
+        return true
+    };
+
+    // Check for remove policy action
+    if (executable::contains_action<Outcome, policy_actions::RemovePolicyAction>(executable)) {
+        let action: &policy_actions::RemovePolicyAction = executable.next_action(witness);
+        let account_id = object::id(account);
+        let key = policy_actions::get_remove_policy_key(action);
+        
+        // CRITICAL: DAO can NEVER remove OA:Custodian through futarchy
+        // Security council can give up control via coexec path, but DAO cannot
+        if (*key == b"OA:Custodian".to_string()) {
+            abort ECannotRemoveOACustodian
+        };
+        
+        // Check if this is a critical policy that requires council co-approval
+        if (policy_registry_coexec::is_critical_policy(key)) {
+            // Critical policies must use policy_registry_coexec::execute_remove_policy_with_council
+            abort ECriticalPolicyRequiresCouncil
+        };
+        
+        let registry = policy_registry::borrow_registry_mut(account, version::current());
+        policy_registry::remove_policy(registry, account_id, *key);
+        return true
+    };
+
+    false
+}
+
+// === Vault Action Handlers ===
+
+
+/// Execute typed vault actions for managing allowed coin types
+fun try_execute_typed_vault_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext
+): bool {
+    // Try to execute AddCoinTypeAction
+    if (executable::contains_action<Outcome, futarchy_vault::AddCoinTypeAction<CoinType>>(executable)) {
+        futarchy_vault::do_add_coin_type<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute RemoveCoinTypeAction
+    if (executable::contains_action<Outcome, futarchy_vault::RemoveCoinTypeAction<CoinType>>(executable)) {
+        futarchy_vault::do_remove_coin_type<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+// === Memo Action Handlers ===
+
+fun try_execute_memo_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext
+): bool {
+    // Try to execute EmitMemoAction
+    if (executable::contains_action<Outcome, memo_actions::EmitMemoAction>(executable)) {
+        memo_actions::do_emit_memo<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute EmitStructuredMemoAction
+    if (executable::contains_action<Outcome, memo_actions::EmitStructuredMemoAction>(executable)) {
+        memo_actions::do_emit_structured_memo<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute EmitCommitmentAction
+    if (executable::contains_action<Outcome, memo_actions::EmitCommitmentAction>(executable)) {
+        memo_actions::do_emit_commitment<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute EmitSignalAction
+    if (executable::contains_action<Outcome, memo_actions::EmitSignalAction>(executable)) {
+        memo_actions::do_emit_signal<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+// === Stream/Recurring Payment Action Handlers ===
+fun try_execute_stream_action<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext
+): bool {
+    // Try to execute UpdatePaymentRecipientAction
+    if (executable::contains_action<Outcome, stream_actions::UpdatePaymentRecipientAction>(executable)) {
+        stream_actions::do_update_payment_recipient<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute AddWithdrawerAction
+    if (executable::contains_action<Outcome, stream_actions::AddWithdrawerAction>(executable)) {
+        stream_actions::do_add_withdrawer<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute RemoveWithdrawersAction
+    if (executable::contains_action<Outcome, stream_actions::RemoveWithdrawersAction>(executable)) {
+        stream_actions::do_remove_withdrawers<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute TogglePaymentAction
+    if (executable::contains_action<Outcome, stream_actions::TogglePaymentAction>(executable)) {
+        stream_actions::do_toggle_payment<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute ChallengeWithdrawalsAction
+    if (executable::contains_action<Outcome, stream_actions::ChallengeWithdrawalsAction>(executable)) {
+        stream_actions::do_challenge_withdrawals<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute CancelChallengedWithdrawalsAction
+    if (executable::contains_action<Outcome, stream_actions::CancelChallengedWithdrawalsAction>(executable)) {
+        stream_actions::do_cancel_challenged_withdrawals<Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Note: Typed stream actions (CreatePayment, CancelPayment, etc.) require coin type
+    
+    false
+}
+
+// === Move Framework Integration ===
+// For transfer operations, users should use Account Protocol directly:
+// - vault_intents::execute_spend_and_transfer() for coin transfers
+// - currency_intents::execute_mint_and_transfer() for minting
+// - currency_intents::execute_withdraw_and_burn() for burning
+//
+// For liquidity operations, the integration pattern is:
+// 1. Create liquidity action intents (AddLiquidityAction, RemoveLiquidityAction)
+// 2. Execute with execute_typed_actions for validation
+// 3. Use vault intents to manage coin flows:
+//    - vault_intents::execute_spend() to withdraw coins for adding liquidity
+//    - vault_intents::execute_deposit() to store received assets/LP tokens
+// 4. Execute actual pool operations with execute_add_liquidity_with_pool
+//
+// These are not wrapped in the dispatcher as they should be called directly
+// in the appropriate sequence for your use case.
+
+// === Typed Action Execution ===
+
+/// Execute actions with known coin types and pool
+/// This version validates liquidity actions but requires manual coin handling
+/// Note: Witness requires copy because it's used in the loop
+/// BREAKING: Governance resources removed - use execute_typed_actions_with_pool_and_governance
+public(package) fun execute_typed_actions_with_pool<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _pool: &mut AccountSpotPool<AssetType, StableType>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    // Just use the regular typed actions since we can't automate pool operations
+    // The pool parameter is kept for API compatibility
+    execute_typed_actions<AssetType, StableType, IW, Outcome>(
+        executable,
+        account,
+        witness,
+        clock,
+        ctx
+    )
+}
+
+/// Execute all actions WITH governance resources for second-order proposals
+/// This version handles CreateProposalAction by using the hot potato pattern
+public(package) fun execute_all_actions_with_governance<IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    parent_proposal_id: ID,
+    mut fee_coin_opt: Option<Coin<SUI>>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Process all actions in the executable
+    loop {
+        // Check for CreateProposalAction FIRST
+        if (executable::contains_action<Outcome, governance_actions::CreateProposalAction>(&mut executable)) {
+            // Create resource request
+            let request = governance_actions::do_create_proposal<Outcome, IW>(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                parent_proposal_id,
+                clock,
+                ctx
+            );
+            
+            // Fulfill with provided resources
+            if (option::is_some(&fee_coin_opt)) {
+                let fee_coin = option::extract(&mut fee_coin_opt);
+                let _receipt = governance_actions::fulfill_create_proposal(
+                    request,
+                    queue,
+                    fee_manager,
+                    registry,
+                    fee_coin,
+                    clock,
+                    ctx
+                );
+            } else {
+                // No fee coin - abort with unfulfilled request
+                abort EProposalCreationSkipped
+            };
+            continue
+        };
+        
+        // Try all other actions (same as execute_all_actions)
+        if (try_execute_config_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        if (try_execute_memo_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        if (try_execute_stream_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        if (try_execute_dissolution_action(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        if (try_execute_liquidity_action(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        // If no action was executed, all actions have been processed
+        break
+    };
+    
+    // Return any unused fee coin to sender
+    if (option::is_some(&fee_coin_opt)) {
+        let unused_fee = option::extract(&mut fee_coin_opt);
+        if (coin::value(&unused_fee) > 0) {
+            transfer::public_transfer(unused_fee, tx_context::sender(ctx));
+        } else {
+            coin::destroy_zero(unused_fee);
+        };
+    };
+    option::destroy_none(fee_coin_opt);
+    
+    executable
+}
+
+/// Execute actions with known coin types (without pool)
+/// This version can handle liquidity and stream actions that require specific types
+/// Note: Witness requires copy because it's used multiple times in the loop
+/// BREAKING: Governance resources removed - CreateProposalAction will abort if present
+public(package) fun execute_typed_actions<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    loop {
+        // Try config actions
+        if (try_execute_config_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Try dissolution actions (including typed distribute actions)
+        if (try_execute_dissolution_action(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        if (try_execute_typed_dissolution_action<AssetType, IW, Outcome>(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Try typed dissolution actions that need both coin types
+        if (try_execute_typed_dissolution_action_dual<AssetType, StableType, IW, Outcome>(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        // Try operating agreement actions
+        if (try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Try policy actions
+        if (try_execute_policy_action(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        // Try memo actions
+        if (try_execute_memo_action(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Try typed liquidity actions
+        if (try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(&mut executable, account, witness, ctx)) {
+            continue
+        };
+        
+        // Try typed stream actions (using AssetType as the coin type)
+        if (try_execute_typed_stream_action<AssetType, IW, Outcome>(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Try oracle mint actions - these return resource requests
+        if (try_execute_oracle_mint_actions<AssetType, StableType, IW, Outcome>(&mut executable, account, witness, clock, ctx)) {
+            continue
+        };
+        
+        // Check for CreateProposalAction - abort as we can't handle without resources
+        if (executable::contains_action<Outcome, governance_actions::CreateProposalAction>(&mut executable)) {
+            // Cannot handle CreateProposalAction without governance resources
+            // Caller should use execute_all_actions_with_governance instead
+            abort EProposalCreationSkipped
+        };
+        
+        // If no action was executed, all actions have been processed
+        break
+    };
+    
+    // Do NOT confirm here; the centralized runner (execute::run_*) owns confirmation.
+    // Return the executable for the caller to handle
+    executable
+}
+
+// Note: try_execute_typed_liquidity_action_with_pool has been removed
+// and execute_remove_liquidity_with_pool directly for actual execution.
+
+/// Execute liquidity actions with known types (without pool)
+/// only handles validation now
+/// Actual execution requires execute_add_liquidity_with_pool or execute_remove_liquidity_with_pool
+fun try_execute_typed_liquidity_action<AssetType: drop + store, StableType: drop + store, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext,
+): bool {
+    // For add liquidity actions, validate and document execution requirements
+    if (executable::contains_action<Outcome, liquidity_actions::AddLiquidityAction<AssetType, StableType>>(executable)) {
+        validate_add_liquidity_action<AssetType, StableType, IW, Outcome>(
+            executable,
+            account,
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // For remove liquidity actions, validate and document execution requirements  
+    if (executable::contains_action<Outcome, liquidity_actions::RemoveLiquidityAction<AssetType, StableType>>(executable)) {
+        validate_remove_liquidity_action<AssetType, StableType, IW, Outcome>(
+            executable,
+            account,
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute CreatePoolAction
+    if (executable::contains_action<Outcome, liquidity_actions::CreatePoolAction<AssetType, StableType>>(executable)) {
+        liquidity_actions::do_create_pool<AssetType, StableType, Outcome, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+
+/// Execute add liquidity action with pool and coins
+/// Coins must be provided by the caller (e.g., from Move framework vault operations)
+/// 
+/// Move framework integration:
+/// - Use vault_intents::execute_spend() to obtain coins
+/// - This function performs the actual pool operation
+/// - LP tokens are deposited to the custody registry automatically
+/// 
+/// Note: Requires copy on witness to create auth after using it for action
+public(package) fun execute_add_liquidity_with_pool<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    asset_coin: Coin<AssetType>,
+    stable_coin: Coin<StableType>,
+    witness: IW,
+    ctx: &mut TxContext,
+) {
+    // Extract and validate the action
+    let action: &liquidity_actions::AddLiquidityAction<AssetType, StableType> = 
+        executable::next_action(executable, witness);
+    
+    // Get action parameters
+    let pool_id = liquidity_actions::get_pool_id(action);
+    let asset_amount = liquidity_actions::get_asset_amount(action);
+    let stable_amount = liquidity_actions::get_stable_amount(action);
+    let min_lp_amount = liquidity_actions::get_min_lp_amount(action);
+    
+    // Validate amounts
+    assert!(asset_amount > 0 && stable_amount > 0, EInvalidAmount);
+    
+    // Verify pool ID matches config
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), ENoSpotPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
+    assert!(pool_id == object::id(pool), EInvalidPoolId);
+    
+    // Verify amounts match what we expect
+    assert!(asset_coin.value() == asset_amount, EInvalidAmount);
+    assert!(stable_coin.value() == stable_amount, EInvalidAmount);
+    
+    // Add liquidity to the pool and get LP token
+    let lp_token = account_spot_pool::add_liquidity_and_return(
+        pool,
+        asset_coin,
+        stable_coin,
+        min_lp_amount,
+        ctx
+    );
+    
+    // Store LP token in custody system
+    let auth = account::new_auth(account, version::current(), witness);
+    lp_token_custody::deposit_lp_token(
+        auth,
+        account,
+        pool_id,
+        lp_token,
+        ctx
+    );
+}
+
+/// Validate add liquidity action parameters
+/// Replaces the old execute_add_liquidity validation-only function
+fun validate_add_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &Account<FutarchyConfig>,
+    witness: IW,
+    _ctx: &mut TxContext,
+) {
+    // Extract and validate the action
+    let action: &liquidity_actions::AddLiquidityAction<AssetType, StableType> = 
+        executable::next_action(executable, witness);
+    
+    // Get action parameters
+    let pool_id = liquidity_actions::get_pool_id(action);
+    let asset_amount = liquidity_actions::get_asset_amount(action);
+    let stable_amount = liquidity_actions::get_stable_amount(action);
+    let _min_lp_amount = liquidity_actions::get_min_lp_amount(action);
+    
+    // Validate the action
+    assert!(asset_amount > 0, EInvalidAmount);
+    assert!(stable_amount > 0, EInvalidAmount);
+    
+    // Verify pool ID matches config
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), ENoSpotPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
+    
+    // Action validated - actual execution requires execute_add_liquidity_with_pool
+    // with coins obtained from vault operations using Move framework vault intents:
+    //
+    // Example integration pattern:
+    // 1. This function validates the AddLiquidityAction
+    // 2. Use vault_intents::execute_spend() to withdraw asset_amount and stable_amount
+    // 3. Call execute_add_liquidity_with_pool with the withdrawn coins
+    // 4. LP tokens are automatically deposited to the custody registry
+}
+
+// Use execute_add_liquidity_with_pool directly for actual liquidity operations.
+// For validation only, the dispatcher now uses validate_add_liquidity_action.
+
+/// Execute remove liquidity action - full implementation  
+/// Removes liquidity from pool and provides coins for vault deposit
+/// 
+/// Move framework integration:
+/// - LP token should be obtained via lp_token_custody::withdraw_lp_token()
+/// - This function performs the actual pool operation
+/// - Resulting coins should be deposited via vault_intents::execute_deposit()
+/// 
+/// Note: Requires copy on witness to create multiple auth objects for vault deposits
+public(package) fun execute_remove_liquidity_with_pool<AssetType: drop, StableType: drop, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    lp_token: LPToken<AssetType, StableType>,
+    witness: IW,
+    ctx: &mut TxContext,
+) {
+    // Extract and validate the action
+    let action: &liquidity_actions::RemoveLiquidityAction<AssetType, StableType> = 
+        executable::next_action(executable, witness);
+    
+    // Get action parameters
+    let pool_id = liquidity_actions::get_remove_pool_id(action);
+    let lp_amount = liquidity_actions::get_lp_amount(action);
+    let min_asset_amount = liquidity_actions::get_min_asset_amount(action);
+    let min_stable_amount = liquidity_actions::get_min_stable_amount(action);
+    
+    // Validate the action
+    assert!(lp_amount > 0, EInvalidAmount);
+    assert!(account_spot_pool::lp_token_amount(&lp_token) == lp_amount, EInvalidAmount);
+    
+    // Verify pool ID matches
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), ENoSpotPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
+    assert!(pool_id == object::id(pool), EInvalidPoolId);
+    
+    // Remove liquidity from pool
+    let (asset_coin, stable_coin) = account_spot_pool::remove_liquidity_and_return(
+        pool,
+        lp_token,
+        min_asset_amount,
+        min_stable_amount,
+        ctx
+    );
+    
+    // Deposit coins directly into the DAO vault (treasury)
+    let auth = account::new_auth(account, version::current(), witness);
+    vault::deposit(auth, account, b"treasury".to_string(), asset_coin);
+    // Create a new auth for the second deposit
+    let auth2 = account::new_auth(account, version::current(), witness);
+    vault::deposit(auth2, account, b"treasury".to_string(), stable_coin);
+}
+
+/// Validate remove liquidity action parameters
+/// Replaces the old execute_remove_liquidity validation-only function
+fun validate_remove_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &Account<FutarchyConfig>,
+    witness: IW,
+    _ctx: &mut TxContext,
+) {
+    // Extract and validate the action
+    let action: &liquidity_actions::RemoveLiquidityAction<AssetType, StableType> = 
+        executable::next_action(executable, witness);
+    
+    // Get action parameters
+    let pool_id = liquidity_actions::get_remove_pool_id(action);
+    let lp_amount = liquidity_actions::get_lp_amount(action);
+    let _min_asset_amount = liquidity_actions::get_min_asset_amount(action);
+    let _min_stable_amount = liquidity_actions::get_min_stable_amount(action);
+    
+    // Validate the action
+    assert!(lp_amount > 0, EInvalidAmount);
+    
+    // Verify pool ID matches config
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), ENoSpotPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
+    
+    // Action validated - actual execution requires execute_remove_liquidity_with_pool
+    // with LP tokens obtained from the custody system using Move framework patterns:
+    //
+    // Example integration pattern:
+    // 1. This function validates the RemoveLiquidityAction
+    // 2. Retrieve LP tokens from custody using lp_token_custody::withdraw_lp_token()
+    // 3. Call execute_remove_liquidity_with_pool with the LP tokens
+    // 4. Resulting coins can be deposited back to vault via vault_intents::execute_deposit()
+}
+
+/// Execute typed dissolution actions that require coins
+fun try_execute_typed_dissolution_action<CoinType: drop, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): bool {
+    // Note: DistributeAssetsAction requires coins but we can't withdraw mid-execution
+    // The frontend should:
+    // 1. Create a vault SpendAction first to withdraw the distribution amount
+    // 2. Create the DistributeAssetsAction 
+    // 3. Use a different entry function that can pass coins between actions
+    // For now, this is not implemented here
+    
+    // Try to execute CancelAllStreamsAction (no type parameter on the action)
+    if (executable::contains_action<Outcome, dissolution_actions::CancelAllStreamsAction>(executable)) {
+        // This action cancels streams and refunds coins
+        dissolution_actions::do_cancel_all_streams<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+/// Try to execute typed dissolution actions requiring both AssetType and StableType
+fun try_execute_typed_dissolution_action_dual<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext
+): bool {
+    // Try to execute WithdrawAmmLiquidityAction
+    if (executable::contains_action<Outcome, dissolution_actions::WithdrawAmmLiquidityAction<AssetType, StableType>>(executable)) {
+        dissolution_actions::do_withdraw_amm_liquidity<Outcome, AssetType, StableType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+// === Helper Functions ===
+
+/// Execute stream actions with known coin type
+fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): bool {
+    // Try to execute CreatePaymentAction
+    if (executable::contains_action<Outcome, stream_actions::CreatePaymentAction<CoinType>>(executable)) {
+        stream_actions::do_create_payment<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute CancelPaymentAction
+    if (executable::contains_action<Outcome, stream_actions::CancelPaymentAction<CoinType>>(executable)) {
+        stream_actions::do_cancel_payment<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute CreateBudgetStreamAction
+    if (executable::contains_action<Outcome, stream_actions::CreateBudgetStreamAction<CoinType>>(executable)) {
+        stream_actions::do_create_budget_stream<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute ExecutePaymentAction
+    if (executable::contains_action<Outcome, stream_actions::ExecutePaymentAction<CoinType>>(executable)) {
+        stream_actions::do_execute_payment<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute RequestWithdrawalAction
+    if (executable::contains_action<Outcome, stream_actions::RequestWithdrawalAction<CoinType>>(executable)) {
+        stream_actions::do_request_withdrawal<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    // Try to execute ProcessPendingWithdrawalAction
+    if (executable::contains_action<Outcome, stream_actions::ProcessPendingWithdrawalAction<CoinType>>(executable)) {
+        stream_actions::do_process_pending_withdrawal<Outcome, CoinType, IW>(
+            executable,
+            account,
+            version::current(),
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
+    false
+}
+
+/// Check for oracle mint actions - these require special resources
+fun try_execute_oracle_mint_actions<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    _account: &mut Account<FutarchyConfig>,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+): bool {
+    // Abort if oracle mint actions are present - they need treasury cap and AMM pool
+    if (executable::contains_action<Outcome, oracle_mint_actions::ConditionalMintAction<AssetType>>(executable)) {
+        abort ECannotExecuteInHotPath
+    };
+    
+    if (executable::contains_action<Outcome, oracle_mint_actions::RatioBasedMintAction<AssetType, StableType>>(executable)) {
+        abort ECannotExecuteInHotPath
+    };
+    
+    false
+}
+
+/// Execute conditional mint action with treasury cap and spot pool
+public(package) fun execute_conditional_mint_with_resources<AssetType: drop + store, StableType: drop + store, T, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    treasury_cap: &mut TreasuryCap<T>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Process the conditional mint action
+    let request = oracle_mint_actions::do_conditional_mint<T, Outcome, IW>(
+        &mut executable,
+        account,
+        version::current(),
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Fulfill with provided resources
+    let _receipt = oracle_mint_actions::fulfill_conditional_mint<AssetType, StableType, T>(
+        request,
+        treasury_cap,
+        spot_pool,
+        clock,
+        ctx
+    );
+    
+    executable
+}
+
+/// Execute ratio-based mint action with treasury cap and spot pool
+public(package) fun execute_ratio_mint_with_resources<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    treasury_cap: &mut TreasuryCap<AssetType>,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    let mut executable = executable;
+    
+    // Process the ratio mint action
+    let request = oracle_mint_actions::do_ratio_mint<AssetType, StableType, Outcome, IW>(
+        &mut executable,
+        account,
+        version::current(),
+        witness,
+        clock,
+        ctx
+    );
+    
+    // Fulfill with provided resources
+    let _receipt = oracle_mint_actions::fulfill_ratio_mint<AssetType, StableType>(
+        request,
+        treasury_cap,
+        spot_pool,
+        clock,
+        ctx
+    );
+    
+    executable
+}

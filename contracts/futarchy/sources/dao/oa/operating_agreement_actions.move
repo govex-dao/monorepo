@@ -43,6 +43,9 @@ public struct CreateOperatingAgreementAction has store {
 }
 
 /// Represents a single atomic change to the operating agreement
+/// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
+/// Individual actions (UpdateLineAction, InsertLineAfterAction, etc.) are handled
+/// directly in the dispatcher. This wrapper is only used within batch operations.
 public struct OperatingAgreementAction has store, drop {
     action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
     // Only fields relevant to the action_type will be populated

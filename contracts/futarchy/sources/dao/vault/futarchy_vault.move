@@ -32,6 +32,11 @@ const VAULT_KEY: vector<u8> = b"futarchy_vault";
 const ALLOWED_COINS_KEY: vector<u8> = b"allowed_coin_types";
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 
+/// Get the default vault name (treasury) - the source of truth for the DAO's main vault
+public fun default_vault_name(): vector<u8> {
+    DEFAULT_VAULT_NAME
+}
+
 // === Structs ===
 
 /// Minimal vault storage for initialization only

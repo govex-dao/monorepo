@@ -79,6 +79,72 @@ public struct ProposalIntentExecuted has copy, drop {
     timestamp: u64,
 }
 
+/// Execute approved proposal with fee coin for second-order proposals
+public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: copy + drop>(
+    account: &mut Account<FutarchyConfig>,
+    proposal: &Proposal<AssetType, StableType>,
+    market: &MarketState,
+    intent_witness: IW,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut governance_actions::ProposalReservationRegistry,
+    fee_coin: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Verify market is finalized
+    assert!(market_state::is_finalized(market), EMarketNotFinalized);
+    
+    // Verify proposal was approved (YES outcome won)
+    let winning_outcome = market_state::get_winning_outcome(market);
+    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
+    
+    // Get the intent key for the winning outcome (YES = 0)  
+    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
+    assert!(intent_key_opt.is_some(), ENoIntentKey);
+    let intent_key = *intent_key_opt.borrow();
+    
+    // Execute the proposal intent using FutarchyOutcome
+    let executable = futarchy_config::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
+        account,
+        proposal,
+        market,
+        winning_outcome,
+        clock,
+        ctx
+    );
+    
+    // Get the parent proposal ID for second-order proposals
+    let parent_proposal_id = proposal::get_id(proposal);
+    
+    execute::run_all_with_governance(
+        executable,
+        account,
+        strategy::and(),
+        true,
+        true,
+        intent_witness,
+        queue,
+        fee_manager,
+        registry,
+        parent_proposal_id,
+        option::some(fee_coin),
+        clock,
+        ctx
+    );
+    
+    // Cleanup all expired intents after execution
+    intent_janitor::cleanup_all_expired_intents(account, clock, ctx);
+    
+    // Emit execution event
+    event::emit(ProposalIntentExecuted {
+        proposal_id: proposal::get_id(proposal),
+        dao_id: proposal::get_dao_id(proposal),
+        intent_key,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
 /// Emitted when the next proposal is reserved (locked) into PREMARKET
 public struct ProposalReserved has copy, drop {
     queued_proposal_id: ID,
@@ -317,6 +383,9 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut governance_actions::ProposalReservationRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -345,13 +414,21 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     // NEW: Use the centralized execute::run_all with strategy gates
     // For approved proposals, both futarchy (ok_a) and any council requirements (ok_b) are satisfied
     // execute::run_all handles confirmation internally - consumes executable
-    execute::run_all(
+    // Get the parent proposal ID for second-order proposals
+    let parent_proposal_id = proposal::get_id(proposal);
+    
+    execute::run_all_with_governance(
         executable,
         account,
-        strategy::and(),  // Both conditions must be true
-        true,  // Futarchy approved (market resolved in favor)
-        true,  // Council approved (or not required)
+        strategy::and(),
+        true,
+        true,
         intent_witness,
+        queue,
+        fee_manager,
+        registry,
+        parent_proposal_id,
+        option::none(), // No fee coin - caller must provide if needed
         clock,
         ctx
     );
@@ -370,11 +447,14 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
 
 /// Executes an approved proposal's intent with known asset types
 /// This version can handle all action types including those requiring specific coin types
-public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW: copy + drop>(
+public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
     account: &mut Account<FutarchyConfig>,
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut governance_actions::ProposalReservationRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -400,15 +480,12 @@ public fun execute_approved_proposal_typed<AssetType: drop, StableType: drop, IW
         ctx
     );
     
-    // NEW: Use the centralized execute::run_typed for typed actions
-    // The typed dispatcher is called within execute::run_typed
-    // execute::run_typed handles confirmation internally - consumes executable
     execute::run_typed<AssetType, StableType, IW>(
         executable,
         account,
-        strategy::and(),  // Both conditions must be true
-        true,  // Futarchy approved (market resolved in favor)
-        true,  // Council approved (or not required)
+        strategy::and(),
+        true,
+        true,
         intent_witness,
         clock,
         ctx

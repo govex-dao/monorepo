@@ -42,21 +42,6 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
     intent.add_action(action, intent_witness);
 }
 
-/// Add a distribute asset action to an existing intent
-public fun distribute_asset_in_intent<Outcome: store, CoinType, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    total_amount: u64,
-    recipients: vector<address>,
-    amounts: vector<u64>,
-    intent_witness: IW,
-) {
-    let action = dissolution_actions::new_distribute_asset_action<CoinType>(
-        total_amount,
-        recipients,
-        amounts,
-    );
-    intent.add_action(action, intent_witness);
-}
 
 /// Add a batch distribute action to an existing intent
 public fun batch_distribute_in_intent<Outcome: store, IW: drop>(

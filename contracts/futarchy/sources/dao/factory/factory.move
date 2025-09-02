@@ -23,6 +23,7 @@ use account_protocol::{
     account::{Self, Account},
 };
 use account_extensions::extensions::Extensions;
+use account_actions::currency;
 use futarchy::{
     futarchy_config::{Self, FutarchyConfig, ConfigParams},
     dao_config,
@@ -308,15 +309,17 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);
     
-    // If treasury cap provided, store it
+    // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
-        // Store treasury cap as managed asset
-        account::add_managed_asset(
+        // Use Move framework's currency::lock_cap for proper treasury cap storage
+        // This ensures atomic borrowing and proper permissions management
+        let auth = futarchy_config::authenticate(&account, ctx);
+        currency::lock_cap(
+            auth,
             &mut account,
-            b"treasury_cap".to_string(),
             cap,
-            version::current()
+            option::none() // No max supply limit for now
         );
     };
     // Destroy the empty option
@@ -475,15 +478,17 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         );
     };
     
-    // If treasury cap provided, store it
+    // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
-        // Store treasury cap as managed asset
-        account::add_managed_asset(
+        // Use Move framework's currency::lock_cap for proper treasury cap storage
+        // This ensures atomic borrowing and proper permissions management
+        let auth = futarchy_config::authenticate(&account, ctx);
+        currency::lock_cap(
+            auth,
             &mut account,
-            b"treasury_cap".to_string(),
             cap,
-            account_protocol::version_witness::new_for_testing(@account_protocol)
+            option::none() // No max supply limit for now
         );
     };
     // Destroy the empty option

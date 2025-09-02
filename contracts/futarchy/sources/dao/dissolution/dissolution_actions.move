@@ -31,6 +31,7 @@ const EEmptyAssetList: u64 = 3;
 const EInvalidThreshold: u64 = 4;
 const EDissolutionNotActive: u64 = 5;
 const ENotDissolving: u64 = 6;
+const EInvalidAmount: u64 = 7;
 
 // === Action Structs ===
 
@@ -42,12 +43,6 @@ public struct InitiateDissolutionAction has store {
     final_operations_deadline: u64,
 }
 
-/// Action to distribute a specific asset during dissolution
-public struct DistributeAssetAction<phantom CoinType> has store {
-    total_amount: u64,
-    recipients: vector<address>,
-    amounts: vector<u64>, // For custom distribution
-}
 
 /// Action to batch distribute multiple assets
 public struct BatchDistributeAction has store {
@@ -138,48 +133,6 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop>(
 }
 
 /// Execute a distribute asset action
-public fun do_distribute_asset<Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    intent_witness: IW,
-    mut distribution_coin: Coin<CoinType>,
-    ctx: &mut TxContext,
-) {
-    let action: &DistributeAssetAction<CoinType> = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let recipients = &action.recipients;
-    let amounts = &action.amounts;
-    let total_amount = action.total_amount;
-    
-    // 1. Verify dissolution state
-    let config = account::config(account);
-    assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
-        EDissolutionNotActive
-    );
-
-    // 2. Distribute to recipients from provided coin
-    let mut i = 0;
-    let mut distributed_sum = 0;
-    while (i < recipients.length()) {
-        let recipient = *recipients.borrow(i);
-        let amount = *amounts.borrow(i);
-        transfer::public_transfer(coin::split(&mut distribution_coin, amount, ctx), recipient);
-        distributed_sum = distributed_sum + amount;
-        i = i + 1;
-    };
-
-    // Return any remainder back to sender; if exactly zero, destroy_zero()
-    if (coin::value(&distribution_coin) > 0) {
-        transfer::public_transfer(distribution_coin, ctx.sender());
-    } else {
-        distribution_coin.destroy_zero();
-    };
-
-    let _ = version;
-}
 
 /// Execute a batch distribute action
 public fun do_batch_distribute<Outcome: store, IW: drop>(
@@ -202,13 +155,13 @@ public fun do_batch_distribute<Outcome: store, IW: drop>(
     );
     
     // Note: This action serves as a coordinator for multiple distribute actions
-    // The actual typed DistributeAssetAction<CoinType> actions would need to be
+    // The actual typed DistributeAssetsAction<CoinType> actions would need to be
     // added to the executable for each specific coin type.
     // This is because Move doesn't support runtime type information.
     // 
     // In practice, when creating the dissolution intent, you would:
     // 1. Add this BatchDistributeAction to mark the batch operation
-    // 2. Add individual DistributeAssetAction<CoinType> for each asset type
+    // 2. Add individual DistributeAssetsAction<CoinType> for each asset type
     // 3. The executor would process them in sequence
     
     // For now, just validate that we have asset types to distribute
@@ -425,12 +378,22 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     let _ = ctx;
 }
 
-/// Execute distribute assets action  
+/// Execute distribute assets action
+/// 
+/// ⚠️ REQUIRES SPECIAL HANDLING:
+/// This function now properly requires and uses coins for actual distribution, but needs frontend to:
+///   1. Create vault SpendAction to withdraw coins
+///   2. Pass coins to this action  
+///   3. This is architecturally challenging in current system
+/// 
+/// The coins must be provided as a parameter, which means the frontend needs to structure
+/// the transaction to first withdraw from vault, then call this with the resulting coins.
 public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
+    mut distribution_coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
     let action: &DistributeAssetsAction<CoinType> = executable.next_action(intent_witness);
@@ -450,6 +413,7 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     // Validate inputs
     assert!(holders.length() > 0, EEmptyAssetList);
     assert!(holders.length() == holder_amounts.length(), EInvalidRatio);
+    assert!(coin::value(&distribution_coin) >= total_distribution_amount, EInvalidAmount);
     
     // Calculate total tokens held (for pro rata calculation)
     let mut total_held = 0u64;
@@ -460,32 +424,39 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     };
     assert!(total_held > 0, EInvalidRatio);
     
-    // Distribute assets pro rata
-    // In a real implementation, this would:
-    // 1. Withdraw total_distribution_amount from vault
-    // 2. For each holder, calculate their share: (holder_amount * total_distribution) / total_held
-    // 3. Transfer their share to them
-    // 4. Holders would burn their tokens after receiving distribution
-    
+    // Distribute assets pro rata to each holder
     let mut j = 0;
+    let mut total_distributed = 0u64;
     while (j < holders.length()) {
         let holder = *holders.borrow(j);
         let holder_amount = *holder_amounts.borrow(j);
         
         // Calculate pro rata share
-        // Using integer math: (holder_amount * total_distribution) / total_held
-        // In production, use proper fixed-point math to avoid rounding errors
         let share = (holder_amount as u128) * (total_distribution_amount as u128) / (total_held as u128);
-        let share_amount = (share as u64);
+        let mut share_amount = (share as u64);
         
-        // Validate recipient and amount
+        // Last recipient gets the remainder to handle rounding
+        if (j == holders.length() - 1) {
+            share_amount = total_distribution_amount - total_distributed;
+        };
+        
+        // Validate recipient
         assert!(holder != @0x0, EInvalidRecipient);
-        assert!(share_amount > 0 || holder_amount == 0, EInvalidRatio);
         
-        // In real implementation, transfer the share to holder here
-        // transfer::public_transfer(coin::split(&mut distribution_coin, share_amount, ctx), holder);
+        // Transfer the calculated share to the holder
+        if (share_amount > 0) {
+            transfer::public_transfer(coin::split(&mut distribution_coin, share_amount, ctx), holder);
+            total_distributed = total_distributed + share_amount;
+        };
         
         j = j + 1;
+    };
+    
+    // Return any remainder back to sender or destroy if zero
+    if (coin::value(&distribution_coin) > 0) {
+        transfer::public_transfer(distribution_coin, ctx.sender());
+    } else {
+        distribution_coin.destroy_zero();
     };
     
     let _ = version;
@@ -504,14 +475,6 @@ public fun delete_initiate_dissolution(expired: &mut Expired) {
     } = expired.remove_action();
 }
 
-/// Delete a distribute asset action from an expired intent
-public fun delete_distribute_asset<CoinType>(expired: &mut Expired) {
-    let DistributeAssetAction<CoinType> {
-        total_amount: _,
-        recipients: _,
-        amounts: _,
-    } = expired.remove_action();
-}
 
 /// Delete a batch distribute action from an expired intent
 public fun delete_batch_distribute(expired: &mut Expired) {
@@ -587,30 +550,6 @@ public fun new_initiate_dissolution_action(
     }
 }
 
-/// Create a new distribute asset action
-public fun new_distribute_asset_action<CoinType>(
-    total_amount: u64,
-    recipients: vector<address>,
-    amounts: vector<u64>,
-): DistributeAssetAction<CoinType> {
-    assert!(recipients.length() > 0, EEmptyAssetList);
-    assert!(recipients.length() == amounts.length(), EInvalidRatio);
-    
-    // Verify amounts sum to total (with some tolerance for rounding)
-    let mut sum = 0;
-    let mut i = 0;
-    while (i < amounts.length()) {
-        sum = sum + *amounts.borrow(i);
-        i = i + 1;
-    };
-    assert!(sum <= total_amount, EInvalidRatio);
-    
-    DistributeAssetAction {
-        total_amount,
-        recipients,
-        amounts,
-    }
-}
 
 /// Create a new batch distribute action
 public fun new_batch_distribute_action(
@@ -669,20 +608,6 @@ public fun get_final_operations_deadline(action: &InitiateDissolutionAction): u6
     action.final_operations_deadline
 }
 
-/// Get total amount from DistributeAssetAction
-public fun get_total_amount<CoinType>(action: &DistributeAssetAction<CoinType>): u64 {
-    action.total_amount
-}
-
-/// Get recipients from DistributeAssetAction
-public fun get_recipients<CoinType>(action: &DistributeAssetAction<CoinType>): &vector<address> {
-    &action.recipients
-}
-
-/// Get amounts from DistributeAssetAction
-public fun get_amounts<CoinType>(action: &DistributeAssetAction<CoinType>): &vector<u64> {
-    &action.amounts
-}
 
 /// Get asset types from BatchDistributeAction
 public fun get_asset_types(action: &BatchDistributeAction): &vector<String> {
