@@ -21,7 +21,6 @@ use futarchy::{
 
 // === Constants ===
 const ECriticalPolicyRequiresCouncil: u64 = 9;
-const ECannotRemoveOACustodian: u64 = 10;
 
 // === Public(friend) Functions ===
 
@@ -54,12 +53,6 @@ public(package) fun try_execute_policy_action<IW: drop, Outcome: store + drop + 
         let action: &policy_actions::RemovePolicyAction = executable::next_action(executable, witness);
         let account_id = object::id(account);
         let key = policy_actions::get_remove_policy_key(action);
-        
-        // CRITICAL: DAO can NEVER remove OA:Custodian through futarchy
-        // Security council can give up control via coexec path, but DAO cannot
-        if (*key == b"OA:Custodian".to_string()) {
-            abort ECannotRemoveOACustodian
-        };
         
         // Check if this is a critical policy that requires council co-approval
         if (policy_registry_coexec::is_critical_policy(key)) {

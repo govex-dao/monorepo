@@ -247,6 +247,13 @@ public struct RefundClaimed has copy, drop {
     refund_amount: u64,
 }
 
+public struct FounderRewardsConfigured has copy, drop {
+    raise_id: ID,
+    founder_address: address,
+    allocation_bps: u64,
+    tiers: u64,
+}
+
 // === Init ===
 
 fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
@@ -719,6 +726,26 @@ public entry fun claim_success_and_create_dao<RaiseToken: drop, StableCoin: drop
     // Create the DAO using the stored parameters. The DAO's Asset is the new governance
     // token, and its Stable is the coin used in the raise.
     let params = &raise.dao_params;
+    
+    // Set up founder rewards if configured
+    if (params.founder_reward_params.is_some()) {
+        let founder_params = params.founder_reward_params.borrow();
+        
+        // Emit event with founder rewards configuration
+        // The actual action creation will be done when processing the DAO creation
+        if (treasury_cap.is_some()) {
+            // Calculate tiers based on vesting type
+            let num_tiers = if (founder_params.linear_vesting) { 5u64 } else { 1u64 };
+            
+            event::emit(FounderRewardsConfigured {
+                raise_id: object::id(raise),
+                founder_address: founder_params.founder_address,
+                allocation_bps: founder_params.founder_allocation_bps,
+                tiers: num_tiers,
+            });
+        };
+    };
+    
     factory::create_dao_internal_with_extensions<RaiseToken, StableCoin>(
         factory,
         extensions,

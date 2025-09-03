@@ -90,7 +90,85 @@ public struct SweepIntentsAction has store {
     intent_keys: vector<String>,  // Specific intent keys to clean up
 }
 
+/// Action for security council to create an optimistic intent
+public struct CouncilCreateOptimisticIntentAction has store {
+    dao_id: ID,
+    intent_key: String,
+    title: String,
+    description: String,
+}
+
+/// Action for security council to execute a matured optimistic intent
+public struct CouncilExecuteOptimisticIntentAction has store {
+    dao_id: ID,
+    intent_id: ID,
+}
+
+/// Action for security council to cancel their own optimistic intent
+public struct CouncilCancelOptimisticIntentAction has store {
+    dao_id: ID,
+    intent_id: ID,
+    reason: String,
+}
+
 // --- Constructors, Getters, Cleanup ---
+
+// Optimistic Intent Constructors
+public fun new_council_create_optimistic_intent(
+    dao_id: ID,
+    intent_key: String,
+    title: String,
+    description: String,
+): CouncilCreateOptimisticIntentAction {
+    CouncilCreateOptimisticIntentAction { dao_id, intent_key, title, description }
+}
+
+public fun get_council_create_optimistic_intent_params(
+    action: &CouncilCreateOptimisticIntentAction
+): (ID, &String, &String, &String) {
+    (action.dao_id, &action.intent_key, &action.title, &action.description)
+}
+
+public fun delete_council_create_optimistic_intent(expired: &mut Expired) {
+    let CouncilCreateOptimisticIntentAction {..} = expired.remove_action();
+}
+
+public fun new_council_execute_optimistic_intent(
+    dao_id: ID,
+    intent_id: ID,
+): CouncilExecuteOptimisticIntentAction {
+    CouncilExecuteOptimisticIntentAction { dao_id, intent_id }
+}
+
+public fun get_council_execute_optimistic_intent_params(
+    action: &CouncilExecuteOptimisticIntentAction
+): (ID, ID) {
+    (action.dao_id, action.intent_id)
+}
+
+public fun delete_council_execute_optimistic_intent(expired: &mut Expired) {
+    let CouncilExecuteOptimisticIntentAction {..} = expired.remove_action();
+}
+
+public fun new_council_cancel_optimistic_intent(
+    dao_id: ID,
+    intent_id: ID,
+    reason: String,
+): CouncilCancelOptimisticIntentAction {
+    CouncilCancelOptimisticIntentAction { dao_id, intent_id, reason }
+}
+
+public fun get_council_cancel_optimistic_intent_params(
+    action: &CouncilCancelOptimisticIntentAction
+): (ID, ID, &String) {
+    (action.dao_id, action.intent_id, &action.reason)
+}
+
+public fun delete_council_cancel_optimistic_intent(expired: &mut Expired) {
+    let CouncilCancelOptimisticIntentAction {..} = expired.remove_action();
+}
+
+// Other Constructors
 public fun new_update_upgrade_rules(package_name: String): UpdateUpgradeRulesAction {
     UpdateUpgradeRulesAction { package_name }
 }

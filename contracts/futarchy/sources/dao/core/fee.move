@@ -251,6 +251,7 @@ public(package) fun deposit_dao_creation_payment(
     });
 }
 
+
 // Function to collect proposal creation fee
 public(package) fun deposit_proposal_creation_payment(
     fee_manager: &mut FeeManager,
@@ -276,6 +277,7 @@ public(package) fun deposit_proposal_creation_payment(
         timestamp: clock.timestamp_ms(),
     });
 }
+
 
 // Function to collect recovery fee for dead-man switch
 public(package) fun deposit_recovery_payment(
@@ -569,6 +571,32 @@ public(package) fun deposit_dao_platform_fee<StableType: drop>(
         collector: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
+}
+
+/// Collect DAO platform fee with admin-approved discount
+/// Admin can collect any amount between 0 and the full fee owed
+public fun collect_dao_platform_fee_with_discount<StableType: drop>(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    dao_id: ID,
+    discount_amount: u64, // Amount to discount from the full fee
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (u64, u64) { // Returns (actual_fee_charged, periods_collected)
+    // Verify admin cap
+    assert!(fee_manager.admin_cap_id == object::id(admin_cap), EInvalidAdminCap);
+    
+    // Calculate the full fee owed
+    let (full_fee, periods) = collect_dao_platform_fee<StableType>(fee_manager, dao_id, clock, ctx);
+    
+    // Apply discount (ensure we don't go negative)
+    let actual_fee = if (discount_amount >= full_fee) {
+        0 // Full discount (free)
+    } else {
+        full_fee - discount_amount
+    };
+    
+    (actual_fee, periods)
 }
 
 public entry fun update_dao_monthly_fee(

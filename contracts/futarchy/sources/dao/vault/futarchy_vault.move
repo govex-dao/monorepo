@@ -10,6 +10,7 @@ use std::{
 use sui::{
     bag::{Self, Bag},
     coin::Coin,
+    event,
     vec_set::{Self, VecSet},
 };
 use account_protocol::{
@@ -26,6 +27,7 @@ use futarchy::{
 // === Errors ===
 const ECoinTypeNotAllowed: u64 = 1;
 const EVaultNotInitialized: u64 = 2;
+const ECoinTypeDoesNotExist: u64 = 3;
 
 // === Constants ===
 const VAULT_KEY: vector<u8> = b"futarchy_vault";
@@ -38,6 +40,15 @@ public fun default_vault_name(): vector<u8> {
 }
 
 // === Structs ===
+
+/// Event emitted when revenue is deposited to a DAO
+public struct RevenueDeposited has copy, drop {
+    dao_id: ID,
+    depositor: address,
+    coin_type: TypeName,
+    amount: u64,
+    vault_name: String,
+}
 
 /// Minimal vault storage for initialization only
 public struct Vault has store {
@@ -116,24 +127,62 @@ public fun is_coin_type_allowed<Config, CoinType>(
     allowed.types.contains(&type_name::get<CoinType>())
 }
 
-/// PERMISSIONLESS: Deposit coins of an already-allowed type to the vault
-/// Anyone can deposit if the coin type is already allowed
-public fun deposit_allowed_coin<CoinType: drop>(
+/// PERMISSIONLESS: Deposit coins of a type that already exists in the vault
+/// Anyone can deposit if the DAO already holds this coin type
+public fun deposit_existing_coin_type<CoinType: drop>(
     account: &mut Account<FutarchyConfig>,
     coin: Coin<CoinType>,
     vault_name: String,
     ctx: &mut TxContext,
 ) {
-    // Check if coin type is allowed
+    // Check if the vault exists and has this coin type
     assert!(
-        is_coin_type_allowed<FutarchyConfig, CoinType>(account),
-        ECoinTypeNotAllowed
+        vault::has_vault(account, vault_name) &&
+        vault::borrow_vault(account, vault_name).coin_type_exists<CoinType>(),
+        ECoinTypeDoesNotExist
     );
     
     // Get a permissionless auth token
     let auth = futarchy_config::authenticate(account, ctx);
     
     // Deposit to vault
+    vault::deposit(auth, account, vault_name, coin);
+}
+
+/// ENTRY: Public entry function for depositing revenue/donations to a DAO
+/// Anyone can send coins of a type the DAO already holds
+public entry fun deposit_revenue<CoinType: drop>(
+    account: &mut Account<FutarchyConfig>,
+    coin: Coin<CoinType>,
+    ctx: &mut TxContext,
+) {
+    // Use default vault name for revenue deposits (primary)
+    let vault_name = b"primary".to_string();
+    let amount = coin.value();
+    let dao_id = object::id(account);
+    
+    // Deposit only if DAO already has this coin type
+    deposit_existing_coin_type<CoinType>(account, coin, vault_name, ctx);
+    
+    // Emit event for transparency
+    event::emit(RevenueDeposited {
+        dao_id,
+        depositor: ctx.sender(),
+        coin_type: type_name::get<CoinType>(),
+        amount,
+        vault_name,
+    });
+}
+
+/// GOVERNANCE: Initial deposit of a new coin type
+/// Requires governance approval to add a new coin type to the vault
+public fun deposit_new_coin_type<CoinType: drop>(
+    auth: Auth,
+    account: &mut Account<FutarchyConfig>,
+    coin: Coin<CoinType>,
+    vault_name: String,
+) {
+    // Direct deposit with auth - this will verify and create the coin type entry if it doesn't exist
     vault::deposit(auth, account, vault_name, coin);
 }
 

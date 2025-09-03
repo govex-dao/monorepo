@@ -18,7 +18,7 @@ use account_protocol::{
 use futarchy::{
     version,
     coexec_common,
-    futarchy_config::{Self, FutarchyConfig, GenericApproval, CouncilApproval},
+    futarchy_config::{Self, FutarchyConfig, GenericApproval},
     security_council,
     custody_actions,
     security_council_intents,

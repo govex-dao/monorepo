@@ -132,3 +132,4 @@ public fun request_id<T>(request: &ResourceRequest<T>): ID {
 public fun receipt_id<T>(receipt: &ResourceReceipt<T>): ID {
     receipt.request_id
 }
+

@@ -35,25 +35,19 @@ use futarchy::{
 use futarchy::{
     config_dispatcher,
     governance_dispatcher,
-    oracle_mint_actions,
+    oracle_actions, // Now uses stored TreasuryCap directly
     dissolution_dispatcher,
     liquidity_dispatcher,
     stream_dispatcher,
     vault_dispatcher,
     memo_dispatcher,
     operating_agreement_dispatcher,
+    optimistic_dispatcher,
     governance_actions::{Self, ProposalReservationRegistry},
+    protocol_admin_actions,
+    factory::{Factory},
+    fee::{FeeManager},
 };
-
-// === Constants ===
-const EProposalCreationSkipped: u64 = 14;
-
-// === Events ===
-public struct ProposalCreationSkipped has copy, drop {
-    parent_proposal_id: ID,
-    timestamp: u64,
-    reason: vector<u8>,
-}
 
 // === Entry Functions for Composable Execution ===
 
@@ -74,7 +68,8 @@ public(package) fun execute_standard_actions<IW: copy + drop, Outcome: store + d
             config_dispatcher::try_execute_config_action(&mut executable, account, witness, clock, ctx) ||
             governance_dispatcher::try_execute_governance_actions(&mut executable, account, witness, clock, ctx) ||
             memo_dispatcher::try_execute_memo_action(&mut executable, account, witness, clock, ctx) ||
-            operating_agreement_dispatcher::try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx);
+            operating_agreement_dispatcher::try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx) ||
+            optimistic_dispatcher::try_execute_optimistic_action(&mut executable, account, witness, clock, ctx);
             
         if (!processed) break  // Unknown action type
     };
@@ -119,21 +114,67 @@ public(package) fun execute_vault_management<Outcome: store + drop + copy, CoinT
     executable
 }
 
-/// Execute oracle mint actions (conditional or ratio-based)
-public(package) fun execute_oracle_mint<Outcome: store + drop + copy, AssetType>(
-    executable: Executable<Outcome>,
+/// Execute oracle mint actions using stored TreasuryCap
+/// Handles conditional mints and tiered mints for founder rewards
+public(package) fun execute_oracle_mint<
+    Outcome: store + drop + copy,
+    AssetType: drop + store,
+    StableType: drop + store,
+    IW: copy + drop
+>(
+    mut executable: Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
-    amm_pool: &mut conditional_amm::LiquidityPool,
+    witness: IW,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Executable<Outcome> {
-    let mut executable = executable;
-    
-    oracle_mint_actions::execute_all_oracle_mint_actions<Outcome, AssetType>(
-        &mut executable,
-        account,
-        amm_pool,
-        ctx
-    );
+    // Process all oracle actions using stored TreasuryCap
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        // Check for read oracle price action
+        if (executable::contains_action<Outcome, oracle_actions::ReadOraclePriceAction<AssetType, StableType>>(&mut executable)) {
+            oracle_actions::do_read_oracle_price<AssetType, StableType, Outcome, IW>(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                spot_pool,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        // Check for conditional mint action
+        if (executable::contains_action<Outcome, oracle_actions::ConditionalMintAction<AssetType>>(&mut executable)) {
+            oracle_actions::do_conditional_mint<AssetType, StableType, Outcome, IW>(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                spot_pool,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        // Check for tiered mint action
+        if (executable::contains_action<Outcome, oracle_actions::TieredMintAction<AssetType>>(&mut executable)) {
+            oracle_actions::do_tiered_mint<AssetType, StableType, Outcome, IW>(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                spot_pool,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        break // Unknown action type
+    };
     
     executable
 }
@@ -294,6 +335,257 @@ public(package) fun execute_governance_operations<
         transfer::public_transfer(fee_coin, tx_context::sender(ctx));
     } else {
         coin::destroy_zero(fee_coin);
+    };
+    
+    executable
+}
+
+/// Execute protocol admin operations (factory, fee, validator management)
+/// This enables dogfooding - the protocol being governed by its own DAO
+public(package) fun execute_protocol_admin_operations<
+    Outcome: store + drop + copy,
+    IW: copy + drop
+>(
+    mut executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    factory: &mut Factory,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    // Process all protocol admin actions
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        // Factory admin actions
+        if (executable::contains_action<Outcome, protocol_admin_actions::SetFactoryPausedAction>(&mut executable)) {
+            protocol_admin_actions::do_set_factory_paused(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                factory,
+                ctx
+            );
+            continue
+        };
+        
+        // Fee admin actions
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateDaoCreationFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_dao_creation_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateProposalFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_proposal_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateMonthlyDaoFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_monthly_dao_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateVerificationFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_verification_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::AddVerificationLevelAction>(&mut executable)) {
+            protocol_admin_actions::do_add_verification_level(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::RemoveVerificationLevelAction>(&mut executable)) {
+            protocol_admin_actions::do_remove_verification_level(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateRecoveryFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_recovery_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::ApplyDaoFeeDiscountAction>(&mut executable)) {
+            protocol_admin_actions::do_apply_dao_fee_discount(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::WithdrawFeesToTreasuryAction>(&mut executable)) {
+            protocol_admin_actions::do_withdraw_fees_to_treasury(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        break // Unknown action type
+    };
+    
+    executable
+}
+
+/// Execute commitment creation with coins
+public(package) fun execute_commitment_creation<
+    AssetType,
+    StableType,
+    Outcome: store + drop + copy,
+    IW: copy + drop
+>(
+    mut executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    committed_coin: Coin<AssetType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    use futarchy::commitment_dispatcher;
+    
+    // Process only create commitment action
+    if (executable.action_idx() < executable.intent().actions().length()) {
+        let mut new_commitment = commitment_dispatcher::try_execute_create_commitment<AssetType, StableType, Outcome, IW>(
+            &mut executable,
+            account,
+            witness,
+            committed_coin,
+            clock,
+            ctx,
+        );
+        
+        if (option::is_some(&new_commitment)) {
+            transfer::public_share_object(option::extract(&mut new_commitment));
+            option::destroy_none(new_commitment);
+            return executable
+        };
+        
+        // The coins have already been handled by try_execute_create_commitment
+        option::destroy_none(new_commitment);
+    } else {
+        // If the executable is complete, the coin should already be zero
+        if (coin::value(&committed_coin) == 0) {
+            coin::destroy_zero(committed_coin);
+        } else {
+            // Return non-zero coins to sender
+            transfer::public_transfer(committed_coin, tx_context::sender(ctx));
+        };
+    };
+    
+    executable
+}
+
+/// Execute commitment operations (no coin needed)
+public(package) fun execute_commitment_operations<
+    AssetType,
+    StableType,
+    Outcome: store + drop + copy,
+    IW: copy + drop
+>(
+    mut executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    commitment: &mut futarchy::commitment_proposal::CommitmentProposal<AssetType, StableType>,
+    proposal: &futarchy::proposal::Proposal<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    use futarchy::commitment_dispatcher;
+    
+    // Process commitment actions (execute, update, withdraw)
+    while (executable.action_idx() < executable.intent().actions().length()) {
+        // Check for execute commitment action  
+        if (commitment_dispatcher::try_execute_commitment<AssetType, StableType, Outcome, IW>(
+            &mut executable,
+            account,
+            witness,
+            commitment,
+            proposal,
+            clock,
+            ctx,
+        )) {
+            continue
+        };
+        
+        // Try other commitment actions (update recipient, withdraw)
+        if (commitment_dispatcher::try_execute_other_commitment_actions<AssetType, StableType, Outcome, IW>(
+            &mut executable,
+            account,
+            witness,
+            commitment,
+            clock,
+            ctx,
+        )) {
+            continue
+        };
+        
+        break // Unknown action type
     };
     
     executable

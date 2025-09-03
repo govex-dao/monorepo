@@ -57,6 +57,8 @@ public struct GovernanceConfig has store, drop, copy {
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
+    optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals
+    optimistic_challenge_period_ms: u64, // Time period to challenge optimistic proposals (e.g., 10 days)
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
 }
@@ -68,9 +70,8 @@ public struct MetadataConfig has store, drop, copy {
     description: String,
 }
 
-/// Security configuration for dead-man switch and OA protection
+/// Security configuration for dead-man switch
 public struct SecurityConfig has store, drop, copy {
-    oa_custodian_immutable: bool,        // If true, OA:Custodian cannot be updated (council can still give up control)
     deadman_enabled: bool,               // If true, dead-man switch recovery is enabled
     recovery_liveness_ms: u64,           // Inactivity threshold for dead-man switch (e.g., 30 days)
     require_deadman_council: bool,       // If true, all councils must support dead-man switch
@@ -144,6 +145,8 @@ public fun new_governance_config(
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
+    optimistic_challenge_fee: u64,
+    optimistic_challenge_period_ms: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64,
 ): GovernanceConfig {
@@ -154,6 +157,8 @@ public fun new_governance_config(
     assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
     assert!(fee_escalation_basis_points <= MAX_FEE_BPS, EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
+    assert!(optimistic_challenge_fee > 0, EInvalidProposalFee);
+    assert!(optimistic_challenge_period_ms > 0, EInvalidPeriod); // Must be non-zero
     assert!(eviction_grace_period_ms >= 300000, EInvalidGracePeriod); // Min 5 minutes
     
     GovernanceConfig {
@@ -167,6 +172,8 @@ public fun new_governance_config(
         proposal_creation_enabled,
         accept_new_proposals,
         max_intents_per_outcome,
+        optimistic_challenge_fee,
+        optimistic_challenge_period_ms,
         eviction_grace_period_ms,
         proposal_intent_expiry_ms,
     }
@@ -187,13 +194,11 @@ public fun new_metadata_config(
 
 /// Create a new security configuration
 public fun new_security_config(
-    oa_custodian_immutable: bool,
     deadman_enabled: bool,
     recovery_liveness_ms: u64,
     require_deadman_council: bool,
 ): SecurityConfig {
     SecurityConfig {
-        oa_custodian_immutable,
         deadman_enabled,
         recovery_liveness_ms,
         require_deadman_council,
@@ -241,6 +246,8 @@ public fun governance_config(config: &DaoConfig): &GovernanceConfig { &config.go
 public(package) fun governance_config_mut(config: &mut DaoConfig): &mut GovernanceConfig { &mut config.governance_config }
 public fun max_outcomes(gov: &GovernanceConfig): u64 { gov.max_outcomes }
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
+public fun optimistic_challenge_fee(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_fee }
+public fun optimistic_challenge_period_ms(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_period_ms }
 public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
 public fun max_concurrent_proposals(gov: &GovernanceConfig): u64 { gov.max_concurrent_proposals }
 public fun proposal_recreation_window_ms(gov: &GovernanceConfig): u64 { gov.proposal_recreation_window_ms }
@@ -262,7 +269,6 @@ public fun description(meta: &MetadataConfig): &String { &meta.description }
 // Security config getters
 public fun security_config(config: &DaoConfig): &SecurityConfig { &config.security_config }
 public(package) fun security_config_mut(config: &mut DaoConfig): &mut SecurityConfig { &mut config.security_config }
-public fun oa_custodian_immutable(sec: &SecurityConfig): bool { sec.oa_custodian_immutable }
 public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
 public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
 public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
@@ -335,6 +341,16 @@ public(package) fun set_required_bond_amount(gov: &mut GovernanceConfig, amount:
     gov.required_bond_amount = amount;
 }
 
+public(package) fun set_optimistic_challenge_fee(gov: &mut GovernanceConfig, amount: u64) {
+    assert!(amount > 0, EInvalidProposalFee);
+    gov.optimistic_challenge_fee = amount;
+}
+
+public(package) fun set_optimistic_challenge_period_ms(gov: &mut GovernanceConfig, period: u64) {
+    assert!(period > 0, EInvalidPeriod); // Must be non-zero
+    gov.optimistic_challenge_period_ms = period;
+}
+
 public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max: u64) {
     assert!(max > 0, EInvalidMaxConcurrentProposals);
     gov.max_concurrent_proposals = max;
@@ -390,9 +406,6 @@ public(package) fun set_description(meta: &mut MetadataConfig, desc: String) {
 }
 
 // Security config direct setters
-public(package) fun set_oa_custodian_immutable(sec: &mut SecurityConfig, val: bool) {
-    sec.oa_custodian_immutable = val;
-}
 
 public(package) fun set_deadman_enabled(sec: &mut SecurityConfig, val: bool) {
     sec.deadman_enabled = val;
@@ -497,6 +510,8 @@ public fun default_governance_config(): GovernanceConfig {
         proposal_creation_enabled: true,
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
+        optimistic_challenge_fee: 1000000000, // 1 billion MIST = 1 token
+        optimistic_challenge_period_ms: 864000000, // 10 days default
         eviction_grace_period_ms: 7200000, // 2 hours default
         proposal_intent_expiry_ms: 2592000000, // 30 days default
     }
@@ -505,7 +520,6 @@ public fun default_governance_config(): GovernanceConfig {
 /// Get default security configuration
 public fun default_security_config(): SecurityConfig {
     SecurityConfig {
-        oa_custodian_immutable: false,  // Allow updates by default
         deadman_enabled: false,          // Opt-in feature
         recovery_liveness_ms: 2_592_000_000, // 30 days default
         require_deadman_council: false,  // Optional

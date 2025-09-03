@@ -15,7 +15,6 @@ use futarchy::resources;
 
 // === Errors ===
 const EPolicyNotFound: u64 = 1;
-const ECannotRemoveOACustodian: u64 = 2;  // DAO can never remove OA:Custodian
 
 // === Structs ===
 
@@ -101,17 +100,6 @@ public fun set_policy(
 /// Removes a policy for a resource.
 public fun remove_policy(registry: &mut PolicyRegistry, dao_id: ID, resource_key: String) {
     assert!(table::contains(&registry.policies, resource_key), EPolicyNotFound);
-    
-    // CRITICAL: DAO can NEVER remove certain critical policies
-    // Check if this is a critical resource that shouldn't be removed
-    if (resources::is_critical_resource(&resource_key)) {
-        // For now, we specifically protect the OA:Custodian for backward compatibility
-        if (resource_key == b"OA:Custodian".to_string() || 
-            resource_key == resources::operations_agreement()) {
-            abort ECannotRemoveOACustodian
-        }
-    };
-    
     table::remove(&mut registry.policies, resource_key);
 
     event::emit(PolicyRemoved {
@@ -161,21 +149,6 @@ public fun gating_mode_dao_only(): u8 { 0 }
 public fun gating_mode_council_only(): u8 { 1 }
 public fun gating_mode_and(): u8 { 2 }
 public fun gating_mode_or(): u8 { 3 }
-
-/// Special surrender method for OA:Custodian that bypasses the DAO-side removal guard.
-/// Must be called only after verifying council co-exec approval.
-public fun surrender_oa_custodian(
-    registry: &mut PolicyRegistry,
-    dao_id: ID,
-) {
-    let key = b"OA:Custodian".to_string();
-    assert!(table::contains(&registry.policies, key), EPolicyNotFound);
-    table::remove(&mut registry.policies, key);
-    event::emit(PolicyRemoved {
-        dao_id,
-        resource_key: key,
-    });
-}
 
 /// Helper function to get a mutable reference to the PolicyRegistry from an Account
 public fun borrow_registry_mut<Config>(

@@ -192,7 +192,9 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::some(max_outcomes),
                 option::some(required_bond_amount),
                 option::none(), // max_intents_per_outcome - not specified
-                option::none()  // proposal_intent_expiry_ms - not specified
+                option::none(), // proposal_intent_expiry_ms - not specified
+                option::none(), // optimistic_challenge_fee - not specified
+                option::none()  // optimistic_challenge_period_ms - not specified
             );
             intent.add_action(action, iw);
         }

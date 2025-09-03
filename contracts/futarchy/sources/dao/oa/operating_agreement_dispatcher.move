@@ -17,9 +17,6 @@ use futarchy::{
     operating_agreement_actions,
 };
 
-// === Constants ===
-const EOARequiresCouncil: u64 = 8;
-
 // === Public(friend) Functions ===
 
 /// Try to execute operating agreement actions
@@ -30,15 +27,6 @@ public(package) fun try_execute_operating_agreement_action<IW: drop, Outcome: st
     clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
-    // Enforce 2-of-2 if OA has a council custodian policy set.
-    // Skip this check for CreateOperatingAgreementAction since OA doesn't exist yet
-    if (!executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
-        if (operating_agreement::has_agreement(account) && operating_agreement::requires_council_coapproval(account)) {
-            // Disallow direct OA changes. Must use operating_agreement_coexec::execute_with_council
-            abort EOARequiresCouncil
-        };
-    };
-    
     // Create OA if it doesn't exist yet
     if (executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
         operating_agreement::execute_create_agreement<IW, FutarchyConfig, Outcome>(

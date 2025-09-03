@@ -948,14 +948,6 @@ public entry fun read_agreement(agreement: &OperatingAgreement, clock: &Clock) {
     emit_current_state_event_with_status(agreement, clock);
 }
 
-/// True if OA is guarded by a Security Council custodial policy.
-/// If true, OA mutation must go through co-execution path (futarchy + council).
-public fun requires_council_coapproval<Config: store>(
-    account: &Account<Config>
-): bool {
-    let reg = policy_registry::borrow_registry(account, version::current());
-    policy_registry::has_policy(reg, b"OA:Custodian".to_string())
-}
 
 
 /// Apply a batch of OA actions directly (co-exec calls this after validation).

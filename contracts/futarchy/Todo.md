@@ -4,18 +4,19 @@
 like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
-- [ ]  Make sure owner dao and its secuity council can control admin thingy to change platform fees / fee collector
+- [X]  Make sure owner dao and its secuity council can control admin thingy to change platform fees / fee collector
 
-- [ ] Optional Security council with optimisitic proosal action creation, can be challenged with X period like how stream sub actions work
-Second their of investors that get paid first of paid set % of all incoming revenue of Vector X% of vecotor first Y amounts
+- [x] Optional Security council with optimisitic proosal action creation, can be challenged with X period like how stream sub actions work
+
+- [ ] Second teir of investors that get paid first of paid set % of all incoming revenue of Vector X% of vecotor first Y amounts. can easily have deposit revenue endpoint and from that calculate profit??
 
 - [ ] Way to create double memo proposal or proposal that requires x% increase to pass not just dao threshold %. So founder agree to lock tokens if increases price of stock… either need profile for that founder to act as their own ado or something else???
 
-- [ ] Need deposit revenue endpoint for daos
+- [x] Need deposit revenue endpoint for daos
 
-- [ ] Also maybe shard all daos based on number e.g give certain dao number label to admins
 
-- [ ] Collect fee require admin cap and be able to only take less than max so can give discounts 
+
+- [x] Collect fee require admin cap and be able to only take less than max so can give discounts 
 
 
 
@@ -37,6 +38,7 @@ OK lets have a TWAP oracle but for time when proposal was live fill in using my 
 - [ ] Sort out twap i itializatkon prices and handle spot oracle given 24 7 proposals if no spot trading dueot back to back proposals
 - [ ] multiverse finance Token splitting? https://www.paradigm.xyz/2025/05/multiverse-finance
 - [ ] Amm routing abstraction Redeeming condition toke redeem type dispatcher for burn or redeem winning
+- [ ] Also maybe shard all daos based on number e.g give certain dao number label to admins
 - [ ]  Way to generate dao onchain spending data?
 - [ ]  Make whole code not rely so much on off chain indexing, like keep last n proposals discoverable from dao and every other object properly discoverable
 - [ ] Procurement proposal type

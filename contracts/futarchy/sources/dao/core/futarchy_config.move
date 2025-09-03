@@ -241,6 +241,8 @@ public fun new_config_params_from_values(
         true,  // proposal_creation_enabled (default)
         true,  // accept_new_proposals (default)
         10,    // max_intents_per_outcome (default)
+        1000000000, // optimistic_challenge_fee (1 billion MIST = 1 token, default)
+        864000000, // optimistic_challenge_period_ms (10 days default)
         7200000, // eviction_grace_period_ms (2 hours default)
         2592000000, // proposal_intent_expiry_ms (30 days default)
     );
@@ -331,9 +333,6 @@ public fun review_to_trading_fee(config: &FutarchyConfig): u64 { config.review_t
 public fun finalization_fee(config: &FutarchyConfig): u64 { config.finalization_fee }
 
 // Security config getters (delegated to dao_config)
-public fun oa_custodian_immutable(config: &FutarchyConfig): bool { 
-    dao_config::oa_custodian_immutable(dao_config::security_config(&config.config)) 
-}
 public fun deadman_enabled(config: &FutarchyConfig): bool { 
     dao_config::deadman_enabled(dao_config::security_config(&config.config)) 
 }
@@ -392,6 +391,8 @@ public fun proposal_fee_per_outcome(config: &FutarchyConfig): u64 { dao_config::
 public fun operational_state(config: &FutarchyConfig): u8 { config.operational_state }
 public fun max_concurrent_proposals(config: &FutarchyConfig): u64 { dao_config::max_concurrent_proposals(dao_config::governance_config(&config.config)) }
 public fun required_bond_amount(config: &FutarchyConfig): u64 { dao_config::required_bond_amount(dao_config::governance_config(&config.config)) }
+public fun optimistic_challenge_fee(config: &FutarchyConfig): u64 { dao_config::optimistic_challenge_fee(dao_config::governance_config(&config.config)) }
+public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 { dao_config::optimistic_challenge_period_ms(dao_config::governance_config(&config.config)) }
 
 // State tracking
 public fun active_proposals(config: &FutarchyConfig): u64 { config.active_proposals }
@@ -537,6 +538,18 @@ public(package) fun set_required_bond_amount(config: &mut FutarchyConfig, amount
     dao_config::set_required_bond_amount(governance_config, amount);
 }
 
+public(package) fun set_optimistic_challenge_fee(config: &mut FutarchyConfig, amount: u64) {
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_optimistic_challenge_fee(governance_config, amount);
+}
+
+public(package) fun set_optimistic_challenge_period_ms(config: &mut FutarchyConfig, period: u64) {
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_optimistic_challenge_period_ms(governance_config, period);
+}
+
 // State tracking
 public(package) fun increment_active_proposals(config: &mut FutarchyConfig) {
     config.active_proposals = config.active_proposals + 1;
@@ -679,12 +692,6 @@ public(package) fun set_finalization_fee(config: &mut FutarchyConfig, amount: u6
 }
 
 // Security config setters (use direct mutable references)
-public(package) fun set_oa_custodian_immutable(config: &mut FutarchyConfig, val: bool) {
-    // Use direct mutable reference for efficient in-place update
-    let security_config = dao_config::security_config_mut(&mut config.config);
-    dao_config::set_oa_custodian_immutable(security_config, val);
-}
-
 public(package) fun set_deadman_enabled(config: &mut FutarchyConfig, val: bool) {
     // Use direct mutable reference for efficient in-place update
     let security_config = dao_config::security_config_mut(&mut config.config);
@@ -932,16 +939,9 @@ public struct GovernanceWitness has drop {}
 /// Witness for FutarchyConfig creation
 public struct FutarchyConfigWitness has drop {}
 
-// === Council Approval System (Simplified) ===
+// === Council Approval System (Generic Only) ===
 
-/// Typed approval for Operating Agreement changes (unique due to batch operations)
-public struct OAApproval has store, drop, copy {
-    dao_id: ID,
-    batch_id: ID,  // Unique ID for the batch of OA changes
-    expires_at: u64,
-}
-
-/// Generic approval for all other council actions
+/// Generic approval for all council actions
 public struct GenericApproval has store, drop, copy {
     dao_id: ID,
     action_type: String,  // "policy_remove", "policy_set", "custody_accept", etc.
@@ -950,26 +950,7 @@ public struct GenericApproval has store, drop, copy {
     expires_at: u64,
 }
 
-/// Council approval enum - just two types needed
-public enum CouncilApproval has store, drop, copy {
-    OA(OAApproval),  // Special because of batch_id requirement
-    Generic(GenericApproval),  // Everything else
-}
-
 // === Helper Functions for Generic Approvals ===
-
-/// Constructor for OAApproval
-public fun new_oa_approval(
-    dao_id: ID,
-    batch_id: ID,
-    expires_at: u64
-): OAApproval {
-    OAApproval {
-        dao_id,
-        batch_id,
-        expires_at,
-    }
-}
 
 /// Create a generic approval for policy removal
 public fun new_policy_removal_approval(
@@ -1066,8 +1047,8 @@ public fun new_bundle_approval(
 /// Managed-data key and container for council approvals
 public struct CouncilApprovalKey has copy, drop, store {}
 public struct CouncilApprovalBook has store {
-    // Maps intent_key -> typed approval record
-    approvals: Table<String, CouncilApproval>,
+    // Maps intent_key -> approval record
+    approvals: Table<String, GenericApproval>,
 }
 
 /// Initialize the council approval book for a DAO (package-level only)
@@ -1076,7 +1057,7 @@ public(package) fun init_approval_book(
     ctx: &mut TxContext
 ) {
     let book = CouncilApprovalBook {
-        approvals: table::new<String, CouncilApproval>(ctx),
+        approvals: table::new<String, GenericApproval>(ctx),
     };
     account::add_managed_data(
         account,
@@ -1118,7 +1099,7 @@ public struct ExecutePermit has copy, drop {
     issued_at: u64,
     expires_at: u64,
     /// The actual council approval (if any) that authorized this permit
-    council_approval: Option<CouncilApproval>,
+    council_approval: Option<GenericApproval>,
 }
 
 /// Information about a proposal
@@ -1270,24 +1251,13 @@ fun ensure_approval_book(
         account::add_managed_data(
             account,
             CouncilApprovalKey {},
-            CouncilApprovalBook { approvals: table::new<String, CouncilApproval>(ctx) },
+            CouncilApprovalBook { approvals: table::new<String, GenericApproval>(ctx) },
             version::current()
         );
     };
 }
 
-/// Record a council approval for an intent (OA variant)
-public fun record_council_approval_oa(
-    account: &mut Account<FutarchyConfig>,
-    intent_key: String,
-    approval: OAApproval,
-    ctx: &mut TxContext
-) {
-    let book = get_or_init_approval_book(account, ctx);
-    table::add(&mut book.approvals, intent_key, CouncilApproval::OA(approval));
-}
-
-/// Record a council approval for an intent (Generic variant)
+/// Record a council approval for an intent
 public fun record_council_approval_generic(
     account: &mut Account<FutarchyConfig>,
     intent_key: String,
@@ -1295,27 +1265,9 @@ public fun record_council_approval_generic(
     ctx: &mut TxContext
 ) {
     let book = get_or_init_approval_book(account, ctx);
-    table::add(&mut book.approvals, intent_key, CouncilApproval::Generic(approval));
-}
-
-/// Record a council approval for an intent
-public fun record_council_approval(
-    account: &mut Account<FutarchyConfig>,
-    intent_key: String,
-    approval: CouncilApproval,
-    ctx: &mut TxContext
-) {
-    ensure_approval_book(account, ctx);
-    let book: &mut CouncilApprovalBook = account::borrow_managed_data_mut(
-        account, CouncilApprovalKey {}, version::current()
-    );
-    
-    // Replace any existing approval for this intent
-    if (table::contains(&book.approvals, intent_key)) {
-        table::remove(&mut book.approvals, intent_key);
-    };
     table::add(&mut book.approvals, intent_key, approval);
 }
+
 
 /// Check if a council approval exists for an intent
 public fun has_council_approval(
@@ -1334,18 +1286,15 @@ public fun has_council_approval(
     let approval = table::borrow(&book.approvals, *intent_key);
     let now = clock.timestamp_ms();
     
-    // Check expiry based on approval type
-    match (approval) {
-        CouncilApproval::OA(oa) => now < oa.expires_at,
-        CouncilApproval::Generic(gen) => now < gen.expires_at,
-    }
+    // Check expiry
+    now < approval.expires_at
 }
 
 /// Get the council approval for an intent (if exists)
 public fun get_council_approval(
     account: &Account<FutarchyConfig>,
     intent_key: &String
-): Option<CouncilApproval> {
+): Option<GenericApproval> {
     // Check if the approval book exists
     if (!account::has_managed_data(account, CouncilApprovalKey {})) {
         return option::none()
@@ -1367,7 +1316,7 @@ public fun consume_council_approval(
     account: &mut Account<FutarchyConfig>,
     intent_key: &String,
     ctx: &mut TxContext
-): Option<CouncilApproval> {
+): Option<GenericApproval> {
     // Ensure the approval book exists
     ensure_approval_book(account, ctx);
     
@@ -1399,10 +1348,7 @@ public fun issue_execute_permit_for_intent(
     // If there's a council approval, use its expiry time if sooner
     let permit_expires = if (option::is_some(&council_approval)) {
         let approval = option::borrow(&council_approval);
-        let approval_expires = match (approval) {
-            CouncilApproval::OA(oa) => oa.expires_at,
-            CouncilApproval::Generic(gen) => gen.expires_at,
-        };
+        let approval_expires = approval.expires_at;
         if (approval_expires < expires_at) { approval_expires } else { expires_at }
     } else {
         expires_at
@@ -1462,7 +1408,7 @@ public fun permit_expires_at(permit: &ExecutePermit): u64 {
 }
 
 /// Accessor for permit's council approval
-public fun permit_council_approval(permit: &ExecutePermit): &Option<CouncilApproval> {
+public fun permit_council_approval(permit: &ExecutePermit): &Option<GenericApproval> {
     &permit.council_approval
 }
 

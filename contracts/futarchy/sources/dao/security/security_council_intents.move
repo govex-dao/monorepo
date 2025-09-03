@@ -311,18 +311,9 @@ public fun execute_create_security_council(
     let council_id = object::id(&council);
     transfer::public_share_object(council);
 
-    // Optionally set OA:Custodian policy to this council
-    if (set_oa) {
-        let dao_id = object::id(dao);
-        let reg = policy_registry::borrow_registry_mut(dao, version::current());
-        policy_registry::set_policy(
-            reg,
-            dao_id,
-            b"OA:Custodian".to_string(),
-            council_id,
-            b"SecurityCouncil".to_string()
-        );
-    };
+    // Note: OA:Custodian policy has been removed - OA is now always governed like other actions
+    // The set_oa parameter is kept for backward compatibility but is now ignored
+    let _ = set_oa;
 
     // Confirm DAO-side execution
     dao.confirm_execution(executable);
@@ -593,3 +584,121 @@ public fun delete_sweep_expired_intents(expired: &mut Expired) {
 
 // Witness for sweep intents
 public struct SweepExpiredIntentsIntent has copy, drop {}
+
+// Witness for optimistic intents
+public struct CreateOptimisticIntent has copy, drop {}
+public struct ExecuteOptimisticIntent has copy, drop {}
+public struct CancelOptimisticIntent has copy, drop {}
+public struct ChallengeOptimisticIntents has copy, drop {}
+
+// === Optimistic Intent Functions ===
+
+/// Security council creates an optimistic intent that can be executed after waiting period
+public fun request_create_optimistic_intent(
+    security_council: &mut Account<WeightedMultisig>,
+    auth_from_member: Auth,
+    params: Params,
+    dao_id: ID,
+    intent_key_for_execution: String,  // The actual intent to execute after delay
+    title: String,
+    description: String,
+    ctx: &mut TxContext
+) {
+    security_council.verify(auth_from_member);
+    let outcome: Approvals = multisig::new_approvals(security_council.config());
+    
+    security_council.build_intent!(
+        params,
+        outcome,
+        b"create_optimistic_intent".to_string(),
+        version::current(),
+        CreateOptimisticIntent{},
+        ctx,
+        |intent, iw| {
+            // Create the optimistic intent action
+            let action = security_council_actions::new_council_create_optimistic_intent(
+                dao_id,
+                intent_key_for_execution,
+                title,
+                description
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Execute a matured optimistic intent (after 10-day waiting period)
+public fun request_execute_optimistic_intent(
+    security_council: &mut Account<WeightedMultisig>, 
+    auth_from_member: Auth,
+    params: Params,
+    dao_id: ID,
+    optimistic_intent_id: ID,
+    ctx: &mut TxContext
+) {
+    security_council.verify(auth_from_member);
+    let outcome: Approvals = multisig::new_approvals(security_council.config());
+    
+    security_council.build_intent!(
+        params,
+        outcome,
+        b"execute_optimistic_intent".to_string(),
+        version::current(),
+        ExecuteOptimisticIntent{},
+        ctx,
+        |intent, iw| {
+            // Create action to execute the optimistic intent
+            use futarchy::optimistic_intents;
+            let action = optimistic_intents::new_execute_optimistic_intent_action(
+                optimistic_intent_id
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Security council member cancels their own optimistic intent
+public fun request_cancel_optimistic_intent(
+    security_council: &mut Account<WeightedMultisig>,
+    auth_from_member: Auth,
+    params: Params,
+    dao_id: ID,
+    optimistic_intent_id: ID,
+    reason: String,
+    ctx: &mut TxContext
+) {
+    security_council.verify(auth_from_member);
+    let outcome: Approvals = multisig::new_approvals(security_council.config());
+    
+    security_council.build_intent!(
+        params,
+        outcome,
+        b"cancel_optimistic_intent".to_string(),
+        version::current(),
+        CancelOptimisticIntent{},
+        ctx,
+        |intent, iw| {
+            use futarchy::optimistic_intents;
+            let action = optimistic_intents::new_cancel_optimistic_intent_action(
+                optimistic_intent_id,
+                reason
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+// Delete functions for expired intents
+public fun delete_create_optimistic_intent(expired: &mut Expired) {
+    security_council_actions::delete_council_create_optimistic_intent(expired);
+}
+
+public fun delete_execute_optimistic_intent(expired: &mut Expired) {
+    use futarchy::optimistic_intents;
+    optimistic_intents::delete_execute_optimistic_intent_action(expired);
+}
+
+public fun delete_cancel_optimistic_intent(expired: &mut Expired) {
+    use futarchy::optimistic_intents;
+    optimistic_intents::delete_cancel_optimistic_intent_action(expired);
+}

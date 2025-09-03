@@ -143,6 +143,8 @@ public struct GovernanceUpdateAction has store, drop {
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
     proposal_intent_expiry_ms: Option<u64>,
+    optimistic_challenge_fee: Option<u64>,
+    optimistic_challenge_period_ms: Option<u64>,
 }
 
 /// Metadata table update action
@@ -398,6 +400,12 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     if (action.proposal_intent_expiry_ms.is_some()) {
         futarchy_config::set_proposal_intent_expiry_ms(config, *action.proposal_intent_expiry_ms.borrow());
     };
+    if (action.optimistic_challenge_fee.is_some()) {
+        futarchy_config::set_optimistic_challenge_fee(config, *action.optimistic_challenge_fee.borrow());
+    };
+    if (action.optimistic_challenge_period_ms.is_some()) {
+        futarchy_config::set_optimistic_challenge_period_ms(config, *action.optimistic_challenge_period_ms.borrow());
+    };
     
     // Emit event
     event::emit(GovernanceSettingsChanged {
@@ -592,6 +600,8 @@ public fun delete_governance_update(expired: &mut Expired) {
         required_bond_amount: _,
         max_intents_per_outcome: _,
         proposal_intent_expiry_ms: _,
+        optimistic_challenge_fee: _,
+        optimistic_challenge_period_ms: _,
     } = expired.remove_action();
 }
 
@@ -728,6 +738,8 @@ public fun new_governance_update_action(
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
     proposal_intent_expiry_ms: Option<u64>,
+    optimistic_challenge_fee: Option<u64>,
+    optimistic_challenge_period_ms: Option<u64>,
 ): GovernanceUpdateAction {
     let action = GovernanceUpdateAction {
         proposal_creation_enabled,
@@ -735,6 +747,8 @@ public fun new_governance_update_action(
         required_bond_amount,
         max_intents_per_outcome,
         proposal_intent_expiry_ms,
+        optimistic_challenge_fee,
+        optimistic_challenge_period_ms,
     };
     validate_governance_update(&action);
     action
