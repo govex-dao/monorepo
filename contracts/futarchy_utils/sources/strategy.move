@@ -1,4 +1,4 @@
-module futarchy::strategy;
+module futarchy_utils::strategy;
 
 // === Constants for Strategy Types ===
 const STRATEGY_AND: u8 = 0;

@@ -4,6 +4,8 @@ edition = "2024"
 license = "BSL"
 
 [dependencies]
+futarchy_utils = { local = "../futarchy_utils" }
+AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 AccountActions = { local = "../move-framework/packages/actions" }
 
@@ -11,11 +13,12 @@ AccountActions = { local = "../move-framework/packages/actions" }
 # Production addresses will be generated when packages are published
 # For now, using development addresses
 futarchy = "0x0"
+futarchy_utils = "0xebdffb8f5ef2415093491c9c3e80f14731d7022574b6e196f0a0c6446078103c"
 
 # Account protocol addresses (these are the actual published addresses)
-account_protocol = "0x10c87c29ea5d5674458652ababa246742a763f9deafed11608b7f0baea296484"
-account_extensions = "0x87bee60d3ea6dc5b42e1074134373af27733fb3c5ebc3ac8e013901426d85d53"
-account_actions = "0xf477dbfad6ab1de1fdcb6042c0afeda2aa5bf12eb7ef42d280059fc8d6c36c94"
+account_protocol = "0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870"
+account_extensions = "0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd"
+account_actions = "0x56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491"
 
 # When publishing to production:
 # 1. First publish futarchy_actions package - get its address

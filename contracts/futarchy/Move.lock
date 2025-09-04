@@ -2,15 +2,17 @@
 
 [move]
 version = 3
-manifest_digest = "A49B8FD7BC8096C5B50558B33EA5CAA68782DA046AC73F7B08C2981A224E8B98"
-deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+manifest_digest = "ABD814E2D1ABB62A6BAC5DAD83FD7464D2B786D5F5D7287BF6D27BBC4F9082D9"
+deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_utils", name = "futarchy_utils" },
 ]
 
 [[move.package]]
@@ -86,6 +88,17 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "b5633abb4177", 
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "futarchy_utils"
+source = { local = "../futarchy_utils" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [move.toolchain-version]

@@ -1,4 +1,4 @@
-module futarchy::vectors;
+module futarchy_utils::vectors;
 
 use std::string::String;
 use sui::vec_set;

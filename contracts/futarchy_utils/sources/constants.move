@@ -1,7 +1,7 @@
 /// Centralized constants for the Futarchy protocol
 /// This module contains all magic numbers and configuration constants
 /// to ensure consistency across the codebase
-module futarchy::constants;
+module futarchy_utils::constants;
 
 // === AMM Fee Constants ===
 

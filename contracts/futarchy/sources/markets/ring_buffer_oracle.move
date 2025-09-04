@@ -43,7 +43,7 @@ module futarchy::ring_buffer_oracle;
 
 use std::vector;
 use sui::clock::Clock;
-use futarchy::math;
+use futarchy_utils::math;
 
 // ============================================================================
 // Constants

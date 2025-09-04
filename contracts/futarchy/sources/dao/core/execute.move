@@ -15,7 +15,6 @@ use account_protocol::{
 };
 
 use futarchy::{
-    strategy,
     gc_janitor,
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome, ExecutePermit},
     action_dispatcher,
@@ -24,6 +23,7 @@ use futarchy::{
     proposal_fee_manager::ProposalFeeManager,
     governance_actions::ProposalReservationRegistry,
 };
+use futarchy_utils::strategy;
 
 const EPolicyNotSatisfied: u64 = 777;
 const EInvalidPermit: u64 = 778;

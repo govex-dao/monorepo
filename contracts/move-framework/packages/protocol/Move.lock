@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "1BDA65227DD487DA4B183D008297FF112C2F41F7F595A69C3F0F753120055DB5"
+manifest_digest = "EA4CC02C17909A76B5847CE6E5F1680FEAE5E342CFAFF0BC0B05EA42799C95D7"
 deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
 dependencies = [
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -58,3 +58,11 @@ dependencies = [
 compiler-version = "1.49.1"
 edition = "2024"
 flavor = "sui"
+
+[env]
+
+[env.devnet]
+chain-id = "f117859f"
+original-published-id = "0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870"
+latest-published-id = "0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870"
+published-version = "1"

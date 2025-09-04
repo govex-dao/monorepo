@@ -11,7 +11,7 @@ use sui::{
     transfer,
     event,
 };
-use futarchy::{
+use futarchy_utils::{
     math,
 };
 

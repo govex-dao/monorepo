@@ -33,8 +33,8 @@
 
 module futarchy::oracle;
 
-use futarchy::math;
-use futarchy::constants;
+use futarchy_utils::math;
+use futarchy_utils::constants;
 use std::u128;
 use std::u64;
 use sui::clock::Clock;

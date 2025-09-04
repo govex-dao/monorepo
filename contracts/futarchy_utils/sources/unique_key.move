@@ -1,5 +1,5 @@
 /// Simple unique key generation for intents
-module futarchy::unique_key;
+module futarchy_utils::unique_key;
 
 use std::string::String;
 use sui::{object, tx_context::TxContext};

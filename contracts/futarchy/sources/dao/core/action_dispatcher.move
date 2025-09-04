@@ -39,7 +39,7 @@ use futarchy::{
     dissolution_dispatcher,
     liquidity_dispatcher,
     stream_dispatcher,
-    vault_dispatcher,
+    vault_governance_dispatcher,
     memo_dispatcher,
     operating_agreement_dispatcher,
     optimistic_dispatcher,
@@ -104,7 +104,7 @@ public(package) fun execute_vault_management<Outcome: store + drop + copy, CoinT
 ): Executable<Outcome> {
     // Process vault coin type management actions
     while (executable.action_idx() < executable.intent().actions().length()) {
-        if (vault_dispatcher::try_execute_typed_vault_action<CoinType, IW, Outcome>(&mut executable, account, witness, ctx)) {
+        if (vault_governance_dispatcher::try_execute_typed_vault_action<CoinType, IW, Outcome>(&mut executable, account, witness, ctx)) {
             continue
         };
         

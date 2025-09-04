@@ -87,10 +87,10 @@ use sui::transfer;
 use sui::tx_context::{Self, TxContext};
 use sui::clock::{Self, Clock};
 use sui::event;
-use futarchy::math;
+use futarchy_utils::math;
 use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
 use futarchy::conditional_amm;
-use futarchy::constants;
+use futarchy_utils::constants;
 
 // Basic errors
 const EZeroAmount: u64 = 1;

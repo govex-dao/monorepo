@@ -1,0 +1,9 @@
+[package]
+name = "futarchy_utils"
+edition = "2024"
+license = "BSL"
+
+[dependencies]
+
+[addresses]
+futarchy_utils = "0xebdffb8f5ef2415093491c9c3e80f14731d7022574b6e196f0a0c6446078103c"

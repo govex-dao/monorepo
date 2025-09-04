@@ -36,9 +36,9 @@ use futarchy::{
     intent_janitor,
     gc_janitor,
     execute,
-    strategy,
     events,
 };
+use futarchy_utils::strategy;
 
 // === Errors ===
 const EProposalNotActive: u64 = 1;

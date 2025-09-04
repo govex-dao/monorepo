@@ -2,10 +2,10 @@ module futarchy::conditional_amm;
 
 use futarchy::market_state::MarketState;
 use futarchy::conditional_token::ConditionalToken;
-use futarchy::math;
+use futarchy_utils::math;
 use futarchy::oracle::{Self, Oracle};
 use futarchy::ring_buffer_oracle::{Self, RingBufferOracle};
-use futarchy::constants;
+use futarchy_utils::constants;
 use sui::clock::Clock;
 use sui::event;
 use std::u64;

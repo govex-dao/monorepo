@@ -1,4 +1,4 @@
-module futarchy::math;
+module futarchy_utils::math;
 
 use std::u128;
 use std::u64;

@@ -1,4 +1,4 @@
-module futarchy::metadata;
+module futarchy_utils::metadata;
 
 use std::string::String;
 use sui::table::{Self, Table};

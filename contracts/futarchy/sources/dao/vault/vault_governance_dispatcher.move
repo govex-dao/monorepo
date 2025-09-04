@@ -1,5 +1,5 @@
-/// Dispatcher for vault actions
-module futarchy::vault_dispatcher;
+/// Dispatcher for vault governance actions
+module futarchy::vault_governance_dispatcher;
 
 // === Imports ===
 use sui::tx_context::TxContext;

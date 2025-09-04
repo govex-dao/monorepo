@@ -1,6 +1,6 @@
-/// Vault management intents for futarchy DAOs
+/// Vault governance intents for futarchy DAOs
 /// Provides governance-controlled coin type management with permissionless deposits for allowed types
-module futarchy::vault_intents;
+module futarchy::vault_governance_intents;
 
 // === Imports ===
 use std::string::String;

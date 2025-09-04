@@ -14,7 +14,7 @@ use sui::object::{Self, UID, ID};
 use sui::tx_context::TxContext;
 use futarchy::factory;
 use futarchy::fee;
-use futarchy::math;
+use futarchy_utils::math;
 use account_extensions::extensions::Extensions;
 
 // === Errors ===
