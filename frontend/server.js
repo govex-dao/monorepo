@@ -21,7 +21,9 @@ Object.keys(env).forEach((key) => {
   process.env[key] = env[key];
 });
 
-const API_URL = process.env.VITE_API_URL || "http://localhost:3000/";
+const API_URL = process.env.VITE_API_URL ? `https://${process.env.VITE_API_URL}/` : "http://localhost:3000/";
+console.log('Environment API URL:', process.env.VITE_API_URL);
+console.log('Constructed API URL:', API_URL);
 
 // Helper Functions
 async function fetchDaoData(daoId) {
@@ -246,6 +248,8 @@ async function createServer() {
   app.get("*", async (req, res) => {
     const url = req.originalUrl;
     
+    console.log(req.get("host"))
+    console.log(API_URL)
     try {
       let template, render;
 
@@ -286,6 +290,7 @@ async function createServer() {
       const daoMatch = url.match(/^\/dao\/(.+)$/);
       const proposalMatch = url.match(/^\/trade\/(.+)$/);
 
+      console.log("PROPOSAL MATCH", proposalMatch)
       if (daoMatch) {
         const dao = await fetchDaoData(daoMatch[1]);
         if (dao) {
@@ -293,6 +298,7 @@ async function createServer() {
         }
       } else if (proposalMatch) {
         const proposal = await fetchProposalData(proposalMatch[1]);
+        console.log(proposal)
         if (proposal) {
           console.error("Proposal data:", JSON.stringify(proposal, null, 2));
           console.error("Trades and traders:", proposal.trades, proposal.traders);

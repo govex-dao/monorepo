@@ -103,82 +103,112 @@ export interface ProposalOgParams {
   tradingPeriodMs: number
 }
 
-// Utility Functions
+export function calculateVolumeInUSDC(
+  amountIn: string,
+  amountOut: string,
+  isBuy: boolean,
+  stableScale: number,
+): number {
+  // For buys: amount_in is USDC
+  // For sells: amount_out is USDC
+  const usdcAmount = isBuy ? amountIn : amountOut;
+  return Number(usdcAmount) / stableScale;
+}
+
+// type TextWrapResult = { lines: string[]; fontSize: number; totalHeight: number };
+type MeasureCtx = { font: string; measureText: (t: string) => { width: number } };
+
+let ctx: MeasureCtx | null = null;
+
+function getCtx(): MeasureCtx {
+  if (ctx) return ctx;
+  if (typeof document !== 'undefined') {
+    const c = document.createElement('canvas');
+    ctx = c.getContext('2d') as unknown as MeasureCtx;
+  } else {
+    const { createCanvas } = require('@napi-rs/canvas');
+    ctx = createCanvas(1, 1).getContext('2d') as unknown as MeasureCtx;
+  }
+  return ctx!;
+}
+
+export function measure(
+  text: string,
+  px: number,
+  family = 'DejaVu Sans',   // system font available from fonts-dejavu-core
+  weight = 400
+): number {
+  const c = getCtx();
+  c!.font = `${weight} ${px}px "${family}"`;
+  return c!.measureText(text).width;
+}
+
 export function wrapText(
   text: string,
-  maxWidth: number = 400,
-  fontSize: number = FONT_CONFIG.defaultSize,
-  maxHeight: number = 180,
-  minFontSize: number = FONT_CONFIG.minSize
+  maxWidth: number,
+  fontSize: number,
+  {
+    family = 'sans-serif',
+    maxHeight = Infinity,
+    minFontSize = 10,
+    lineHeight = 1.2,
+    maxLines = 4
+  } = {}
 ): TextWrapResult {
-  let currentFontSize = fontSize;
-  let lines: string[] = [];
-  let totalHeight = 0;
-  const minLines = 1;
-  const maxLines = 4;
+  const words = text.split(/\s+/);
+  let fs = fontSize;
 
-  // Helper function to wrap text with current settings
-  const wrapWithCurrentSize = () => {
-    const words = text.split(' ');
-    const result: string[] = [];
-    let currentLine = '';
-
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const estimatedWidth = testLine.length * currentFontSize * FONT_CONFIG.coeff;
-
-      if (estimatedWidth <= maxWidth) { // Use more of the available width
-        currentLine = testLine;
+  const buildLines = () => {
+    const out: string[] = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (measure(test, fs, family) <= maxWidth) {
+        line = test;
       } else {
-        if (currentLine) {
-          result.push(currentLine);
-          currentLine = word;
+        if (line) out.push(line);
+        // handle ultra-long words
+        if (!line && measure(w, fs, family) > maxWidth) {
+          let chunk = '';
+          for (const ch of w) {
+            const t = chunk + ch;
+            if (measure(t, fs, family) <= maxWidth) chunk = t;
+            else { out.push(chunk); chunk = ch; }
+          }
+          line = chunk;
         } else {
-          // If a single word is too long, force it onto its own line
-          result.push(word);
+          line = w;
         }
       }
+      if (out.length === maxLines) break;
     }
-
-    if (currentLine) {
-      result.push(currentLine);
-    }
-
-    return result;
+    if (line && out.length < maxLines) out.push(line);
+    return out;
   };
 
-  // First attempt with original font size
-  lines = wrapWithCurrentSize();
+  let lines = buildLines();
+  let totalHeight = lines.length * fs * lineHeight;
 
-  // If we have too many lines, try increasing font size
+  // shrink font until both constraints satisfied
+  while ((lines.length > maxLines || totalHeight > maxHeight) && fs > minFontSize) {
+    fs = Math.max(minFontSize, Math.floor(fs - 1));
+    lines = buildLines();
+    totalHeight = lines.length * fs * lineHeight;
+  }
+
+  // if still overflowing in line count, truncate last line with fitted ellipsis
   if (lines.length > maxLines) {
-    currentFontSize = Math.min(fontSize * 1.2, fontSize + 12);
-    lines = wrapWithCurrentSize();
+    lines = lines.slice(0, maxLines);
+  }
+  const last = lines[lines.length - 1] ?? '';
+  if (lines.length === maxLines && (words.join(' ') !== lines.join(' '))) {
+    let ell = last;
+    while (ell && measure(ell + '…', fs, family) > maxWidth) ell = ell.slice(0, -1);
+    lines[lines.length - 1] = (ell || '').replace(/\s+$/,'') + '…';
   }
 
-  // If we still have too many lines, truncate and add ellipsis
-  if (lines.length > maxLines) {
-    lines = lines.slice(0, maxLines - 1);
-    lines.push(lines[lines.length - 1] + '...');
-  }
-
-  // If text is long but we have few lines, reduce font size to show more
-  if (lines.length < minLines && text.length > 100) {
-    currentFontSize = Math.max(fontSize * 0.8, minFontSize);
-    lines = wrapWithCurrentSize();
-  }
-
-  // Check if total height exceeds maxHeight and adjust font size if needed
-  totalHeight = lines.length * currentFontSize + (lines.length - 1) * FONT_CONFIG.lineSpacing;
-  
-  if (totalHeight > maxHeight) {
-    const reductionFactor = maxHeight / totalHeight;
-    currentFontSize = Math.max(currentFontSize * reductionFactor, minFontSize);
-    totalHeight = lines.length * currentFontSize + (lines.length - 1) * FONT_CONFIG.lineSpacing;
-    lines = wrapWithCurrentSize(); // Rewrap with new font size
-  }
-
-  return { lines, fontSize: currentFontSize, totalHeight };
+  totalHeight = lines.length * fs * lineHeight;
+  return { lines, fontSize: fs, totalHeight };
 }
 
 // Note: fetchAndEncodeImage removed - we only use cached images now
@@ -267,7 +297,7 @@ export function createDaoLogo(logo: string, name: string): string {
 export function createDaoMainContent(name: string, description: string): string {
   const { lines: descLines, fontSize: descFontSize } = wrapText(
     description || "A futarchy-governed DAO where prediction markets drive decision-making",
-    650, 28, 100
+    650, 28, { maxHeight: 100 }
   );
 
   // Sanitize user input
@@ -314,17 +344,17 @@ export function createInfoCard({
 }): string {
   return `
 <g transform="translate(${x}, ${y})">
-  <rect x="0" y="0" width="${width}" height="${height}" rx="24" fill="${bgColor}" stroke="${COLORS.background.quaternary}" stroke-width="2" filter="url(#cardShadow)"/>
+  <rect x="0" y="0" width="${width}" height="${height}" rx="24" fill="${bgColor + "60"}" stroke="${COLORS.background.quaternary + "40"}" stroke-width="2" filter="url(#cardShadow)"/>
   <rect x="2" y="2" width="${width - 4}" height="${height - 4}" rx="22" fill="none" stroke="rgba(148, 163, 184, 0.08)" stroke-width="1"/>
   ${animated ? `
   <circle cx="40" cy="45" r="8" fill="${color}">
     <animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/>
   </circle>
-  <text x="70" y="52" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="${COLORS.text.secondary}" font-weight="500" letter-spacing="0.05em">${title}</text>
+  <text x="70" y="52" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="${COLORS.text.secondary}" font-weight="500" letter-spacing="0.05em">${title}</text>
   ` : `
-  <text x="30" y="45" font-family="Arial, Helvetica, sans-serif" font-size="24" fill="${COLORS.text.secondary}" font-weight="500" letter-spacing="0.05em">${title}</text>
+  <text x="30" y="45" font-family="Arial, Helvetica, sans-serif" font-size="28" fill="${COLORS.text.secondary}" font-weight="500" letter-spacing="0.05em">${title}</text>
   `}
-  <text x="30" y="95" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="600" fill="${COLORS.text.primary}" letter-spacing="-0.01em">${value}</text>
+  <text x="30" y="105" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="600" fill="${COLORS.text.primary}" letter-spacing="-0.01em">${value}</text>
 </g>`;
 }
 
@@ -354,7 +384,7 @@ export function createStatsCards(proposalCount: number, hasLiveProposal: boolean
         width: cardWidth,
         height: cardHeight,
         title: 'LIVE PROPOSALS',
-        value: 'Active Now',
+        value: 'Trading Now',
         subtitle: 'Markets are trading',
         color: COLORS.accent.green,
         bgColor: 'rgba(16, 185, 129, 0.15)',
@@ -366,7 +396,7 @@ export function createStatsCards(proposalCount: number, hasLiveProposal: boolean
         width: cardWidth,
         height: cardHeight,
         title: 'ACTIVITY STATUS',
-        value: 'No Active Proposal',
+        value: 'Not trading',
         subtitle: 'Create one to get started',
         color: COLORS.text.tertiary,
         bgColor: 'rgba(71, 85, 105, 0.4)'
@@ -444,7 +474,6 @@ export function generateDaoSvg(params: DaoOgParams): string {
 export async function generateProposalOG(params: ProposalOgParams): Promise<string> {
   let {
     title,
-    description,
     daoName,
     daoLogo,
     currentState,
@@ -457,13 +486,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   } = params;
 
   const { width, height } = OG_IMAGE_DIMENSIONS;
-  // description= `
-  // Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut lorem ligula, fermentum eget lectus non, ultrices pretium dui. Fusce finibus lacus ac diam pellentesque, non elementum nulla tincidunt. Duis vel bibendum mi. Quisque tempus sem nec turpis aliquet posuere. Aliquam ac sapien tempor, porta tortor id, tempor tellus. Etiam dictum, urna eget venenatis tempus, nibh ex feugiat lacus, consequat molestie ligula massa ut diam. Nunc tincidunt augue purus, a scelerisque ante malesuada id.
-  // Donec ipsum est, scelerisque eget pulvinar a, varius condimentum ipsum. Suspendisse dapibus libero eget lacus malesuada varius. Pellentesque ac placerat odio. Praesent bibendum purus eu ex varius, in pharetra turpis tincidunt. Integer tincidunt in leo eget congue. Phasellus quam massa, commodo vitae efficitur et, tempor et tortor. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.
-  // Cras scelerisque ac sem vel tincidunt. Phasellus eget risus lorem. Duis tellus neque, efficitur at eros ut, sollicitudin dictum mauris. Ut sed viverra nulla. Nunc interdum nisi sed leo pharetra, laoreet cursus velit rutrum. Sed molestie fringilla eros sed egestas. Suspendisse rutrum congue purus in feugiat. Aliquam nec sem tincidunt, aliquet dolor ut, tristique velit. Etiam dictum, erat nec mollis finibus, dolor ligula faucibus purus, ut iaculis tortor nisl at nisi. Quisque tincidunt ex ac accumsan ornare. Proin at ex in ante ornare accumsan. Mauris nibh odio, cursus vel feugiat vitae, rhoncus ac orci. Nam convallis felis tellus, vel cursus urna vulputate in. Nulla maximus scelerisque neque eu malesuada.
-  // Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Etiam convallis felis sit amet gravida tincidunt. Vestibulum gravida porttitor magna vel vehicula. Praesent luctus odio risus, at gravida tellus vulputate eget. Vestibulum hendrerit consectetur lobortis. Nunc pulvinar quam lacus, non malesuada ligula sodales sit amet. Vestibulum ut fermentum tellus, sed imperdiet augue. Curabitur sit amet bibendum mi, eget pellentesque sapien. Sed bibendum neque scelerisque facilisis dignissim. Maecenas ut leo massa. Nunc sit amet turpis eu ligula commodo maximus. Nulla molestie vel diam quis tempor. Pellentesque sit amet felis id nisl rutrum condimentum vel eget augue. Quisque tempor enim ac pulvinar pellentesque.
-  // Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean rutrum risus et rhoncus vulputate. Maecenas sed dui velit. Maecenas dictum vel purus ac semper. Integer viverra felis lacus, quis cursus leo fringilla et. Donec placerat lacus id nisl vulputate tincidunt. Nulla facilisi. 
-  //   `
+
   // Sanitize and limit description
   const sanitizeText = (text: string) => {
     return text
@@ -474,22 +497,8 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
       .slice(0, 500); // Limit length
   };
 
-  description = description ? sanitizeText(description) : 'No description provided';
-
-  const { lines: titleLines, fontSize: titleFontSize, totalHeight: titleHeight } = wrapText(title, width - 96, FONT_CONFIG.titleSize, 100);
-  const { lines: descLines, fontSize: descFontSize, totalHeight: descHeight } = wrapText(description, width - 96, 36, height - titleHeight - 140 - 32 );
-
-  // Get status information
-  const getStatusInfo = (state: number) => {
-    switch (state) {
-      case 2: return { text: 'Finalized', color: COLORS.accent.green };
-      case 1: return { text: 'Trading', color: COLORS.accent.blue };
-      case 0: return { text: 'Pending', color: COLORS.text.tertiary };
-      default: return { text: 'Unknown', color: COLORS.text.tertiary };
-    }
-  };
-
-  const statusInfo = getStatusInfo(currentState);
+  title = title ? sanitizeText(title) : 'No title provided';
+  const { lines: titleLines, fontSize: titleFontSize } = wrapText(title, width - 96, 103, { maxHeight: height - 252 });
   // ONLY use cached image - no external URL fetching
   let daoImage = null;
   if (daoLogo && daoLogo !== "placeholder" && daoLogo.startsWith('/dao-images/')) {
@@ -542,7 +551,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     <!-- Outcome text -->
     <text 
       x="${textWidth / 2}" 
-      y="${height / 2}" 
+      y="${height / 2 + 2}" 
       font-family="Arial, Helvetica, sans-serif" 
       font-size="32" 
       font-weight="600" 
@@ -620,7 +629,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
       width: cardWidth,
       height: cardHeight,
       title: 'VOLUME',
-      value: formatNumber(volume) + " SUI",
+      value: "$" + formatNumber(volume),
       subtitle: '',
       color: COLORS.text.primary
     })}
@@ -650,9 +659,9 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   
   <!-- Proposal Title -->
   ${titleLines.map((line, index) =>
-    `<text x="32" y="${160 + (index * (titleFontSize + 12))}" font-family="Roboto, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
+    `<text x="32" width="${width - 96}" y="${titleLines.length === 1 ? 240 : 170 + (index * (titleFontSize + 12))}" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
   ).join('')}
-  
+
   ${createOutcomeSection()}
   ${createStatsSection()}
 </svg>`;
@@ -667,7 +676,7 @@ export async function generateGeneralOG(): Promise<string> {
     description,
     width - 400,
     40,
-    200
+    { maxHeight: 200 }
   );
 
   // Use a hardcoded base64 logo or cached version for Govex
