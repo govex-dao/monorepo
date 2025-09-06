@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
 import { Resvg } from '@resvg/resvg-js';
-import { generateDaoSvg, generateProposalOG, generateGeneralOG, FONT_FAMILY, CACHE_DURATION } from '../../utils/dynamic-image';
+import { generateDaoSvg, generateProposalOG, generateGeneralOG, FONT_FAMILY, CACHE_DURATION, calculateVolumeInUSDC } from '../../utils/dynamic-image';
 import { validateId, logSecurityError } from '../../utils/security';
 import path from 'path';
 import fs from 'fs/promises';
@@ -28,6 +28,7 @@ function sendErrorResponse(res: Response, error: any, message = 'Internal server
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
     const { daoId } = req.params;
+    const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
 
     // Validate input
     if (!validateId(daoId)) {
@@ -43,6 +44,8 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
         description: true,
         icon_url: true,
         icon_cache_large: true, // Use 512x512 cached image
+        asset_symbol: true,
+        stable_symbol: true,
         verification: {
           select: { verified: true }
         },
@@ -54,8 +57,25 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
         }
       }
     });
+
     if (!dao) {
       res.status(404).json({ error: 'DAO not found' });
+      return;
+    }
+
+    // Return JSON if requested
+    if (returnJson) {
+      res.json({
+        dao_id: dao.dao_id,
+        dao_name: dao.dao_name,
+        description: dao.description,
+        icon_url: dao.icon_url,
+        asset_symbol: dao.asset_symbol,
+        stable_symbol: dao.stable_symbol,
+        verified: dao.verification?.verified ?? false,
+        proposal_count: dao.proposals.length,
+        has_live_proposal: dao.proposals.some(proposal => (proposal.current_state || 0) === 0)
+      });
       return;
     }
 
@@ -140,8 +160,13 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       return;
     }
 
-    const proposal = await prisma.proposal.findUnique({
-      where: { market_state_id: propId },
+    const proposal = await prisma.proposal.findFirst({
+      where: {
+        OR: [
+          { market_state_id: propId },
+          { proposal_id: propId }
+        ]
+      },
       select: {
         proposal_id: true,
         title: true,
@@ -151,6 +176,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         outcome_messages: true,
         trading_period_ms: true,
         review_period_ms: true,
+        market_state_id: true,
         result: {
           select: { winning_outcome: true }
         },
@@ -167,7 +193,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
 
     // Get trading statistics
-    const [swapCount, uniqueTraders, volumeData] = await Promise.all([
+    const [swapCount, uniqueTraders, swapEvents] = await Promise.all([
       prisma.swapEvent.count({
         where: { market_id: proposal.proposal_id }
       }),
@@ -176,11 +202,13 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         where: { market_id: proposal.proposal_id },
         _count: { sender: true }
       }),
-      prisma.swapEvent.aggregate({
+      // Get all swap events to calculate volume
+      prisma.swapEvent.findMany({
         where: { market_id: proposal.proposal_id },
-        _sum: {
+        select: {
           amount_in: true,
-          amount_out: true
+          amount_out: true,
+          is_buy: true
         }
       })
     ]);
@@ -193,8 +221,16 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       logSecurityError('parseOutcomeMessages', parseError);
       outcomeMessages = undefined;
     }
-    // Calculate total volume (sum of amount_in and amount_out divided by 2 to avoid double counting)
-    const totalVolume = Math.floor(((Number(volumeData._sum.amount_in) || 0) + (Number(volumeData._sum.amount_out) || 0)) / 2);
+
+    // Calculate total volume in USDC using the utility function
+    const totalVolume = swapEvents.reduce((acc, event) => {
+      return acc + calculateVolumeInUSDC(
+        event.amount_in.toString(),
+        event.amount_out.toString(),
+        event.is_buy,
+        1e9 // USDC scale
+      );
+    }, 0);
 
 
     // Return JSON if requested
