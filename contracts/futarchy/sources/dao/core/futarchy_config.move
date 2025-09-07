@@ -232,6 +232,7 @@ public fun new_config_params_from_values(
     
     let governance_config = dao_config::new_governance_config(
         max_outcomes,
+        5,    // max_actions_per_outcome (default 5 actions per outcome)
         proposal_fee_per_outcome,
         required_bond_amount,
         max_concurrent_proposals,
@@ -387,6 +388,7 @@ public fun description(config: &FutarchyConfig): &String { dao_config::descripti
 
 // Governance parameters
 public fun max_outcomes(config: &FutarchyConfig): u64 { dao_config::max_outcomes(dao_config::governance_config(&config.config)) }
+public fun max_actions_per_outcome(config: &FutarchyConfig): u64 { dao_config::max_actions_per_outcome(dao_config::governance_config(&config.config)) }
 public fun proposal_fee_per_outcome(config: &FutarchyConfig): u64 { dao_config::proposal_fee_per_outcome(dao_config::governance_config(&config.config)) }
 public fun operational_state(config: &FutarchyConfig): u8 { config.operational_state }
 public fun max_concurrent_proposals(config: &FutarchyConfig): u64 { dao_config::max_concurrent_proposals(dao_config::governance_config(&config.config)) }
@@ -514,6 +516,12 @@ public(package) fun set_max_outcomes(config: &mut FutarchyConfig, max: u64) {
     // Use direct mutable reference for efficient in-place update
     let governance_config = dao_config::governance_config_mut(&mut config.config);
     dao_config::set_max_outcomes(governance_config, max);
+}
+
+public(package) fun set_max_actions_per_outcome(config: &mut FutarchyConfig, max: u64) {
+    // Use direct mutable reference for efficient in-place update
+    let governance_config = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_max_actions_per_outcome(governance_config, max);
 }
 
 public(package) fun set_proposal_fee_per_outcome(config: &mut FutarchyConfig, fee: u64) {

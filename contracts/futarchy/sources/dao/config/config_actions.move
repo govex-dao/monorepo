@@ -140,6 +140,7 @@ public struct TwapConfigUpdateAction has store, drop {
 public struct GovernanceUpdateAction has store, drop {
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
+    max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
     proposal_intent_expiry_ms: Option<u64>,
@@ -391,6 +392,9 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     if (action.max_outcomes.is_some()) {
         futarchy_config::set_max_outcomes(config, *action.max_outcomes.borrow());
     };
+    if (action.max_actions_per_outcome.is_some()) {
+        futarchy_config::set_max_actions_per_outcome(config, *action.max_actions_per_outcome.borrow());
+    };
     if (action.required_bond_amount.is_some()) {
         futarchy_config::set_required_bond_amount(config, *action.required_bond_amount.borrow());
     };
@@ -597,6 +601,7 @@ public fun delete_governance_update(expired: &mut Expired) {
     let GovernanceUpdateAction {
         proposal_creation_enabled: _,
         max_outcomes: _,
+        max_actions_per_outcome: _,
         required_bond_amount: _,
         max_intents_per_outcome: _,
         proposal_intent_expiry_ms: _,
@@ -735,6 +740,7 @@ public fun new_twap_config_update_action(
 public fun new_governance_update_action(
     proposal_creation_enabled: Option<bool>,
     max_outcomes: Option<u64>,
+    max_actions_per_outcome: Option<u64>,
     required_bond_amount: Option<u64>,
     max_intents_per_outcome: Option<u64>,
     proposal_intent_expiry_ms: Option<u64>,
@@ -744,6 +750,7 @@ public fun new_governance_update_action(
     let action = GovernanceUpdateAction {
         proposal_creation_enabled,
         max_outcomes,
+        max_actions_per_outcome,
         required_bond_amount,
         max_intents_per_outcome,
         proposal_intent_expiry_ms,
@@ -848,11 +855,13 @@ public fun get_governance_fields(update: &GovernanceUpdateAction): (
     &Option<u64>,
     &Option<u64>,
     &Option<u64>,
+    &Option<u64>,
     &Option<u64>
 ) {
     (
         &update.proposal_creation_enabled,
         &update.max_outcomes,
+        &update.max_actions_per_outcome,
         &update.required_bond_amount,
         &update.max_intents_per_outcome,
         &update.proposal_intent_expiry_ms

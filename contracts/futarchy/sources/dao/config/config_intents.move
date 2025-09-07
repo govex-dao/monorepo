@@ -176,6 +176,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
     outcome: Outcome,
     proposals_enabled: bool,
     max_outcomes: u64,
+    max_actions_per_outcome: u64,
     required_bond_amount: u64,
     ctx: &mut TxContext
 ) {
@@ -190,11 +191,50 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
             let action = config_actions::new_governance_update_action(
                 option::some(proposals_enabled),
                 option::some(max_outcomes),
+                option::some(max_actions_per_outcome),
                 option::some(required_bond_amount),
                 option::none(), // max_intents_per_outcome - not specified
                 option::none(), // proposal_intent_expiry_ms - not specified
                 option::none(), // optimistic_challenge_fee - not specified
                 option::none()  // optimistic_challenge_period_ms - not specified
+            );
+            intent.add_action(action, iw);
+        }
+    );
+}
+
+/// Create a flexible intent to update governance settings with optional parameters
+public fun create_update_governance_flexible_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    params: Params,
+    outcome: Outcome,
+    proposals_enabled: Option<bool>,
+    max_outcomes: Option<u64>,
+    max_actions_per_outcome: Option<u64>,
+    required_bond_amount: Option<u64>,
+    max_intents_per_outcome: Option<u64>,
+    proposal_intent_expiry_ms: Option<u64>,
+    optimistic_challenge_fee: Option<u64>,
+    optimistic_challenge_period_ms: Option<u64>,
+    ctx: &mut TxContext
+) {
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_governance_flexible".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_governance_update_action(
+                proposals_enabled,
+                max_outcomes,
+                max_actions_per_outcome,
+                required_bond_amount,
+                max_intents_per_outcome,
+                proposal_intent_expiry_ms,
+                optimistic_challenge_fee,
+                optimistic_challenge_period_ms
             );
             intent.add_action(action, iw);
         }

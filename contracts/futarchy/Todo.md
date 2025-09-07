@@ -8,9 +8,7 @@ main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big o
 
 - [x] Optional Security council with optimisitic proosal action creation, can be challenged with X period like how stream sub actions work
 
-- [ ] Second teir of investors that get paid first of paid set % of all incoming revenue of Vector X% of vecotor first Y amounts. can easily have deposit revenue endpoint and from that calculate profit??
-
-- [ ] Way to create double memo proposal or proposal that requires x% increase to pass not just dao threshold %. So founder agree to lock tokens if increases price of stock… either need profile for that founder to act as their own ado or something else???
+- [X] Way to create double memo proposal or proposal that requires x% increase to pass not just dao threshold %. So founder agree to lock tokens if increases price of stock… either need profile for that founder to act as their own ado or something else???
 
 - [x] Need deposit revenue endpoint for daos
 

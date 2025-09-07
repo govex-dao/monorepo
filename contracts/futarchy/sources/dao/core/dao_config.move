@@ -7,6 +7,7 @@ use std::{
     ascii::String as AsciiString,
 };
 use sui::url::Url;
+use futarchy_utils::constants;
 
 // === Errors ===
 const EInvalidMinAmount: u64 = 0; // Minimum amount must be positive
@@ -19,12 +20,12 @@ const EInvalidBondAmount: u64 = 6; // Bond amount must be positive
 const EInvalidTwapParams: u64 = 7; // Invalid TWAP parameters
 const EInvalidGracePeriod: u64 = 8; // Grace period too short
 const EInvalidMaxConcurrentProposals: u64 = 9; // Max concurrent proposals must be positive
+const EMaxOutcomesExceedsProtocol: u64 = 10; // Max outcomes exceeds protocol limit
+const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limit
 
 // === Constants ===
-const MAX_FEE_BPS: u64 = 10000; // 100% in basis points
-const MIN_OUTCOMES: u64 = 2; // Minimum number of outcomes for a proposal
-const MIN_REVIEW_PERIOD_MS: u64 = 1000; // 1 second minimum review period (lowered for testing)
-const MIN_TRADING_PERIOD_MS: u64 = 1000; // 1 second minimum trading period (lowered for testing)
+// Most constants are now in futarchy_utils::constants
+// Only keep module-specific error codes here
 
 // === Structs ===
 
@@ -48,6 +49,7 @@ public struct TwapConfig has store, drop, copy {
 /// Governance parameters configuration
 public struct GovernanceConfig has store, drop, copy {
     max_outcomes: u64,
+    max_actions_per_outcome: u64, // Maximum actions allowed per single outcome
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
     max_concurrent_proposals: u64,
@@ -99,9 +101,9 @@ public fun new_trading_params(
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
     assert!(min_stable_amount > 0, EInvalidMinAmount);
-    assert!(review_period_ms >= MIN_REVIEW_PERIOD_MS, EInvalidPeriod);
-    assert!(trading_period_ms >= MIN_TRADING_PERIOD_MS, EInvalidPeriod);
-    assert!(amm_total_fee_bps <= MAX_FEE_BPS, EInvalidFee);
+    assert!(review_period_ms >= constants::min_review_period_ms(), EInvalidPeriod);
+    assert!(trading_period_ms >= constants::min_trading_period_ms(), EInvalidPeriod);
+    assert!(amm_total_fee_bps <= constants::max_fee_bps(), EInvalidFee);
     
     TradingParams {
         min_asset_amount,
@@ -136,6 +138,7 @@ public fun new_twap_config(
 /// Create a new governance configuration
 public fun new_governance_config(
     max_outcomes: u64,
+    max_actions_per_outcome: u64,
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
     max_concurrent_proposals: u64,
@@ -151,18 +154,21 @@ public fun new_governance_config(
     proposal_intent_expiry_ms: u64,
 ): GovernanceConfig {
     // Validate inputs
-    assert!(max_outcomes >= MIN_OUTCOMES, EInvalidMaxOutcomes);
+    assert!(max_outcomes >= constants::min_outcomes(), EInvalidMaxOutcomes);
+    assert!(max_outcomes <= constants::protocol_max_outcomes(), EMaxOutcomesExceedsProtocol);
+    assert!(max_actions_per_outcome > 0 && max_actions_per_outcome <= constants::protocol_max_actions_per_outcome(), EMaxActionsExceedsProtocol);
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
     assert!(required_bond_amount > 0, EInvalidBondAmount);
     assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
-    assert!(fee_escalation_basis_points <= MAX_FEE_BPS, EInvalidFee);
+    assert!(fee_escalation_basis_points <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
     assert!(optimistic_challenge_fee > 0, EInvalidProposalFee);
     assert!(optimistic_challenge_period_ms > 0, EInvalidPeriod); // Must be non-zero
-    assert!(eviction_grace_period_ms >= 300000, EInvalidGracePeriod); // Min 5 minutes
+    assert!(eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(), EInvalidGracePeriod);
     
     GovernanceConfig {
         max_outcomes,
+        max_actions_per_outcome,
         proposal_fee_per_outcome,
         required_bond_amount,
         max_concurrent_proposals,
@@ -245,6 +251,7 @@ public fun threshold(twap: &TwapConfig): u64 { twap.threshold }
 public fun governance_config(config: &DaoConfig): &GovernanceConfig { &config.governance_config }
 public(package) fun governance_config_mut(config: &mut DaoConfig): &mut GovernanceConfig { &mut config.governance_config }
 public fun max_outcomes(gov: &GovernanceConfig): u64 { gov.max_outcomes }
+public fun max_actions_per_outcome(gov: &GovernanceConfig): u64 { gov.max_actions_per_outcome }
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
 public fun optimistic_challenge_fee(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_fee }
 public fun optimistic_challenge_period_ms(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_period_ms }
@@ -290,17 +297,17 @@ public(package) fun set_min_stable_amount(params: &mut TradingParams, amount: u6
 }
 
 public(package) fun set_review_period_ms(params: &mut TradingParams, period: u64) {
-    assert!(period >= MIN_REVIEW_PERIOD_MS, EInvalidPeriod);
+    assert!(period >= constants::min_review_period_ms(), EInvalidPeriod);
     params.review_period_ms = period;
 }
 
 public(package) fun set_trading_period_ms(params: &mut TradingParams, period: u64) {
-    assert!(period >= MIN_TRADING_PERIOD_MS, EInvalidPeriod);
+    assert!(period >= constants::min_trading_period_ms(), EInvalidPeriod);
     params.trading_period_ms = period;
 }
 
 public(package) fun set_amm_total_fee_bps(params: &mut TradingParams, fee_bps: u64) {
-    assert!(fee_bps <= MAX_FEE_BPS, EInvalidFee);
+    assert!(fee_bps <= constants::max_fee_bps(), EInvalidFee);
     params.amm_total_fee_bps = fee_bps;
 }
 
@@ -327,8 +334,14 @@ public(package) fun set_threshold(twap: &mut TwapConfig, threshold: u64) {
 
 // Governance config direct setters
 public(package) fun set_max_outcomes(gov: &mut GovernanceConfig, max: u64) {
-    assert!(max >= MIN_OUTCOMES, EInvalidMaxOutcomes);
+    assert!(max >= constants::min_outcomes(), EInvalidMaxOutcomes);
+    assert!(max <= constants::protocol_max_outcomes(), EMaxOutcomesExceedsProtocol);
     gov.max_outcomes = max;
+}
+
+public(package) fun set_max_actions_per_outcome(gov: &mut GovernanceConfig, max: u64) {
+    assert!(max > 0 && max <= constants::protocol_max_actions_per_outcome(), EMaxActionsExceedsProtocol);
+    gov.max_actions_per_outcome = max;
 }
 
 public(package) fun set_proposal_fee_per_outcome(gov: &mut GovernanceConfig, fee: u64) {
@@ -365,7 +378,7 @@ public(package) fun set_max_proposal_chain_depth(gov: &mut GovernanceConfig, dep
 }
 
 public(package) fun set_fee_escalation_basis_points(gov: &mut GovernanceConfig, points: u64) {
-    assert!(points <= MAX_FEE_BPS, EInvalidFee);
+    assert!(points <= constants::max_fee_bps(), EInvalidFee);
     gov.fee_escalation_basis_points = points;
 }
 
@@ -383,12 +396,12 @@ public(package) fun set_max_intents_per_outcome(gov: &mut GovernanceConfig, max:
 }
 
 public(package) fun set_eviction_grace_period_ms(gov: &mut GovernanceConfig, period: u64) {
-    assert!(period >= 300000, EInvalidGracePeriod); // Min 5 minutes
+    assert!(period >= constants::min_eviction_grace_period_ms(), EInvalidGracePeriod);
     gov.eviction_grace_period_ms = period;
 }
 
 public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, period: u64) {
-    assert!(period >= 3600000, EInvalidGracePeriod); // Min 1 hour
+    assert!(period >= constants::min_proposal_intent_expiry_ms(), EInvalidGracePeriod);
     gov.proposal_intent_expiry_ms = period;
 }
 
@@ -500,20 +513,21 @@ public fun default_twap_config(): TwapConfig {
 /// Get default governance configuration for testing
 public fun default_governance_config(): GovernanceConfig {
     GovernanceConfig {
-        max_outcomes: 10,
+        max_outcomes: constants::default_max_outcomes(),
+        max_actions_per_outcome: constants::default_max_actions_per_outcome(),
         proposal_fee_per_outcome: 1000000, // 1 token per outcome
         required_bond_amount: 10000000, // 10 tokens
         max_concurrent_proposals: 5,
-        proposal_recreation_window_ms: 86400000, // 24 hours
-        max_proposal_chain_depth: 3,
-        fee_escalation_basis_points: 500, // 5%
+        proposal_recreation_window_ms: constants::default_proposal_recreation_window_ms(),
+        max_proposal_chain_depth: constants::default_max_proposal_chain_depth(),
+        fee_escalation_basis_points: constants::default_fee_escalation_bps(),
         proposal_creation_enabled: true,
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
-        optimistic_challenge_fee: 1000000000, // 1 billion MIST = 1 token
-        optimistic_challenge_period_ms: 864000000, // 10 days default
-        eviction_grace_period_ms: 7200000, // 2 hours default
-        proposal_intent_expiry_ms: 2592000000, // 30 days default
+        optimistic_challenge_fee: constants::default_optimistic_challenge_fee(),
+        optimistic_challenge_period_ms: constants::default_optimistic_challenge_period_ms(),
+        eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
+        proposal_intent_expiry_ms: constants::default_proposal_intent_expiry_ms(),
     }
 }
 

@@ -237,6 +237,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         futarchy_config::amm_twap_step_max(config),
         futarchy_config::twap_threshold(config),
         futarchy_config::amm_total_fee_bps(config),
+        futarchy_config::max_outcomes(config), // DAO's configured max outcomes
         object::id_address(account), // treasury address
         title,
         metadata,
@@ -295,8 +296,11 @@ public fun finalize_proposal_market<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext, // Now needed for auth
 ) {
-    // Critical fix: Calculate the winning outcome on-chain instead of accepting it from caller
-    let winning_outcome = calculate_winning_outcome(proposal, clock);
+    // Calculate winning outcome and get TWAPs in single computation
+    let (winning_outcome, twap_prices) = calculate_winning_outcome_with_twaps(proposal, clock);
+    
+    // Store the final TWAPs for third-party access
+    proposal::set_twap_prices(proposal, twap_prices);
     
     // Set the winning outcome on the proposal
     proposal::set_winning_outcome(proposal, winning_outcome);
@@ -566,6 +570,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         futarchy_config::amm_twap_step_max(cfg),
         futarchy_config::twap_threshold(cfg),
         futarchy_config::amm_total_fee_bps(cfg),
+        futarchy_config::max_outcomes(cfg), // DAO's configured max outcomes
         object::id_address(account),
         *priority_queue::get_title(&data),
         *priority_queue::get_metadata(&data),
@@ -692,17 +697,17 @@ public fun can_execute_proposal<AssetType, StableType>(
 }
 
 
-/// Calculates the winning outcome based on TWAP prices
-/// Returns OUTCOME_ACCEPTED if the YES price exceeds the threshold, OUTCOME_REJECTED otherwise
-public fun calculate_winning_outcome<AssetType, StableType>(
+/// Calculates the winning outcome and returns TWAP prices to avoid double computation
+/// Returns (outcome, twap_prices) where outcome is OUTCOME_ACCEPTED or OUTCOME_REJECTED
+public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     clock: &Clock,
-): u64 {
-    // Get TWAP prices from all pools
+): (u64, vector<u128>) {
+    // Get TWAP prices from all pools (only computed once now)
     let twap_prices = proposal::get_twaps_for_proposal(proposal, clock);
     
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
-    if (twap_prices.length() >= 2) {
+    let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
         let threshold = proposal::get_twap_threshold(proposal);
         
@@ -715,5 +720,7 @@ public fun calculate_winning_outcome<AssetType, StableType>(
     } else {
         // Default to NO if we can't determine
         OUTCOME_REJECTED
-    }
+    };
+    
+    (winning_outcome, twap_prices)
 }

@@ -27,6 +27,11 @@ const EPoolNotFound: u64 = 6;
 const EOutcomeOutOfBounds: u64 = 7;
 const EInvalidOutcomeVectors: u64 = 8;
 const ESpotTwapNotReady: u64 = 9;
+const ETooManyOutcomes: u64 = 10;
+const EInvalidOutcome: u64 = 11;
+const ENotFinalized: u64 = 12;
+const ETwapNotSet: u64 = 13;
+const ETooManyActions: u64 = 14;
 
 // === Constants ===
 
@@ -86,6 +91,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     /// Intent keys for each outcome - when outcome i wins, create and execute intent with this key
     /// Intents are NOT created in Account until the outcome wins
     intent_keys: vector<option::Option<String>>,
+    /// Track number of actions per outcome for limit enforcement
+    actions_per_outcome: vector<u64>,
 }
 
 /// A scoped witness proving that a particular (proposal, outcome) owned the intent key.
@@ -171,6 +178,7 @@ public(package) fun initialize_market<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
+    max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     // Proposal specific parameters
     title: String,
@@ -194,6 +202,7 @@ public(package) fun initialize_market<AssetType, StableType>(
 
     // Validate outcome count
     assert!(outcome_count == initial_outcome_details.length(), EInvalidOutcomeVectors);
+    assert!(outcome_count <= max_outcomes, ETooManyOutcomes);
 
     // Liquidity is split evenly among all outcomes
     let total_asset_liquidity = asset_coin.value();
@@ -341,6 +350,7 @@ public(package) fun initialize_market<AssetType, StableType>(
         // Initialize with no intent keys for each outcome
         // Intent keys will be set separately if needed
         intent_keys: vector::tabulate!(outcome_count, |_| option::none()),
+        actions_per_outcome: vector::tabulate!(outcome_count, |_| 0),
         review_period_ms,
         trading_period_ms,
         twap_prices: vector::empty(),
@@ -389,6 +399,7 @@ public(package) fun new_premarket<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
+    max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     title: String,
     metadata: String,
@@ -404,6 +415,9 @@ public(package) fun new_premarket<AssetType, StableType>(
     let id = object::new(ctx);
     let actual_proposal_id = object::uid_to_inner(&id);
     let outcome_count = outcome_messages.length();
+    
+    // Validate outcome count
+    assert!(outcome_count <= max_outcomes, ETooManyOutcomes);
     
     let proposal = Proposal<AssetType, StableType> {
         id,
@@ -439,6 +453,7 @@ public(package) fun new_premarket<AssetType, StableType>(
         fee_escrow,
         treasury_address,
         intent_keys: vector::tabulate!(outcome_count, |_| option::none()),
+        actions_per_outcome: vector::tabulate!(outcome_count, |_| 0),
         review_period_ms,
         trading_period_ms,
         twap_prices: vector::empty(),
@@ -580,6 +595,7 @@ public(package) fun initialize_market_from_premarket<AssetType, StableType>(
 }
 
 /// Adds a new outcome during the premarket phase.
+/// max_outcomes: The DAO's configured maximum number of outcomes allowed
 public(package) fun add_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     message: String,
@@ -587,13 +603,20 @@ public(package) fun add_outcome<AssetType, StableType>(
     asset_amount: u64,
     stable_amount: u64,
     creator: address,
+    max_outcomes: u64,
     clock: &Clock,
 ) {
+    // Check that we're not exceeding the maximum number of outcomes
+    assert!(proposal.outcome_count < max_outcomes, ETooManyOutcomes);
+    
     proposal.outcome_messages.push_back(message);
     proposal.details.push_back(detail);
     proposal.asset_amounts.push_back(asset_amount);
     proposal.stable_amounts.push_back(stable_amount);
     proposal.outcome_creators.push_back(creator);
+    
+    // Initialize action count for new outcome
+    proposal.actions_per_outcome.push_back(0);
 
     let new_idx = proposal.outcome_count;
     proposal.outcome_count = new_idx + 1;
@@ -704,6 +727,31 @@ public fun get_last_twap_update<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): u64 {
     proposal.last_twap_update
+}
+
+/// Get TWAP for a specific outcome by index
+public fun get_twap_by_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64,
+): u128 {
+    // Add defensive checks
+    assert!(proposal.state == STATE_FINALIZED, ENotFinalized);
+    let twap_prices = &proposal.twap_prices;
+    assert!(!twap_prices.is_empty(), ETwapNotSet);
+    assert!(outcome_index < twap_prices.length(), EOutcomeOutOfBounds);
+    *twap_prices.borrow(outcome_index)
+}
+
+/// Get the TWAP of the winning outcome
+public fun get_winning_twap<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+): u128 {
+    // Add defensive checks
+    assert!(proposal.state == STATE_FINALIZED, ENotFinalized);
+    assert!(proposal.winning_outcome.is_some(), EInvalidState);
+    assert!(!proposal.twap_prices.is_empty(), ETwapNotSet);
+    let winning_outcome = *proposal.winning_outcome.borrow();
+    get_twap_by_outcome(proposal, winning_outcome)
 }
 
 public fun state<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u8 {
@@ -1066,15 +1114,6 @@ public fun get_intent_key_for_outcome<AssetType, StableType>(
     vector::borrow(&proposal.intent_keys, outcome_index)
 }
 
-/// Clear the intent key for a specific outcome (used after cancellation)
-public(package) fun clear_intent_key_for_outcome<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    outcome_index: u64
-) {
-    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
-    let intent_key_ref = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
-    *intent_key_ref = option::none();
-}
 
 /// Take (move out) the intent key for a specific outcome and clear the slot.
 public(package) fun take_intent_key_for_outcome<AssetType, StableType>(
@@ -1106,17 +1145,36 @@ public(package) fun make_cancel_witness<AssetType, StableType>(
     }
 }
 
-/// Set the intent key for a specific outcome
-public fun set_intent_key_for_outcome<AssetType, StableType>(
+/// Set the intent key for a specific outcome and track action count
+/// Handles replacement if an intent key already exists
+public(package) fun set_intent_key_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64,
     intent_key: String,
+    num_actions: u64,
+    max_actions_per_outcome: u64,
 ) {
-    // Allow intents for any outcome - each outcome may need different actions
     assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
     
     let key_slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    let action_count = vector::borrow_mut(&mut proposal.actions_per_outcome, outcome_index);
+    
+    // Calculate new count for this outcome
+    let mut new_outcome_count = *action_count;
+    
+    if (option::is_some(key_slot)) {
+        // Replacing existing intent - reset count
+        new_outcome_count = 0;
+    };
+    
+    new_outcome_count = new_outcome_count + num_actions;
+    
+    // Check outcome limit only
+    assert!(new_outcome_count <= max_actions_per_outcome, ETooManyActions);
+    
+    // Set the intent key and update count
     *key_slot = option::some(intent_key);
+    *action_count = new_outcome_count;
 }
 
 
@@ -1128,6 +1186,35 @@ public fun has_intent_key<AssetType, StableType>(
     assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
     option::is_some(vector::borrow(&proposal.intent_keys, outcome_index))
 }
+
+/// Get the number of actions for a specific outcome
+public fun get_actions_for_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64
+): u64 {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    *vector::borrow(&proposal.actions_per_outcome, outcome_index)
+}
+
+/// Clear the intent key for an outcome and reset action count
+public(package) fun clear_intent_key_for_outcome<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64,
+) {
+    assert!(outcome_index < proposal.outcome_count, EOutcomeOutOfBounds);
+    
+    let key_slot = vector::borrow_mut(&mut proposal.intent_keys, outcome_index);
+    let action_count = vector::borrow_mut(&mut proposal.actions_per_outcome, outcome_index);
+    
+    if (option::is_some(key_slot)) {
+        // Clear the intent key
+        *key_slot = option::none();
+        
+        // Reset this outcome's action count
+        *action_count = 0;
+    };
+}
+
 
 /// Emits the ProposalOutcomeMutated event
 public(package) fun emit_outcome_mutated(
@@ -1229,6 +1316,7 @@ public fun new_for_testing<AssetType, StableType>(
         fee_escrow,
         treasury_address,
         intent_keys,
+        actions_per_outcome: vector::tabulate!(outcome_count as u64, |_| 0),
     }
 }
 
@@ -1260,5 +1348,3 @@ public fun id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>)
 public fun id_address<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): address {
     object::uid_to_address(&proposal.id)
 }
-
-/// Get market ID (already defined earlier in the file)
