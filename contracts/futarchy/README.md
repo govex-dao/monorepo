@@ -19,7 +19,10 @@ npm run prettier -- -w sources/amm/amm.move
 
 Concatenating all .Move files for use with LLMs 
 ```
-find . -type f -name '*.move' -exec cat {} + > all_moves.txt
+find \
+    futarchy/sources \
+    futarchy_utils/sources \
+    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_all.txt
 ```
 
 ```
