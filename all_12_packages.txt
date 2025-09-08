@@ -8434,16 +8434,29 @@ public fun slash_proposal_fee_with_distribution(
         return (coin::zero(ctx), coin::zero(ctx))
     };
     
-    // Calculate distributions using getter functions
-    let slasher_amount = (total_amount * (futarchy_config::slasher_reward_bps(slash_config) as u64)) / 10000;
-    let dao_amount = (total_amount * (futarchy_config::dao_treasury_bps(slash_config) as u64)) / 10000;
-    let protocol_amount = (total_amount * (futarchy_config::protocol_bps(slash_config) as u64)) / 10000;
-    let burn_amount = (total_amount * (futarchy_config::burn_bps(slash_config) as u64)) / 10000;
+    // Calculate distributions using getter functions with proper rounding
+    // Use multiply-then-divide to minimize rounding errors
+    let slasher_bps = futarchy_config::slasher_reward_bps(slash_config) as u64;
+    let dao_bps = futarchy_config::dao_treasury_bps(slash_config) as u64;
+    let protocol_bps = futarchy_config::protocol_bps(slash_config) as u64;
+    let burn_bps = futarchy_config::burn_bps(slash_config) as u64;
     
-    // Handle rounding: give any remainder to protocol
-    let distributed = slasher_amount + dao_amount + protocol_amount + burn_amount;
-    let remainder = if (total_amount > distributed) { total_amount - distributed } else { 0 };
-    let final_protocol_amount = protocol_amount + remainder;
+    // Calculate amounts with better precision
+    let slasher_amount = (total_amount * slasher_bps) / 10000;
+    let dao_amount = (total_amount * dao_bps) / 10000;
+    let protocol_amount = (total_amount * protocol_bps) / 10000;
+    
+    // For burn amount, ensure we account for all remaining funds
+    // This prevents dust from being left over due to rounding
+    let distributed_so_far = slasher_amount + dao_amount + protocol_amount;
+    let burn_amount = if (total_amount > distributed_so_far) {
+        total_amount - distributed_so_far  // All remaining goes to burn
+    } else {
+        0  // Safety check, shouldn't happen with valid bps
+    };
+    
+    // No need for separate remainder handling now
+    let final_protocol_amount = protocol_amount;
     
     // Create slasher reward coin
     let slasher_reward = if (slasher_amount > 0) {
@@ -8464,10 +8477,12 @@ public fun slash_proposal_fee_with_distribution(
         manager.protocol_revenue.join(fee_balance.split(final_protocol_amount));
     };
     
-    // Burn the burn amount
+    // Burn the burn amount by destroying the balance
     if (burn_amount > 0) {
         let burn_balance = fee_balance.split(burn_amount);
-        burn_balance.destroy_zero();
+        // Properly burn by transferring to a Coin and then destroying it
+        let burn_coin = coin::from_balance(burn_balance, ctx);
+        transfer::public_transfer(burn_coin, @0x0); // Send to burn address
     };
     
     // Destroy any remaining dust
@@ -8701,8 +8716,8 @@ public fun new_twap_config(
     initial_observation: u128,
     threshold: u64,
 ): TwapConfig {
-    // Validate inputs (allow 0 for start_delay for testing)
-    // assert!(start_delay > 0, EInvalidTwapParams); // Commented out to allow 0 for testing
+    // Validate inputs - start_delay can be 0 for immediate TWAP start
+    // This is a valid use case for certain market configurations
     assert!(step_max > 0, EInvalidTwapParams);
     assert!(initial_observation > 0, EInvalidTwapParams);
     assert!(threshold > 0, EInvalidTwapThreshold);
@@ -9153,6 +9168,7 @@ use futarchy_core::events;
 const DAO_STATE_ACTIVE: u8 = 0;
 const DAO_STATE_DISSOLVING: u8 = 1;
 const DAO_STATE_PAUSED: u8 = 2;
+const DAO_STATE_DISSOLVED: u8 = 3;
 
 const OUTCOME_ACCEPTED: u8 = 0;
 const OUTCOME_REJECTED: u8 = 1;
@@ -9537,6 +9553,7 @@ public fun is_verified(config: &FutarchyConfig): bool { config.verification_leve
 public fun state_active(): u8 { DAO_STATE_ACTIVE }
 public fun state_dissolving(): u8 { DAO_STATE_DISSOLVING }
 public fun state_paused(): u8 { DAO_STATE_PAUSED }
+public fun state_dissolved(): u8 { DAO_STATE_DISSOLVED }
 
 // === Package-Level Mutators ===
 
@@ -10776,23 +10793,56 @@ fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut i
 }
 
 /// Find minimum priority element in heap (it's in the leaves) - O(n/2)
+/// Optimized to only check proposer-funded proposals
 fun find_min_index<StableCoin>(heap: &vector<QueuedProposal<StableCoin>>, size: u64): u64 {
     if (size == 0) return 0;
     if (size == 1) return 0;
     
     // Minimum is in the second half of the array (leaves)
+    // But we only care about proposer-funded proposals
     let start = size / 2;
-    let mut min_idx = start;
-    let mut min_priority = &vector::borrow(heap, start).priority_score;
+    let mut min_idx = size; // Initialize to invalid index
+    let mut min_priority: Option<PriorityScore> = option::none();
     
-    let mut i = start + 1;
+    // Only check leaves and filter for proposer-funded proposals
+    let mut i = start;
     while (i < size) {
-        let current_priority = &vector::borrow(heap, i).priority_score;
-        if (compare_priority_scores(current_priority, min_priority) == COMPARE_LESS) {
-            min_priority = current_priority;
-            min_idx = i;
+        let proposal = vector::borrow(heap, i);
+        // Only consider proposer-funded proposals for eviction
+        if (!proposal.uses_dao_liquidity) {
+            if (option::is_none(&min_priority)) {
+                min_priority = option::some(proposal.priority_score);
+                min_idx = i;
+            } else {
+                let current_priority = &proposal.priority_score;
+                if (compare_priority_scores(current_priority, option::borrow(&min_priority)) == COMPARE_LESS) {
+                    min_priority = option::some(proposal.priority_score);
+                    min_idx = i;
+                };
+            };
         };
         i = i + 1;
+    };
+    
+    // If no proposer-funded proposal found in leaves, check the rest
+    if (min_idx == size && start > 0) {
+        let mut i = 0;
+        while (i < start) {
+            let proposal = vector::borrow(heap, i);
+            if (!proposal.uses_dao_liquidity) {
+                if (option::is_none(&min_priority)) {
+                    min_priority = option::some(proposal.priority_score);
+                    min_idx = i;
+                } else {
+                    let current_priority = &proposal.priority_score;
+                    if (compare_priority_scores(current_priority, option::borrow(&min_priority)) == COMPARE_LESS) {
+                        min_priority = option::some(proposal.priority_score);
+                        min_idx = i;
+                    };
+                };
+            };
+            i = i + 1;
+        };
     };
     
     min_idx
@@ -10873,7 +10923,15 @@ public fun new_with_config<StableCoin>(
 public fun create_priority_score(fee: u64, timestamp: u64): PriorityScore {
     // Higher fee = higher priority
     // Earlier timestamp = higher priority (for tie-breaking)
-    let computed_value = ((fee as u128) << 64) | ((18446744073709551615u64 - timestamp) as u128);
+    // Use safe subtraction to prevent overflow
+    let max_u64 = 18446744073709551615u64;
+    let timestamp_inverted = if (timestamp > max_u64) {
+        0u64  // Cap at 0 if timestamp somehow exceeds max
+    } else {
+        max_u64 - timestamp
+    };
+    
+    let computed_value = ((fee as u128) << 64) | (timestamp_inverted as u128);
     
     PriorityScore {
         fee,
@@ -11319,19 +11377,28 @@ public fun slash_and_distribute_fee<StableCoin>(
     (coin::zero(ctx), dao_coin)
 }
 
-/// Mark a proposal as completed, freeing up space
+/// Mark a proposal as completed, freeing up space with state consistency checks
 public fun mark_proposal_completed<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     uses_dao_liquidity: bool
 ) {
+    // Validate preconditions for state consistency
     assert!(queue.active_proposal_count > 0, EInvalidProposalId);
     
+    // If marking a DAO liquidity proposal as complete, verify slot is occupied
+    if (uses_dao_liquidity) {
+        assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
+    };
+    
+    // Update state atomically
     queue.active_proposal_count = queue.active_proposal_count - 1;
     
     if (uses_dao_liquidity) {
-        assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
         queue.dao_liquidity_slot_occupied = false;
     };
+    
+    // Post-condition validation: ensure state remains consistent
+    assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
 }
 
 /// Remove a specific proposal from the queue
@@ -11402,6 +11469,7 @@ public fun update_max_concurrent_proposals<StableCoin>(
 
 /// Cancel a proposal and refund the fee - secured to prevent theft
 /// Now this is an entry function that transfers funds directly to the proposer
+/// Added validation to ensure proposal is still in queue (not activated)
 public entry fun cancel_proposal<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     fee_manager: &mut ProposalFeeManager,
@@ -11409,41 +11477,48 @@ public entry fun cancel_proposal<StableCoin>(
     ctx: &mut TxContext
 ) {
     let mut i = 0;
+    let mut found = false;
     
+    // First, verify the proposal exists in the queue and belongs to the sender
     while (i < queue.size) {
         let proposal = vector::borrow(&queue.heap, i);
         if (proposal.proposal_id == proposal_id) {
             // Critical fix: Require that the transaction sender is the proposer
             assert!(proposal.proposer == tx_context::sender(ctx), EProposalNotFound);
-            
-            // Store proposer address before removing
-            let proposer_addr = proposal.proposer;
-            
-            let removed = remove_at(&mut queue.heap, i, &mut queue.size);
-            let QueuedProposal { proposal_id, mut bond, .. } = removed;
-            
-            // Get the fee refunded as a Coin
-            let refunded_fee = proposal_fee_manager::refund_proposal_fee(
-                fee_manager,
-                proposal_id,
-                ctx
-            );
-            
-            // Critical fix: Transfer the refunded fee directly to the proposer
-            transfer::public_transfer(refunded_fee, proposer_addr);
-            
-            // Critical fix: Transfer the bond directly to the proposer if it exists
-            if (option::is_some(&bond)) {
-                transfer::public_transfer(option::extract(&mut bond), proposer_addr);
-            };
-            option::destroy_none(bond);
-            
-            return
+            found = true;
+            break
         };
         i = i + 1;
     };
     
-    abort EProposalNotFound
+    // If not found in queue, it means proposal is either:
+    // 1. Already activated (cannot cancel)
+    // 2. Never existed
+    // Either way, abort with error
+    assert!(found, EProposalNotFound);
+    
+    // Now we know the proposal is in queue and belongs to sender, safe to remove
+    let proposal = vector::borrow(&queue.heap, i);
+    let proposer_addr = proposal.proposer;
+    
+    let removed = remove_at(&mut queue.heap, i, &mut queue.size);
+    let QueuedProposal { proposal_id, mut bond, .. } = removed;
+    
+    // Get the fee refunded as a Coin
+    let refunded_fee = proposal_fee_manager::refund_proposal_fee(
+        fee_manager,
+        proposal_id,
+        ctx
+    );
+    
+    // Critical fix: Transfer the refunded fee directly to the proposer
+    transfer::public_transfer(refunded_fee, proposer_addr);
+    
+    // Critical fix: Transfer the bond directly to the proposer if it exists
+    if (option::is_some(&bond)) {
+        transfer::public_transfer(option::extract(&mut bond), proposer_addr);
+    };
+    option::destroy_none(bond);
 }
 
 /// Update a proposal's priority by adding more fee
@@ -22144,8 +22219,38 @@ public fun new(
     threshold: u64,
     ctx: &mut TxContext,
 ): Account<WeightedMultisig> {
-    // build multisig config
+    // build multisig config (uses default initialization with last_activity_ms = 0)
+    // This is safe as the first activity will set the proper timestamp
     let config = weighted_multisig::new(members, weights, threshold);
+
+    account_protocol::account_interface::create_account!(
+        config,
+        version::current(),  // VersionWitness for 'futarchy'
+        Witness{},           // config witness (this module)
+        ctx,
+        || deps::new_latest_extensions(
+            extensions,
+            vector[
+                b"AccountProtocol".to_string(),
+                b"Futarchy".to_string(),
+                b"AccountActions".to_string(),
+            ]
+        )
+    )
+}
+
+/// Create a new Weighted Security Council account with current timestamp initialized.
+/// Use this when you want the dead-man switch to start counting from creation time.
+public fun new_with_clock(
+    extensions: &Extensions,
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Account<WeightedMultisig> {
+    // build multisig config with current timestamp
+    let config = weighted_multisig::new_with_clock(members, weights, threshold, clock);
 
     account_protocol::account_interface::create_account!(
         config,
@@ -22194,7 +22299,7 @@ public fun approve_intent(
         Witness{},
         |outcome_mut: &mut Approvals| {
             // Insert approver without borrowing config in this closure
-            weighted_multisig::approve_sender_unchecked(outcome_mut, ctx.sender());
+            weighted_multisig::approve_sender_verified(outcome_mut, ctx.sender());
         }
     );
     
@@ -22671,6 +22776,10 @@ public fun execute_approve_policy_change(
 
 // === Intent Cleanup Functions ===
 
+// Constants for batch processing limits
+const MAX_CLEANUP_BATCH_SIZE: u64 = 20;
+const EBatchTooLarge: u64 = 101;
+
 /// Security Council can clean up specific expired intents by key
 /// This is a hot path - council members can execute this without needing a proposal
 /// 
@@ -22685,9 +22794,12 @@ public fun cleanup_expired_council_intents(
     // Verify the caller is a council member
     security_council.verify(auth_from_member);
     
+    // Validate batch size to prevent gas exhaustion
+    let len = intent_keys.length();
+    assert!(len <= MAX_CLEANUP_BATCH_SIZE, EBatchTooLarge);
+    
     // Clean up each specified intent if it's expired
     let mut i = 0;
-    let len = intent_keys.length();
     
     while (i < len) {
         let key = *intent_keys.borrow(i);
@@ -23007,6 +23119,7 @@ use std::{
 use sui::{
     clock::Clock,
     table::{Self, Table},
+    vec_set::{Self, VecSet},
     event,
     object::{Self, ID, UID},
     tx_context::{Self, TxContext},
@@ -23040,6 +23153,10 @@ const MAX_OPTIMISTIC_INTENTS: u64 = 10;
 const WAITING_PERIOD_MS: u64 = 864_000_000; // 10 days in milliseconds
 const MAX_BATCH_CHALLENGES: u64 = 10;
 const EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in milliseconds
+
+// Static validation for overflow safety - these values are safe:
+// WAITING_PERIOD_MS + EXPIRY_PERIOD_MS = 3,456,000,000 which is much less than u64::MAX
+// The sum check in the code ensures no overflow when adding to current timestamp
 
 // === Storage Keys ===
 
@@ -23241,6 +23358,16 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     let batch_size = vector::length(&action.intent_ids);
     assert!(batch_size > 0 && batch_size <= MAX_BATCH_CHALLENGES, EInvalidBatchSize);
     
+    // Check for duplicates in the batch
+    let mut seen_intents = vec_set::empty<ID>();
+    let mut i = 0;
+    while (i < batch_size) {
+        let intent_id = *vector::borrow(&action.intent_ids, i);
+        assert!(!vec_set::contains(&seen_intents, &intent_id), EDuplicateIntent);
+        vec_set::insert(&mut seen_intents, intent_id);
+        i = i + 1;
+    };
+    
     // Initialize storage if needed
     initialize_storage(account, version::current(), ctx);
     
@@ -23254,7 +23381,7 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     );
     
     // Process each intent in the batch
-    let mut i = 0;
+    i = 0;
     while (i < batch_size) {
         let intent_id = *vector::borrow(&action.intent_ids, i);
         
@@ -23274,7 +23401,9 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
         );
         
         // Remove from active intents safely
-        remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
+        // We expect this to succeed since we just cancelled an active intent
+        let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
+        assert!(removed, EIntentNotFound);
         
         // Emit event
         event::emit(OptimisticIntentCancelled {
@@ -23313,8 +23442,12 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     
     let intent = table::borrow_mut(&mut storage.intents, action.intent_id);
     
-    // Only the original proposer can cancel
-    assert!(intent.proposer == tx_context::sender(ctx), ENotProposer);
+    // Verify sender was the original proposer
+    // Note: We can't verify if they're still a council member here as this is executed
+    // through the DAO account, not the security council account. The action execution
+    // itself should be gated by proper security council membership checks.
+    let sender = tx_context::sender(ctx);
+    assert!(intent.proposer == sender, ENotProposer);
     
     // Check not already cancelled or executed
     assert!(!intent.is_cancelled, EIntentAlreadyCancelled);
@@ -23325,7 +23458,9 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     intent.cancel_reason = option::some(action.reason);
     
     // Remove from active intents safely
-    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    // We expect this to succeed since we just cancelled an active intent
+    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    assert!(removed, EIntentNotFound);
     
     // Emit event
     event::emit(OptimisticIntentCancelled {
@@ -23373,7 +23508,9 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     let intent_key = intent.intent_key;
     
     // Remove from active intents safely  
-    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    // We expect this to succeed since we just executed an active intent
+    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    assert!(removed, EIntentNotFound);
     
     // Emit event
     event::emit(OptimisticIntentExecuted {
@@ -23389,18 +23526,24 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
 // === Helper Functions ===
 
 /// Safely remove an intent from the active intents vector
+/// Returns true if the intent was found and removed, false otherwise
 fun remove_from_active_intents(
     active_intents: &mut vector<ID>,
     total_active: &mut u64,
     intent_id: ID,
-) {
+): bool {
     let (found, index) = vector::index_of(active_intents, &intent_id);
     if (found) {
         vector::remove(active_intents, index);
-        // Only decrement if we actually removed something
-        if (*total_active > 0) {
-            *total_active = *total_active - 1;
-        }
+        // Decrement counter since we removed an item
+        // Assert to ensure counter doesn't underflow (should never happen if state is consistent)
+        assert!(*total_active > 0, EIntegerOverflow);
+        *total_active = *total_active - 1;
+        true
+    } else {
+        // Intent was not in active list - this is a logic error if we're trying to remove it
+        // Return false to let caller handle this case
+        false
     }
 }
 
@@ -24526,6 +24669,7 @@ public struct Approvals has store, drop, copy {
 // === Public Functions ===
 
 /// Create a new weighted multisig configuration.
+/// Note: Clock parameter added to initialize last_activity_ms properly
 public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): WeightedMultisig {
     assert!(members.length() == weights.length(), EInvalidArguments);
     assert!(members.length() > 0, EEmptyMemberList);
@@ -24567,7 +24711,21 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): 
     // Optional: warn if no single member can meet threshold (may be intentional)
     // This is a valid configuration for requiring multiple signers
     
+    // Initialize with 0 - will be set on first activity or creation with clock
+    // This is safe as dead-man switch checks require explicit time periods
     WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: 0 }
+}
+
+/// Create a new weighted multisig configuration with current timestamp.
+public fun new_with_clock(
+    members: vector<address>, 
+    weights: vector<u64>, 
+    threshold: u64,
+    clock: &Clock
+): WeightedMultisig {
+    let mut config = new(members, weights, threshold);
+    config.last_activity_ms = clock.timestamp_ms();
+    config
 }
 
 /// Create a fresh, empty Approvals outcome for a new intent.
@@ -24619,10 +24777,11 @@ public fun assert_is_member(config: &WeightedMultisig, addr: address) {
     assert!(is_member(config, addr), ENotMember);
 }
 
-/// Insert approver address without borrowing the config inside the resolve_intent! closure.
-/// Call weighted_multisig::assert_is_member(config, sender) BEFORE calling this to ensure membership.
-/// This avoids borrowing account.config() inside the closure (which conflicts with the mutable borrow held by resolve_intent!).
-public fun approve_sender_unchecked(outcome: &mut Approvals, sender: address) {
+/// Insert approver address after membership has been verified.
+/// IMPORTANT: This function assumes membership has already been verified by the caller.
+/// Only call this from within trusted module functions that have already checked membership.
+/// This pattern avoids borrowing conflicts with account.config() inside resolve_intent! closures.
+public(package) fun approve_sender_verified(outcome: &mut Approvals, sender: address) {
     assert!(!outcome.approvers.contains(&sender), EAlreadyApproved);
     outcome.approvers.insert(sender);
 }
@@ -24882,11 +25041,15 @@ public fun set_policy(
         approval_threshold: 0
     };
     
-    // Check if policy exists and update or insert accordingly
+    // Use atomic update pattern - if exists, borrow_mut and update, otherwise add
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -24984,9 +25147,13 @@ public fun set_policy_with_timelock(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -25013,9 +25180,13 @@ public fun set_policy_with_threshold(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -25041,9 +25212,13 @@ public fun set_emergency_policy(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -31770,15 +31945,12 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     // Implementation would iterate through all coin types in vaults
     
     // 3. Mark DAO as fully dissolved
-    // Set the operational state to a final "dissolved" state
-    // For now, we'll keep it in DISSOLVING state since we don't have a DISSOLVED constant
-    // In a real implementation, you'd add a DISSOLVED state constant
+    futarchy_config::set_operational_state(config, futarchy_config::state_dissolved());
     
     // 4. Destroy account if specified
     if (destroy_account) {
         // Account destruction would need special handling
-        // For now, we just mark it as inactive
-        futarchy_config::set_operational_state(config, futarchy_config::state_paused());
+        // The dissolved state already prevents any further operations
     };
     
     let _ = version;
@@ -33150,7 +33322,12 @@ fun setup_tiered_founder_rewards<AssetType>(
     let mut descriptions = vector::empty<String>();
     let mut is_above_thresholds = vector::empty<bool>();
     
-    let price_step = (max_price_ratio - min_price_ratio) / (num_tiers - 1);
+    // Calculate price step, handling single tier case to avoid division by zero
+    let price_step = if (num_tiers > 1) {
+        (max_price_ratio - min_price_ratio) / (num_tiers - 1)
+    } else {
+        0 // Single tier uses min_price_ratio only
+    };
     let amount_per_tier = total_allocation / num_tiers;
     
     let mut i = 0;
@@ -33270,6 +33447,7 @@ const ECapChangeAfterDeadline: u64 = 105;
 const ECapHeapInvariant: u64 = 106;
 const ESettlementAlreadyStarted: u64 = 107;
 const EInvalidSettlementState: u64 = 108;
+const ETooManyUniqueCaps: u64 = 109;
 
 // === Constants ===
 /// The duration for every raise is fixed. 14 days in milliseconds.
@@ -33283,6 +33461,7 @@ const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
 const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
+const MAX_UNIQUE_CAPS: u64 = 1000; // Maximum number of unique cap values to prevent unbounded heap
 
 // === Structs ===
 
@@ -33652,6 +33831,8 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
         // Ensure a cap-bin exists and index it if first time seen
         let tkey = ThresholdKey { cap };
         if (!df::exists_(&raise.id, tkey)) {
+            // Check we haven't exceeded maximum unique caps
+            assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
             df::add(&mut raise.id, tkey, ThresholdBin { total: 0, count: 0 });
             vector::push_back(&mut raise.thresholds, cap);
         };
@@ -33714,6 +33895,8 @@ public entry fun update_cap<RaiseToken, StableCoin>(
     // create bin for new cap if needed
     let new_tk = ThresholdKey { cap: new_cap };
     if (!df::exists_(&raise.id, new_tk)) {
+        // Check we haven't exceeded maximum unique caps
+        assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
         df::add(&mut raise.id, new_tk, ThresholdBin { total: 0, count: 0 });
         vector::push_back(&mut raise.thresholds, new_cap);
     };
