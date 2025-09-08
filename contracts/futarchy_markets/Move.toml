@@ -1,0 +1,11 @@
+[package]
+name = "futarchy_markets"
+edition = "2024"
+license = "BSL"
+
+[dependencies]
+futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+
+[addresses]
+futarchy_markets = "0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964"
+futarchy_one_shot_utils = "0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc"

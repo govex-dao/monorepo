@@ -1,0 +1,13 @@
+{
+  "timestamp": "2025-09-08T11:01:50Z",
+  "network": "devnet",
+  "packages": {
+    "futarchy_one_shot_utils": "0x57872170d84e77e3b258cf676f59c7a81a8ecbc47fbd8e60eb9cc8ba01b48f96",
+    "futarchy_core": "0x28c40499699f98000b805f86714ecbd2f2cd548e26ae7f0525f4964ae39dfa8e",
+    "futarchy_markets": "0x48e04b8974fb65f67bd9853154010b21eb3757f2271059b123b39ae73f39de2f",
+    "futarchy_vault": "0x7b273ecbbe940fe0a3b093ef9ebdcb9d2438f0d500b1058209f496531c88f235",
+    "futarchy_multisig": "0xac59ddcea90d6174cf333acfebddb7c15be822e95ec1e2955c08301354be7868",
+    "futarchy_specialized_actions": "0xe87e6f6363b3890ecad823c070ced610f3d422d6bf5c9dd163559eebb2fef8bf",
+    "futarchy_lifecycle": "0xea8d1ab8a013b86bd57878d82e0e47767e216df2039b5b05f5b65027d3503e6f"
+  }
+}

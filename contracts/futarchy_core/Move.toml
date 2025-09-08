@@ -1,0 +1,30 @@
+[package]
+name = "futarchy_core"
+edition = "2024"
+license = "BSL"
+
+[dependencies]
+futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+AccountExtensions = { local = "../move-framework/packages/extensions" }
+AccountProtocol = { local = "../move-framework/packages/protocol" }
+
+[addresses]
+futarchy_core = "0x9507a06101f44857b3bdd57ab9a60ffc9fc9afe23e5186f721220a1be41ca863"
+futarchy_one_shot_utils = "0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc"
+account_protocol = "0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870"
+account_extensions = "0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd"
+
+# Named addresses will be accessible in Move as `@name`. They're also exported:
+# for example, `std = "0x0"` is exported by the Standard Library.
+# alice = "0x0"
+
+[dev-dependencies]
+# The dev-dependencies section allows overriding dependencies for `--test` and
+# `--dev` modes. You can introduce test-only dependencies here.
+# Local = { local = "../path/to/dev-build" }
+
+[dev-addresses]
+# The dev-addresses section allows overwriting named addresses for the `--test`
+# and `--dev` modes.
+# alice = "0x0"
+

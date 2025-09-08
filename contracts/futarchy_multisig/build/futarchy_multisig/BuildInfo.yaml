@@ -1,0 +1,94 @@
+---
+compiled_package_info:
+  package_name: futarchy_multisig
+  address_alias_instantiation:
+    account_actions: 56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491
+    account_extensions: 32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd
+    account_protocol: 3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870
+    bridge: 000000000000000000000000000000000000000000000000000000000000000b
+    futarchy_core: 9507a06101f44857b3bdd57ab9a60ffc9fc9afe23e5186f721220a1be41ca863
+    futarchy_markets: 6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964
+    futarchy_multisig: "0000000000000000000000000000000000000000000000000000000000000000"
+    futarchy_one_shot_utils: 34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc
+    futarchy_vault: b360eeeb047d085e587ae609ad6113df2af0b9b1ec7448bc7ec07069a55f06db
+    kiosk: fac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30
+    std: "0000000000000000000000000000000000000000000000000000000000000001"
+    sui: "0000000000000000000000000000000000000000000000000000000000000002"
+    sui_system: "0000000000000000000000000000000000000000000000000000000000000003"
+  source_digest: 95A15CEE18C4BE9CC73572C926AD86C4EDBF5144201C43084AA16F4CF6E2B636
+  build_flags:
+    dev_mode: false
+    test_mode: false
+    generate_docs: false
+    save_disassembly: false
+    install_dir: ~
+    force_recompilation: false
+    lock_file: "./Move.lock"
+    fetch_deps_only: false
+    skip_fetch_latest_git_deps: false
+    default_flavor: sui
+    default_edition: ~
+    deps_as_root: false
+    silence_warnings: false
+    warnings_are_errors: false
+    json_errors: false
+    additional_named_addresses: {}
+    lint_flag:
+      no_lint: false
+      lint: false
+    modes: []
+    implicit_dependencies:
+      Bridge:
+        Internal:
+          kind:
+            Git:
+              git_url: "https://github.com/MystenLabs/sui.git"
+              git_rev: 2cde80b5766b0bc2073908e10f6e3c81c93fd691
+              subdir: crates/sui-framework/packages/bridge
+          subst: ~
+          digest: ~
+          dep_override: true
+      MoveStdlib:
+        Internal:
+          kind:
+            Git:
+              git_url: "https://github.com/MystenLabs/sui.git"
+              git_rev: 2cde80b5766b0bc2073908e10f6e3c81c93fd691
+              subdir: crates/sui-framework/packages/move-stdlib
+          subst: ~
+          digest: ~
+          dep_override: true
+      Sui:
+        Internal:
+          kind:
+            Git:
+              git_url: "https://github.com/MystenLabs/sui.git"
+              git_rev: 2cde80b5766b0bc2073908e10f6e3c81c93fd691
+              subdir: crates/sui-framework/packages/sui-framework
+          subst: ~
+          digest: ~
+          dep_override: true
+      SuiSystem:
+        Internal:
+          kind:
+            Git:
+              git_url: "https://github.com/MystenLabs/sui.git"
+              git_rev: 2cde80b5766b0bc2073908e10f6e3c81c93fd691
+              subdir: crates/sui-framework/packages/sui-system
+          subst: ~
+          digest: ~
+          dep_override: true
+    force_lock_file: false
+dependencies:
+  - AccountActions
+  - AccountExtensions
+  - AccountProtocol
+  - Bridge
+  - Kiosk
+  - MoveStdlib
+  - Sui
+  - SuiSystem
+  - futarchy_core
+  - futarchy_markets
+  - futarchy_one_shot_utils
+  - futarchy_vault

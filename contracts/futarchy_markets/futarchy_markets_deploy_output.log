@@ -1,0 +1,1298 @@
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
+INCLUDING DEPENDENCY futarchy_one_shot_utils
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_markets
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:34:50
+   [0m[34m│[0m
+[0m[34m34[0m [0m[34m│[0m use futarchy_markets::ring_buffer_oracle::{Self, [0m[33mRingBufferOracle[0m};
+   [0m[34m│[0m                                                  [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'RingBufferOracle'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:37:10
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:37:10
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'vector'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This alias does not shadow the built-in type 'vector' in type annotations.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:48:7
+   [0m[34m│[0m
+[0m[34m48[0m [0m[34m│[0m const [0m[33mESpotLocked[0m: u64 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^[0m [0m[33mThe constant 'ESpotLocked' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:92:5
+   [0m[34m│[0m
+[0m[34m92[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
+   [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_oracle_interface.move:199:1
+    [0m[34m│[0m  
+[0m[34m199[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Example: How a lending protocol would use this[0m
+[0m[34m200[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m201[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// ```move[0m
+[0m[34m202[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// // In lending protocol[0m
+    [0m[34m·[0m [0m[33m│[0m
+[0m[34m217[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m218[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// It just gets a continuous price feed that never stops.[0m
+    [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:91:7
+   [0m[34m│[0m
+[0m[34m91[0m [0m[34m│[0m const [0m[33mEBadWitness[0m: u64 = 12; // Invalid one-time witness
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^[0m [0m[33mThe constant 'EBadWitness' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:102:7
+    [0m[34m│[0m
+[0m[34m102[0m [0m[34m│[0m const [0m[33mMARKET_EXPIRY_PERIOD_MS[0m: u64 = 2_592_000_000; // 30 days in ms
+    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'MARKET_EXPIRY_PERIOD_MS' is never used. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:912:8
+    [0m[34m│[0m
+[0m[34m912[0m [0m[34m│[0m public [0m[33mentry[0m fun get_escrow_balances_and_supply<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:1083:5
+     [0m[34m│[0m
+[0m[34m1083[0m [0m[34m│[0m fun [0m[33mget_winning_pool_final_amounts[0m<AssetType, StableType>(
+     [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'get_winning_pool_final_amounts' is never called. Consider removing it.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:1222:8
+     [0m[34m│[0m
+[0m[34m1222[0m [0m[34m│[0m public [0m[33mentry[0m fun convert_winning_lp_to_spot_claim_entry<AssetType, StableType>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/coin_escrow.move:1247:8
+     [0m[34m│[0m
+[0m[34m1247[0m [0m[34m│[0m public [0m[33mentry[0m fun burn_losing_lp_tokens_entry<AssetType, StableType>(
+     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+     [0m[34m│[0m
+     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_amm.move:4:42
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use futarchy_markets::conditional_token::[0m[33mConditionalToken[0m;
+  [0m[34m│[0m                                          [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'ConditionalToken'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_amm.move:46:7
+   [0m[34m│[0m
+[0m[34m46[0m [0m[34m│[0m const [0m[33mEInvalidTokenType[0m: u64 = 9; // Wrong conditional token type provided
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidTokenType' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_amm.move:53:7
+   [0m[34m│[0m
+[0m[34m53[0m [0m[34m│[0m const [0m[33mDEFAULT_FEE[0m: u64 = 30; // 0.3%
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^[0m [0m[33mThe constant 'DEFAULT_FEE' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:17:7
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m const [0m[33mEInvalidOutcome[0m: u64 = 0;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidOutcome' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:18:7
+   [0m[34m│[0m
+[0m[34m18[0m [0m[34m│[0m const [0m[33mEInvalidLiquidityTransfer[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidLiquidityTransfer' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:172:8
+    [0m[34m│[0m
+[0m[34m172[0m [0m[34m│[0m public [0m[33mentry[0m fun redeem_winning_tokens_stable_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:188:8
+    [0m[34m│[0m
+[0m[34m188[0m [0m[34m│[0m public [0m[33mentry[0m fun mint_complete_set_asset_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:204:8
+    [0m[34m│[0m
+[0m[34m204[0m [0m[34m│[0m public [0m[33mentry[0m fun mint_complete_set_stable_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:219:8
+    [0m[34m│[0m
+[0m[34m219[0m [0m[34m│[0m public [0m[33mentry[0m fun redeem_complete_set_asset_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:238:8
+    [0m[34m│[0m
+[0m[34m238[0m [0m[34m│[0m public [0m[33mentry[0m fun redeem_complete_set_stable_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:254:8
+    [0m[34m│[0m
+[0m[34m254[0m [0m[34m│[0m public [0m[33mentry[0m fun redeem_winning_tokens_asset_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:275:8
+    [0m[34m│[0m
+[0m[34m275[0m [0m[34m│[0m public [0m[33mentry[0m fun add_liquidity_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:336:8
+    [0m[34m│[0m
+[0m[34m336[0m [0m[34m│[0m public [0m[33mentry[0m fun remove_liquidity_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/liquidity_interact.move:531:8
+    [0m[34m│[0m
+[0m[34m531[0m [0m[34m│[0m public [0m[33mentry[0m fun burn_unused_tokens_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:73:8
+   [0m[34m│[0m
+[0m[34m73[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_asset_to_stable_entry<AssetType, StableType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:133:8
+    [0m[34m│[0m
+[0m[34m133[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_stable_to_asset_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:198:8
+    [0m[34m│[0m
+[0m[34m198[0m [0m[34m│[0m public [0m[33mentry[0m fun create_and_swap_stable_to_asset_with_existing_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:208:14
+    [0m[34m│[0m
+[0m[34m208[0m [0m[34m│[0m     let (mut [0m[33mtokens[0m, asset_token) = create_and_swap_stable_to_asset_with_existing(
+    [0m[34m│[0m          [0m[34m---[0m [0m[33m^^^^^^[0m [0m[33mThe variable 'tokens' is never used mutably[0m
+    [0m[34m│[0m          [0m[34m│[0m    
+    [0m[34m│[0m          [0m[34mConsider removing the 'mut' declaration here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:268:8
+    [0m[34m│[0m
+[0m[34m268[0m [0m[34m│[0m public [0m[33mentry[0m fun create_and_swap_asset_to_stable_with_existing_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:278:14
+    [0m[34m│[0m
+[0m[34m278[0m [0m[34m│[0m     let (mut [0m[33mtokens[0m, stable_token) = create_and_swap_asset_to_stable_with_existing(
+    [0m[34m│[0m          [0m[34m---[0m [0m[33m^^^^^^[0m [0m[33mThe variable 'tokens' is never used mutably[0m
+    [0m[34m│[0m          [0m[34m│[0m    
+    [0m[34m│[0m          [0m[34mConsider removing the 'mut' declaration here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:328:8
+    [0m[34m│[0m
+[0m[34m328[0m [0m[34m│[0m public [0m[33mentry[0m fun create_and_swap_asset_to_stable_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:337:14
+    [0m[34m│[0m
+[0m[34m337[0m [0m[34m│[0m     let (mut [0m[33mtokens[0m, stable_token) = create_and_swap_asset_to_stable(
+    [0m[34m│[0m          [0m[34m---[0m [0m[33m^^^^^^[0m [0m[33mThe variable 'tokens' is never used mutably[0m
+    [0m[34m│[0m          [0m[34m│[0m    
+    [0m[34m│[0m          [0m[34mConsider removing the 'mut' declaration here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:386:8
+    [0m[34m│[0m
+[0m[34m386[0m [0m[34m│[0m public [0m[33mentry[0m fun create_and_swap_stable_to_asset_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09012][0m[1m: unused 'mut' modifiers[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/swap.move:395:14
+    [0m[34m│[0m
+[0m[34m395[0m [0m[34m│[0m     let (mut [0m[33mtokens[0m, asset_token) = create_and_swap_stable_to_asset(
+    [0m[34m│[0m          [0m[34m---[0m [0m[33m^^^^^^[0m [0m[33mThe variable 'tokens' is never used mutably[0m
+    [0m[34m│[0m          [0m[34m│[0m    
+    [0m[34m│[0m          [0m[34mConsider removing the 'mut' declaration here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:9:10
+  [0m[34m│[0m
+[0m[34m9[0m [0m[34m│[0m use sui::[0m[33mtransfer[0m;
+  [0m[34m│[0m          [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:10:22
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+   [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:11:10
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:17:7
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m const [0m[33mESlippageTooHigh[0m: u64 = 4;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ESlippageTooHigh' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:23:8
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_spot_asset_to_spot_stable_exact_in<AssetType, StableType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_router.move:80:8
+   [0m[34m│[0m
+[0m[34m80[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_spot_stable_to_spot_asset_exact_in<AssetType, StableType>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_token.move:23:7
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m const [0m[33mTOKEN_TYPE_ASSET[0m: u8 = 0;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'TOKEN_TYPE_ASSET' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_token.move:24:7
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m const [0m[33mTOKEN_TYPE_STABLE[0m: u8 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'TOKEN_TYPE_STABLE' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/conditional_token.move:25:7
+   [0m[34m│[0m
+[0m[34m25[0m [0m[34m│[0m const [0m[33mTOKEN_TYPE_LP[0m: u8 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe constant 'TOKEN_TYPE_LP' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:7:17
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use sui::coin::{[0m[33mSelf[0m, Coin};
+  [0m[34m│[0m                 [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'coin'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:20:7
+   [0m[34m│[0m
+[0m[34m20[0m [0m[34m│[0m const [0m[33mEStableTypeNotFound[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EStableTypeNotFound' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:22:7
+   [0m[34m│[0m
+[0m[34m22[0m [0m[34m│[0m const [0m[33mERecurringFeeNotDue[0m: u64 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ERecurringFeeNotDue' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:23:7
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m const [0m[33mEWrongStableTypeForFee[0m: u64 = 4;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EWrongStableTypeForFee' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:24:7
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m const [0m[33mEInsufficientTreasuryBalance[0m: u64 = 5;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInsufficientTreasuryBalance' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:27:7
+   [0m[34m│[0m
+[0m[34m27[0m [0m[34m│[0m const [0m[33mEInvalidRecoveryFee[0m: u64 = 9;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidRecoveryFee' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:183:5
+    [0m[34m│[0m
+[0m[34m183[0m [0m[34m│[0m     [0m[33mdao_id[0m: ID,
+    [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mThe 'dao_id' field of the 'RecoveryExecuted' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:184:5
+    [0m[34m│[0m
+[0m[34m184[0m [0m[34m│[0m     [0m[33mnew_council_id[0m: ID,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mThe 'new_council_id' field of the 'RecoveryExecuted' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:185:5
+    [0m[34m│[0m
+[0m[34m185[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'RecoveryExecuted' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:327:8
+    [0m[34m│[0m
+[0m[34m327[0m [0m[34m│[0m public [0m[33mentry[0m fun withdraw_all_fees(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:350:8
+    [0m[34m│[0m
+[0m[34m350[0m [0m[34m│[0m public [0m[33mentry[0m fun update_dao_creation_fee(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:370:8
+    [0m[34m│[0m
+[0m[34m370[0m [0m[34m│[0m public [0m[33mentry[0m fun update_proposal_creation_fee(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:390:8
+    [0m[34m│[0m
+[0m[34m390[0m [0m[34m│[0m public [0m[33mentry[0m fun add_verification_level(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:412:8
+    [0m[34m│[0m
+[0m[34m412[0m [0m[34m│[0m public [0m[33mentry[0m fun remove_verification_level(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:432:8
+    [0m[34m│[0m
+[0m[34m432[0m [0m[34m│[0m public [0m[33mentry[0m fun update_verification_fee(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:456:8
+    [0m[34m│[0m
+[0m[34m456[0m [0m[34m│[0m public [0m[33mentry[0m fun update_recovery_fee(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09010][0m[1m: unused function type parameter[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:484:37
+    [0m[34m│[0m
+[0m[34m484[0m [0m[34m│[0m public fun collect_dao_platform_fee<[0m[33mStableType[0m: drop>(
+    [0m[34m│[0m                                     [0m[33m^^^^^^^^^^[0m [0m[33mUnused type parameter 'StableType'.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:488:5
+    [0m[34m│[0m
+[0m[34m488[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext,
+    [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:500:38
+    [0m[34m│[0m
+[0m[34m500[0m [0m[34m│[0m     let (last_collection, last_rate, [0m[33mis_new[0m) = if (dynamic_field::exists_(&fee_manager.id, record_key)) {
+    [0m[34m│[0m                                      [0m[33m^^^^^^[0m [0m[33mUnused local variable 'is_new'. Consider removing or prefixing with an underscore: '_is_new'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:562:38
+    [0m[34m│[0m
+[0m[34m562[0m [0m[34m│[0m     let stable_type_str = type_name::[0m[33mget[0m<StableType>().into_string();
+    [0m[34m│[0m                                      [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:602:8
+    [0m[34m│[0m
+[0m[34m602[0m [0m[34m│[0m public [0m[33mentry[0m fun update_dao_monthly_fee(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:697:32
+    [0m[34m│[0m
+[0m[34m697[0m [0m[34m│[0m     let type_name = type_name::[0m[33mget[0m<StableType>();
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:708:8
+    [0m[34m│[0m
+[0m[34m708[0m [0m[34m│[0m public [0m[33mentry[0m fun withdraw_stable_fees<StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/fee.move:740:36
+    [0m[34m│[0m
+[0m[34m740[0m [0m[34m│[0m         let type_name = type_name::[0m[33mget[0m<StableType>();
+    [0m[34m│[0m                                    [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:10:10
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use std::[0m[33moption[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:11:10
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:29:7
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m const [0m[33mESpotTwapNotReady[0m: u64 = 9;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ESpotTwapNotReady' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:31:7
+   [0m[34m│[0m
+[0m[34m31[0m [0m[34m│[0m const [0m[33mEInvalidOutcome[0m: u64 = 11;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidOutcome' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:44:7
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m const [0m[33mOUTCOME_ACCEPTED[0m: u64 = 0;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'OUTCOME_ACCEPTED' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:45:7
+   [0m[34m│[0m
+[0m[34m45[0m [0m[34m│[0m const [0m[33mOUTCOME_REJECTED[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'OUTCOME_REJECTED' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:214:5
+    [0m[34m│[0m
+[0m[34m214[0m [0m[34m│[0m     [0m[33mintent_key_for_yes[0m: Option<String>, // Intent key for YES outcome
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused parameter 'intent_key_for_yes'. Consider removing or prefixing with an underscore: '_intent_key_for_yes'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:393:32
+    [0m[34m│[0m
+[0m[34m393[0m [0m[34m│[0m         asset_type: type_name::[0m[33mget[0m<AssetType>().into_string(),
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:394:33
+    [0m[34m│[0m
+[0m[34m394[0m [0m[34m│[0m         stable_type: type_name::[0m[33mget[0m<StableType>().into_string(),
+    [0m[34m│[0m                                 [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/proposal.move:437:5
+    [0m[34m│[0m
+[0m[34m437[0m [0m[34m│[0m     [0m[33mintent_key_for_yes[0m: Option<String>,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused parameter 'intent_key_for_yes'. Consider removing or prefixing with an underscore: '_intent_key_for_yes'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:44:10
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:46:30
+   [0m[34m│[0m
+[0m[34m46[0m [0m[34m│[0m use futarchy_one_shot_utils::[0m[33mmath[0m;
+   [0m[34m│[0m                              [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'math'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:52:7
+   [0m[34m│[0m
+[0m[34m52[0m [0m[34m│[0m const [0m[33mMAX_OBSERVATIONS[0m: u64 = 65535; // ~9 days at 12 second blocks
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'MAX_OBSERVATIONS' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:58:7
+   [0m[34m│[0m
+[0m[34m58[0m [0m[34m│[0m const [0m[33mEInvalidWindow[0m: u64 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidWindow' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:59:7
+   [0m[34m│[0m
+[0m[34m59[0m [0m[34m│[0m const [0m[33mEInsufficientHistory[0m: u64 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInsufficientHistory' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/ring_buffer_oracle.move:255:13
+    [0m[34m│[0m
+[0m[34m255[0m [0m[34m│[0m         let [0m[33mafter[0m = *oracle.observations.borrow(after_idx);
+    [0m[34m│[0m             [0m[33m^^^^^[0m [0m[33mUnused local variable 'after'. Consider removing or prefixing with an underscore: '_after'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/conditional/market_state.move:185:14
+    [0m[34m│[0m
+[0m[34m185[0m [0m[34m│[0m     use std::[0m[33moption[0m;
+    [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:81:19
+   [0m[34m│[0m
+[0m[34m81[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:81:25
+   [0m[34m│[0m
+[0m[34m81[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+   [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:82:19
+   [0m[34m│[0m
+[0m[34m82[0m [0m[34m│[0m use std::vector::{[0m[33mSelf[0m};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:85:19
+   [0m[34m│[0m
+[0m[34m85[0m [0m[34m│[0m use sui::object::{[0m[33mSelf[0m, UID, ID};
+   [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:85:25
+   [0m[34m│[0m
+[0m[34m85[0m [0m[34m│[0m use sui::object::{Self, [0m[33mUID[0m, ID};
+   [0m[34m│[0m                         [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:85:30
+   [0m[34m│[0m
+[0m[34m85[0m [0m[34m│[0m use sui::object::{Self, UID, [0m[33mID[0m};
+   [0m[34m│[0m                              [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:86:10
+   [0m[34m│[0m
+[0m[34m86[0m [0m[34m│[0m use sui::[0m[33mtransfer[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:87:23
+   [0m[34m│[0m
+[0m[34m87[0m [0m[34m│[0m use sui::tx_context::{[0m[33mSelf[0m, TxContext};
+   [0m[34m│[0m                       [0m[33m^^^^[0m [0m[33mUnnecessary alias 'tx_context' for module 'sui::tx_context'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:87:23
+   [0m[34m│[0m
+[0m[34m87[0m [0m[34m│[0m use sui::tx_context::{[0m[33mSelf[0m, TxContext};
+   [0m[34m│[0m                       [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'tx_context'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:87:29
+   [0m[34m│[0m
+[0m[34m87[0m [0m[34m│[0m use sui::tx_context::{Self, [0m[33mTxContext[0m};
+   [0m[34m│[0m                             [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:88:18
+   [0m[34m│[0m
+[0m[34m88[0m [0m[34m│[0m use sui::clock::{[0m[33mSelf[0m, Clock};
+   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'clock'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:105:7
+    [0m[34m│[0m
+[0m[34m105[0m [0m[34m│[0m const [0m[33mEPoolLockedForProposal[0m: u64 = 10;
+    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EPoolLockedForProposal' is never used. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:163:5
+    [0m[34m│[0m
+[0m[34m163[0m [0m[34m│[0m     [0m[33mpool_id[0m: ID,
+    [0m[34m│[0m     [0m[33m^^^^^^^[0m [0m[33mThe 'pool_id' field of the 'SpotTwapUpdate' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:164:5
+    [0m[34m│[0m
+[0m[34m164[0m [0m[34m│[0m     [0m[33mtwap[0m: u128,
+    [0m[34m│[0m     [0m[33m^^^^[0m [0m[33mThe 'twap' field of the 'SpotTwapUpdate' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:165:5
+    [0m[34m│[0m
+[0m[34m165[0m [0m[34m│[0m     [0m[33mwindow_start[0m: u64,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^[0m [0m[33mThe 'window_start' field of the 'SpotTwapUpdate' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:166:5
+    [0m[34m│[0m
+[0m[34m166[0m [0m[34m│[0m     [0m[33mwindow_end[0m: u64,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'window_end' field of the 'SpotTwapUpdate' type is unused[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:313:8
+    [0m[34m│[0m
+[0m[34m313[0m [0m[34m│[0m public [0m[33mentry[0m fun add_liquidity<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:373:8
+    [0m[34m│[0m
+[0m[34m373[0m [0m[34m│[0m public [0m[33mentry[0m fun remove_liquidity<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:403:8
+    [0m[34m│[0m
+[0m[34m403[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_asset_for_stable<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:437:8
+    [0m[34m│[0m
+[0m[34m437[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_stable_for_asset<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99001][0m[1m: non-composable transfer to sender[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:485:5
+    [0m[34m│[0m
+[0m[34m480[0m [0m[34m│[0m ): ID {
+    [0m[34m│[0m    [0m[34m--[0m [0m[34mReturning an object from a function, allows a caller to use the object and enables composability via programmable transactions.[0m
+    [0m[34m·[0m
+[0m[34m485[0m [0m[34m│[0m     [0m[33mtransfer::public_transfer(lp, ctx.sender())[0m;
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m     [0m[33m│[0m                             [0m[34m│[0m
+    [0m[34m│[0m     [0m[33m│[0m                             [0m[34mTransaction sender address coming from here[0m
+    [0m[34m│[0m     [0m[33mTransfer of an object to transaction sender address[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/spot_amm.move:566:13
+    [0m[34m│[0m
+[0m[34m566[0m [0m[34m│[0m         let [0m[33mspot_duration[0m = proposal_start - pool.window_start_timestamp;
+    [0m[34m│[0m             [0m[33m^^^^^^^^^^^^^[0m [0m[33mUnused local variable 'spot_duration'. Consider removing or prefixing with an underscore: '_spot_duration'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:3:18
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::[0m[33mOption[0m;
+  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:3:18
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::[0m[33mOption[0m;
+  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Option'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:4:47
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use futarchy_markets::conditional_amm::{Self, [0m[33mLiquidityPool[0m};
+  [0m[34m│[0m                                               [0m[33m^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'LiquidityPool'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:5:34
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use futarchy_markets::proposal::{[0m[33mSelf[0m, Proposal};
+  [0m[34m│[0m                                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'proposal'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:7:37
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use futarchy_markets::market_state::[0m[33mMarketState[0m;
+  [0m[34m│[0m                                     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'MarketState'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:25:7
+   [0m[34m│[0m
+[0m[34m25[0m [0m[34m│[0m const [0m[33mEInsufficientLiquidity[0m: u64 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInsufficientLiquidity' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:65:5
+   [0m[34m│[0m
+[0m[34m65[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
+   [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot_conditional_quoter.move:125:5
+    [0m[34m│[0m
+[0m[34m125[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
+    [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:6:19
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:6:19
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'option'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:6:25
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:6:25
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Option'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:10:14
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, UID},
+   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:10:20
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     object::{Self, [0m[33mUID[0m},
+   [0m[34m│[0m                    [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:11:5
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:23:7
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m const [0m[33mEPoolNotInitialized[0m: u64 = 5;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EPoolNotInitialized' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:56:5
+   [0m[34m│[0m
+[0m[34m56[0m [0m[34m│[0m     [0m[33mamount_out[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'amount_out' field of the 'SwapResult' type is unused[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:58:5
+   [0m[34m│[0m
+[0m[34m58[0m [0m[34m│[0m     [0m[33mfee_amount[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'fee_amount' field of the 'SwapResult' type is unused[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:124:8
+    [0m[34m│[0m
+[0m[34m124[0m [0m[34m│[0m public [0m[33mentry[0m fun add_liquidity<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:276:8
+    [0m[34m│[0m
+[0m[34m276[0m [0m[34m│[0m public [0m[33mentry[0m fun remove_liquidity<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:322:8
+    [0m[34m│[0m
+[0m[34m322[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_asset_to_stable<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:361:8
+    [0m[34m│[0m
+[0m[34m361[0m [0m[34m│[0m public [0m[33mentry[0m fun swap_stable_to_asset<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:491:8
+    [0m[34m│[0m
+[0m[34m491[0m [0m[34m│[0m public [0m[33mentry[0m fun merge_lp_tokens_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_markets/sources/spot/account_spot_pool.move:525:8
+    [0m[34m│[0m
+[0m[34m525[0m [0m[34m│[0m public [0m[33mentry[0m fun split_lp_token_entry<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+Total number of linter warnings suppressed: 8 (unique lints: 3)
+Skipping dependency verification
+Transaction Digest: DxSNLpyZHukwq6xPqSjauDankyXmZVep5wfLAizgff5v
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                   │
+│ Gas Owner: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                │
+│ Gas Budget: 3000000000 MIST                                                                                  │
+│ Gas Price: 1000 MIST                                                                                         │
+│ Gas Payment:                                                                                                 │
+│  ┌──                                                                                                         │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                    │
+│  │ Version: 20056                                                                                            │
+│  │ Digest: 7rwhAsU8FPS7H4ikANxWFo7Rt8PmVd4fzmxNL2wcgGe9                                                      │
+│  └──                                                                                                         │
+│                                                                                                              │
+│ Transaction Kind: Programmable                                                                               │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Input Objects                                                                                            │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0   Pure Arg: Type: address, Value: "0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd" │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
+│ │ Commands                                                                │                                  │
+│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
+│ │ 0  Publish:                                                             │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Dependencies:                                                        │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
+│ │  │   0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc │                                  │
+│ │  └                                                                      │                                  │
+│ │                                                                         │                                  │
+│ │ 1  TransferObjects:                                                     │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Arguments:                                                           │                                  │
+│ │  │   Result 0                                                           │                                  │
+│ │  │ Address: Input  0                                                    │                                  │
+│ │  └                                                                      │                                  │
+│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
+│                                                                                                              │
+│ Signatures:                                                                                                  │
+│    WmTNeOXBoXRDjgofnED08CRR/0cDakJRl+CFGDPYrgEjeXJVaI2rud4Qtoi7ShR3Z9RjoqFPLRkQDOvDZZtgCA==                  │
+│                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: DxSNLpyZHukwq6xPqSjauDankyXmZVep5wfLAizgff5v                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 162                                                                               │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x36e71f4557531bf2c8766144dba0fbfae7e44a95924b77f8604c497308f72509                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: 571LcTByEnNv1XZL5C7yzEH3tGHGoU1RCqTFModFe1vw                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964                         │
+│  │ Owner: Immutable                                                                               │
+│  │ Version: 1                                                                                     │
+│  │ Digest: 9ByETJ7oxfouzFbuRKaNW5C3NBv2TfVRvaoaeKXJ8fKw                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x7e5536e502b8162b8a8f375d3ffdedfc8c6b79ca295937075245a42b72620452                         │
+│  │ Owner: Shared( 20057 )                                                                         │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: 4i6wkQb2tivTv2aaEbkBJhy71w6mvENgaVgAQ2K1ezwC                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x90faa72da0bbe78b3799cffdfc93ac9e6afe52fdf0af18e23f220ebfe807ca5a                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: DKCNCrgU14ktVPshaKNSRTxpSn328Cavnaw6E2xCThf3                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0xaef3e5c7b9de6aebbd4439b35a324c518d270a8ed1e8461c7c0e6a06b4a4a5e2                         │
+│  │ Owner: Object ID: ( 0xa005caa0958d2842bbf97403f1558a9760003221dc8b6611e0d03f961c6f3e0a )       │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: F9KN8Jmjq6C3N6FjadE9tzbdwmJb55SFTF4J9HPMwEVD                                           │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: 6FSpmADnUxF1CN74CjYKQJaapGSHQ2UyLdsj823mto32                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20057                                                                                 │
+│  │ Digest: 6FSpmADnUxF1CN74CjYKQJaapGSHQ2UyLdsj823mto32                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 547162000 MIST                                                                   │
+│    Computation Cost: 6000000 MIST                                                                 │
+│    Storage Rebate: 978120 MIST                                                                    │
+│    Non-refundable Storage Fee: 9880 MIST                                                          │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    5fAazmK1axnC13oPGgAJ8GENrBnULXQvXtDGSGK9Ecnc                                                   │
+│    7uhZX6LjHKTEEYL3osKyG6FznyHmo55pixnFJNUqWmx7                                                   │
+│    Gum3EUuN7JgRJFryEEX8w86WB6SUWzTKtfpjNHKQ8RMM                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                                                                                                                                                                                             │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                                                                                                                                                                                           │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ ObjectID: 0x36e71f4557531bf2c8766144dba0fbfae7e44a95924b77f8604c497308f72509                                                                                                                                                                                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                                                                                                                                                                           │
+│  │ ObjectType: 0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964::fee::FeeAdminCap                                                                                                                                                                        │
+│  │ Version: 20057                                                                                                                                                                                                                                                          │
+│  │ Digest: 571LcTByEnNv1XZL5C7yzEH3tGHGoU1RCqTFModFe1vw                                                                                                                                                                                                                    │
+│  └──                                                                                                                                                                                                                                                                       │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ ObjectID: 0x7e5536e502b8162b8a8f375d3ffdedfc8c6b79ca295937075245a42b72620452                                                                                                                                                                                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                              │
+│  │ Owner: Shared( 20057 )                                                                                                                                                                                                                                                  │
+│  │ ObjectType: 0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964::fee::FeeManager                                                                                                                                                                         │
+│  │ Version: 20057                                                                                                                                                                                                                                                          │
+│  │ Digest: 4i6wkQb2tivTv2aaEbkBJhy71w6mvENgaVgAQ2K1ezwC                                                                                                                                                                                                                    │
+│  └──                                                                                                                                                                                                                                                                       │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ ObjectID: 0x90faa72da0bbe78b3799cffdfc93ac9e6afe52fdf0af18e23f220ebfe807ca5a                                                                                                                                                                                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                                                                                                                                                                           │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                                                                                                                                                                                                    │
+│  │ Version: 20057                                                                                                                                                                                                                                                          │
+│  │ Digest: DKCNCrgU14ktVPshaKNSRTxpSn328Cavnaw6E2xCThf3                                                                                                                                                                                                                    │
+│  └──                                                                                                                                                                                                                                                                       │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ ObjectID: 0xaef3e5c7b9de6aebbd4439b35a324c518d270a8ed1e8461c7c0e6a06b4a4a5e2                                                                                                                                                                                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                              │
+│  │ Owner: Object ID: ( 0xa005caa0958d2842bbf97403f1558a9760003221dc8b6611e0d03f961c6f3e0a )                                                                                                                                                                                │
+│  │ ObjectType: 0x2::dynamic_field::Field<u8, u64>                                                                                                                                                                                                                          │
+│  │ Version: 20057                                                                                                                                                                                                                                                          │
+│  │ Digest: F9KN8Jmjq6C3N6FjadE9tzbdwmJb55SFTF4J9HPMwEVD                                                                                                                                                                                                                    │
+│  └──                                                                                                                                                                                                                                                                       │
+│ Mutated Objects:                                                                                                                                                                                                                                                           │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ ObjectID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                                                                                                                                                                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                                                                                                                                                                           │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                                                                                                                                                                                              │
+│  │ Version: 20057                                                                                                                                                                                                                                                          │
+│  │ Digest: 6FSpmADnUxF1CN74CjYKQJaapGSHQ2UyLdsj823mto32                                                                                                                                                                                                                    │
+│  └──                                                                                                                                                                                                                                                                       │
+│ Published Objects:                                                                                                                                                                                                                                                         │
+│  ┌──                                                                                                                                                                                                                                                                       │
+│  │ PackageID: 0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964                                                                                                                                                                                           │
+│  │ Version: 1                                                                                                                                                                                                                                                              │
+│  │ Digest: 9ByETJ7oxfouzFbuRKaNW5C3NBv2TfVRvaoaeKXJ8fKw                                                                                                                                                                                                                    │
+│  │ Modules: account_spot_pool, coin_escrow, conditional_amm, conditional_token, fee, liquidity_initialize, liquidity_interact, market_state, oracle, proposal, ring_buffer_oracle, spot_amm, spot_conditional_quoter, spot_conditional_router, spot_oracle_interface, swap │
+│  └──                                                                                                                                                                                                                                                                       │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -552183880                                                                             │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -1,0 +1,187 @@
+INCLUDING DEPENDENCY AccountActions
+INCLUDING DEPENDENCY Kiosk
+INCLUDING DEPENDENCY futarchy_core
+INCLUDING DEPENDENCY AccountProtocol
+INCLUDING DEPENDENCY AccountExtensions
+INCLUDING DEPENDENCY futarchy_markets
+INCLUDING DEPENDENCY futarchy_one_shot_utils
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_vault
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m ./../futarchy_markets/sources/spot/spot_oracle_interface.move:199:1
+    [0m[34m│[0m  
+[0m[34m199[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Example: How a lending protocol would use this[0m
+[0m[34m200[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m201[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// ```move[0m
+[0m[34m202[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// // In lending protocol[0m
+    [0m[34m·[0m [0m[33m│[0m
+[0m[34m217[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m218[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// It just gets a continuous price feed that never stops.[0m
+    [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:13:19
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m use std::{string::[0m[33mString[0m, option};
+   [0m[34m│[0m                   [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:13:27
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m use std::{string::String, [0m[33moption[0m};
+   [0m[34m│[0m                           [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:15:14
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
+   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:15:20
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m},
+   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:18:5
+   [0m[34m│[0m
+[0m[34m18[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/lp_token_custody.move:32:7
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m const [0m[33mEUnauthorized[0m: u64 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe constant 'EUnauthorized' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/lp_token_custody.move:122:9
+    [0m[34m│[0m
+[0m[34m122[0m [0m[34m│[0m     let [0m[33maccount_address[0m = object::id_address(account);
+    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mUnused local variable 'account_address'. Consider removing or prefixing with an underscore: '_account_address'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+     [0m[34m┌─[0m ./../futarchy_core/sources/futarchy_config.move:1141:1
+     [0m[34m│[0m  
+[0m[34m1141[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1142[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1143[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This allows standard intents to work with any outcome type[0m
+     [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/futarchy_vault.move:17:30
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m     account::{Self, Account, [0m[33mAuth[0m},
+   [0m[34m│[0m                              [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'Auth'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/futarchy_vault.move:23:38
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m use futarchy_core::futarchy_config::{[0m[33mSelf[0m, FutarchyConfig};
+   [0m[34m│[0m                                      [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'futarchy_config'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/futarchy_vault.move:28:7
+   [0m[34m│[0m
+[0m[34m28[0m [0m[34m│[0m const [0m[33mECoinTypeNotAllowed[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ECoinTypeNotAllowed' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m ./sources/futarchy_vault.move:29:7
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m const [0m[33mEVaultNotInitialized[0m: u64 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EVaultNotInitialized' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:127:40
+    [0m[34m│[0m
+[0m[34m127[0m [0m[34m│[0m     allowed.types.contains(&type_name::[0m[33mget[0m<CoinType>())
+    [0m[34m│[0m                                        [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:134:5
+    [0m[34m│[0m
+[0m[34m134[0m [0m[34m│[0m     [0m[33mcoin[0m: Coin<CoinType>,
+    [0m[34m│[0m     [0m[33m^^^^[0m [0m[33mUnused parameter 'coin'. Consider removing or prefixing with an underscore: '_coin'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:136:5
+    [0m[34m│[0m
+[0m[34m136[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext,
+    [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:152:8
+    [0m[34m│[0m
+[0m[34m152[0m [0m[34m│[0m public [0m[33mentry[0m fun deposit_revenue<CoinType: drop>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:169:31
+    [0m[34m│[0m
+[0m[34m169[0m [0m[34m│[0m         coin_type: type_name::[0m[33mget[0m<CoinType>(),
+    [0m[34m│[0m                               [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:195:32
+    [0m[34m│[0m
+[0m[34m195[0m [0m[34m│[0m     let type_name = type_name::[0m[33mget[0m<CoinType>();
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/futarchy_vault.move:222:32
+    [0m[34m│[0m
+[0m[34m222[0m [0m[34m│[0m     let type_name = type_name::[0m[33mget[0m<CoinType>();
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/custody_actions.move:4:18
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use sui::object::[0m[33mID[0m;
+  [0m[34m│[0m                  [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+

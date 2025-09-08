@@ -1,0 +1,331 @@
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
+INCLUDING DEPENDENCY AccountActions
+INCLUDING DEPENDENCY Kiosk
+INCLUDING DEPENDENCY futarchy_core
+INCLUDING DEPENDENCY AccountProtocol
+INCLUDING DEPENDENCY AccountExtensions
+INCLUDING DEPENDENCY futarchy_markets
+INCLUDING DEPENDENCY futarchy_one_shot_utils
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_vault
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/../futarchy_markets/sources/spot/spot_oracle_interface.move:199:1
+    [0m[34m│[0m  
+[0m[34m199[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Example: How a lending protocol would use this[0m
+[0m[34m200[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m201[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// ```move[0m
+[0m[34m202[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// // In lending protocol[0m
+    [0m[34m·[0m [0m[33m│[0m
+[0m[34m217[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m218[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// It just gets a continuous price feed that never stops.[0m
+    [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:13:19
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m use std::{string::[0m[33mString[0m, option};
+   [0m[34m│[0m                   [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:13:27
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m use std::{string::String, [0m[33moption[0m};
+   [0m[34m│[0m                           [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:15:14
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
+   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:15:20
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m},
+   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:18:5
+   [0m[34m│[0m
+[0m[34m18[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:32:7
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m const [0m[33mEUnauthorized[0m: u64 = 3;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe constant 'EUnauthorized' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/lp_token_custody.move:122:9
+    [0m[34m│[0m
+[0m[34m122[0m [0m[34m│[0m     let [0m[33maccount_address[0m = object::id_address(account);
+    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mUnused local variable 'account_address'. Consider removing or prefixing with an underscore: '_account_address'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/../futarchy_core/sources/futarchy_config.move:1141:1
+     [0m[34m│[0m  
+[0m[34m1141[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1142[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1143[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This allows standard intents to work with any outcome type[0m
+     [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:17:30
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m     account::{Self, Account, [0m[33mAuth[0m},
+   [0m[34m│[0m                              [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'Auth'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:23:38
+   [0m[34m│[0m
+[0m[34m23[0m [0m[34m│[0m use futarchy_core::futarchy_config::{[0m[33mSelf[0m, FutarchyConfig};
+   [0m[34m│[0m                                      [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'futarchy_config'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:28:7
+   [0m[34m│[0m
+[0m[34m28[0m [0m[34m│[0m const [0m[33mECoinTypeNotAllowed[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'ECoinTypeNotAllowed' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:29:7
+   [0m[34m│[0m
+[0m[34m29[0m [0m[34m│[0m const [0m[33mEVaultNotInitialized[0m: u64 = 2;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EVaultNotInitialized' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:127:40
+    [0m[34m│[0m
+[0m[34m127[0m [0m[34m│[0m     allowed.types.contains(&type_name::[0m[33mget[0m<CoinType>())
+    [0m[34m│[0m                                        [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:134:5
+    [0m[34m│[0m
+[0m[34m134[0m [0m[34m│[0m     [0m[33mcoin[0m: Coin<CoinType>,
+    [0m[34m│[0m     [0m[33m^^^^[0m [0m[33mUnused parameter 'coin'. Consider removing or prefixing with an underscore: '_coin'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:136:5
+    [0m[34m│[0m
+[0m[34m136[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext,
+    [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:152:8
+    [0m[34m│[0m
+[0m[34m152[0m [0m[34m│[0m public [0m[33mentry[0m fun deposit_revenue<CoinType: drop>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:169:31
+    [0m[34m│[0m
+[0m[34m169[0m [0m[34m│[0m         coin_type: type_name::[0m[33mget[0m<CoinType>(),
+    [0m[34m│[0m                               [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:195:32
+    [0m[34m│[0m
+[0m[34m195[0m [0m[34m│[0m     let type_name = type_name::[0m[33mget[0m<CoinType>();
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/futarchy_vault.move:222:32
+    [0m[34m│[0m
+[0m[34m222[0m [0m[34m│[0m     let type_name = type_name::[0m[33mget[0m<CoinType>();
+    [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_vault/sources/custody_actions.move:4:18
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use sui::object::[0m[33mID[0m;
+  [0m[34m│[0m                  [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+Skipping dependency verification
+Transaction Digest: 2bVy5rFVipKukqeBycphyovJofY393GQWsrSA1UrSQ5h
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                   │
+│ Gas Owner: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                │
+│ Gas Budget: 3000000000 MIST                                                                                  │
+│ Gas Price: 1000 MIST                                                                                         │
+│ Gas Payment:                                                                                                 │
+│  ┌──                                                                                                         │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                    │
+│  │ Version: 20057                                                                                            │
+│  │ Digest: 6FSpmADnUxF1CN74CjYKQJaapGSHQ2UyLdsj823mto32                                                      │
+│  └──                                                                                                         │
+│                                                                                                              │
+│ Transaction Kind: Programmable                                                                               │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Input Objects                                                                                            │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0   Pure Arg: Type: address, Value: "0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd" │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
+│ │ Commands                                                                │                                  │
+│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
+│ │ 0  Publish:                                                             │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Dependencies:                                                        │                                  │
+│ │  │   0x56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491 │                                  │
+│ │  │   0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd │                                  │
+│ │  │   0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870 │                                  │
+│ │  │   0xfac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
+│ │  │   0x9507a06101f44857b3bdd57ab9a60ffc9fc9afe23e5186f721220a1be41ca863 │                                  │
+│ │  │   0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964 │                                  │
+│ │  │   0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc │                                  │
+│ │  └                                                                      │                                  │
+│ │                                                                         │                                  │
+│ │ 1  TransferObjects:                                                     │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Arguments:                                                           │                                  │
+│ │  │   Result 0                                                           │                                  │
+│ │  │ Address: Input  0                                                    │                                  │
+│ │  └                                                                      │                                  │
+│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
+│                                                                                                              │
+│ Signatures:                                                                                                  │
+│    CjzKyzmZMJ7XuRrRs1R2lWGsKuGkr37HIH3AfEGyh0J90k1l+z7GnOCDj00wh/f8AkqV8/0PVsVZJ1DzCAfUBQ==                  │
+│                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: 2bVy5rFVipKukqeBycphyovJofY393GQWsrSA1UrSQ5h                                              │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 162                                                                               │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x99175a689671d24aa33ddb50358f6f4ca04e11def863ddfd8304c54aa5e27cb2                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20058                                                                                 │
+│  │ Digest: 8w7McE11b7gGXBiaQxAFD2fiz3gFChV8uz4j3oXnxdQE                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0xb360eeeb047d085e587ae609ad6113df2af0b9b1ec7448bc7ec07069a55f06db                         │
+│  │ Owner: Immutable                                                                               │
+│  │ Version: 1                                                                                     │
+│  │ Digest: FJezDwNad9cm49bMEG3E2Xn1HsWCawFaYzi3TiUZaN7b                                           │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20058                                                                                 │
+│  │ Digest: 2t7vNDKX67UxjbuDbQxktRwsYqib9PkjEJSiVmP3oN8w                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 20058                                                                                 │
+│  │ Digest: 2t7vNDKX67UxjbuDbQxktRwsYqib9PkjEJSiVmP3oN8w                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 65648800 MIST                                                                    │
+│    Computation Cost: 4000000 MIST                                                                 │
+│    Storage Rebate: 978120 MIST                                                                    │
+│    Non-refundable Storage Fee: 9880 MIST                                                          │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    5fAazmK1axnC13oPGgAJ8GENrBnULXQvXtDGSGK9Ecnc                                                   │
+│    5yLrGGmc2ETUhR4bwbidnSpApsuvfaJAYpDyNQBsQo3E                                                   │
+│    7uhZX6LjHKTEEYL3osKyG6FznyHmo55pixnFJNUqWmx7                                                   │
+│    9BWwnXoWBuFKFsVDG2eyMo2uQRz3wHmMcKht2GeBAUg3                                                   │
+│    CYoQBEk37Q5K4SQ3vgdbZ8ohaRs6fRBAasBXgGkT7Mi9                                                   │
+│    DxSNLpyZHukwq6xPqSjauDankyXmZVep5wfLAizgff5v                                                   │
+│    FXazR5kXB3MpgnAfZQCCxdCzWkM9SQVtPEhojpBzBujS                                                   │
+│    Gum3EUuN7JgRJFryEEX8w86WB6SUWzTKtfpjNHKQ8RMM                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+
+╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                   │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x99175a689671d24aa33ddb50358f6f4ca04e11def863ddfd8304c54aa5e27cb2                  │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                    │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd ) │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                          │
+│  │ Version: 20058                                                                                │
+│  │ Digest: 8w7McE11b7gGXBiaQxAFD2fiz3gFChV8uz4j3oXnxdQE                                          │
+│  └──                                                                                             │
+│ Mutated Objects:                                                                                 │
+│  ┌──                                                                                             │
+│  │ ObjectID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                  │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                    │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd ) │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                    │
+│  │ Version: 20058                                                                                │
+│  │ Digest: 2t7vNDKX67UxjbuDbQxktRwsYqib9PkjEJSiVmP3oN8w                                          │
+│  └──                                                                                             │
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0xb360eeeb047d085e587ae609ad6113df2af0b9b1ec7448bc7ec07069a55f06db                 │
+│  │ Version: 1                                                                                    │
+│  │ Digest: FJezDwNad9cm49bMEG3E2Xn1HsWCawFaYzi3TiUZaN7b                                          │
+│  │ Modules: custody_actions, futarchy_vault, futarchy_vault_init, lp_token_custody               │
+│  └──                                                                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -68670680                                                                              │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
