@@ -17,21 +17,69 @@ Run this in root
 npm run prettier -- -w sources/amm/amm.move  
 ```
 
-Concatenating all .Move files for use with LLMs 
-```
-find \
-    futarchy/sources \
-    futarchy_utils/sources \
-    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_all.txt
-```
+## Concatenating all .Move files for use with LLMs
 
-```
+Run these commands from the project root directory (`/Users/admin/monorepo/`):
+
+**All 12 packages (Move Framework + Futarchy):**
+```bash
 find \
-  contracts/move-framework/examples/sources \
-  contracts/move-framework/packages/actions/sources \
   contracts/move-framework/packages/extensions/sources \
   contracts/move-framework/packages/protocol/sources \
-  -type f -name '*.move' -exec cat {} + > all_moves.txt
+  contracts/move-framework/packages/actions/sources \
+  contracts/futarchy_one_shot_utils/sources \
+  contracts/futarchy_core/sources \
+  contracts/futarchy_markets/sources \
+  contracts/futarchy_vault/sources \
+  contracts/futarchy_multisig/sources \
+  contracts/futarchy_specialized_actions/sources \
+  contracts/futarchy_lifecycle/sources \
+  contracts/futarchy_actions/sources \
+  contracts/futarchy_dao/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_12_packages.txt
+```
+
+**Just 3 Move Framework packages:**
+```bash
+find \
+  contracts/move-framework/packages/extensions/sources \
+  contracts/move-framework/packages/protocol/sources \
+  contracts/move-framework/packages/actions/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > move_framework_only.txt
+```
+
+**Just 9 Futarchy packages:**
+```bash
+find \
+  contracts/futarchy_one_shot_utils/sources \
+  contracts/futarchy_core/sources \
+  contracts/futarchy_markets/sources \
+  contracts/futarchy_vault/sources \
+  contracts/futarchy_multisig/sources \
+  contracts/futarchy_specialized_actions/sources \
+  contracts/futarchy_lifecycle/sources \
+  contracts/futarchy_actions/sources \
+  contracts/futarchy_dao/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_9_packages.txt
+```
+
+**Alternative: Run from contracts/futarchy_dao directory:**
+```bash
+# If running from contracts/futarchy_dao/
+find \
+  ../move-framework/packages/extensions/sources \
+  ../move-framework/packages/protocol/sources \
+  ../move-framework/packages/actions/sources \
+  ../futarchy_one_shot_utils/sources \
+  ../futarchy_core/sources \
+  ../futarchy_markets/sources \
+  ../futarchy_vault/sources \
+  ../futarchy_multisig/sources \
+  ../futarchy_specialized_actions/sources \
+  ../futarchy_lifecycle/sources \
+  ../futarchy_actions/sources \
+  ../futarchy_dao/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > ../../all_12_packages.txt
 ```
 
 ```

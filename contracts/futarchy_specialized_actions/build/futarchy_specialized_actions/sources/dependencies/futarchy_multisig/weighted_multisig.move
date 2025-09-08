@@ -13,6 +13,16 @@ const EAlreadyApproved: u64 = 2;
 const ENotMember: u64 = 3;
 const EThresholdUnreachable: u64 = 4;
 const EInvalidArguments: u64 = 5;
+const EDuplicateMember: u64 = 6;
+const EEmptyMemberList: u64 = 7;
+const EWeightTooLarge: u64 = 8;
+const EWeightOverflow: u64 = 9;
+
+// === Constants ===
+/// Protocol-level maximum weight per member (prevents gaming and overflow)
+const MAX_MEMBER_WEIGHT: u64 = 1_000_000; // 1 million max weight per member
+/// Maximum total weight to prevent overflow
+const MAX_TOTAL_WEIGHT: u64 = 1_000_000_000; // 1 billion max total
 
 // === Structs ===
 
@@ -44,20 +54,45 @@ public struct Approvals has store, drop, copy {
 /// Create a new weighted multisig configuration.
 public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): WeightedMultisig {
     assert!(members.length() == weights.length(), EInvalidArguments);
+    assert!(members.length() > 0, EEmptyMemberList);
+    assert!(threshold > 0, EInvalidArguments); // Check threshold early
+    
     let mut member_map = vec_map::empty();
     let mut total_weight = 0u64;
+    let mut max_individual_weight = 0u64;
+    let mut seen_members = vec_set::empty<address>();
 
     let mut i = 0;
     while (i < members.length()) {
         let member = *vector::borrow(&members, i);
         let weight = *vector::borrow(&weights, i);
+        
+        // Check for duplicate members
+        assert!(!seen_members.contains(&member), EDuplicateMember);
+        seen_members.insert(member);
+        
+        // Validate weight bounds
         assert!(weight > 0, EInvalidArguments);
+        assert!(weight <= MAX_MEMBER_WEIGHT, EWeightTooLarge);
+        
+        // Track max individual weight
+        if (weight > max_individual_weight) {
+            max_individual_weight = weight;
+        };
+        
+        // Check for overflow before adding
+        assert!(total_weight <= MAX_TOTAL_WEIGHT - weight, EWeightOverflow);
+        
         member_map.insert(member, weight);
         total_weight = total_weight + weight;
         i = i + 1;
     };
 
-    assert!(threshold > 0 && threshold <= total_weight, EThresholdUnreachable);
+    // Validate threshold is achievable
+    assert!(threshold <= total_weight, EThresholdUnreachable);
+    // Optional: warn if no single member can meet threshold (may be intentional)
+    // This is a valid configuration for requiring multiple signers
+    
     WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: 0 }
 }
 
@@ -91,6 +126,8 @@ public fun validate_outcome(
     while (i < approvers_vector.length()) {
         let approver = *vector::borrow(&approvers_vector, i);
         let weight = *config.members.get(&approver);
+        // Overflow protection (should never happen with MAX_MEMBER_WEIGHT but be safe)
+        assert!(current_weight <= MAX_TOTAL_WEIGHT - weight, EWeightOverflow);
         current_weight = current_weight + weight;
         i = i + 1;
     };
@@ -123,17 +160,31 @@ public fun update_membership(
     new_members: vector<address>,
     new_weights: vector<u64>,
     new_threshold: u64,
+    clock: &Clock,
 ) {
     assert!(new_members.length() == new_weights.length(), EInvalidArguments);
+    assert!(new_members.length() > 0, EEmptyMemberList);
     
     let mut new_member_map = vec_map::empty();
     let mut new_total_weight = 0u64;
+    let mut seen_members = vec_set::empty<address>();
     
     let mut i = 0;
     while (i < new_members.length()) {
         let member = *vector::borrow(&new_members, i);
         let weight = *vector::borrow(&new_weights, i);
+        
+        // Check for duplicate members
+        assert!(!seen_members.contains(&member), EDuplicateMember);
+        seen_members.insert(member);
+        
+        // Validate weight bounds
         assert!(weight > 0, EInvalidArguments);
+        assert!(weight <= MAX_MEMBER_WEIGHT, EWeightTooLarge);
+        
+        // Check for overflow before adding
+        assert!(new_total_weight <= MAX_TOTAL_WEIGHT - weight, EWeightOverflow);
+        
         new_member_map.insert(member, weight);
         new_total_weight = new_total_weight + weight;
         i = i + 1;
@@ -145,8 +196,8 @@ public fun update_membership(
     config.members = new_member_map;
     config.threshold = new_threshold;
     config.total_weight = new_total_weight;
-    // Reset activity on membership update
-    config.last_activity_ms = 0;
+    // Set activity to current time on membership update
+    config.last_activity_ms = clock.timestamp_ms();
 }
 
 // === Dead-man switch helpers ===

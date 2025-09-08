@@ -77,10 +77,15 @@ const ELineNotExpired: u64 = 14;
 const EInvalidTimeOrder: u64 = 15;
 const EAgreementIsImmutable: u64 = 16;
 const EAlreadyGloballyImmutable: u64 = 17;
+const EInsertNotAllowedForTemporaryLine: u64 = 18;
+const EExpiryTooFarInFuture: u64 = 19;
+const EDuplicateLineText: u64 = 20;
 
 // === Constants ===
 const MAX_LINES_PER_AGREEMENT: u64 = 1000;
 const MAX_TRAVERSAL_LIMIT: u64 = 1000;
+// Maximum expiry time: 100 years in milliseconds
+const MAX_EXPIRY_TIME_MS: u64 = 100 * 365 * 24 * 60 * 60 * 1000;
 
 // Line type constants
 const LINE_TYPE_PERMANENT: u8 = 0;
@@ -552,19 +557,22 @@ fun insert_line_after_internal(
     // Check if insertions are allowed
     assert!(agreement.allow_insert, EInsertNotAllowed);
     
+    // Check for duplicate text
+    assert!(!has_duplicate_text(agreement, &new_text), EDuplicateLineText);
+    
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
+    // Get the next pointer from the previous line first (before creating UID)
+    let prev_line_next = {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line.next
+    };
+    
+    // Now create the UID after all validations
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
-    
-    // Get the next pointer from the previous line
-    let prev_line_next;
-    {
-        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
-        prev_line_next = prev_line.next;
-    };
     
     let new_line = AgreementLine {
         text: new_text,
@@ -625,8 +633,12 @@ fun insert_line_at_beginning_internal(
     // Check if insertions are allowed
     assert!(agreement.allow_insert, EInsertNotAllowed);
     
+    // Check for duplicate text
+    assert!(!has_duplicate_text(agreement, &new_text), EDuplicateLineText);
+    
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
+    // Create UID after all validations
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
     
@@ -671,7 +683,12 @@ fun insert_line_at_beginning_internal(
     new_line_id
 }
 
-/// Internal function to remove expired lines (bypasses immutability check since expired lines can be removed)
+/// Internal function to remove expired lines
+/// NOTE: This function intentionally bypasses the immutability check because expired lines
+/// must be removable for cleanup, regardless of their immutable status. This is by design:
+/// - Expired lines are no longer active/valid parts of the agreement
+/// - Allowing their removal prevents permanent storage bloat
+/// - The expiry mechanism takes precedence over immutability for cleanup purposes
 fun remove_expired_line_internal(
     agreement: &mut OperatingAgreement,
     line_id: ID,
@@ -912,6 +929,24 @@ public fun is_global_immutable(agreement: &OperatingAgreement): bool {
     agreement.immutable
 }
 
+/// Check if a line with the given text already exists in the agreement
+fun has_duplicate_text(agreement: &OperatingAgreement, text: &String): bool {
+    let mut current_id_opt = agreement.head;
+    let mut iterations = 0;
+    
+    while (current_id_opt.is_some() && iterations < MAX_TRAVERSAL_LIMIT) {
+        let current_id = *current_id_opt.borrow();
+        let current_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: current_id });
+        if (&current_line.text == text) {
+            return true
+        };
+        current_id_opt = current_line.next;
+        iterations = iterations + 1;
+    };
+    
+    false
+}
+
 /// Get all OA lock status in one call (allow_insert, allow_remove, global_immutable)
 public fun get_oa_full_policy(agreement: &OperatingAgreement): (bool, bool, bool) {
     (agreement.allow_insert, agreement.allow_remove, agreement.immutable)
@@ -1046,7 +1081,13 @@ public fun is_line_active(line: &AgreementLine, current_time_ms: u64): bool {
 /// Public entry point for anyone to remove a specific expired line
 /// This is a cleanup function that can be called by anyone to remove expired sunset lines
 /// The line must actually be expired (expires_at < current_time) for this to succeed
-/// Respects allow_remove: if removals are disabled, even expired lines cannot be removed
+/// 
+/// IMPORTANT: While this function can remove "immutable" expired lines, this is intentional:
+/// - Immutability prevents CHANGES to line content, not cleanup of expired lines
+/// - Expired lines are no longer part of the active agreement
+/// - This prevents permanent storage bloat from expired but immutable lines
+/// 
+/// Respects allow_remove: if removals are disabled globally, even expired lines cannot be removed
 public entry fun remove_expired_line(
     agreement: &mut OperatingAgreement,
     line_id: ID,
@@ -1086,23 +1127,27 @@ public fun insert_sunset_line_after(
     // Check if agreement is globally immutable
     assert!(!agreement.immutable, EAgreementIsImmutable);
     assert!(agreement.allow_insert, EInsertNotAllowed);
+    // Check for duplicate text
+    assert!(!has_duplicate_text(agreement, &text), EDuplicateLineText);
     // Cannot add sunset lines if removals are disabled (since they can't be cleaned up)
     assert!(agreement.allow_remove, ERemoveNotAllowed);
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
-    // Validate sunset time is in the future
+    // Validate sunset time is in the future but not too far
     let now = clock::timestamp_ms(clock);
     assert!(expires_at_ms > now, EInvalidTimeOrder);
+    assert!(expires_at_ms <= now + MAX_EXPIRY_TIME_MS, EExpiryTooFarInFuture);
     
+    // Get the next pointer from the previous line first (before creating UID)
+    let prev_line_next = {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line.next
+    };
+    
+    // Now create the UID after all validations
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
-    
-    let prev_line_next;
-    {
-        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
-        prev_line_next = prev_line.next;
-    };
     
     let new_line = AgreementLine {
         text,
@@ -1164,17 +1209,20 @@ public fun insert_sunrise_line_after(
     // Check if agreement is globally immutable
     assert!(!agreement.immutable, EAgreementIsImmutable);
     assert!(agreement.allow_insert, EInsertNotAllowed);
+    // Check for duplicate text
+    assert!(!has_duplicate_text(agreement, &text), EDuplicateLineText);
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
 
+    // Get the next pointer from the previous line first (before creating UID)
+    let prev_line_next = {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line.next
+    };
+
+    // Now create the UID after all validations
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
-
-    let prev_line_next;
-    {
-        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
-        prev_line_next = prev_line.next;
-    };
 
     let new_line = AgreementLine {
         text,
@@ -1234,19 +1282,26 @@ public fun insert_temporary_line_after(
     // Check if agreement is globally immutable
     assert!(!agreement.immutable, EAgreementIsImmutable);
     assert!(agreement.allow_insert, EInsertNotAllowed);
-    assert!(agreement.allow_remove, ERemoveNotAllowed); // must allow later cleanup
+    // Check for duplicate text
+    assert!(!has_duplicate_text(agreement, &text), EDuplicateLineText);
+    // Temporary lines need removal to be allowed for cleanup after expiry
+    assert!(agreement.allow_remove, EInsertNotAllowedForTemporaryLine);
     assert!(df::exists_<LineKey>(&agreement.id, LineKey { id: prev_line_id }), ELineNotFound);
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     assert!(effective_from_ms < expires_at_ms, EInvalidTimeOrder);
+    // Validate times are reasonable
+    let now = clock::timestamp_ms(clock);
+    assert!(expires_at_ms <= now + MAX_EXPIRY_TIME_MS, EExpiryTooFarInFuture);
 
+    // Get the next pointer from the previous line first (before creating UID)
+    let prev_line_next = {
+        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
+        prev_line.next
+    };
+
+    // Now create the UID after all validations
     let line_uid = object::new(ctx);
     let new_line_id = object::uid_to_inner(&line_uid);
-
-    let prev_line_next;
-    {
-        let prev_line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: prev_line_id });
-        prev_line_next = prev_line.next;
-    };
 
     let new_line = AgreementLine {
         text,

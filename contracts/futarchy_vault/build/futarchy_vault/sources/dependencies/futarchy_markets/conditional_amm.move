@@ -45,8 +45,7 @@ const EMarketIdMismatch: u64 = 7; // Market ID doesn't match expected value
 const EInsufficientLPTokens: u64 = 8; // Not enough LP tokens to burn
 const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
 const EOverflow: u64 = 10; // Arithmetic overflow detected
-const EInvalidLiquidityRatio: u64 = 11; // Liquidity provided does not match pool ratio
-const EInvalidFeeRate: u64 = 12; // Fee rate is invalid (e.g., >= 100%)
+const EInvalidFeeRate: u64 = 11; // Fee rate is invalid (e.g., >= 100%)
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -379,21 +378,7 @@ public fun add_liquidity_proportional(
         // This approach inherently protects against adding imbalanced liquidity by only considering the
         // smaller of the two potential LP amounts derived from asset and stable contributions.
         //
-        // Additionally, the `assert!` statement below provides explicit ratio validation (slippage protection)
-        // to ensure that the provided asset and stable amounts are close to the current pool ratio,
-        // preventing users from adding liquidity at highly unfavorable rates.
-        let expected_stable_amount = math::mul_div_to_64(asset_amount, pool.stable_reserve, pool.asset_reserve);
-        let expected_asset_amount = math::mul_div_to_64(stable_amount, pool.asset_reserve, pool.stable_reserve);
-
-        // Use a tolerance of 0.1% (10 basis points) to allow for small rounding differences
-        // while still preventing imbalanced liquidity attacks
-        let tolerance_bps = 10; // 0.1%
-        assert!(
-            math::within_tolerance(stable_amount, expected_stable_amount, tolerance_bps) && 
-            math::within_tolerance(asset_amount, expected_asset_amount, tolerance_bps), 
-            EInvalidLiquidityRatio
-        );
-
+        // The min_lp_out parameter provides slippage protection for users.
         let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
         let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
         // Use minimum to ensure proper ratio

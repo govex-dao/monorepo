@@ -239,7 +239,7 @@ public fun new_insert_line_after_action(
     difficulty: u64,
 ): InsertLineAfterAction {
     assert!(text.length() > 0, EEmptyText);
-    assert!(difficulty > 0, EInvalidDifficulty);
+    // Difficulty of 0 is valid for unanimous decisions
     InsertLineAfterAction { prev_line_id, text, difficulty }
 }
 
@@ -249,7 +249,7 @@ public fun new_insert_line_at_beginning_action(
     difficulty: u64,
 ): InsertLineAtBeginningAction {
     assert!(text.length() > 0, EEmptyText);
-    assert!(difficulty > 0, EInvalidDifficulty);
+    // Difficulty of 0 is valid for unanimous decisions
     InsertLineAtBeginningAction { text, difficulty }
 }
 
@@ -297,10 +297,12 @@ public fun new_operating_agreement_action(
     } else if (action_type == ACTION_INSERT_AFTER) {
         assert!(line_id.is_some(), EInvalidLineId);
         assert!(text.is_some() && text.borrow().length() > 0, EEmptyText);
-        assert!(difficulty.is_some() && *difficulty.borrow() > 0, EInvalidDifficulty);
+        // Difficulty of 0 is valid for unanimous decisions
+        assert!(difficulty.is_some(), EInvalidDifficulty);
     } else if (action_type == ACTION_INSERT_AT_BEGINNING) {
         assert!(text.is_some() && text.borrow().length() > 0, EEmptyText);
-        assert!(difficulty.is_some() && *difficulty.borrow() > 0, EInvalidDifficulty);
+        // Difficulty of 0 is valid for unanimous decisions
+        assert!(difficulty.is_some(), EInvalidDifficulty);
     } else if (action_type == ACTION_REMOVE) {
         assert!(line_id.is_some(), EInvalidLineId);
     };
@@ -428,10 +430,12 @@ fun validate_operating_agreement_action(action: &OperatingAgreementAction) {
     } else if (action.action_type == ACTION_INSERT_AFTER) {
         assert!(action.line_id.is_some(), EInvalidLineId);
         assert!(action.text.is_some() && action.text.borrow().length() > 0, EEmptyText);
-        assert!(action.difficulty.is_some() && *action.difficulty.borrow() > 0, EInvalidDifficulty);
+        // Difficulty of 0 is valid for unanimous decisions
+        assert!(action.difficulty.is_some(), EInvalidDifficulty);
     } else if (action.action_type == ACTION_INSERT_AT_BEGINNING) {
         assert!(action.text.is_some() && action.text.borrow().length() > 0, EEmptyText);
-        assert!(action.difficulty.is_some() && *action.difficulty.borrow() > 0, EInvalidDifficulty);
+        // Difficulty of 0 is valid for unanimous decisions
+        assert!(action.difficulty.is_some(), EInvalidDifficulty);
     } else if (action.action_type == ACTION_REMOVE) {
         assert!(action.line_id.is_some(), EInvalidLineId);
     };

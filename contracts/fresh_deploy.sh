@@ -13,9 +13,9 @@ packages=(
     "futarchy_markets"
     "futarchy_vault"
     "futarchy_multisig"
+    "futarchy_specialized_actions"  # Must come before lifecycle and actions
     "futarchy_lifecycle"
     "futarchy_actions"
-    "futarchy_specialized_actions"
     "futarchy_dao"
 )
 
@@ -40,6 +40,14 @@ for pkg in "${packages[@]}"; do
     echo "========================================="
     
     cd "/Users/admin/monorepo/contracts/$pkg"
+    
+    # Check if already deployed
+    CURRENT_ADDR=$(grep "^${pkg} = " Move.toml | cut -d'"' -f2)
+    if [ "$CURRENT_ADDR" != "0x0" ] && [ -n "$CURRENT_ADDR" ]; then
+        echo "✅ $pkg already deployed: $CURRENT_ADDR"
+        echo ""
+        continue
+    fi
     
     # Build
     echo "Building $pkg..."

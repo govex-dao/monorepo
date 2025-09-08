@@ -44,6 +44,7 @@ const EDuplicateIntent: u64 = 9;
 const EInvalidWaitingPeriod: u64 = 10;
 const EIntentAlreadyCancelled: u64 = 11;
 const ENotProposer: u64 = 12;
+const EIntegerOverflow: u64 = 13;
 
 // === Constants ===
 const MAX_OPTIMISTIC_INTENTS: u64 = 10;
@@ -191,6 +192,13 @@ public fun do_create_optimistic_intent<Outcome: store, IW: drop>(
     assert!(storage.total_active < MAX_OPTIMISTIC_INTENTS, ETooManyOptimisticIntents);
     
     let current_time = clock.timestamp_ms();
+    
+    // Validate overflow for time calculations
+    // u64 max is 18446744073709551615
+    assert!(current_time <= 18446744073709551615 - WAITING_PERIOD_MS, EIntegerOverflow);
+    assert!(current_time + WAITING_PERIOD_MS <= 18446744073709551615 - EXPIRY_PERIOD_MS, EIntegerOverflow);
+    
+    // Create UID after all validations
     let uid = object::new(ctx);
     let intent_id = object::uid_to_inner(&uid);
     object::delete(uid);
@@ -234,7 +242,7 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
-    _ctx: &mut TxContext,
+    ctx: &mut TxContext,
 ) {
     let action = executable::next_action<Outcome, ChallengeOptimisticIntentsAction, IW>(
         executable, witness
@@ -243,6 +251,9 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     // Validate batch size
     let batch_size = vector::length(&action.intent_ids);
     assert!(batch_size > 0 && batch_size <= MAX_BATCH_CHALLENGES, EInvalidBatchSize);
+    
+    // Initialize storage if needed
+    initialize_storage(account, version::current(), ctx);
     
     let current_time = clock.timestamp_ms();
     let dao_id = object::id(account);
@@ -273,12 +284,8 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
             b"Cancelled by governance proposal".to_string()
         );
         
-        // Remove from active intents
-        let (found, index) = vector::index_of(&storage.active_intents, &intent_id);
-        if (found) {
-            vector::remove(&mut storage.active_intents, index);
-            storage.total_active = storage.total_active - 1;
-        };
+        // Remove from active intents safely
+        remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
         
         // Emit event
         event::emit(OptimisticIntentCancelled {
@@ -328,12 +335,8 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     intent.is_cancelled = true;
     intent.cancel_reason = option::some(action.reason);
     
-    // Remove from active intents
-    let (found, index) = vector::index_of(&storage.active_intents, &action.intent_id);
-    if (found) {
-        vector::remove(&mut storage.active_intents, index);
-        storage.total_active = storage.total_active - 1;
-    };
+    // Remove from active intents safely
+    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
     
     // Emit event
     event::emit(OptimisticIntentCancelled {
@@ -380,12 +383,8 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     intent.is_executed = true;
     let intent_key = intent.intent_key;
     
-    // Remove from active intents
-    let (found, index) = vector::index_of(&storage.active_intents, &action.intent_id);
-    if (found) {
-        vector::remove(&mut storage.active_intents, index);
-        storage.total_active = storage.total_active - 1;
-    };
+    // Remove from active intents safely  
+    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
     
     // Emit event
     event::emit(OptimisticIntentExecuted {
@@ -396,6 +395,24 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     });
     
     intent_key
+}
+
+// === Helper Functions ===
+
+/// Safely remove an intent from the active intents vector
+fun remove_from_active_intents(
+    active_intents: &mut vector<ID>,
+    total_active: &mut u64,
+    intent_id: ID,
+) {
+    let (found, index) = vector::index_of(active_intents, &intent_id);
+    if (found) {
+        vector::remove(active_intents, index);
+        // Only decrement if we actually removed something
+        if (*total_active > 0) {
+            *total_active = *total_active - 1;
+        }
+    }
 }
 
 /// Clean up expired intents
@@ -411,6 +428,10 @@ public fun do_cleanup_expired_intents<Outcome: store, IW: drop>(
         executable, witness
     );
     
+    // Validate batch size to prevent gas exhaustion
+    let batch_size = vector::length(&action.intent_ids);
+    assert!(batch_size > 0 && batch_size <= MAX_BATCH_CHALLENGES, EInvalidBatchSize);
+    
     let current_time = clock.timestamp_ms();
     let dao_id = object::id(account);
     
@@ -422,7 +443,7 @@ public fun do_cleanup_expired_intents<Outcome: store, IW: drop>(
     
     // Process each intent
     let mut i = 0;
-    while (i < vector::length(&action.intent_ids)) {
+    while (i < batch_size) {
         let intent_id = *vector::borrow(&action.intent_ids, i);
         
         if (table::contains(&storage.intents, intent_id)) {

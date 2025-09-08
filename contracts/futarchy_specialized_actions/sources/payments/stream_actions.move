@@ -1193,8 +1193,10 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
             current_period_start: _,
             current_period_claimed: _,
             max_per_period: _,
-        } = budget_config.extract();
+        } = budget_config.destroy_some();
         table::drop(pending_withdrawals);
+    } else {
+        budget_config.destroy_none();
     };
 }
 

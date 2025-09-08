@@ -9,10 +9,10 @@ AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 
 [addresses]
-futarchy_core = "0xb56da75c850e9e7db23156d975060638b322d117863a143d717bc7df03b1d927"
-futarchy_one_shot_utils = "0x3dda2b29c33b794ca04f89dfeba1db2a3642bc68370a1fd9b8110126e1b74645"
-account_protocol = "0x30448780c44b209898af12419ca4264f2f016c44b66da47d15739fa8a39aa772"
-account_extensions = "0x18d76db190917de8d07775e5d196c296419f8de05b6e57924fc8e5e755f590f6"
+futarchy_core = "0x3293a4c2a5e3a3997a4a6258b7d7e88374e7cb955c4cc1a2975e429afb40c41f"
+futarchy_one_shot_utils = "0x31a8bbdc8ef0b2f9750cc53f7e1c4b5efa00d5bf31315e893e78699f08984ba8"
+account_protocol = "0xac811f71b6762bc12b46ae76e0a090cd8585f792b74e654224580a7d5d09a87e"
+account_extensions = "0x5abe067980aef4257d241b92d1c60aa4d31e8ebe98a167883cffaea4ceca7ef2"
 
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x0"` is exported by the Standard Library.

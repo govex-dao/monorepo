@@ -8,12 +8,10 @@ use sui::object::ID;
 use account_protocol::intents::Expired;
 
 /// Create a new Security Council (WeightedMultisig) for the DAO.
-/// Optionally register it as the OA custodian.
 public struct CreateSecurityCouncilAction has store {
     members: vector<address>,
     weights: vector<u64>,
     threshold: u64,
-    set_as_oa_custodian: bool,
 }
 
 /// Council's approval for an Operating Agreement change
@@ -29,15 +27,14 @@ public fun new_create_council(
     members: vector<address>,
     weights: vector<u64>,
     threshold: u64,
-    set_as_oa_custodian: bool,
 ): CreateSecurityCouncilAction {
-    CreateSecurityCouncilAction { members, weights, threshold, set_as_oa_custodian }
+    CreateSecurityCouncilAction { members, weights, threshold }
 }
 
 public fun get_create_council_params(
     action: &CreateSecurityCouncilAction
-): (&vector<address>, &vector<u64>, u64, bool) {
-    (&action.members, &action.weights, action.threshold, action.set_as_oa_custodian)
+): (&vector<address>, &vector<u64>, u64) {
+    (&action.members, &action.weights, action.threshold)
 }
 
 public fun delete_create_council(expired: &mut Expired) {

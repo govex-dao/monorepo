@@ -24,6 +24,7 @@ use futarchy_multisig::{
     security_council,
     security_council_actions::{Self, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
+    optimistic_intents,
 };
 use futarchy_vault::custody_actions;
 use futarchy_multisig::policy_registry;
@@ -33,11 +34,31 @@ use account_extensions::extensions::Extensions;
 // witnesses
 public struct RequestPackageUpgradeIntent has copy, drop {}
 public struct AcceptUpgradeCapIntent has copy, drop {}
-
 public struct RequestOAPolicyChangeIntent has copy, drop {}
 public struct UpdateCouncilMembershipIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
 public struct ApprovePolicyChangeIntent has copy, drop {}
+
+// Constructor functions for witnesses
+public fun new_request_package_upgrade_intent(): RequestPackageUpgradeIntent {
+    RequestPackageUpgradeIntent{}
+}
+
+public fun new_request_oa_policy_change_intent(): RequestOAPolicyChangeIntent {
+    RequestOAPolicyChangeIntent{}
+}
+
+public fun new_update_council_membership_intent(): UpdateCouncilMembershipIntent {
+    UpdateCouncilMembershipIntent{}
+}
+
+public fun new_create_security_council_intent(): CreateSecurityCouncilIntent {
+    CreateSecurityCouncilIntent{}
+}
+
+public fun new_approve_policy_change_intent(): ApprovePolicyChangeIntent {
+    ApprovePolicyChangeIntent{}
+}
 
 // Named errors
 const ERequiresCoExecution: u64 = 100;
@@ -166,9 +187,8 @@ public fun execute_accept_and_lock_cap(
     security_council.confirm_execution(executable);
 }
 
-/// Execute accept and lock cap with optional DAO enforcement
-/// If dao is provided, checks if "UpgradeCap:Custodian" policy is set
-/// If policy is set, aborts and instructs to use upgrade_cap_coexec instead
+/// Execute accept and lock cap with DAO enforcement
+/// Checks if "UpgradeCap:Custodian" policy is set and enforces co-execution
 public fun execute_accept_and_lock_cap_with_dao_check(
     dao: &Account<FutarchyConfig>,
     mut executable: Executable<Approvals>,
@@ -179,10 +199,9 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     // Check if DAO has UpgradeCap:Custodian policy set
     let reg = policy_registry::borrow_registry(dao, version::current());
     let key = b"UpgradeCap:Custodian".to_string();
-    if (policy_registry::has_policy(reg, key)) {
-        // If policy is set, enforce use of co-execution path
-        abort ERequiresCoExecution // must use upgrade_cap_coexec::execute_accept_and_lock_with_council
-    };
+    
+    // Always require co-execution if policy exists
+    assert!(!policy_registry::has_policy(reg, key), ERequiresCoExecution);
     
     // If no policy, proceed with regular execution
     execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
@@ -232,6 +251,7 @@ public fun request_update_council_membership(
 public fun execute_update_council_membership(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
+    clock: &Clock,
 ) {
     let action: &UpdateCouncilMembershipAction = executable.next_action(UpdateCouncilMembershipIntent{});
     let (new_members, new_weights, new_threshold) =
@@ -244,12 +264,13 @@ public fun execute_update_council_membership(
         security_council::witness()
     );
 
-    // Use the weighted_multisig's update_membership function
+    // Use the weighted_multisig's update_membership function (now requires clock)
     multisig::update_membership(
         config_mut,
         *new_members,
         *new_weights,
-        new_threshold
+        new_threshold,
+        clock
     );
 
     security_council.confirm_execution(executable);
@@ -257,7 +278,7 @@ public fun execute_update_council_membership(
 
 // === Create Security Council (DAO-side intent) ===
 
-/// DAO proposes creation of a Security Council; optionally registers it as OA custodian.
+/// DAO proposes creation of a Security Council.
 public fun request_create_security_council<Outcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     params: Params,
@@ -265,7 +286,6 @@ public fun request_create_security_council<Outcome: store + drop + copy>(
     members: vector<address>,
     weights: vector<u64>,
     threshold: u64,
-    set_as_oa_custodian: bool,
     ctx: &mut TxContext
 ) {
     dao.build_intent!(
@@ -279,8 +299,7 @@ public fun request_create_security_council<Outcome: store + drop + copy>(
             let action = security_council_actions::new_create_council(
                 members,
                 weights,
-                threshold,
-                set_as_oa_custodian
+                threshold
             );
             intent.add_action(action, iw);
         }
@@ -297,7 +316,7 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
     ctx: &mut TxContext
 ) {
     let action: &CreateSecurityCouncilAction = executable.next_action(CreateSecurityCouncilIntent{});
-    let (members, weights, threshold, set_oa) =
+    let (members, weights, threshold) =
         security_council_actions::get_create_council_params(action);
 
     // Build council account
@@ -310,10 +329,6 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
     );
     let council_id = object::id(&council);
     transfer::public_share_object(council);
-
-    // Note: OA:Custodian policy has been removed - OA is now always governed like other actions
-    // The set_oa parameter is kept for backward compatibility but is now ignored
-    let _ = set_oa;
 
     // Confirm DAO-side execution
     dao.confirm_execution(executable);
@@ -468,6 +483,14 @@ fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<
     security_council_actions::delete_create_council(expired);
     security_council_actions::delete_approve_generic(expired);
     security_council_actions::delete_sweep_intents(expired);
+    security_council_actions::delete_council_create_optimistic_intent(expired);
+    
+    // Delete optimistic intent actions
+    optimistic_intents::delete_execute_optimistic_intent_action(expired);
+    optimistic_intents::delete_cancel_optimistic_intent_action(expired);
+    optimistic_intents::delete_create_optimistic_intent_action(expired);
+    optimistic_intents::delete_challenge_optimistic_intents_action(expired);
+    optimistic_intents::delete_cleanup_expired_intents_action(expired);
     
     // Delete package upgrade actions
     package_upgrade::delete_upgrade(expired);
@@ -590,6 +613,27 @@ public struct CreateOptimisticIntent has copy, drop {}
 public struct ExecuteOptimisticIntent has copy, drop {}
 public struct CancelOptimisticIntent has copy, drop {}
 public struct ChallengeOptimisticIntents has copy, drop {}
+
+// Constructor functions for additional witnesses
+public fun new_sweep_expired_intents_intent(): SweepExpiredIntentsIntent {
+    SweepExpiredIntentsIntent{}
+}
+
+public fun new_create_optimistic_intent(): CreateOptimisticIntent {
+    CreateOptimisticIntent{}
+}
+
+public fun new_execute_optimistic_intent(): ExecuteOptimisticIntent {
+    ExecuteOptimisticIntent{}
+}
+
+public fun new_cancel_optimistic_intent(): CancelOptimisticIntent {
+    CancelOptimisticIntent{}
+}
+
+public fun new_challenge_optimistic_intents(): ChallengeOptimisticIntents {
+    ChallengeOptimisticIntents{}
+}
 
 // === Optimistic Intent Functions ===
 
