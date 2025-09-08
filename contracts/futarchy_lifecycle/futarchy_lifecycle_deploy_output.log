@@ -90,38 +90,6 @@ BUILDING futarchy_lifecycle
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:193:5
-    [0m[34m│[0m
-[0m[34m193[0m [0m[34m│[0m     [0m[33mraise_id[0m: ID,
-    [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'raise_id' field of the 'ContributionAdded' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:194:5
-    [0m[34m│[0m
-[0m[34m194[0m [0m[34m│[0m     [0m[33mcontributor[0m: address,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mThe 'contributor' field of the 'ContributionAdded' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:195:5
-    [0m[34m│[0m
-[0m[34m195[0m [0m[34m│[0m     [0m[33mamount[0m: u64,
-    [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mThe 'amount' field of the 'ContributionAdded' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:196:5
-    [0m[34m│[0m
-[0m[34m196[0m [0m[34m│[0m     [0m[33mnew_total_raised[0m: u64,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe 'new_total_raised' field of the 'ContributionAdded' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 [0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:266:8
     [0m[34m│[0m
@@ -200,23 +168,6 @@ BUILDING futarchy_lifecycle
     [0m[34m│[0m
     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[Lint W99000][0m[1m: possible owned object share[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:681:5
-    [0m[34m│[0m
-[0m[34m103[0m [0m[34m│[0m public struct CapSettlement has key, store {
-    [0m[34m│[0m                                      [0m[34m-----[0m [0m[34mPotentially an owned object because 'store' grants access to public transfers[0m
-    [0m[34m·[0m
-[0m[34m568[0m [0m[34m│[0m ): CapSettlement {
-    [0m[34m│[0m    [0m[34m-------------[0m [0m[34mA potentially owned object coming from here[0m
-    [0m[34m·[0m
-[0m[34m681[0m [0m[34m│[0m     [0m[33mtransfer::public_share_object(settlement)[0m;
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-    [0m[34m│[0m     [0m[33m│[0m                             [0m[34m│[0m
-    [0m[34m│[0m     [0m[33m│[0m                             [0m[34mCreating a fresh object and sharing it within the same function will ensure this does not abort.[0m
-    [0m[34m│[0m     [0m[33mPotential abort from a (potentially) owned object created by a different transaction.[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad.move:685:8
@@ -351,16 +302,6 @@ BUILDING futarchy_lifecycle
    [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09014][0m[1m: unused mutable reference '&mut' parameter[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/factory/launchpad_rewards.move:63:10
-   [0m[34m│[0m
-[0m[34m63[0m [0m[34m│[0m     ctx: [0m[33m&mut TxContext[0m,
-   [0m[34m│[0m     [0m[34m---[0m  [0m[33m^^^^^^^^^^^^^^[0m [0m[33mMutable reference is never used mutably, consider switching to an immutable reference '&' instead[0m
-   [0m[34m│[0m     [0m[34m│[0m     
-   [0m[34m│[0m     [0m[34mFor parameters, this can be silenced by prefixing the name with an underscore, e.g. '_ctx'[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
      [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_core/sources/futarchy_config.move:1141:1
@@ -607,19 +548,191 @@ BUILDING futarchy_lifecycle
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[Lint W99001][0m[1m: non-composable transfer to sender[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/dissolution/dissolution_actions.move:456:9
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:120:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m120[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_create_payment<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                      [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m121[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m122[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m123[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m126[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m127[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:575:56
     [0m[34m│[0m
-[0m[34m390[0m [0m[34m│[0m public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
-    [0m[34m│[0m            [0m[34m--------------------[0m [0m[34mReturning an object from a function, allows a caller to use the object and enables composability via programmable transactions.[0m
-    [0m[34m·[0m
-[0m[34m456[0m [0m[34m│[0m         [0m[33mtransfer::public_transfer(distribution_coin, ctx.sender())[0m;
-    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-    [0m[34m│[0m         [0m[33m│[0m                                            [0m[34m│[0m
-    [0m[34m│[0m         [0m[33m│[0m                                            [0m[34mTransaction sender address coming from here[0m
-    [0m[34m│[0m         [0m[33mTransfer of an object to transaction sender address[0m
+[0m[34m575[0m [0m[34m│[0m public fun do_create_payment<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                        [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:133:9
+     [0m[34m│[0m  
+[0m[34m 111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+     [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+     [0m[34m·[0m  
+[0m[34m 133[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_cancel_payment<Outcome, CoinType, IW>([0m
+     [0m[34m│[0m                                                      [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m 134[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m 135[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m 136[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+     [0m[34m·[0m [0m[31m│[0m
+[0m[34m 139[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m 140[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+     [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+     [0m[34m│[0m  
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:1011:56
+     [0m[34m│[0m
+[0m[34m1011[0m [0m[34m│[0m public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: drop>(
+     [0m[34m│[0m                                                        [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:146:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m146[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_create_budget_stream<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                            [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m147[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m148[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m149[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m152[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m153[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:733:62
     [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+[0m[34m733[0m [0m[34m│[0m public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                              [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:159:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m159[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_execute_payment<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                       [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m160[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m161[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m162[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m165[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m166[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:853:57
+    [0m[34m│[0m
+[0m[34m853[0m [0m[34m│[0m public fun do_execute_payment<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                         [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:630:20
+    [0m[34m│[0m
+[0m[34m630[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                    [0m[31m│[0m                          [0m[34m│[0m
+    [0m[34m│[0m                    [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+    [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:367:22
+    [0m[34m│[0m
+[0m[34m367[0m [0m[34m│[0m     version_witness: VersionWitness,
+    [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:630:20
+    [0m[34m│[0m
+[0m[34m630[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                    [0m[31m│[0m                [0m[34m│[0m
+    [0m[34m│[0m                    [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+    [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:365:12
+    [0m[34m│[0m
+[0m[34m365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+    [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:787:16
+    [0m[34m│[0m
+[0m[34m787[0m [0m[34m│[0m     let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                [0m[31m│[0m                          [0m[34m│[0m
+    [0m[34m│[0m                [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+    [0m[34m│[0m                [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:367:22
+    [0m[34m│[0m
+[0m[34m367[0m [0m[34m│[0m     version_witness: VersionWitness,
+    [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:787:16
+    [0m[34m│[0m
+[0m[34m787[0m [0m[34m│[0m     let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                [0m[31m│[0m                [0m[34m│[0m
+    [0m[34m│[0m                [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+    [0m[34m│[0m                [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:365:12
+    [0m[34m│[0m
+[0m[34m365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+    [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:1037:20
+     [0m[34m│[0m
+[0m[34m1037[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+     [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+     [0m[34m│[0m                    [0m[31m│[0m                          [0m[34m│[0m
+     [0m[34m│[0m                    [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+     [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+     [0m[34m│[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:367:22
+     [0m[34m│[0m
+[0m[34m 367[0m [0m[34m│[0m     version_witness: VersionWitness,
+     [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:1037:20
+     [0m[34m│[0m
+[0m[34m1037[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+     [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+     [0m[34m│[0m                    [0m[31m│[0m                [0m[34m│[0m
+     [0m[34m│[0m                    [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+     [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+     [0m[34m│[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../move-framework/packages/protocol/sources/account.move:365:12
+     [0m[34m│[0m
+[0m[34m 365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+     [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E01002][0m[1m: unexpected token[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:1898:5
+     [0m[34m│[0m
+[0m[34m1898[0m [0m[34m│[0m     [0m[31mstruct[0m TempWitness has drop {}
+     [0m[34m│[0m     [0m[31m^^^^^^[0m
+     [0m[34m│[0m     [0m[31m│[0m
+     [0m[34m│[0m     [0m[31mUnexpected 'struct'[0m
+     [0m[34m│[0m     [0m[34mExpected an expression term[0m
+
+[0m[1m[38;5;9merror[E01002][0m[1m: unexpected token[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/../futarchy_specialized_actions/sources/payments/stream_actions.move:1901:5
+     [0m[34m│[0m
+[0m[34m1901[0m [0m[34m│[0m     [0m[31mlet[0m mut intent = intents::new_intent<FutarchyConfig, TempWitness>(
+     [0m[34m│[0m     [0m[31m^^^[0m
+     [0m[34m│[0m     [0m[31m│[0m
+     [0m[34m│[0m     [0m[31mUnexpected 'let'[0m
+     [0m[34m│[0m     [0m[34mExpected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'[0m
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_lifecycle/sources/dissolution/dissolution_intents.move:10:15
@@ -645,197 +758,4 @@ BUILDING futarchy_lifecycle
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-Please report feedback on the linter warnings at https://forums.sui.io
-
-Total number of linter warnings suppressed: 1 (unique lints: 1)
-Skipping dependency verification
-Transaction Digest: YNgdbtrhD3MXUznoHqR9Gg1pgMawLBmQogSnkMpxz6Q
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Transaction Data                                                                                             │
-├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                   │
-│ Gas Owner: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                │
-│ Gas Budget: 3000000000 MIST                                                                                  │
-│ Gas Price: 1000 MIST                                                                                         │
-│ Gas Payment:                                                                                                 │
-│  ┌──                                                                                                         │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                    │
-│  │ Version: 20060                                                                                            │
-│  │ Digest: 9JdpedkdSeE4aVW41SHip8ttpo5MS5qP5pMFSJTb52WV                                                      │
-│  └──                                                                                                         │
-│                                                                                                              │
-│ Transaction Kind: Programmable                                                                               │
-│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
-│ │ Input Objects                                                                                            │ │
-│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
-│ │ 0   Pure Arg: Type: address, Value: "0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd" │ │
-│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
-│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
-│ │ Commands                                                                │                                  │
-│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
-│ │ 0  Publish:                                                             │                                  │
-│ │  ┌                                                                      │                                  │
-│ │  │ Dependencies:                                                        │                                  │
-│ │  │   0x56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491 │                                  │
-│ │  │   0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd │                                  │
-│ │  │   0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870 │                                  │
-│ │  │   0xfac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30 │                                  │
-│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
-│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
-│ │  │   0x9507a06101f44857b3bdd57ab9a60ffc9fc9afe23e5186f721220a1be41ca863 │                                  │
-│ │  │   0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964 │                                  │
-│ │  │   0x6f22314d606df195552d49f415a108eb4ce760e3af7205166f938ea5bdde7c70 │                                  │
-│ │  │   0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc │                                  │
-│ │  │   0xfa9401996c917e62953be31177dcb83a23eb68799bacd159775f4a8e8188ba7f │                                  │
-│ │  │   0xb360eeeb047d085e587ae609ad6113df2af0b9b1ec7448bc7ec07069a55f06db │                                  │
-│ │  └                                                                      │                                  │
-│ │                                                                         │                                  │
-│ │ 1  TransferObjects:                                                     │                                  │
-│ │  ┌                                                                      │                                  │
-│ │  │ Arguments:                                                           │                                  │
-│ │  │   Result 0                                                           │                                  │
-│ │  │ Address: Input  0                                                    │                                  │
-│ │  └                                                                      │                                  │
-│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
-│                                                                                                              │
-│ Signatures:                                                                                                  │
-│    CBZRQGfRb80pyx8g0kVqMHuLINNHXg1HB/UermOoI2/PhPo0+HDwjOsJ8oJDgAgUCzIQPTV5UjIKd9GoB7liDg==                  │
-│                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Transaction Effects                                                                               │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Digest: YNgdbtrhD3MXUznoHqR9Gg1pgMawLBmQogSnkMpxz6Q                                               │
-│ Status: Success                                                                                   │
-│ Executed Epoch: 162                                                                               │
-│                                                                                                   │
-│ Created Objects:                                                                                  │
-│  ┌──                                                                                              │
-│  │ ID: 0x02d827796e389c5143f30688421c9a07703eec12804758ee7ab8d563093cc298                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: 4PBW8eL5DPLtZw9xuN8VCStyoBy3xoWULHcqBatp2RKM                                           │
-│  └──                                                                                              │
-│  ┌──                                                                                              │
-│  │ ID: 0x27314ffd163044f4cd4fd01f157cb5c08f6590a995c7022e7d35c11c9cfcb6e8                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: 3yQgA15bNZ7GGgEpnZ15AcS3VHim3isVizvcF5RoWMDD                                           │
-│  └──                                                                                              │
-│  ┌──                                                                                              │
-│  │ ID: 0x2dc40e64fd0edea2dcdf43d4b99b3fbba72d18475a84b8187f154c96b57afb78                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: AAuNuufjCuHpasegfuZAnNsuzpY1KqWUnNJ35BfygRk                                            │
-│  └──                                                                                              │
-│  ┌──                                                                                              │
-│  │ ID: 0x8bb8acb321f2ee60120c7abc9ff8da094d7eb72fc133cc6c68a5d9480513ca77                         │
-│  │ Owner: Shared( 20061 )                                                                         │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: 6ygjXdFFSZeAt65dRtqcdFSY6TExvdWo6ibUA9JjdKU8                                           │
-│  └──                                                                                              │
-│  ┌──                                                                                              │
-│  │ ID: 0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73                         │
-│  │ Owner: Immutable                                                                               │
-│  │ Version: 1                                                                                     │
-│  │ Digest: 9qfn5HMBjX8rCfLLLAyXEzUMrf4xcCW5TK5mbEn5xFNz                                           │
-│  └──                                                                                              │
-│ Mutated Objects:                                                                                  │
-│  ┌──                                                                                              │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: 54ikC6kCLrSemXQ7o54Zq4G4mPHnjzrH4svemweb41GH                                           │
-│  └──                                                                                              │
-│ Gas Object:                                                                                       │
-│  ┌──                                                                                              │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20061                                                                                 │
-│  │ Digest: 54ikC6kCLrSemXQ7o54Zq4G4mPHnjzrH4svemweb41GH                                           │
-│  └──                                                                                              │
-│ Gas Cost Summary:                                                                                 │
-│    Storage Cost: 199196000 MIST                                                                   │
-│    Computation Cost: 6000000 MIST                                                                 │
-│    Storage Rebate: 978120 MIST                                                                    │
-│    Non-refundable Storage Fee: 9880 MIST                                                          │
-│                                                                                                   │
-│ Transaction Dependencies:                                                                         │
-│    2bVy5rFVipKukqeBycphyovJofY393GQWsrSA1UrSQ5h                                                   │
-│    5fAazmK1axnC13oPGgAJ8GENrBnULXQvXtDGSGK9Ecnc                                                   │
-│    5yLrGGmc2ETUhR4bwbidnSpApsuvfaJAYpDyNQBsQo3E                                                   │
-│    7uhZX6LjHKTEEYL3osKyG6FznyHmo55pixnFJNUqWmx7                                                   │
-│    9BWwnXoWBuFKFsVDG2eyMo2uQRz3wHmMcKht2GeBAUg3                                                   │
-│    CYoQBEk37Q5K4SQ3vgdbZ8ohaRs6fRBAasBXgGkT7Mi9                                                   │
-│    ChtuNikQYwKwMPSNYJLgbWweqxDkQr5yP1rTEWfYFZUF                                                   │
-│    DxSNLpyZHukwq6xPqSjauDankyXmZVep5wfLAizgff5v                                                   │
-│    FXazR5kXB3MpgnAfZQCCxdCzWkM9SQVtPEhojpBzBujS                                                   │
-│    Gum3EUuN7JgRJFryEEX8w86WB6SUWzTKtfpjNHKQ8RMM                                                   │
-│    HTJ6mf7Mygxd9RCk3KBsn5DwqEkXDMrztYxdJwt6h4tG                                                   │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─────────────────────────────╮
-│ No transaction block events │
-╰─────────────────────────────╯
-
-╭─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Object Changes                                                                                                      │
-├─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Created Objects:                                                                                                    │
-│  ┌──                                                                                                                │
-│  │ ObjectID: 0x02d827796e389c5143f30688421c9a07703eec12804758ee7ab8d563093cc298                                     │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                       │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                    │
-│  │ ObjectType: 0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73::factory::ValidatorAdminCap       │
-│  │ Version: 20061                                                                                                   │
-│  │ Digest: 4PBW8eL5DPLtZw9xuN8VCStyoBy3xoWULHcqBatp2RKM                                                             │
-│  └──                                                                                                                │
-│  ┌──                                                                                                                │
-│  │ ObjectID: 0x27314ffd163044f4cd4fd01f157cb5c08f6590a995c7022e7d35c11c9cfcb6e8                                     │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                       │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                    │
-│  │ ObjectType: 0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73::factory::FactoryOwnerCap         │
-│  │ Version: 20061                                                                                                   │
-│  │ Digest: 3yQgA15bNZ7GGgEpnZ15AcS3VHim3isVizvcF5RoWMDD                                                             │
-│  └──                                                                                                                │
-│  ┌──                                                                                                                │
-│  │ ObjectID: 0x2dc40e64fd0edea2dcdf43d4b99b3fbba72d18475a84b8187f154c96b57afb78                                     │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                       │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                    │
-│  │ ObjectType: 0x2::package::UpgradeCap                                                                             │
-│  │ Version: 20061                                                                                                   │
-│  │ Digest: AAuNuufjCuHpasegfuZAnNsuzpY1KqWUnNJ35BfygRk                                                              │
-│  └──                                                                                                                │
-│  ┌──                                                                                                                │
-│  │ ObjectID: 0x8bb8acb321f2ee60120c7abc9ff8da094d7eb72fc133cc6c68a5d9480513ca77                                     │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                       │
-│  │ Owner: Shared( 20061 )                                                                                           │
-│  │ ObjectType: 0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73::factory::Factory                 │
-│  │ Version: 20061                                                                                                   │
-│  │ Digest: 6ygjXdFFSZeAt65dRtqcdFSY6TExvdWo6ibUA9JjdKU8                                                             │
-│  └──                                                                                                                │
-│ Mutated Objects:                                                                                                    │
-│  ┌──                                                                                                                │
-│  │ ObjectID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                     │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                       │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                    │
-│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                                       │
-│  │ Version: 20061                                                                                                   │
-│  │ Digest: 54ikC6kCLrSemXQ7o54Zq4G4mPHnjzrH4svemweb41GH                                                             │
-│  └──                                                                                                                │
-│ Published Objects:                                                                                                  │
-│  ┌──                                                                                                                │
-│  │ PackageID: 0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73                                    │
-│  │ Version: 1                                                                                                       │
-│  │ Digest: 9qfn5HMBjX8rCfLLLAyXEzUMrf4xcCW5TK5mbEn5xFNz                                                             │
-│  │ Modules: dissolution_actions, dissolution_dispatcher, dissolution_intents, factory, launchpad, launchpad_rewards │
-│  └──                                                                                                                │
-╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Balance Changes                                                                                   │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──                                                                                              │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ CoinType: 0x2::sui::SUI                                                                        │
-│  │ Amount: -204217880                                                                             │
-│  └──                                                                                              │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+Failed to build Move modules: Compilation error.

@@ -16,7 +16,7 @@ const VERSION: u64 = 1; // bump this when the package is upgraded
 // define a new version struct for each new version of the package
 public struct V1() has drop;
 
-public(package) fun current(): VersionWitness {
+public fun current(): VersionWitness {
     version_witness::new(V1()) // modify with the new version struct
 }
 

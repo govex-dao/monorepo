@@ -131,108 +131,6 @@ BUILDING futarchy_actions
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[Lint W99001][0m[1m: non-composable transfer to sender[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/commitment_dispatcher.move:52:9
-   [0m[34m│[0m
-[0m[34m38[0m [0m[34m│[0m ): Option<CommitmentProposal<AssetType, StableType>> {
-   [0m[34m│[0m    [0m[34m-------------------------------------------------[0m [0m[34mReturning an object from a function, allows a caller to use the object and enables composability via programmable transactions.[0m
-   [0m[34m·[0m
-[0m[34m52[0m [0m[34m│[0m         [0m[33mtransfer::public_transfer(committed_coins, ctx.sender())[0m;
-   [0m[34m│[0m         [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-   [0m[34m│[0m         [0m[33m│[0m                                          [0m[34m│[0m
-   [0m[34m│[0m         [0m[33m│[0m                                          [0m[34mTransaction sender address coming from here[0m
-   [0m[34m│[0m         [0m[33mTransfer of an object to transaction sender address[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:6:18
-  [0m[34m│[0m
-[0m[34m6[0m [0m[34m│[0m use std::string::[0m[33mString[0m;
-  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:8:12
-  [0m[34m│[0m
-[0m[34m8[0m [0m[34m│[0m     coin::{[0m[33mSelf[0m, Coin},
-  [0m[34m│[0m            [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'coin'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:8:18
-  [0m[34m│[0m
-[0m[34m8[0m [0m[34m│[0m     coin::{Self, [0m[33mCoin[0m},
-  [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'Coin'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:9:14
-  [0m[34m│[0m
-[0m[34m9[0m [0m[34m│[0m     balance::[0m[33mBalance[0m,
-  [0m[34m│[0m              [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'Balance'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:10:14
-   [0m[34m│[0m
-[0m[34m10[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
-   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:10:14
-   [0m[34m│[0m
-[0m[34m10[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
-   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'object'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:10:20
-   [0m[34m│[0m
-[0m[34m10[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m},
-   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:11:17
-   [0m[34m│[0m
-[0m[34m11[0m [0m[34m│[0m     tx_context::[0m[33mTxContext[0m,
-   [0m[34m│[0m                 [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:14:15
-   [0m[34m│[0m
-[0m[34m14[0m [0m[34m│[0m     account::{[0m[33mSelf[0m, Account},
-   [0m[34m│[0m               [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'account'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:15:18
-   [0m[34m│[0m
-[0m[34m15[0m [0m[34m│[0m     executable::{[0m[33mSelf[0m, Executable},
-   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'executable'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:24:7
-   [0m[34m│[0m
-[0m[34m24[0m [0m[34m│[0m const [0m[33mEInvalidSlippage[0m: u64 = 3;
-   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidSlippage' is never used. Consider removing it.[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/vault_governance_intents.move:7:16
   [0m[34m│[0m
@@ -376,183 +274,6 @@ BUILDING futarchy_actions
    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use fun' of 'account_protocol::account::Account.process_intent'. Consider removing it[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:6:19
-  [0m[34m│[0m
-[0m[34m6[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
-  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:6:25
-  [0m[34m│[0m
-[0m[34m6[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
-  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:6:25
-  [0m[34m│[0m
-[0m[34m6[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
-  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Option'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:8:13
-  [0m[34m│[0m
-[0m[34m8[0m [0m[34m│[0m     clock::{[0m[33mSelf[0m, Clock},
-  [0m[34m│[0m             [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'clock'. Consider removing it[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:11:14
-   [0m[34m│[0m
-[0m[34m11[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
-   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:11:14
-   [0m[34m│[0m
-[0m[34m11[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
-   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'object'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:11:20
-   [0m[34m│[0m
-[0m[34m11[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m},
-   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:12:5
-   [0m[34m│[0m
-[0m[34m12[0m [0m[34m│[0m     [0m[33mtransfer[0m,
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:13:18
-   [0m[34m│[0m
-[0m[34m13[0m [0m[34m│[0m     tx_context::{[0m[33mSelf[0m, TxContext},
-   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnnecessary alias 'tx_context' for module 'sui::tx_context'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:13:24
-   [0m[34m│[0m
-[0m[34m13[0m [0m[34m│[0m     tx_context::{Self, [0m[33mTxContext[0m},
-   [0m[34m│[0m                        [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:14:5
-   [0m[34m│[0m
-[0m[34m14[0m [0m[34m│[0m     [0m[33mevent[0m,
-   [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'event'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:17:15
-   [0m[34m│[0m
-[0m[34m17[0m [0m[34m│[0m     account::{[0m[33mSelf[0m, Account},
-   [0m[34m│[0m               [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'account'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:19:14
-   [0m[34m│[0m
-[0m[34m19[0m [0m[34m│[0m     intents::[0m[33mIntent[0m,
-   [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Intent'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:25:38
-   [0m[34m│[0m
-[0m[34m25[0m [0m[34m│[0m use futarchy_core::futarchy_config::{[0m[33mSelf[0m, FutarchyConfig};
-   [0m[34m│[0m                                      [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'futarchy_config'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:28:28
-   [0m[34m│[0m
-[0m[34m28[0m [0m[34m│[0m     proposal_fee_manager::{[0m[33mSelf[0m, ProposalFeeManager},
-   [0m[34m│[0m                            [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'proposal_fee_manager'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:33:5
-   [0m[34m│[0m
-[0m[34m33[0m [0m[34m│[0m     [0m[33mconditional_amm[0m,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'conditional_amm'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[Lint W99001][0m[1m: non-composable transfer to sender[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:341:9
-    [0m[34m│[0m
-[0m[34m303[0m [0m[34m│[0m ): Executable<Outcome> {
-    [0m[34m│[0m    [0m[34m-------------------[0m [0m[34mReturning an object from a function, allows a caller to use the object and enables composability via programmable transactions.[0m
-    [0m[34m·[0m
-[0m[34m341[0m [0m[34m│[0m         [0m[33mtransfer::public_transfer(fee_coin, tx_context::sender(ctx))[0m;
-    [0m[34m│[0m         [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-    [0m[34m│[0m         [0m[33m│[0m                                   [0m[34m│[0m
-    [0m[34m│[0m         [0m[33m│[0m                                   [0m[34mTransaction sender address coming from here[0m
-    [0m[34m│[0m         [0m[33mTransfer of an object to transaction sender address[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[Lint W99000][0m[1m: possible owned object share[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:530:13
-    [0m[34m│[0m
-[0m[34m530[0m [0m[34m│[0m             [0m[33mtransfer::public_share_object(option::extract(&mut new_commitment))[0m;
-    [0m[34m│[0m             [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-    [0m[34m│[0m             [0m[33m│[0m                             [0m[34m│[0m
-    [0m[34m│[0m             [0m[33m│[0m                             [0m[34mCreating a fresh object and sharing it within the same function will ensure this does not abort.[0m
-    [0m[34m│[0m             [0m[33mPotential abort from a (potentially) owned object created by a different transaction.[0m
-    [0m[34m│[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/commitment_dispatcher.move:38:11
-    [0m[34m│[0m
-[0m[34m 38[0m [0m[34m│[0m ): Option<CommitmentProposal<AssetType, StableType>> {
-    [0m[34m│[0m           [0m[34m-----------------------------------------[0m [0m[34mA potentially owned object coming from here[0m
-    [0m[34m│[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/commitment_proposal.move:108:82
-    [0m[34m│[0m
-[0m[34m108[0m [0m[34m│[0m public struct CommitmentProposal<phantom AssetType, phantom StableType> has key, store {
-    [0m[34m│[0m                                                                                  [0m[34m-----[0m [0m[34mPotentially an owned object because 'store' grants access to public transfers[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[Lint W99001][0m[1m: non-composable transfer to sender[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:543:13
-    [0m[34m│[0m
-[0m[34m515[0m [0m[34m│[0m ): Executable<Outcome> {
-    [0m[34m│[0m    [0m[34m-------------------[0m [0m[34mReturning an object from a function, allows a caller to use the object and enables composability via programmable transactions.[0m
-    [0m[34m·[0m
-[0m[34m543[0m [0m[34m│[0m             [0m[33mtransfer::public_transfer(committed_coin, tx_context::sender(ctx))[0m;
-    [0m[34m│[0m             [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
-    [0m[34m│[0m             [0m[33m│[0m                                         [0m[34m│[0m
-    [0m[34m│[0m             [0m[33m│[0m                                         [0m[34mTransaction sender address coming from here[0m
-    [0m[34m│[0m             [0m[33mTransfer of an object to transaction sender address[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(self_transfer))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
      [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_core/sources/futarchy_config.move:1141:1
@@ -753,6 +474,30 @@ BUILDING futarchy_actions
    [0m[34m│[0m                                                                                                      [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'EmitSignalAction'. Consider removing it[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_dispatcher.move:5:19
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_dispatcher.move:5:25
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_dispatcher.move:6:22
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
+  [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/resource_requests.move:3:19
@@ -965,19 +710,191 @@ BUILDING futarchy_actions
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_dispatcher.move:5:22
-  [0m[34m│[0m
-[0m[34m5[0m [0m[34m│[0m use sui::tx_context::[0m[33mTxContext[0m;
-  [0m[34m│[0m                      [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_dispatcher.move:100:1
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:120:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m120[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_create_payment<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                      [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m121[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m122[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m123[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m126[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m127[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:575:56
     [0m[34m│[0m
-[0m[34m100[0m [0m[34m│[0m [0m[33m/// Validate add liquidity action parameters[0m
-    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mDocumentation comment cannot be matched to a language item[0m
+[0m[34m575[0m [0m[34m│[0m public fun do_create_payment<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                        [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:133:9
+     [0m[34m│[0m  
+[0m[34m 111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+     [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+     [0m[34m·[0m  
+[0m[34m 133[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_cancel_payment<Outcome, CoinType, IW>([0m
+     [0m[34m│[0m                                                      [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m 134[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m 135[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m 136[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+     [0m[34m·[0m [0m[31m│[0m
+[0m[34m 139[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m 140[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+     [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+     [0m[34m│[0m  
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:1011:56
+     [0m[34m│[0m
+[0m[34m1011[0m [0m[34m│[0m public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: drop>(
+     [0m[34m│[0m                                                        [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:146:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m146[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_create_budget_stream<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                            [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m147[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m148[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m149[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m152[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m153[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:733:62
+    [0m[34m│[0m
+[0m[34m733[0m [0m[34m│[0m public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                              [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E05001][0m[1m: ability constraint not satisfied[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_dispatcher.move:159:9
+    [0m[34m│[0m  
+[0m[34m111[0m [0m[34m│[0m   public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+    [0m[34m│[0m                                              [0m[34m--------[0m [0m[34mTo satisfy the constraint, the 'drop' ability would need to be added here[0m
+    [0m[34m·[0m  
+[0m[34m159[0m [0m[34m│[0m [0m[31m╭[0m         [0m[31mstream_actions::do_execute_payment<Outcome, CoinType, IW>([0m
+    [0m[34m│[0m                                                       [0m[34m--------[0m [0m[34mThe type 'CoinType' does not have the ability 'drop'[0m
+[0m[34m160[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            executable,[0m
+[0m[34m161[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            account,[0m
+[0m[34m162[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            version::current(),[0m
+    [0m[34m·[0m [0m[31m│[0m
+[0m[34m165[0m [0m[34m│[0m [0m[31m│[0m [0m[31m            ctx[0m
+[0m[34m166[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────────^ 'drop' constraint not satisifed[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:853:57
+    [0m[34m│[0m
+[0m[34m853[0m [0m[34m│[0m public fun do_execute_payment<Outcome: store, CoinType: drop, IW: drop>(
+    [0m[34m│[0m                                                         [0m[34m----[0m [0m[34m'drop' constraint declared here[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:630:20
+    [0m[34m│[0m
+[0m[34m630[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                    [0m[31m│[0m                          [0m[34m│[0m
+    [0m[34m│[0m                    [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+    [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:367:22
+    [0m[34m│[0m
+[0m[34m367[0m [0m[34m│[0m     version_witness: VersionWitness,
+    [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:630:20
+    [0m[34m│[0m
+[0m[34m630[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                    [0m[31m│[0m                [0m[34m│[0m
+    [0m[34m│[0m                    [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+    [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:365:12
+    [0m[34m│[0m
+[0m[34m365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+    [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:787:16
+    [0m[34m│[0m
+[0m[34m787[0m [0m[34m│[0m     let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                [0m[31m│[0m                          [0m[34m│[0m
+    [0m[34m│[0m                [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+    [0m[34m│[0m                [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:367:22
+    [0m[34m│[0m
+[0m[34m367[0m [0m[34m│[0m     version_witness: VersionWitness,
+    [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:787:16
+    [0m[34m│[0m
+[0m[34m787[0m [0m[34m│[0m     let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+    [0m[34m│[0m                [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+    [0m[34m│[0m                [0m[31m│[0m                [0m[34m│[0m
+    [0m[34m│[0m                [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+    [0m[34m│[0m                [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:365:12
+    [0m[34m│[0m
+[0m[34m365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+    [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:1037:20
+     [0m[34m│[0m
+[0m[34m1037[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+     [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+     [0m[34m│[0m                    [0m[31m│[0m                          [0m[34m│[0m
+     [0m[34m│[0m                    [0m[31m│[0m                          [0m[34mGiven: 'futarchy_specialized_actions::stream_actions::FutarchyConfigWitness'[0m
+     [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. Invalid argument for parameter 'version_witness'[0m
+     [0m[34m│[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:367:22
+     [0m[34m│[0m
+[0m[34m 367[0m [0m[34m│[0m     version_witness: VersionWitness,
+     [0m[34m│[0m                      [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:1037:20
+     [0m[34m│[0m
+[0m[34m1037[0m [0m[34m│[0m         let auth = [0m[31maccount::new_auth(account, FutarchyConfigWitness {})[0m;
+     [0m[34m│[0m                    [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+     [0m[34m│[0m                    [0m[31m│[0m                [0m[34m│[0m
+     [0m[34m│[0m                    [0m[31m│[0m                [0m[34mFound 2 argument(s) here[0m
+     [0m[34m│[0m                    [0m[31mInvalid call of 'account_protocol::account::new_auth'. The call expected 3 argument(s) but got 2[0m
+     [0m[34m│[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../move-framework/packages/protocol/sources/account.move:365:12
+     [0m[34m│[0m
+[0m[34m 365[0m [0m[34m│[0m public fun new_auth<Config, CW: drop>(
+     [0m[34m│[0m            [0m[34m--------[0m [0m[34mExpected 3 argument(s)[0m
+
+[0m[1m[38;5;9merror[E01002][0m[1m: unexpected token[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:1898:5
+     [0m[34m│[0m
+[0m[34m1898[0m [0m[34m│[0m     [0m[31mstruct[0m TempWitness has drop {}
+     [0m[34m│[0m     [0m[31m^^^^^^[0m
+     [0m[34m│[0m     [0m[31m│[0m
+     [0m[34m│[0m     [0m[31mUnexpected 'struct'[0m
+     [0m[34m│[0m     [0m[34mExpected an expression term[0m
+
+[0m[1m[38;5;9merror[E01002][0m[1m: unexpected token[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_specialized_actions/sources/payments/stream_actions.move:1901:5
+     [0m[34m│[0m
+[0m[34m1901[0m [0m[34m│[0m     [0m[31mlet[0m mut intent = intents::new_intent<FutarchyConfig, TempWitness>(
+     [0m[34m│[0m     [0m[31m^^^[0m
+     [0m[34m│[0m     [0m[31m│[0m
+     [0m[34m│[0m     [0m[31mUnexpected 'let'[0m
+     [0m[34m│[0m     [0m[34mExpected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'[0m
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/intent_spec_builder.move:8:58
@@ -986,6 +903,38 @@ BUILDING futarchy_actions
   [0m[34m│[0m                                                          [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Params'. Consider removing it[0m
   [0m[34m│[0m
   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:6:10
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use std::[0m[33moption[0m;
+  [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:11:5
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:12:17
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m     tx_context::[0m[33mTxContext[0m,
+   [0m[34m│[0m                 [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/action_dispatcher.move:17:14
+   [0m[34m│[0m
+[0m[34m17[0m [0m[34m│[0m     intents::[0m[33mIntent[0m,
+   [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Intent'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/protocol_admin_intents.move:6:18
@@ -1079,146 +1028,108 @@ BUILDING futarchy_actions
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:7:19
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:6:25
   [0m[34m│[0m
-[0m[34m7[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
-  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+[0m[34m6[0m [0m[34m│[0m use std::string::{Self, [0m[33mString[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
   [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:7:25
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:9:14
   [0m[34m│[0m
-[0m[34m7[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
-  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
-  [0m[34m│[0m
-  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:8:19
-  [0m[34m│[0m
-[0m[34m8[0m [0m[34m│[0m use std::vector::{[0m[33mSelf[0m};
-  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+[0m[34m9[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID},
+  [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
   [0m[34m│[0m
   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:14
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:9:20
+  [0m[34m│[0m
+[0m[34m9[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m},
+  [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:10:12
    [0m[34m│[0m
-[0m[34m12[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID, UID},
-   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+[0m[34m10[0m [0m[34m│[0m     clock::[0m[33mClock[0m,
+   [0m[34m│[0m            [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'Clock'. Consider removing it[0m
    [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:20
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:11:17
    [0m[34m│[0m
-[0m[34m12[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m, UID},
-   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:24
-   [0m[34m│[0m
-[0m[34m12[0m [0m[34m│[0m     object::{Self, ID, [0m[33mUID[0m},
-   [0m[34m│[0m                        [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:15:5
-   [0m[34m│[0m
-[0m[34m15[0m [0m[34m│[0m     [0m[33mtransfer[0m,
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:16:18
-   [0m[34m│[0m
-[0m[34m16[0m [0m[34m│[0m     tx_context::{[0m[33mSelf[0m, TxContext},
-   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnnecessary alias 'tx_context' for module 'sui::tx_context'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:16:24
-   [0m[34m│[0m
-[0m[34m16[0m [0m[34m│[0m     tx_context::{Self, [0m[33mTxContext[0m},
-   [0m[34m│[0m                        [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+[0m[34m11[0m [0m[34m│[0m     tx_context::[0m[33mTxContext[0m,
+   [0m[34m│[0m                 [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:20:18
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:12:15
    [0m[34m│[0m
-[0m[34m20[0m [0m[34m│[0m     executable::{[0m[33mSelf[0m, Executable},
-   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'executable'. Consider removing it[0m
+[0m[34m12[0m [0m[34m│[0m     balance::{[0m[33mSelf[0m, Balance},
+   [0m[34m│[0m               [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'balance'. Consider removing it[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:33:7
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:12:21
    [0m[34m│[0m
-[0m[34m33[0m [0m[34m│[0m const [0m[33mEInvalidProposalType[0m: u64 = 1;
-   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidProposalType' is never used. Consider removing it.[0m
+[0m[34m12[0m [0m[34m│[0m     balance::{Self, [0m[33mBalance[0m},
+   [0m[34m│[0m                     [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'Balance'. Consider removing it[0m
    [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:37:7
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:23:34
    [0m[34m│[0m
-[0m[34m37[0m [0m[34m│[0m const [0m[33mEProposalAlreadyExists[0m: u64 = 5;
-   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EProposalAlreadyExists' is never used. Consider removing it.[0m
+[0m[34m23[0m [0m[34m│[0m use futarchy_markets::spot_amm::{[0m[33mSelf[0m, SpotAMM};
+   [0m[34m│[0m                                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'spot_amm'. Consider removing it[0m
    [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:48:7
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:23:40
    [0m[34m│[0m
-[0m[34m48[0m [0m[34m│[0m const [0m[33mDEFAULT_RESERVATION_PERIOD_MS[0m: u64 = 2_592_000_000; // 30 days
-   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'DEFAULT_RESERVATION_PERIOD_MS' is never used. Consider removing it.[0m
+[0m[34m23[0m [0m[34m│[0m use futarchy_markets::spot_amm::{Self, [0m[33mSpotAMM[0m};
+   [0m[34m│[0m                                        [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'SpotAMM'. Consider removing it[0m
    [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:166:14
+[0m[1m[38;5;9merror[E03003][0m[1m: unbound module member[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:294:13
     [0m[34m│[0m
-[0m[34m  6[0m [0m[34m│[0m use std::string::{Self, String};
-    [0m[34m│[0m                   [0m[34m----[0m [0m[34mThe same alias was previously declared here[0m
-    [0m[34m·[0m
-[0m[34m166[0m [0m[34m│[0m     use std::[0m[33mstring[0m;
-    [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'string' for module 'std::string'. It was already in scope[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+[0m[34m294[0m [0m[34m│[0m     assert!([0m[31maccount_spot_pool::lp_value[0m(&lp_token) >= action.lp_amount, EInvalidAmount);
+    [0m[34m│[0m             [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31mInvalid module access. Unbound function 'lp_value' in module 'futarchy_markets::account_spot_pool'[0m
 
-[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:197:5
+[0m[1m[38;5;9merror[E04016][0m[1m: too few arguments[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:297:37
+    [0m[34m│[0m    
+[0m[34m297[0m [0m[34m│[0m         let (asset_coin, stable_coin) = [0m[31maccount_spot_pool::remove_liquidity_and_return([0m
+    [0m[34m│[0m [0m[31m╭[0m[0m[31m──[0m[0m[31m─────────────────────────────────────^[0m
+    [0m[34m│[0m [0m[31m│[0m [0m[34m╭[0m[0m[34m───────────────────────────────────────────────────────────────────────────────────'[0m
+[0m[34m298[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        pool,[0m
+[0m[34m299[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        lp_token,[0m
+[0m[34m300[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        action.min_asset_amount,[0m
+[0m[34m301[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        action.min_stable_amount,[0m
+[0m[34m302[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m    )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─[0m[0m[34m│[0m[0m[31m─────^ Invalid call of 'futarchy_markets::account_spot_pool::remove_liquidity_and_return'. The call expected 5 argument(s) but got 4[0m
+    [0m[34m│[0m   [0m[34m╰[0m[0m[34m─────' Found 4 argument(s) here[0m
+    [0m[34m│[0m    
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/../futarchy_markets/sources/spot/account_spot_pool.move:232:12
     [0m[34m│[0m
-[0m[34m197[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
-    [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+[0m[34m232[0m [0m[34m│[0m public fun remove_liquidity_and_return<AssetType, StableType>(
+    [0m[34m│[0m            [0m[34m---------------------------[0m [0m[34mExpected 5 argument(s)[0m
 
-[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:332:8
+[0m[1m[38;5;9merror[E03003][0m[1m: unbound module member[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/liquidity/liquidity_actions.move:533:5
     [0m[34m│[0m
-[0m[34m332[0m [0m[34m│[0m public [0m[33mentry[0m fun recreate_evicted_proposal(
-    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
-    [0m[34m│[0m
-    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:619:8
-    [0m[34m│[0m
-[0m[34m619[0m [0m[34m│[0m public [0m[33mentry[0m fun recreate_proposal_chain(
-    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
-    [0m[34m│[0m
-    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
-    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+[0m[34m533[0m [0m[34m│[0m     [0m[31maccount_spot_pool::lp_value[0m(lp_token)
+    [0m[34m│[0m     [0m[31m^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[31mInvalid module access. Unbound function 'lp_value' in module 'futarchy_markets::account_spot_pool'[0m
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/memo/memo_dispatcher.move:7:17
@@ -1575,78 +1486,6 @@ BUILDING futarchy_actions
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:107:5
-    [0m[34m│[0m
-[0m[34m107[0m [0m[34m│[0m     [0m[33mintent[0m: Intent<String>,
-    [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mThe 'intent' field of the 'CreateOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:108:5
-    [0m[34m│[0m
-[0m[34m108[0m [0m[34m│[0m     [0m[33mdescription[0m: String,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mThe 'description' field of the 'CreateOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:109:5
-    [0m[34m│[0m
-[0m[34m109[0m [0m[34m│[0m     [0m[33mchallenge_period_ms[0m: u64,  // If 0, uses DAO config default
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'challenge_period_ms' field of the 'CreateOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:110:5
-    [0m[34m│[0m
-[0m[34m110[0m [0m[34m│[0m     [0m[33mmetadata[0m: String,
-    [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'metadata' field of the 'CreateOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:115:5
-    [0m[34m│[0m
-[0m[34m115[0m [0m[34m│[0m     [0m[33moptimistic_proposal_id[0m: ID,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'optimistic_proposal_id' field of the 'ChallengeOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:116:5
-    [0m[34m│[0m
-[0m[34m116[0m [0m[34m│[0m     [0m[33mchallenge_description[0m: String,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'challenge_description' field of the 'ChallengeOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:121:5
-    [0m[34m│[0m
-[0m[34m121[0m [0m[34m│[0m     [0m[33moptimistic_proposal_id[0m: ID,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'optimistic_proposal_id' field of the 'ExecuteOptimisticProposalAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:126:5
-    [0m[34m│[0m
-[0m[34m126[0m [0m[34m│[0m     [0m[33moptimistic_proposal_id[0m: ID,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'optimistic_proposal_id' field of the 'ResolveChallengeAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:127:5
-    [0m[34m│[0m
-[0m[34m127[0m [0m[34m│[0m     [0m[33mfutarchy_proposal_id[0m: ID,
-    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe 'futarchy_proposal_id' field of the 'ResolveChallengeAction' type is unused[0m
-    [0m[34m│[0m
-    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/intent_lifecycle/optimistic_proposal.move:191:5
     [0m[34m│[0m
@@ -1928,156 +1767,161 @@ BUILDING futarchy_actions
   [0m[34m│[0m
   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-Please report feedback on the linter warnings at https://forums.sui.io
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:7:19
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-Skipping dependency verification
-Transaction Digest: 6BiVr1QvXJDqvZNaiKzmbVBe51GZVgyjrX9pwHHnSdjh
-╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Transaction Data                                                                                             │
-├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                   │
-│ Gas Owner: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                │
-│ Gas Budget: 3000000000 MIST                                                                                  │
-│ Gas Price: 1000 MIST                                                                                         │
-│ Gas Payment:                                                                                                 │
-│  ┌──                                                                                                         │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                    │
-│  │ Version: 20061                                                                                            │
-│  │ Digest: 54ikC6kCLrSemXQ7o54Zq4G4mPHnjzrH4svemweb41GH                                                      │
-│  └──                                                                                                         │
-│                                                                                                              │
-│ Transaction Kind: Programmable                                                                               │
-│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
-│ │ Input Objects                                                                                            │ │
-│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
-│ │ 0   Pure Arg: Type: address, Value: "0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd" │ │
-│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
-│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
-│ │ Commands                                                                │                                  │
-│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
-│ │ 0  Publish:                                                             │                                  │
-│ │  ┌                                                                      │                                  │
-│ │  │ Dependencies:                                                        │                                  │
-│ │  │   0x56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491 │                                  │
-│ │  │   0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd │                                  │
-│ │  │   0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870 │                                  │
-│ │  │   0xfac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30 │                                  │
-│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
-│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
-│ │  │   0x9507a06101f44857b3bdd57ab9a60ffc9fc9afe23e5186f721220a1be41ca863 │                                  │
-│ │  │   0x9ec194f9d5bb53efd7368e3683c9e28cd126b64bda3ce4f0dd3ca904f2d16d73 │                                  │
-│ │  │   0x6a549ebafdd9c642532e65c6a8b87a25a13bf3665ddb6c50bde48c8e0cc03964 │                                  │
-│ │  │   0x6f22314d606df195552d49f415a108eb4ce760e3af7205166f938ea5bdde7c70 │                                  │
-│ │  │   0x34bd77744460768abfd00692b7c40a1a09fdca117b52e7c875a1d722651850fc │                                  │
-│ │  │   0xfa9401996c917e62953be31177dcb83a23eb68799bacd159775f4a8e8188ba7f │                                  │
-│ │  │   0xb360eeeb047d085e587ae609ad6113df2af0b9b1ec7448bc7ec07069a55f06db │                                  │
-│ │  └                                                                      │                                  │
-│ │                                                                         │                                  │
-│ │ 1  TransferObjects:                                                     │                                  │
-│ │  ┌                                                                      │                                  │
-│ │  │ Arguments:                                                           │                                  │
-│ │  │   Result 0                                                           │                                  │
-│ │  │ Address: Input  0                                                    │                                  │
-│ │  └                                                                      │                                  │
-│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
-│                                                                                                              │
-│ Signatures:                                                                                                  │
-│    VVL0QviOV3ZjQUI/iBO4H5K5Ov/014Pw9tn0N1y7xI/LzyUvgo4OmHWKs/RdPjpyCmS8AyvTJ64KxZGAbJPWDQ==                  │
-│                                                                                                              │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Transaction Effects                                                                               │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Digest: 6BiVr1QvXJDqvZNaiKzmbVBe51GZVgyjrX9pwHHnSdjh                                              │
-│ Status: Success                                                                                   │
-│ Executed Epoch: 162                                                                               │
-│                                                                                                   │
-│ Created Objects:                                                                                  │
-│  ┌──                                                                                              │
-│  │ ID: 0x24ab7544eeaf117ee4935a3395633f9a2bd12819bf6b8e5df2923666fb7b38c3                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20062                                                                                 │
-│  │ Digest: BdZyN4B97nLb4D3AanMrW2ztFEU9NfNu9VhtpNbEvorL                                           │
-│  └──                                                                                              │
-│  ┌──                                                                                              │
-│  │ ID: 0xc0c3290355401394c8340da4f8ac3f122afa7331f4790ca662512bf03da00f49                         │
-│  │ Owner: Immutable                                                                               │
-│  │ Version: 1                                                                                     │
-│  │ Digest: EQ4RE4ktHxzmwGzHq5TNoqZF9LiNeFMWU2hKenDgaJLt                                           │
-│  └──                                                                                              │
-│ Mutated Objects:                                                                                  │
-│  ┌──                                                                                              │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20062                                                                                 │
-│  │ Digest: DycFBzYNQp9eiqr7c1a2fnmeCfPnURyh4fsUXB4AtiZi                                           │
-│  └──                                                                                              │
-│ Gas Object:                                                                                       │
-│  ┌──                                                                                              │
-│  │ ID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                         │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ Version: 20062                                                                                 │
-│  │ Digest: DycFBzYNQp9eiqr7c1a2fnmeCfPnURyh4fsUXB4AtiZi                                           │
-│  └──                                                                                              │
-│ Gas Cost Summary:                                                                                 │
-│    Storage Cost: 515219200 MIST                                                                   │
-│    Computation Cost: 10000000 MIST                                                                │
-│    Storage Rebate: 978120 MIST                                                                    │
-│    Non-refundable Storage Fee: 9880 MIST                                                          │
-│                                                                                                   │
-│ Transaction Dependencies:                                                                         │
-│    YNgdbtrhD3MXUznoHqR9Gg1pgMawLBmQogSnkMpxz6Q                                                    │
-│    2bVy5rFVipKukqeBycphyovJofY393GQWsrSA1UrSQ5h                                                   │
-│    5fAazmK1axnC13oPGgAJ8GENrBnULXQvXtDGSGK9Ecnc                                                   │
-│    5yLrGGmc2ETUhR4bwbidnSpApsuvfaJAYpDyNQBsQo3E                                                   │
-│    7uhZX6LjHKTEEYL3osKyG6FznyHmo55pixnFJNUqWmx7                                                   │
-│    9BWwnXoWBuFKFsVDG2eyMo2uQRz3wHmMcKht2GeBAUg3                                                   │
-│    CYoQBEk37Q5K4SQ3vgdbZ8ohaRs6fRBAasBXgGkT7Mi9                                                   │
-│    ChtuNikQYwKwMPSNYJLgbWweqxDkQr5yP1rTEWfYFZUF                                                   │
-│    DxSNLpyZHukwq6xPqSjauDankyXmZVep5wfLAizgff5v                                                   │
-│    FXazR5kXB3MpgnAfZQCCxdCzWkM9SQVtPEhojpBzBujS                                                   │
-│    Gum3EUuN7JgRJFryEEX8w86WB6SUWzTKtfpjNHKQ8RMM                                                   │
-│    HTJ6mf7Mygxd9RCk3KBsn5DwqEkXDMrztYxdJwt6h4tG                                                   │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─────────────────────────────╮
-│ No transaction block events │
-╰─────────────────────────────╯
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:7:25
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-╭────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Object Changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 │
-├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Created Objects:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               │
-│  ┌──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-│  │ ObjectID: 0x24ab7544eeaf117ee4935a3395633f9a2bd12819bf6b8e5df2923666fb7b38c3                                                                                                                                                                                                                                                                                                                                                                                                                                                                │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                                                                                                                                                                                                                                                                                                  │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                                                                                                                                                                                                                                                                                                                                                                                                                                               │
-│  │ ObjectType: 0x2::package::UpgradeCap                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        │
-│  │ Version: 20062                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              │
-│  │ Digest: BdZyN4B97nLb4D3AanMrW2ztFEU9NfNu9VhtpNbEvorL                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        │
-│  └──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-│ Mutated Objects:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               │
-│  ┌──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-│  │ ObjectID: 0x96eae499fa55b24245d02b451cb6dcdfbd8862447ac53441607543fab94dc2d4                                                                                                                                                                                                                                                                                                                                                                                                                                                                │
-│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                                                                                                                                                                                                                                                                                                                                                                                                                                                  │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )                                                                                                                                                                                                                                                                                                                                                                                                                                               │
-│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  │
-│  │ Version: 20062                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              │
-│  │ Digest: DycFBzYNQp9eiqr7c1a2fnmeCfPnURyh4fsUXB4AtiZi                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        │
-│  └──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-│ Published Objects:                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             │
-│  ┌──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-│  │ PackageID: 0xc0c3290355401394c8340da4f8ac3f122afa7331f4790ca662512bf03da00f49                                                                                                                                                                                                                                                                                                                                                                                                                                                               │
-│  │ Version: 1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  │
-│  │ Digest: EQ4RE4ktHxzmwGzHq5TNoqZF9LiNeFMWU2hKenDgaJLt                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        │
-│  │ Modules: action_dispatcher, commitment_actions, commitment_dispatcher, commitment_proposal, config_actions, config_dispatcher, config_intents, governance_actions, governance_dispatcher, intent_janitor, intent_spec, intent_spec_builder, intent_witnesses, liquidity_actions, liquidity_dispatcher, liquidity_intents, memo_actions, memo_dispatcher, memo_intents, optimistic_dispatcher, optimistic_proposal, protocol_admin_actions, protocol_admin_intents, resource_requests, vault_governance_dispatcher, vault_governance_intents │
-│  └──                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           │
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Balance Changes                                                                                   │
-├───────────────────────────────────────────────────────────────────────────────────────────────────┤
-│  ┌──                                                                                              │
-│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
-│  │ CoinType: 0x2::sui::SUI                                                                        │
-│  │ Amount: -524241080                                                                             │
-│  └──                                                                                              │
-╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:8:19
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m use std::vector::{[0m[33mSelf[0m};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:14
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m     object::{[0m[33mSelf[0m, ID, UID},
+   [0m[34m│[0m              [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:20
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m     object::{Self, [0m[33mID[0m, UID},
+   [0m[34m│[0m                    [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:12:24
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m     object::{Self, ID, [0m[33mUID[0m},
+   [0m[34m│[0m                        [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:15:5
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:16:18
+   [0m[34m│[0m
+[0m[34m16[0m [0m[34m│[0m     tx_context::{[0m[33mSelf[0m, TxContext},
+   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnnecessary alias 'tx_context' for module 'sui::tx_context'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:16:24
+   [0m[34m│[0m
+[0m[34m16[0m [0m[34m│[0m     tx_context::{Self, [0m[33mTxContext[0m},
+   [0m[34m│[0m                        [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:20:18
+   [0m[34m│[0m
+[0m[34m20[0m [0m[34m│[0m     executable::{[0m[33mSelf[0m, Executable},
+   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'executable'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:33:7
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m const [0m[33mEInvalidProposalType[0m: u64 = 1;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EInvalidProposalType' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:37:7
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m const [0m[33mEProposalAlreadyExists[0m: u64 = 5;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EProposalAlreadyExists' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:44:7
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m const [0m[33mEChainDepthNotFound[0m: u64 = 12;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EChainDepthNotFound' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:52:7
+   [0m[34m│[0m
+[0m[34m52[0m [0m[34m│[0m const [0m[33mDEFAULT_RESERVATION_PERIOD_MS[0m: u64 = 2_592_000_000; // 30 days
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'DEFAULT_RESERVATION_PERIOD_MS' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:170:14
+    [0m[34m│[0m
+[0m[34m  6[0m [0m[34m│[0m use std::string::{Self, String};
+    [0m[34m│[0m                   [0m[34m----[0m [0m[34mThe same alias was previously declared here[0m
+    [0m[34m·[0m
+[0m[34m170[0m [0m[34m│[0m     use std::[0m[33mstring[0m;
+    [0m[34m│[0m              [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'string' for module 'std::string'. It was already in scope[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:201:5
+    [0m[34m│[0m
+[0m[34m201[0m [0m[34m│[0m     [0m[33mclock[0m: &Clock,
+    [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'clock'. Consider removing or prefixing with an underscore: '_clock'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:341:8
+    [0m[34m│[0m
+[0m[34m341[0m [0m[34m│[0m public [0m[33mentry[0m fun recreate_evicted_proposal(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:567:5
+    [0m[34m│[0m
+[0m[34m567[0m [0m[34m│[0m fun [0m[33mcreate_queued_proposal_from_reservation[0m(
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'create_queued_proposal_from_reservation' is never called. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_actions/sources/governance/governance_actions.move:672:8
+    [0m[34m│[0m
+[0m[34m672[0m [0m[34m│[0m public [0m[33mentry[0m fun recreate_proposal_chain(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Failed to build Move modules: Compilation error.

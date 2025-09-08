@@ -4,14 +4,15 @@ module futarchy_vault::futarchy_vault;
 
 // === Imports ===
 use std::{
-    string::String,
+    string::{Self, String},
     type_name::{Self, TypeName},
 };
 use sui::{
-    bag::{Self, Bag},
     coin::Coin,
     event,
     vec_set::{Self, VecSet},
+    object::{Self, ID},
+    tx_context::{Self, TxContext},
 };
 use account_protocol::{
     account::{Self, Account, Auth},
@@ -30,7 +31,6 @@ const EVaultNotInitialized: u64 = 2;
 const ECoinTypeDoesNotExist: u64 = 3;
 
 // === Constants ===
-const VAULT_KEY: vector<u8> = b"futarchy_vault";
 const ALLOWED_COINS_KEY: vector<u8> = b"allowed_coin_types";
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 
@@ -41,6 +41,9 @@ public fun default_vault_name(): vector<u8> {
 
 // === Structs ===
 
+/// Witness for FutarchyConfig authorization
+public struct FutarchyConfigWitness has drop {}
+
 /// Event emitted when revenue is deposited to a DAO
 public struct RevenueDeposited has copy, drop {
     dao_id: ID,
@@ -48,12 +51,6 @@ public struct RevenueDeposited has copy, drop {
     coin_type: TypeName,
     amount: u64,
     vault_name: String,
-}
-
-/// Minimal vault storage for initialization only
-public struct Vault has store {
-    balances: Bag,
-    treasury_caps: Bag,
 }
 
 /// Tracks which coin types are allowed in the vault
@@ -79,18 +76,8 @@ public fun init_vault<Config>(
     version: VersionWitness,
     ctx: &mut TxContext
 ) {
-    let vault = Vault {
-        balances: bag::new(ctx),
-        treasury_caps: bag::new(ctx),
-    };
-    
-    // Store vault in account managed data
-    account::add_managed_data(
-        account,
-        VAULT_KEY,
-        vault,
-        version,
-    );
+    // Don't store our own vault - rely on account_actions::vault
+    // We only need to track allowed coin types for governance control
     
     // Initialize allowed coin types set
     let allowed = AllowedCoinTypes {
@@ -104,10 +91,8 @@ public fun init_vault<Config>(
         version,
     );
     
-    // Open the default treasury vault
-    // Note: vault::open requires Auth, but we're initializing during DAO creation
     // The actual vault opening is handled by account_actions::vault module
-    // We just initialize the allowed coin types tracking here
+    // through proper Auth when needed
 }
 
 /// Check if a coin type is allowed in the vault
@@ -129,22 +114,24 @@ public fun is_coin_type_allowed<Config, CoinType>(
 
 /// PERMISSIONLESS: Deposit coins of a type that already exists in the vault
 /// Anyone can deposit if the DAO already holds this coin type
+/// This bypasses auth requirements since it's just adding to existing balances
 public fun deposit_existing_coin_type<CoinType: drop>(
     account: &mut Account<FutarchyConfig>,
     coin: Coin<CoinType>,
     vault_name: String,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     // Check if the vault exists and has this coin type
-    assert!(
-        vault::has_vault(account, vault_name) &&
-        vault::borrow_vault(account, vault_name).coin_type_exists<CoinType>(),
-        ECoinTypeDoesNotExist
-    );
+    assert!(vault::has_vault(account, vault_name), EVaultNotInitialized);
+    let vault_ref = vault::borrow_vault(account, vault_name);
+    assert!(vault::coin_type_exists<CoinType>(vault_ref), ECoinTypeDoesNotExist);
     
-    // TODO: Fix this - authenticate function doesn't exist
-    // Need to use proper intent system for deposits
-    abort ECoinTypeDoesNotExist
+    // Use the permissionless deposit function from vault module
+    // This is safe because:
+    // 1. We're only adding to existing coin types
+    // 2. Deposits don't reduce DAO assets
+    // 3. This enables permissionless revenue/donations
+    vault::deposit_permissionless(account, vault_name, coin);
 }
 
 /// ENTRY: Public entry function for depositing revenue/donations to a DAO
@@ -154,8 +141,8 @@ public entry fun deposit_revenue<CoinType: drop>(
     coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
-    // Use default vault name for revenue deposits (primary)
-    let vault_name = b"primary".to_string();
+    // Use treasury vault name for revenue deposits
+    let vault_name = string::utf8(default_vault_name());
     let amount = coin.value();
     let dao_id = object::id(account);
     
@@ -165,7 +152,7 @@ public entry fun deposit_revenue<CoinType: drop>(
     // Emit event for transparency
     event::emit(RevenueDeposited {
         dao_id,
-        depositor: ctx.sender(),
+        depositor: tx_context::sender(ctx),
         coin_type: type_name::get<CoinType>(),
         amount,
         vault_name,

@@ -27,15 +27,17 @@ use sui::{
     bag::Bag,
     tx_context::TxContext,
 };
-use futarchy_core::version;
-use account_actions::{vault, vault_intents};
+use futarchy_core::{
+    version,
+    futarchy_config::{Self, FutarchyConfig},
+};
+use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
     account::{Self, Account, Auth},
     executable::Executable,
     version_witness::VersionWitness,
     intents,
 };
-use futarchy_core::futarchy_config::FutarchyConfig;
 
 // === Errors ===
 const EInvalidStreamDuration: u64 = 1;
@@ -63,7 +65,9 @@ const EWithdrawalChallenged: u64 = 22;
 const EMissingReasonCode: u64 = 23;
 const EMissingProjectName: u64 = 24;
 const EChallengeMismatch: u64 = 25;
-const EBudgetExceeded: u64 = 26;
+const ECannotWithdrawFromVault: u64 = 26;
+const EBudgetExceeded: u64 = 27;
+const EInvalidSourceMode: u64 = 28;
 
 const MAX_WITHDRAWERS: u64 = 100;
 const MAX_PENDING_WITHDRAWALS: u64 = 100;
@@ -212,6 +216,8 @@ public struct ChallengedWithdrawalsCancelled has copy, drop {
 
 // === Structs ===
 
+// Note: FutarchyConfigWitness removed - use futarchy_config::authenticate() instead
+
 /// Payment types supported by the unified system
 const PAYMENT_TYPE_STREAM: u8 = 0;      // Continuous streaming (vesting, salaries)
 const PAYMENT_TYPE_RECURRING: u8 = 1;   // Periodic payments
@@ -255,6 +261,8 @@ public struct PaymentConfig has store {
     /// Budget stream fields for treasury accountability
     is_budget_stream: bool,
     budget_config: Option<BudgetStreamConfig>,
+    /// Vault stream ID for direct treasury streams
+    vault_stream_id: Option<ID>,
 }
 
 /// Action to create a new payment (stream or recurring)
@@ -566,7 +574,7 @@ public fun new_cancel_challenged_withdrawals_action(
 // === Execution Functions ===
 
 /// Execute creation of a payment (stream or recurring) with funding if isolated pool
-public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
+public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version_witness: VersionWitness,
@@ -598,6 +606,7 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
         description: action.description,
         is_budget_stream: false,
         budget_config: option::none(),
+        vault_stream_id: option::none(),  // Will be set after vault stream creation
     };
     
     // Initialize payment storage if needed
@@ -616,6 +625,29 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
     
     // Generate unique payment ID
     let payment_id = generate_payment_id(&config, clock.timestamp_ms(), ctx);
+    
+    // Create vault stream for direct treasury mode
+    let vault_stream_id: Option<ID> = if (config.source_mode == SOURCE_DIRECT_TREASURY && config.payment_type == PAYMENT_TYPE_STREAM) {
+        // Create a vault stream for direct treasury withdrawals
+        let auth = futarchy_config::authenticate(account, ctx);
+        let stream_id = vault::create_stream<FutarchyConfig, CoinType>(
+            auth,
+            account,
+            string::utf8(b"treasury"),
+            action.recipient,  // Initial beneficiary
+            config.amount,     // Total amount
+            config.start_timestamp,
+            config.end_timestamp,
+            config.interval_or_cliff,  // Cliff time
+            config.amount / 12,  // Max per withdrawal (monthly chunks for a year)
+            86_400_000,  // Min interval: 1 day in milliseconds
+            clock,
+            ctx
+        );
+        option::some(stream_id)
+    } else {
+        option::none()
+    };
     
     // If using an isolated pool, create and fund the pool from vault
     if (config.source_mode == SOURCE_ISOLATED_POOL) {
@@ -678,8 +710,12 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
     let start_timestamp = config.start_timestamp;
     let end_timestamp = config.end_timestamp;
     
+    // Update config with vault_stream_id if created
+    let mut final_config = config;
+    final_config.vault_stream_id = vault_stream_id;
+    
     // Store the payment configuration
-    table::add(&mut storage.payments, payment_id, config);
+    table::add(&mut storage.payments, payment_id, final_config);
     storage.payment_ids.push_back(payment_id);  // Track ID for dissolution
     storage.total_payments = storage.total_payments + 1;
     
@@ -696,7 +732,7 @@ public fun do_create_payment<Outcome: store, CoinType, IW: drop>(
 }
 
 /// Execute creation of a budget stream with enhanced accountability
-public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
+public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
@@ -743,10 +779,28 @@ public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
         description: action.description,
         is_budget_stream: true,
         budget_config: option::some(budget_config),
+        vault_stream_id: option::none(),  // Will be set after creation
     };
     
     // Generate unique payment ID
     let payment_id = generate_payment_id(&config, clock.timestamp_ms(), ctx);
+    
+    // Create vault stream for budget stream
+    let auth = futarchy_config::authenticate(account, ctx);
+    let vault_stream_id = vault::create_stream<FutarchyConfig, CoinType>(
+        auth,
+        account,
+        string::utf8(b"treasury"),
+        action.recipient,  // Initial beneficiary
+        config.amount,     // Total amount
+        config.start_timestamp,
+        config.end_timestamp,
+        option::none(),    // No cliff for budget streams
+        config.amount / 12,  // Max per withdrawal (monthly chunks)
+        action.pending_period_ms,  // Use pending period as min interval
+        clock,
+        ctx
+    );
     
     // Initialize payment storage if needed
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
@@ -776,8 +830,12 @@ public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
     let start_timestamp = config.start_timestamp;
     let end_timestamp = config.end_timestamp;
     
+    // Update config with vault_stream_id
+    let mut final_config = config;
+    final_config.vault_stream_id = option::some(vault_stream_id);
+    
     // Store the payment configuration
-    table::add(&mut storage.payments, payment_id, config);
+    table::add(&mut storage.payments, payment_id, final_config);
     storage.payment_ids.push_back(payment_id);  // Track ID for dissolution
     storage.total_payments = storage.total_payments + 1;
     
@@ -793,8 +851,8 @@ public fun do_create_budget_stream<Outcome: store, CoinType, IW: drop>(
     });
 }
 
-/// Execute a payment - validation only, no fund movement
-public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
+/// Execute a payment - handles both direct treasury and isolated pool modes
+public fun do_execute_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version_witness: VersionWitness,
@@ -806,18 +864,37 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     let payment_id = action.payment_id;
     let amount = action.amount;
     
-    let storage: &PaymentStorage = account::borrow_managed_data(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
+    // First extract needed data from payment before borrowing account
+    let (is_active, source_mode, has_vault_stream, mut vault_stream_id, claimable, sender_authorized) = {
+        let storage: &PaymentStorage = account::borrow_managed_data(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+        
+        assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
+        let payment = table::borrow(&storage.payments, payment_id);
+        assert!(payment.active, EPaymentNotActive);
+        
+        let current_time = clock.timestamp_ms();
+        let claimable = calculate_claimable_amount(payment, current_time);
+        let sender = ctx.sender();
+        
+        (
+            payment.active,
+            payment.source_mode,
+            payment.vault_stream_id.is_some(),
+            if (payment.vault_stream_id.is_some()) { 
+                option::some(*payment.vault_stream_id.borrow())
+            } else { 
+                option::none() 
+            },
+            claimable,
+            table::contains(&payment.authorized_withdrawers, sender)
+        )
+    };
     
-    assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
-    let payment = table::borrow(&storage.payments, payment_id);
-    assert!(payment.active, EPaymentNotActive);
-    
-    let current_time = clock.timestamp_ms();
-    let claimable = calculate_claimable_amount(payment, current_time);
+    assert!(sender_authorized, ENotAuthorizedWithdrawer);
     
     // Determine actual amount to claim
     let claim_amount = if (amount.is_some()) {
@@ -830,7 +907,62 @@ public fun do_execute_payment<Outcome: store, CoinType, IW: drop>(
     
     assert!(claim_amount > 0, ENothingToClaim);
     
-    // This function only validates. Actual execution with funds happens in do_execute_payment_with_coin
+    // Get the coin based on source mode
+    let payment_coin = if (source_mode == SOURCE_DIRECT_TREASURY && has_vault_stream) {
+        // Use vault stream for direct treasury
+        let stream_id = vault_stream_id.extract();
+        vault::withdraw_from_stream<FutarchyConfig, CoinType>(
+            account,
+            string::utf8(b"treasury"),
+            stream_id,
+            claim_amount,
+            clock,
+            ctx
+        )
+    } else if (source_mode == SOURCE_ISOLATED_POOL) {
+        // Use isolated pool
+        let pool_key = PaymentPoolKey { payment_id };
+        let pool_balance: &mut Balance<CoinType> = account::borrow_managed_data_mut(
+            account,
+            pool_key,
+            version::current()
+        );
+        coin::take(pool_balance, claim_amount, ctx)
+    } else {
+        // Fallback for legacy or other modes - this should not happen
+        abort EInvalidSourceMode
+    };
+    
+    // Update payment state - need to borrow mutably again
+    let current_time = clock.timestamp_ms();
+    let sender = ctx.sender();
+    let total_claimed = {
+        let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+        let payment = table::borrow_mut(&mut storage.payments, payment_id);
+        payment.claimed_amount = payment.claimed_amount + claim_amount;
+        if (payment.payment_type == PAYMENT_TYPE_RECURRING) {
+            payment.payments_made = payment.payments_made + 1;
+            payment.last_payment_timestamp = current_time;
+        };
+        payment.claimed_amount
+    };
+    
+    // Transfer to recipient
+    transfer::public_transfer(payment_coin, sender);
+    
+    // Emit claim event
+    event::emit(PaymentClaimed {
+        account_id: object::id(account),
+        payment_id,
+        recipient: sender,
+        amount_claimed: claim_amount,
+        total_claimed,
+        timestamp: current_time,
+    });
 }
 
 /// Execute a payment with provided coin - actual fund movement
@@ -902,8 +1034,8 @@ public(package) fun do_execute_payment_with_coin<Outcome: store, CoinType, IW: d
     });
 }
 
-/// Execute cancellation of a payment - validation only
-public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
+/// Execute cancellation of a payment
+public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version_witness: VersionWitness,
@@ -913,18 +1045,157 @@ public fun do_cancel_payment<Outcome: store, CoinType, IW: drop>(
 ) {
     let action = executable.next_action<Outcome, CancelPaymentAction<CoinType>, IW>(witness);
     let payment_id = action.payment_id;
+    let return_unclaimed = action.return_unclaimed;
     
-    let storage: &PaymentStorage = account::borrow_managed_data(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
+    // Extract payment and remove it from storage
+    let mut payment = {
+        let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+        
+        assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
+        table::remove(&mut storage.payments, payment_id)
+    };
     
-    assert!(table::contains(&storage.payments, payment_id), EPaymentNotFound);
-    let payment = table::borrow(&storage.payments, payment_id);
     assert!(payment.cancellable, ENotCancellable);
     
-    // This function only validates. Actual cancellation happens in do_cancel_payment_with_coin
+    let current_time = clock.timestamp_ms();
+    let has_vault_stream = payment.vault_stream_id.is_some();
+    let mut stream_id_opt = if (has_vault_stream) { option::some(payment.vault_stream_id.extract()) } else { option::none() };
+    let source_mode = payment.source_mode;
+    
+    let unclaimed_amount = if (source_mode == SOURCE_DIRECT_TREASURY && stream_id_opt.is_some()) {
+        // Cancel vault stream and get refund
+        let stream_id = stream_id_opt.extract();
+        let auth = futarchy_config::authenticate(account, ctx);
+        let (refund_coin, refund_amount) = vault::cancel_stream<FutarchyConfig, CoinType>(
+            auth,
+            account,
+            string::utf8(b"treasury"),
+            stream_id,
+            clock,
+            ctx
+        );
+        
+        // Return refund to treasury if requested
+        if (return_unclaimed && refund_amount > 0) {
+            // The refund coin is already back in the vault from cancel_stream
+            refund_coin.destroy_zero();
+        } else if (refund_amount > 0) {
+            // Transfer refund somewhere else if not returning to treasury
+            transfer::public_transfer(refund_coin, tx_context::sender(ctx));
+        } else {
+            refund_coin.destroy_zero();
+        };
+        
+        refund_amount
+    } else if (source_mode == SOURCE_ISOLATED_POOL) {
+        // Return isolated pool balance to treasury
+        let pool_key = PaymentPoolKey { payment_id };
+        if (account::has_managed_data(account, pool_key)) {
+            let pool_balance: Balance<CoinType> = account::remove_managed_data(
+                account,
+                pool_key,
+                version::current()
+            );
+            
+            let remaining = pool_balance.value();
+            if (return_unclaimed && remaining > 0) {
+                // Return to treasury vault
+                let vault_name = string::utf8(b"treasury");
+                if (vault::has_vault(account, vault_name)) {
+                    // Convert balance back to coin and deposit
+                    let return_coin = coin::from_balance(pool_balance, ctx);
+                    vault::deposit_permissionless(
+                        account,
+                        vault_name,
+                        return_coin
+                    );
+                } else {
+                    // No vault, destroy the balance
+                    pool_balance.destroy_zero();
+                };
+            } else {
+                pool_balance.destroy_zero();
+            };
+            
+            remaining
+        } else {
+            0
+        }
+    } else {
+        0
+    };
+    
+    // Remove from payment IDs list - need to borrow storage again
+    {
+        let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
+            account,
+            PaymentStorageKey {},
+            version::current()
+        );
+        
+        let mut i = 0;
+        while (i < storage.payment_ids.length()) {
+            if (storage.payment_ids[i] == payment_id) {
+                storage.payment_ids.swap_remove(i);
+                break
+            };
+            i = i + 1;
+        };
+    };
+    
+    // Emit cancellation event
+    event::emit(PaymentCancelled {
+        account_id: object::id(account),
+        payment_id,
+        unclaimed_returned: unclaimed_amount,
+        timestamp: current_time,
+    });
+    
+    // Properly destroy the payment by destructuring it
+    let PaymentConfig {
+        payment_type: _,
+        source_mode: _,
+        authorized_withdrawers,
+        withdrawer_count: _,
+        amount: _,
+        claimed_amount: _,
+        start_timestamp: _,
+        end_timestamp: _,
+        interval_or_cliff: _,
+        total_payments: _,
+        payments_made: _,
+        last_payment_timestamp: _,
+        cancellable: _,
+        active: _,
+        description: _,
+        is_budget_stream: _,
+        budget_config,
+        vault_stream_id: _,
+    } = payment;
+    
+    // Drop the authorized_withdrawers table
+    table::drop(authorized_withdrawers);
+    
+    // Handle budget_config if present
+    if (budget_config.is_some()) {
+        let BudgetStreamConfig {
+            project_name: _,
+            pending_period_ms: _,
+            pending_withdrawals,
+            pending_count: _,
+            total_pending_amount: _,
+            next_withdrawal_id: _,
+            budget_period_ms: _,
+            current_period_start: _,
+            current_period_claimed: _,
+            max_per_period: _,
+        } = budget_config.extract();
+        table::drop(pending_withdrawals);
+    };
 }
 
 /// Cancel a payment with optional final payment coin
@@ -1706,39 +1977,11 @@ fun withdraw_from_vault<CoinType>(
     vault_name: String,
     amount: u64,
     _version_witness: VersionWitness,
-    ctx: &mut TxContext
+    _ctx: &mut TxContext
 ): Coin<CoinType> {
-    // Create a temporary witness for vault operations
-    struct TempWitness has drop {}
-    
-    // Create a spend intent using Move framework patterns
-    let mut intent = intents::new_intent<FutarchyConfig, TempWitness>(
-        account,
-        ctx
-    );
-    
-    // Add the spend action to the intent
-    vault::new_spend<FutarchyConfig, CoinType, TempWitness>(
-        &mut intent,
-        vault_name,
-        amount,
-        TempWitness {}
-    );
-    
-    // Execute the intent to get the coin
-    let mut executable = account::execute_intent(account, intent);
-    let coin = vault::do_spend<FutarchyConfig, _, CoinType, _>(
-        &mut executable,
-        account,
-        version::current(),
-        TempWitness {},
-        ctx
-    );
-    
-    // Confirm execution
-    account::confirm_execution(account, executable);
-    
-    coin
+    // Note: This function needs to be called through the proper action dispatcher
+    // which handles vault withdrawals. For now, abort as this shouldn't be called directly.
+    abort ECannotWithdrawFromVault
 }
 
 /// Calculate claimable amount for a payment
@@ -1998,3 +2241,120 @@ public fun payment_type_stream(): u8 { PAYMENT_TYPE_STREAM }
 
 /// Get payment type constant for recurring
 public fun payment_type_recurring(): u8 { PAYMENT_TYPE_RECURRING }
+
+// === Delete Functions for Expired Intents ===
+
+/// Delete a create payment action from an expired intent
+public fun delete_create_payment<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let CreatePaymentAction<CoinType> {
+        payment_type: _,
+        source_mode: _,
+        recipient: _,
+        amount: _,
+        start_timestamp: _,
+        end_timestamp: _,
+        interval_or_cliff: _,
+        total_payments: _,
+        cancellable: _,
+        description: _,
+    } = expired.remove_action();
+}
+
+/// Delete a create budget stream action from an expired intent
+public fun delete_create_budget_stream<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let CreateBudgetStreamAction<CoinType> {
+        recipient: _,
+        amount: _,
+        start_timestamp: _,
+        end_timestamp: _,
+        project_name: _,
+        pending_period_ms: _,
+        cancellable: _,
+        description: _,
+        budget_period_ms: _,
+        max_per_period: _,
+    } = expired.remove_action();
+}
+
+/// Delete an execute payment action from an expired intent
+public fun delete_execute_payment<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let ExecutePaymentAction<CoinType> {
+        payment_id: _,
+        amount: _,
+    } = expired.remove_action();
+}
+
+/// Delete a cancel payment action from an expired intent
+public fun delete_cancel_payment<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let CancelPaymentAction<CoinType> {
+        payment_id: _,
+        return_unclaimed: _,
+    } = expired.remove_action();
+}
+
+/// Delete an update payment recipient action from an expired intent
+public fun delete_update_payment_recipient(expired: &mut account_protocol::intents::Expired) {
+    let UpdatePaymentRecipientAction {
+        payment_id: _,
+        new_recipient: _,
+    } = expired.remove_action();
+}
+
+/// Delete an add withdrawer action from an expired intent
+public fun delete_add_withdrawer(expired: &mut account_protocol::intents::Expired) {
+    let AddWithdrawerAction {
+        payment_id: _,
+        new_withdrawer: _,
+    } = expired.remove_action();
+}
+
+/// Delete a remove withdrawers action from an expired intent
+public fun delete_remove_withdrawers(expired: &mut account_protocol::intents::Expired) {
+    let RemoveWithdrawersAction {
+        payment_id: _,
+        withdrawers_to_remove: _,
+    } = expired.remove_action();
+}
+
+/// Delete a toggle payment action from an expired intent
+public fun delete_toggle_payment(expired: &mut account_protocol::intents::Expired) {
+    let TogglePaymentAction {
+        payment_id: _,
+        active: _,
+    } = expired.remove_action();
+}
+
+/// Delete a request withdrawal action from an expired intent
+public fun delete_request_withdrawal<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let RequestWithdrawalAction<CoinType> {
+        payment_id: _,
+        amount: _,
+        reason_code: _,
+    } = expired.remove_action();
+}
+
+/// Delete a challenge withdrawals action from an expired intent
+public fun delete_challenge_withdrawals(expired: &mut account_protocol::intents::Expired) {
+    let ChallengeWithdrawalsAction {
+        payment_id: _,
+        withdrawal_ids: _,
+        proposal_id: _,
+    } = expired.remove_action();
+}
+
+/// Delete a process pending withdrawal action from an expired intent
+public fun delete_process_pending_withdrawal<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let ProcessPendingWithdrawalAction<CoinType> {
+        payment_id: _,
+        withdrawal_id: _,
+    } = expired.remove_action();
+}
+
+/// Delete a cancel challenged withdrawals action from an expired intent
+public fun delete_cancel_challenged_withdrawals(expired: &mut account_protocol::intents::Expired) {
+    let CancelChallengedWithdrawalsAction {
+        payment_id: _,
+        withdrawal_ids: _,
+        proposal_id: _,
+    } = expired.remove_action();
+}

@@ -3,18 +3,16 @@
 module futarchy_actions::action_dispatcher;
 
 // === Imports ===
-use std::option::{Self, Option};
+use std::option;
 use sui::{
-    clock::{Self, Clock},
+    clock::Clock,
     coin::{Self, Coin},
     sui::SUI,
-    object::{Self, ID},
     transfer,
-    tx_context::{Self, TxContext},
-    event,
+    tx_context::TxContext,
 };
 use account_protocol::{
-    account::{Self, Account},
+    account::Account,
     executable::{Self, Executable},
     intents::Intent,
 };
@@ -22,15 +20,14 @@ use account_actions::{
     vault_intents,
 };
 use futarchy_core::version;
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::{
     priority_queue,
-    proposal_fee_manager::{Self, ProposalFeeManager},
+    proposal_fee_manager::ProposalFeeManager,
 };
 use futarchy_markets::{
     proposal,
     spot_amm::SpotAMM,
-    conditional_amm,
 };
 
 // Import all specialized dispatchers
@@ -204,9 +201,12 @@ public fun execute_liquidity_operations<
             continue
         };
         
-        if (liquidity_dispatcher::try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(
+        let (handled, resource_request) = liquidity_dispatcher::try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(
             &mut executable, account, witness, ctx
-        )) {
+        );
+        // Properly handle the resource request option
+        option::destroy_none(resource_request);
+        if (handled) {
             continue
         };
         
@@ -273,9 +273,12 @@ public fun execute_dissolution_operations<
         };
         
         // Try liquidity actions (needed for withdrawing AMM liquidity)
-        if (liquidity_dispatcher::try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(
+        let (handled, resource_request) = liquidity_dispatcher::try_execute_typed_liquidity_action<AssetType, StableType, IW, Outcome>(
             &mut executable, account, witness, ctx
-        )) {
+        );
+        // Properly handle the resource request option
+        option::destroy_none(resource_request);
+        if (handled) {
             continue
         };
         

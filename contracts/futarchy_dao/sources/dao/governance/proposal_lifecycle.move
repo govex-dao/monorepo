@@ -127,7 +127,7 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
     // Get the parent proposal ID for second-order proposals
     let parent_proposal_id = proposal::get_id(proposal);
     
-    execute::run_all_with_governance(
+    execute::run_with_governance(
         executable,
         account,
         strategy::and(),
@@ -138,7 +138,7 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
         fee_manager,
         registry,
         parent_proposal_id,
-        option::some(fee_coin),
+        fee_coin,
         clock,
         ctx
     );
@@ -429,24 +429,17 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
         ctx
     );
     
-    // NEW: Use the centralized execute::run_all with strategy gates
+    // Use the centralized execute::run_all with strategy gates
     // For approved proposals, both futarchy (ok_a) and any council requirements (ok_b) are satisfied
     // execute::run_all handles confirmation internally - consumes executable
-    // Get the parent proposal ID for second-order proposals
-    let parent_proposal_id = proposal::get_id(proposal);
-    
-    execute::run_all_with_governance(
+    // This path doesn't create second-order proposals, so use run_all
+    execute::run_all(
         executable,
         account,
         strategy::and(),
         true,
         true,
         intent_witness,
-        queue,
-        fee_manager,
-        registry,
-        parent_proposal_id,
-        option::none(), // No fee coin - caller must provide if needed
         clock,
         ctx
     );
@@ -498,7 +491,9 @@ public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: 
         ctx
     );
     
-    execute::run_typed<AssetType, StableType, IW>(
+    // For typed actions, we should use run_all since typed resources
+    // should be provided through specialized entry points
+    execute::run_all(
         executable,
         account,
         strategy::and(),

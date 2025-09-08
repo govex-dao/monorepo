@@ -8,16 +8,27 @@ use account_protocol::{
 use account_actions::{
     package_upgrade,
     vault,
+    currency,
+    kiosk,
+    access_control,
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_actions::{
     config_actions,
     memo_actions,
     liquidity_actions,
+    governance_actions,
 };
 use futarchy_lifecycle::dissolution_actions;
-use futarchy_specialized_actions::operating_agreement_actions;
-use futarchy_specialized_actions::stream_actions;
+use futarchy_specialized_actions::{
+    operating_agreement_actions,
+    stream_actions,
+    oracle_actions,
+};
+use futarchy_multisig::{
+    security_council_actions,
+    policy_actions,
+};
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
@@ -140,33 +151,126 @@ public fun delete_cancel_dissolution(expired: &mut Expired) {
 
 // === Package Upgrade Actions ===
 public fun delete_upgrade_commit(expired: &mut Expired) {
-    // Handle upgrade commit actions from account_actions
-    // These don't need Account parameter
-    if (expired.actions().length() > 0) {
-        account_actions::package_upgrade::delete_upgrade(expired);
-    }
+    package_upgrade::delete_upgrade(expired);
+}
+
+public fun delete_restrict_policy(expired: &mut Expired) {
+    package_upgrade::delete_restrict(expired);
 }
 
 // === Owned Object Actions ===
 public fun delete_owned_withdraw(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
-    // Handle owned withdrawals - this unlocks the object
-    // We need to check if there's actually a withdraw action before calling
-    // For now we'll handle this carefully to avoid errors
-    if (expired.actions().length() > 0) {
-        // Try to delete owned withdraw if it exists
-        // The account_protocol::owned module handles the unlocking
-        account_protocol::owned::delete_withdraw(expired, account);
-    }
+    // The owned module's delete_withdraw properly unlocks objects
+    account_protocol::owned::delete_withdraw(expired, account);
 }
 
-// === Vault Spending Actions ===
-public fun delete_vault_spend(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
-    // Handle vault spending which might involve locked coins
-    // Check with vault module if this needs special handling
-    let _ = account;
-    if (expired.actions().length() > 0) {
-        // account_actions::vault::delete_spend(expired);
-        // For now, just drain without special handling
-        let _ = expired;
-    }
+// === Vault Actions ===
+public fun delete_vault_spend<CoinType>(expired: &mut Expired) {
+    vault::delete_spend<CoinType>(expired);
+}
+
+public fun delete_vault_deposit<CoinType>(expired: &mut Expired) {
+    vault::delete_deposit<CoinType>(expired);
+}
+
+// === Currency Actions ===
+public fun delete_currency_mint<CoinType>(expired: &mut Expired) {
+    currency::delete_mint<CoinType>(expired);
+}
+
+public fun delete_currency_burn<CoinType>(expired: &mut Expired) {
+    currency::delete_burn<CoinType>(expired);
+}
+
+public fun delete_currency_update_metadata<CoinType>(expired: &mut Expired) {
+    currency::delete_update<CoinType>(expired);
+}
+
+// === Kiosk Actions ===
+public fun delete_kiosk_take(expired: &mut Expired) {
+    kiosk::delete_take(expired);
+}
+
+public fun delete_kiosk_list(expired: &mut Expired) {
+    kiosk::delete_list(expired);
+}
+
+// === Access Control Actions ===
+public fun delete_borrow_cap<Cap>(expired: &mut Expired) {
+    access_control::delete_borrow<Cap>(expired);
+}
+
+// === Stream/Payment Actions ===
+public fun delete_create_payment<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_create_payment<CoinType>(expired);
+}
+
+public fun delete_create_budget_stream<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_create_budget_stream<CoinType>(expired);
+}
+
+public fun delete_execute_payment<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_execute_payment<CoinType>(expired);
+}
+
+public fun delete_cancel_payment<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_cancel_payment<CoinType>(expired);
+}
+
+public fun delete_update_payment_recipient(expired: &mut Expired) {
+    stream_actions::delete_update_payment_recipient(expired);
+}
+
+public fun delete_add_withdrawer(expired: &mut Expired) {
+    stream_actions::delete_add_withdrawer(expired);
+}
+
+public fun delete_remove_withdrawers(expired: &mut Expired) {
+    stream_actions::delete_remove_withdrawers(expired);
+}
+
+public fun delete_toggle_payment(expired: &mut Expired) {
+    stream_actions::delete_toggle_payment(expired);
+}
+
+public fun delete_request_withdrawal<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_request_withdrawal<CoinType>(expired);
+}
+
+public fun delete_challenge_withdrawals(expired: &mut Expired) {
+    stream_actions::delete_challenge_withdrawals(expired);
+}
+
+public fun delete_process_pending_withdrawal<CoinType>(expired: &mut Expired) {
+    stream_actions::delete_process_pending_withdrawal<CoinType>(expired);
+}
+
+public fun delete_cancel_challenged_withdrawals(expired: &mut Expired) {
+    stream_actions::delete_cancel_challenged_withdrawals(expired);
+}
+
+// === Governance Actions ===
+public fun delete_create_proposal(expired: &mut Expired) {
+    governance_actions::delete_create_proposal(expired);
+}
+
+public fun delete_proposal_reservation(expired: &mut Expired) {
+    governance_actions::delete_proposal_reservation(expired);
+}
+
+// === Oracle Actions ===
+// Note: ReadOraclePriceAction has drop ability, not stored in expired intents
+// Only mint actions need cleanup
+
+public fun delete_conditional_mint<CoinType>(expired: &mut Expired) {
+    oracle_actions::delete_conditional_mint<CoinType>(expired);
+}
+
+public fun delete_tiered_mint<CoinType>(expired: &mut Expired) {
+    oracle_actions::delete_tiered_mint<CoinType>(expired);
+}
+
+// === Memo Actions ===
+public fun delete_memo(expired: &mut Expired) {
+    memo_actions::delete_memo(expired);
 }

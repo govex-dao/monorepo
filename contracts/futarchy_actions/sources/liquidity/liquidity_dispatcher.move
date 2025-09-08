@@ -2,6 +2,7 @@
 module futarchy_actions::liquidity_dispatcher;
 
 // === Imports ===
+use std::option::{Self, Option};
 use sui::tx_context::TxContext;
 use account_protocol::{
     account::{Self, Account},
@@ -10,11 +11,17 @@ use account_protocol::{
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_actions::liquidity_actions;
+use futarchy_actions::resource_requests::ResourceRequest;
 
-// === Public(friend) Functions ===
+// === Constants ===
+const EInvalidAmount: u64 = 4;
+const ENoSpotPool: u64 = 5;
+const EInvalidPoolId: u64 = 6;
+
+// === Public Functions ===
 
 /// Try to execute liquidity actions (pool management actions)
-public fun try_execute_liquidity_action<IW: drop, Outcome: store + drop + copy>(
+public fun try_execute_liquidity_action<IW: copy + drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
@@ -51,13 +58,13 @@ public fun try_execute_liquidity_action<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute liquidity actions with known types
-/// Handles validation for typed liquidity operations
-public fun try_execute_typed_liquidity_action<AssetType: drop + store, StableType: drop + store, IW: drop, Outcome: store + drop + copy>(
+/// Returns a ResourceRequest if a create pool action is found
+public fun try_execute_typed_liquidity_action<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,
     ctx: &mut TxContext,
-): bool {
+): (bool, Option<ResourceRequest<liquidity_actions::CreatePoolAction<AssetType, StableType>>>) {
     // For add liquidity actions, validate and document execution requirements
     if (executable::contains_action<Outcome, liquidity_actions::AddLiquidityAction<AssetType, StableType>>(executable)) {
         validate_add_liquidity_action<AssetType, StableType, IW, Outcome>(
@@ -66,7 +73,7 @@ public fun try_execute_typed_liquidity_action<AssetType: drop + store, StableTyp
             witness,
             ctx
         );
-        return true
+        return (true, option::none())
     };
     
     // For remove liquidity actions, validate and document execution requirements  
@@ -77,34 +84,46 @@ public fun try_execute_typed_liquidity_action<AssetType: drop + store, StableTyp
             witness,
             ctx
         );
-        return true
+        return (true, option::none())
     };
     
-    // Try to execute CreatePoolAction
+    // Try to execute CreatePoolAction - returns a ResourceRequest that must be fulfilled
     if (executable::contains_action<Outcome, liquidity_actions::CreatePoolAction<AssetType, StableType>>(executable)) {
-        liquidity_actions::do_create_pool<AssetType, StableType, Outcome, IW>(
+        // Create pool action returns a ResourceRequest that must be fulfilled
+        let request = liquidity_actions::do_create_pool<AssetType, StableType, Outcome, IW>(
             executable,
             account,
             version::current(),
             witness,
             ctx
         );
-        return true
+        // Return the request to the caller for fulfillment
+        return (true, option::some(request))
     };
     
-    false
+    (false, option::none())
+}
+
+/// Execute add liquidity action and return ResourceRequest
+public fun execute_add_liquidity<AssetType: drop + store, StableType: drop + store, IW: copy + drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    witness: IW,
+    ctx: &mut TxContext,
+): ResourceRequest<liquidity_actions::AddLiquidityAction<AssetType, StableType>> {
+    liquidity_actions::do_add_liquidity<AssetType, StableType, Outcome, IW>(
+        executable,
+        account,
+        version::current(),
+        witness,
+        ctx
+    )
 }
 
 // === Helper Functions ===
 
 /// Validate add liquidity action parameters
-
-// === Constants ===
-const EInvalidAmount: u64 = 4;
-const ENoSpotPool: u64 = 5;
-const EInvalidPoolId: u64 = 6;
-
-fun validate_add_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+fun validate_add_liquidity_action<AssetType, StableType, IW: copy + drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &Account<FutarchyConfig>,
     witness: IW,
@@ -130,18 +149,18 @@ fun validate_add_liquidity_action<AssetType, StableType, IW: drop, Outcome: stor
     assert!(stored_pool_id.is_some(), ENoSpotPool);
     assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
     
-    // Action validated - actual execution requires execute_add_liquidity_with_pool
-    // with coins obtained from vault operations using Move framework vault intents:
+    // Action validated - actual execution requires fulfill_add_liquidity
+    // with coins obtained from vault operations:
     //
     // Example integration pattern:
     // 1. This function validates the AddLiquidityAction
-    // 2. Use vault_intents::execute_spend() to withdraw asset_amount and stable_amount
-    // 3. Call execute_add_liquidity_with_pool with the withdrawn coins
-    // 4. LP tokens are automatically deposited to the custody registry
+    // 2. Call execute_add_liquidity to get a ResourceRequest
+    // 3. Fulfill the request with vault coins using fulfill_add_liquidity
+    // 4. LP tokens are returned to the caller
 }
 
 /// Validate remove liquidity action parameters
-fun validate_remove_liquidity_action<AssetType, StableType, IW: drop, Outcome: store + drop + copy>(
+fun validate_remove_liquidity_action<AssetType, StableType, IW: copy + drop, Outcome: store + drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &Account<FutarchyConfig>,
     witness: IW,
@@ -166,12 +185,11 @@ fun validate_remove_liquidity_action<AssetType, StableType, IW: drop, Outcome: s
     assert!(stored_pool_id.is_some(), ENoSpotPool);
     assert!(pool_id == *stored_pool_id.borrow(), EInvalidPoolId);
     
-    // Action validated - actual execution requires execute_remove_liquidity_with_pool
-    // with LP tokens obtained from the custody system using Move framework patterns:
+    // Action validated - actual execution requires do_remove_liquidity
+    // with LP tokens and pool:
     //
     // Example integration pattern:
     // 1. This function validates the RemoveLiquidityAction
-    // 2. Retrieve LP tokens from custody using lp_token_custody::withdraw_lp_token()
-    // 3. Call execute_remove_liquidity_with_pool with the LP tokens
-    // 4. Resulting coins can be deposited back to vault via vault_intents::execute_deposit()
+    // 2. Call do_remove_liquidity with LP tokens and pool
+    // 3. Resulting coins can be deposited back to vault
 }

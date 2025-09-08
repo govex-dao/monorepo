@@ -108,7 +108,7 @@ public fun try_execute_stream_action<IW: drop, Outcome: store + drop + copy>(
 }
 
 /// Execute stream actions with known coin type
-public fun try_execute_typed_stream_action<CoinType, IW: drop, Outcome: store + drop + copy>(
+public fun try_execute_typed_stream_action<CoinType: drop, IW: copy + drop, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     witness: IW,

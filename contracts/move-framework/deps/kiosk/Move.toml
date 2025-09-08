@@ -1,11 +1,11 @@
 [package]
 name = "Kiosk"
 version = "0.0.1"
-# published-at = "0x34cc6762780f4f6f153c924c0680cfe2a1fb4601e7d33cc28a92297b62de1e0e"
-# published-at = "0x0717a13f43deaf5345682153e3633f76cdcf695405959697fcd63f63f289320b"
+# published-at = "0x0"
+# published-at = "0x0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b5633abb4177" }
 
 [addresses]
-kiosk = "0xfac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30"
+kiosk = "0x44c5d7428a5924600d6d9d719f267f302cf42decbe2f9b70edbb075f73be5dff"

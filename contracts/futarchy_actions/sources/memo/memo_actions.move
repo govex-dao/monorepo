@@ -338,3 +338,42 @@ public fun get_signal_type(action: &EmitSignalAction): &String {
 public fun get_signal_value(action: &EmitSignalAction): &String {
     &action.signal_value
 }
+
+// === Delete Functions for Expired Intents ===
+
+/// Delete an emit memo action from an expired intent
+public fun delete_memo(expired: &mut account_protocol::intents::Expired) {
+    let EmitMemoAction {
+        memo: _,
+        category: _,
+        reference_id: _,
+    } = expired.remove_action();
+}
+
+/// Delete an emit structured memo action from an expired intent
+public fun delete_structured_memo(expired: &mut account_protocol::intents::Expired) {
+    let EmitStructuredMemoAction {
+        title: _,
+        fields: _,
+        metadata: _,
+    } = expired.remove_action();
+}
+
+/// Delete an emit commitment action from an expired intent
+public fun delete_commitment(expired: &mut account_protocol::intents::Expired) {
+    let EmitCommitmentAction {
+        commitment_type: _,
+        commitment: _,
+        counterparty: _,
+        expires_at: _,
+    } = expired.remove_action();
+}
+
+/// Delete an emit signal action from an expired intent
+public fun delete_signal(expired: &mut account_protocol::intents::Expired) {
+    let EmitSignalAction {
+        signal_type: _,
+        signal_value: _,
+        context: _,
+    } = expired.remove_action();
+}

@@ -20,6 +20,19 @@ This fork adds `cancel_intent` functionality that allows config modules to cance
 
 1. **Added `cancel_intent` function** (`account.move`): Config-authorized cancellation that returns an `Expired` bag for cleanup. This enables losing intents to be cancelled in the finalization transaction with all cleanup hooks processed immediately.
 
+2. **Added streaming/vesting functionality** (`vault.move`): Time-based vesting streams for controlled treasury withdrawals:
+   - **VaultStream struct**: Manages vesting schedules with cliff periods, rate limiting, and per-withdrawal caps
+   - **create_stream**: Authorized creation of vesting streams for beneficiaries (e.g., employees, contractors)
+   - **withdraw_from_stream**: Permissionless withdrawals by beneficiaries respecting vesting schedule
+   - **cancel_stream**: Authorized cancellation with proper vested/unvested fund distribution
+   - **deposit_permissionless**: Anyone can deposit to existing coin types (enables protocol revenue deposits)
+   - **calculate_claimable**: Query available vested amount for any stream at current time
+   - **stream_info**: Get full stream details including beneficiary, amounts, and timing parameters
+   - **prune_stream/prune_streams**: Clean up fully-claimed streams to allow vault closure
+   - **Safe math utilities**: Overflow-protected multiplication/division for vesting calculations
+   
+   This enables DAOs to implement salary payments, grants, and controlled treasury access without giving full custody. Streams ensure funds remain in the main vault until withdrawn, maintaining treasury unity while enabling programmatic disbursements. The system includes comprehensive safety checks for timing constraints, withdrawal limits, and proper handling of cliff periods.
+
 ## Project Overview
 
 This project aims to provide the robust foundations developers need to build secure and user-friendly experiences on Sui.

@@ -4,14 +4,13 @@ module futarchy_actions::liquidity_actions;
 
 // === Imports ===
 use std::string::{Self, String};
-use std::type_name::{Self, TypeName};
 use sui::{
     coin::{Self, Coin},
-    balance::{Self, Balance},
     object::{Self, ID},
-    tx_context::{Self, TxContext},
+    clock::Clock,
+    tx_context::TxContext,
+    balance::{Self, Balance},
     transfer,
-    bag::{Self, Bag},
 };
 use account_protocol::{
     account::{Self, Account},
@@ -19,19 +18,17 @@ use account_protocol::{
     intents::Expired,
     version_witness::VersionWitness,
 };
-use account_actions::{vault, vault_intents};
+use account_actions::vault;
 use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
 use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::spot_amm::{Self, SpotAMM};
-use futarchy_vault::lp_token_custody;
+use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;
 const EInvalidRatio: u64 = 2;
-const EInvalidSlippage: u64 = 3;
 const EEmptyPool: u64 = 4;
 const EInsufficientVaultBalance: u64 = 5;
-const EPoolAlreadyExists: u64 = 6;
 
 // === Constants ===
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
@@ -39,7 +36,7 @@ const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 // === Action Structs ===
 
 /// Action to add liquidity to a pool
-public struct AddLiquidityAction<phantom AssetType, phantom StableType> has store {
+public struct AddLiquidityAction<phantom AssetType, phantom StableType> has store, copy {
     pool_id: ID,
     asset_amount: u64,
     stable_amount: u64,
@@ -79,14 +76,14 @@ public struct SetPoolStatusAction has store {
 
 /// Execute a create pool action
 /// Creates a hot potato ResourceRequest that must be fulfilled with coins and pool
-public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
+public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
 ): resource_requests::ResourceRequest<CreatePoolAction<AssetType, StableType>> {
-    let action = executable.next_action<Outcome, CreatePoolAction<AssetType, StableType>, IW>(executable, witness);
+    let action = executable::next_action<Outcome, CreatePoolAction<AssetType, StableType>, IW>(executable, witness);
     
     // Validate parameters
     assert!(action.initial_asset_amount > 0, EInvalidAmount);
@@ -114,7 +111,7 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &UpdatePoolParamsAction = executable.next_action(witness);
+    let action: &UpdatePoolParamsAction = executable::next_action(executable, witness);
     
     // Get action parameters
     let pool_id = action.pool_id;
@@ -126,7 +123,7 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     assert!(new_minimum_liquidity > 0, EInvalidAmount);
     
     // Verify this pool belongs to the DAO
-    let config = account.config();
+    let config = account::config(account);
     let stored_pool_id = futarchy_config::spot_pool_id(config);
     assert!(stored_pool_id.is_some(), EEmptyPool);
     assert!(pool_id == *stored_pool_id.borrow(), EEmptyPool);
@@ -145,14 +142,14 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &SetPoolStatusAction = executable.next_action(witness);
+    let action: &SetPoolStatusAction = executable::next_action(executable, witness);
     
     // Get action parameters
     let pool_id = action.pool_id;
     let is_paused = action.is_paused;
     
     // Verify this pool belongs to the DAO
-    let config = account.config();
+    let config = account::config(account);
     let stored_pool_id = futarchy_config::spot_pool_id(config);
     assert!(stored_pool_id.is_some(), EEmptyPool);
     assert!(pool_id == *stored_pool_id.borrow(), EEmptyPool);
@@ -166,49 +163,62 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
 }
 
 /// Fulfill pool creation request with coins from vault
-public fun fulfill_create_pool<AssetType: drop, StableType: drop>(
+public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + drop>(
     request: ResourceRequest<CreatePoolAction<AssetType, StableType>>,
     account: &mut Account<FutarchyConfig>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
+    witness: IW,
     ctx: &mut TxContext,
-): (ResourceReceipt<CreatePoolAction<AssetType, StableType>>, SpotAMM<AssetType, StableType>) {
+): (ResourceReceipt<CreatePoolAction<AssetType, StableType>>, ID) {
     // Extract parameters from request
     let initial_asset_amount: u64 = resource_requests::get_context(&request, string::utf8(b"initial_asset_amount"));
     let initial_stable_amount: u64 = resource_requests::get_context(&request, string::utf8(b"initial_stable_amount"));
     let fee_bps: u64 = resource_requests::get_context(&request, string::utf8(b"fee_bps"));
-    let minimum_liquidity: u64 = resource_requests::get_context(&request, string::utf8(b"minimum_liquidity"));
+    let _minimum_liquidity: u64 = resource_requests::get_context(&request, string::utf8(b"minimum_liquidity"));
     
     // Verify coins match requested amounts
     assert!(coin::value(&asset_coin) >= initial_asset_amount, EInvalidAmount);
     assert!(coin::value(&stable_coin) >= initial_stable_amount, EInvalidAmount);
     
-    // Create the pool
-    let pool = spot_amm::new_pool(
+    // Create the pool using account_spot_pool
+    let mut pool = account_spot_pool::new<AssetType, StableType>(fee_bps, ctx);
+    
+    // Add initial liquidity to the pool
+    let lp_token = account_spot_pool::add_liquidity_and_return(
+        &mut pool,
         asset_coin,
         stable_coin,
-        fee_bps,
-        minimum_liquidity,
+        0, // min_lp_out - 0 for initial liquidity
         ctx
     );
     
     // Store pool ID in account config
-    let config = account::config_mut(account);
-    futarchy_config::set_spot_pool_id(config, object::id(&pool));
+    let config = account::config_mut(account, version::current(), witness);
+    let pool_id = object::id(&pool);
+    futarchy_config::set_spot_pool_id(config, pool_id);
     
-    // Return receipt and pool
-    (resource_requests::fulfill(request), pool)
+    // Transfer LP token to the account address
+    // This ensures the DAO owns the initial liquidity
+    let account_address = object::id_address(account);
+    transfer::public_transfer(lp_token, account_address);
+    
+    // Share the pool so it can be accessed by anyone
+    account_spot_pool::share(pool);
+    
+    // Return receipt and pool ID
+    (resource_requests::fulfill(request), pool_id)
 }
 
 /// Execute add liquidity - creates request for vault coins
-public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
+public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     _version: VersionWitness,
     witness: IW,
     ctx: &mut TxContext,
 ): ResourceRequest<AddLiquidityAction<AssetType, StableType>> {
-    let action = executable.next_action<Outcome, AddLiquidityAction<AssetType, StableType>, IW>(executable, witness);
+    let action = executable::next_action<Outcome, AddLiquidityAction<AssetType, StableType>, IW>(executable, witness);
     
     // Check vault has sufficient balance
     let vault_name = string::utf8(DEFAULT_VAULT_NAME);
@@ -218,126 +228,85 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     assert!(vault::coin_type_value<AssetType>(vault) >= action.asset_amount, EInsufficientVaultBalance);
     assert!(vault::coin_type_value<StableType>(vault) >= action.stable_amount, EInsufficientVaultBalance);
     
-    // Create resource request with action details
+    // Create resource request with action details (make a copy since action has copy ability)
     let mut request = resource_requests::new_request<AddLiquidityAction<AssetType, StableType>>(ctx);
-    resource_requests::add_context(&mut request, string::utf8(b"action"), *action);
+    let action_copy = *action;
+    resource_requests::add_context(&mut request, string::utf8(b"action"), action_copy);
     resource_requests::add_context(&mut request, string::utf8(b"account_id"), object::id(account));
     
     request
 }
 
 /// Fulfill add liquidity request with vault coins and pool
-public fun fulfill_add_liquidity<AssetType: drop, StableType: drop>(
+/// Uses the do_spend function from vault module to withdraw coins properly
+public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     request: ResourceRequest<AddLiquidityAction<AssetType, StableType>>,
+    executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
-    pool: &mut SpotAMM<AssetType, StableType>,
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    witness: IW,
     ctx: &mut TxContext,
-): ResourceReceipt<AddLiquidityAction<AssetType, StableType>> {
-    // Extract action from request
-    let action: AddLiquidityAction<AssetType, StableType> = 
+): (ResourceReceipt<AddLiquidityAction<AssetType, StableType>>, LPToken<AssetType, StableType>) {
+    // Extract action from request and destructure to consume it
+    let AddLiquidityAction<AssetType, StableType> { pool_id, asset_amount: _, stable_amount: _, min_lp_amount } = 
         resource_requests::get_context(&request, string::utf8(b"action"));
     
     // Verify pool ID matches
-    assert!(action.pool_id == object::id(pool), EEmptyPool);
+    assert!(pool_id == object::id(pool), EEmptyPool);
     
-    // Use Move framework vault intents to withdraw coins
-    // This properly handles the vault withdrawal using the framework's patterns
-    let vault_name = string::utf8(DEFAULT_VAULT_NAME);
-    
-    // Create spend intent for asset coins
-    let mut asset_intent = account_protocol::intents::new_intent<FutarchyConfig, vault_intents::SpendAndTransferIntent>(
-        account,
-        ctx
-    );
-    vault::new_spend<FutarchyConfig, AssetType, vault_intents::SpendAndTransferIntent>(
-        &mut asset_intent,
-        vault_name,
-        action.asset_amount,
-        vault_intents::SpendAndTransferIntent {}
-    );
-    
-    // Execute the spend to get asset coins
-    let mut asset_executable = account::execute_intent(account, asset_intent);
-    let asset_coin = vault::do_spend<FutarchyConfig, _, AssetType, _>(
-        &mut asset_executable,
+    // Use vault::do_spend to withdraw coins (this is the proper way)
+    // Requires proper action setup in the executable
+    let asset_coin = vault::do_spend<FutarchyConfig, Outcome, AssetType, IW>(
+        executable,
         account,
         version::current(),
-        vault_intents::SpendAndTransferIntent {},
+        witness,
         ctx
     );
-    account::confirm_execution(account, asset_executable);
     
-    // Create spend intent for stable coins
-    let mut stable_intent = account_protocol::intents::new_intent<FutarchyConfig, vault_intents::SpendAndTransferIntent>(
-        account,
-        ctx
-    );
-    vault::new_spend<FutarchyConfig, StableType, vault_intents::SpendAndTransferIntent>(
-        &mut stable_intent,
-        vault_name,
-        action.stable_amount,
-        vault_intents::SpendAndTransferIntent {}
-    );
-    
-    // Execute the spend to get stable coins
-    let mut stable_executable = account::execute_intent(account, stable_intent);
-    let stable_coin = vault::do_spend<FutarchyConfig, _, StableType, _>(
-        &mut stable_executable,
+    let stable_coin = vault::do_spend<FutarchyConfig, Outcome, StableType, IW>(
+        executable,
         account,
         version::current(),
-        vault_intents::SpendAndTransferIntent {},
+        witness,
         ctx
     );
-    account::confirm_execution(account, stable_executable);
     
-    // Add liquidity to pool
-    let lp_coin = spot_amm::add_liquidity(
+    // Add liquidity to pool and get LP token
+    let lp_token = account_spot_pool::add_liquidity_and_return(
         pool,
         asset_coin,
         stable_coin,
-        action.min_lp_amount,
+        min_lp_amount,
         ctx
     );
     
-    // Store LP tokens in custody
-    lp_token_custody::deposit_lp_token(
-        account,
-        object::id(pool),
-        lp_coin,
-        version::current()
-    );
-    
-    // Fulfill the request
-    resource_requests::fulfill(request)
+    // Return receipt and LP token
+    (resource_requests::fulfill(request), lp_token)
 }
 
 /// Execute remove liquidity and return coins to caller
-public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
+public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
+    _account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
     witness: IW,
-    pool: &mut SpotAMM<AssetType, StableType>,
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    lp_token: LPToken<AssetType, StableType>,
     ctx: &mut TxContext,
 ): (Coin<AssetType>, Coin<StableType>) {
-    let action = executable.next_action<Outcome, RemoveLiquidityAction<AssetType, StableType>, IW>(executable, witness);
+    let action = executable::next_action<Outcome, RemoveLiquidityAction<AssetType, StableType>, IW>(executable, witness);
     
     // Verify pool ID matches
     assert!(action.pool_id == object::id(pool), EEmptyPool);
     
-    // Withdraw LP tokens from custody
-    let lp_coin = lp_token_custody::withdraw_lp_token<AssetType, StableType>(
-        account,
-        object::id(pool),
-        action.lp_amount,
-        version,
-        ctx
-    );
+    // Verify LP token amount matches
+    assert!(account_spot_pool::lp_token_amount(&lp_token) >= action.lp_amount, EInvalidAmount);
     
     // Remove liquidity from pool
-    let (asset_coin, stable_coin) = spot_amm::remove_liquidity(
+    let (asset_coin, stable_coin) = account_spot_pool::remove_liquidity_and_return(
         pool,
-        lp_coin,
+        lp_token,
         action.min_asset_amount,
         action.min_stable_amount,
         ctx
@@ -568,4 +537,9 @@ public fun get_status_pool_id(action: &SetPoolStatusAction): ID {
 /// Get is paused flag from SetPoolStatusAction
 public fun get_is_paused(action: &SetPoolStatusAction): bool {
     action.is_paused
+}
+
+/// Get LP token value helper
+public fun lp_value<AssetType, StableType>(lp_token: &LPToken<AssetType, StableType>): u64 {
+    account_spot_pool::lp_token_amount(lp_token)
 }

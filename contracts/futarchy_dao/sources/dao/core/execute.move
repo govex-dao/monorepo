@@ -25,6 +25,7 @@ use futarchy_actions::{
     governance_actions::ProposalReservationRegistry,
 };
 use futarchy_one_shot_utils::strategy;
+use futarchy_dao::gc_janitor;
 
 const EPolicyNotSatisfied: u64 = 777;
 const EInvalidPermit: u64 = 778;
@@ -34,6 +35,7 @@ const EPermitMismatch: u64 = 779;
 public struct FutarchyIntent has copy, drop {}
 
 /// Helper function to confirm execution and handle one-shot intent cleanup
+/// Properly implements garbage collection for expired intents
 public fun confirm_and_cleanup(
     executable: Executable<FutarchyOutcome>,
     account: &mut Account<FutarchyConfig>,
@@ -48,10 +50,9 @@ public fun confirm_and_cleanup(
     if (account::intents(account).contains(key)) {
         let intent = account::intents(account).get<FutarchyOutcome>(key);
         if (intent.execution_times().is_empty()) {
-            // One-shot intent - destroy it and clean up
+            // One-shot intent - destroy it and clean up with proper garbage collection
             let mut expired = account::destroy_empty_intent<FutarchyConfig, FutarchyOutcome>(account, key);
-            // TODO: Add garbage collection if needed
-            // gc_janitor::drain_all_public(account, &mut expired);
+            gc_janitor::drain_all_public(account, &mut expired);
             intents::destroy_empty_expired(expired);
         }
         // else: recurring intent, leave it in storage
@@ -84,101 +85,46 @@ public fun run_all<IW: copy + drop>(
     confirm_and_cleanup(executable, account);
 }
 
-/// Generic "all actions" runner WITH governance resources
-/// For proposals that may create second-order proposals
-/// 
-/// NOTE: Creating second-order proposals requires specialized execution
-/// The frontend should use specific entry points in action_dispatcher
-/// This function is kept for backwards compatibility but delegates to standard execution
-public fun run_all_with_governance<IW: copy + drop>(
+/// Execute proposals that create second-order governance proposals
+/// Requires governance resources (queue, fee manager, registry) to be provided
+public fun run_with_governance<IW: copy + drop>(
     executable: Executable<FutarchyOutcome>,
     account: &mut Account<FutarchyConfig>,
     gate: strategy::Strategy,
     ok_a: bool,
     ok_b: bool,
     intent_witness: IW,
-    _queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
-    _fee_manager: &mut ProposalFeeManager,
-    _registry: &mut ProposalReservationRegistry,
-    _parent_proposal_id: ID,
-    mut fee_coin_opt: Option<Coin<SUI>>,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    parent_proposal_id: ID,
+    fee_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext
 ) {
     assert!(strategy::can_execute(ok_a, ok_b, gate), EPolicyNotSatisfied);
 
-    // Return fee coin if provided (governance actions not supported in this path)
-    if (fee_coin_opt.is_some()) {
-        let fee_coin = fee_coin_opt.extract();
-        transfer::public_transfer(fee_coin, ctx.sender());
-    };
-    fee_coin_opt.destroy_none();
-    
-    // Execute standard actions only
-    let executable = action_dispatcher::execute_standard_actions(
+    // Execute governance operations directly with all required resources
+    let executable = action_dispatcher::execute_governance_operations(
         executable,
         account,
         intent_witness,
+        queue,
+        fee_manager,
+        registry,
+        parent_proposal_id,
+        fee_coin,
         clock,
         ctx
     );
     
-    // Confirm and cleanup using helper function
+    // Confirm and cleanup
     confirm_and_cleanup(executable, account);
 }
 
-/// Typed runner for proposals with typed actions
-/// 
-/// NOTE: Typed actions (liquidity, oracle mint) require specific resources
-/// The frontend should use specialized entry points in action_dispatcher:
-/// - execute_oracle_mint for oracle minting
-/// - execute_vault_spend for vault operations
-/// This function is kept for backwards compatibility but delegates to standard execution
-public fun run_typed<AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
-    executable: Executable<FutarchyOutcome>,
-    account: &mut Account<FutarchyConfig>,
-    gate: strategy::Strategy,
-    ok_a: bool,
-    ok_b: bool,
-    intent_witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext
-) {
-    assert!(strategy::can_execute(ok_a, ok_b, gate), EPolicyNotSatisfied);
-
-    // Execute standard actions only
-    // Typed actions should be executed via specialized entry points
-    let executable = action_dispatcher::execute_standard_actions(
-        executable,
-        account,
-        intent_witness,
-        clock,
-        ctx
-    );
-    
-    // Confirm and cleanup using helper function
-    confirm_and_cleanup(executable, account);
-}
-
-/// Simple execution without strategy gates (for backwards compatibility)
-public fun run_simple<IW: copy + drop>(
-    executable: Executable<FutarchyOutcome>,
-    account: &mut Account<FutarchyConfig>,
-    intent_witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext
-) {
-    run_all(
-        executable,
-        account,
-        strategy::and(),
-        true,
-        true,
-        intent_witness,
-        clock,
-        ctx
-    )
-}
+// Note: For typed operations (liquidity, oracle mint), use the specialized
+// entry points in action_dispatcher module directly, as they require
+// specific resources (AMM pools, TreasuryCaps) that must be provided by the caller
 
 /// Permit-based execution for cross-DAO bundles WITHOUT governance resources
 /// The permit is minted by futarchy_config after re-checking all gates

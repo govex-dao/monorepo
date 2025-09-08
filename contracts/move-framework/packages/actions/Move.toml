@@ -9,7 +9,7 @@ AccountProtocol = { local = "../protocol" }
 Kiosk = { local = "../../deps/kiosk" }
 
 [addresses]
-account_actions = "0x56cdad1b3e1135d97ac713f69e3d23a7dbbcf6500711b4bb71cbdff46e274491"
-account_protocol = "0x3524efaf502bb2f845416b1cd73c97bd6130a6f28db9384c55c40b358cf96870"
-account_extensions = "0x32b220eb8e08ffb4a9e946bdbdd90af6f4fe510f121fed438f3f1e6531eae7dd"
-kiosk = "0xfac3936ae5b275ea2bd981056ad2d2af4b8e997a101b94a4235455a3770d0b30"
+account_actions = "0x37b9e21647615db8d522b2ae25495663834fb72de41c10057bfbb919446abdc3"
+account_protocol = "0x30448780c44b209898af12419ca4264f2f016c44b66da47d15739fa8a39aa772"
+account_extensions = "0x18d76db190917de8d07775e5d196c296419f8de05b6e57924fc8e5e755f590f6"
+kiosk = "0x44c5d7428a5924600d6d9d719f267f302cf42decbe2f9b70edbb075f73be5dff"
