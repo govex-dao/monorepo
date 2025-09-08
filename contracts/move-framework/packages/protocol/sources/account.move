@@ -1,9 +1,23 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Complete Removal of Object Locking
+// ============================================================================
+// This module has been modified to remove ALL object locking functionality.
+// In DAO governance contexts, multiple proposals competing for the same 
+// resources is natural and desirable. The blockchain's ownership model already
+// provides necessary conflict resolution.
+//
+// Changes in this fork:
+// - REMOVED: lock_object() function - no longer needed
+// - REMOVED: unlock_object() function - no longer needed  
+// - ADDED: cancel_intent() function - allows config-authorized intent cancellation
+//
+// The removal of locking eliminates ~100 lines of complex code and prevents
+// the critical footgun where objects could become permanently locked if cleanup
+// wasn't performed correctly after intent cancellation/expiration.
+// ============================================================================
+
 /// This is the core module managing the account Account<Config>.
 /// It provides the apis to create, approve and execute intents with actions.
-/// 
-/// Fork modifications for DAO proposal platform:
-/// - Added cancel_intent function for config-authorized intent cancellation with version witness
-///   for proper dependency checking and security
 /// 
 /// The flow is as follows:
 ///   1. An intent is created by stacking actions into it. 
@@ -479,21 +493,8 @@ public(package) fun receive<Config, T: key + store>(
     transfer::public_receive(&mut account.id, receiving)
 }
 
-/// Locks an object in the account, preventing it to be used in another intent.
-public(package) fun lock_object<Config>(
-    account: &mut Account<Config>, 
-    id: ID,
-) {
-    account.intents.lock(id);
-}
-
-/// Unlocks an object in the account, allowing it to be used in another intent.
-public(package) fun unlock_object<Config>(
-    account: &mut Account<Config>, 
-    id: ID,
-) {
-    account.intents.unlock(id);
-}
+// REMOVED: lock_object and unlock_object - no locking in new design
+// Conflicts between intents are natural in DAO governance
 
 /// Asserts that the function is called from the module defining the config of the account.
 public(package) fun assert_is_config_module<Config, CW: drop>(

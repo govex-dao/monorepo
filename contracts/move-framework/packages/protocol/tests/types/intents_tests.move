@@ -127,7 +127,7 @@ fun test_getters() {
 
     // check intents getters
     assert!(intents.length() == 2);
-    assert!(intents.locked().size() == 0);
+    // No longer checking locked() - removed in new design
     assert!(intents.contains(b"one".to_string()));
     assert!(intents.contains(b"two".to_string()));
 
@@ -229,19 +229,7 @@ fun test_pop_front_execution_time() {
     scenario.end();
 }
 
-#[test]
-fun test_lock_unlock_id() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    assert!(intents.locked().contains(&@0x1D.to_id()));
-    intents.unlock(@0x1D.to_id());
-    assert!(!intents.locked().contains(&@0x1D.to_id()));
-
-    destroy(intents);
-    scenario.end();
-}
+// REMOVED: test_lock_unlock_id - no locking in new design
 
 #[test]
 fun test_add_destroy_intent() {
@@ -469,26 +457,5 @@ fun test_error_execution_times_not_ascending() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = intents::EObjectAlreadyLocked)]
-fun test_error_lock_object_already_locked() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    intents.lock(@0x1D.to_id());
-
-    destroy(intents);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = intents::EObjectNotLocked)]
-fun test_error_unlock_object_not_locked() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    intents.unlock(@0x1D1.to_id());
-
-    destroy(intents);
-    scenario.end();
-}
+// REMOVED: test_error_lock_object_already_locked - no locking in new design
+// REMOVED: test_error_unlock_object_not_locked - no locking in new design

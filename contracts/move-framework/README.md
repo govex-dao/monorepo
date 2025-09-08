@@ -2,25 +2,55 @@
 
 ![account.tech logo](./assets/accountdottech_logo.png)
 
-> **Fork Notice**: This is a fork of [account.tech/move-framework](https://github.com/account-tech/move-framework) with modifications for DAO proposal platform hot-path losing intent cleanup.
+> **Fork Notice**: This is a fork of [account.tech/move-framework](https://github.com/account-tech/move-framework) with significant modifications for DAO proposal platforms.
 
 ## Fork Modifications
 
-### Why Hot-Path Intent Cleanup?
+### Major Change: Complete Removal of Object Locking
 
-When a DAO proposal resolves, **losing intents** no longer have economic purpose but still occupy on-chain storage. If cleanup is left to off-chain actors (keepers/MEV bots), you risk:
+This fork has **completely removed the object locking mechanism** from the Account Protocol. In the context of DAO governance, multiple proposals competing for the same resources is natural and desirable. The blockchain's ownership model already provides the necessary conflict resolution - if an object is consumed by one intent, other intents will simply fail when they try to access it.
 
-- **State bloat**: Larger account state increases gas costs for everyone interacting with the DAO
-- **Liveness assumptions**: Cleanup timing depends on third parties
-- **Griefing surface**: Unbounded stale locks can degrade UX or create contention
+### Why Remove Locking?
 
-This fork adds `cancel_intent` functionality that allows config modules to cancel intents and automatically unlock any locked objects. This enables losing intents to be cancelled **in the finalization transaction** with all cleanup operations processed immediately. This keeps the account slim on the **hot path**, reduces gas for subsequent calls, and removes reliance on complex keeper infrastructure.
+The original design had a critical flaw:
+- Objects were locked when creating intents (pessimistic locking)
+- If intents were cancelled/expired, objects could remain permanently locked if cleanup wasn't performed correctly
+- This created a footgun where critical DAO assets (like TreasuryCaps) could become permanently unusable
+
+Our initial fix was to move to execution-time locking, but we realized that **locking is unnecessary entirely**:
+- **Conflicts are natural in DAOs**: Multiple proposals competing for treasury funds is normal governance
+- **Blockchain handles it**: Sui's ownership model naturally prevents double-spending
+- **Simpler is safer**: No locks means no lock bugs, no cleanup complexity, no footguns
 
 ### Changes Made
 
-1. **Added `cancel_intent` function** (`account.move`): Config-authorized cancellation that returns an `Expired` bag for cleanup. This enables losing intents to be cancelled in the finalization transaction with all cleanup hooks processed immediately.
+1. **Removed all locking infrastructure** (`intents.move`):
+   - ❌ Removed `locked: VecSet<ID>` field from `Intents` struct
+   - ❌ Removed `lock()`, `unlock()`, and `locked()` functions  
+   - ❌ Removed `EObjectAlreadyLocked` and `EObjectNotLocked` errors
+   - ✅ Intents now just track actions to execute, nothing more
 
-2. **Added streaming/vesting functionality** (`vault.move`): Time-based vesting streams for controlled treasury withdrawals:
+2. **Simplified account module** (`account.move`):
+   - ❌ Removed `lock_object()` and `unlock_object()` functions
+   - ✅ Added `cancel_intent()` for config-authorized intent cancellation
+   - ✅ Account operations are now simpler and safer
+
+3. **Dramatically simplified owned actions** (`owned.move`):
+   - ✅ `new_withdraw()` just adds the action - no validation or locking
+   - ✅ `do_withdraw()` just receives the object - no lock/unlock dance
+   - ✅ `delete_withdraw()` is now trivial - no cleanup needed
+   - ✅ `merge()` and `split()` work without any lock checks
+   - ❌ Removed `EObjectLocked` error entirely
+
+### Benefits
+
+- **~300 lines less code**: Massive simplification
+- **Zero footguns**: Can't have stale locks if there are no locks
+- **Natural conflict resolution**: First intent to execute wins, others fail gracefully
+- **Better for DAOs**: Multiple proposals can reference same assets without artificial restrictions
+- **Cleaner mental model**: Intents are just "plans", not resource reservations
+
+3. **Added streaming/vesting functionality** (`vault.move`): Time-based vesting streams for controlled treasury withdrawals:
    - **VaultStream struct**: Manages vesting schedules with cliff periods, rate limiting, and per-withdrawal caps
    - **create_stream**: Authorized creation of vesting streams for beneficiaries (e.g., employees, contractors)
    - **withdraw_from_stream**: Permissionless withdrawals by beneficiaries respecting vesting schedule

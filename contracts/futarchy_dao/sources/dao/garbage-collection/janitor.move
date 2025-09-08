@@ -200,15 +200,15 @@ fun is_intent_expired(
     all_expired
 }
 
-/// Drain with Account context for actions that need unlocking
-fun drain_all_with_account(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
+/// Drain with Account context to handle all action types including owned withdrawals
+fun drain_all_with_account(account: &Account<FutarchyConfig>, expired: &mut Expired) {
     // First drain all non-generic actions
     drain_all(expired);
     
     // Then drain common generic actions
     drain_common_generics(expired);
     
-    // Handle owned withdrawals which need Account for unlocking
+    // Handle owned withdrawals
     gc_registry::delete_owned_withdraw(account, expired);
     
     // Handle NFT/Kiosk actions for common NFT types
@@ -218,7 +218,7 @@ fun drain_all_with_account(account: &mut Account<FutarchyConfig>, expired: &mut 
 
 /// Public export of drain_all for use in other modules
 /// Properly handles all action types including generics
-public fun drain_all_public(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
+public fun drain_all_public(account: &Account<FutarchyConfig>, expired: &mut Expired) {
     drain_all_with_account(account, expired);
 }
 

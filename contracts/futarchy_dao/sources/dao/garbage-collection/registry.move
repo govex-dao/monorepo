@@ -159,8 +159,7 @@ public fun delete_restrict_policy(expired: &mut Expired) {
 }
 
 // === Owned Object Actions ===
-public fun delete_owned_withdraw(account: &mut Account<FutarchyConfig>, expired: &mut Expired) {
-    // The owned module's delete_withdraw properly unlocks objects
+public fun delete_owned_withdraw(account: &Account<FutarchyConfig>, expired: &mut Expired) {
     account_protocol::owned::delete_withdraw(expired, account);
 }
 

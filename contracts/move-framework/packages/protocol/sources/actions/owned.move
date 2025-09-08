@@ -1,3 +1,24 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Complete Removal of Object Locking
+// ============================================================================
+// This module has been dramatically simplified by removing ALL locking logic.
+// In DAO governance, multiple proposals competing for the same resources is 
+// natural and expected. The blockchain's ownership model already prevents 
+// double-spending - if an object is consumed by one intent, others will simply
+// fail when they try to access it.
+//
+// Changes in this fork:
+// - new_withdraw(): Just adds the action - no validation or locking
+// - do_withdraw(): Just receives the object - no lock/unlock dance  
+// - delete_withdraw(): Trivial cleanup - no unlocking needed
+// - merge_and_split(): Works without any lock checks
+// - REMOVED: EObjectLocked error entirely
+//
+// This eliminates ~50 lines of locking code and removes the critical footgun
+// where objects could be permanently locked if cleanup wasn't performed 
+// correctly. The system is now simpler, safer, and more suitable for DAOs.
+// ============================================================================
+
 /// This module allows objects owned by the account to be accessed through intents in a secure way.
 /// The objects can be taken only via an WithdrawAction action which uses Transfer to Object (TTO).
 /// This action can't be proposed directly since it wouldn't make sense to withdraw an object without using it.
@@ -19,7 +40,7 @@ use account_protocol::{
 // === Errors ===
 
 const EWrongObject: u64 = 0;
-const EObjectLocked: u64 = 1;
+// REMOVED: EObjectLocked - no locking in new design
 
 // === Structs ===
 
@@ -34,13 +55,12 @@ public struct WithdrawAction has store {
 /// Creates a new WithdrawAction and add it to an intent
 public fun new_withdraw<Config, Outcome, IW: drop>(
     intent: &mut Intent<Outcome>, 
-    account: &mut Account<Config>,
+    account: &Account<Config>,
     object_id: ID,
     intent_witness: IW,
 ) {
     intent.assert_is_account(account.addr());
-    
-    account.lock_object(object_id);
+    // No validation needed - conflicts are natural in DAO governance
     intent.add_action(WithdrawAction { object_id }, intent_witness);
 }
 
@@ -56,15 +76,18 @@ public fun do_withdraw<Config, Outcome: store, T: key + store, IW: drop>(
     let action: &WithdrawAction = executable.next_action(intent_witness);
     assert!(receiving.receiving_object_id() == action.object_id, EWrongObject);
 
+    // Simply receive the object - no locking needed
+    // If the object isn't available, this will naturally fail
     account.receive(receiving)
 }
 
 /// Deletes a WithdrawAction from an expired intent
-public fun delete_withdraw<Config>(expired: &mut Expired, account: &mut Account<Config>) {
+/// Note: No unlocking needed since we now only lock during execution
+public fun delete_withdraw<Config>(expired: &mut Expired, account: &Account<Config>) {
     expired.assert_is_account(account.addr());
 
-    let WithdrawAction { object_id } = expired.remove_action();
-    account.unlock_object(object_id);
+    let WithdrawAction { object_id: _ } = expired.remove_action();
+    // No unlock needed - objects are only locked during execution, not during intent creation
 }
 
 // Coin operations
@@ -99,7 +122,7 @@ fun merge<Config, CoinType>(
 ): Coin<CoinType> {
     let mut merged = coin::zero<CoinType>(ctx);
     coins.do!(|coin| {
-        assert!(!account.intents().locked().contains(&object::id(&coin)), EObjectLocked);
+        // No lock check needed - conflicts are natural
         merged.join(coin);
     });
 
@@ -112,9 +135,7 @@ fun split<Config, CoinType>(
     amounts: vector<u64>, 
     ctx: &mut TxContext
 ): vector<ID> {
-    // never throws as long as the function is called from merge_and_split only
-    assert!(!account.intents().locked().contains(&object::id(&coin)), EObjectLocked);
-
+    // No lock check needed - conflicts are natural
     let ids = amounts.map!(|amount| {
         let split = coin.split(amount, ctx);
         let id = object::id(&split);

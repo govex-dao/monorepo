@@ -114,7 +114,7 @@ fun test_withdraw_flow() {
     let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
@@ -140,7 +140,7 @@ fun test_withdraw_expired() {
     let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);
@@ -222,7 +222,7 @@ fun test_error_do_withdraw_wrong_object() {
     let not_id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
@@ -239,26 +239,8 @@ fun test_error_do_withdraw_wrong_object() {
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = owned::EObjectLocked)]
-fun test_error_merge_locked_coins() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let account_address = account.addr();
-
-    let id1 = keep_coin(account_address, 60, &mut scenario);
-    let id2 = keep_coin(account_address, 60, &mut scenario);
-    account.intents_mut(version::current(), Witness()).lock(id1);
-
-    let auth = account.new_auth(version::current(), Witness());
-    let _ = owned::merge_and_split<Config, SUI>(
-        auth,
-        &mut account,
-        vector[ts::receiving_ticket_by_id(id1), ts::receiving_ticket_by_id(id2)],
-        vector[100],
-        scenario.ctx()
-    );
-
-    end(scenario, extensions, account, clock);          
-}  
+// REMOVED: test_error_merge_locked_coins - no locking in new design
+// Conflicts are natural and resolved at execution time  
 
 // sanity checks as these are tested in AccountProtocol tests
 
@@ -274,7 +256,7 @@ fun test_error_do_withdraw_from_wrong_account() {
 
     // intent is submitted to other account
     let mut intent = create_dummy_intent(&mut scenario, &account2, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account2.insert_intent(intent, version::current(), DummyIntent());
 
     let (_, mut executable) = account2.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
@@ -300,7 +282,7 @@ fun test_error_do_withdraw_from_wrong_constructor_witness() {
     let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
@@ -329,7 +311,7 @@ fun test_error_delete_withdraw_from_wrong_account() {
     let id = send_coin(account.addr(), 5, &mut scenario);
 
     let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    owned::new_withdraw(&mut intent, &mut account, id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
     
     let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);

@@ -148,7 +148,7 @@ public fun request_accept_and_lock_cap(
         ctx
     );
 
-    // now it's safe to borrow &mut security_council to lock the object
+    // now it's safe to borrow security_council (no locking at creation)
     owned::new_withdraw(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
     
     // Use generic custody accept action

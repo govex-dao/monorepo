@@ -1,7 +1,30 @@
+/// === FORK MODIFICATIONS ===
+/// This file has been modified from the original account.tech implementation to completely remove
+/// the object locking mechanism. Changes include:
+///
+/// Original design (pessimistic locking):
+/// - Intents struct contained a `locked: VecSet<ID>` field to track locked objects
+/// - Objects were locked when creating intents to prevent conflicts
+/// - Required explicit unlocking when intents were cancelled/expired
+/// - Could lead to permanently locked objects if cleanup wasn't performed
+///
+/// New design (no locking):
+/// - Removed the `locked` field entirely from Intents struct
+/// - Removed lock(), unlock(), and locked() functions
+/// - Removed EObjectAlreadyLocked and EObjectNotLocked errors
+/// - Multiple intents can now reference the same objects
+/// - Conflicts are resolved naturally by the blockchain - first to execute wins
+///
+/// Benefits:
+/// - Eliminates risk of stale locks that could make objects permanently unusable
+/// - Simplifies the codebase by ~100 lines
+/// - Better suits DAO governance where multiple proposals competing for resources is natural
+/// - Removes complex cleanup logic from cancellation/expiration paths
+///
 /// This is the core module managing Intents.
 /// It provides the interface to create and execute intents which is used in the `account` module.
-/// The `locked` field tracks the owned objects used in an intent, to prevent state changes.
-/// e.g. withdraw coinA (value=10sui), coinA must not be split before intent is executed.
+/// In the new design, there is no locking - multiple intents can reference the same objects.
+/// Conflicts are resolved naturally: if coinA is withdrawn by intent1, intent2 will fail when it tries.
 
 module account_protocol::intents;
 
@@ -14,7 +37,6 @@ use std::{
 use sui::{
     bag::{Self, Bag},
     dynamic_field,
-    vec_set::{Self, VecSet},
     clock::Clock,
 };
 
@@ -27,8 +49,7 @@ use fun dynamic_field::remove as UID.df_remove;
 // === Errors ===
 
 const EIntentNotFound: u64 = 0;
-const EObjectAlreadyLocked: u64 = 1;
-const EObjectNotLocked: u64 = 2;
+// REMOVED: EObjectAlreadyLocked and EObjectNotLocked - no locking in new design
 const ENoExecutionTime: u64 = 3;
 const EExecutionTimesNotAscending: u64 = 4;
 const EActionsNotEmpty: u64 = 5;
@@ -43,8 +64,6 @@ const ESingleExecution: u64 = 9;
 public struct Intents has store {
     // map of intents: key -> Intent<Outcome>
     inner: Bag,
-    // ids of the objects that are being requested in intents, to avoid state changes
-    locked: VecSet<ID>,
 }
 
 /// Child struct, intent owning a sequence of actions requested to be executed
@@ -200,9 +219,7 @@ public fun length(intents: &Intents): u64 {
     intents.inner.length()
 }
 
-public fun locked(intents: &Intents): &VecSet<ID> {
-    &intents.locked
-}
+// REMOVED: locked() getter - no longer tracking locked objects
 
 public fun contains(intents: &Intents, key: String): bool {
     intents.inner.contains(key)
@@ -316,7 +333,7 @@ public fun assert_single_execution(params: &Params) {
 /// The following functions are only used in the `account` module
 
 public(package) fun empty(ctx: &mut TxContext): Intents {
-    Intents { inner: bag::new(ctx), locked: vec_set::empty() }
+    Intents { inner: bag::new(ctx) }
 }
 
 public(package) fun new_intent<Outcome, IW: drop>(
@@ -375,15 +392,9 @@ public(package) fun pop_front_execution_time<Outcome>(
     intent.execution_times.remove(0)
 }
 
-public(package) fun lock(intents: &mut Intents, id: ID) {
-    assert!(!intents.locked.contains(&id), EObjectAlreadyLocked);
-    intents.locked.insert(id);
-}
-
-public(package) fun unlock(intents: &mut Intents, id: ID) {
-    assert!(intents.locked.contains(&id), EObjectNotLocked);
-    intents.locked.remove(&id);
-}
+// REMOVED: lock and unlock functions - no locking needed in the new design
+// Conflicts between intents are natural in DAO governance where multiple proposals
+// can compete for the same resources
 
 /// Removes an intent being executed if the execution_time is reached
 /// Outcome must be validated in AccountMultisig to be destroyed
@@ -627,7 +638,7 @@ fun test_empty_intents() {
     let intents = empty(ctx);
     
     assert_eq(length(&intents), 0);
-    assert_eq(locked(&intents).size(), 0);
+    // No longer checking locked() - removed in new design
     assert!(!contains(&intents, b"test_key".to_string()));
     
     destroy(intents);
@@ -730,45 +741,9 @@ fun test_remove_nonexistent_intent() {
     destroy(intents);
 }
 
-#[test]
-fun test_lock_and_unlock_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    assert!(!locked(&intents).contains(&object_id));
-    
-    lock(&mut intents, object_id);
-    assert!(locked(&intents).contains(&object_id));
-    
-    unlock(&mut intents, object_id);
-    assert!(!locked(&intents).contains(&object_id));
-    
-    destroy(intents);
-}
-
-#[test, expected_failure(abort_code = EObjectAlreadyLocked)]
-fun test_lock_already_locked_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    lock(&mut intents, object_id);
-    lock(&mut intents, object_id);
-    
-    destroy(intents);
-}
-
-#[test, expected_failure(abort_code = EObjectNotLocked)]
-fun test_unlock_not_locked_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    unlock(&mut intents, object_id);
-    
-    destroy(intents);
-}
+// REMOVED: test_lock_and_unlock_object - no locking in new design
+// REMOVED: test_lock_already_locked_object - no locking in new design  
+// REMOVED: test_unlock_not_locked_object - no locking in new design
 
 #[test]
 fun test_pop_front_execution_time() {

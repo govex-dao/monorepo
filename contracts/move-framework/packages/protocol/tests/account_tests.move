@@ -234,20 +234,7 @@ fun test_receive_object() {
     ts::end(scenario);
 }
 
-#[test]
-fun test_lock_object() {
-    let mut scenario = ts::begin(OWNER);
-    let mut account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness(), scenario.ctx());
-
-    assert!(!account.intents().locked().contains(&@0x1D.to_id()));
-    account.lock_object(@0x1D.to_id());
-    assert!(account.intents().locked().contains(&@0x1D.to_id()));
-    account.unlock_object(@0x1D.to_id());
-    assert!(!account.intents().locked().contains(&@0x1D.to_id()));
-
-    destroy(account);
-    ts::end(scenario);
-}
+// REMOVED: test_lock_object - no locking in new design
 
 #[test]
 #[allow(unused_mut_ref)]
@@ -785,13 +772,11 @@ fun test_cancel_intent_with_withdraw() {
         scenario.ctx()
     );
     
-    // Add withdraw action which locks the coin
-    owned::new_withdraw(&mut intent, &mut account, coin_id, DummyIntent());
+    // Add withdraw action (no longer locks the coin at creation)
+    owned::new_withdraw(&mut intent, &account, coin_id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
     
-    // Verify the object is locked (check if it's in the locked set)
-    let locked_ids = account.intents().locked();
-    assert!(locked_ids.contains(&coin_id), 0);
+    // No locking in new design - nothing to verify
     
     // Cancel the intent using config witness
     let mut expired = account.cancel_intent<Config, Outcome, Witness>(
@@ -800,13 +785,11 @@ fun test_cancel_intent_with_withdraw() {
         Witness()
     );
     
-    // Drain the expired intent (this should unlock the object)
-    owned::delete_withdraw(&mut expired, &mut account);
+    // Drain the expired intent (no unlocking needed anymore)
+    owned::delete_withdraw(&mut expired, &account);
     intents::destroy_empty_expired(expired);
     
-    // Verify the object is now unlocked
-    let locked_ids = account.intents().locked();
-    assert!(!locked_ids.contains(&coin_id), 1);
+    // No locking in new design - nothing to verify
     
     destroy(clock);
     destroy(account);
@@ -853,15 +836,12 @@ fun test_cancel_intent_multiple_withdraws() {
         scenario.ctx()
     );
     
-    // Add multiple withdraw actions
-    owned::new_withdraw(&mut intent, &mut account, coin1_id, DummyIntent());
-    owned::new_withdraw(&mut intent, &mut account, coin2_id, DummyIntent());
+    // Add multiple withdraw actions (no locking at creation)
+    owned::new_withdraw(&mut intent, &account, coin1_id, DummyIntent());
+    owned::new_withdraw(&mut intent, &account, coin2_id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
     
-    // Verify all objects are locked
-    let locked = account.intents().locked();
-    assert!(locked.contains(&coin1_id), 0);
-    assert!(locked.contains(&coin2_id), 1);
+    // No locking in new design - nothing to verify
     
     // Cancel the intent
     let mut expired = account.cancel_intent<Config, Outcome, Witness>(
@@ -870,15 +850,12 @@ fun test_cancel_intent_multiple_withdraws() {
         Witness()
     );
     
-    // Drain all withdraw actions
-    owned::delete_withdraw(&mut expired, &mut account);
-    owned::delete_withdraw(&mut expired, &mut account);
+    // Drain all withdraw actions (no unlocking needed)
+    owned::delete_withdraw(&mut expired, &account);
+    owned::delete_withdraw(&mut expired, &account);
     intents::destroy_empty_expired(expired);
     
-    // Verify all objects are unlocked
-    let locked = account.intents().locked();
-    assert!(!locked.contains(&coin1_id), 2);
-    assert!(!locked.contains(&coin2_id), 3);
+    // No locking in new design - nothing to verify
     
     destroy(clock);
     destroy(account);
