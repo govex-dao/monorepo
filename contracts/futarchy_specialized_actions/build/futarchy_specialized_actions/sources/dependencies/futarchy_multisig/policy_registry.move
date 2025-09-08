@@ -84,11 +84,15 @@ public fun set_policy(
         approval_threshold: 0
     };
     
-    // Check if policy exists and update or insert accordingly
+    // Use atomic update pattern - if exists, borrow_mut and update, otherwise add
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -186,9 +190,13 @@ public fun set_policy_with_timelock(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -215,9 +223,13 @@ public fun set_policy_with_threshold(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,
@@ -243,9 +255,13 @@ public fun set_emergency_policy(
     };
     
     if (table::contains(&registry.policies, resource_key)) {
-        table::remove(&mut registry.policies, resource_key);
+        // Update existing policy in place
+        let existing = table::borrow_mut(&mut registry.policies, resource_key);
+        *existing = policy;
+    } else {
+        // Add new policy
+        table::add(&mut registry.policies, resource_key, policy);
     };
-    table::add(&mut registry.policies, resource_key, policy);
 
     event::emit(PolicySet {
         dao_id,

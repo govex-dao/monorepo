@@ -208,23 +208,56 @@ fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut i
 }
 
 /// Find minimum priority element in heap (it's in the leaves) - O(n/2)
+/// Optimized to only check proposer-funded proposals
 fun find_min_index<StableCoin>(heap: &vector<QueuedProposal<StableCoin>>, size: u64): u64 {
     if (size == 0) return 0;
     if (size == 1) return 0;
     
     // Minimum is in the second half of the array (leaves)
+    // But we only care about proposer-funded proposals
     let start = size / 2;
-    let mut min_idx = start;
-    let mut min_priority = &vector::borrow(heap, start).priority_score;
+    let mut min_idx = size; // Initialize to invalid index
+    let mut min_priority: Option<PriorityScore> = option::none();
     
-    let mut i = start + 1;
+    // Only check leaves and filter for proposer-funded proposals
+    let mut i = start;
     while (i < size) {
-        let current_priority = &vector::borrow(heap, i).priority_score;
-        if (compare_priority_scores(current_priority, min_priority) == COMPARE_LESS) {
-            min_priority = current_priority;
-            min_idx = i;
+        let proposal = vector::borrow(heap, i);
+        // Only consider proposer-funded proposals for eviction
+        if (!proposal.uses_dao_liquidity) {
+            if (option::is_none(&min_priority)) {
+                min_priority = option::some(proposal.priority_score);
+                min_idx = i;
+            } else {
+                let current_priority = &proposal.priority_score;
+                if (compare_priority_scores(current_priority, option::borrow(&min_priority)) == COMPARE_LESS) {
+                    min_priority = option::some(proposal.priority_score);
+                    min_idx = i;
+                };
+            };
         };
         i = i + 1;
+    };
+    
+    // If no proposer-funded proposal found in leaves, check the rest
+    if (min_idx == size && start > 0) {
+        let mut i = 0;
+        while (i < start) {
+            let proposal = vector::borrow(heap, i);
+            if (!proposal.uses_dao_liquidity) {
+                if (option::is_none(&min_priority)) {
+                    min_priority = option::some(proposal.priority_score);
+                    min_idx = i;
+                } else {
+                    let current_priority = &proposal.priority_score;
+                    if (compare_priority_scores(current_priority, option::borrow(&min_priority)) == COMPARE_LESS) {
+                        min_priority = option::some(proposal.priority_score);
+                        min_idx = i;
+                    };
+                };
+            };
+            i = i + 1;
+        };
     };
     
     min_idx
@@ -305,7 +338,15 @@ public fun new_with_config<StableCoin>(
 public fun create_priority_score(fee: u64, timestamp: u64): PriorityScore {
     // Higher fee = higher priority
     // Earlier timestamp = higher priority (for tie-breaking)
-    let computed_value = ((fee as u128) << 64) | ((18446744073709551615u64 - timestamp) as u128);
+    // Use safe subtraction to prevent overflow
+    let max_u64 = 18446744073709551615u64;
+    let timestamp_inverted = if (timestamp > max_u64) {
+        0u64  // Cap at 0 if timestamp somehow exceeds max
+    } else {
+        max_u64 - timestamp
+    };
+    
+    let computed_value = ((fee as u128) << 64) | (timestamp_inverted as u128);
     
     PriorityScore {
         fee,
@@ -751,19 +792,28 @@ public fun slash_and_distribute_fee<StableCoin>(
     (coin::zero(ctx), dao_coin)
 }
 
-/// Mark a proposal as completed, freeing up space
+/// Mark a proposal as completed, freeing up space with state consistency checks
 public fun mark_proposal_completed<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     uses_dao_liquidity: bool
 ) {
+    // Validate preconditions for state consistency
     assert!(queue.active_proposal_count > 0, EInvalidProposalId);
     
+    // If marking a DAO liquidity proposal as complete, verify slot is occupied
+    if (uses_dao_liquidity) {
+        assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
+    };
+    
+    // Update state atomically
     queue.active_proposal_count = queue.active_proposal_count - 1;
     
     if (uses_dao_liquidity) {
-        assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
         queue.dao_liquidity_slot_occupied = false;
     };
+    
+    // Post-condition validation: ensure state remains consistent
+    assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
 }
 
 /// Remove a specific proposal from the queue
@@ -834,6 +884,7 @@ public fun update_max_concurrent_proposals<StableCoin>(
 
 /// Cancel a proposal and refund the fee - secured to prevent theft
 /// Now this is an entry function that transfers funds directly to the proposer
+/// Added validation to ensure proposal is still in queue (not activated)
 public entry fun cancel_proposal<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     fee_manager: &mut ProposalFeeManager,
@@ -841,41 +892,48 @@ public entry fun cancel_proposal<StableCoin>(
     ctx: &mut TxContext
 ) {
     let mut i = 0;
+    let mut found = false;
     
+    // First, verify the proposal exists in the queue and belongs to the sender
     while (i < queue.size) {
         let proposal = vector::borrow(&queue.heap, i);
         if (proposal.proposal_id == proposal_id) {
             // Critical fix: Require that the transaction sender is the proposer
             assert!(proposal.proposer == tx_context::sender(ctx), EProposalNotFound);
-            
-            // Store proposer address before removing
-            let proposer_addr = proposal.proposer;
-            
-            let removed = remove_at(&mut queue.heap, i, &mut queue.size);
-            let QueuedProposal { proposal_id, mut bond, .. } = removed;
-            
-            // Get the fee refunded as a Coin
-            let refunded_fee = proposal_fee_manager::refund_proposal_fee(
-                fee_manager,
-                proposal_id,
-                ctx
-            );
-            
-            // Critical fix: Transfer the refunded fee directly to the proposer
-            transfer::public_transfer(refunded_fee, proposer_addr);
-            
-            // Critical fix: Transfer the bond directly to the proposer if it exists
-            if (option::is_some(&bond)) {
-                transfer::public_transfer(option::extract(&mut bond), proposer_addr);
-            };
-            option::destroy_none(bond);
-            
-            return
+            found = true;
+            break
         };
         i = i + 1;
     };
     
-    abort EProposalNotFound
+    // If not found in queue, it means proposal is either:
+    // 1. Already activated (cannot cancel)
+    // 2. Never existed
+    // Either way, abort with error
+    assert!(found, EProposalNotFound);
+    
+    // Now we know the proposal is in queue and belongs to sender, safe to remove
+    let proposal = vector::borrow(&queue.heap, i);
+    let proposer_addr = proposal.proposer;
+    
+    let removed = remove_at(&mut queue.heap, i, &mut queue.size);
+    let QueuedProposal { proposal_id, mut bond, .. } = removed;
+    
+    // Get the fee refunded as a Coin
+    let refunded_fee = proposal_fee_manager::refund_proposal_fee(
+        fee_manager,
+        proposal_id,
+        ctx
+    );
+    
+    // Critical fix: Transfer the refunded fee directly to the proposer
+    transfer::public_transfer(refunded_fee, proposer_addr);
+    
+    // Critical fix: Transfer the bond directly to the proposer if it exists
+    if (option::is_some(&bond)) {
+        transfer::public_transfer(option::extract(&mut bond), proposer_addr);
+    };
+    option::destroy_none(bond);
 }
 
 /// Update a proposal's priority by adding more fee

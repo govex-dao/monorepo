@@ -228,7 +228,7 @@ deploy_package() {
     echo "  Publishing package..."
     local deploy_output="${package}_deploy_output.log"
     
-    if sui client publish --gas-budget "$GAS_BUDGET" --skip-dependency-verification 2>&1 | tee "$deploy_output"; then
+    if sui client publish --gas-budget "$GAS_BUDGET" --with-unpublished-dependencies 2>&1 | tee "$deploy_output"; then
         # Extract package ID
         local package_id=$(extract_package_id "$deploy_output")
         

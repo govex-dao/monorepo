@@ -33,6 +33,7 @@ use futarchy_core::events;
 const DAO_STATE_ACTIVE: u8 = 0;
 const DAO_STATE_DISSOLVING: u8 = 1;
 const DAO_STATE_PAUSED: u8 = 2;
+const DAO_STATE_DISSOLVED: u8 = 3;
 
 const OUTCOME_ACCEPTED: u8 = 0;
 const OUTCOME_REJECTED: u8 = 1;
@@ -417,6 +418,7 @@ public fun is_verified(config: &FutarchyConfig): bool { config.verification_leve
 public fun state_active(): u8 { DAO_STATE_ACTIVE }
 public fun state_dissolving(): u8 { DAO_STATE_DISSOLVING }
 public fun state_paused(): u8 { DAO_STATE_PAUSED }
+public fun state_dissolved(): u8 { DAO_STATE_DISSOLVED }
 
 // === Package-Level Mutators ===
 

@@ -40,6 +40,7 @@ const ECapChangeAfterDeadline: u64 = 105;
 const ECapHeapInvariant: u64 = 106;
 const ESettlementAlreadyStarted: u64 = 107;
 const EInvalidSettlementState: u64 = 108;
+const ETooManyUniqueCaps: u64 = 109;
 
 // === Constants ===
 /// The duration for every raise is fixed. 14 days in milliseconds.
@@ -53,6 +54,7 @@ const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
 const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
+const MAX_UNIQUE_CAPS: u64 = 1000; // Maximum number of unique cap values to prevent unbounded heap
 
 // === Structs ===
 
@@ -422,6 +424,8 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
         // Ensure a cap-bin exists and index it if first time seen
         let tkey = ThresholdKey { cap };
         if (!df::exists_(&raise.id, tkey)) {
+            // Check we haven't exceeded maximum unique caps
+            assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
             df::add(&mut raise.id, tkey, ThresholdBin { total: 0, count: 0 });
             vector::push_back(&mut raise.thresholds, cap);
         };
@@ -484,6 +488,8 @@ public entry fun update_cap<RaiseToken, StableCoin>(
     // create bin for new cap if needed
     let new_tk = ThresholdKey { cap: new_cap };
     if (!df::exists_(&raise.id, new_tk)) {
+        // Check we haven't exceeded maximum unique caps
+        assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
         df::add(&mut raise.id, new_tk, ThresholdBin { total: 0, count: 0 });
         vector::push_back(&mut raise.thresholds, new_cap);
     };

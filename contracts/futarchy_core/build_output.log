@@ -7,22 +7,6 @@ INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING futarchy_core
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-   [0m[34m┌─[0m ./sources/proposal_fee_manager.move:10:5
-   [0m[34m│[0m
-[0m[34m10[0m [0m[34m│[0m     [0m[33mtransfer[0m
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
-   [0m[34m┌─[0m ./sources/proposal_fee_manager.move:10:5
-   [0m[34m│[0m
-[0m[34m10[0m [0m[34m│[0m     [0m[33mtransfer[0m
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnused 'use' of alias 'transfer'. Consider removing it[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
   [0m[34m┌─[0m ./sources/events.move:4:10
   [0m[34m│[0m
 [0m[34m4[0m [0m[34m│[0m use std::[0m[33mvector[0m;
@@ -224,257 +208,257 @@ BUILDING futarchy_core
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:37:7
+   [0m[34m┌─[0m ./sources/futarchy_config.move:38:7
    [0m[34m│[0m
-[0m[34m37[0m [0m[34m│[0m const [0m[33mOUTCOME_ACCEPTED[0m: u8 = 0;
+[0m[34m38[0m [0m[34m│[0m const [0m[33mOUTCOME_ACCEPTED[0m: u8 = 0;
    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'OUTCOME_ACCEPTED' is never used. Consider removing it.[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:38:7
+   [0m[34m┌─[0m ./sources/futarchy_config.move:39:7
    [0m[34m│[0m
-[0m[34m38[0m [0m[34m│[0m const [0m[33mOUTCOME_REJECTED[0m: u8 = 1;
+[0m[34m39[0m [0m[34m│[0m const [0m[33mOUTCOME_REJECTED[0m: u8 = 1;
    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'OUTCOME_REJECTED' is never used. Consider removing it.[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:41:7
+   [0m[34m┌─[0m ./sources/futarchy_config.move:42:7
    [0m[34m│[0m
-[0m[34m41[0m [0m[34m│[0m const [0m[33mEProposalNotApproved[0m: u64 = 1;
+[0m[34m42[0m [0m[34m│[0m const [0m[33mEProposalNotApproved[0m: u64 = 1;
    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EProposalNotApproved' is never used. Consider removing it.[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:44:7
+   [0m[34m┌─[0m ./sources/futarchy_config.move:45:7
    [0m[34m│[0m
-[0m[34m44[0m [0m[34m│[0m const [0m[33mEIntentNotFound[0m: u64 = 4;
+[0m[34m45[0m [0m[34m│[0m const [0m[33mEIntentNotFound[0m: u64 = 4;
    [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EIntentNotFound' is never used. Consider removing it.[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:50:5
-   [0m[34m│[0m
-[0m[34m50[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'ProposalsEnabledChanged' type is unused[0m
-   [0m[34m│[0m
-   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:51:5
    [0m[34m│[0m
-[0m[34m51[0m [0m[34m│[0m     [0m[33menabled[0m: bool,
-   [0m[34m│[0m     [0m[33m^^^^^^^[0m [0m[33mThe 'enabled' field of the 'ProposalsEnabledChanged' type is unused[0m
+[0m[34m51[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'ProposalsEnabledChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:52:5
    [0m[34m│[0m
-[0m[34m52[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'ProposalsEnabledChanged' type is unused[0m
+[0m[34m52[0m [0m[34m│[0m     [0m[33menabled[0m: bool,
+   [0m[34m│[0m     [0m[33m^^^^^^^[0m [0m[33mThe 'enabled' field of the 'ProposalsEnabledChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:57:5
+   [0m[34m┌─[0m ./sources/futarchy_config.move:53:5
    [0m[34m│[0m
-[0m[34m57[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'DaoNameChanged' type is unused[0m
+[0m[34m53[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'ProposalsEnabledChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:58:5
    [0m[34m│[0m
-[0m[34m58[0m [0m[34m│[0m     [0m[33mold_name[0m: AsciiString,
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'old_name' field of the 'DaoNameChanged' type is unused[0m
+[0m[34m58[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'DaoNameChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:59:5
    [0m[34m│[0m
-[0m[34m59[0m [0m[34m│[0m     [0m[33mnew_name[0m: AsciiString,
-   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'new_name' field of the 'DaoNameChanged' type is unused[0m
+[0m[34m59[0m [0m[34m│[0m     [0m[33mold_name[0m: AsciiString,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'old_name' field of the 'DaoNameChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:60:5
    [0m[34m│[0m
-[0m[34m60[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'DaoNameChanged' type is unused[0m
+[0m[34m60[0m [0m[34m│[0m     [0m[33mnew_name[0m: AsciiString,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mThe 'new_name' field of the 'DaoNameChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:65:5
+   [0m[34m┌─[0m ./sources/futarchy_config.move:61:5
    [0m[34m│[0m
-[0m[34m65[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'TradingParamsChanged' type is unused[0m
+[0m[34m61[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'DaoNameChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:66:5
    [0m[34m│[0m
-[0m[34m66[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'TradingParamsChanged' type is unused[0m
+[0m[34m66[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'TradingParamsChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:71:5
+   [0m[34m┌─[0m ./sources/futarchy_config.move:67:5
    [0m[34m│[0m
-[0m[34m71[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'MetadataChanged' type is unused[0m
+[0m[34m67[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'TradingParamsChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:72:5
    [0m[34m│[0m
-[0m[34m72[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'MetadataChanged' type is unused[0m
+[0m[34m72[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'MetadataChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-   [0m[34m┌─[0m ./sources/futarchy_config.move:77:5
+   [0m[34m┌─[0m ./sources/futarchy_config.move:73:5
    [0m[34m│[0m
-[0m[34m77[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
-   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'GovernanceSettingsChanged' type is unused[0m
+[0m[34m73[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'MetadataChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
    [0m[34m┌─[0m ./sources/futarchy_config.move:78:5
    [0m[34m│[0m
-[0m[34m78[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
+[0m[34m78[0m [0m[34m│[0m     [0m[33maccount_id[0m: ID,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^[0m [0m[33mThe 'account_id' field of the 'GovernanceSettingsChanged' type is unused[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
+   [0m[34m┌─[0m ./sources/futarchy_config.move:79:5
+   [0m[34m│[0m
+[0m[34m79[0m [0m[34m│[0m     [0m[33mtimestamp[0m: u64,
    [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'timestamp' field of the 'GovernanceSettingsChanged' type is unused[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:157:32
+    [0m[34m┌─[0m ./sources/futarchy_config.move:158:32
     [0m[34m│[0m
-[0m[34m157[0m [0m[34m│[0m         asset_type: type_name::[0m[33mget[0m<AssetType>().into_string().to_string(),
+[0m[34m158[0m [0m[34m│[0m         asset_type: type_name::[0m[33mget[0m<AssetType>().into_string().to_string(),
     [0m[34m│[0m                                [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:158:33
+    [0m[34m┌─[0m ./sources/futarchy_config.move:159:33
     [0m[34m│[0m
-[0m[34m158[0m [0m[34m│[0m         stable_type: type_name::[0m[33mget[0m<StableType>().into_string().to_string(),
+[0m[34m159[0m [0m[34m│[0m         stable_type: type_name::[0m[33mget[0m<StableType>().into_string().to_string(),
     [0m[34m│[0m                                 [0m[33m^^^[0m [0m[33mThe function 'std::type_name::get' is deprecated: Renamed to `with_defining_ids` for clarity.[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:736:9
+    [0m[34m┌─[0m ./sources/futarchy_config.move:738:9
     [0m[34m│[0m
 [0m[34m 23[0m [0m[34m│[0m     deps::{Self, Deps},
     [0m[34m│[0m            [0m[34m----[0m [0m[34mThe same alias was previously declared here[0m
     [0m[34m·[0m
-[0m[34m736[0m [0m[34m│[0m         [0m[33mdeps[0m,
+[0m[34m738[0m [0m[34m│[0m         [0m[33mdeps[0m,
     [0m[34m│[0m         [0m[33m^^^^[0m [0m[33mUnnecessary alias 'deps' for module 'account_protocol::deps'. It was already in scope[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:766:9
+    [0m[34m┌─[0m ./sources/futarchy_config.move:768:9
     [0m[34m│[0m
 [0m[34m 23[0m [0m[34m│[0m     deps::{Self, Deps},
     [0m[34m│[0m            [0m[34m----[0m [0m[34mThe same alias was previously declared here[0m
     [0m[34m·[0m
-[0m[34m766[0m [0m[34m│[0m         [0m[33mdeps[0m,
+[0m[34m768[0m [0m[34m│[0m         [0m[33mdeps[0m,
     [0m[34m│[0m         [0m[33m^^^^[0m [0m[33mUnnecessary alias 'deps' for module 'account_protocol::deps'. It was already in scope[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:866:5
+    [0m[34m┌─[0m ./sources/futarchy_config.move:868:5
     [0m[34m│[0m
-[0m[34m866[0m [0m[34m│[0m     [0m[33mproposal_id[0m: ID,
+[0m[34m868[0m [0m[34m│[0m     [0m[33mproposal_id[0m: ID,
     [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mThe 'proposal_id' field of the 'ApprovedProposal' type is unused[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:867:5
+    [0m[34m┌─[0m ./sources/futarchy_config.move:869:5
     [0m[34m│[0m
-[0m[34m867[0m [0m[34m│[0m     [0m[33mmarket_id[0m: ID,
+[0m[34m869[0m [0m[34m│[0m     [0m[33mmarket_id[0m: ID,
     [0m[34m│[0m     [0m[33m^^^^^^^^^[0m [0m[33mThe 'market_id' field of the 'ApprovedProposal' type is unused[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09009][0m[1m: unused struct field[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:868:5
+    [0m[34m┌─[0m ./sources/futarchy_config.move:870:5
     [0m[34m│[0m
-[0m[34m868[0m [0m[34m│[0m     [0m[33moutcome_index[0m: u64,
+[0m[34m870[0m [0m[34m│[0m     [0m[33moutcome_index[0m: u64,
     [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe 'outcome_index' field of the 'ApprovedProposal' type is unused[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:964:5
+    [0m[34m┌─[0m ./sources/futarchy_config.move:966:5
     [0m[34m│[0m
-[0m[34m964[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
+[0m[34m966[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
     [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-    [0m[34m┌─[0m ./sources/futarchy_config.move:986:5
+    [0m[34m┌─[0m ./sources/futarchy_config.move:988:5
     [0m[34m│[0m
-[0m[34m986[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
+[0m[34m988[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
     [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
     [0m[34m│[0m
     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-     [0m[34m┌─[0m ./sources/futarchy_config.move:1012:5
+     [0m[34m┌─[0m ./sources/futarchy_config.move:1014:5
      [0m[34m│[0m
-[0m[34m1012[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
+[0m[34m1014[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
      [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
      [0m[34m│[0m
      [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-     [0m[34m┌─[0m ./sources/futarchy_config.move:1036:5
+     [0m[34m┌─[0m ./sources/futarchy_config.move:1038:5
      [0m[34m│[0m
-[0m[34m1036[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
+[0m[34m1038[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext
      [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
-     [0m[34m│[0m
-     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
-     [0m[34m┌─[0m ./sources/futarchy_config.move:1120:5
-     [0m[34m│[0m
-[0m[34m1120[0m [0m[34m│[0m     [0m[33mproposal_id[0m: ID,
-     [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused parameter 'proposal_id'. Consider removing or prefixing with an underscore: '_proposal_id'[0m
      [0m[34m│[0m
      [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
      [0m[34m┌─[0m ./sources/futarchy_config.move:1122:5
      [0m[34m│[0m
-[0m[34m1122[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext,
+[0m[34m1122[0m [0m[34m│[0m     [0m[33mproposal_id[0m: ID,
+     [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused parameter 'proposal_id'. Consider removing or prefixing with an underscore: '_proposal_id'[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+     [0m[34m┌─[0m ./sources/futarchy_config.move:1124:5
+     [0m[34m│[0m
+[0m[34m1124[0m [0m[34m│[0m     [0m[33mctx[0m: &mut TxContext,
      [0m[34m│[0m     [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
      [0m[34m│[0m
      [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
-     [0m[34m┌─[0m ./sources/futarchy_config.move:1141:1
+     [0m[34m┌─[0m ./sources/futarchy_config.move:1143:1
      [0m[34m│[0m  
-[0m[34m1141[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
-[0m[34m1142[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
-[0m[34m1143[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This allows standard intents to work with any outcome type[0m
+[0m[34m1143[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1144[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1145[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This allows standard intents to work with any outcome type[0m
      [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
 
 [0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
@@ -608,13 +592,29 @@ BUILDING futarchy_core
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
-    [0m[34m┌─[0m ./sources/queue/priority_queue.move:837:8
+    [0m[34m┌─[0m ./sources/queue/priority_queue.move:888:8
     [0m[34m│[0m
-[0m[34m837[0m [0m[34m│[0m public [0m[33mentry[0m fun cancel_proposal<StableCoin>(
+[0m[34m888[0m [0m[34m│[0m public [0m[33mentry[0m fun cancel_proposal<StableCoin>(
     [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
     [0m[34m│[0m
     [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
     [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/proposal_fee_manager.move:10:5
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     [0m[33mtransfer[0m
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/proposal_fee_manager.move:173:9
+    [0m[34m│[0m
+[0m[34m173[0m [0m[34m│[0m     let [0m[33mburn_bps[0m = futarchy_config::burn_bps(slash_config) as u64;
+    [0m[34m│[0m         [0m[33m^^^^^^^^[0m [0m[33mUnused local variable 'burn_bps'. Consider removing or prefixing with an underscore: '_burn_bps'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 Please report feedback on the linter warnings at https://forums.sui.io
 

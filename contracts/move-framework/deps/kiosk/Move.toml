@@ -8,4 +8,4 @@ version = "0.0.1"
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b5633abb4177" }
 
 [addresses]
-kiosk = "0x44c5d7428a5924600d6d9d719f267f302cf42decbe2f9b70edbb075f73be5dff"
+kiosk = "0xe6cb38323ad6d2fcdb4b0ed7c46e98a5619a1972de62e78d11826ac1b2bc55bf"

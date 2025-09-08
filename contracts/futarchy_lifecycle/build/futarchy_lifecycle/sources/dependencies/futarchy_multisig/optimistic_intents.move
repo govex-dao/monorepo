@@ -18,6 +18,7 @@ use std::{
 use sui::{
     clock::Clock,
     table::{Self, Table},
+    vec_set::{Self, VecSet},
     event,
     object::{Self, ID, UID},
     tx_context::{Self, TxContext},
@@ -51,6 +52,10 @@ const MAX_OPTIMISTIC_INTENTS: u64 = 10;
 const WAITING_PERIOD_MS: u64 = 864_000_000; // 10 days in milliseconds
 const MAX_BATCH_CHALLENGES: u64 = 10;
 const EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in milliseconds
+
+// Static validation for overflow safety - these values are safe:
+// WAITING_PERIOD_MS + EXPIRY_PERIOD_MS = 3,456,000,000 which is much less than u64::MAX
+// The sum check in the code ensures no overflow when adding to current timestamp
 
 // === Storage Keys ===
 
@@ -252,6 +257,16 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     let batch_size = vector::length(&action.intent_ids);
     assert!(batch_size > 0 && batch_size <= MAX_BATCH_CHALLENGES, EInvalidBatchSize);
     
+    // Check for duplicates in the batch
+    let mut seen_intents = vec_set::empty<ID>();
+    let mut i = 0;
+    while (i < batch_size) {
+        let intent_id = *vector::borrow(&action.intent_ids, i);
+        assert!(!vec_set::contains(&seen_intents, &intent_id), EDuplicateIntent);
+        vec_set::insert(&mut seen_intents, intent_id);
+        i = i + 1;
+    };
+    
     // Initialize storage if needed
     initialize_storage(account, version::current(), ctx);
     
@@ -265,7 +280,7 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     );
     
     // Process each intent in the batch
-    let mut i = 0;
+    i = 0;
     while (i < batch_size) {
         let intent_id = *vector::borrow(&action.intent_ids, i);
         
@@ -285,7 +300,9 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
         );
         
         // Remove from active intents safely
-        remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
+        // We expect this to succeed since we just cancelled an active intent
+        let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
+        assert!(removed, EIntentNotFound);
         
         // Emit event
         event::emit(OptimisticIntentCancelled {
@@ -324,8 +341,12 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     
     let intent = table::borrow_mut(&mut storage.intents, action.intent_id);
     
-    // Only the original proposer can cancel
-    assert!(intent.proposer == tx_context::sender(ctx), ENotProposer);
+    // Verify sender was the original proposer
+    // Note: We can't verify if they're still a council member here as this is executed
+    // through the DAO account, not the security council account. The action execution
+    // itself should be gated by proper security council membership checks.
+    let sender = tx_context::sender(ctx);
+    assert!(intent.proposer == sender, ENotProposer);
     
     // Check not already cancelled or executed
     assert!(!intent.is_cancelled, EIntentAlreadyCancelled);
@@ -336,7 +357,9 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     intent.cancel_reason = option::some(action.reason);
     
     // Remove from active intents safely
-    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    // We expect this to succeed since we just cancelled an active intent
+    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    assert!(removed, EIntentNotFound);
     
     // Emit event
     event::emit(OptimisticIntentCancelled {
@@ -384,7 +407,9 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     let intent_key = intent.intent_key;
     
     // Remove from active intents safely  
-    remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    // We expect this to succeed since we just executed an active intent
+    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
+    assert!(removed, EIntentNotFound);
     
     // Emit event
     event::emit(OptimisticIntentExecuted {
@@ -400,18 +425,24 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
 // === Helper Functions ===
 
 /// Safely remove an intent from the active intents vector
+/// Returns true if the intent was found and removed, false otherwise
 fun remove_from_active_intents(
     active_intents: &mut vector<ID>,
     total_active: &mut u64,
     intent_id: ID,
-) {
+): bool {
     let (found, index) = vector::index_of(active_intents, &intent_id);
     if (found) {
         vector::remove(active_intents, index);
-        // Only decrement if we actually removed something
-        if (*total_active > 0) {
-            *total_active = *total_active - 1;
-        }
+        // Decrement counter since we removed an item
+        // Assert to ensure counter doesn't underflow (should never happen if state is consistent)
+        assert!(*total_active > 0, EIntegerOverflow);
+        *total_active = *total_active - 1;
+        true
+    } else {
+        // Intent was not in active list - this is a logic error if we're trying to remove it
+        // Return false to let caller handle this case
+        false
     }
 }
 

@@ -52,6 +52,7 @@ public struct Approvals has store, drop, copy {
 // === Public Functions ===
 
 /// Create a new weighted multisig configuration.
+/// Note: Clock parameter added to initialize last_activity_ms properly
 public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): WeightedMultisig {
     assert!(members.length() == weights.length(), EInvalidArguments);
     assert!(members.length() > 0, EEmptyMemberList);
@@ -93,7 +94,21 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): 
     // Optional: warn if no single member can meet threshold (may be intentional)
     // This is a valid configuration for requiring multiple signers
     
+    // Initialize with 0 - will be set on first activity or creation with clock
+    // This is safe as dead-man switch checks require explicit time periods
     WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: 0 }
+}
+
+/// Create a new weighted multisig configuration with current timestamp.
+public fun new_with_clock(
+    members: vector<address>, 
+    weights: vector<u64>, 
+    threshold: u64,
+    clock: &Clock
+): WeightedMultisig {
+    let mut config = new(members, weights, threshold);
+    config.last_activity_ms = clock.timestamp_ms();
+    config
 }
 
 /// Create a fresh, empty Approvals outcome for a new intent.
@@ -145,10 +160,11 @@ public fun assert_is_member(config: &WeightedMultisig, addr: address) {
     assert!(is_member(config, addr), ENotMember);
 }
 
-/// Insert approver address without borrowing the config inside the resolve_intent! closure.
-/// Call weighted_multisig::assert_is_member(config, sender) BEFORE calling this to ensure membership.
-/// This avoids borrowing account.config() inside the closure (which conflicts with the mutable borrow held by resolve_intent!).
-public fun approve_sender_unchecked(outcome: &mut Approvals, sender: address) {
+/// Insert approver address after membership has been verified.
+/// IMPORTANT: This function assumes membership has already been verified by the caller.
+/// Only call this from within trusted module functions that have already checked membership.
+/// This pattern avoids borrowing conflicts with account.config() inside resolve_intent! closures.
+public(package) fun approve_sender_verified(outcome: &mut Approvals, sender: address) {
     assert!(!outcome.approvers.contains(&sender), EAlreadyApproved);
     outcome.approvers.insert(sender);
 }

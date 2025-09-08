@@ -201,15 +201,12 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     // Implementation would iterate through all coin types in vaults
     
     // 3. Mark DAO as fully dissolved
-    // Set the operational state to a final "dissolved" state
-    // For now, we'll keep it in DISSOLVING state since we don't have a DISSOLVED constant
-    // In a real implementation, you'd add a DISSOLVED state constant
+    futarchy_config::set_operational_state(config, futarchy_config::state_dissolved());
     
     // 4. Destroy account if specified
     if (destroy_account) {
         // Account destruction would need special handling
-        // For now, we just mark it as inactive
-        futarchy_config::set_operational_state(config, futarchy_config::state_paused());
+        // The dissolved state already prevents any further operations
     };
     
     let _ = version;

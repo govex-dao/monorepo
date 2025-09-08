@@ -165,16 +165,29 @@ public fun slash_proposal_fee_with_distribution(
         return (coin::zero(ctx), coin::zero(ctx))
     };
     
-    // Calculate distributions using getter functions
-    let slasher_amount = (total_amount * (futarchy_config::slasher_reward_bps(slash_config) as u64)) / 10000;
-    let dao_amount = (total_amount * (futarchy_config::dao_treasury_bps(slash_config) as u64)) / 10000;
-    let protocol_amount = (total_amount * (futarchy_config::protocol_bps(slash_config) as u64)) / 10000;
-    let burn_amount = (total_amount * (futarchy_config::burn_bps(slash_config) as u64)) / 10000;
+    // Calculate distributions using getter functions with proper rounding
+    // Use multiply-then-divide to minimize rounding errors
+    let slasher_bps = futarchy_config::slasher_reward_bps(slash_config) as u64;
+    let dao_bps = futarchy_config::dao_treasury_bps(slash_config) as u64;
+    let protocol_bps = futarchy_config::protocol_bps(slash_config) as u64;
+    let burn_bps = futarchy_config::burn_bps(slash_config) as u64;
     
-    // Handle rounding: give any remainder to protocol
-    let distributed = slasher_amount + dao_amount + protocol_amount + burn_amount;
-    let remainder = if (total_amount > distributed) { total_amount - distributed } else { 0 };
-    let final_protocol_amount = protocol_amount + remainder;
+    // Calculate amounts with better precision
+    let slasher_amount = (total_amount * slasher_bps) / 10000;
+    let dao_amount = (total_amount * dao_bps) / 10000;
+    let protocol_amount = (total_amount * protocol_bps) / 10000;
+    
+    // For burn amount, ensure we account for all remaining funds
+    // This prevents dust from being left over due to rounding
+    let distributed_so_far = slasher_amount + dao_amount + protocol_amount;
+    let burn_amount = if (total_amount > distributed_so_far) {
+        total_amount - distributed_so_far  // All remaining goes to burn
+    } else {
+        0  // Safety check, shouldn't happen with valid bps
+    };
+    
+    // No need for separate remainder handling now
+    let final_protocol_amount = protocol_amount;
     
     // Create slasher reward coin
     let slasher_reward = if (slasher_amount > 0) {
@@ -195,10 +208,12 @@ public fun slash_proposal_fee_with_distribution(
         manager.protocol_revenue.join(fee_balance.split(final_protocol_amount));
     };
     
-    // Burn the burn amount
+    // Burn the burn amount by destroying the balance
     if (burn_amount > 0) {
         let burn_balance = fee_balance.split(burn_amount);
-        burn_balance.destroy_zero();
+        // Properly burn by transferring to a Coin and then destroying it
+        let burn_coin = coin::from_balance(burn_balance, ctx);
+        transfer::public_transfer(burn_coin, @0x0); // Send to burn address
     };
     
     // Destroy any remaining dust

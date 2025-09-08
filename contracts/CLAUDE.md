@@ -49,11 +49,23 @@ sui client publish --gas-budget 5000000000 --json 2>/dev/null | \
 
 We have several deployment scripts available:
 
-#### 1. `deploy_all_automated.sh`
-- Full automated deployment with gas checking
-- Includes retry logic and error handling
-- Saves deployment results to JSON file
-- Usage: `./deploy_all_automated.sh [--force]`
+#### 1. `deploy_all_automated.sh` (RECOMMENDED)
+- **Primary deployment script** - deploys all 9 futarchy packages automatically
+- Deploys packages in dependency order (futarchy_one_shot_utils → futarchy_core → ... → futarchy_dao)
+- Includes automatic gas checking and faucet requests
+- Handles Account Protocol packages (checks if already deployed)
+- Saves deployment results to timestamped JSON file
+- Updates all Move.toml files with deployed addresses automatically
+- Usage: 
+  - `./deploy_all_automated.sh` - Normal deployment (skips already deployed packages)
+  - `./deploy_all_automated.sh --force` - Force redeploy all packages (useful after code changes)
+- The script will:
+  1. Check gas balance and request from faucet if needed
+  2. Check if Account Protocol packages are deployed
+  3. Deploy all 9 futarchy packages in order
+  4. Update Move.toml files with new addresses after each deployment
+  5. Save results to `deployment_results_YYYYMMDD_HHMMSS.json`
+  6. Show deployment summary with all package addresses
 
 #### 2. `fresh_deploy.sh`
 - Resets all addresses to 0x0 before deployment

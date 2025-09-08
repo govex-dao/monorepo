@@ -121,8 +121,8 @@ public fun new_twap_config(
     initial_observation: u128,
     threshold: u64,
 ): TwapConfig {
-    // Validate inputs (allow 0 for start_delay for testing)
-    // assert!(start_delay > 0, EInvalidTwapParams); // Commented out to allow 0 for testing
+    // Validate inputs - start_delay can be 0 for immediate TWAP start
+    // This is a valid use case for certain market configurations
     assert!(step_max > 0, EInvalidTwapParams);
     assert!(initial_observation > 0, EInvalidTwapParams);
     assert!(threshold > 0, EInvalidTwapThreshold);

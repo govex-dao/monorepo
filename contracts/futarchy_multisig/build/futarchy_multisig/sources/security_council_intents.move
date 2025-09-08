@@ -429,6 +429,10 @@ public fun execute_approve_policy_change(
 
 // === Intent Cleanup Functions ===
 
+// Constants for batch processing limits
+const MAX_CLEANUP_BATCH_SIZE: u64 = 20;
+const EBatchTooLarge: u64 = 101;
+
 /// Security Council can clean up specific expired intents by key
 /// This is a hot path - council members can execute this without needing a proposal
 /// 
@@ -443,9 +447,12 @@ public fun cleanup_expired_council_intents(
     // Verify the caller is a council member
     security_council.verify(auth_from_member);
     
+    // Validate batch size to prevent gas exhaustion
+    let len = intent_keys.length();
+    assert!(len <= MAX_CLEANUP_BATCH_SIZE, EBatchTooLarge);
+    
     // Clean up each specified intent if it's expired
     let mut i = 0;
-    let len = intent_keys.length();
     
     while (i < len) {
         let key = *intent_keys.borrow(i);

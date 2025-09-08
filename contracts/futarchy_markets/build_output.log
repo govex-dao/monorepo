@@ -125,9 +125,9 @@ BUILDING futarchy_markets
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 [0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
-   [0m[34m┌─[0m ./sources/conditional/conditional_amm.move:53:7
+   [0m[34m┌─[0m ./sources/conditional/conditional_amm.move:52:7
    [0m[34m│[0m
-[0m[34m53[0m [0m[34m│[0m const [0m[33mDEFAULT_FEE[0m: u64 = 30; // 0.3%
+[0m[34m52[0m [0m[34m│[0m const [0m[33mDEFAULT_FEE[0m: u64 = 30; // 0.3%
    [0m[34m│[0m       [0m[33m^^^^^^^^^^^[0m [0m[33mThe constant 'DEFAULT_FEE' is never used. Consider removing it.[0m
    [0m[34m│[0m
    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

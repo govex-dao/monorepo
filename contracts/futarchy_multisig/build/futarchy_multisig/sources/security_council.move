@@ -37,8 +37,38 @@ public fun new(
     threshold: u64,
     ctx: &mut TxContext,
 ): Account<WeightedMultisig> {
-    // build multisig config
+    // build multisig config (uses default initialization with last_activity_ms = 0)
+    // This is safe as the first activity will set the proper timestamp
     let config = weighted_multisig::new(members, weights, threshold);
+
+    account_protocol::account_interface::create_account!(
+        config,
+        version::current(),  // VersionWitness for 'futarchy'
+        Witness{},           // config witness (this module)
+        ctx,
+        || deps::new_latest_extensions(
+            extensions,
+            vector[
+                b"AccountProtocol".to_string(),
+                b"Futarchy".to_string(),
+                b"AccountActions".to_string(),
+            ]
+        )
+    )
+}
+
+/// Create a new Weighted Security Council account with current timestamp initialized.
+/// Use this when you want the dead-man switch to start counting from creation time.
+public fun new_with_clock(
+    extensions: &Extensions,
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Account<WeightedMultisig> {
+    // build multisig config with current timestamp
+    let config = weighted_multisig::new_with_clock(members, weights, threshold, clock);
 
     account_protocol::account_interface::create_account!(
         config,
@@ -87,7 +117,7 @@ public fun approve_intent(
         Witness{},
         |outcome_mut: &mut Approvals| {
             // Insert approver without borrowing config in this closure
-            weighted_multisig::approve_sender_unchecked(outcome_mut, ctx.sender());
+            weighted_multisig::approve_sender_verified(outcome_mut, ctx.sender());
         }
     );
     

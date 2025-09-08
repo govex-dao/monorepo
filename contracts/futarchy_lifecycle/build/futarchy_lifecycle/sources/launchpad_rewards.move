@@ -70,7 +70,12 @@ fun setup_tiered_founder_rewards<AssetType>(
     let mut descriptions = vector::empty<String>();
     let mut is_above_thresholds = vector::empty<bool>();
     
-    let price_step = (max_price_ratio - min_price_ratio) / (num_tiers - 1);
+    // Calculate price step, handling single tier case to avoid division by zero
+    let price_step = if (num_tiers > 1) {
+        (max_price_ratio - min_price_ratio) / (num_tiers - 1)
+    } else {
+        0 // Single tier uses min_price_ratio only
+    };
     let amount_per_tier = total_allocation / num_tiers;
     
     let mut i = 0;
