@@ -1,5 +1,5 @@
 /// Dispatcher for stream/recurring payment actions
-module futarchy_specialized_actions::stream_dispatcher;
+module futarchy_lifecycle::stream_dispatcher;
 
 // === Imports ===
 use sui::{
@@ -12,7 +12,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_specialized_actions::stream_actions;
+use futarchy_lifecycle::stream_actions;
 
 // === Public(friend) Functions ===
 

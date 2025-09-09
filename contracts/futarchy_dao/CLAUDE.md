@@ -1,5 +1,14 @@
 # Claude AI Context - Futarchy Protocol
 
+## Common Build Issues
+
+### Package Address Mismatches
+**Issue**: "Conflicting assignments for address" errors during build
+**Cause**: Package's own Move.toml has `package_name = "0x0"` while dependencies reference the deployed address
+**Fix**: Ensure each package's Move.toml has its own address set to the deployed value, not "0x0"
+
+# Claude AI Context - Futarchy Protocol
+
 ## Frontend Control
 **IMPORTANT**: The frontend and database are fully controlled by us. This means:
 - We can track all proposal types and required resources in our database

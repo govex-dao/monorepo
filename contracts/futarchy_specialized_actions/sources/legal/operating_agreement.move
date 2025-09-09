@@ -30,6 +30,7 @@ use futarchy_specialized_actions::operating_agreement_actions::{Self,
     SetLineImmutableAction,
     SetInsertAllowedAction,
     SetRemoveAllowedAction,
+    SetGlobalImmutableAction,
     BatchOperatingAgreementAction,
     OperatingAgreementAction,
     CreateOperatingAgreementAction,
@@ -40,6 +41,7 @@ use futarchy_specialized_actions::operating_agreement_actions::{Self,
     get_set_line_immutable_id,
     get_set_insert_allowed,
     get_set_remove_allowed,
+    confirm_set_global_immutable,
     get_batch_actions,
     get_operating_agreement_action_params,
     get_create_operating_agreement_params,
@@ -514,6 +516,21 @@ public(package) fun execute_set_remove_allowed<IW: drop, Outcome: store + drop +
     let action: &SetRemoveAllowedAction = executable.next_action(witness);
     let allowed = get_set_remove_allowed(action);
     set_remove_allowed(agreement, allowed, clock);
+}
+
+/// Execute a set global immutable action
+/// WARNING: This is a permanent one-way operation that locks the entire agreement
+public(package) fun execute_set_global_immutable<IW: drop, Outcome: store + drop + copy>(
+    executable: &mut Executable<Outcome>,
+    agreement: &mut OperatingAgreement,
+    witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let action: &SetGlobalImmutableAction = executable.next_action(witness);
+    // Confirm the action exists (no params to extract)
+    let _ = confirm_set_global_immutable(action);
+    set_global_immutable(agreement, clock);
 }
 
 // === Internal Functions ===

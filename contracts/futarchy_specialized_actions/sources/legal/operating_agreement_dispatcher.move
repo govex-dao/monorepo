@@ -170,5 +170,21 @@ public fun try_execute_operating_agreement_action<IW: drop, Outcome: store + dro
         return true
     };
     
+    if (executable::contains_action<Outcome, operating_agreement_actions::SetGlobalImmutableAction>(executable)) {
+        // Check if agreement exists before trying to get mutable reference
+        if (!operating_agreement::has_agreement(account)) {
+            abort EAgreementNotFound
+        };
+        let agreement = operating_agreement::get_agreement_mut(account, version::current());
+        operating_agreement::execute_set_global_immutable<IW, Outcome>(
+            executable,
+            agreement,
+            witness,
+            clock,
+            ctx
+        );
+        return true
+    };
+    
     false
 }

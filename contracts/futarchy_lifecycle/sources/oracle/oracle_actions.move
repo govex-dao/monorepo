@@ -1,5 +1,5 @@
 /// Unified oracle actions - uses stored TreasuryCap from DAO Account
-module futarchy_specialized_actions::oracle_actions;
+module futarchy_lifecycle::oracle_actions;
 
 use std::string::{Self, String};
 use std::vector;

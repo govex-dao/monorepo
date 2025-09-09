@@ -22,7 +22,7 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_vault::{
     futarchy_vault,
 };
-use futarchy_specialized_actions::stream_actions;
+use futarchy_lifecycle::stream_actions;
 
 // === Errors ===
 const EInvalidRatio: u64 = 1;

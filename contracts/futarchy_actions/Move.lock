@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "22441212C83AB358FC85D079C1AB03312C4CA3E0CB50F64CB92C07154BD71924"
+manifest_digest = "A447141143FD426A328BF27C787CEA1F61057AF1523867C47F5C698B972AEB52"
 deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -126,7 +126,6 @@ dependencies = [
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_specialized_actions", name = "futarchy_specialized_actions" },
   { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
@@ -183,6 +182,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
@@ -215,6 +215,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0xba0b679ac6e8bf0c236a57113a8fd0635694f33d7af8cdd8dc335c0cafe031bc"
-latest-published-id = "0xba0b679ac6e8bf0c236a57113a8fd0635694f33d7af8cdd8dc335c0cafe031bc"
+original-published-id = "0x1ed2edff5cbb02d8bb4d9f2c6258568233ca7d620f8bd28258965787d6be8e85"
+latest-published-id = "0x1ed2edff5cbb02d8bb4d9f2c6258568233ca7d620f8bd28258965787d6be8e85"
 published-version = "1"

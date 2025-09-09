@@ -1,0 +1,321 @@
+[0;34m================================================[0m
+[0;34m    Automated Futarchy Package Deployment      [0m
+[0;34m================================================[0m
+Starting deployment process...
+Network: devnet
+
+[1;33mForce redeploy mode enabled[0m
+[1;33mChecking gas balance...[0m
+Current address: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd
+Current gas balance: 0 MIST (0 SUI)
+[0;31mInsufficient gas balance![0m
+[1;33mYou need at least 5.00 SUI[0m
+[1;33mPlease run: sui client faucet[0m
+Attempting to request from faucet...
+[0;32mSuccessfully requested gas from faucet![0m
+New gas balance: 0 MIST (0 SUI)
+[1;33mChecking Account Protocol packages...[0m
+  Found AccountProtocol at /Users/admin/monorepo/contracts/move-framework/packages/protocol
+[1;33m  AccountProtocol needs deployment[0m
+  Deploying AccountProtocol...
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+Failed to build Move modules: Processing dependency 'AccountExtensions' of 'AccountProtocol'
+
+Caused by:
+    Conflicting assignments for address 'account_extensions': '0x0' and '0x26bac758f0e6fb4f680710aec118dcf7def01da1df227dca86f25073ceb499cd'..
+  Found AccountExtensions at /Users/admin/monorepo/contracts/move-framework/packages/extensions
+[1;33m  AccountExtensions needs deployment[0m
+  Deploying AccountExtensions...
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING AccountExtensions
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/move-framework/packages/extensions/sources/extensions.move:139:8
+    [0m[34m│[0m
+[0m[34m139[0m [0m[34m│[0m public [0m[33mentry[0m fun new_admin(_: &AdminCap, recipient: address, ctx: &mut TxContext) {
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+Skipping dependency verification
+Transaction Digest: tUA1oz5rTQZQx1ingaJjTHVCFdX6SiRvqjoDuEpnxbm
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                   │
+│ Gas Owner: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                                │
+│ Gas Budget: 5000000000 MIST                                                                                  │
+│ Gas Price: 1000 MIST                                                                                         │
+│ Gas Payment:                                                                                                 │
+│  ┌──                                                                                                         │
+│  │ ID: 0x172a67a79114e2607f06744d50549d0409182240410a1e9c86deccb5cbd654e6                                    │
+│  │ Version: 78                                                                                               │
+│  │ Digest: 45Tafz39rNgCzR4pxsv5XJLAcfTur1Zq7At3wpFTBjAj                                                      │
+│  └──                                                                                                         │
+│                                                                                                              │
+│ Transaction Kind: Programmable                                                                               │
+│ ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────╮ │
+│ │ Input Objects                                                                                            │ │
+│ ├──────────────────────────────────────────────────────────────────────────────────────────────────────────┤ │
+│ │ 0   Pure Arg: Type: address, Value: "0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd" │ │
+│ ╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯ │
+│ ╭─────────────────────────────────────────────────────────────────────────╮                                  │
+│ │ Commands                                                                │                                  │
+│ ├─────────────────────────────────────────────────────────────────────────┤                                  │
+│ │ 0  Publish:                                                             │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Dependencies:                                                        │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000001 │                                  │
+│ │  │   0x0000000000000000000000000000000000000000000000000000000000000002 │                                  │
+│ │  └                                                                      │                                  │
+│ │                                                                         │                                  │
+│ │ 1  TransferObjects:                                                     │                                  │
+│ │  ┌                                                                      │                                  │
+│ │  │ Arguments:                                                           │                                  │
+│ │  │   Result 0                                                           │                                  │
+│ │  │ Address: Input  0                                                    │                                  │
+│ │  └                                                                      │                                  │
+│ ╰─────────────────────────────────────────────────────────────────────────╯                                  │
+│                                                                                                              │
+│ Signatures:                                                                                                  │
+│    apW0zFtk82lNKYEf+mNv8TWpdPC6wYryWsBpl2kmJ8ITvQ+k4d4wyv/da8iokMaqSMAXbhdErbWij6Mek4zOCg==                  │
+│                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Effects                                                                               │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Digest: tUA1oz5rTQZQx1ingaJjTHVCFdX6SiRvqjoDuEpnxbm                                               │
+│ Status: Success                                                                                   │
+│ Executed Epoch: 25                                                                                │
+│                                                                                                   │
+│ Created Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x1ccd2fa8b9a8b0d00b808f502feb532116daa375b81f1eb194e0a5ded7d2d3d1                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 79                                                                                    │
+│  │ Digest: 8TSDS9pKDpJGrAcmA8FpBMuoBogKRnSLEjEyJ3oQPSGR                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681                         │
+│  │ Owner: Immutable                                                                               │
+│  │ Version: 1                                                                                     │
+│  │ Digest: AiHF6whRVGyiZJaeppgnFmSAGGiUWRbkKdenmQdyNo5N                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x28b38328cf78c6fe9c2db450109394855f9fb1390e8b6b7aac03a5fdfa969a7a                         │
+│  │ Owner: Shared( 79 )                                                                            │
+│  │ Version: 79                                                                                    │
+│  │ Digest: 8FU1RKcpjFocw4h4VQrGkakBaoBm5v1A5ENDQoXqgHGw                                           │
+│  └──                                                                                              │
+│  ┌──                                                                                              │
+│  │ ID: 0x5d92d9ceb09149e046d604ac7d6e545d203bc5b9ff7ca857953af9bcd85cc2a2                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 79                                                                                    │
+│  │ Digest: He251PhQ7XC5WGhkYhh6s97xdqAyHTSysu1EXqRYBKrh                                           │
+│  └──                                                                                              │
+│ Mutated Objects:                                                                                  │
+│  ┌──                                                                                              │
+│  │ ID: 0x172a67a79114e2607f06744d50549d0409182240410a1e9c86deccb5cbd654e6                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 79                                                                                    │
+│  │ Digest: 4EKtsrZFmutdYH1TBGhQXoBdmywj1PPAME9h1vNFbhxG                                           │
+│  └──                                                                                              │
+│ Gas Object:                                                                                       │
+│  ┌──                                                                                              │
+│  │ ID: 0x172a67a79114e2607f06744d50549d0409182240410a1e9c86deccb5cbd654e6                         │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ Version: 79                                                                                    │
+│  │ Digest: 4EKtsrZFmutdYH1TBGhQXoBdmywj1PPAME9h1vNFbhxG                                           │
+│  └──                                                                                              │
+│ Gas Cost Summary:                                                                                 │
+│    Storage Cost: 24054000 MIST                                                                    │
+│    Computation Cost: 1000000 MIST                                                                 │
+│    Storage Rebate: 978120 MIST                                                                    │
+│    Non-refundable Storage Fee: 9880 MIST                                                          │
+│                                                                                                   │
+│ Transaction Dependencies:                                                                         │
+│    2Cq5KffR4TtY4CJrYCkjVC4WSw5iyaCx6k2mQsqnePL2                                                   │
+│    4s4YSH2gxtcr5YhGBV4HuDY6EjLawbQDF9ie8bosBpdt                                                   │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────────╮
+│ No transaction block events │
+╰─────────────────────────────╯
+
+╭────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Object Changes                                                                                             │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Created Objects:                                                                                           │
+│  ┌──                                                                                                       │
+│  │ ObjectID: 0x1ccd2fa8b9a8b0d00b808f502feb532116daa375b81f1eb194e0a5ded7d2d3d1                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )           │
+│  │ ObjectType: 0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681::extensions::AdminCap    │
+│  │ Version: 79                                                                                             │
+│  │ Digest: 8TSDS9pKDpJGrAcmA8FpBMuoBogKRnSLEjEyJ3oQPSGR                                                    │
+│  └──                                                                                                       │
+│  ┌──                                                                                                       │
+│  │ ObjectID: 0x28b38328cf78c6fe9c2db450109394855f9fb1390e8b6b7aac03a5fdfa969a7a                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                              │
+│  │ Owner: Shared( 79 )                                                                                     │
+│  │ ObjectType: 0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681::extensions::Extensions  │
+│  │ Version: 79                                                                                             │
+│  │ Digest: 8FU1RKcpjFocw4h4VQrGkakBaoBm5v1A5ENDQoXqgHGw                                                    │
+│  └──                                                                                                       │
+│  ┌──                                                                                                       │
+│  │ ObjectID: 0x5d92d9ceb09149e046d604ac7d6e545d203bc5b9ff7ca857953af9bcd85cc2a2                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )           │
+│  │ ObjectType: 0x2::package::UpgradeCap                                                                    │
+│  │ Version: 79                                                                                             │
+│  │ Digest: He251PhQ7XC5WGhkYhh6s97xdqAyHTSysu1EXqRYBKrh                                                    │
+│  └──                                                                                                       │
+│ Mutated Objects:                                                                                           │
+│  ┌──                                                                                                       │
+│  │ ObjectID: 0x172a67a79114e2607f06744d50549d0409182240410a1e9c86deccb5cbd654e6                            │
+│  │ Sender: 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )           │
+│  │ ObjectType: 0x2::coin::Coin<0x2::sui::SUI>                                                              │
+│  │ Version: 79                                                                                             │
+│  │ Digest: 4EKtsrZFmutdYH1TBGhQXoBdmywj1PPAME9h1vNFbhxG                                                    │
+│  └──                                                                                                       │
+│ Published Objects:                                                                                         │
+│  ┌──                                                                                                       │
+│  │ PackageID: 0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681                           │
+│  │ Version: 1                                                                                              │
+│  │ Digest: AiHF6whRVGyiZJaeppgnFmSAGGiUWRbkKdenmQdyNo5N                                                    │
+│  │ Modules: extensions                                                                                     │
+│  └──                                                                                                       │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Balance Changes                                                                                   │
+├───────────────────────────────────────────────────────────────────────────────────────────────────┤
+│  ┌──                                                                                              │
+│  │ Owner: Account Address ( 0xcb42e748bffa0e11c8524f67634510e47fc7092a9e116429d9930c5e118816cd )  │
+│  │ CoinType: 0x2::sui::SUI                                                                        │
+│  │ Amount: -24075880                                                                              │
+│  └──                                                                                              │
+╰───────────────────────────────────────────────────────────────────────────────────────────────────╯
+[0;32m  AccountExtensions deployed at: 0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681[0m
+  Found AccountActions at /Users/admin/monorepo/contracts/move-framework/packages/actions
+[1;33m  AccountActions needs deployment[0m
+  Deploying AccountActions...
+[Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+Failed to build Move modules: Processing dependency 'AccountExtensions' of 'AccountProtocol'
+
+Caused by:
+    Conflicting assignments for address 'account_extensions': '0xb117d096c2a1e4ca51735e342047ee4d246894bf60af6139095447461968d998' and '0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681'..
+[1;33mChecking futarchy_actions deployment status...[0m
+
+[0;34mDeploying futarchy_one_shot_utils...[0m
+  Resetting addresses to 0x0 in futarchy_one_shot_utils/Move.toml...
+  Building package...
+[0;32m  Build successful[0m
+  Publishing package (this may take a moment)...
+  Verifying deployment on chain...
+[0;32m✓ Successfully deployed futarchy_one_shot_utils at: 0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839[0m
+  Updating futarchy_one_shot_utils address to 0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839
+    Updating reference in futarchy_one_shot_utils/Move.toml
+    Updating reference in futarchy_core/Move.toml
+    Updating reference in futarchy_markets/Move.toml
+    Updating reference in futarchy_vault/Move.toml
+    Updating reference in futarchy_multisig/Move.toml
+    Updating reference in futarchy_specialized_actions/Move.toml
+    Updating reference in futarchy_lifecycle/Move.toml
+    Updating reference in futarchy_actions/Move.toml
+    Updating reference in futarchy_dao/Move.toml
+[0;32m✓ futarchy_one_shot_utils deployed successfully (1/9)[0m
+
+[0;34mDeploying futarchy_core...[0m
+  Resetting addresses to 0x0 in futarchy_core/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_core![0m
+Build errors:
+[0;31m✗ futarchy_core deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_markets...[0m
+  Resetting addresses to 0x0 in futarchy_markets/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_markets![0m
+Build errors:
+[0;31m✗ futarchy_markets deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_vault...[0m
+  Resetting addresses to 0x0 in futarchy_vault/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_vault![0m
+Build errors:
+[0;31m✗ futarchy_vault deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_multisig...[0m
+  Resetting addresses to 0x0 in futarchy_multisig/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_multisig![0m
+Build errors:
+[0;31m✗ futarchy_multisig deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_specialized_actions...[0m
+  Resetting addresses to 0x0 in futarchy_specialized_actions/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_specialized_actions![0m
+Build errors:
+[0;31m✗ futarchy_specialized_actions deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_lifecycle...[0m
+  Resetting addresses to 0x0 in futarchy_lifecycle/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_lifecycle![0m
+Build errors:
+[0;31m✗ futarchy_lifecycle deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_actions...[0m
+  Resetting addresses to 0x0 in futarchy_actions/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_actions![0m
+Build errors:
+[0;31m✗ futarchy_actions deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34mDeploying futarchy_dao...[0m
+  Resetting addresses to 0x0 in futarchy_dao/Move.toml...
+  Building package...
+[0;31mBuild failed for futarchy_dao![0m
+Build errors:
+[0;31m✗ futarchy_dao deployment failed[0m
+[1;33mContinuing with remaining packages...[0m
+
+[0;34m================================================[0m
+[0;34m           Deployment Summary                  [0m
+[0;34m================================================[0m
+[0;32mSuccessfully deployed: 1/9 packages[0m
+[0;31mFailed packages:[0m
+  - futarchy_core
+  - futarchy_markets
+  - futarchy_vault
+  - futarchy_multisig
+  - futarchy_specialized_actions
+  - futarchy_lifecycle
+  - futarchy_actions
+  - futarchy_dao
+
+[0;32mDeployed addresses:[0m
+  futarchy_one_shot_utils: 0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839
+
+[0;34mSaving deployment results to: /Users/admin/monorepo/contracts/deployment_results_20250909_192326.json[0m
+[0;32mResults saved![0m
+
+[0;34mFinal gas balance check:[0m
+Remaining gas: 0 MIST (0 SUI)
+
+[1;33m⚠️  Some packages failed to deploy[0m

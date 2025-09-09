@@ -1,7 +1,7 @@
 /// User-facing API for creating stream-related intents
 /// This module provides helper functions for creating stream actions
 /// The actual intent creation must be done by the governance system that provides the Outcome
-module futarchy_specialized_actions::stream_intents;
+module futarchy_lifecycle::stream_intents;
 
 // === Imports ===
 use std::{
@@ -13,7 +13,7 @@ use account_actions::vault;
 use account_protocol::{
     intents::Intent,
 };
-use futarchy_specialized_actions::stream_actions;
+use futarchy_lifecycle::stream_actions;
 
 // === Witness ===
 

@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "9E90719240482523A3FE5081B11F69D34E05257369E084449AA0CB909E111ED4"
-deps_digest = "59CF4C5FBF9CA9498217B3AC2BED47AD5D49696CE64F735BE1226EDCEF529664"
+manifest_digest = "43A1CCDC77E3375BE38FFAA699E30304282810EBCB80570B8CCAD1E8AFAD0852"
+deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -16,7 +16,6 @@ dependencies = [
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_specialized_actions", name = "futarchy_specialized_actions" },
   { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
@@ -150,25 +149,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "futarchy_specialized_actions"
-source = { local = "../futarchy_specialized_actions" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets", name = "futarchy_markets" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
 id = "futarchy_vault"
 source = { local = "../futarchy_vault" }
 
@@ -194,6 +174,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0x6dd3bd3f18f0db0f099134ddc742f0327108229576565819078b92a146b8653d"
-latest-published-id = "0x6dd3bd3f18f0db0f099134ddc742f0327108229576565819078b92a146b8653d"
+original-published-id = "0x7dc13c609cfdfa40836679b32bc178d59ed35784fe5c5d706e243af4e6000901"
+latest-published-id = "0x7dc13c609cfdfa40836679b32bc178d59ed35784fe5c5d706e243af4e6000901"
 published-version = "1"

@@ -92,6 +92,12 @@ public struct SetRemoveAllowedAction has store {
     allowed: bool,
 }
 
+/// Action to set the entire operating agreement as globally immutable (one-way lock)
+/// This is the ultimate lock - once set, NO changes can be made to the agreement
+public struct SetGlobalImmutableAction has store {
+    // No fields needed - this is a one-way operation to true
+}
+
 /// Batch action for multiple operating agreement changes
 public struct BatchOperatingAgreementAction has store {
     batch_id: ID,  // Unique ID for this batch
@@ -142,6 +148,11 @@ public fun delete_set_insert_allowed(expired: &mut Expired) {
 /// Delete a set remove allowed action from an expired intent
 public fun delete_set_remove_allowed(expired: &mut Expired) {
     let SetRemoveAllowedAction { allowed: _ } = expired.remove_action();
+}
+
+/// Delete a set global immutable action from an expired intent
+public fun delete_set_global_immutable(expired: &mut Expired) {
+    let SetGlobalImmutableAction { } = expired.remove_action();
 }
 
 /// Delete a batch operating agreement action from an expired intent
@@ -197,6 +208,16 @@ public fun new_remove_line<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = new_remove_line_action(line_id);
+    intent.add_action(action, intent_witness);
+}
+
+/// Create a new set global immutable action for intents
+/// WARNING: This is a permanent one-way operation that locks the entire agreement
+public fun new_set_global_immutable<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    intent_witness: IW,
+) {
+    let action = new_set_global_immutable_action();
     intent.add_action(action, intent_witness);
 }
 
@@ -271,6 +292,11 @@ public fun new_set_insert_allowed_action(allowed: bool): SetInsertAllowedAction 
 /// Create a new set remove allowed action
 public fun new_set_remove_allowed_action(allowed: bool): SetRemoveAllowedAction {
     SetRemoveAllowedAction { allowed }
+}
+
+/// Create a new set global immutable action
+public fun new_set_global_immutable_action(): SetGlobalImmutableAction {
+    SetGlobalImmutableAction { }
 }
 
 /// Create a new batch operating agreement action
@@ -390,6 +416,11 @@ public fun get_set_insert_allowed(action: &SetInsertAllowedAction): bool {
 /// Get allowed flag from SetRemoveAllowedAction
 public fun get_set_remove_allowed(action: &SetRemoveAllowedAction): bool {
     action.allowed
+}
+
+/// Get confirmation that SetGlobalImmutableAction exists (no params to return)
+public fun confirm_set_global_immutable(_action: &SetGlobalImmutableAction): bool {
+    true
 }
 
 /// Get actions from BatchOperatingAgreementAction

@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "10C7CA81B364AD61A1CC9C253E93D913136B62C9E32C7BDB5EF748084E92B1AC"
-deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
+manifest_digest = "802B4EDEAD227CDA509EF0796848B57F6B686FFD787394A887590D5C819CCBEE"
+deps_digest = "59CF4C5FBF9CA9498217B3AC2BED47AD5D49696CE64F735BE1226EDCEF529664"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -13,6 +13,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
@@ -109,6 +110,25 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "futarchy_lifecycle"
+source = { local = "../futarchy_lifecycle" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
 id = "futarchy_markets"
 source = { local = "../futarchy_markets" }
 
@@ -174,6 +194,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0xc94a5b1566151aca1e9506b183a220a5912e8cd33d6ba8daf4961aae54834d12"
-latest-published-id = "0xc94a5b1566151aca1e9506b183a220a5912e8cd33d6ba8daf4961aae54834d12"
+original-published-id = "0x5c1efbbef09433743ffc879e1afff6704393749c5e5fc205bbdaccaf67739563"
+latest-published-id = "0x5c1efbbef09433743ffc879e1afff6704393749c5e5fc205bbdaccaf67739563"
 published-version = "1"

@@ -7,7 +7,7 @@ use std::option::{Self, Option};
 use sui::coin::TreasuryCap;
 use sui::clock::Clock;
 use sui::tx_context::TxContext;
-use futarchy_specialized_actions::{
+use futarchy_lifecycle::{
     oracle_actions::{Self, TieredMintAction, PriceTier, RecipientMint},
 };
 

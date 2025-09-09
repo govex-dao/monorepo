@@ -46,7 +46,7 @@ These oracles are crucial for lending protocols, derivatives, stablecoins, and g
 Research has focused on enhancing TWAP security:
 \begin{itemize}
     \item \textbf{Median-Based Oracles:} Using the median price instead of the mean offers strong resistance to outliers, as an attacker must control over 50\% of observations in a window to significantly skew the median. Implementations like Euler Finance's Time-Weighted Median Price using a ring buffer and novel algorithms like Ormer, which uses a piecewise-parabolic formula to estimate the median with constant storage, have been proposed. \cite{omer} However, on-chain medians can be storage-intensive or computationally complex if not carefully designed. For markets with infrequent trades, such as governance markets where trades might average 150-second gaps, a simple median of recent trades might not be representative or fair if the window captures too few distinct price points \cite{trades}.
-    \item \textbf{Winsorized/Truncated Oracles:} These methods "cap" or "trim" extreme price movements. For instance, Uniswap V4's truncated oracle hook limits the maximum price change recorded by the oracle in a single block. This forces attackers to sustain manipulation over more blocks, increasing costs. Defining caps based on larger window parameters, rather than solely on per-observation limits, can allow for greater precision and robustness in the cap value, especially in high-frequency environments where individual block/checkpoint times (e.g., Sui's ~220ms checkpoints, Solana's ~400ms blocks \cite{suicheckpoints, solblocks}) might be too granular for stable cap setting.
+    \item \textbf{Winsorized/Truncated Oracles:} These methods "cap" or "trim" extreme price movements. For instance, Uniswap V4's truncated oracle hook limits the maximum price change recorded by the oracle in a single block \cite{uniswapv4}. This forces attackers to sustain manipulation over more blocks, increasing costs. Defining caps based on larger window parameters, rather than solely on per-observation limits, can allow for greater precision and robustness in the cap value, especially in high-frequency environments where individual block/checkpoint times (e.g., Sui's ~250ms checkpoints with ~400ms finality \cite{suiblog}, Solana's ~400ms blocks \cite{solblocks}) might be too granular for stable cap setting.
     \item \textbf{Zero-Knowledge (ZK) Proofs:} ZK-Median oracles propose computing medians or other complex statistics off-chain and verifying them on-chain with a ZK proof, reducing on-chain computational load. This is promising but still experimental and may introduce latency.
 \end{itemize}
 
@@ -195,22 +195,22 @@ Both bots and humans can be expected to want to move the TWAP accumulation price
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{step-twap.png}
-    \caption{Retrospective TWAP step cap adjustment produces a more accurate TWAP. Line 2 shows the naive TWAP approach, where the step can only increase by the cap once per observation. Line 4 shows a TWAP step cap that can retrospectively increase once per window, regardless of new state updates. This \$1 gap in TWAP accumulation would continue indefinitely past window 3, until the next state update. This model uses a TWAP step cap of \$1 per window.}
+    \caption{Retrospective TWAP step cap adjustment produces a more accurate TWAP. Line 2 shows the naive TWAP approach, where the step can only increase by the cap once per observation. Line 4 shows a TWAP step cap that can retrospectively increase once per window, regardless of new state updates. This gap in TWAP accumulation would continue indefinitely past window 3, until the next state update. This model uses a percentage-based TWAP step cap per window.}
     \label{fig:enter-label}
 \end{figure}
 
 \subsection{Intra-step TWAP}
-This method ensures removes race conditions for being the first to land a transaction in a new window. Race conditions lead to MEV opportunities and capital extraction from traders. This new method also allows the TWAP to respond more quickly to changes in price while maintaining the TWAP step cap precision benefits that a large window offers.
+This method removes race conditions for being the first to land a transaction in a new window. Race conditions lead to MEV opportunities and capital extraction from traders. This new method also allows the TWAP to respond more quickly to changes in price while maintaining the TWAP step cap precision benefits that a large window offers.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\linewidth]{intra-twap.png}
-    \caption{Intra-step TWAP calculation for the previous TWAP base produces a more accurate TWAP. Line 2 shows that the naive TWAP approach has a delay when intra-window price changes occur. It can only update in the next window. Line 4 shows that when a price change occurs, the optimized approach responds immediately while still obeying the TWAP per window max accumulation change cap. The gap in accuracy propagates into the window 1 - 2, where the optimized approach is \$0.5 closer to the raw price. This model uses a TWAP step cap of \$1 per window.}
+    \caption{Intra-step TWAP calculation for the previous TWAP base produces a more accurate TWAP. Line 2 shows that the naive TWAP approach has a delay when intra-window price changes occur. It can only update in the next window. Line 4 shows that when a price change occurs, the optimized approach responds immediately while still obeying the TWAP per window max accumulation change cap. The gap in accuracy propagates into the window 1 - 2, where the optimized approach is closer to the raw price. This model uses a percentage-based TWAP step cap per window.}
     \label{fig:enter-label}
 \end{figure}
 
-\section{Future work}
-The TWAPs proposed in this paper require an initial TWAP observation and a max TWAP step configs. Future investigation into whether the max TWAP step config can be derived as a fixed percent of the initial TWAP observation may be worthwhile to simplify the total number of configs required. Additionally, for governance markets that run  regularly and have a short duration, deriving the initial TWAP observation from the last market's TWAP may make the TWAP more responsive to longer term price movements.
+\section{Future Work}
+The TWAPs proposed in this paper require an initial TWAP observation and a max TWAP step configuration. We have implemented the cap as a percentage of the initial observation to maintain scale invariance across different asset prices. Future investigation into dynamically adjusting this percentage based on realized volatility may further improve manipulation resistance. Additionally, for governance markets that run regularly and have a short duration, deriving the initial TWAP observation from the last market's TWAP may make the TWAP more responsive to longer-term price movements.
 
 \nocite{*}                % optional: list all entries
 \bibliographystyle{unsrt}% choose a style you like

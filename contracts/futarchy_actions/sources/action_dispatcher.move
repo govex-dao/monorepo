@@ -42,13 +42,13 @@ use futarchy_actions::{
     governance_actions::{Self, ProposalReservationRegistry},
 };
 use futarchy_specialized_actions::{
-    oracle_actions,
     operating_agreement_dispatcher,
-    stream_dispatcher,
 };
 use futarchy_lifecycle::{
     factory::Factory,
     dissolution_dispatcher,
+    oracle_actions,
+    stream_dispatcher,
 };
 use futarchy_markets::fee::{FeeManager};
 

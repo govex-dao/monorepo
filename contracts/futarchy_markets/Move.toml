@@ -7,5 +7,6 @@ license = "BSL"
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 
 [addresses]
-futarchy_markets = "0x74c9197404cf38d669b6e9526bd185c1ebbebbacecbd34208bbf8b682bfae86c"
-futarchy_one_shot_utils = "0x1d4aafac4b1843e882ed500c15b0db3678b2544930bc6eb8435f5fe0b896d01e"
+futarchy_markets = "0x18cf78cdcc08eeb8abeb4b8bf038c5f33352986fb9c4fe168e2647c1851546e9"
+futarchy_one_shot_utils = "0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839"
+futarchy_core = "0x516f4a3b32bc43213229e2c7327dcaba83251328fdcf116bbaa0382a496184d2"

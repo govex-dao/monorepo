@@ -2,13 +2,14 @@
 
 [move]
 version = 3
-manifest_digest = "324B1C63443E14EC5953942E4E907A07A659D71A658636FA6051D66A8CD0ADE0"
-deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
+manifest_digest = "63008CC69AE7ABD0D316514B2969A6482EDD07F54D7EA6B6288297D0F07F806D"
+deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
+  { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -148,7 +149,6 @@ dependencies = [
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_specialized_actions", name = "futarchy_specialized_actions" },
   { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
@@ -205,6 +205,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
@@ -237,6 +238,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0x532b16e3702c6f5a7517e86bcfef8e6473bf22bf26732e0cff38dbe6a58b2162"
-latest-published-id = "0x532b16e3702c6f5a7517e86bcfef8e6473bf22bf26732e0cff38dbe6a58b2162"
+original-published-id = "0xf0b7fd9eb8cb4b1037f23f7e6908b1192540942c3449645ce4a1f79106e21881"
+latest-published-id = "0xf0b7fd9eb8cb4b1037f23f7e6908b1192540942c3449645ce4a1f79106e21881"
 published-version = "1"

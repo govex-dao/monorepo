@@ -7,7 +7,7 @@
 /// - Source modes: Direct treasury or isolated pool funding
 /// - Cliff periods for vesting schedules
 /// - Cancellable and pausable payments
-module futarchy_specialized_actions::stream_actions;
+module futarchy_lifecycle::stream_actions;
 
 // === Imports ===
 use std::{

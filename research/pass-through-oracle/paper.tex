@@ -1,0 +1,208 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{hyperref}
+
+\title{Pass-Through Oracles: Continuous Price Discovery in State-Transitioning AMMs}
+\author{Greshams Code\\Govex.ai}
+\date{September 2025}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present pass-through oracles, a mechanism for maintaining price continuity in AMMs that transition between discrete states. When liquidity migrates from spot to conditional markets, traditional oracles exhibit discontinuities. Our solution: the spot oracle becomes a transparent proxy, reading from conditional oracles during proposals and retroactively filling gaps post-finalization. This achieves $C^0$ continuity across state transitions with $O(1)$ storage overhead.
+\end{abstract}
+
+\section{Problem Formulation}
+
+Let $\mathcal{S} = \{s_0, s_1, ..., s_n\}$ be system states where $s_0$ represents spot trading and $s_i$ for $i > 0$ represents conditional trading for outcome $i$.
+
+\textbf{Time notation:}
+\begin{itemize}
+\item $t_{start}$: Time when proposal starts (liquidity migrates to conditional markets)
+\item $t_{end}$: Time when proposal ends (liquidity returns to spot)
+\item $t_{init}$: Time when oracle was initialized
+\item $t_{last}$: Time of last observation/update
+\item $\tau$: Query time (current time when TWAP is requested)
+\item $\Delta t$: Discrete time step between observations
+\end{itemize}
+
+\textbf{Price notation:}
+\begin{itemize}
+\item $P(k)$: Spot price at discrete time $k$
+\item $P_{conditional}(k)$: Conditional price at time $k$
+\item $P_{last}$: Last observed price
+\item $C_{spot}(t)$: Cumulative spot price up to time $t$
+\item $C_{combined}$: Combined cumulative price during proposal
+\item $W$: TWAP window duration
+\item $W_{eff}$: Effective window (accounting for initialization time)
+\end{itemize}
+
+Define oracle function:
+$$O_t: \mathcal{S} \times [0, \infty) \to \mathbb{R}^+$$
+
+where $O_t(s, \tau)$ returns TWAP at time $\tau$ for state $s$.
+
+\textbf{Discontinuity Problem:} At state transition $t_{trans}$:
+$$\lim_{\tau \to t_{trans}^-} O_t(s_0, \tau) \neq \lim_{\tau \to t_{trans}^+} O_t(s_i, \tau)$$
+
+\section{Pass-Through Mechanism}
+
+\subsection{State-Dependent Oracle}
+
+Define pass-through oracle $\hat{O}_t$ as:
+
+$$\hat{O}_t(\tau) = \begin{cases}
+O_t(s_0, \tau) & \text{if } \tau < t_{start} \\
+O_t(s_{w(\tau)}, \tau) & \text{if } t_{start} \leq \tau < t_{end} \\
+O_t(s_0, \tau) & \text{if } \tau \geq t_{end}
+\end{cases}$$
+
+where $w(\tau)$ returns winning outcome at time $\tau$ (highest conditional price).
+
+\subsection{Retroactive Gap Filling}
+
+Upon finalization at $t_{end}$, update spot oracle's cumulative price:
+
+$$C_{s_0}(t_{end}) = C_{s_0}(t_{start}) + \sum_{k=t_{start}}^{t_{end}-1} P_{s_w}(k) \cdot \Delta t$$
+
+where $P_{s_w}(k)$ is the price from winning conditional AMM at discrete time $k$, and $\Delta t$ is the time step.
+
+\subsection{Window Management}
+
+For rolling window of duration $W$, the effective TWAP at time $\tau$:
+
+$$\text{TWAP}(\tau) = \frac{1}{W_{eff}} \sum_{k=\max(\tau - W, t_{init})}^{\tau-1} P(k) \cdot \Delta t$$
+
+where $W_{eff} = \min(W, \tau - t_{init})$.
+
+During proposal ($t_{start} \leq \tau < t_{end}$):
+
+$$\text{TWAP}(\tau) = \frac{C_{spot}(t_{start}) + \sum_{k=t_{start}}^{\tau-1} P_{conditional}(k) \cdot \Delta t}{W_{eff}}$$
+
+\subsection{Implementation}
+
+\begin{algorithm}
+\caption{Pass-Through Oracle Read}
+\begin{algorithmic}
+\STATE \textbf{function} GetTWAP($\tau$: query time, $winning\_conditional$: ID of leading conditional)
+\IF{proposal\_active \AND $winning\_conditional \neq \emptyset$}
+    \STATE $n_{steps} \gets \lfloor(\tau - t_{start}) / \Delta t\rfloor$
+    \STATE $C_{combined} \gets C_{spot}(t_{start}) + P_{conditional} \cdot n_{steps} \cdot \Delta t$
+    \STATE $W_{eff} \gets \min(W, \tau - t_{init})$
+    \RETURN $C_{combined} / W_{eff}$
+\ELSE
+    \STATE $n_{steps} \gets \lfloor(\tau - t_{last}) / \Delta t\rfloor$
+    \STATE $C_{projected} \gets C_{spot}(t_{last}) + P_{last} \cdot n_{steps} \cdot \Delta t$
+    \STATE $W_{eff} \gets \min(W, \tau - t_{init})$
+    \RETURN $C_{projected} / W_{eff}$
+\ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\section{Dual Oracle Architecture}
+
+We employ two complementary oracles:
+
+\subsection{Write-Through TWAP (Governance)}
+From \cite{twap2025}, with retroactive step adjustments:
+$$P'_i = B + \text{sign}(P-B) \cdot \min(i \cdot \Delta_M, |P-B|)$$
+
+Requires mutation before read, preventing stale prices.
+
+\subsection{Ring Buffer Oracle (External)}
+Adapted from Uniswap V3 \cite{uniswapv3}:
+
+\begin{algorithm}
+\caption{Ring Buffer Write}
+\begin{algorithmic}
+\STATE $idx \gets (current + 1) \mod capacity$
+\STATE $observations[idx] \gets \{timestamp, cumulative, price\}$
+\STATE $current \gets idx$
+\end{algorithmic}
+\end{algorithm}
+
+Key adaptation: \texttt{merge\_observations()} for seamless history integration:
+
+$$O_{merged} = O_{spot} \cup \{o \in O_{conditional} : t_{start} \leq o.t \leq t_{end}\}$$
+
+\section{Properties}
+
+\subsection{Continuity}
+\begin{theorem}
+The pass-through oracle maintains $C^0$ continuity:
+$$\forall t: \lim_{\tau \to t^-} \hat{O}_t(\tau) = \lim_{\tau \to t^+} \hat{O}_t(\tau)$$
+\end{theorem}
+
+\begin{proof}
+At $t_{start}$: Both oracles initialized from same spot price $P_0$, so:
+$$\lim_{\tau \to t_{start}^-} \hat{O}_t(\tau) = P_0 = \lim_{\tau \to t_{start}^+} \hat{O}_t(\tau)$$
+
+At $t_{end}$: Gap-filling ensures:
+$$C_{spot}(t_{end}^+) = C_{spot}(t_{start}) + \sum_{k=t_{start}}^{t_{end}-1} P_{conditional}(k) \cdot \Delta t$$
+
+Thus: $\lim_{\tau \to t_{end}^-} \hat{O}_t(\tau) = \lim_{\tau \to t_{end}^+} \hat{O}_t(\tau)$
+
+During proposal: Direct read from conditional ensures no jumps.
+\end{proof}
+
+\subsection{Manipulation Resistance}
+Cost to manipulate by $\delta$:
+$$C_{manip} = \sum_{i=1}^{n} \frac{L_i \cdot \delta^2}{2(1-\delta)}$$
+
+where $L_i$ is liquidity in window $i$.
+
+Pass-through preserves this property as manipulation must occur in active oracle.
+
+\subsection{Winning Outcome Selection}
+
+The winning outcome $w(\tau)$ at time $\tau$ is determined by:
+
+$$w(\tau) = \arg\max_{i \in \{1,...,n\}} P_i(\tau)$$
+
+where $P_i(\tau)$ is the spot price in conditional AMM $i$.
+
+For binary outcomes with equal initial liquidity:
+$$P_{pass} + P_{fail} = 1$$
+
+The higher price indicates market's preferred outcome.
+
+\subsection{Storage Complexity}
+\begin{itemize}
+\item Spot oracle: $O(1)$ cumulative + $O(k)$ segments
+\item Ring buffer: $O(n)$ observations where $n = 1440$ (24 hours)
+\item Total: $O(n + k)$ where $k \ll n$ typically
+\end{itemize}
+
+\section{Comparison}
+
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Property} & \textbf{Naive} & \textbf{Checkpoint} & \textbf{Pass-Through} \\
+\hline
+Continuity & No & Discrete & Yes ($C^0$) \\
+Storage & $O(1)$ & $O(m)$ & $O(n)$ \\
+Write Cost & $O(1)$ & $O(m)$ & $O(1)$ \\
+Manipulation Cost & Low & Medium & High \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Conclusion}
+
+Pass-through oracles solve the discontinuity problem in state-transitioning AMMs through transparent proxying and retroactive gap-filling. The mechanism maintains continuity with minimal overhead while preserving manipulation resistance. The dual-oracle architecture separates concerns: governance uses write-through TWAPs for security, while external protocols use ring buffers for standard interfaces.
+
+\begin{thebibliography}{9}
+\bibitem{twap2025}
+Greshams Code. Novel Methods for Manipulation-Resistant TWAPs in the High-Frequency Compute-Limited Discrete Regime. 2025.
+
+\bibitem{uniswapv3}
+Adams et al. Uniswap v3 Core. 2021.
+\end{thebibliography}
+
+\end{document}
