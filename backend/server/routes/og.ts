@@ -1,29 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../db';
-import { Resvg } from '@resvg/resvg-js';
-import { generateDaoSvg, generateProposalOG, generateGeneralOG, FONT_FAMILY, CACHE_DURATION, calculateVolumeInUSDC } from '../../utils/dynamic-image';
+import { generateDaoSvg, generateProposalOG, generateGeneralOG, calculateVolumeInUSDC, renderSvgToPng, sendPngResponse, sendErrorResponse, loadCachedImage } from '../../utils/dynamic-image';
 import { validateId, logSecurityError } from '../../utils/security';
 import path from 'path';
 import fs from 'fs/promises';
 
 const router = Router();
-
-// Helper Functions
-function renderSvgToPng(svg: string, options = {}) {
-  const resvg = new Resvg(svg, { font: FONT_FAMILY, ...options });
-  return resvg.render().asPng();
-}
-
-function sendPngResponse(res: Response, png: Buffer, cacheControl: string = CACHE_DURATION.image) {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', cacheControl);
-  res.send(png);
-}
-
-function sendErrorResponse(res: Response, error: any, message = 'Internal server error') {
-  console.error(message, error);
-  res.status(500).json({ error: message });
-}
 
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
@@ -43,7 +25,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
         dao_name: true,
         description: true,
         icon_url: true,
-        icon_cache_large: true, // Use 512x512 cached image
+        icon_cache_large: true,
         asset_symbol: true,
         stable_symbol: true,
         verification: {
@@ -80,16 +62,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
     }
 
     // ONLY use cached image - no fallback to external URLs
-    let daoImage = null;
-    if (dao.icon_cache_large) {
-      try {
-        const imagePath = path.join(process.cwd(), 'public', dao.icon_cache_large.substring(1));
-        const imageBuffer = await fs.readFile(imagePath);
-        daoImage = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-      } catch (err) {
-        logSecurityError('readCachedImage', err);
-      }
-    }
+    const daoImage = dao.icon_cache_large ? await loadCachedImage(dao.icon_cache_large) : null;
 
     const svg = generateDaoSvg({
       name: dao.dao_name,
@@ -99,12 +72,9 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
       hasLiveProposal: dao.proposals.some(proposal => (proposal.current_state || 0) === 0),
       isVerified: dao.verification?.verified ?? false
     });
-    const resvg = new Resvg(svg);
-    const png = resvg.render().asPng();
-
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=900'); // Cache for 15 minutes
-    res.send(png);
+  
+    const png = renderSvgToPng(svg);
+    sendPngResponse(res, png);
 
   } catch (error) {
     logSecurityError('generateDaoOG', error);
@@ -184,7 +154,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
           select: {
             dao_name: true,
             icon_url: true,
-            icon_cache_large: true // Use 512x512 cached image
+            icon_cache_path: true
           }
         }
       }
@@ -228,7 +198,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         event.amount_in.toString(),
         event.amount_out.toString(),
         event.is_buy,
-        1e9 // USDC scale
+        1e6 // USDC scale
       );
     }, 0);
 
@@ -240,7 +210,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         title: proposal.title,
         details: proposal.details,
         dao_name: proposal.dao?.dao_name || "DAO",
-        dao_icon_url: proposal.dao?.icon_url,
+        dao_icon_url: proposal.dao?.icon_cache_path,
         current_state: proposal.current_state || 0,
         winning_outcome: Number(proposal.result?.winning_outcome) || 0,
         outcome_messages: outcomeMessages,
@@ -257,7 +227,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       title: proposal.title,
       description: proposal.details || "",
       daoName: proposal.dao?.dao_name || "DAO",
-      daoLogo: proposal.dao?.icon_cache_large || proposal.dao?.icon_url || "placeholder",
+      daoLogo: proposal.dao?.icon_cache_path || "placeholder",
       currentState: proposal.current_state || 0,
       winningOutcome: Number(proposal.result?.winning_outcome) || 0,
       outcomeMessages,
@@ -268,13 +238,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       tradingPeriodMs: Number(proposal.trading_period_ms)
     });
 
-    const resvg = new Resvg(svg);
-    const png = resvg.render().asPng();
-
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=900'); // Cache for 15 minutes
-    res.send(png);
-
+    const png = renderSvgToPng(svg);
+    sendPngResponse(res, png);
   } catch (error) {
     logSecurityError('generateProposalOG', error);
     res.status(500).json({ error: 'Failed to generate image' });
@@ -285,12 +250,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
 router.get('/general', async (_req: Request, res: Response) => {
   try {
     const svg = await generateGeneralOG();
-    const resvg = new Resvg(svg);
-    const png = resvg.render().asPng();
-
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=604800'); // Cache for 7 days since it's static
-    res.send(png);
+    const png = renderSvgToPng(svg);
+    sendPngResponse(res, png);
   } catch (error) {
     logSecurityError('generateGeneralOG', error);
     res.status(500).json({ error: 'Failed to generate image' });
