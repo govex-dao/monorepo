@@ -32,6 +32,8 @@ const EInvalidThreshold: u64 = 4;
 const EDissolutionNotActive: u64 = 5;
 const ENotDissolving: u64 = 6;
 const EInvalidAmount: u64 = 7;
+const EDivisionByZero: u64 = 8;
+const EOverflow: u64 = 9;
 
 // === Action Structs ===
 
@@ -280,7 +282,7 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     // 3. Calculate each holder's percentage of the adjusted total
     // 4. Store these percentages for use in distribution actions
     
-    assert!(total_supply > 0, EInvalidRatio);
+    assert!(total_supply > 0, EDivisionByZero);
     
     // The actual calculation would be done when creating DistributeAssetsAction
     // This action mainly validates and prepares for distribution
@@ -418,7 +420,8 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
         total_held = total_held + *holder_amounts.borrow(i);
         i = i + 1;
     };
-    assert!(total_held > 0, EInvalidRatio);
+    // Prevent division by zero in pro rata calculations
+    assert!(total_held > 0, EDivisionByZero);
     
     // Distribute assets pro rata to each holder
     let mut j = 0;
@@ -427,8 +430,10 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
         let holder = *holders.borrow(j);
         let holder_amount = *holder_amounts.borrow(j);
         
-        // Calculate pro rata share
+        // Calculate pro rata share with overflow protection
         let share = (holder_amount as u128) * (total_distribution_amount as u128) / (total_held as u128);
+        // Check that the result fits in u64
+        assert!(share <= (std::u64::max_value!() as u128), EOverflow);
         let mut share_amount = (share as u64);
         
         // Last recipient gets the remainder to handle rounding

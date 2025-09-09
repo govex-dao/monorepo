@@ -128,6 +128,7 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
         dao,
         intent_key,
         generic_approval,
+        clock,
         ctx
     );
     

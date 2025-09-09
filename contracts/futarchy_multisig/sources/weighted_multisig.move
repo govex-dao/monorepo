@@ -51,9 +51,9 @@ public struct Approvals has store, drop, copy {
 
 // === Public Functions ===
 
-/// Create a new weighted multisig configuration.
-/// Note: Clock parameter added to initialize last_activity_ms properly
-public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): WeightedMultisig {
+/// Create a new weighted multisig configuration with current time from clock.
+/// Properly initializes the dead-man switch tracking.
+public fun new(members: vector<address>, weights: vector<u64>, threshold: u64, clock: &Clock): WeightedMultisig {
     assert!(members.length() == weights.length(), EInvalidArguments);
     assert!(members.length() > 0, EEmptyMemberList);
     assert!(threshold > 0, EInvalidArguments); // Check threshold early
@@ -61,16 +61,14 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): 
     let mut member_map = vec_map::empty();
     let mut total_weight = 0u64;
     let mut max_individual_weight = 0u64;
-    let mut seen_members = vec_set::empty<address>();
 
     let mut i = 0;
     while (i < members.length()) {
         let member = *vector::borrow(&members, i);
         let weight = *vector::borrow(&weights, i);
         
-        // Check for duplicate members
-        assert!(!seen_members.contains(&member), EDuplicateMember);
-        seen_members.insert(member);
+        // Check for duplicate members using vec_map's contains
+        assert!(!member_map.contains(&member), EDuplicateMember);
         
         // Validate weight bounds
         assert!(weight > 0, EInvalidArguments);
@@ -94,22 +92,10 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64): 
     // Optional: warn if no single member can meet threshold (may be intentional)
     // This is a valid configuration for requiring multiple signers
     
-    // Initialize with 0 - will be set on first activity or creation with clock
-    // This is safe as dead-man switch checks require explicit time periods
-    WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: 0 }
+    // Initialize with current timestamp for proper dead-man switch tracking
+    WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: clock.timestamp_ms() }
 }
 
-/// Create a new weighted multisig configuration with current timestamp.
-public fun new_with_clock(
-    members: vector<address>, 
-    weights: vector<u64>, 
-    threshold: u64,
-    clock: &Clock
-): WeightedMultisig {
-    let mut config = new(members, weights, threshold);
-    config.last_activity_ms = clock.timestamp_ms();
-    config
-}
 
 /// Create a fresh, empty Approvals outcome for a new intent.
 public fun new_approvals(_config: &WeightedMultisig): Approvals {
@@ -141,7 +127,7 @@ public fun validate_outcome(
     while (i < approvers_vector.length()) {
         let approver = *vector::borrow(&approvers_vector, i);
         let weight = *config.members.get(&approver);
-        // Overflow protection (should never happen with MAX_MEMBER_WEIGHT but be safe)
+        // Check for overflow BEFORE addition
         assert!(current_weight <= MAX_TOTAL_WEIGHT - weight, EWeightOverflow);
         current_weight = current_weight + weight;
         i = i + 1;
@@ -183,16 +169,14 @@ public fun update_membership(
     
     let mut new_member_map = vec_map::empty();
     let mut new_total_weight = 0u64;
-    let mut seen_members = vec_set::empty<address>();
     
     let mut i = 0;
     while (i < new_members.length()) {
         let member = *vector::borrow(&new_members, i);
         let weight = *vector::borrow(&new_weights, i);
         
-        // Check for duplicate members
-        assert!(!seen_members.contains(&member), EDuplicateMember);
-        seen_members.insert(member);
+        // Check for duplicate members using vec_map's contains
+        assert!(!new_member_map.contains(&member), EDuplicateMember);
         
         // Validate weight bounds
         assert!(weight > 0, EInvalidArguments);

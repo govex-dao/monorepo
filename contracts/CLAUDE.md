@@ -1,5 +1,9 @@
 # Futarchy Contracts Deployment Guide
 
+## Sui Security Model
+
+**Important Note**: Sui's execution model is atomic and does not have reentrancy risks like Ethereum. Race conditions are also unlikely due to Sui's object-centric model and transaction ordering guarantees. When you see defensive programming patterns in this codebase (like atomic check-and-delete patterns), they are primarily for code clarity and best practices rather than addressing actual race condition risks that would exist in other blockchain environments.
+
 ## Quick Start
 
 ```bash

@@ -501,11 +501,11 @@ public(package) fun assert_is_config_module<Config, CW: drop>(
     _account: &Account<Config>, 
     _config_witness: CW
 ) {
-    let account_type = type_name::get<Config>();
-    let witness_type = type_name::get<CW>();
+    let account_type = type_name::with_defining_ids<Config>();
+    let witness_type = type_name::with_defining_ids<CW>();
     assert!(
-        account_type.get_address() == witness_type.get_address() &&
-        account_type.get_module() == witness_type.get_module(),
+        account_type.address_string() == witness_type.address_string() &&
+        account_type.module_string() == witness_type.module_string(),
         ENotCalledFromConfigModule
     );
 }
@@ -791,7 +791,7 @@ fun test_metadata_access() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     
     // Should not abort - just testing access
-    assert_eq(metadata(&account).size(), 0);
+    assert_eq(metadata(&account).length(), 0);
     destroy(account);
 }
 

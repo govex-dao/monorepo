@@ -7,7 +7,6 @@ authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 [dependencies]
 AccountProtocol = { local = "../protocol" }
 Kiosk = { local = "../../deps/kiosk" }
-
 [addresses]
 account_actions = "0xe70b48716e3e452f055ea38549c4381b6eeb175784364caa09b030e5b2f55714"
 account_protocol = "0x128f93d1ad6977fa168c0877160da2f3bbe82a0aa44ee92d65a09d05a2758d50"

@@ -115,6 +115,7 @@ public fun execute_remove_policy_with_council<FutarchyOutcome: store + drop + co
         dao,
         intent_key,
         generic_approval,
+        clock,
         ctx
     );
     
@@ -196,6 +197,7 @@ public fun execute_set_policy_with_council<FutarchyOutcome: store + drop + copy>
         dao,
         intent_key,
         generic_approval,
+        clock,
         ctx
     );
     

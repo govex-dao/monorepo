@@ -10,12 +10,11 @@ AccountExtensions = { local = "../move-framework/packages/extensions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets = { local = "../futarchy_markets" }
-
 [addresses]
-futarchy_vault = "0xa3f436ab481645f0f27bb608d0c3ed7b7c2ced8e07aa54531290ae832d97edd7"
-futarchy_one_shot_utils = "0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839"
-futarchy_core = "0x516f4a3b32bc43213229e2c7327dcaba83251328fdcf116bbaa0382a496184d2"
-futarchy_markets = "0x18cf78cdcc08eeb8abeb4b8bf038c5f33352986fb9c4fe168e2647c1851546e9"
+futarchy_vault = "0x68d1b15355f7ac42fd74916610b277ea7670e3a998e5b445a9eb8adf7cd33311"
+futarchy_one_shot_utils = "0xb129c7808c0986908dc0cc8fecacab315440ef0a8fb4c37f5497b701ddf4ce0f"
+futarchy_core = "0xf9d01bdd32483246ad29f4874003529f3e273499ec3f36a3e168d0cf2cf333a8"
+futarchy_markets = "0x777643fab37bf9c483b4c3a0ff5d0518a536ea501fe64583cc132a7751bfef33"
 account_protocol = "0x128f93d1ad6977fa168c0877160da2f3bbe82a0aa44ee92d65a09d05a2758d50"
 account_extensions = "0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681"
 account_actions = "0xe70b48716e3e452f055ea38549c4381b6eeb175784364caa09b030e5b2f55714"

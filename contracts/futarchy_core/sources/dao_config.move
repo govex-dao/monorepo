@@ -22,6 +22,7 @@ const EInvalidGracePeriod: u64 = 8; // Grace period too short
 const EInvalidMaxConcurrentProposals: u64 = 9; // Max concurrent proposals must be positive
 const EMaxOutcomesExceedsProtocol: u64 = 10; // Max outcomes exceeds protocol limit
 const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limit
+const EStateInconsistent: u64 = 12; // State would become inconsistent with this change
 
 // === Constants ===
 // Most constants are now in futarchy_utils::constants
@@ -282,6 +283,52 @@ public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_dea
 
 // === Update Functions ===
 
+// === State Validation Functions ===
+
+/// Check if a config update would cause state inconsistency
+/// Returns true if the update is safe, false otherwise
+public fun validate_config_update(
+    current_config: &DaoConfig,
+    new_config: &DaoConfig,
+    active_proposals: u64,
+): bool {
+    let current_gov = governance_config(current_config);
+    let new_gov = governance_config(new_config);
+    
+    // Check 1: Can't reduce max_concurrent_proposals below active count
+    if (max_concurrent_proposals(new_gov) < active_proposals) {
+        return false
+    };
+    
+    // Check 2: Can't reduce max_outcomes below what existing proposals might have
+    // This is a conservative check - in production you'd check actual proposals
+    if (max_outcomes(new_gov) < max_outcomes(current_gov)) {
+        if (active_proposals > 0) {
+            return false  // Unsafe to reduce when proposals are active
+        }
+    };
+    
+    // Check 3: Can't reduce max_actions_per_outcome if proposals are active
+    if (max_actions_per_outcome(new_gov) < max_actions_per_outcome(current_gov)) {
+        if (active_proposals > 0) {
+            return false  // Unsafe to reduce when proposals are active
+        }
+    };
+    
+    // Check 4: Grace periods can't be reduced to zero
+    if (eviction_grace_period_ms(new_gov) == 0) {
+        return false
+    };
+    
+    // Check 5: Trading periods must be reasonable
+    let new_trading = trading_params(new_config);
+    if (review_period_ms(new_trading) == 0 || trading_period_ms(new_trading) == 0) {
+        return false
+    };
+    
+    true
+}
+
 // === Direct Field Setters (Package-level) ===
 // These functions provide efficient in-place field updates without struct copying
 
@@ -336,11 +383,13 @@ public(package) fun set_threshold(twap: &mut TwapConfig, threshold: u64) {
 public(package) fun set_max_outcomes(gov: &mut GovernanceConfig, max: u64) {
     assert!(max >= constants::min_outcomes(), EInvalidMaxOutcomes);
     assert!(max <= constants::protocol_max_outcomes(), EMaxOutcomesExceedsProtocol);
+    // Note: Caller must ensure no active proposals exceed this limit
     gov.max_outcomes = max;
 }
 
 public(package) fun set_max_actions_per_outcome(gov: &mut GovernanceConfig, max: u64) {
     assert!(max > 0 && max <= constants::protocol_max_actions_per_outcome(), EMaxActionsExceedsProtocol);
+    // Note: Caller must ensure no active proposals exceed this limit
     gov.max_actions_per_outcome = max;
 }
 
@@ -366,6 +415,7 @@ public(package) fun set_optimistic_challenge_period_ms(gov: &mut GovernanceConfi
 
 public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max: u64) {
     assert!(max > 0, EInvalidMaxConcurrentProposals);
+    // Note: Caller must ensure this doesn't drop below active proposal count
     gov.max_concurrent_proposals = max;
 }
 

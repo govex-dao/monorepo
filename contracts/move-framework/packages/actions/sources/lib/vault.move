@@ -130,10 +130,10 @@ public fun deposit<Config, CoinType: drop>(
         account.borrow_managed_data_mut(VaultKey(name), version::current());
 
     if (vault.coin_type_exists<CoinType>()) {
-        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
         balance_mut.join(coin.into_balance());
     } else {
-        vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
+        vault.bag.add(type_name::with_defining_ids<CoinType>(), coin.into_balance());
     };
 }
 
@@ -150,7 +150,7 @@ public fun deposit_permissionless<Config, CoinType: drop>(
     // Only allow deposits to existing coin types
     assert!(coin_type_exists<CoinType>(vault), EWrongCoinType);
     
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
     balance_mut.join(coin.into_balance());
 }
 
@@ -193,12 +193,12 @@ public fun size(vault: &Vault): u64 {
 
 /// Returns true if the coin type exists in the vault.
 public fun coin_type_exists<CoinType: drop>(vault: &Vault): bool {
-    vault.bag.contains(type_name::get<CoinType>())
+    vault.bag.contains(type_name::with_defining_ids<CoinType>())
 }
 
 /// Returns the value of the coin type in the vault.
 public fun coin_type_value<CoinType: drop>(vault: &Vault): u64 {
-    vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::get<CoinType>()).value()
+    vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).value()
 }
 
 // Intent functions
@@ -228,9 +228,9 @@ public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
         
     let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(action.name), version_witness);
     if (!vault.coin_type_exists<CoinType>()) {
-        vault.bag.add(type_name::get<CoinType>(), coin.into_balance());
+        vault.bag.add(type_name::with_defining_ids<CoinType>(), coin.into_balance());
     } else {
-        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
         balance_mut.join(coin.into_balance());
     };
 }
@@ -263,11 +263,11 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     let action: &SpendAction<CoinType> = executable.next_action(intent_witness);
         
     let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(action.name), version_witness);
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
     let coin = coin::take(balance_mut, action.amount, ctx);
 
     if (balance_mut.value() == 0) 
-        vault.bag.remove<_, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+        vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
         
     coin
 }
@@ -316,7 +316,7 @@ public fun create_stream<Config, CoinType: drop>(
     
     table::add(&mut vault.streams, stream_id, VaultStream {
         id: stream_id,
-        coin_type: type_name::get<CoinType>(),
+        coin_type: type_name::with_defining_ids<CoinType>(),
         beneficiary,
         total_amount,
         claimed_amount: 0,
@@ -348,7 +348,7 @@ public fun withdraw_from_stream<Config, CoinType: drop>(
     
     // Verify caller is beneficiary
     assert!(stream.beneficiary == tx_context::sender(ctx), EUnauthorizedBeneficiary);
-    assert!(stream.coin_type == type_name::get<CoinType>(), EWrongCoinType);
+    assert!(stream.coin_type == type_name::with_defining_ids<CoinType>(), EWrongCoinType);
     
     let current_time = clock.timestamp_ms();
     
@@ -380,12 +380,12 @@ public fun withdraw_from_stream<Config, CoinType: drop>(
     stream.last_withdrawal_time = current_time;
     
     // Withdraw from vault
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
     let coin = coin::take(balance_mut, amount, ctx);
     
     // Clean up zero balance if needed
     if (balance_mut.value() == 0) {
-        vault.bag.remove<_, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+        vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
     };
     
     coin
@@ -419,7 +419,7 @@ public fun cancel_stream<Config, CoinType: drop>(
         last_withdrawal_time: _,
     } = table::remove(&mut vault.streams, stream_id);
     
-    assert!(coin_type == type_name::get<CoinType>(), EWrongCoinType);
+    assert!(coin_type == type_name::with_defining_ids<CoinType>(), EWrongCoinType);
     
     // Calculate final vested amount (respecting cliff)
     let current_time = clock.timestamp_ms();
@@ -448,7 +448,7 @@ public fun cancel_stream<Config, CoinType: drop>(
     let unvested = total_amount - vested_amount;
     
     // Create coin for final claim to beneficiary
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::get<CoinType>());
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
     let final_payment = if (final_claimable > 0) {
         coin::take(balance_mut, final_claimable, ctx)
     } else {
@@ -471,7 +471,7 @@ public fun cancel_stream<Config, CoinType: drop>(
     
     // Clean up zero balance if needed
     if (balance_mut.value() == 0) {
-        vault.bag.remove<_, Balance<CoinType>>(type_name::get<CoinType>()).destroy_zero();
+        vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
     };
     
     (refund, unvested)

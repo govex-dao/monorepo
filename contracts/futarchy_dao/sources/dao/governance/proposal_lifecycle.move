@@ -368,7 +368,9 @@ public fun finalize_proposal_market<AssetType, StableType>(
                     gc_janitor::drain_all_public(account, &mut expired);
                     account_protocol::intents::destroy_empty_expired(expired);
                 }
-            }
+            };
+            // Properly destroy the empty option
+            option::destroy_none(cw_opt);
         };
         i = i + 1;
     };
@@ -401,9 +403,6 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
-    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
-    fee_manager: &mut ProposalFeeManager,
-    registry: &mut governance_actions::ProposalReservationRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -463,9 +462,6 @@ public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: 
     proposal: &Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
-    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
-    fee_manager: &mut ProposalFeeManager,
-    registry: &mut governance_actions::ProposalReservationRegistry,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

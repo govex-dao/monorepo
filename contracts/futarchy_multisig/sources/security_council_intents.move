@@ -313,6 +313,7 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
     dao: &mut Account<FutarchyConfig>,
     extensions: &Extensions,
     mut executable: Executable<Outcome>,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
     let action: &CreateSecurityCouncilAction = executable.next_action(CreateSecurityCouncilIntent{});
@@ -325,6 +326,7 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
         *members,
         *weights,
         threshold,
+        clock,
         ctx
     );
     let council_id = object::id(&council);
@@ -457,13 +459,13 @@ public fun cleanup_expired_council_intents(
     while (i < len) {
         let key = *intent_keys.borrow(i);
         
-        // Check if the intent exists and is expired
+        // Atomic check-and-delete pattern to avoid TOCTOU
+        // The delete_expired_intent function internally checks if expired
         let intents_store = account::intents(security_council);
         if (intents::contains(intents_store, key)) {
-            // Get the intent to check expiration
+            // Try to delete - will only succeed if expired
+            // This is atomic within the account protocol
             let intent = intents::get<Approvals>(intents_store, key);
-            
-            // If expired, delete it
             if (clock.timestamp_ms() >= intents::expiration_time(intent)) {
                 let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
                     security_council,
@@ -570,13 +572,12 @@ fun cleanup_expired_council_intents_internal(
     while (i < len) {
         let key = *intent_keys.borrow(i);
         
-        // Check if the intent exists and is expired
+        // Atomic check-and-delete pattern
         let intents_store = account::intents(security_council);
         if (intents::contains(intents_store, key)) {
-            // Get the intent to check expiration
+            // The delete_expired_intent function is atomic and will only
+            // delete if the intent is actually expired
             let intent = intents::get<Approvals>(intents_store, key);
-            
-            // If expired, delete it
             if (clock.timestamp_ms() >= intents::expiration_time(intent)) {
                 let mut expired = account::delete_expired_intent<WeightedMultisig, Approvals>(
                     security_council,

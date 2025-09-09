@@ -216,7 +216,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     assert!(!factory.paused, EPaused);
     
     // Check if StableType is allowed
-    let stable_type_name = type_name::get<StableType>();
+    let stable_type_name = type_name::with_defining_ids<StableType>();
     assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
     
     // Process payment
@@ -384,7 +384,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     assert!(!factory.paused, EPaused);
     
     // Check if StableType is allowed
-    let stable_type_name = type_name::get<StableType>();
+    let stable_type_name = type_name::with_defining_ids<StableType>();
     assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
     
     // Process payment
@@ -540,7 +540,7 @@ public entry fun add_allowed_stable_type<StableType>(
     ctx: &mut TxContext,
 ) {
     assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
-    let type_name_val = type_name::get<StableType>();
+    let type_name_val = type_name::with_defining_ids<StableType>();
     
     if (!factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.insert(type_name_val);
@@ -561,7 +561,7 @@ public entry fun remove_allowed_stable_type<StableType>(
     ctx: &mut TxContext,
 ) {
     assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
-    let type_name_val = type_name::get<StableType>();
+    let type_name_val = type_name::with_defining_ids<StableType>();
     if (factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.remove(&type_name_val);
         
@@ -596,7 +596,7 @@ public fun is_paused(factory: &Factory): bool {
 
 /// Check if a stable type is allowed
 public fun is_stable_type_allowed<StableType>(factory: &Factory): bool {
-    let type_name_val = type_name::get<StableType>();
+    let type_name_val = type_name::with_defining_ids<StableType>();
     factory.allowed_stable_types.contains(&type_name_val)
 }
 

@@ -109,7 +109,7 @@ public fun is_coin_type_allowed<Config, CoinType>(
         ALLOWED_COINS_KEY,
         version::current()
     );
-    allowed.types.contains(&type_name::get<CoinType>())
+    allowed.types.contains(&type_name::with_defining_ids<CoinType>())
 }
 
 /// PERMISSIONLESS: Deposit coins of a type that already exists in the vault
@@ -153,7 +153,7 @@ public entry fun deposit_revenue<CoinType: drop>(
     event::emit(RevenueDeposited {
         dao_id,
         depositor: tx_context::sender(ctx),
-        coin_type: type_name::get<CoinType>(),
+        coin_type: type_name::with_defining_ids<CoinType>(),
         amount,
         vault_name,
     });
@@ -179,7 +179,7 @@ public fun do_add_coin_type<Outcome: store, CoinType, IW: drop>(
         version
     );
     
-    let type_name = type_name::get<CoinType>();
+    let type_name = type_name::with_defining_ids<CoinType>();
     if (!allowed.types.contains(&type_name)) {
         allowed.types.insert(type_name);
     };
@@ -206,7 +206,7 @@ public fun do_remove_coin_type<Outcome: store, CoinType, IW: drop>(
         version
     );
     
-    let type_name = type_name::get<CoinType>();
+    let type_name = type_name::with_defining_ids<CoinType>();
     if (allowed.types.contains(&type_name)) {
         allowed.types.remove(&type_name);
     };

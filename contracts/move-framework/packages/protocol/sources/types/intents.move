@@ -313,7 +313,7 @@ public fun assert_is_witness<Outcome, IW: drop>(
     intent: &Intent<Outcome>,
     _: IW,
 ) {
-    assert!(intent.type_ == type_name::get<IW>(), EWrongWitness);
+    assert!(intent.type_ == type_name::with_defining_ids<IW>(), EWrongWitness);
 }
 
 public use fun assert_expired_is_account as Expired.assert_is_account;
@@ -356,7 +356,7 @@ public(package) fun new_intent<Outcome, IW: drop>(
     id.delete();
 
     Intent<Outcome> { 
-        type_: type_name::get<IW>(),
+        type_: type_name::with_defining_ids<IW>(),
         key,
         description,
         account: account_addr,
@@ -410,10 +410,10 @@ public(package) fun destroy_intent<Outcome: store + drop>(
 // === Private functions ===
 
 fun new_role<IW: drop>(managed_name: String): String {
-    let intent_type = type_name::get<IW>();
-    let mut role = intent_type.get_address().to_string();
+    let intent_type = type_name::with_defining_ids<IW>();
+    let mut role = intent_type.address_string().to_string();
     role.append_utf8(b"::");
-    role.append(intent_type.get_module().to_string());
+    role.append(intent_type.module_string().to_string());
 
     if (!managed_name.is_empty()) {
         role.append_utf8(b"::");

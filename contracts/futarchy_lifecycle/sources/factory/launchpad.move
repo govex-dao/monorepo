@@ -976,8 +976,8 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
     event::emit(RaiseCreated {
         raise_id: object::id(&raise),
         creator: raise.creator,
-        raise_token_type: type_name::get<RaiseToken>().into_string().to_string(),
-        stable_coin_type: type_name::get<StableCoin>().into_string().to_string(),
+        raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
+        stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
         min_raise_amount,
         tokens_for_sale,
         deadline_ms: raise.deadline_ms,
@@ -1022,8 +1022,8 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
     event::emit(RaiseCreated {
         raise_id: object::id(&raise),
         creator: raise.creator,
-        raise_token_type: type_name::get<RaiseToken>().into_string().to_string(),
-        stable_coin_type: type_name::get<StableCoin>().into_string().to_string(),
+        raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
+        stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
         min_raise_amount,
         tokens_for_sale,
         deadline_ms: raise.deadline_ms,

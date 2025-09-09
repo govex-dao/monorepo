@@ -11,7 +11,7 @@ use std::{
     type_name,
 };
 use sui::{
-    clock::Clock,
+    clock::{Self, Clock},
     url::{Self, Url},
     coin::TreasuryCap,
     table::{Self, Table},
@@ -155,8 +155,8 @@ public fun new<AssetType: drop, StableType>(
     _ctx: &mut TxContext,
 ): FutarchyConfig {
     FutarchyConfig {
-        asset_type: type_name::get<AssetType>().into_string().to_string(),
-        stable_type: type_name::get<StableType>().into_string().to_string(),
+        asset_type: type_name::with_defining_ids<AssetType>().into_string().to_string(),
+        stable_type: type_name::with_defining_ids<StableType>().into_string().to_string(),
         config: params.dao_config,
         operational_state: DAO_STATE_ACTIVE,
         active_proposals: 0,
@@ -302,7 +302,13 @@ public fun new_slash_distribution(
     protocol_bps: u16,
     burn_bps: u16,
 ): SlashDistribution {
-    // Ensure they sum to 10000 (100%)
+    // Validate individual basis points don't exceed 100%
+    assert!(slasher_reward_bps <= 10000, EInvalidSlashDistribution);
+    assert!(dao_treasury_bps <= 10000, EInvalidSlashDistribution);
+    assert!(protocol_bps <= 10000, EInvalidSlashDistribution);
+    assert!(burn_bps <= 10000, EInvalidSlashDistribution);
+    
+    // Ensure they sum to exactly 10000 (100%)
     assert!(
         (slasher_reward_bps as u64) + (dao_treasury_bps as u64) + 
         (protocol_bps as u64) + (burn_bps as u64) == 10000,
@@ -1055,6 +1061,10 @@ public struct CouncilApprovalKey has copy, drop, store {}
 public struct CouncilApprovalBook has store {
     // Maps intent_key -> approval record
     approvals: Table<String, GenericApproval>,
+    // Track keys for periodic cleanup (newest first)
+    approval_keys: vector<String>,
+    // Maximum number of approvals to keep (prevent unbounded growth)
+    max_approvals: u64,
 }
 
 /// Initialize the council approval book for a DAO (package-level only)
@@ -1064,6 +1074,8 @@ public fun init_approval_book(
 ) {
     let book = CouncilApprovalBook {
         approvals: table::new<String, GenericApproval>(ctx),
+        approval_keys: vector::empty(),
+        max_approvals: 100, // Default max approvals to prevent unbounded growth
     };
     account::add_managed_data(
         account,
@@ -1163,9 +1175,46 @@ fun ensure_approval_book(
         account::add_managed_data(
             account,
             CouncilApprovalKey {},
-            CouncilApprovalBook { approvals: table::new<String, GenericApproval>(ctx) },
+            CouncilApprovalBook { 
+                approvals: table::new<String, GenericApproval>(ctx),
+                approval_keys: vector::empty(),
+                max_approvals: 100,
+            },
             version::current()
         );
+    };
+}
+
+/// Clean up expired approvals from the book
+fun cleanup_expired_approvals(
+    book: &mut CouncilApprovalBook,
+    clock: &Clock,
+    max_to_clean: u64
+) {
+    let now = clock.timestamp_ms();
+    let mut cleaned = 0;
+    let mut i = 0;
+    let len = vector::length(&book.approval_keys);
+    
+    // Clean from oldest entries (end of vector)
+    while (i < len && cleaned < max_to_clean) {
+        let idx = len - i - 1;
+        let key = vector::borrow(&book.approval_keys, idx);
+        
+        if (table::contains(&book.approvals, *key)) {
+            let approval = table::borrow(&book.approvals, *key);
+            if (now >= approval.expires_at) {
+                // Remove expired approval
+                table::remove(&mut book.approvals, *key);
+                vector::remove(&mut book.approval_keys, idx);
+                cleaned = cleaned + 1;
+            }
+        } else {
+            // Key without approval, remove it
+            vector::remove(&mut book.approval_keys, idx);
+        };
+        
+        i = i + 1;
     };
 }
 
@@ -1174,10 +1223,25 @@ public fun record_council_approval_generic(
     account: &mut Account<FutarchyConfig>,
     intent_key: String,
     approval: GenericApproval,
+    clock: &Clock,
     ctx: &mut TxContext
 ) {
     let book = get_or_init_approval_book(account, ctx);
+    
+    // Clean up some expired entries first (max 5 per call to bound gas)
+    cleanup_expired_approvals(book, clock, 5);
+    
+    // If at max capacity, remove oldest entry
+    if (vector::length(&book.approval_keys) >= book.max_approvals) {
+        let oldest_key = vector::pop_back(&mut book.approval_keys);
+        if (table::contains(&book.approvals, oldest_key)) {
+            table::remove(&mut book.approvals, oldest_key);
+        };
+    };
+    
+    // Add new approval
     table::add(&mut book.approvals, intent_key, approval);
+    vector::push_back(&mut book.approval_keys, intent_key);
 }
 
 

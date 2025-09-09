@@ -87,7 +87,7 @@ public fun package_publish(): String {
 /// Key for spending from a specific coin type
 /// Example: "resource:/vault/spend/0x2::sui::SUI"
 public fun vault_spend<CoinType>(): String {
-    vault_spend_by_type(type_name::get<CoinType>())
+    vault_spend_by_type(type_name::with_defining_ids<CoinType>())
 }
 
 public fun vault_spend_by_type(coin_type: TypeName): String {
@@ -102,7 +102,7 @@ public fun vault_spend_by_type(coin_type: TypeName): String {
 /// Key for minting new coins (if TreasuryCap is held)
 /// Example: "resource:/vault/mint/0x123::my_coin::MyCoin"
 public fun vault_mint<CoinType>(): String {
-    vault_mint_by_type(type_name::get<CoinType>())
+    vault_mint_by_type(type_name::with_defining_ids<CoinType>())
 }
 
 public fun vault_mint_by_type(coin_type: TypeName): String {
@@ -119,7 +119,7 @@ public fun vault_burn<CoinType>(): String {
     let mut key = string::utf8(RESOURCE_PREFIX);
     key.append(string::utf8(VAULT_CATEGORY));
     key.append(string::utf8(b"burn/"));
-    let type_str = type_name::into_string(type_name::get<CoinType>());
+    let type_str = type_name::into_string(type_name::with_defining_ids<CoinType>());
     key.append(string::from_ascii(type_str));
     key
 }
@@ -199,10 +199,10 @@ public fun liquidity_create_pool<AssetType, StableType>(): String {
     let mut key = string::utf8(RESOURCE_PREFIX);
     key.append(string::utf8(LIQUIDITY_CATEGORY));
     key.append(string::utf8(b"create/"));
-    let asset_str = type_name::into_string(type_name::get<AssetType>());
+    let asset_str = type_name::into_string(type_name::with_defining_ids<AssetType>());
     key.append(string::from_ascii(asset_str));
     key.append(string::utf8(b"/"));
-    let stable_str = type_name::into_string(type_name::get<StableType>());
+    let stable_str = type_name::into_string(type_name::with_defining_ids<StableType>());
     key.append(string::from_ascii(stable_str));
     key
 }
@@ -212,10 +212,10 @@ public fun liquidity_add<AssetType, StableType>(): String {
     let mut key = string::utf8(RESOURCE_PREFIX);
     key.append(string::utf8(LIQUIDITY_CATEGORY));
     key.append(string::utf8(b"add/"));
-    let asset_str = type_name::into_string(type_name::get<AssetType>());
+    let asset_str = type_name::into_string(type_name::with_defining_ids<AssetType>());
     key.append(string::from_ascii(asset_str));
     key.append(string::utf8(b"/"));
-    let stable_str = type_name::into_string(type_name::get<StableType>());
+    let stable_str = type_name::into_string(type_name::with_defining_ids<StableType>());
     key.append(string::from_ascii(stable_str));
     key
 }
@@ -225,10 +225,10 @@ public fun liquidity_remove<AssetType, StableType>(): String {
     let mut key = string::utf8(RESOURCE_PREFIX);
     key.append(string::utf8(LIQUIDITY_CATEGORY));
     key.append(string::utf8(b"remove/"));
-    let asset_str = type_name::into_string(type_name::get<AssetType>());
+    let asset_str = type_name::into_string(type_name::with_defining_ids<AssetType>());
     key.append(string::from_ascii(asset_str));
     key.append(string::utf8(b"/"));
-    let stable_str = type_name::into_string(type_name::get<StableType>());
+    let stable_str = type_name::into_string(type_name::with_defining_ids<StableType>());
     key.append(string::from_ascii(stable_str));
     key
 }
@@ -274,7 +274,7 @@ public fun streams_create<CoinType>(): String {
     let mut key = string::utf8(RESOURCE_PREFIX);
     key.append(string::utf8(STREAMS_CATEGORY));
     key.append(string::utf8(b"create/"));
-    let type_str = type_name::into_string(type_name::get<CoinType>());
+    let type_str = type_name::into_string(type_name::with_defining_ids<CoinType>());
     key.append(string::from_ascii(type_str));
     key
 }
@@ -439,7 +439,7 @@ fun test_resource_keys() {
     assert_eq(pkg_key, b"resource:/package/upgrade/0000000000000000000000000000000000000000000000000000000000000123::my_package".to_string());
     
     // Test vault keys
-    let vault_key = vault_spend_by_type(type_name::get<sui::sui::SUI>());
+    let vault_key = vault_spend_by_type(type_name::with_defining_ids<sui::sui::SUI>());
     assert!(vault_key.length() > 0);
     
     // Test role-based keys

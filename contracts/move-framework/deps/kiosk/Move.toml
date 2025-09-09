@@ -2,10 +2,8 @@
 name = "Kiosk"
 version = "0.0.1"
 # published-at = "0x0"
-# published-at = "0x0"
 
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b5633abb4177" }
-
 [addresses]
 kiosk = "0x3b6222e7d3b8ea5be933acd16767d022723faf27e8826ea6748179c4342627a7"

@@ -57,7 +57,7 @@ public fun new_request<T>(ctx: &mut TxContext): ResourceRequest<T> {
     
     event::emit(ResourceRequested {
         request_id,
-        action_type: type_name::get<T>(),
+        action_type: type_name::with_defining_ids<T>(),
         resource_count: 0, // Will be determined by what's added to context
     });
     
@@ -103,7 +103,7 @@ public fun fulfill<T>(request: ResourceRequest<T>): ResourceReceipt<T> {
     
     event::emit(ResourceFulfilled {
         request_id,
-        action_type: type_name::get<T>(),
+        action_type: type_name::with_defining_ids<T>(),
     });
     
     // Clean up

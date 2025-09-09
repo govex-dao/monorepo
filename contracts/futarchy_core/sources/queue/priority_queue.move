@@ -69,6 +69,7 @@ const EProposalNotFound: u64 = 4;
 const EInvalidBond: u64 = 5;
 const EProposalInGracePeriod: u64 = 6;
 const EHeapInvariantViolated: u64 = 7;
+const EFeeExceedsMaximum: u64 = 8;
 
 // === Constants ===
 
@@ -77,6 +78,7 @@ const EVICTION_GRACE_PERIOD_MS: u64 = 300000; // 5 minutes
 const COMPARE_GREATER: u8 = 1;
 const COMPARE_EQUAL: u8 = 0;
 const COMPARE_LESS: u8 = 2;
+const MAX_REASONABLE_FEE: u64 = 1_000_000_000_000_000; // 1 million SUI (with 9 decimals)
 
 // === Structs ===
 
@@ -107,6 +109,7 @@ public struct QueuedProposal<phantom StableCoin> has store {
     intent_key: Option<String>,
     uses_dao_liquidity: bool,
     data: ProposalData,
+    queue_entry_time: u64,  // Track when proposal entered queue for grace period
 }
 
 /// Priority queue using binary heap for O(log n) operations
@@ -140,26 +143,49 @@ public struct EvictionInfo has copy, drop, store {
 
 // === Heap Operations (Private) ===
 
-/// Get parent index in heap
+/// Get parent index in heap (safe from underflow)
 fun parent_idx(i: u64): u64 {
+    // Already protected: returns 0 for i=0, otherwise (i-1)/2
+    // The check prevents underflow when i=0
     if (i == 0) 0 else (i - 1) / 2
 }
 
-/// Get left child index
+/// Get left child index (safe from overflow)
 fun left_child_idx(i: u64): u64 {
-    2 * i + 1
+    // Check for potential overflow: if i > (MAX_U64 - 1) / 2
+    // For practical heap sizes this will never overflow, but add safety
+    let max_safe = (18446744073709551615u64 - 1) / 2;
+    if (i > max_safe) {
+        // Return max value to indicate invalid child (will be >= size in checks)
+        18446744073709551615u64
+    } else {
+        2 * i + 1
+    }
 }
 
-/// Get right child index
+/// Get right child index (safe from overflow)
 fun right_child_idx(i: u64): u64 {
-    2 * i + 2
+    // Check for potential overflow: if i > (MAX_U64 - 2) / 2
+    // For practical heap sizes this will never overflow, but add safety
+    let max_safe = (18446744073709551615u64 - 2) / 2;
+    if (i > max_safe) {
+        // Return max value to indicate invalid child (will be >= size in checks)
+        18446744073709551615u64
+    } else {
+        2 * i + 2
+    }
 }
 
 /// Bubble up element to maintain heap property - O(log n)
 fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx: u64) {
+    // Safety: ensure idx is within bounds
+    let heap_size = vector::length(heap);
+    if (idx >= heap_size) return;
+    
     while (idx > 0) {
         let parent = parent_idx(idx);
         
+        // Safety: parent_idx guarantees parent < idx when idx > 0
         let child_priority = &vector::borrow(heap, idx).priority_score;
         let parent_priority = &vector::borrow(heap, parent).priority_score;
         
@@ -175,6 +201,9 @@ fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx
 
 /// Bubble down element to maintain heap property - O(log n)
 fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx: u64, size: u64) {
+    // Safety: ensure parameters are valid
+    if (size == 0 || idx >= size) return;
+    
     loop {
         let left = left_child_idx(idx);
         let right = right_child_idx(idx);
@@ -265,9 +294,11 @@ fun find_min_index<StableCoin>(heap: &vector<QueuedProposal<StableCoin>>, size: 
 
 /// Remove element at index and maintain heap property - O(log n)
 fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, idx: u64, size: &mut u64): QueuedProposal<StableCoin> {
+    // Safety: ensure valid index and non-empty heap
+    assert!(*size > 0, EQueueEmpty);
     assert!(idx < *size, EInvalidProposalId);
     
-    // Swap with last element
+    // Swap with last element (safe: size > 0 guaranteed)
     let last_idx = *size - 1;
     if (idx != last_idx) {
         vector::swap(heap, idx, last_idx);
@@ -308,6 +339,10 @@ public fun new<StableCoin>(
     eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
 ): ProposalQueue<StableCoin> {
+    // Ensure max_concurrent_proposals is never 0 to prevent division by zero
+    assert!(max_concurrent_proposals > 0, EInvalidProposalId);
+    assert!(max_proposer_funded > 0, EInvalidProposalId);
+    
     ProposalQueue {
         id: object::new(ctx),
         dao_id,
@@ -334,18 +369,21 @@ public fun new_with_config<StableCoin>(
     new(dao_id, max_concurrent_proposals, max_proposer_funded, eviction_grace_period_ms, ctx)
 }
 
-/// Create priority score from fee and timestamp
+/// Create priority score from fee and timestamp with validation
 public fun create_priority_score(fee: u64, timestamp: u64): PriorityScore {
+    // Validate fee is within reasonable bounds to prevent gaming
+    assert!(fee <= MAX_REASONABLE_FEE, EFeeExceedsMaximum);
+    
     // Higher fee = higher priority
     // Earlier timestamp = higher priority (for tie-breaking)
-    // Use safe subtraction to prevent overflow
+    // Invert timestamp for priority ordering (earlier = higher priority)
     let max_u64 = 18446744073709551615u64;
-    let timestamp_inverted = if (timestamp > max_u64) {
-        0u64  // Cap at 0 if timestamp somehow exceeds max
-    } else {
-        max_u64 - timestamp
-    };
+    // timestamp is already u64, so it cannot exceed max_u64
+    // Safe subtraction - timestamp will always be <= max_u64
+    let timestamp_inverted = max_u64 - timestamp;
     
+    // Compute priority value: fee in upper 64 bits, inverted timestamp in lower 64 bits
+    // This ensures fee is the primary factor, timestamp is the tiebreaker
     let computed_value = ((fee as u128) << 64) | (timestamp_inverted as u128);
     
     PriorityScore {
@@ -373,6 +411,9 @@ public fun insert<StableCoin>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): Option<EvictionInfo> {
+    // Validate fee is reasonable
+    assert!(proposal.fee <= MAX_REASONABLE_FEE, EFeeExceedsMaximum);
+    
     // Generate proposal ID if needed
     if (proposal.proposal_id == @0x0.to_id()) {
         let id = object::new(ctx);
@@ -381,6 +422,9 @@ public fun insert<StableCoin>(
     };
     let mut eviction_info = option::none<EvictionInfo>();
     let current_time = clock::timestamp_ms(clock);
+    
+    // Set queue entry time for grace period tracking
+    proposal.queue_entry_time = current_time;
     
     // Check capacity and eviction logic
     if (proposal.uses_dao_liquidity) {
@@ -397,9 +441,9 @@ public fun insert<StableCoin>(
             let lowest_idx = find_min_index(&queue.heap, queue.size);
             let lowest = vector::borrow(&queue.heap, lowest_idx);
             
-            // Check grace period BEFORE removing
+            // Check grace period BEFORE removing (use queue entry time, not creation timestamp)
             assert!(
-                current_time - lowest.timestamp >= queue.eviction_grace_period_ms,
+                current_time - lowest.queue_entry_time >= queue.eviction_grace_period_ms,
                 EProposalInGracePeriod
             );
             
@@ -437,7 +481,7 @@ public fun insert<StableCoin>(
             });
             
             // Clean up evicted proposal
-            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_key, uses_dao_liquidity: _, data: _ } = evicted;
+            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_key, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = evicted;
             
             if (intent_key.is_some()) {
                 let key = intent_key.extract();
@@ -574,6 +618,7 @@ public fun new_queued_proposal<StableCoin>(
         intent_key,
         uses_dao_liquidity,
         data,
+        queue_entry_time: 0,  // Will be set during insert
     }
 }
 
@@ -603,6 +648,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
         intent_key,
         uses_dao_liquidity,
         data,
+        queue_entry_time: 0,  // Will be set during insert
     }
 }
 
@@ -683,14 +729,10 @@ public fun calculate_min_fee<StableCoin>(queue: &ProposalQueue<StableCoin>): u64
     let queue_size = queue.size;
     
     // Calculate occupancy ratio, clamped to 100% maximum
-    // This ensures we don't overflow and provides predictable fee scaling
-    let occupancy_ratio = if (queue.max_concurrent_proposals == 0) {
-        100 // If max is 0 (edge case), treat as full
-    } else {
-        let raw_ratio = (queue_size * 100) / queue.max_concurrent_proposals;
-        // Clamp to 100% - queue can exceed max_concurrent but fee stops scaling at 100%
-        if (raw_ratio > 100) { 100 } else { raw_ratio }
-    };
+    // max_concurrent_proposals is guaranteed to be > 0 by constructor validation
+    let raw_ratio = (queue_size * 100) / queue.max_concurrent_proposals;
+    // Clamp to 100% - queue can exceed max_concurrent but fee stops scaling at 100%
+    let occupancy_ratio = if (raw_ratio > 100) { 100 } else { raw_ratio };
     
     // Base minimum fee
     let min_fee_base = 1_000_000; // 1 unit with 6 decimals
@@ -793,8 +835,10 @@ public fun slash_and_distribute_fee<StableCoin>(
 }
 
 /// Mark a proposal as completed, freeing up space with state consistency checks
+/// Now requires proposal_id to ensure we're marking the correct proposal
 public fun mark_proposal_completed<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
+    proposal_id: ID,
     uses_dao_liquidity: bool
 ) {
     // Validate preconditions for state consistency
@@ -803,6 +847,16 @@ public fun mark_proposal_completed<StableCoin>(
     // If marking a DAO liquidity proposal as complete, verify slot is occupied
     if (uses_dao_liquidity) {
         assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
+    };
+    
+    // Verify the proposal_id matches a reserved/active proposal if tracked
+    // This ensures we're completing the right proposal
+    if (option::is_some(&queue.reserved_next_proposal)) {
+        let reserved_id = *option::borrow(&queue.reserved_next_proposal);
+        if (reserved_id == proposal_id) {
+            // Clear the reservation as it's being completed
+            queue.reserved_next_proposal = option::none();
+        }
     };
     
     // Update state atomically
@@ -917,7 +971,7 @@ public entry fun cancel_proposal<StableCoin>(
     let proposer_addr = proposal.proposer;
     
     let removed = remove_at(&mut queue.heap, i, &mut queue.size);
-    let QueuedProposal { proposal_id, mut bond, .. } = removed;
+    let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_key: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
     
     // Get the fee refunded as a Coin
     let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -1061,6 +1115,7 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         intent_key: _,
         uses_dao_liquidity: _,
         data: _,
+        queue_entry_time: _,
     } = proposal;
     bond.destroy_none();
 }

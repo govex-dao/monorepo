@@ -467,9 +467,10 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
     // Check that DAO has treasury cap
     assert!(currency::has_cap<FutarchyConfig, AssetType>(account), ECannotExecuteWithoutTreasuryCap);
     
-    // Check max supply constraint
+    // Check max supply constraint with overflow protection
     let current_supply = currency::coin_type_supply<FutarchyConfig, AssetType>(account);
-    let max_mint = (current_supply * MAX_MINT_PERCENTAGE) / 10000;
+    // Use safe multiplication to prevent overflow
+    let max_mint = safe_mul_div_u64(current_supply, MAX_MINT_PERCENTAGE, 10000);
     let actual_mint = if (mint_amount > max_mint) {
         max_mint
     } else {
@@ -484,6 +485,10 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
         witness,
         ctx
     );
+    
+    // Verify the minted amount matches what we calculated
+    let minted_value = coin::value(&minted_coin);
+    assert!(minted_value == actual_mint, EInvalidMintAmount);
     
     // Transfer to recipient
     transfer::public_transfer(minted_coin, recipient);
@@ -548,9 +553,10 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
                 while (j < tier.recipients.length()) {
                     let recipient = tier.recipients.borrow(j);
                     
-                    // Check mint doesn't exceed max supply percentage per mint
+                    // Check mint doesn't exceed max supply percentage per mint with overflow protection
                     let current_supply = currency::coin_type_supply<FutarchyConfig, AssetType>(account);
-                    let max_mint = (current_supply * MAX_MINT_PERCENTAGE) / 10000;
+                    // Use safe multiplication to prevent overflow
+                    let max_mint = safe_mul_div_u64(current_supply, MAX_MINT_PERCENTAGE, 10000);
                     let actual_mint = if (recipient.mint_amount > max_mint) {
                         max_mint
                     } else {

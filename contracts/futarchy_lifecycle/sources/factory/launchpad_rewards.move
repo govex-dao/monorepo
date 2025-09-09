@@ -31,9 +31,12 @@ public fun setup_founder_rewards<AssetType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): TieredMintAction<AssetType> {
-    // Validate parameters
+    // Validate parameters with explicit overflow protection
     assert!(founder_allocation_bps <= MAX_FOUNDER_ALLOCATION_BPS, EInvalidFounderAllocation);
-    assert!(min_price_ratio > 0 && max_price_ratio >= min_price_ratio, EInvalidPriceRatio);
+    assert!(min_price_ratio > 0, EInvalidPriceRatio);
+    assert!(max_price_ratio >= min_price_ratio, EInvalidPriceRatio);
+    // Additional check to prevent arithmetic overflow in price calculations
+    assert!(max_price_ratio <= 1_000_000_000_000, EInvalidPriceRatio); // Max 1000x
     
     let total_supply = treasury_cap.total_supply();
     let founder_allocation = (total_supply * founder_allocation_bps) / 10000;
@@ -72,7 +75,9 @@ fun setup_tiered_founder_rewards<AssetType>(
     
     // Calculate price step, handling single tier case to avoid division by zero
     let price_step = if (num_tiers > 1) {
-        (max_price_ratio - min_price_ratio) / (num_tiers - 1)
+        // Safe subtraction since we already validated max >= min
+        let price_range = max_price_ratio - min_price_ratio;
+        price_range / (num_tiers - 1)
     } else {
         0 // Single tier uses min_price_ratio only
     };

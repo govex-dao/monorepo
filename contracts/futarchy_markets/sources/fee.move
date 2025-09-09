@@ -559,7 +559,7 @@ public fun deposit_dao_platform_fee<StableType: drop>(
     ctx: &mut TxContext,
 ) {
     let amount = fee_coin.value();
-    let stable_type_str = type_name::get<StableType>().into_string();
+    let stable_type_str = type_name::with_defining_ids<StableType>().into_string();
     
     deposit_stable_fees(fee_manager, fee_coin.into_balance(), dao_id, clock);
     
@@ -694,7 +694,7 @@ public fun deposit_stable_fees<StableType>(
         dynamic_field::add(&mut fee_manager.id, StableFeeRegistry<StableType> {}, balance_wrapper);
     };
 
-    let type_name = type_name::get<StableType>();
+    let type_name = type_name::with_defining_ids<StableType>();
     let type_str = type_name.into_string();
     // Emit collection event
     event::emit(StableFeesCollected {
@@ -737,7 +737,7 @@ public entry fun withdraw_stable_fees<StableType>(
         let withdrawn = fee_balance_wrapper.balance.split(amount);
         let coin = withdrawn.into_coin(ctx);
 
-        let type_name = type_name::get<StableType>();
+        let type_name = type_name::with_defining_ids<StableType>();
         let type_str = type_name.into_string();
         // Emit withdrawal event
         event::emit(StableFeesWithdrawn {

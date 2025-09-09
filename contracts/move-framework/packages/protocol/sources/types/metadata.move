@@ -47,7 +47,7 @@ public fun get_entry_by_idx(metadata: &Metadata, idx: u64): (String, String) {
 
 /// Returns the number of entries.
 public fun size(metadata: &Metadata): u64 {
-    metadata.inner.size()
+    metadata.inner.length()
 }
 
 //**************************************************************************************************//

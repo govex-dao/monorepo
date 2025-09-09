@@ -283,7 +283,7 @@ fun test_deposit_flow_multiple_coins() {
     account.confirm_execution(executable);
 
     let vault = vault::borrow_vault(&account, b"Degen".to_string());
-    assert!(vault.size() == 2);
+    assert!(vault.length() == 2);
     assert!(vault.coin_type_value<SUI>() == 5);
     assert!(vault.coin_type_value<VAULT_TESTS>() == 5);
 

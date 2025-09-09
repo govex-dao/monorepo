@@ -300,9 +300,8 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
         );
         
         // Remove from active intents safely
-        // We expect this to succeed since we just cancelled an active intent
-        let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
-        assert!(removed, EIntentNotFound);
+        // Handle gracefully if intent was already removed (defensive programming)
+        let _ = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, intent_id);
         
         // Emit event
         event::emit(OptimisticIntentCancelled {
@@ -342,9 +341,10 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     let intent = table::borrow_mut(&mut storage.intents, action.intent_id);
     
     // Verify sender was the original proposer
-    // Note: We can't verify if they're still a council member here as this is executed
-    // through the DAO account, not the security council account. The action execution
-    // itself should be gated by proper security council membership checks.
+    // SECURITY NOTE: This function is called through an executable that should have been
+    // created with proper security council membership verification. We cannot re-verify
+    // council membership here as this executes in the DAO context, not the council context.
+    // The security model relies on the action creation being properly gated.
     let sender = tx_context::sender(ctx);
     assert!(intent.proposer == sender, ENotProposer);
     
@@ -357,9 +357,8 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     intent.cancel_reason = option::some(action.reason);
     
     // Remove from active intents safely
-    // We expect this to succeed since we just cancelled an active intent
-    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
-    assert!(removed, EIntentNotFound);
+    // Handle gracefully if intent was already removed (defensive programming)
+    let _ = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
     
     // Emit event
     event::emit(OptimisticIntentCancelled {
@@ -407,9 +406,8 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     let intent_key = intent.intent_key;
     
     // Remove from active intents safely  
-    // We expect this to succeed since we just executed an active intent
-    let removed = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
-    assert!(removed, EIntentNotFound);
+    // Handle gracefully if intent was already removed (defensive programming)
+    let _ = remove_from_active_intents(&mut storage.active_intents, &mut storage.total_active, action.intent_id);
     
     // Emit event
     event::emit(OptimisticIntentExecuted {

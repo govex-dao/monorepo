@@ -4,6 +4,5 @@ edition = "2024"
 license = "BSL"
 
 [dependencies]
-
 [addresses]
-futarchy_one_shot_utils = "0x6f37d232d20f2ff1f6d30e7eccc8ea77955fb1bd85a67f26169d96672c878839"
+futarchy_one_shot_utils = "0xb129c7808c0986908dc0cc8fecacab315440ef0a8fb4c37f5497b701ddf4ce0f"
