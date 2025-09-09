@@ -2,6 +2,47 @@
 import { logSecurityError, escapeXml } from './security';
 import path from 'path';
 import fs from 'fs/promises';
+import { Response } from 'express';
+import { Resvg } from '@resvg/resvg-js';
+
+// Image rendering helpers
+export interface RenderOptions {
+  dpi?: number;
+  shapeRendering?: 0 | 1 | 2;
+  textRendering?: 0 | 1 | 2;
+  imageRendering?: 0 | 1;
+}
+
+export function renderSvgToPng(svg: string, options: RenderOptions = {}) {
+  const resvg = new Resvg(svg, { font: FONT_FAMILY, ...options });
+  return resvg.render().asPng();
+}
+
+export function sendPngResponse(res: Response, png: Buffer, cacheControl: string = CACHE_DURATION.image) {
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', cacheControl);
+  res.send(png);
+}
+
+export function sendErrorResponse(res: Response, error: any, message = 'Internal server error') {
+  console.error(message, error);
+  res.status(500).json({ error: message });
+}
+
+// Image loading helper
+export async function loadCachedImage(imagePath: string): Promise<string | null> {
+  try {
+    if (!imagePath.startsWith('/')) {
+      imagePath = '/' + imagePath;
+    }
+    const fullPath = path.join(process.cwd(), 'public', imagePath.substring(1));
+    const imageBuffer = await fs.readFile(fullPath);
+    return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+  } catch (err) {
+    logSecurityError('loadCachedImage', err);
+    return null;
+  }
+}
 
 // Constants
 export const OG_IMAGE_DIMENSIONS = {
@@ -21,7 +62,8 @@ function formatNumber(num: number): string {
   if (absNum >= 1_000) {
     return (num / 1_000).toFixed(1) + 'K';
   }
-  return num.toString();
+  // For numbers less than 1000, show at most 2 decimal places
+  return Number(num.toFixed(2)).toString();
 }
 
 export const FONT_CONFIG = {
@@ -501,12 +543,16 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   const { lines: titleLines, fontSize: titleFontSize } = wrapText(title, width - 96, 103, { maxHeight: height - 252 });
   // ONLY use cached image - no external URL fetching
   let daoImage = null;
+  console.log(daoLogo)
   if (daoLogo && daoLogo !== "placeholder" && daoLogo.startsWith('/dao-images/')) {
     try {
+      console.log(daoLogo)
       const imagePath = path.join(process.cwd(), 'public', daoLogo.substring(1));
       const imageBuffer = await fs.readFile(imagePath);
       daoImage = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      console.log(daoImage)
     } catch (err) {
+      console.log(err)
       logSecurityError('readCachedProposalImage', err);
     }
   }
@@ -659,7 +705,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   
   <!-- Proposal Title -->
   ${titleLines.map((line, index) =>
-    `<text x="32" width="${width - 96}" y="${titleLines.length === 1 ? 240 : 170 + (index * (titleFontSize + 12))}" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
+    `<text x="32" width="${width - 96}" y="${200 + (index * (titleFontSize + 12))}" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
   ).join('')}
 
   ${createOutcomeSection()}

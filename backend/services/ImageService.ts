@@ -22,13 +22,13 @@ const IMAGE_VERSIONS: Record<string, ImageProcessOptions> = {
   medium: { 
     width: 256, 
     height: 256, 
-    format: 'jpeg',
+    format: 'png',
     fit: 'cover'
   },
   large: { 
     width: 512, 
     height: 512, 
-    format: 'jpeg',
+    format: 'png',
     fit: 'cover'
   }
 };
