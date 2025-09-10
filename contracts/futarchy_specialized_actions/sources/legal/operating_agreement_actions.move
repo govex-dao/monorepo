@@ -166,71 +166,9 @@ public fun delete_operating_agreement_action(expired: &mut Expired) {
 }
 
 // === Intent Helper Functions ===
-
-/// Create a new update line action for intents
-public fun new_update_line<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    line_id: ID,
-    new_text: String,
-    intent_witness: IW,
-) {
-    let action = new_update_line_action(line_id, new_text);
-    intent.add_action(action, intent_witness);
-}
-
-/// Create a new insert line after action for intents
-public fun new_insert_line_after<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    prev_line_id: ID,
-    text: String,
-    difficulty: u64,
-    intent_witness: IW,
-) {
-    let action = new_insert_line_after_action(prev_line_id, text, difficulty);
-    intent.add_action(action, intent_witness);
-}
-
-/// Create a new insert line at beginning action for intents
-public fun new_insert_line_at_beginning<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    text: String,
-    difficulty: u64,
-    intent_witness: IW,
-) {
-    let action = new_insert_line_at_beginning_action(text, difficulty);
-    intent.add_action(action, intent_witness);
-}
-
-/// Create a new remove line action for intents
-public fun new_remove_line<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    line_id: ID,
-    intent_witness: IW,
-) {
-    let action = new_remove_line_action(line_id);
-    intent.add_action(action, intent_witness);
-}
-
-/// Create a new set global immutable action for intents
-/// WARNING: This is a permanent one-way operation that locks the entire agreement
-public fun new_set_global_immutable<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    intent_witness: IW,
-) {
-    let action = new_set_global_immutable_action();
-    intent.add_action(action, intent_witness);
-}
-
-/// Create a new batch operating agreement action for intents
-public fun new_batch_operating_agreement<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    batch_id: ID,
-    actions: vector<OperatingAgreementAction>,
-    intent_witness: IW,
-) {
-    let action = new_batch_operating_agreement_action(batch_id, actions);
-    intent.add_action(action, intent_witness);
-}
+// NOTE: Old helper functions that directly added to intents have been removed.
+// Use the new_*_action functions below to create action structs,
+// then add them with descriptors using add_action_with_descriptor.
 
 // === Helper Functions ===
 

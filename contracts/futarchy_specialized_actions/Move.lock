@@ -2,12 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "83F72A271DDD6A522AD10B490754C60D7121B83B84DD8061EC0810FE031EB998"
-deps_digest = "59CF4C5FBF9CA9498217B3AC2BED47AD5D49696CE64F735BE1226EDCEF529664"
+manifest_digest = "388603B0368A4F53E9A3D895476EAB604C8422140117F002B096F0061D98CF03"
+deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -116,7 +115,6 @@ source = { local = "../futarchy_lifecycle" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -137,6 +135,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
 ]
 
@@ -147,7 +146,6 @@ source = { local = "../futarchy_multisig" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -175,7 +173,6 @@ source = { local = "../futarchy_vault" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -194,6 +191,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0x18c7a2f2596dd0ae0f194af77f779346f55527fe104d04cc9d0b49c65dda613f"
-latest-published-id = "0x18c7a2f2596dd0ae0f194af77f779346f55527fe104d04cc9d0b49c65dda613f"
+original-published-id = "0x5990bd29bbeb8c16552711ab9c81e5b0f9563896d938eac564b33e935d211101"
+latest-published-id = "0x5990bd29bbeb8c16552711ab9c81e5b0f9563896d938eac564b33e935d211101"
 published-version = "1"

@@ -11,7 +11,6 @@ use account_protocol::{
 };
 use account_actions::{
     transfer as acc_transfer,
-    vesting,
     vault,
     version,
 };
@@ -31,8 +30,6 @@ const ECoinTypeDoesntExist: u64 = 2;
 
 /// Intent Witness defining the vault spend and transfer intent, and associated role.
 public struct SpendAndTransferIntent() has copy, drop;
-/// Intent Witness defining the vault spend and vesting intent, and associated role.
-public struct SpendAndVestIntent() has copy, drop;
 
 // === Public Functions ===
 
@@ -88,53 +85,3 @@ public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
     );
 }
 
-/// Creates a SpendAndVestIntent and adds it to an Account.
-public fun request_spend_and_vest<Config, Outcome: store, CoinType: drop>(
-    auth: Auth,
-    account: &mut Account<Config>, 
-    params: Params,
-    outcome: Outcome,
-    vault_name: String, 
-    coin_amount: u64, 
-    start_timestamp: u64, 
-    end_timestamp: u64, 
-    recipient: address, 
-    ctx: &mut TxContext
-) {
-    account.verify(auth);
-    params.assert_single_execution();
-
-    let vault = vault::borrow_vault(account, vault_name);
-    assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
-    assert!(vault.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
-
-    account.build_intent!(
-        params,
-        outcome,
-        vault_name,
-        version::current(),
-        SpendAndVestIntent(),
-        ctx,
-        |intent, iw| {
-            vault::new_spend<_, CoinType, _>(intent, vault_name, coin_amount, iw);
-            vesting::new_vest(intent, start_timestamp, end_timestamp, recipient, iw);
-        }
-    );
-}
-
-/// Executes a SpendAndVestIntent, create a vesting from a coin in the vault.
-public fun execute_spend_and_vest<Config, Outcome: store, CoinType: drop>(
-    executable: &mut Executable<Outcome>, 
-    account: &mut Account<Config>, 
-    ctx: &mut TxContext
-) {
-    account.process_intent!(
-        executable,
-        version::current(),
-        SpendAndVestIntent(),
-        |executable, iw| {
-            let coin = vault::do_spend<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
-            vesting::do_vest(executable, coin, iw, ctx);
-        }
-    );
-}

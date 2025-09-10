@@ -148,7 +148,7 @@ public fun do_emit_memo<Outcome: store, IW: drop>(
         memo: action.memo,
         category: action.category,
         reference_id: action.reference_id,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
         emitter: tx_context::sender(ctx),
     });
 }
@@ -173,7 +173,7 @@ public fun do_emit_structured_memo<Outcome: store, IW: drop>(
         dao_id: object::id(account),
         title: action.title,
         fields: action.fields,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
         emitter: tx_context::sender(ctx),
     });
 }
@@ -196,7 +196,7 @@ public fun do_emit_commitment<Outcome: store, IW: drop>(
     // Check expiry if provided
     if (action.expires_at.is_some()) {
         let expiry = *action.expires_at.borrow();
-        assert!(expiry > clock::timestamp_ms(clock), EInvalidMetadata);
+        assert!(expiry > clock.timestamp_ms(), EInvalidMetadata);
     };
     
     // Emit the event
@@ -206,7 +206,7 @@ public fun do_emit_commitment<Outcome: store, IW: drop>(
         commitment: action.commitment,
         counterparty: action.counterparty,
         expires_at: action.expires_at,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
         emitter: tx_context::sender(ctx),
     });
 }
@@ -231,7 +231,7 @@ public fun do_emit_signal<Outcome: store, IW: drop>(
         dao_id: object::id(account),
         signal_type: action.signal_type,
         signal_value: action.signal_value,
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
         emitter: tx_context::sender(ctx),
     });
 }

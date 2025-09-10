@@ -11,6 +11,10 @@ use account_protocol::{
     metadata,
 };
 use futarchy_lifecycle::dissolution_actions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Witness ===
 
@@ -39,7 +43,8 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         burn_unsold_tokens,
         final_operations_deadline,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"dissolution", b"initiate");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Add a batch distribute action to an existing intent
@@ -49,7 +54,8 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_batch_distribute_action(asset_types);
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"dissolution", b"distribute");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Add a finalize dissolution action to an existing intent
@@ -63,7 +69,8 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         final_recipient,
         destroy_account,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"dissolution", b"finalize");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Add a cancel dissolution action to an existing intent
@@ -73,7 +80,8 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_cancel_dissolution_action(reason);
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"dissolution", b"cancel");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Create a unique key for a dissolution intent

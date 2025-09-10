@@ -161,7 +161,7 @@ public fun create_commitment_proposal<AssetType, StableType>(
     validate_tiers(&tiers, committed_amount);
     
     let id = object::new(ctx);
-    let created_at = clock::timestamp_ms(clock);
+    let created_at = clock.timestamp_ms();
     
     event::emit(CommitmentProposalCreated {
         proposal_id: object::uid_to_inner(&id),
@@ -226,7 +226,7 @@ public fun execute_commitment<AssetType, StableType>(
 ) {
     // Validate commitment state
     assert!(!commitment.executed, EAlreadyExecuted);
-    assert!(clock::timestamp_ms(clock) >= commitment.trading_end, EProposalNotExecuted);
+    assert!(clock.timestamp_ms() >= commitment.trading_end, EProposalNotExecuted);
     
     // Validate proposal state - must be finalized with a winning outcome
     assert!(proposal::is_finalized(proposal), EProposalNotExecuted);
@@ -255,7 +255,7 @@ public fun execute_commitment<AssetType, StableType>(
         
         commitment.locked_amount = tier.lock_amount;
         commitment.unlock_time = option::some(
-            clock::timestamp_ms(clock) + tier.lock_duration_ms
+            clock.timestamp_ms() + tier.lock_duration_ms
         );
         commitment.tier_reached = option::some(index);
         
@@ -324,7 +324,7 @@ public entry fun withdraw_unlocked_tokens<AssetType, StableType>(
     assert!(option::is_some(&commitment.unlock_time), ENotLocked);
     
     let unlock_time = *option::borrow(&commitment.unlock_time);
-    assert!(clock::timestamp_ms(clock) >= unlock_time, EStillLocked);
+    assert!(clock.timestamp_ms() >= unlock_time, EStillLocked);
     
     let sender = tx_context::sender(ctx);
     assert!(sender == commitment.withdrawal_recipient, ENotRecipient);

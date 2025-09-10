@@ -556,7 +556,7 @@ fun update_line_internal(
         dao_id: agreement.dao_id,
         line_id,
         new_text,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -628,7 +628,7 @@ fun insert_line_after_internal(
         text: new_text,
         difficulty: new_difficulty,
         position_after: option::some(prev_line_id),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
         line_type: LINE_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -691,7 +691,7 @@ fun insert_line_at_beginning_internal(
         text: new_text,
         difficulty: new_difficulty,
         position_after: option::none(),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
         line_type: LINE_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -752,7 +752,7 @@ fun remove_expired_line_internal(
     event::emit(LineRemoved {
         dao_id: agreement.dao_id,
         line_id,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -810,7 +810,7 @@ fun remove_line_internal(
     event::emit(LineRemoved {
         dao_id: agreement.dao_id,
         line_id,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -838,7 +838,7 @@ public fun set_line_immutable(
         dao_id: agreement.dao_id,
         line_id,
         immutable: true,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -861,7 +861,7 @@ public fun set_insert_allowed(
     event::emit(OAInsertAllowedChanged {
         dao_id: agreement.dao_id,
         allow_insert: agreement.allow_insert,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -884,7 +884,7 @@ public fun set_remove_allowed(
     event::emit(OARemoveAllowedChanged {
         dao_id: agreement.dao_id,
         allow_remove: agreement.allow_remove,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -902,7 +902,7 @@ public fun set_global_immutable(
     event::emit(OAGlobalImmutabilityChanged {
         dao_id: agreement.dao_id,
         immutable: true,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 
@@ -1069,7 +1069,7 @@ public(package) fun emit_current_state_event(agreement: &OperatingAgreement, clo
         allow_insert: agreement.allow_insert,
         allow_remove: agreement.allow_remove,
         global_immutable: agreement.immutable,
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
     });
 }
 // === Time-Based Line Functions ===
@@ -1118,7 +1118,7 @@ public entry fun remove_expired_line(
     
     // Get the line and check if it's expired
     let line = df::borrow<LineKey, AgreementLine>(&agreement.id, LineKey { id: line_id });
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     
     // Line must have an expiry date and be past it
     assert!(line.expires_at.is_some(), ELineHasNoExpiry);
@@ -1152,7 +1152,7 @@ public fun insert_sunset_line_after(
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     
     // Validate sunset time is in the future but not too far
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(expires_at_ms > now, EInvalidTimeOrder);
     assert!(expires_at_ms <= now + MAX_EXPIRY_TIME_MS, EExpiryTooFarInFuture);
     
@@ -1203,7 +1203,7 @@ public fun insert_sunset_line_after(
         text,
         difficulty,
         position_after: option::some(prev_line_id),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
         line_type: LINE_TYPE_SUNSET,
         expires_at: option::some(expires_at_ms),
         effective_from: option::none(),
@@ -1275,7 +1275,7 @@ public fun insert_sunrise_line_after(
         text,
         difficulty,
         position_after: option::some(prev_line_id),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
         line_type: LINE_TYPE_SUNRISE,
         expires_at: option::none(),
         effective_from: option::some(effective_from_ms),
@@ -1307,7 +1307,7 @@ public fun insert_temporary_line_after(
     assert!(agreement.line_count < MAX_LINES_PER_AGREEMENT, ETooManyLines);
     assert!(effective_from_ms < expires_at_ms, EInvalidTimeOrder);
     // Validate times are reasonable
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(expires_at_ms <= now + MAX_EXPIRY_TIME_MS, EExpiryTooFarInFuture);
 
     // Get the next pointer from the previous line first (before creating UID)
@@ -1354,7 +1354,7 @@ public fun insert_temporary_line_after(
         text,
         difficulty,
         position_after: option::some(prev_line_id),
-        timestamp_ms: clock::timestamp_ms(clock),
+        timestamp_ms: clock.timestamp_ms(),
         line_type: LINE_TYPE_TEMPORARY,
         expires_at: option::some(expires_at_ms),
         effective_from: option::some(effective_from_ms),
@@ -1366,7 +1366,7 @@ public fun insert_temporary_line_after(
 /// Emit the full state including activity and schedule
 public fun emit_current_state_event_with_status(agreement: &OperatingAgreement, clock: &Clock) {
     let ordered_ids = get_all_line_ids_ordered(agreement);
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
 
     let mut texts = vector[];
     let mut difficulties = vector[];

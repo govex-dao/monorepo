@@ -25,6 +25,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Errors ===
 
@@ -66,7 +70,8 @@ public fun new_borrow<Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
     intent_witness: IW,    
 ) {
-    intent.add_action(BorrowAction<Cap> {}, intent_witness);
+    let descriptor = action_descriptor::new(b"access", b"borrow_cap");
+    intent.add_action_with_descriptor(BorrowAction<Cap> {}, descriptor, intent_witness);
 }
 
 /// Processes a BorrowAction and returns a Borrowed hot potato and the Cap.
@@ -95,7 +100,8 @@ public fun new_return<Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
     intent_witness: IW,
 ) {
-    intent.add_action(ReturnAction<Cap> {}, intent_witness);
+    let descriptor = action_descriptor::new(b"access", b"return_cap");
+    intent.add_action_with_descriptor(ReturnAction<Cap> {}, descriptor, intent_witness);
 }
 
 /// Returns a Cap to the Account and validates the ReturnAction.

@@ -8,10 +8,10 @@ futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
-futarchy_core = "0xf9d01bdd32483246ad29f4874003529f3e273499ec3f36a3e168d0cf2cf333a8"
-futarchy_one_shot_utils = "0xb129c7808c0986908dc0cc8fecacab315440ef0a8fb4c37f5497b701ddf4ce0f"
-account_protocol = "0x128f93d1ad6977fa168c0877160da2f3bbe82a0aa44ee92d65a09d05a2758d50"
-account_extensions = "0x1d02c0069be1b2b6f06f16095c03997ed1d5fab5a725be923ed4b4571c513681"
+futarchy_core = "0x0"
+futarchy_one_shot_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"
+account_protocol = "0xcfb7cce2dc7cf56d94e13f79713389753dc69cccfacced1aa33ca49a21899195"
+account_extensions = "0xa01921dfa6ad89fac820afa1150b047b96271ff6c555c656ba00b8cbeab33615"
 # Named addresses will be accessible in Move as `@name`. They're also exported:
 # for example, `std = "0x0"` is exported by the Standard Library.
 # alice = "0x0"

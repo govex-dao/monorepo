@@ -129,7 +129,7 @@ public fun try_execute_typed_stream_action<CoinType: drop, IW: copy + drop, Outc
     };
     
     // Try to execute CancelPaymentAction
-    if (executable::contains_action<Outcome, stream_actions::CancelPaymentAction<CoinType>>(executable)) {
+    if (executable::contains_action<Outcome, stream_actions::CancelPaymentAction>(executable)) {
         stream_actions::do_cancel_payment<Outcome, CoinType, IW>(
             executable,
             account,

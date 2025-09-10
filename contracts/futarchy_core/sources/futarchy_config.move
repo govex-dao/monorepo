@@ -1152,9 +1152,6 @@ public fun register_proposal(
     increment_active_proposals(config);
 }
 
-/// Execute a proposal's intent with generic outcome type
-/// Execute a proposal's intent with generic outcome type
-/// This allows standard intents to work with any outcome type
 // Note: execute_proposal_intent function moved to futarchy package
 // as it depends on Proposal and MarketState types from futarchy_markets
 

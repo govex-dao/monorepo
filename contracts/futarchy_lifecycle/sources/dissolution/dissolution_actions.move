@@ -292,7 +292,7 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
 }
 
 /// Execute cancel all streams action
-public fun do_cancel_all_streams<Outcome: store, CoinType, IW: drop>(
+public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,

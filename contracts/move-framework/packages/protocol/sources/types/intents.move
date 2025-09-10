@@ -39,12 +39,14 @@ use sui::{
     dynamic_field,
     clock::Clock,
 };
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
 
 // === Aliases ===
 
 use fun dynamic_field::add as UID.df_add;
 use fun dynamic_field::borrow as UID.df_borrow;
 use fun dynamic_field::remove as UID.df_remove;
+// The add_action_with_descriptor function is defined in this module
 
 // === Errors ===
 
@@ -91,6 +93,8 @@ public struct Intent<Outcome> has store {
     role: String,
     // heterogenous array of actions to be executed in order
     actions: Bag,
+    // descriptors for each action (for approval tracking)
+    action_descriptors: vector<ActionDescriptor>,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome,
 }
@@ -170,6 +174,20 @@ public fun add_action<Outcome, Action: store, IW: drop>(
 
     let idx = intent.actions().length();
     intent.actions_mut().add(idx, action);
+}
+
+/// Add an action with its descriptor for approval tracking
+public fun add_action_with_descriptor<Outcome, Action: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action: Action,
+    descriptor: ActionDescriptor,
+    intent_witness: IW,
+) {
+    intent.assert_is_witness(intent_witness);
+
+    let idx = intent.actions().length();
+    intent.actions_mut().add(idx, action);
+    intent.action_descriptors_mut().push_back(descriptor);
 }
 
 public fun remove_action<Action: store>(
@@ -279,6 +297,14 @@ public fun actions_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Bag {
     &mut intent.actions
 }
 
+public fun action_descriptors<Outcome>(intent: &Intent<Outcome>): &vector<ActionDescriptor> {
+    &intent.action_descriptors
+}
+
+public fun action_descriptors_mut<Outcome>(intent: &mut Intent<Outcome>): &mut vector<ActionDescriptor> {
+    &mut intent.action_descriptors
+}
+
 public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
     &intent.outcome
 }
@@ -366,6 +392,7 @@ public(package) fun new_intent<Outcome, IW: drop>(
         expiration_time,
         role: new_role<IW>(managed_name),
         actions: bag::new(ctx),
+        action_descriptors: vector::empty(),
         outcome,
     }
 }

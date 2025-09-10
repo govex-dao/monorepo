@@ -2,12 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "0D98F8C83DF3191005B3F7ACDB9752C89276A0FB2B0F4D93D9E2ED14551BF543"
-deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
+manifest_digest = "6FDBE1EDBA0335CC5495A002409622EE601B0E1452D9FCF39EE641B6E22C9368"
+deps_digest = "D7FB1F2E1A893B9A0E80A392473710373DE5791D3AC8F6D898803754B2ADAE6B"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -117,6 +116,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
 ]
 
@@ -127,7 +127,6 @@ source = { local = "../futarchy_multisig" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -155,7 +154,6 @@ source = { local = "../futarchy_vault" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -174,6 +172,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0x0bfd19e430a865ec1b92cf87dbd99394e705047394c70d36988c21f1eae235d1"
-latest-published-id = "0x0bfd19e430a865ec1b92cf87dbd99394e705047394c70d36988c21f1eae235d1"
+original-published-id = "0x59ca3adaf121609525bc04cac8f3a0ee221221462d7fd8d0bc60ca5bc327dd53"
+latest-published-id = "0x59ca3adaf121609525bc04cac8f3a0ee221221462d7fd8d0bc60ca5bc327dd53"
 published-version = "1"

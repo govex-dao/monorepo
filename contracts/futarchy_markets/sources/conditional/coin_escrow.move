@@ -235,6 +235,36 @@ public (package) fun burn_single_conditional_token<AssetType, StableType>(
     };
 }
 
+/// Burn a single conditional token after market finalization - used for burning losing LP tokens
+fun burn_single_conditional_token_post_finalization<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    token: ConditionalToken,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    // Safety checks - NO finalization check here since this is for post-finalization
+    assert_supplies_initialized(escrow);
+    
+    let asset_type = token.asset_type();
+    let outcome = token.outcome();
+    let outcome_idx = (outcome as u64);
+    
+    assert!(token.market_id() == escrow.market_state.market_id(), EWrongMarket);
+    assert!(outcome_idx < escrow.market_state.outcome_count(), EOutcomeOutOfBounds);
+    
+    // Get the appropriate supply and burn
+    if (asset_type == TOKEN_TYPE_ASSET) {
+        let supply = &mut escrow.outcome_asset_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    } else if (asset_type == TOKEN_TYPE_STABLE) {
+        let supply = &mut escrow.outcome_stable_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    } else {
+        let supply = &mut escrow.outcome_lp_supplies[outcome_idx];
+        token::burn(token, supply, clock, ctx);
+    };
+}
+
 /// Mint a complete set of asset conditional tokens for all outcomes
 public fun mint_complete_set_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
@@ -745,7 +775,7 @@ public fun redeem_winning_tokens_stable<AssetType, StableType>(
 
 
 /// ======= Swap Methods =========
-public fun swap_token_asset_to_stable<AssetType, StableType>(
+public(package) fun swap_token_asset_to_stable<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     token_in: ConditionalToken,
     outcome_idx: u64,
@@ -780,7 +810,7 @@ public fun swap_token_asset_to_stable<AssetType, StableType>(
     token
 }
 
-public fun swap_token_stable_to_asset<AssetType, StableType>(
+public(package) fun swap_token_stable_to_asset<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     token_in: ConditionalToken,
     outcome_idx: u64,
@@ -1109,8 +1139,8 @@ public fun burn_losing_lp_tokens<AssetType, StableType>(
     // Verify this is an LP token
     assert!(conditional_lp_token.asset_type() == TOKEN_TYPE_LP, ETokenTypeMismatch);
     
-    // Burn the worthless LP token
-    burn_single_conditional_token(escrow, conditional_lp_token, clock, ctx);
+    // Burn the worthless LP token using post-finalization burn
+    burn_single_conditional_token_post_finalization(escrow, conditional_lp_token, clock, ctx);
 }
 
 /// Batch burn multiple losing LP tokens
@@ -1132,8 +1162,8 @@ public fun burn_losing_lp_tokens_batch<AssetType, StableType>(
         assert!((token_outcome as u64) != winning_outcome, EOutcomeOutOfBounds);
         assert!(token.asset_type() == TOKEN_TYPE_LP, ETokenTypeMismatch);
         
-        // Burn the token
-        burn_single_conditional_token(escrow, token, clock, ctx);
+        // Burn the token using post-finalization burn
+        burn_single_conditional_token_post_finalization(escrow, token, clock, ctx);
     };
     
     conditional_lp_tokens.destroy_empty();

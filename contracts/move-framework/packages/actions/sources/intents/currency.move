@@ -20,7 +20,6 @@ use account_protocol::{
 };
 use account_actions::{
     transfer as acc_transfer,
-    vesting,
     version,
     currency,
 };
@@ -50,8 +49,6 @@ public struct DisableRulesIntent() has copy, drop;
 public struct UpdateMetadataIntent() has copy, drop;
 /// Intent Witness defining the intent to transfer a minted coin.
 public struct MintAndTransferIntent() has copy, drop;
-/// Intent Witness defining the intent to pay from a minted coin.
-public struct MintAndVestIntent() has copy, drop;
 /// Intent Witness defining the intent to burn coins from the account using a locked TreasuryCap.
 public struct WithdrawAndBurnIntent() has copy, drop;
 
@@ -198,55 +195,6 @@ public fun execute_mint_and_transfer<Config, Outcome: store, CoinType>(
     );
 }
 
-/// Creates a MintAndVestIntent and adds it to an Account.
-public fun request_mint_and_vest<Config, Outcome: store, CoinType>(
-    auth: Auth,
-    account: &mut Account<Config>, 
-    params: Params,
-    outcome: Outcome,
-    total_amount: u64,
-    start_timestamp: u64, 
-    end_timestamp: u64, 
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    account.verify(auth);
-    params.assert_single_execution();
-
-    let rules = currency::borrow_rules<_, CoinType>(account);
-    assert!(rules.can_mint(), EMintDisabled);
-    if (rules.max_supply().is_some()) assert!(total_amount <= *rules.max_supply().borrow(), EMaxSupply);
-
-    account.build_intent!(
-        params,
-        outcome, 
-        type_name_to_string<CoinType>(),
-        version::current(),
-        MintAndVestIntent(),
-        ctx,
-        |intent, iw| {
-            currency::new_mint<_, CoinType, _>(intent, total_amount, iw);
-            vesting::new_vest(intent, start_timestamp, end_timestamp, recipient, iw);
-        }
-    );
-}
-
-/// Executes a MintAndVestIntent, sends managed coins and creates a vesting.
-public fun execute_mint_and_vest<Config, Outcome: store, CoinType>(
-    executable: &mut Executable<Outcome>, 
-    account: &mut Account<Config>, 
-    ctx: &mut TxContext
-) {
-    account.process_intent!(
-        executable,
-        version::current(),
-        MintAndVestIntent(),
-        |executable, iw| {
-            let coin = currency::do_mint<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
-            vesting::do_vest(executable, coin, iw, ctx);
-        }
-    );
-}
 
 /// Creates a WithdrawAndBurnIntent and adds it to an Account.
 public fun request_withdraw_and_burn<Config, Outcome: store, CoinType>(

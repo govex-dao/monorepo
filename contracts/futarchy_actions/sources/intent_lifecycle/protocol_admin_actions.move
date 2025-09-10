@@ -103,6 +103,42 @@ public struct ApplyDaoFeeDiscountAction has store {
     discount_amount: u64,
 }
 
+// Coin-specific fee actions
+
+/// Add a new coin type with fee configuration
+public struct AddCoinFeeConfigAction has store {
+    coin_type: TypeName,
+    decimals: u8,
+    dao_monthly_fee: u64,
+    dao_creation_fee: u64,
+    proposal_fee_per_outcome: u64,
+    recovery_fee: u64,
+}
+
+/// Update monthly fee for a specific coin type (with 6-month delay)
+public struct UpdateCoinMonthlyFeeAction has store {
+    coin_type: TypeName,
+    new_fee: u64,
+}
+
+/// Update creation fee for a specific coin type (with 6-month delay)
+public struct UpdateCoinCreationFeeAction has store {
+    coin_type: TypeName,
+    new_fee: u64,
+}
+
+/// Update proposal fee for a specific coin type (with 6-month delay)
+public struct UpdateCoinProposalFeeAction has store {
+    coin_type: TypeName,
+    new_fee_per_outcome: u64,
+}
+
+/// Update recovery fee for a specific coin type (with 6-month delay)
+public struct UpdateCoinRecoveryFeeAction has store {
+    coin_type: TypeName,
+    new_fee: u64,
+}
+
 // === Public Functions ===
 
 // Factory Actions
@@ -155,6 +191,54 @@ public fun new_apply_dao_fee_discount(dao_id: ID, discount_amount: u64): ApplyDa
 
 public fun new_withdraw_fees_to_treasury(amount: u64): WithdrawFeesToTreasuryAction {
     WithdrawFeesToTreasuryAction { amount }
+}
+
+// Coin-specific fee constructors
+
+public fun new_add_coin_fee_config(
+    coin_type: TypeName,
+    decimals: u8,
+    dao_monthly_fee: u64,
+    dao_creation_fee: u64,
+    proposal_fee_per_outcome: u64,
+    recovery_fee: u64,
+): AddCoinFeeConfigAction {
+    AddCoinFeeConfigAction {
+        coin_type,
+        decimals,
+        dao_monthly_fee,
+        dao_creation_fee,
+        proposal_fee_per_outcome,
+        recovery_fee,
+    }
+}
+
+public fun new_update_coin_monthly_fee(
+    coin_type: TypeName,
+    new_fee: u64,
+): UpdateCoinMonthlyFeeAction {
+    UpdateCoinMonthlyFeeAction { coin_type, new_fee }
+}
+
+public fun new_update_coin_creation_fee(
+    coin_type: TypeName,
+    new_fee: u64,
+): UpdateCoinCreationFeeAction {
+    UpdateCoinCreationFeeAction { coin_type, new_fee }
+}
+
+public fun new_update_coin_proposal_fee(
+    coin_type: TypeName,
+    new_fee_per_outcome: u64,
+): UpdateCoinProposalFeeAction {
+    UpdateCoinProposalFeeAction { coin_type, new_fee_per_outcome }
+}
+
+public fun new_update_coin_recovery_fee(
+    coin_type: TypeName,
+    new_fee: u64,
+): UpdateCoinRecoveryFeeAction {
+    UpdateCoinRecoveryFeeAction { coin_type, new_fee }
 }
 
 // === Execution Functions ===
@@ -447,6 +531,180 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     // Note: The withdraw_all_fees function transfers directly to sender
     // In a proper implementation, we would need a function that returns the coin
     // for deposit into the DAO treasury
+}
+
+// Coin-specific fee execution functions
+
+/// Execute action to add a coin fee configuration
+public fun do_add_coin_fee_config<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, AddCoinFeeConfigAction, IW>(executable, witness);
+    
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+        account,
+        b"protocol:fee_admin_cap".to_string(),
+        version
+    );
+    
+    fee::add_coin_fee_config(
+        fee_manager,
+        cap,
+        action.coin_type,
+        action.decimals,
+        action.dao_monthly_fee,
+        action.dao_creation_fee,
+        action.proposal_fee_per_outcome,
+        action.recovery_fee,
+        clock,
+        ctx
+    );
+}
+
+/// Execute action to update coin monthly fee
+public fun do_update_coin_monthly_fee<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, UpdateCoinMonthlyFeeAction, IW>(executable, witness);
+    
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+        account,
+        b"protocol:fee_admin_cap".to_string(),
+        version
+    );
+    
+    fee::update_coin_monthly_fee(
+        fee_manager,
+        cap,
+        action.coin_type,
+        action.new_fee,
+        clock,
+        ctx
+    );
+}
+
+/// Execute action to update coin creation fee
+public fun do_update_coin_creation_fee<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, UpdateCoinCreationFeeAction, IW>(executable, witness);
+    
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+        account,
+        b"protocol:fee_admin_cap".to_string(),
+        version
+    );
+    
+    fee::update_coin_creation_fee(
+        fee_manager,
+        cap,
+        action.coin_type,
+        action.new_fee,
+        clock,
+        ctx
+    );
+}
+
+/// Execute action to update coin proposal fee
+public fun do_update_coin_proposal_fee<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, UpdateCoinProposalFeeAction, IW>(executable, witness);
+    
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+        account,
+        b"protocol:fee_admin_cap".to_string(),
+        version
+    );
+    
+    fee::update_coin_proposal_fee(
+        fee_manager,
+        cap,
+        action.coin_type,
+        action.new_fee_per_outcome,
+        clock,
+        ctx
+    );
+}
+
+/// Execute action to update coin recovery fee
+public fun do_update_coin_recovery_fee<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, UpdateCoinRecoveryFeeAction, IW>(executable, witness);
+    
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
+        account,
+        b"protocol:fee_admin_cap".to_string(),
+        version
+    );
+    
+    fee::update_coin_recovery_fee(
+        fee_manager,
+        cap,
+        action.coin_type,
+        action.new_fee,
+        clock,
+        ctx
+    );
+}
+
+/// Action to apply pending coin fee configuration after delay
+public struct ApplyPendingCoinFeesAction has store {
+    coin_type: TypeName,
+}
+
+/// Execute action to apply pending coin fees after delay
+public fun do_apply_pending_coin_fees<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, ApplyPendingCoinFeesAction, IW>(executable, witness);
+    let _ = account;
+    let _ = version;
+    let _ = ctx;
+    
+    // No admin cap needed - anyone can apply pending fees after delay
+    fee::apply_pending_coin_fees(
+        fee_manager,
+        action.coin_type,
+        clock
+    );
 }
 
 // === Helper Functions for Security Council ===

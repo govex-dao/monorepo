@@ -11,6 +11,7 @@ use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
 use sui::object::{Self, ID, UID};
+use sui::table::{Self, Table};
 use sui::tx_context::{Self, TxContext};
 use sui::event;
 use sui::transfer;
@@ -119,6 +120,8 @@ public struct ProposalQueue<phantom StableCoin> has key, store {
     dao_id: ID,
     /// Binary heap of proposals - stored as vector but maintains heap property
     heap: vector<QueuedProposal<StableCoin>>,
+    /// Index table for O(1) proposal lookup by ID
+    proposal_indices: Table<ID, u64>,
     /// Current size of the heap
     size: u64,
     /// Maximum concurrent proposals allowed
@@ -177,7 +180,7 @@ fun right_child_idx(i: u64): u64 {
 }
 
 /// Bubble up element to maintain heap property - O(log n)
-fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx: u64) {
+fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, indices: &mut Table<ID, u64>, mut idx: u64) {
     // Safety: ensure idx is within bounds
     let heap_size = vector::length(heap);
     if (idx >= heap_size) return;
@@ -191,6 +194,12 @@ fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx
         
         // If child has higher priority, swap with parent
         if (compare_priority_scores(child_priority, parent_priority) == COMPARE_GREATER) {
+            // Update indices before swapping
+            let child_id = vector::borrow(heap, idx).proposal_id;
+            let parent_id = vector::borrow(heap, parent).proposal_id;
+            *indices.borrow_mut(child_id) = parent;
+            *indices.borrow_mut(parent_id) = idx;
+            
             vector::swap(heap, idx, parent);
             idx = parent;
         } else {
@@ -200,7 +209,7 @@ fun bubble_up<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx
 }
 
 /// Bubble down element to maintain heap property - O(log n)
-fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut idx: u64, size: u64) {
+fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, indices: &mut Table<ID, u64>, mut idx: u64, size: u64) {
     // Safety: ensure parameters are valid
     if (size == 0 || idx >= size) return;
     
@@ -229,6 +238,12 @@ fun bubble_down<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, mut i
         
         // If current node is largest, we're done
         if (largest == idx) break;
+        
+        // Update indices before swapping
+        let current_id = vector::borrow(heap, idx).proposal_id;
+        let largest_id = vector::borrow(heap, largest).proposal_id;
+        *indices.borrow_mut(current_id) = largest;
+        *indices.borrow_mut(largest_id) = idx;
         
         // Otherwise swap and continue
         vector::swap(heap, idx, largest);
@@ -293,7 +308,7 @@ fun find_min_index<StableCoin>(heap: &vector<QueuedProposal<StableCoin>>, size: 
 }
 
 /// Remove element at index and maintain heap property - O(log n)
-fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, idx: u64, size: &mut u64): QueuedProposal<StableCoin> {
+fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, indices: &mut Table<ID, u64>, idx: u64, size: &mut u64): QueuedProposal<StableCoin> {
     // Safety: ensure valid index and non-empty heap
     assert!(*size > 0, EQueueEmpty);
     assert!(idx < *size, EInvalidProposalId);
@@ -301,11 +316,18 @@ fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, idx: u6
     // Swap with last element (safe: size > 0 guaranteed)
     let last_idx = *size - 1;
     if (idx != last_idx) {
+        // Update indices before swapping
+        let current_id = vector::borrow(heap, idx).proposal_id;
+        let last_id = vector::borrow(heap, last_idx).proposal_id;
+        *indices.borrow_mut(last_id) = idx;
+        
         vector::swap(heap, idx, last_idx);
     };
     
     // Remove the element
     let removed = vector::pop_back(heap);
+    // Remove from index table
+    indices.remove(removed.proposal_id);
     *size = *size - 1;
     
     // Reheapify if we didn't remove the last element
@@ -317,12 +339,12 @@ fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, idx: u6
             let parent_priority = &vector::borrow(heap, parent).priority_score;
             
             if (compare_priority_scores(current_priority, parent_priority) == COMPARE_GREATER) {
-                bubble_up(heap, idx);
+                bubble_up(heap, indices, idx);
             } else {
-                bubble_down(heap, idx, *size);
+                bubble_down(heap, indices, idx, *size);
             };
         } else {
-            bubble_down(heap, idx, *size);
+            bubble_down(heap, indices, idx, *size);
         };
     };
     
@@ -347,6 +369,7 @@ public fun new<StableCoin>(
         id: object::new(ctx),
         dao_id,
         heap: vector::empty(),
+        proposal_indices: table::new(ctx),
         size: 0,
         max_concurrent_proposals,
         active_proposal_count: 0,
@@ -421,7 +444,7 @@ public fun insert<StableCoin>(
         id.delete();
     };
     let mut eviction_info = option::none<EvictionInfo>();
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     
     // Set queue entry time for grace period tracking
     proposal.queue_entry_time = current_time;
@@ -454,7 +477,7 @@ public fun insert<StableCoin>(
             );
             
             // Now safe to remove - assertions have passed
-            let evicted = remove_at(&mut queue.heap, lowest_idx, &mut queue.size);
+            let evicted = remove_at(&mut queue.heap, &mut queue.proposal_indices, lowest_idx, &mut queue.size);
             
             // Save eviction info before destructuring
             let evicted_proposal_id = evicted.proposal_id;
@@ -511,7 +534,7 @@ public fun insert<StableCoin>(
     // Add to heap and bubble up - O(log n)!
     vector::push_back(&mut queue.heap, proposal);
     queue.size = queue.size + 1;
-    bubble_up(&mut queue.heap, queue.size - 1);
+    bubble_up(&mut queue.heap, &mut queue.proposal_indices, queue.size - 1);
     
     // Emit queued event
     event::emit(ProposalQueued {
@@ -533,7 +556,7 @@ public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Optio
     };
     
     // Remove root (max element) - O(log n)!
-    let max_proposal = remove_at(&mut queue.heap, 0, &mut queue.size);
+    let max_proposal = remove_at(&mut queue.heap, &mut queue.proposal_indices, 0, &mut queue.size);
     option::some(max_proposal)
 }
 
@@ -604,7 +627,7 @@ public fun new_queued_proposal<StableCoin>(
     intent_key: Option<String>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let priority_score = create_priority_score(fee, timestamp);
     
     QueuedProposal {
@@ -634,7 +657,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
     intent_key: Option<String>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
-    let timestamp = clock::timestamp_ms(clock);
+    let timestamp = clock.timestamp_ms();
     let priority_score = create_priority_score(fee, timestamp);
     
     QueuedProposal {
@@ -794,7 +817,7 @@ public fun would_accept_proposal<StableCoin>(
             let min_idx = find_min_index(&queue.heap, queue.size);
             if (min_idx < queue.size) {
                 let lowest = vector::borrow(&queue.heap, min_idx);
-                let new_priority = create_priority_score(fee, clock::timestamp_ms(clock));
+                let new_priority = create_priority_score(fee, clock.timestamp_ms());
                 return compare_priority_scores(&new_priority, &lowest.priority_score) == COMPARE_GREATER
             };
         };
@@ -870,24 +893,20 @@ public fun mark_proposal_completed<StableCoin>(
     assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
 }
 
-/// Remove a specific proposal from the queue
+/// Remove a specific proposal from the queue - O(log n) with index tracking
 /// Made package-visible to prevent unauthorized removal
 public fun remove_from_queue<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     proposal_id: ID
 ): QueuedProposal<StableCoin> {
-    let mut i = 0;
-    
-    while (i < queue.size) {
-        let proposal = vector::borrow(&queue.heap, i);
-        if (proposal.proposal_id == proposal_id) {
-            // Found it - remove using our heap function
-            return remove_at(&mut queue.heap, i, &mut queue.size)
-        };
-        i = i + 1;
+    // O(1) lookup of proposal index
+    if (!queue.proposal_indices.contains(proposal_id)) {
+        abort EProposalNotFound
     };
     
-    abort EProposalNotFound
+    let idx = *queue.proposal_indices.borrow(proposal_id);
+    // O(log n) removal
+    remove_at(&mut queue.heap, &mut queue.proposal_indices, idx, &mut queue.size)
 }
 
 /// Get the number of active proposals
@@ -970,7 +989,7 @@ public entry fun cancel_proposal<StableCoin>(
     let proposal = vector::borrow(&queue.heap, i);
     let proposer_addr = proposal.proposer;
     
-    let removed = remove_at(&mut queue.heap, i, &mut queue.size);
+    let removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
     let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_key: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
     
     // Get the fee refunded as a Coin
@@ -1007,12 +1026,12 @@ public fun update_proposal_fee<StableCoin>(
             assert!(proposal.proposer == ctx.sender(), EProposalNotFound);
             
             // Remove the proposal temporarily
-            let mut removed = remove_at(&mut queue.heap, i, &mut queue.size);
+            let mut removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
             let old_fee = removed.fee;
             
             // Update fee and recalculate priority
             removed.fee = removed.fee + additional_fee;
-            removed.priority_score = create_priority_score(removed.fee, clock::timestamp_ms(clock));
+            removed.priority_score = create_priority_score(removed.fee, clock.timestamp_ms());
             
             // Emit fee update event
             event::emit(ProposalFeeUpdated {
@@ -1021,13 +1040,13 @@ public fun update_proposal_fee<StableCoin>(
                 old_fee,
                 new_fee: removed.fee,
                 new_priority_score: removed.priority_score.computed_value,
-                timestamp: clock::timestamp_ms(clock),
+                timestamp: clock.timestamp_ms(),
             });
             
             // Re-insert with new priority - O(log n)!
             vector::push_back(&mut queue.heap, removed);
             queue.size = queue.size + 1;
-            bubble_up(&mut queue.heap, queue.size - 1);
+            bubble_up(&mut queue.heap, &mut queue.proposal_indices, queue.size - 1);
             
             return
         };

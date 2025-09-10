@@ -6,6 +6,23 @@
 
 ## Fork Modifications
 
+### Performance Optimization (2025-09-10)
+
+**User Module** (`user.move`):
+- **Problem**: `reorder_accounts` function had O(N*M) complexity with nested loops
+- **Solution**: Uses VecSet for O(N + M*log N) validation
+- **Impact**: Reordering 20 accounts reduced from ~400 to ~40 operations
+- **Benefit**: Better UX for account management without quadratic gas costs
+
+**Extensions Module** (`extensions.move`):
+- **Decision**: Kept original vector-based implementation
+- **Reason**: Only 3-5 core Account Protocol modules will be whitelisted
+- **Analysis**: O(N) scans are negligible at this scale, vector has lower storage overhead
+
+**Deps Module** (`deps.move`):
+- **Kept as vector-based**: Only manages 2-3 dependencies typically
+- **Reason**: O(N) with N=3 is acceptable; maintains `copy` + `drop` abilities
+
 ### Major Change: Complete Removal of Object Locking
 
 This fork has **completely removed the object locking mechanism** from the Account Protocol. In the context of DAO governance, multiple proposals competing for the same resources is natural and desirable. The blockchain's ownership model already provides the necessary conflict resolution - if an object is consumed by one intent, other intents will simply fail when they try to access it.
@@ -50,18 +67,33 @@ Our initial fix was to move to execution-time locking, but we realized that **lo
 - **Better for DAOs**: Multiple proposals can reference same assets without artificial restrictions
 - **Cleaner mental model**: Intents are just "plans", not resource reservations
 
-3. **Added streaming/vesting functionality** (`vault.move`): Time-based vesting streams for controlled treasury withdrawals:
-   - **VaultStream struct**: Manages vesting schedules with cliff periods, rate limiting, and per-withdrawal caps
-   - **create_stream**: Authorized creation of vesting streams for beneficiaries (e.g., employees, contractors)
-   - **withdraw_from_stream**: Permissionless withdrawals by beneficiaries respecting vesting schedule
-   - **cancel_stream**: Authorized cancellation with proper vested/unvested fund distribution
-   - **deposit_permissionless**: Anyone can deposit to existing coin types (enables protocol revenue deposits)
-   - **calculate_claimable**: Query available vested amount for any stream at current time
-   - **stream_info**: Get full stream details including beneficiary, amounts, and timing parameters
-   - **prune_stream/prune_streams**: Clean up fully-claimed streams to allow vault closure
-   - **Safe math utilities**: Overflow-protected multiplication/division for vesting calculations
+3. **Enhanced streaming functionality** (`vault.move`): Comprehensive streaming/vesting system with advanced management features:
    
-   This enables DAOs to implement salary payments, grants, and controlled treasury access without giving full custody. Streams ensure funds remain in the main vault until withdrawn, maintaining treasury unity while enabling programmatic disbursements. The system includes comprehensive safety checks for timing constraints, withdrawal limits, and proper handling of cliff periods.
+   **Core Streaming**:
+   - **VaultStream struct**: Time-based vesting with cliff periods, rate limiting, and per-withdrawal caps
+   - **create_stream**: Authorized stream creation for beneficiaries (employees, contractors, grants)
+   - **withdraw_from_stream**: Permissionless withdrawals respecting vesting schedule
+   - **cancel_stream**: Authorized cancellation with proper vested/unvested fund distribution
+   - **calculate_claimable**: Query available vested amount at current time
+   - **stream_info**: Get full stream details including amounts and timing
+   
+   **Advanced Management** (Fork Enhancement):
+   - **Multiple beneficiaries**: Support for primary + additional beneficiaries per stream
+   - **Pause/resume**: Temporarily halt streams with automatic schedule adjustment
+   - **Metadata**: Attach descriptive information to streams for better tracking
+   - **Transferability**: Configurable whether streams can be transferred to new recipients
+   - **Cancellability**: Control whether streams can be cancelled after creation
+   - **Beneficiary management**: Add/remove additional beneficiaries, transfer ownership
+   - **Amount reduction**: Reduce total stream amount (above already claimed)
+   - **Authorization checks**: Verify if address is authorized beneficiary
+   - **Activity monitoring**: Check if stream is active and within bounds
+   
+   **Other Features**:
+   - **deposit_permissionless**: Anyone can deposit to existing coin types (revenue/donations)
+   - **prune_stream/prune_streams**: Clean up completed streams for vault closure
+   - **Safe math utilities**: Overflow-protected calculations for vesting math
+   
+   **Note**: Removed standalone `vesting.move` module - all streaming/vesting is now unified in `vault.move`. This ensures funds remain in the treasury until withdrawn, provides better security, simpler accounting, and maintains a single source of truth for DAO funds. The enhanced features enable sophisticated payment streams while maintaining simplicity and safety.
 
 ## Project Overview
 

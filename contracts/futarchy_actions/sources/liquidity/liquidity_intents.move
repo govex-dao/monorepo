@@ -13,6 +13,7 @@ use account_protocol::{
     intents::Intent,
 };
 use futarchy_actions::liquidity_actions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
 
 // === Witness ===
 
@@ -41,7 +42,8 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
         stable_amount,
         min_lp_amount,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"liquidity", b"add_liquidity");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Add a remove liquidity action to an existing intent
@@ -59,7 +61,8 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
         min_asset_amount,
         min_stable_amount,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"liquidity", b"remove_liquidity");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Create a unique key for a liquidity intent

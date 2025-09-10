@@ -210,3 +210,161 @@ fun test_error_remove_wrong_account() {
     destroy(account2);
     ts::end(scenario);
 }
+
+// === Tests for reorder_accounts optimization ===
+
+#[test]
+fun test_reorder_accounts_basic() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    // Create and add 3 accounts
+    let account1 = create_account(scenario.ctx());
+    let account2 = create_account(scenario.ctx());
+    let account3 = create_account(scenario.ctx());
+    
+    let addr1 = account1.addr();
+    let addr2 = account2.addr();
+    let addr3 = account3.addr();
+    
+    user.add_account(&account1, Witness());
+    user.add_account(&account2, Witness());
+    user.add_account(&account3, Witness());
+    
+    // Verify initial order
+    assert!(user.ids_for_type<DummyConfig>() == vector[addr1, addr2, addr3]);
+    
+    // Reorder accounts
+    user.reorder_accounts<DummyConfig>(vector[addr3, addr1, addr2]);
+    
+    // Verify new order
+    assert!(user.ids_for_type<DummyConfig>() == vector[addr3, addr1, addr2]);
+    
+    // Reorder again to different order
+    user.reorder_accounts<DummyConfig>(vector[addr2, addr3, addr1]);
+    assert!(user.ids_for_type<DummyConfig>() == vector[addr2, addr3, addr1]);
+    
+    destroy(account1);
+    destroy(account2);
+    destroy(account3);
+    destroy(user);
+    ts::end(scenario);
+}
+
+#[test]
+fun test_reorder_accounts_large_set() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    // Create 20 accounts to test performance optimization
+    let mut accounts = vector[];
+    let mut addrs = vector[];
+    let mut i = 0;
+    
+    while (i < 20) {
+        let account = create_account(scenario.ctx());
+        let addr = account.addr();
+        user.add_account(&account, Witness());
+        accounts.push_back(account);
+        addrs.push_back(addr);
+        i = i + 1;
+    };
+    
+    // Reverse the order (worst case for old O(N*M) algorithm)
+    let mut reversed = vector[];
+    let mut j = addrs.length();
+    while (j > 0) {
+        j = j - 1;
+        reversed.push_back(addrs[j]);
+    };
+    
+    // This should complete efficiently with VecSet optimization
+    user.reorder_accounts<DummyConfig>(reversed);
+    
+    // Verify the order was reversed
+    assert!(user.ids_for_type<DummyConfig>() == reversed);
+    
+    // Clean up
+    while (!accounts.is_empty()) {
+        destroy(accounts.pop_back());
+    };
+    accounts.destroy_empty();
+    destroy(user);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = user::ENoAccountsToReorder)]
+fun test_error_reorder_no_accounts() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    // Try to reorder when no accounts exist
+    user.reorder_accounts<DummyConfig>(vector[]);
+    
+    destroy(user);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = user::EWrongNumberOfAccounts)]
+fun test_error_reorder_wrong_count() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    let account1 = create_account(scenario.ctx());
+    let account2 = create_account(scenario.ctx());
+    
+    user.add_account(&account1, Witness());
+    user.add_account(&account2, Witness());
+    
+    // Try to reorder with wrong number of addresses (3 instead of 2)
+    user.reorder_accounts<DummyConfig>(vector[@0x1, @0x2, @0x3]);
+    
+    destroy(account1);
+    destroy(account2);
+    destroy(user);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = user::EAccountNotFound)]
+fun test_error_reorder_invalid_address() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    let account1 = create_account(scenario.ctx());
+    let account2 = create_account(scenario.ctx());
+    
+    let addr1 = account1.addr();
+    
+    user.add_account(&account1, Witness());
+    user.add_account(&account2, Witness());
+    
+    // Try to reorder with an address that's not in the user's accounts
+    user.reorder_accounts<DummyConfig>(vector[addr1, @0xDEADBEEF]);
+    
+    destroy(account1);
+    destroy(account2);
+    destroy(user);
+    ts::end(scenario);
+}
+
+#[test, expected_failure(abort_code = user::EAccountNotFound)]
+fun test_error_reorder_duplicate_address() {
+    let mut scenario = ts::begin(@0xCAFE);
+    let mut user = user::new(scenario.ctx());
+    
+    let account1 = create_account(scenario.ctx());
+    let account2 = create_account(scenario.ctx());
+    
+    let addr1 = account1.addr();
+    
+    user.add_account(&account1, Witness());
+    user.add_account(&account2, Witness());
+    
+    // Try to reorder with duplicate addresses
+    user.reorder_accounts<DummyConfig>(vector[addr1, addr1]);
+    
+    destroy(account1);
+    destroy(account2);
+    destroy(user);
+    ts::end(scenario);
+}

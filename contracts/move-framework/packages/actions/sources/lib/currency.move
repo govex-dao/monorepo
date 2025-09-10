@@ -20,6 +20,10 @@ use account_actions::{
     currency,
     version
 };
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Errors ===
 
@@ -203,7 +207,8 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
     
-    intent.add_action(DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon }, intent_witness);
+    let descriptor = action_descriptor::new(b"currency", b"disable_permissions");
+    intent.add_action_with_descriptor(DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon }, descriptor, intent_witness);
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
@@ -248,7 +253,8 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
 
-    intent.add_action(UpdateAction<CoinType> { symbol, name, description, icon_url }, intent_witness);
+    let descriptor = action_descriptor::new(b"currency", b"update_metadata");
+    intent.add_action_with_descriptor(UpdateAction<CoinType> { symbol, name, description, icon_url }, descriptor, intent_witness);
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
@@ -287,13 +293,18 @@ public fun delete_update<CoinType>(expired: &mut Expired) {
     let UpdateAction<CoinType> { .. } = expired.remove_action();
 }
 
-/// Creates a MintAction and adds it to an intent.
+/// Creates a MintAction and adds it to an intent with descriptor.
 public fun new_mint<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
     amount: u64,
     intent_witness: IW,
 ) {
-    intent.add_action(MintAction<CoinType> { amount }, intent_witness);
+    let descriptor = action_descriptor::new(b"treasury", b"mint");
+    intent.add_action_with_descriptor(
+        MintAction<CoinType> { amount },
+        descriptor,
+        intent_witness
+    );
 }
 
 /// Processes a MintAction, mints and returns new coins.
@@ -328,13 +339,18 @@ public fun delete_mint<CoinType>(expired: &mut Expired) {
     let MintAction<CoinType> { .. } = expired.remove_action();
 }
 
-/// Creates a BurnAction and adds it to an intent.
+/// Creates a BurnAction and adds it to an intent with descriptor.
 public fun new_burn<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
     amount: u64, 
     intent_witness: IW,
 ) {
-    intent.add_action(BurnAction<CoinType> { amount }, intent_witness);
+    let descriptor = action_descriptor::new(b"treasury", b"burn");
+    intent.add_action_with_descriptor(
+        BurnAction<CoinType> { amount },
+        descriptor,
+        intent_witness
+    );
 }
 
 /// Processes a BurnAction, burns coins and returns the amount burned.

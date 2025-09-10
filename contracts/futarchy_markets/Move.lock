@@ -2,14 +2,38 @@
 
 [move]
 version = 3
-manifest_digest = "4AAE9EABE22E71E345A21549613287D3619FE5AC6FC391881DC24D5E85F6034D"
-deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
+manifest_digest = "93E115629CBFC45CFBADD37E4436DFED1ED7558C31857231D7526B562DF62693"
+deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+]
+
+[[move.package]]
+id = "AccountExtensions"
+source = { local = "../move-framework/packages/extensions" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "AccountProtocol"
+source = { local = "../move-framework/packages/protocol" }
+
+dependencies = [
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [[move.package]]
@@ -44,6 +68,20 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "futarchy_core"
+source = { local = "../futarchy_core" }
+
+dependencies = [
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+]
+
+[[move.package]]
 id = "futarchy_one_shot_utils"
 source = { local = "../futarchy_one_shot_utils" }
 
@@ -63,6 +101,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0x777643fab37bf9c483b4c3a0ff5d0518a536ea501fe64583cc132a7751bfef33"
-latest-published-id = "0x777643fab37bf9c483b4c3a0ff5d0518a536ea501fe64583cc132a7751bfef33"
+original-published-id = "0x62e5ece8572f14864e4a7c0be24166495eb7b3c0aa1431a9ed7b1ccbf32b32e7"
+latest-published-id = "0x62e5ece8572f14864e4a7c0be24166495eb7b3c0aa1431a9ed7b1ccbf32b32e7"
 published-version = "1"

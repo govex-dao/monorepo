@@ -7,13 +7,17 @@ use std::string::String;
 use sui::coin::Coin;
 use account_protocol::{
     account::{Account, Auth},
-    intents::Params,
+    intents::{Intent, Params},
     intent_interface,
 };
 use account_actions::vault;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_vault::futarchy_vault;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -102,7 +106,8 @@ public fun new_add_coin_type<Outcome, CoinType, IW: drop>(
     intent_witness: IW,
 ) {
     let action = futarchy_vault::new_add_coin_type_action<CoinType>(vault_name);
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"vault", b"add_coin_type");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Helper function to create remove coin type action in an intent
@@ -112,5 +117,6 @@ public fun new_remove_coin_type<Outcome, CoinType, IW: drop>(
     intent_witness: IW,
 ) {
     let action = futarchy_vault::new_remove_coin_type_action<CoinType>(vault_name);
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"vault", b"remove_coin_type");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }

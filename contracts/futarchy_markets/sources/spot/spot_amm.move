@@ -329,7 +329,7 @@ public entry fun add_liquidity<AssetType, StableType>(
         let root = root_u128 as u64;
         assert!(root > MINIMUM_LIQUIDITY, EInsufficientLiquidity);
         // Lock MINIMUM_LIQUIDITY permanently to prevent rounding attacks
-        pool.lp_supply = root;  // FIX: Set to total root amount, not just minimum
+        pool.lp_supply = MINIMUM_LIQUIDITY;  // Set to minimum, will add minted below
         
         // Initialize TWAP oracle on first liquidity
         pool.asset_reserve.join(asset_in.into_balance());

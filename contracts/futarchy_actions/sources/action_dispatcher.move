@@ -4,17 +4,20 @@ module futarchy_actions::action_dispatcher;
 
 // === Imports ===
 use std::option;
+use std::string::String;
+use std::vector;
 use sui::{
     clock::Clock,
     coin::{Self, Coin},
     sui::SUI,
     transfer,
     tx_context::TxContext,
+    object::{Self, ID},
 };
 use account_protocol::{
     account::Account,
     executable::{Self, Executable},
-    intents::Intent,
+    intents::{Self, Intent},
 };
 use account_actions::{
     vault_intents,
@@ -24,6 +27,7 @@ use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::{
     priority_queue,
     proposal_fee_manager::ProposalFeeManager,
+    dao_payment_tracker::{Self, DaoPaymentTracker},
 };
 use futarchy_markets::{
     proposal,
@@ -51,6 +55,91 @@ use futarchy_lifecycle::{
     stream_dispatcher,
 };
 use futarchy_markets::fee::{FeeManager};
+use futarchy_multisig::{
+    weighted_multisig::{Self, WeightedMultisig},
+    policy_registry::{Self, PolicyRegistry},
+    descriptor_analyzer,
+    policy_dispatcher,
+};
+
+// === Errors ===
+const EInsufficientApprovals: u64 = 100;
+const ECouncilNotFound: u64 = 101;
+
+// === Main Entry Point with Approval Checking ===
+
+/// Execute actions with approval checking
+/// Pass all relevant security council Accounts that have approved
+public fun execute_with_approvals<IW: copy + drop, Outcome: store + drop + copy>(
+    executable: Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    councils: &vector<Account<WeightedMultisig>>,  // Pass references to council Accounts that approved
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Executable<Outcome> {
+    // 1. Get policy registry from account
+    let registry = policy_registry::borrow_registry(account, version::current());
+    
+    // 2. Analyze descriptors to determine requirements
+    let requirements = descriptor_analyzer::analyze_requirements(
+        executable::intent(&executable),
+        registry
+    );
+    
+    // 3. Check if DAO approval is needed and satisfied
+    let dao_approved = if (descriptor_analyzer::needs_dao(&requirements)) {
+        // In futarchy, DAO approval means the proposal passed
+        // This is verified by the fact we have an executable (from winning outcome)
+        true
+    } else {
+        true // Not needed
+    };
+    
+    // 4. Check if council approval is needed and satisfied
+    let council_approved = if (descriptor_analyzer::needs_council(&requirements)) {
+        let council_id_opt = descriptor_analyzer::council_id(&requirements);
+        if (option::is_some(council_id_opt)) {
+            let required_council_id = *option::borrow(council_id_opt);
+            // Find the council and verify it belongs to this DAO
+            verify_council_approval(councils, required_council_id, object::id(account))
+        } else {
+            false // Need council but no ID specified
+        }
+    } else {
+        true // Not needed
+    };
+    
+    // 5. Verify all required approvals are satisfied
+    assert!(
+        descriptor_analyzer::check_approvals(&requirements, dao_approved, council_approved),
+        EInsufficientApprovals
+    );
+    
+    // 6. Now safe to execute actions
+    execute_standard_actions(executable, account, witness, clock, ctx)
+}
+
+/// Verify council has approved and belongs to this DAO
+fun verify_council_approval(
+    councils: &vector<Account<WeightedMultisig>>,
+    required_id: ID,
+    dao_id: ID,
+): bool {
+    let mut i = 0;
+    while (i < vector::length(councils)) {
+        let council = vector::borrow(councils, i);
+        if (object::id(council) == required_id) {
+            // Verify this council belongs to this DAO
+            let config = account_protocol::account::config(council);
+            if (weighted_multisig::belongs_to_dao(config, dao_id)) {
+                return true
+            }
+        };
+        i = i + 1;
+    };
+    false  // Council not found or not owned by DAO
+}
 
 // === Entry Functions for Composable Execution ===
 
@@ -72,7 +161,8 @@ public fun execute_standard_actions<IW: copy + drop, Outcome: store + drop + cop
             governance_dispatcher::try_execute_governance_actions(&mut executable, account, witness, clock, ctx) ||
             memo_dispatcher::try_execute_memo_action(&mut executable, account, witness, clock, ctx) ||
             operating_agreement_dispatcher::try_execute_operating_agreement_action(&mut executable, account, witness, clock, ctx) ||
-            optimistic_dispatcher::try_execute_optimistic_action(&mut executable, account, witness, clock, ctx);
+            optimistic_dispatcher::try_execute_optimistic_action(&mut executable, account, witness, clock, ctx) ||
+            policy_dispatcher::try_execute_policy_action(&mut executable, account, witness, ctx);
             
         if (!processed) break  // Unknown action type
     };
@@ -299,6 +389,7 @@ public fun execute_governance_operations<
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,
     parent_proposal_id: ID,
     fee_coin: Coin<SUI>,
     clock: &Clock,
@@ -326,6 +417,7 @@ public fun execute_governance_operations<
                 queue,
                 fee_manager,
                 registry,
+                payment_tracker,
                 fee_coin,
                 clock,
                 ctx
@@ -485,6 +577,84 @@ public fun execute_protocol_admin_operations<
         
         if (executable::contains_action<Outcome, protocol_admin_actions::WithdrawFeesToTreasuryAction>(&mut executable)) {
             protocol_admin_actions::do_withdraw_fees_to_treasury(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::AddCoinFeeConfigAction>(&mut executable)) {
+            protocol_admin_actions::do_add_coin_fee_config(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateCoinMonthlyFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_coin_monthly_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateCoinCreationFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_coin_creation_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateCoinProposalFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_coin_proposal_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::UpdateCoinRecoveryFeeAction>(&mut executable)) {
+            protocol_admin_actions::do_update_coin_recovery_fee(
+                &mut executable,
+                account,
+                version::current(),
+                witness,
+                fee_manager,
+                clock,
+                ctx
+            );
+            continue
+        };
+        
+        if (executable::contains_action<Outcome, protocol_admin_actions::ApplyPendingCoinFeesAction>(&mut executable)) {
+            protocol_admin_actions::do_apply_pending_coin_fees(
                 &mut executable,
                 account,
                 version::current(),

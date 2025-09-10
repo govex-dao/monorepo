@@ -20,7 +20,6 @@ use account_protocol::{
 use account_actions::{
     currency,
     currency_intents,
-    vesting::{Self, Vesting},
     transfer as acc_transfer,
     version,
 };
@@ -346,50 +345,6 @@ fun test_request_execute_mint_and_transfer() {
     end(scenario, extensions, account, clock, metadata);
 }
 
-#[test]
-fun test_request_execute_mint_and_vest() {
-    let (mut scenario, extensions, mut account, clock, cap, metadata) = start();
-    let auth = account.new_auth(version::current(), DummyIntent());
-    currency::lock_cap(auth, &mut account, cap, option::none());
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    let outcome = Outcome {};
-    let params = intents::new_params(
-        b"dummy".to_string(), b"".to_string(), vector[0], 1, &clock, scenario.ctx()
-    );
-    currency_intents::request_mint_and_vest<Config, Outcome, CURRENCY_INTENTS_TESTS>(
-        auth, 
-        &mut account, 
-        params,
-        outcome, 
-        5, 
-        1,
-        2,
-        @0x1,
-        scenario.ctx()
-    );
-
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), DummyIntent());
-    currency_intents::execute_mint_and_vest<_, Outcome, CURRENCY_INTENTS_TESTS>(&mut executable, &mut account, scenario.ctx());
-    account.confirm_execution(executable);
-
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key);
-    currency::delete_mint<CURRENCY_INTENTS_TESTS>(&mut expired);
-    vesting::delete_vest(&mut expired);
-    expired.destroy_empty();
-
-    scenario.next_tx(OWNER);
-    let stream = scenario.take_shared<Vesting<CURRENCY_INTENTS_TESTS>>();
-    assert!(stream.balance_value() == 5);
-    assert!(stream.last_claimed() == 1);
-    assert!(stream.start_timestamp() == 1);
-    assert!(stream.end_timestamp() == 2);
-    assert!(stream.recipient() == @0x1);
-
-    destroy(stream);
-    end(scenario, extensions, account, clock, metadata);
-}
 
 #[test, expected_failure(abort_code = currency_intents::EAmountsRecipentsNotSameLength)]
 fun test_error_request_mint_and_transfer_not_same_length() {

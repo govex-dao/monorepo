@@ -2,12 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "F3989CAF8255C88B15D7E9E5A7BDFE4812F3CCB44443AE819BD196B78D10A384"
-deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
+manifest_digest = "206AA37B1BE1A578070210A0A7EAB91B4B269F7CB6BD0D86BC8155C1A8AB4161"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -105,7 +104,6 @@ source = { local = "../futarchy_actions" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -140,7 +138,6 @@ source = { local = "../futarchy_lifecycle" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -161,6 +158,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
 ]
 
@@ -171,7 +169,6 @@ source = { local = "../futarchy_multisig" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -199,7 +196,6 @@ source = { local = "../futarchy_specialized_actions" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -219,7 +215,6 @@ source = { local = "../futarchy_vault" }
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
@@ -238,6 +233,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "ae43edc0"
-original-published-id = "0xddfb6c8f6501a87382050d7e1f50bf73938f5758a814d23da86a9c99fb9f3819"
-latest-published-id = "0xddfb6c8f6501a87382050d7e1f50bf73938f5758a814d23da86a9c99fb9f3819"
+original-published-id = "0x0000000000000000000000000000000000000000000000000000000000000000"
+latest-published-id = "0x1af6fed64d756d89c94a9f9663231efd29c725a7c21e93eebacebe78a87ff8bb"
 published-version = "1"

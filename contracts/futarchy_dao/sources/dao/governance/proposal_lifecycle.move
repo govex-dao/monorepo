@@ -23,6 +23,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     priority_queue::{Self, ProposalQueue, QueuedProposal},
     proposal_fee_manager::{Self, ProposalFeeManager},
+    dao_payment_tracker::DaoPaymentTracker,
     version,
 };
 use futarchy_markets::{
@@ -98,6 +99,7 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut governance_actions::ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,
     fee_coin: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -137,6 +139,7 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
         queue,
         fee_manager,
         registry,
+        payment_tracker,
         parent_proposal_id,
         fee_coin,
         clock,

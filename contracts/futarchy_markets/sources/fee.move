@@ -1,7 +1,7 @@
 module futarchy_markets::fee;
 
 use std::ascii::String as AsciiString;
-use std::type_name;
+use std::type_name::{Self, TypeName};
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
@@ -11,6 +11,8 @@ use sui::sui::SUI;
 use std::u64;
 use sui::table::{Self, Table};
 use sui::transfer::{public_share_object, public_transfer};
+use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
+use futarchy_core::dao_fee_collector;
 
 // === Introduction ===
 // Manages all fees earnt by the protocol. It is also the interface for admin fee withdrawal
@@ -26,6 +28,8 @@ const EArithmeticOverflow: u64 = 6;
 const EInvalidAdminCap: u64 = 7;
 const EInvalidRecoveryFee: u64 = 9;
 const EFeeExceedsHardCap: u64 = 10;
+const EWrongStableCoinType: u64 = 11;
+const EFeeExceedsTenXCap: u64 = 12;
 
 // === Constants ===
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
@@ -34,6 +38,8 @@ const DEFAULT_VERIFICATION_FEE: u64 = 10_000; // Default fee for level 1
 const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
 const FEE_UPDATE_DELAY_MS: u64 = 15_552_000_000; // 6 months (180 days)
 const MAX_FEE_COLLECTION_PERIOD_MS: u64 = 7_776_000_000; // 90 days (3 months) - max retroactive collection
+const MAX_FEE_MULTIPLIER: u64 = 10; // Maximum 10x increase from baseline
+const FEE_BASELINE_RESET_PERIOD_MS: u64 = 15_552_000_000; // 6 months - baseline resets after this
 // Remove ABSOLUTE_MAX_MONTHLY_FEE in V3 this is jsut here to build up trust
 // Dont want to limit fee as platform gets more mature
 const ABSOLUTE_MAX_MONTHLY_FEE: u64 = 10_000_000_000; // 10,000 USDC (6 decimals)
@@ -57,6 +63,29 @@ public struct FeeManager has key, store {
 
 public struct FeeAdminCap has key, store {
     id: UID,
+}
+
+/// Stores fee amounts for a specific coin type
+public struct CoinFeeConfig has store {
+    coin_type: TypeName,
+    decimals: u8,
+    dao_monthly_fee: u64,
+    dao_creation_fee: u64,
+    proposal_creation_fee_per_outcome: u64,
+    recovery_fee: u64,
+    verification_fees: Table<u8, u64>,
+    // Pending updates with 6-month delay
+    pending_monthly_fee: Option<u64>,
+    pending_creation_fee: Option<u64>,
+    pending_proposal_fee: Option<u64>,
+    pending_recovery_fee: Option<u64>,
+    pending_fees_effective_timestamp: Option<u64>,
+    // 10x cap tracking - baseline fees that reset every 6 months
+    monthly_fee_baseline: u64,
+    creation_fee_baseline: u64,
+    proposal_fee_baseline: u64,
+    recovery_fee_baseline: u64,
+    baseline_reset_timestamp: u64,
 }
 
 /// Tracks fee collection history for each DAO
@@ -551,6 +580,110 @@ public fun collect_dao_platform_fee<StableType: drop>(
     (total_fee, periods_to_collect)
 }
 
+/// Collect platform fee from DAO vault using DAO's own stablecoin
+/// If the DAO doesn't have sufficient funds, debt is accumulated and DAO is blocked
+public fun collect_dao_platform_fee_with_dao_coin<StableType>(
+    fee_manager: &mut FeeManager,
+    payment_tracker: &mut DaoPaymentTracker,
+    dao_id: ID,
+    coin_type: TypeName,
+    mut available_funds: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<StableType>, u64) { // Returns (remaining_funds, periods_collected)
+    // CRITICAL: Verify type safety - ensure StableType matches the coin_type parameter
+    assert!(
+        type_name::get<StableType>() == coin_type,
+        EWrongStableCoinType
+    );
+    
+    // Apply any pending fee updates for this coin type
+    apply_pending_coin_fees(fee_manager, coin_type, clock);
+    
+    // Get fee amount for this specific coin type
+    let fee_amount = if (dynamic_field::exists_(&fee_manager.id, coin_type)) {
+        let config: &CoinFeeConfig = dynamic_field::borrow(&fee_manager.id, coin_type);
+        config.dao_monthly_fee
+    } else {
+        // Fallback to default fee if coin not configured
+        fee_manager.dao_monthly_fee
+    };
+    
+    // Calculate periods to collect
+    let current_time = clock.timestamp_ms();
+    let record_key = dao_id;
+    
+    // Get or create fee record
+    let periods_to_collect = if (dynamic_field::exists_(&fee_manager.id, record_key)) {
+        let record: &DaoFeeRecord = dynamic_field::borrow(&fee_manager.id, record_key);
+        let time_since_last = if (current_time > record.last_collection_timestamp) {
+            current_time - record.last_collection_timestamp
+        } else {
+            0
+        };
+        
+        // Cap at 3 months max
+        let collectible_time = if (time_since_last > MAX_FEE_COLLECTION_PERIOD_MS) {
+            MAX_FEE_COLLECTION_PERIOD_MS
+        } else {
+            time_since_last
+        };
+        
+        collectible_time / MONTHLY_FEE_PERIOD_MS
+    } else {
+        // First time - create record but don't collect
+        let new_record = DaoFeeRecord {
+            last_collection_timestamp: current_time,
+            total_collected: 0,
+            last_fee_rate: fee_amount,
+        };
+        dynamic_field::add(&mut fee_manager.id, record_key, new_record);
+        0
+    };
+    
+    if (periods_to_collect == 0 || fee_amount == 0) {
+        // No fee due, return all funds
+        return (available_funds, 0)
+    };
+    
+    let total_fee = fee_amount * periods_to_collect;
+    
+    // Update the record
+    let record: &mut DaoFeeRecord = dynamic_field::borrow_mut(&mut fee_manager.id, record_key);
+    record.last_collection_timestamp = current_time;
+    record.total_collected = record.total_collected + total_fee;
+    record.last_fee_rate = fee_amount;
+    
+    // Check if DAO has enough funds
+    let available_amount = available_funds.value();
+    if (available_amount >= total_fee) {
+        // Full payment available - split the exact amount
+        let fee_coin = available_funds.split(total_fee, ctx);
+        
+        // Deposit the fee
+        deposit_stable_fees(fee_manager, fee_coin.into_balance(), dao_id, clock);
+        
+        (available_funds, periods_to_collect)
+    } else {
+        // Insufficient funds - take what's available and accumulate debt
+        let debt_amount = total_fee - available_amount;
+        
+        // Accumulate debt in the payment tracker
+        dao_payment_tracker::accumulate_debt(payment_tracker, dao_id, debt_amount);
+        
+        // Take all available funds as partial payment
+        if (available_amount > 0) {
+            deposit_stable_fees(fee_manager, available_funds.into_balance(), dao_id, clock);
+            // Return empty coin since all funds were taken
+            (coin::zero<StableType>(ctx), periods_to_collect)
+        } else {
+            // No funds available, destroy the zero coin and return a new zero coin
+            available_funds.destroy_zero();
+            (coin::zero<StableType>(ctx), periods_to_collect)
+        }
+    }
+}
+
 public fun deposit_dao_platform_fee<StableType: drop>(
     fee_manager: &mut FeeManager,
     fee_coin: Coin<StableType>,
@@ -806,6 +939,268 @@ public fun get_stable_fee_balance<StableType>(fee_manager: &FeeManager): u64 {
 /// Get the hard cap for monthly fees (V2 safety limit)
 public fun get_max_monthly_fee_cap(): u64 {
     ABSOLUTE_MAX_MONTHLY_FEE
+}
+
+// === Coin-specific Fee Management ===
+
+/// Add a new coin type with its fee configuration
+public fun add_coin_fee_config(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    coin_type: TypeName,
+    decimals: u8,
+    dao_monthly_fee: u64,
+    dao_creation_fee: u64,
+    proposal_fee_per_outcome: u64,
+    recovery_fee: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    
+    // Create verification fees table
+    let mut verification_fees = table::new<u8, u64>(ctx);
+    // Add default verification levels
+    table::add(&mut verification_fees, 1, DEFAULT_VERIFICATION_FEE);
+    
+    let config = CoinFeeConfig {
+        coin_type,
+        decimals,
+        dao_monthly_fee,
+        dao_creation_fee,
+        proposal_creation_fee_per_outcome: proposal_fee_per_outcome,
+        recovery_fee,
+        verification_fees,
+        pending_monthly_fee: option::none(),
+        pending_creation_fee: option::none(),
+        pending_proposal_fee: option::none(),
+        pending_recovery_fee: option::none(),
+        pending_fees_effective_timestamp: option::none(),
+        // Initialize baselines to current fees
+        monthly_fee_baseline: dao_monthly_fee,
+        creation_fee_baseline: dao_creation_fee,
+        proposal_fee_baseline: proposal_fee_per_outcome,
+        recovery_fee_baseline: recovery_fee,
+        baseline_reset_timestamp: clock.timestamp_ms(),
+    };
+    
+    // Store using coin type as key
+    dynamic_field::add(&mut fee_manager.id, coin_type, config);
+}
+
+/// Update monthly fee for a specific coin type (with 6-month delay and 10x cap)
+public fun update_coin_monthly_fee(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    coin_type: TypeName,
+    new_fee: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
+    
+    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
+    let current_time = clock.timestamp_ms();
+    
+    // Check if 6 months have passed since baseline was set - if so, reset baseline
+    if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
+        config.monthly_fee_baseline = config.dao_monthly_fee;
+        config.baseline_reset_timestamp = current_time;
+    };
+    
+    // Enforce 10x cap from baseline
+    assert!(
+        new_fee <= config.monthly_fee_baseline * MAX_FEE_MULTIPLIER,
+        EFeeExceedsTenXCap
+    );
+    
+    // Allow immediate decrease, delayed increase
+    if (new_fee <= config.dao_monthly_fee) {
+        // Fee decrease - apply immediately
+        config.dao_monthly_fee = new_fee;
+    } else {
+        // Fee increase - apply after delay
+        let effective_timestamp = current_time + FEE_UPDATE_DELAY_MS;
+        config.pending_monthly_fee = option::some(new_fee);
+        config.pending_fees_effective_timestamp = option::some(effective_timestamp);
+    };
+}
+
+/// Update creation fee for a specific coin type (with 6-month delay and 10x cap)
+public fun update_coin_creation_fee(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    coin_type: TypeName,
+    new_fee: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
+    
+    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
+    let current_time = clock.timestamp_ms();
+    
+    // Check if 6 months have passed since baseline was set - if so, reset baseline
+    if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
+        config.creation_fee_baseline = config.dao_creation_fee;
+        config.baseline_reset_timestamp = current_time;
+    };
+    
+    // Enforce 10x cap from baseline
+    assert!(
+        new_fee <= config.creation_fee_baseline * MAX_FEE_MULTIPLIER,
+        EFeeExceedsTenXCap
+    );
+    
+    // Allow immediate decrease, delayed increase
+    if (new_fee <= config.dao_creation_fee) {
+        // Fee decrease - apply immediately
+        config.dao_creation_fee = new_fee;
+    } else {
+        // Fee increase - apply after delay
+        let effective_timestamp = current_time + FEE_UPDATE_DELAY_MS;
+        config.pending_creation_fee = option::some(new_fee);
+        config.pending_fees_effective_timestamp = option::some(effective_timestamp);
+    };
+}
+
+/// Update proposal fee for a specific coin type (with 6-month delay and 10x cap)
+public fun update_coin_proposal_fee(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    coin_type: TypeName,
+    new_fee_per_outcome: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
+    
+    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
+    let current_time = clock.timestamp_ms();
+    
+    // Check if 6 months have passed since baseline was set - if so, reset baseline
+    if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
+        config.proposal_fee_baseline = config.proposal_creation_fee_per_outcome;
+        config.baseline_reset_timestamp = current_time;
+    };
+    
+    // Enforce 10x cap from baseline
+    assert!(
+        new_fee_per_outcome <= config.proposal_fee_baseline * MAX_FEE_MULTIPLIER,
+        EFeeExceedsTenXCap
+    );
+    
+    // Allow immediate decrease, delayed increase
+    if (new_fee_per_outcome <= config.proposal_creation_fee_per_outcome) {
+        // Fee decrease - apply immediately
+        config.proposal_creation_fee_per_outcome = new_fee_per_outcome;
+    } else {
+        // Fee increase - apply after delay
+        let effective_timestamp = current_time + FEE_UPDATE_DELAY_MS;
+        config.pending_proposal_fee = option::some(new_fee_per_outcome);
+        config.pending_fees_effective_timestamp = option::some(effective_timestamp);
+    };
+}
+
+/// Update recovery fee for a specific coin type (with 6-month delay and 10x cap)
+public fun update_coin_recovery_fee(
+    fee_manager: &mut FeeManager,
+    admin_cap: &FeeAdminCap,
+    coin_type: TypeName,
+    new_fee: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
+    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
+    
+    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
+    let current_time = clock.timestamp_ms();
+    
+    // Check if 6 months have passed since baseline was set - if so, reset baseline
+    if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
+        config.recovery_fee_baseline = config.recovery_fee;
+        config.baseline_reset_timestamp = current_time;
+    };
+    
+    // Enforce 10x cap from baseline
+    assert!(
+        new_fee <= config.recovery_fee_baseline * MAX_FEE_MULTIPLIER,
+        EFeeExceedsTenXCap
+    );
+    
+    // Allow immediate decrease, delayed increase
+    if (new_fee <= config.recovery_fee) {
+        // Fee decrease - apply immediately
+        config.recovery_fee = new_fee;
+    } else {
+        // Fee increase - apply after delay
+        let effective_timestamp = current_time + FEE_UPDATE_DELAY_MS;
+        config.pending_recovery_fee = option::some(new_fee);
+        config.pending_fees_effective_timestamp = option::some(effective_timestamp);
+    };
+}
+
+/// Apply pending fee updates if the delay has passed
+public fun apply_pending_coin_fees(
+    fee_manager: &mut FeeManager,
+    coin_type: TypeName,
+    clock: &Clock,
+) {
+    if (!dynamic_field::exists_(&fee_manager.id, coin_type)) {
+        return
+    };
+    
+    let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
+    
+    if (config.pending_fees_effective_timestamp.is_some()) {
+        let effective_time = *config.pending_fees_effective_timestamp.borrow();
+        
+        if (clock.timestamp_ms() >= effective_time) {
+            // Apply all pending fees
+            if (config.pending_monthly_fee.is_some()) {
+                config.dao_monthly_fee = *config.pending_monthly_fee.borrow();
+                config.pending_monthly_fee = option::none();
+            };
+            
+            if (config.pending_creation_fee.is_some()) {
+                config.dao_creation_fee = *config.pending_creation_fee.borrow();
+                config.pending_creation_fee = option::none();
+            };
+            
+            if (config.pending_proposal_fee.is_some()) {
+                config.proposal_creation_fee_per_outcome = *config.pending_proposal_fee.borrow();
+                config.pending_proposal_fee = option::none();
+            };
+            
+            if (config.pending_recovery_fee.is_some()) {
+                config.recovery_fee = *config.pending_recovery_fee.borrow();
+                config.pending_recovery_fee = option::none();
+            };
+            
+            config.pending_fees_effective_timestamp = option::none();
+        }
+    }
+}
+
+/// Get fee config for a specific coin type
+public fun get_coin_fee_config(
+    fee_manager: &FeeManager,
+    coin_type: TypeName,
+): &CoinFeeConfig {
+    assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
+    dynamic_field::borrow(&fee_manager.id, coin_type)
+}
+
+/// Get monthly fee for a specific coin type
+public fun get_coin_monthly_fee(
+    fee_manager: &FeeManager,
+    coin_type: TypeName,
+): u64 {
+    get_coin_fee_config(fee_manager, coin_type).dao_monthly_fee
 }
 
 // ======== Test Functions ========

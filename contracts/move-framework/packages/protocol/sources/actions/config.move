@@ -25,6 +25,9 @@ use account_protocol::{
     intent_interface,
 };
 use account_extensions::extensions::Extensions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// No use fun needed - add_action_with_descriptor is in intents module
 
 // === Aliases ===
 
@@ -87,7 +90,7 @@ public fun update_extensions_to_latest<Config>(
         i = i + 1;
     };
 
-    *account.deps_mut(version::current()).inner_mut() = 
+    *account.deps_mut(version::current()) = 
         deps::new_inner(extensions, account.deps(), new_names, new_addrs, new_versions);
 }
 
@@ -106,7 +109,8 @@ public fun request_config_deps<Config, Outcome: store>(
     account.verify(auth);
     params.assert_single_execution();
     
-    let deps = deps::new_inner(extensions, account.deps(), names, addresses, versions);
+    let mut deps = deps::new_inner(extensions, account.deps(), names, addresses, versions);
+    let deps_inner = *deps.inner_mut();
 
     account.build_intent!(
         params,
@@ -115,7 +119,10 @@ public fun request_config_deps<Config, Outcome: store>(
         version::current(),
         ConfigDepsIntent(),   
         ctx,
-        |intent, iw| intent.add_action(ConfigDepsAction { deps }, iw),
+        |intent, iw| {
+            let descriptor = action_descriptor::new(b"config", b"update_deps");
+            intent.add_action_with_descriptor(ConfigDepsAction { deps: deps_inner }, descriptor, iw);
+        },
     );
 }
 
@@ -129,7 +136,8 @@ public fun execute_config_deps<Config, Outcome: store>(
         version::current(),   
         ConfigDepsIntent(), 
         |executable, iw| {
-            let ConfigDepsAction { deps } = executable.next_action<_, ConfigDepsAction, _>(iw);
+            let action_ref = executable.next_action<_, ConfigDepsAction, _>(iw);
+            let ConfigDepsAction { deps } = action_ref;
             *account.deps_mut(version::current()).inner_mut() = *deps;
         }
     ); 
@@ -158,7 +166,10 @@ public fun request_toggle_unverified_allowed<Config, Outcome: store>(
         version::current(),
         ToggleUnverifiedAllowedIntent(),
         ctx,
-        |intent, iw| intent.add_action(ToggleUnverifiedAllowedAction {}, iw),
+        |intent, iw| {
+            let descriptor = action_descriptor::new(b"config", b"toggle_unverified");
+            intent.add_action_with_descriptor(ToggleUnverifiedAllowedAction {}, descriptor, iw);
+        },
     );
 }
 

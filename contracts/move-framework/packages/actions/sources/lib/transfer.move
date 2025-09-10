@@ -9,6 +9,10 @@ use account_protocol::{
     intents::{Expired, Intent},
     executable::Executable,
 };
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Structs ===
 
@@ -20,13 +24,18 @@ public struct TransferAction has store {
 
 // === Public functions ===
 
-/// Creates a TransferAction and adds it to an intent.
+/// Creates a TransferAction and adds it to an intent with descriptor.
 public fun new_transfer<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     recipient: address,
     intent_witness: IW,
 ) {
-    intent.add_action(TransferAction { recipient }, intent_witness);
+    let descriptor = action_descriptor::new(b"treasury", b"transfer");
+    intent.add_action_with_descriptor(
+        TransferAction { recipient },
+        descriptor,
+        intent_witness
+    );
 }
 
 /// Processes a TransferAction and transfers an object to a recipient.

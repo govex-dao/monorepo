@@ -5,7 +5,8 @@
 module futarchy_multisig::weighted_multisig;
 
 use std::string::String;
-use sui::{vec_map::{Self, VecMap}, vec_set::{Self, VecSet}, clock::Clock};
+use std::option::{Self, Option};
+use sui::{vec_map::{Self, VecMap}, vec_set::{Self, VecSet}, clock::Clock, object::ID};
 
 // === Errors ===
 const EThresholdNotMet: u64 = 1;
@@ -41,6 +42,8 @@ public struct WeightedMultisig has store {
     total_weight: u64,
     /// Last activity timestamp for dead-man switch tracking
     last_activity_ms: u64,
+    /// The DAO that owns this security council (optional for backwards compatibility)
+    dao_id: Option<ID>,
 }
 
 /// The outcome object for a weighted multisig. Tracks approvals for a specific intent.
@@ -93,7 +96,13 @@ public fun new(members: vector<address>, weights: vector<u64>, threshold: u64, c
     // This is a valid configuration for requiring multiple signers
     
     // Initialize with current timestamp for proper dead-man switch tracking
-    WeightedMultisig { members: member_map, threshold, total_weight, last_activity_ms: clock.timestamp_ms() }
+    WeightedMultisig { 
+        members: member_map, 
+        threshold, 
+        total_weight, 
+        last_activity_ms: clock.timestamp_ms(),
+        dao_id: option::none(), // Can be set later with set_dao_id
+    }
 }
 
 
@@ -210,4 +219,25 @@ public fun last_activity_ms(config: &WeightedMultisig): u64 {
 /// Bump the last activity timestamp to the current time
 public fun bump_last_activity(config: &mut WeightedMultisig, clock: &Clock) {
     config.last_activity_ms = clock.timestamp_ms();
+}
+
+// === DAO ownership ===
+
+/// Set the DAO ID that owns this security council
+public fun set_dao_id(config: &mut WeightedMultisig, dao_id: ID) {
+    config.dao_id = option::some(dao_id);
+}
+
+/// Get the DAO ID that owns this security council
+public fun dao_id(config: &WeightedMultisig): Option<ID> {
+    config.dao_id
+}
+
+/// Check if this council belongs to a specific DAO
+public fun belongs_to_dao(config: &WeightedMultisig, dao_id: ID): bool {
+    if (option::is_some(&config.dao_id)) {
+        *option::borrow(&config.dao_id) == dao_id
+    } else {
+        false // No DAO set
+    }
 }

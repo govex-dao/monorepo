@@ -23,6 +23,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Errors ===
 
@@ -179,7 +183,9 @@ public fun new_take<Outcome, IW: drop>(
     recipient: address,
     intent_witness: IW,
 ) {
-    intent.add_action(TakeAction { name, nft_id, recipient }, intent_witness);
+    let descriptor = action_descriptor::new(b"kiosk", b"take_nft")
+        .with_target(nft_id);
+    intent.add_action_with_descriptor(TakeAction { name, nft_id, recipient }, descriptor, intent_witness);
 }
 
 /// Processes a TakeAction, resolves the rules and places the nft into the recipient's kiosk.
@@ -235,7 +241,9 @@ public fun new_list<Outcome, IW: drop>(
     price: u64,
     intent_witness: IW,
 ) {
-    intent.add_action(ListAction { name, nft_id, price }, intent_witness);
+    let descriptor = action_descriptor::new(b"kiosk", b"list_nft")
+        .with_target(nft_id);
+    intent.add_action_with_descriptor(ListAction { name, nft_id, price }, descriptor, intent_witness);
 }
 
 /// Processes a ListAction and lists the nft for purchase.

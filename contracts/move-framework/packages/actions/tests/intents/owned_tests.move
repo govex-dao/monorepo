@@ -20,7 +20,6 @@ use account_protocol::{
 use account_actions::{
     owned_intents,
     vault,
-    vesting::{Self, Vesting},
     transfer as acc_transfer,
     version,
 };
@@ -164,50 +163,6 @@ fun test_request_execute_transfer() {
     end(scenario, extensions, account, clock);
 }
 
-#[test]
-fun test_request_execute_vesting() {
-    let (mut scenario, extensions, mut account, clock) = start();
-    let key = b"dummy".to_string();
-
-    let id = send_coin(account.addr(), 5, &mut scenario);
-
-    let auth = account.new_auth(version::current(), Witness());
-    let outcome = Outcome {};
-    let params = intents::new_params(
-        b"dummy".to_string(), b"".to_string(), vector[0], 1, &clock, scenario.ctx()
-    );
-    owned_intents::request_withdraw_and_vest<Config, Outcome>(
-        auth, 
-        &mut account, 
-        params,
-        outcome, 
-        id, 
-        1,
-        2,
-        @0x1,
-        scenario.ctx()
-    );
-
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
-    owned_intents::execute_withdraw_and_vest<Config, Outcome, SUI>(&mut executable, &mut account, ts::receiving_ticket_by_id<Coin<SUI>>(id), scenario.ctx());
-    account.confirm_execution(executable);
-
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key);
-    owned::delete_withdraw(&mut expired, &mut account);
-    vesting::delete_vest(&mut expired);
-    expired.destroy_empty();
-
-    scenario.next_tx(OWNER);
-    let stream = scenario.take_shared<Vesting<SUI>>();
-    assert!(stream.balance_value() == 5);
-    assert!(stream.last_claimed() == 1);
-    assert!(stream.start_timestamp() == 1);
-    assert!(stream.end_timestamp() == 2);
-    assert!(stream.recipient() == @0x1);
-
-    destroy(stream);
-    end(scenario, extensions, account, clock);
-} 
 
 #[test, expected_failure(abort_code = owned_intents::EObjectsRecipientsNotSameLength)]
 fun test_error_request_transfer_not_same_length() {

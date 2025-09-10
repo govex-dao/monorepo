@@ -22,6 +22,10 @@ use account_protocol::{
 use account_actions::{
     version,
 };
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Error ===
 
@@ -196,7 +200,12 @@ public fun new_upgrade<Outcome, IW: drop>(
     digest: vector<u8>, 
     intent_witness: IW,
 ) {
-    intent.add_action(UpgradeAction { name, digest }, intent_witness);
+    let descriptor = action_descriptor::new(b"upgrade", b"package");
+    intent.add_action_with_descriptor(
+        UpgradeAction { name, digest },
+        descriptor,
+        intent_witness
+    );
 }    
 
 /// Processes an UpgradeAction and returns a UpgradeTicket.
@@ -232,7 +241,12 @@ public fun new_commit<Outcome, IW: drop>(
     name: String,
     intent_witness: IW,
 ) {
-    intent.add_action(CommitAction { name }, intent_witness);
+    let descriptor = action_descriptor::new(b"upgrade", b"commit");
+    intent.add_action_with_descriptor(
+        CommitAction { name },
+        descriptor,
+        intent_witness
+    );
 }    
 
 // must be called after UpgradeAction is processed, there cannot be any other action processed before
@@ -268,7 +282,12 @@ public fun new_restrict<Outcome, IW: drop>(
     policy: u8, 
     intent_witness: IW,
 ) {
-    intent.add_action(RestrictAction { name, policy }, intent_witness);
+    let descriptor = action_descriptor::new(b"upgrade", b"restrict");
+    intent.add_action_with_descriptor(
+        RestrictAction { name, policy },
+        descriptor,
+        intent_witness
+    );
 }    
 
 /// Processes a RestrictAction and updates the UpgradeCap policy.

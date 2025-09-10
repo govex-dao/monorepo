@@ -307,8 +307,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     
     // Action registry removed - using statically-typed pattern
     
-    // Initialize the policy registry
-    policy_registry::initialize(&mut account, version::current(), ctx);
+    // Initialize the policy registry with no initial critical policies
+    policy_registry::initialize(&mut account, version::current(), vector::empty(), ctx);
     
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);

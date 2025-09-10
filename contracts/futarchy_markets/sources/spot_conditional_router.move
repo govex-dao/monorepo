@@ -2,7 +2,7 @@ module futarchy_markets::spot_conditional_router;
 
 use futarchy_markets::swap;
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets::conditional_token::ConditionalToken;
+use futarchy_markets::conditional_token::{Self, ConditionalToken};
 use futarchy_markets::proposal::Proposal;
 use sui::coin::{Self, Coin};
 use sui::clock::Clock;
@@ -64,8 +64,43 @@ public entry fun swap_spot_asset_to_spot_stable_exact_in<AssetType, StableType>(
     };
     tokens.destroy_empty();
 
-    // 3) Redeem STABLE complete set back to spot coin
-    let balance_out = coin_escrow::redeem_complete_set_stable(escrow, stable_tokens, clock, ctx);
+    // 3) Equalize amounts across outcomes before redeeming
+    // Find minimum amount across all stable tokens
+    let n = stable_tokens.length();
+    let mut i = 0;
+    let mut min_amount = std::u64::max_value!();
+    while (i < n) {
+        let token_amount = stable_tokens[i].value();
+        if (token_amount < min_amount) {
+            min_amount = token_amount;
+        };
+        i = i + 1;
+    };
+    
+    // Split each token to have exactly min_amount for redemption
+    let mut tokens_to_redeem = vector::empty<ConditionalToken>();
+    let mut total_leftover = 0u64;
+    while (!stable_tokens.is_empty()) {
+        let mut token = stable_tokens.pop_back();
+        let token_amount = token.value();
+        if (token_amount > min_amount) {
+            // Split off the excess and transfer it back to sender
+            let excess = token_amount - min_amount;
+            let leftover_token = conditional_token::split_and_return(
+                &mut token,
+                excess,
+                clock,
+                ctx
+            );
+            transfer::public_transfer(leftover_token, ctx.sender());
+            total_leftover = total_leftover + excess;
+        };
+        tokens_to_redeem.push_back(token);
+    };
+    stable_tokens.destroy_empty();
+    
+    // Now redeem the equalized complete set
+    let balance_out = coin_escrow::redeem_complete_set_stable(escrow, tokens_to_redeem, clock, ctx);
     let stable_out = coin::from_balance(balance_out, ctx);
     let out_amt = coin::value(&stable_out);
     assert!(out_amt >= min_stable_out, EMinOutNotMet);
@@ -120,8 +155,43 @@ public entry fun swap_spot_stable_to_spot_asset_exact_in<AssetType, StableType>(
     };
     tokens.destroy_empty();
 
-    // 3) Redeem ASSET complete set back to spot coin
-    let balance_out = coin_escrow::redeem_complete_set_asset(escrow, asset_tokens, clock, ctx);
+    // 3) Equalize amounts across outcomes before redeeming
+    // Find minimum amount across all asset tokens
+    let n = asset_tokens.length();
+    let mut i = 0;
+    let mut min_amount = std::u64::max_value!();
+    while (i < n) {
+        let token_amount = asset_tokens[i].value();
+        if (token_amount < min_amount) {
+            min_amount = token_amount;
+        };
+        i = i + 1;
+    };
+    
+    // Split each token to have exactly min_amount for redemption
+    let mut tokens_to_redeem = vector::empty<ConditionalToken>();
+    let mut total_leftover = 0u64;
+    while (!asset_tokens.is_empty()) {
+        let mut token = asset_tokens.pop_back();
+        let token_amount = token.value();
+        if (token_amount > min_amount) {
+            // Split off the excess and transfer it back to sender
+            let excess = token_amount - min_amount;
+            let leftover_token = conditional_token::split_and_return(
+                &mut token,
+                excess,
+                clock,
+                ctx
+            );
+            transfer::public_transfer(leftover_token, ctx.sender());
+            total_leftover = total_leftover + excess;
+        };
+        tokens_to_redeem.push_back(token);
+    };
+    asset_tokens.destroy_empty();
+    
+    // Now redeem the equalized complete set
+    let balance_out = coin_escrow::redeem_complete_set_asset(escrow, tokens_to_redeem, clock, ctx);
     let asset_out = coin::from_balance(balance_out, ctx);
     let out_amt = coin::value(&asset_out);
     assert!(out_amt >= min_asset_out, EMinOutNotMet);

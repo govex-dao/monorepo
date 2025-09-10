@@ -20,6 +20,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_actions::config_actions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_markets::{
 };
@@ -51,7 +52,8 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_set_proposals_enabled_action(enabled);
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"toggle_proposals");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -73,7 +75,8 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_update_name_action(new_name);
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_name");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -103,7 +106,8 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
                 option::some(icon_url),
                 option::some(description)
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_metadata");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -134,7 +138,8 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
                 option::some(trading_period_ms),
                 option::none() // amm_total_fee_bps
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_trading");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -164,7 +169,8 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
                 option::some(initial_observation),
                 option::some(threshold)
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_twap");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -198,7 +204,8 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::none(), // optimistic_challenge_fee - not specified
                 option::none()  // optimistic_challenge_period_ms - not specified
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_governance");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -236,7 +243,8 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
                 optimistic_challenge_fee,
                 optimistic_challenge_period_ms
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_governance_flexible");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -266,7 +274,8 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
                 protocol_bps,
                 burn_bps
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_slash_distribution");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -295,7 +304,8 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
                 option::none(), // max_queue_size - not specified
                 option::some(fee_escalation_basis_points)
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"governance", b"update_queue");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }

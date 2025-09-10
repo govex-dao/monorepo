@@ -113,9 +113,9 @@ public fun write(
 ) {
     let now = clock.timestamp_ms();
     
-    // Prevent spam
-    if (oracle.last_update_ms > 0) {
-        assert!(now >= oracle.last_update_ms + MIN_UPDATE_INTERVAL_MS, EUpdateTooSoon);
+    // Prevent spam - skip update if too soon rather than aborting
+    if (oracle.last_update_ms > 0 && now < oracle.last_update_ms + MIN_UPDATE_INTERVAL_MS) {
+        return; // silently skip; keep the last observation
     };
     
     // Calculate cumulative

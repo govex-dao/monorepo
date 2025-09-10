@@ -31,6 +31,9 @@ use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// No use fun needed - add_action_with_descriptor is in intents module
 use account_protocol::{
     account::{Account, Auth},
     intents::{Expired, Intent},
@@ -61,7 +64,13 @@ public fun new_withdraw<Config, Outcome, IW: drop>(
 ) {
     intent.assert_is_account(account.addr());
     // No validation needed - conflicts are natural in DAO governance
-    intent.add_action(WithdrawAction { object_id }, intent_witness);
+    let descriptor = action_descriptor::new(b"ownership", b"withdraw")
+        .with_target(object_id);
+    intent.add_action_with_descriptor(
+        WithdrawAction { object_id },
+        descriptor,
+        intent_witness
+    );
 }
 
 /// Executes a WithdrawAction and returns the object

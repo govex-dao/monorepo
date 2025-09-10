@@ -20,6 +20,7 @@ use fun intent_interface::build_intent as Account.build_intent;
 
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
 use futarchy_multisig::{
     security_council,
     security_council_actions::{Self, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
@@ -30,6 +31,10 @@ use futarchy_vault::custody_actions;
 use futarchy_multisig::policy_registry;
 use account_actions::package_upgrade;
 use account_extensions::extensions::Extensions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // witnesses
 public struct RequestPackageUpgradeIntent has copy, drop {}
@@ -62,6 +67,7 @@ public fun new_approve_policy_change_intent(): ApprovePolicyChangeIntent {
 
 // Named errors
 const ERequiresCoExecution: u64 = 100;
+const EDAOPaymentDelinquent: u64 = 101; // DAO is blocked due to unpaid fees
 
 // Public constructor for AcceptUpgradeCapIntent witness
 public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
@@ -71,11 +77,18 @@ public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
 public fun request_package_upgrade(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_futarchy_dao: Auth,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
     params: Params,
     package_name: String,
     digest: vector<u8>,
     ctx: &mut TxContext
 ) {
+    // Block if DAO has unpaid fees
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
     security_council.verify(auth_from_futarchy_dao);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -96,8 +109,15 @@ public fun request_package_upgrade(
 public fun execute_upgrade_request(
     executable: &mut Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
     clock: &Clock,
 ): UpgradeTicket {
+    // Double-check DAO isn't blocked at execution time
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
     package_upgrade::do_upgrade(
         executable,
         security_council,
@@ -110,8 +130,15 @@ public fun execute_upgrade_request(
 public fun execute_commit_request(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
     receipt: UpgradeReceipt,
 ) {
+    // Check DAO isn't blocked
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
     package_upgrade::do_commit(
         &mut executable,
         security_council,
@@ -127,13 +154,19 @@ public fun execute_commit_request(
 public fun request_accept_and_lock_cap(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
+    payment_tracker: &DaoPaymentTracker,
+    dao_id: ID,
     params: Params,
     cap_id: ID,
     package_name: String, // used as resource_key
     ctx: &mut TxContext
 ) {
-    use account_protocol::account;
-
+    // Block if DAO has unpaid fees
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
+    
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -159,8 +192,10 @@ public fun request_accept_and_lock_cap(
             resource_key,
             b"".to_string()   // optional context
         );
-        intent.add_action(
+        let descriptor = action_descriptor::new(b"security", b"accept_upgrade_cap");
+        intent.add_action_with_descriptor(
             action,
+            descriptor,
             AcceptUpgradeCapIntent{}
         );
     };
@@ -220,12 +255,19 @@ public fun delete_accept_upgrade_cap(
 public fun request_update_council_membership(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
     params: Params,
     new_members: vector<address>,
     new_weights: vector<u64>,
     new_threshold: u64,
     ctx: &mut TxContext
 ) {
+    // Block if DAO has unpaid fees
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -242,7 +284,8 @@ public fun request_update_council_membership(
                 new_weights,
                 new_threshold
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"update_membership");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -251,8 +294,15 @@ public fun request_update_council_membership(
 public fun execute_update_council_membership(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
     clock: &Clock,
 ) {
+    // Double-check DAO isn't blocked at execution time
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
     let action: &UpdateCouncilMembershipAction = executable.next_action(UpdateCouncilMembershipIntent{});
     let (new_members, new_weights, new_threshold) =
         security_council_actions::get_update_council_membership_params(action);
@@ -301,7 +351,8 @@ public fun request_create_security_council<Outcome: store + drop + copy>(
                 weights,
                 threshold
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"create_council");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -369,7 +420,8 @@ public fun request_approve_policy_removal(
                 metadata,
                 expires_at
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"add_members");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -414,7 +466,8 @@ public fun request_approve_policy_set(
                 metadata,
                 expires_at
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"remove_members");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -537,7 +590,8 @@ public fun request_sweep_expired_intents(
         |intent, iw| {
             // Store the keys in the action so we know what to clean at execution
             let action = security_council_actions::new_sweep_intents_with_keys(intent_keys);
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"sweep_intents");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -674,7 +728,8 @@ public fun request_create_optimistic_intent(
                 title,
                 description
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"optimistic_intent");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -704,7 +759,8 @@ public fun request_execute_optimistic_intent(
             let action = optimistic_intents::new_execute_optimistic_intent_action(
                 optimistic_intent_id
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"challenge_intent");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -735,7 +791,8 @@ public fun request_cancel_optimistic_intent(
                 optimistic_intent_id,
                 reason
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"security", b"reject_proposal");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }

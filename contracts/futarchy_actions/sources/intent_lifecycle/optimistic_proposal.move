@@ -152,7 +152,7 @@ public fun create_optimistic_proposal(
     
     let id = object::new(ctx);
     let proposal_id = object::uid_to_inner(&id);
-    let created_at = clock::timestamp_ms(clock);
+    let created_at = clock.timestamp_ms();
     let challenge_period_end = created_at + actual_challenge_period;
     
     event::emit(OptimisticProposalCreated {
@@ -191,7 +191,7 @@ public fun challenge_optimistic_proposal<AssetType>(
     ctx: &mut TxContext,
 ) {
     // Validate challenge timing
-    let now = clock::timestamp_ms(clock);
+    let now = clock.timestamp_ms();
     assert!(now < optimistic.challenge_period_end, EChallengePeriodEnded);
     assert!(!optimistic.is_challenged, EAlreadyChallenged);
     assert!(!optimistic.executed, EAlreadyExecuted);
@@ -228,13 +228,13 @@ public fun execute_optimistic_proposal(
     // Validate execution conditions
     assert!(!optimistic.executed, EAlreadyExecuted);
     assert!(!optimistic.is_challenged, EAlreadyChallenged);
-    assert!(clock::timestamp_ms(clock) >= optimistic.challenge_period_end, EChallengePeriodNotEnded);
+    assert!(clock.timestamp_ms() >= optimistic.challenge_period_end, EChallengePeriodNotEnded);
     
     optimistic.executed = true;
     
     event::emit(OptimisticProposalExecuted {
         proposal_id: object::id(optimistic),
-        timestamp: clock::timestamp_ms(clock),
+        timestamp: clock.timestamp_ms(),
     });
     
     // Intent execution would be handled separately
@@ -312,7 +312,7 @@ public fun is_challengeable(
 ): bool {
     !optimistic.is_challenged && 
     !optimistic.executed && 
-    clock::timestamp_ms(clock) < optimistic.challenge_period_end
+    clock.timestamp_ms() < optimistic.challenge_period_end
 }
 
 public fun is_executable(
@@ -321,7 +321,7 @@ public fun is_executable(
 ): bool {
     !optimistic.executed && 
     !optimistic.is_challenged && 
-    clock::timestamp_ms(clock) >= optimistic.challenge_period_end
+    clock.timestamp_ms() >= optimistic.challenge_period_end
 }
 
 public fun get_proposer(optimistic: &OptimisticProposal): address {

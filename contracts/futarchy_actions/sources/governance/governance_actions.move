@@ -24,6 +24,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     priority_queue,
     proposal_fee_manager::{Self, ProposalFeeManager},
+    dao_payment_tracker::{Self, DaoPaymentTracker},
 };
 use futarchy_actions::{
     resource_requests::{Self, ResourceRequest, ResourceReceipt},
@@ -45,6 +46,7 @@ const EChainDepthNotFound: u64 = 12;
 const EBucketOrderingViolation: u64 = 13;
 const EIntegerOverflow: u64 = 14;
 const EInsufficientFeeCoins: u64 = 15;
+const EDAOPaymentDelinquent: u64 = 16; // DAO is blocked due to unpaid fees
 
 // === Constants ===
 // These are now just fallbacks - actual values come from DAO config
@@ -239,6 +241,7 @@ public fun fulfill_create_proposal(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,  // NEW: Check if DAO is blocked
     fee_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -248,6 +251,13 @@ public fun fulfill_create_proposal(
     let parent_proposal_id: ID = resource_requests::get_context(&request, string::utf8(b"parent_proposal_id"));
     let reservation_period: u64 = resource_requests::get_context(&request, string::utf8(b"reservation_period"));
     let max_depth: u64 = resource_requests::get_context(&request, string::utf8(b"max_depth"));
+    let account_id: ID = resource_requests::get_context(&request, string::utf8(b"account_id"));
+    
+    // Check if DAO is blocked due to unpaid fees
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, account_id),
+        EDAOPaymentDelinquent
+    );
     
     // Check chain depth - need to track proposals both in registry and queue
     // For proposals in queue, we assume depth 0 if not in registry
@@ -357,7 +367,7 @@ public entry fun recreate_evicted_proposal(
     
     // Check if reservation is still valid (time window only)
     assert!(
-        clock::timestamp_ms(clock) < reservation.recreation_expires_at,
+        clock.timestamp_ms() < reservation.recreation_expires_at,
         EReservationExpired
     );
     
@@ -441,7 +451,7 @@ fun create_reservation(
     let child_proposals = extract_child_proposals(&action.proposal_data);
     
     // Calculate the expiration time for the new reservation with overflow check
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     assert!(current_time <= 18446744073709551615 - reservation_period, EIntegerOverflow);
     let expires_at = current_time + reservation_period;
     
@@ -656,7 +666,7 @@ public fun has_valid_reservation(
     
     let reservation = table::borrow(&registry.reservations, parent_proposal_id);
     // Only time window matters - no recreation limit
-    clock::timestamp_ms(clock) < reservation.recreation_expires_at
+    clock.timestamp_ms() < reservation.recreation_expires_at
 }
 
 /// Get reservation details (for viewing)
@@ -811,7 +821,7 @@ public fun prune_oldest_expired_bucket(
     };
     
     let head_timestamp = *option::borrow(&registry.head_bucket_timestamp);
-    let current_time = clock::timestamp_ms(clock);
+    let current_time = clock.timestamp_ms();
     
     // Add a safety buffer based on DAO configuration
     let safety_buffer = futarchy_config::proposal_recreation_window_ms(config);

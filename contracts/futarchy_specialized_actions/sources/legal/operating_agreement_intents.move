@@ -18,6 +18,10 @@ use futarchy_specialized_actions::{
     operating_agreement_actions,
 };
 use futarchy_core::version;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -45,12 +49,9 @@ public fun create_update_line_intent<Config, Outcome: store>(
         OperatingAgreementIntent {},
         ctx,
         |intent, iw| {
-            operating_agreement_actions::new_update_line<Outcome, OperatingAgreementIntent>(
-                intent,
-                line_id,
-                new_text,
-                iw
-            );
+            let action = operating_agreement_actions::new_update_line_action(line_id, new_text);
+            let descriptor = action_descriptor::new(b"legal", b"update_line");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -73,13 +74,13 @@ public fun create_insert_line_after_intent<Config, Outcome: store>(
         OperatingAgreementIntent {},
         ctx,
         |intent, iw| {
-            operating_agreement_actions::new_insert_line_after<Outcome, OperatingAgreementIntent>(
-                intent,
+            let action = operating_agreement_actions::new_insert_line_after_action(
                 prev_line_id,
                 text,
-                difficulty,
-                iw
+                difficulty
             );
+            let descriptor = action_descriptor::new(b"legal", b"insert_line");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -101,12 +102,12 @@ public fun create_insert_line_at_beginning_intent<Config, Outcome: store>(
         OperatingAgreementIntent {},
         ctx,
         |intent, iw| {
-            operating_agreement_actions::new_insert_line_at_beginning<Outcome, OperatingAgreementIntent>(
-                intent,
+            let action = operating_agreement_actions::new_insert_line_at_beginning_action(
                 text,
-                difficulty,
-                iw
+                difficulty
             );
+            let descriptor = action_descriptor::new(b"legal", b"insert_at_beginning");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -127,11 +128,9 @@ public fun create_remove_line_intent<Config, Outcome: store>(
         OperatingAgreementIntent {},
         ctx,
         |intent, iw| {
-            operating_agreement_actions::new_remove_line<Outcome, OperatingAgreementIntent>(
-                intent,
-                line_id,
-                iw
-            );
+            let action = operating_agreement_actions::new_remove_line_action(line_id);
+            let descriptor = action_descriptor::new(b"legal", b"remove_line");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -156,12 +155,12 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
             let batch_uid = object::new(ctx);
             let batch_id = object::uid_to_inner(&batch_uid);
             object::delete(batch_uid);
-            operating_agreement_actions::new_batch_operating_agreement<Outcome, OperatingAgreementIntent>(
-                intent,
+            let action = operating_agreement_actions::new_batch_operating_agreement_action(
                 batch_id,
-                actions,
-                iw
+                actions
             );
+            let descriptor = action_descriptor::new(b"legal", b"batch_update");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }
@@ -188,7 +187,8 @@ public fun create_create_agreement_intent<Config, Outcome: store>(
                 allow_insert,
                 allow_remove
             );
-            intent.add_action(action, iw);
+            let descriptor = action_descriptor::new(b"legal", b"create_agreement");
+            intent.add_action_with_descriptor(action, descriptor, iw);
         }
     );
 }

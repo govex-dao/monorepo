@@ -16,7 +16,6 @@ use account_protocol::{
 };
 use account_actions::{
     transfer as acc_transfer,
-    vesting,
     vault,
     version,
 };
@@ -36,8 +35,6 @@ const ENoVault: u64 = 1;
 public struct WithdrawAndTransferToVaultIntent() has copy, drop;
 /// Intent Witness defining the intent to withdraw and transfer multiple objects.
 public struct WithdrawAndTransferIntent() has copy, drop;
-/// Intent Witness defining the intent to withdraw a coin and create a vesting.
-public struct WithdrawAndVestIntent() has copy, drop;
 
 // === Public functions ===
 
@@ -134,50 +131,3 @@ public fun execute_withdraw_and_transfer<Config, Outcome: store, T: key + store>
     );
 }
 
-/// Creates a WithdrawAndVestIntent and adds it to an Account.
-public fun request_withdraw_and_vest<Config, Outcome: store>(
-    auth: Auth,
-    account: &mut Account<Config>, 
-    params: Params,
-    outcome: Outcome,
-    coin_id: ID, // coin owned by the account, must have the total amount to be paid
-    start_timestamp: u64,
-    end_timestamp: u64,
-    recipient: address,
-    ctx: &mut TxContext
-) {
-    account.verify(auth);
-    params.assert_single_execution();
-
-    intent_interface::build_intent!(
-        account,
-        params,
-        outcome,
-        b"".to_string(),
-        version::current(),
-        WithdrawAndVestIntent(),
-        ctx,
-        |intent, iw| {
-            owned::new_withdraw(intent, account, coin_id, iw);
-            vesting::new_vest(intent, start_timestamp, end_timestamp, recipient, iw);
-        }
-    );
-}
-
-/// Executes a WithdrawAndVestIntent, withdraws a coin and creates a vesting.
-public fun execute_withdraw_and_vest<Config, Outcome: store, C: drop>(
-    executable: &mut Executable<Outcome>, 
-    account: &mut Account<Config>, 
-    receiving: Receiving<Coin<C>>,
-    ctx: &mut TxContext
-) {
-    account.process_intent!(
-        executable,
-        version::current(),
-        WithdrawAndVestIntent(),
-        |executable, iw| {
-            let coin = owned::do_withdraw(executable, account, receiving, iw);
-            vesting::do_vest(executable, coin, iw, ctx);
-        }
-    );
-}

@@ -19,6 +19,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome, ExecutePermit},
     priority_queue,
     proposal_fee_manager::ProposalFeeManager,
+    dao_payment_tracker::DaoPaymentTracker,
 };
 use futarchy_actions::{
     action_dispatcher,
@@ -97,6 +98,7 @@ public fun run_with_governance<IW: copy + drop>(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,
     parent_proposal_id: ID,
     fee_coin: Coin<SUI>,
     clock: &Clock,
@@ -112,6 +114,7 @@ public fun run_with_governance<IW: copy + drop>(
         queue,
         fee_manager,
         registry,
+        payment_tracker,
         parent_proposal_id,
         fee_coin,
         clock,

@@ -14,6 +14,10 @@ use account_protocol::{
     intents::Intent,
 };
 use futarchy_lifecycle::stream_actions;
+use account_extensions::action_descriptor::{Self, ActionDescriptor};
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
 
 // === Witness ===
 
@@ -41,8 +45,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
-    let action = stream_actions::new_create_stream_action<CoinType>(
-        stream_actions::source_direct_treasury(),
+    let action = stream_actions::new_create_payment_action<CoinType>(
         recipient,
         total_amount,
         start_timestamp,
@@ -50,10 +53,11 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         cliff_timestamp,
         cancellable,
         description,
-        clock,
-        ctx,
+        0, // STREAM_TYPE_LINEAR
+        option::none(),
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"treasury", b"create_stream");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
     
     // Direct treasury streams don't need upfront funding
     // Funds will be withdrawn on each claim via vault::SpendAction
@@ -75,8 +79,7 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
     ctx: &mut TxContext,
 ) {
     // First add the stream creation action
-    let action = stream_actions::new_create_stream_action<CoinType>(
-        stream_actions::source_isolated_pool(),
+    let action = stream_actions::new_create_payment_action<CoinType>(
         recipient,
         total_amount,
         start_timestamp,
@@ -84,10 +87,11 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
         cliff_timestamp,
         cancellable,
         description,
-        clock,
-        ctx,
+        0, // STREAM_TYPE_LINEAR
+        option::some(b"isolated_pool".to_string()),
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"treasury", b"create_isolated_stream");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
     
     // Then add a vault spend action to fund the isolated pool
     vault::new_spend<Outcome, CoinType, IW>(
@@ -125,7 +129,8 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
         clock,
         ctx,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"stream", b"create");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
     
     // Calculate total funding needed
     let total_funding = if (total_payments > 0) {
@@ -167,7 +172,8 @@ public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
         payment_id,
         amount,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"stream", b"create");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Add a cancel stream action to an existing intent
@@ -183,7 +189,8 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         stream_id,
         return_unclaimed,
     );
-    intent.add_action(action, intent_witness);
+    let descriptor = action_descriptor::new(b"stream", b"cancel");
+    intent.add_action_with_descriptor(action, descriptor, intent_witness);
 }
 
 /// Create a unique key for a stream intent

@@ -211,9 +211,9 @@ OK lets have a TWAP oracle but for time when proposal was live fill in using my 
 
 # Consider for V3
 - [ ] Should operating agreements or another object e.g registry be able to make policy rules regarding actions types e.g. preventing them or setting what authority they need
-- [ ] Sort out twap i itializatkon prices and handle spot oracle given 24 7 proposals if no spot trading dueot back to back proposals
+- [X] Sort out twap i itializatkon prices and handle spot oracle given 24 7 proposals if no spot trading dueot back to back proposals
 - [ ] multiverse finance Token splitting? https://www.paradigm.xyz/2025/05/multiverse-finance
-- [ ] Amm routing abstraction Redeeming condition toke redeem type dispatcher for burn or redeem winning
+- [X] Amm routing abstraction Redeeming condition toke redeem type dispatcher for burn or redeem winning
 - [ ] Also maybe shard all daos based on number e.g give certain dao number label to admins
 - [ ]  Way to generate dao onchain spending data?
 - [ ]  Make whole code not rely so much on off chain indexing, like keep last n proposals discoverable from dao and every other object properly discoverable
