@@ -791,7 +791,7 @@ fun test_metadata_access() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     
     // Should not abort - just testing access
-    assert_eq(metadata(&account).length(), 0);
+    assert_eq(metadata(&account).size(), 0);
     destroy(account);
 }
 
