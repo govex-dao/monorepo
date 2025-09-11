@@ -1,7 +1,7 @@
 module account_extensions::action_descriptor {
     use std::option::{Self, Option};
     use std::vector;
-    use sui::object::ID;
+    use sui::object::{Self, ID};
 
     /// Simple descriptor for determining approval requirements
     public struct ActionDescriptor has copy, drop, store {
@@ -31,6 +31,42 @@ module account_extensions::action_descriptor {
     public fun with_target(mut self: ActionDescriptor, target: ID): ActionDescriptor {
         self.target_object = option::some(target);
         self
+    }
+    
+    /// Add target object (mutating)
+    public fun add_target(self: &mut ActionDescriptor, target: ID) {
+        self.target_object = option::some(target);
+    }
+    
+    /// Add target address (converts to ID)
+    public fun add_target_address(self: &mut ActionDescriptor, addr: address) {
+        self.target_object = option::some(object::id_from_address(addr));
+    }
+    
+    /// Create with target
+    public fun new_with_target(
+        category: vector<u8>,
+        action_type: vector<u8>,
+        target: ID,
+    ): ActionDescriptor {
+        ActionDescriptor {
+            category,
+            action_type,
+            target_object: option::some(target),
+        }
+    }
+    
+    /// Create with target address
+    public fun new_with_target_address(
+        category: vector<u8>,
+        action_type: vector<u8>,
+        addr: address,
+    ): ActionDescriptor {
+        ActionDescriptor {
+            category,
+            action_type,
+            target_object: option::some(object::id_from_address(addr)),
+        }
     }
     
     /// Getters

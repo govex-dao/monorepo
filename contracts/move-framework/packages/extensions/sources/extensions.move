@@ -129,22 +129,23 @@ public fun is_extension(
     addr: address,
     version: u64,
 ): bool {
-    // O(1) check if the name exists
+    // O(1) check if the extension exists
     if (!extensions.by_name.contains(name)) return false;
     
-    // O(1) check if the address is registered
-    if (!extensions.by_addr.contains(addr)) return false;
-    
-    // Verify the address maps to this name
-    if (extensions.by_addr.borrow(addr) != name) return false;
-    
-    // Check version in history (small list, typically 1-3 versions)
     let extension = extensions.by_name.borrow(name);
-    let history = extension.history;
-    let opt_idx = history.find_index!(|h| h.addr == addr);
-    if (opt_idx.is_none()) return false;
-    let idx = opt_idx.destroy_some();
-    history[idx].version == version
+    
+    // Linear search through history (O(versions) - typically 1-3)
+    let mut found = false;
+    let mut i = 0;
+    while (i < extension.history.length()) {
+        let h = &extension.history[i];
+        if (h.addr == addr && h.version == version) {
+            found = true;
+            break
+        };
+        i = i + 1;
+    };
+    found
 }
 
 // === Admin functions ===
@@ -162,19 +163,30 @@ public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: ad
     extensions.by_addr.add(addr, name);
 }
 
-/// Removes a package from the list
+/// Removes a package from the list with proper cleanup
 public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
     assert!(extensions.by_name.contains(name), EExtensionNotFound);
     assert!(name != b"AccountProtocol".to_string(), ECannotRemoveAccountProtocol);
     
-    // Remove from tables (O(1) operations)
+    // Remove the extension and get its history for cleanup
     let extension = extensions.by_name.remove(name);
-    let history = extension.history;
-    history.do!(|h| {
-        if (extensions.by_addr.contains(h.addr) && extensions.by_addr.borrow(h.addr) == name) {
-            extensions.by_addr.remove(h.addr);
+    let Extension { name: _, history } = extension;
+    
+    // Clean up all associated addresses from reverse lookup (O(versions) - small)
+    let mut i = 0;
+    while (i < history.length()) {
+        let h = &history[i];
+        // Only remove if address still maps to this extension name
+        if (extensions.by_addr.contains(h.addr)) {
+            let mapped_name = extensions.by_addr.borrow(h.addr);
+            if (*mapped_name == name) {
+                extensions.by_addr.remove(h.addr);
+            }
         };
-    });
+        i = i + 1;
+    };
+    
+    // History is a vector of History structs with copy+drop, it will be dropped automatically
 }
 
 /// Adds a new version to the history of a package
@@ -233,12 +245,21 @@ public fun remove_for_testing(extensions: &mut Extensions, name: String) {
     assert!(name != b"AccountProtocol".to_string(), ECannotRemoveAccountProtocol);
     
     let extension = extensions.by_name.remove(name);
-    let history = extension.history;
-    history.do!(|h| {
-        if (extensions.by_addr.contains(h.addr) && extensions.by_addr.borrow(h.addr) == name) {
-            extensions.by_addr.remove(h.addr);
+    let Extension { name: _, history } = extension;
+    
+    let mut i = 0;
+    while (i < history.length()) {
+        let h = &history[i];
+        if (extensions.by_addr.contains(h.addr)) {
+            let mapped_name = extensions.by_addr.borrow(h.addr);
+            if (*mapped_name == name) {
+                extensions.by_addr.remove(h.addr);
+            }
         };
-    });
+        i = i + 1;
+    };
+    
+    // History is a vector of History structs with copy+drop, it will be dropped automatically
 }
 
 #[test_only]
@@ -315,15 +336,15 @@ fun test_getters() {
     assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
 
     assert!(extensions.length() == 3);
-    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
-    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
-    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
-    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
-    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(2).name() == b"AccountActions".to_string());
-    assert!(extensions.get_by_idx(2).history()[0].addr() == @0x2);
-    assert!(extensions.get_by_idx(2).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).name() == b"AccountProtocol".to_string());
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).history()[0].addr() == @0x0);
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).history()[0].addr() == @0x1);
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).name() == b"AccountActions".to_string());
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).history()[0].addr() == @0x2);
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).history()[0].version() == 1);
 
     destroy(extensions);
 }
@@ -427,31 +448,27 @@ fun test_update_deps() {
     extensions.update(&cap, b"B".to_string(), @0x1B, 2);
     extensions.update(&cap, b"C".to_string(), @0x1C, 2);
     extensions.update(&cap, b"C".to_string(), @0x2C, 3);
-    // assertions - Find indices for each extension
-    let a_idx = extensions.get_idx_for_name(b"A".to_string());
-    let b_idx = extensions.get_idx_for_name(b"B".to_string());
-    let c_idx = extensions.get_idx_for_name(b"C".to_string());
-    
-    assert!(extensions.inner[a_idx].name() == b"A".to_string());
-    assert!(extensions.inner[a_idx].history()[0].addr() == @0xA);
-    assert!(extensions.inner[a_idx].history()[0].version() == 1);
-    assert!(extensions.inner[b_idx].name() == b"B".to_string());
-    assert!(extensions.inner[b_idx].history()[1].addr() == @0x1B);
-    assert!(extensions.inner[b_idx].history()[1].version() == 2);
-    assert!(extensions.inner[c_idx].name() == b"C".to_string());
-    assert!(extensions.inner[c_idx].history()[2].addr() == @0x2C);
-    assert!(extensions.inner[c_idx].history()[2].version() == 3);
+    // assertions
+    assert!(extensions.get_by_name(b"A".to_string()).name() == b"A".to_string());
+    assert!(extensions.get_by_name(b"A".to_string()).history()[0].addr() == @0xA);
+    assert!(extensions.get_by_name(b"A".to_string()).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"B".to_string()).name() == b"B".to_string());
+    assert!(extensions.get_by_name(b"B".to_string()).history()[1].addr() == @0x1B);
+    assert!(extensions.get_by_name(b"B".to_string()).history()[1].version() == 2);
+    assert!(extensions.get_by_name(b"C".to_string()).name() == b"C".to_string());
+    assert!(extensions.get_by_name(b"C".to_string()).history()[2].addr() == @0x2C);
+    assert!(extensions.get_by_name(b"C".to_string()).history()[2].version() == 3);
     // verify core deps didn't change    
     assert!(extensions.length() == 6);
-    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
-    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
-    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
-    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
-    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(2).name() == b"AccountActions".to_string());
-    assert!(extensions.get_by_idx(2).history()[0].addr() == @0x2);
-    assert!(extensions.get_by_idx(2).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).name() == b"AccountProtocol".to_string());
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).history()[0].addr() == @0x0);
+    assert!(extensions.get_by_name(b"AccountProtocol".to_string()).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).name() == b"AccountConfig".to_string());
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).history()[0].addr() == @0x1);
+    assert!(extensions.get_by_name(b"AccountConfig".to_string()).history()[0].version() == 1);
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).name() == b"AccountActions".to_string());
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).history()[0].addr() == @0x2);
+    assert!(extensions.get_by_name(b"AccountActions".to_string()).history()[0].version() == 1);
 
     destroy(extensions);
     destroy(cap);
@@ -649,7 +666,7 @@ fun test_concurrent_operations() {
     extensions.remove(&cap, b"Ext2".to_string());
     assert!(extensions.is_extension(b"Ext1".to_string(), @0xB1, 2));
     assert!(extensions.is_extension(b"Ext3".to_string(), @0xB3, 2));
-    assert!(extensions.inner.find_index!(|e| e.name == b"Ext2".to_string()).is_none());
+    assert!(!extensions.by_name.contains(b"Ext2".to_string()));
     
     destroy(extensions);
     destroy(cap);
@@ -664,6 +681,213 @@ fun test_error_duplicate_address_across_extensions() {
     extensions.add(&cap, b"Ext1".to_string(), @0xABC, 1);
     // Try to add different extension with same address
     extensions.add(&cap, b"Ext2".to_string(), @0xABC, 1);
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+// === Comprehensive Table Implementation Tests ===
+
+#[test]
+/// Test O(1) operations with growing number of extensions
+fun test_table_constant_time_operations() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    // Add many extensions using predefined addresses
+    let test_addrs = vector[
+        @0x1000, @0x1001, @0x1002, @0x1003, @0x1004, @0x1005, @0x1006, @0x1007,
+        @0x1008, @0x1009, @0x100A, @0x100B, @0x100C, @0x100D, @0x100E, @0x100F,
+        @0x1010, @0x1011, @0x1012, @0x1013, @0x1014, @0x1015, @0x1016, @0x1017,
+        @0x1018, @0x1019, @0x101A, @0x101B, @0x101C, @0x101D, @0x101E, @0x101F
+    ];
+    
+    let mut i = 0;
+    while (i < test_addrs.length()) {
+        let mut name = b"Extension_".to_string();
+        if (i < 10) {
+            name.append_utf8(vector[48u8 + (i as u8)]);
+        } else {
+            name.append_utf8(vector[((i / 10) as u8) + 48u8, ((i % 10) as u8) + 48u8]);
+        };
+        extensions.add(&cap, name, test_addrs[i], 1);
+        i = i + 1;
+    };
+    
+    // Verify O(1) lookup works efficiently even with many extensions
+    assert!(extensions.is_extension(b"Extension_0".to_string(), @0x1000, 1));
+    assert!(extensions.is_extension(b"Extension_25".to_string(), @0x1019, 1));
+    assert!(extensions.is_extension(b"Extension_31".to_string(), @0x101F, 1));
+    
+    // Verify get_latest_for_name is O(1)
+    let (addr, version) = extensions.get_latest_for_name(b"Extension_30".to_string());
+    assert!(addr == @0x101E);
+    assert!(version == 1);
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test]
+/// Test proper cleanup of reverse lookup table on remove
+fun test_remove_cleanup_reverse_lookup() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    // Add extension with multiple versions
+    extensions.add(&cap, b"TestExt".to_string(), @0xA, 1);
+    extensions.update(&cap, b"TestExt".to_string(), @0xB, 2);
+    extensions.update(&cap, b"TestExt".to_string(), @0xC, 3);
+    
+    // Verify all addresses are in reverse lookup
+    assert!(extensions.by_addr.contains(@0xA));
+    assert!(extensions.by_addr.contains(@0xB));
+    assert!(extensions.by_addr.contains(@0xC));
+    
+    // Remove the extension
+    extensions.remove(&cap, b"TestExt".to_string());
+    
+    // Verify all addresses are cleaned up from reverse lookup
+    assert!(!extensions.by_addr.contains(@0xA));
+    assert!(!extensions.by_addr.contains(@0xB));
+    assert!(!extensions.by_addr.contains(@0xC));
+    
+    // Verify we can now reuse those addresses for new extensions
+    extensions.add(&cap, b"NewExt1".to_string(), @0xA, 1);
+    extensions.add(&cap, b"NewExt2".to_string(), @0xB, 1);
+    extensions.add(&cap, b"NewExt3".to_string(), @0xC, 1);
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test]
+/// Test address reuse after removal
+fun test_address_reuse_after_removal() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    // Add and remove an extension
+    extensions.add(&cap, b"TempExt".to_string(), @0xDEAD, 1);
+    assert!(extensions.is_extension(b"TempExt".to_string(), @0xDEAD, 1));
+    extensions.remove(&cap, b"TempExt".to_string());
+    
+    // Verify the address can be reused
+    extensions.add(&cap, b"NewExt".to_string(), @0xDEAD, 2);
+    assert!(extensions.is_extension(b"NewExt".to_string(), @0xDEAD, 2));
+    assert!(!extensions.is_extension(b"TempExt".to_string(), @0xDEAD, 1));
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test]
+/// Test multiple extensions with overlapping version numbers
+fun test_multiple_extensions_different_versions() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    // Add multiple extensions with different version patterns
+    extensions.add(&cap, b"Ext1".to_string(), @0x100, 1);
+    extensions.update(&cap, b"Ext1".to_string(), @0x101, 2);
+    
+    extensions.add(&cap, b"Ext2".to_string(), @0x200, 1);
+    extensions.update(&cap, b"Ext2".to_string(), @0x201, 2);
+    extensions.update(&cap, b"Ext2".to_string(), @0x202, 3);
+    
+    extensions.add(&cap, b"Ext3".to_string(), @0x300, 5); // Different starting version
+    
+    // Verify each extension's history is independent
+    assert!(extensions.is_extension(b"Ext1".to_string(), @0x100, 1));
+    assert!(extensions.is_extension(b"Ext1".to_string(), @0x101, 2));
+    assert!(!extensions.is_extension(b"Ext1".to_string(), @0x101, 3)); // Wrong version
+    
+    assert!(extensions.is_extension(b"Ext2".to_string(), @0x202, 3));
+    assert!(!extensions.is_extension(b"Ext2".to_string(), @0x202, 2)); // Wrong version
+    
+    assert!(extensions.is_extension(b"Ext3".to_string(), @0x300, 5));
+    assert!(!extensions.is_extension(b"Ext3".to_string(), @0x300, 1)); // Wrong version
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EExtensionNotFound)]
+/// Test error when getting latest for non-existent extension
+fun test_error_get_latest_non_existent() {
+    let extensions = new_for_testing(&mut tx_context::dummy());
+    let (_addr, _version) = extensions.get_latest_for_name(b"NonExistent".to_string());
+    destroy(extensions);
+}
+
+#[test, expected_failure(abort_code = EExtensionNotFound)]
+/// Test error when updating non-existent extension
+fun test_error_update_non_existent() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    extensions.update(&cap, b"NonExistent".to_string(), @0xBAD, 1);
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EExtensionAlreadyExists)]
+/// Test error when updating with already used address in same extension
+fun test_error_update_duplicate_address_same_extension() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    extensions.add(&cap, b"TestExt".to_string(), @0xA, 1);
+    extensions.update(&cap, b"TestExt".to_string(), @0xB, 2);
+    // Try to add same address again
+    extensions.update(&cap, b"TestExt".to_string(), @0xB, 3);
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EExtensionAlreadyExists)]
+/// Test error when updating with address used by another extension
+fun test_error_update_duplicate_address_different_extension() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    extensions.add(&cap, b"Ext1".to_string(), @0xA, 1);
+    extensions.add(&cap, b"Ext2".to_string(), @0xB, 1);
+    // Try to update Ext2 with Ext1's address
+    extensions.update(&cap, b"Ext2".to_string(), @0xA, 2);
+    
+    destroy(extensions);
+    destroy(cap);
+}
+
+#[test]
+/// Test edge case: empty Extensions object operations
+fun test_empty_extensions_operations() {
+    let extensions = new_for_testing(&mut tx_context::dummy());
+    
+    // Test operations on empty Extensions
+    assert!(extensions.length() == 0);
+    assert!(extensions.size() == 0);
+    assert!(!extensions.is_extension(b"Any".to_string(), @0x1, 1));
+    
+    destroy(extensions);
+}
+
+#[test]
+/// Test edge case: single extension with single version
+fun test_single_extension_single_version() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    
+    extensions.add(&cap, b"OnlyOne".to_string(), @0x51173E, 42);
+    
+    assert!(extensions.length() == 1);
+    assert!(extensions.is_extension(b"OnlyOne".to_string(), @0x51173E, 42));
+    assert!(!extensions.is_extension(b"OnlyOne".to_string(), @0x51173E, 41));
+    
+    let (addr, version) = extensions.get_latest_for_name(b"OnlyOne".to_string());
+    assert!(addr == @0x51173E);
+    assert!(version == 42);
     
     destroy(extensions);
     destroy(cap);

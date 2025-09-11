@@ -16,6 +16,7 @@ use account_protocol::{
     account::{Self, Account},
     deps,
     intents,
+    version_witness,
 };
 use account_actions::{
     version,
@@ -54,7 +55,8 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let account = account::new(Config {}, deps, version::current(), DummyIntent(), scenario.ctx());
+    let version_witness = version_witness::new_for_testing(@account_actions);
+    let account = account::new(Config {}, deps, version_witness, DummyIntent(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
     destroy(cap);
@@ -98,7 +100,7 @@ fun test_cancel_stream_respects_cliff() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        600, 1_000, 2_000, option::some(1_500), 600, 0, &clock, scenario.ctx()
+        600, 1_000, 2_000, option::some(1_500), 600, 0, 10, &clock, scenario.ctx()
     );
 
     // Between start and cliff (at 1200, before cliff at 1500)
@@ -129,7 +131,7 @@ fun test_cancel_stream_after_end_refund_zero() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1_000, 2_000, option::none(), 1_000, 0, &clock, scenario.ctx()
+        500, 1_000, 2_000, option::none(), 1_000, 0, 10, &clock, scenario.ctx()
     );
 
     clock.set_for_testing(3_000);
@@ -155,7 +157,7 @@ fun test_withdraw_wrong_coin_type_generic() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        100, 1000, 2000, option::none(), 100, 0, &clock, scenario.ctx()
+        100, 1000, 2000, option::none(), 100, 0, 10, &clock, scenario.ctx()
     );
 
     clock.set_for_testing(1500);
@@ -179,7 +181,7 @@ fun test_withdraw_after_fully_claimed_fails() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 1000, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 1000, 0, 10, &clock, scenario.ctx()
     );
 
     clock.set_for_testing(2000);
@@ -210,12 +212,12 @@ fun test_oversubscribed_streams_trigger_insufficient_balance() {
     let a = account.new_auth(version::current(), DummyIntent());
     let stream_a = vault::create_stream<Config, SUI>(
         a, &mut account, b"treasury".to_string(), BENEFICIARY,
-        80, 1000, 1100, option::none(), 1000, 0, &clock, scenario.ctx()
+        80, 1000, 1100, option::none(), 1000, 0, 10, &clock, scenario.ctx()
     );
     let b = account.new_auth(version::current(), DummyIntent());
     let stream_b = vault::create_stream<Config, SUI>(
         b, &mut account, b"treasury".to_string(), BENEFICIARY,
-        60, 1000, 1100, option::none(), 1000, 0, &clock, scenario.ctx()
+        60, 1000, 1100, option::none(), 1000, 0, 10, &clock, scenario.ctx()
     );
 
     clock.set_for_testing(1100);
@@ -246,7 +248,7 @@ fun test_cancel_after_external_spend_runs_out_of_funds() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let sid = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        200, 1000, 2000, option::none(), 200, 0, &clock, scenario.ctx()
+        200, 1000, 2000, option::none(), 200, 0, 10, &clock, scenario.ctx()
     );
 
     // Simulate unrelated vault spend draining balance
@@ -283,7 +285,7 @@ fun test_first_withdrawal_blocked_by_min_interval() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let sid = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        100, 1_000, 2_000, option::none(), 100, 10_000, &clock, scenario.ctx()
+        100, 1_000, 2_000, option::none(), 100, 10_000, 10, &clock, scenario.ctx()
     );
 
     // At exact start time, nothing has vested yet (0 elapsed time)
@@ -339,7 +341,7 @@ fun test_withdraw_at_exact_boundary_times() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        1000, 1000, 2000, option::some(1200), 250, 0, &clock, scenario.ctx()
+        1000, 1000, 2000, option::some(1200), 250, 0, 10, &clock, scenario.ctx()
     );
     
     // Test at exact start time (before cliff)
@@ -384,7 +386,7 @@ fun test_near_overflow_large_amounts() {
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
         large_amount, 0, 1_000_000, option::none(), // 1 million ms duration
-        large_amount / 10, 0, &clock, scenario.ctx()
+        large_amount / 10, 0, 10, &clock, scenario.ctx()
     );
     
     // Test at 50% vesting - this tests the multiplication in vesting calculation
@@ -415,7 +417,7 @@ fun test_close_with_streams_fails() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let _stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        50, 1000, 2000, option::none(), 50, 0, &clock, scenario.ctx()
+        50, 1000, 2000, option::none(), 50, 0, 10, &clock, scenario.ctx()
     );
     
     // Spend all funds so bag is empty
@@ -450,7 +452,7 @@ fun test_stream_conservation_invariant() {
     let total = 1000u64;
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        total, 1000, 3000, option::none(), 200, 0, &clock, scenario.ctx()
+        total, 1000, 3000, option::none(), 200, 0, 10, &clock, scenario.ctx()
     );
     
     // Withdraw at 25%
@@ -505,7 +507,7 @@ fun test_claimed_amount_monotonicity() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        1000, 1000, 3000, option::none(), 100, 0, &clock, scenario.ctx()
+        1000, 1000, 3000, option::none(), 100, 0, 10, &clock, scenario.ctx()
     );
     
     let mut last_claimed = 0u64;
@@ -556,7 +558,7 @@ fun test_withdraw_at_cliff_with_min_interval() {
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
         1000, 1000, 3000, option::some(2000), // cliff at 2000
         200, 500, // 500ms min interval
-        &clock, scenario.ctx()
+        10, &clock, scenario.ctx()
     );
     
     // Move to exactly cliff time
@@ -591,7 +593,7 @@ fun test_prune_fully_claimed_stream() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 500, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 500, 0, 10, &clock, scenario.ctx()
     );
     
     // Move to full vesting and withdraw all
@@ -630,7 +632,7 @@ fun test_prune_partially_claimed_stream_fails() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 500, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 500, 0, 10, &clock, scenario.ctx()
     );
     
     // Partially withdraw
@@ -668,19 +670,19 @@ fun test_batch_prune_streams() {
     let auth1 = account.new_auth(version::current(), DummyIntent());
     let stream_id1 = vault::create_stream<Config, SUI>(
         auth1, &mut account, b"treasury".to_string(), BENEFICIARY,
-        300, 1000, 2000, option::none(), 300, 0, &clock, scenario.ctx()
+        300, 1000, 2000, option::none(), 300, 0, 10, &clock, scenario.ctx()
     );
     
     let auth2 = account.new_auth(version::current(), DummyIntent());
     let stream_id2 = vault::create_stream<Config, SUI>(
         auth2, &mut account, b"treasury".to_string(), BENEFICIARY,
-        400, 1000, 2000, option::none(), 400, 0, &clock, scenario.ctx()
+        400, 1000, 2000, option::none(), 400, 0, 10, &clock, scenario.ctx()
     );
     
     let auth3 = account.new_auth(version::current(), DummyIntent());
     let stream_id3 = vault::create_stream<Config, SUI>(
         auth3, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 500, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 500, 0, 10, &clock, scenario.ctx()
     );
     
     // Fully claim stream 1 and 3, partially claim stream 2
@@ -731,7 +733,7 @@ fun test_prune_after_cancel_full_vesting() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let stream_id = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 500, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 500, 0, 10, &clock, scenario.ctx()
     );
     
     // Cancel after full vesting
@@ -762,13 +764,13 @@ fun test_close_vault_after_pruning_all_streams() {
     let auth1 = account.new_auth(version::current(), DummyIntent());
     let stream_id1 = vault::create_stream<Config, SUI>(
         auth1, &mut account, b"treasury".to_string(), BENEFICIARY,
-        400, 1000, 2000, option::none(), 400, 0, &clock, scenario.ctx()
+        400, 1000, 2000, option::none(), 400, 0, 10, &clock, scenario.ctx()
     );
     
     let auth2 = account.new_auth(version::current(), DummyIntent());
     let stream_id2 = vault::create_stream<Config, SUI>(
         auth2, &mut account, b"treasury".to_string(), BENEFICIARY,
-        600, 1000, 2000, option::none(), 600, 0, &clock, scenario.ctx()
+        600, 1000, 2000, option::none(), 600, 0, 10, &clock, scenario.ctx()
     );
     
     // Fully claim both streams
@@ -827,7 +829,7 @@ fun test_batch_prune_with_invalid_ids() {
     let auth = account.new_auth(version::current(), DummyIntent());
     let valid_stream = vault::create_stream<Config, SUI>(
         auth, &mut account, b"treasury".to_string(), BENEFICIARY,
-        500, 1000, 2000, option::none(), 500, 0, &clock, scenario.ctx()
+        500, 1000, 2000, option::none(), 500, 0, 10, &clock, scenario.ctx()
     );
     
     // Fully claim it
@@ -885,6 +887,7 @@ fun test_vesting_with_extreme_values_no_overflow() {
             option::none(), // No cliff
             large_amount, // Full amount
             0, // No min withdrawal interval
+            10, // max beneficiaries
             &clock,
             scenario.ctx()
         );
@@ -960,6 +963,7 @@ fun test_vesting_tiny_amounts_huge_duration() {
             option::none(), // No cliff
             tiny_amount,
             0, // No min withdrawal interval
+            10, // max beneficiaries
             &clock,
             scenario.ctx()
         );
@@ -1028,6 +1032,7 @@ fun test_vesting_max_duration_precision() {
             option::none(), // No cliff
             one_billion_sui,
             0, // No min withdrawal interval
+            10, // max beneficiaries
             &clock,
             scenario.ctx()
         );

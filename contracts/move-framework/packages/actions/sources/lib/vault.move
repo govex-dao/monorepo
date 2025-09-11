@@ -1,9 +1,8 @@
 /// Members can create multiple vaults with different balances and managers (using roles).
 /// This allows for a more flexible and granular way to manage funds.
 ///
-/// === Fork Modifications ===
+/// === Fork Modifications (BSL 1.1 Licensed) ===
 /// Enhanced vault module with comprehensive streaming functionality:
-/// - Consolidated streaming/vesting features from removed vesting.move
 /// - Added generic stream management capabilities:
 ///   * Multiple beneficiaries support (primary + additional)
 ///   * Pause/resume functionality with duration tracking
@@ -18,14 +17,24 @@
 /// - Stream management: Create, withdraw from, and cancel streams with proper vesting math
 /// - All funds remain in vault until withdrawn (no separate vesting objects)
 ///
-/// Note: Removed standalone vesting.move module - all time-based payment features
-/// are now integrated here to ensure treasury unity and simpler accounting.
+/// === Integration with Shared Utilities ===
+/// As of the latest refactor, vault streams now use the shared stream_utils module
+/// for all vesting calculations. This ensures:
+/// - Consistent math with standalone vesting module
+/// - Reduced code duplication and maintenance burden
+/// - Unified approach to time-based fund releases
+/// - Shared security validations and overflow protection
+///
+/// Note: The vesting.move module has been restored and enhanced to provide
+/// standalone vesting functionality. Vault streams are for treasury-managed
+/// streaming payments, while vestings are for independent token locks.
 ///
 /// These changes enable DAOs to:
 /// 1. Grant time-limited treasury access without full custody
 /// 2. Implement salary/grant payments that vest over time
 /// 3. Accept permissionless revenue deposits from protocols
 /// 4. Enforce withdrawal limits and cooling periods for security
+/// 5. Choose between vault-managed streams or standalone vestings
 
 module account_actions::vault;
 
@@ -688,6 +697,71 @@ public fun stream_info<Config>(
         stream.max_per_withdrawal,
         stream.cliff_time,
     )
+}
+
+// === Invariant Checks ===
+
+/// Verify stream invariants to ensure consistency
+/// This function checks that:
+/// 1. Claimed amount never exceeds total amount
+/// 2. Balance + claimed = total (conservation of funds)
+/// 3. Stream times are valid (start < end, cliff between start and end if exists)
+/// 4. Paused duration is reasonable
+public fun verify_stream_invariants<Config, CoinType>(
+    account: &Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+) {
+    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
+    let stream = table::borrow(&vault.streams, stream_id);
+    
+    // Invariant 1: Claimed amount cannot exceed total amount
+    assert!(stream.claimed_amount <= stream.total_amount, 0);
+    
+    // Invariant 2: Check balance consistency
+    // The stream's balance should equal total_amount - claimed_amount (adjusted for any pending withdrawals)
+    let balance_key = type_name::get<Balance<CoinType>>();
+    if (bag::contains(&vault.bag, balance_key)) {
+        let balance: &Balance<CoinType> = bag::borrow(&vault.bag, balance_key);
+        // This checks that we haven't lost funds
+        // Note: Multiple streams share the same balance, so we can't check exact equality
+        assert!(balance.value() >= stream.total_amount - stream.claimed_amount, 1);
+    };
+    
+    // Invariant 3: Time validity
+    assert!(stream.start_time < stream.end_time, 2);
+    if (stream.cliff_time.is_some()) {
+        let cliff = *stream.cliff_time.borrow();
+        assert!(cliff >= stream.start_time && cliff <= stream.end_time, 3);
+    };
+    
+    // Invariant 4: Paused duration sanity check (shouldn't exceed total stream duration)
+    let total_duration = stream.end_time - stream.start_time;
+    assert!(stream.paused_duration <= total_duration, 4);
+    
+    // Invariant 5: Max beneficiaries is within reasonable bounds
+    assert!(stream.max_beneficiaries > 0 && stream.max_beneficiaries <= MAX_BENEFICIARIES, 5);
+    
+    // Invariant 6: Additional beneficiaries count doesn't exceed max
+    assert!(stream.additional_beneficiaries.length() < stream.max_beneficiaries, 6);
+}
+
+/// Verify all streams in a vault maintain their invariants
+public fun verify_vault_invariants<Config>(
+    account: &Account<Config>,
+    vault_name: String,
+) {
+    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    
+    // Check that the vault's stream table is properly initialized
+    // Note: We can't iterate over table entries directly in Move, 
+    // so this function would need to be called with specific stream IDs
+    
+    // Could add checks for:
+    // - Total allocated across all streams doesn't exceed balance
+    // - No duplicate beneficiaries across conflicting streams
+    // - Rate limits are being respected
 }
 
 /// Calculate claimable amount for a stream

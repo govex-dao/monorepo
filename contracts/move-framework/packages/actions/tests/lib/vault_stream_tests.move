@@ -62,8 +62,8 @@ fun start(): (Scenario, Account<Config>, Clock) {
     // add some funds
     let auth = account.new_auth(version::current(), DummyIntent());
     let coin = coin::mint_for_testing<SUI>(1_000_000_000, scenario.ctx());
-    vault::keep(&mut account, auth, string::utf8(b"treasury"), coin, scenario.ctx());
-    vault::keep(&mut account, auth, string::utf8(b"secondary"), coin::mint_for_testing<SUI>(500_000_000, scenario.ctx()), scenario.ctx());
+    vault::deposit(auth, &mut account, string::utf8(b"treasury"), coin);
+    vault::deposit(auth, &mut account, string::utf8(b"secondary"), coin::mint_for_testing<SUI>(500_000_000, scenario.ctx()));
     
     // create clock
     let mut clock = clock::create_for_testing(scenario.ctx());
@@ -84,7 +84,7 @@ fun end(scenario: Scenario, account: Account<Config>, clock: Clock) {
 
 #[test]
 fun test_create_stream_happy_path() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create a stream
@@ -99,6 +99,7 @@ fun test_create_stream_happy_path() {
         option::none(), // no cliff
         10_000_000, // max 10 SUI per withdrawal
         1000, // min 1 second between withdrawals
+        3, // max 3 beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -115,12 +116,12 @@ fun test_create_stream_happy_path() {
     assert!(max_withdrawal == 10_000_000, 5);
     assert!(cliff.is_none(), 6);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_create_stream_with_cliff() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create a stream with cliff
@@ -144,13 +145,13 @@ fun test_create_stream_with_cliff() {
         vault::stream_info(&account, string::utf8(b"treasury"), stream_id);
     assert!(cliff.is_some() && *cliff.borrow() == 6000, 0);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 #[expected_failure(abort_code = vault::EInvalidStreamParameters)]
 fun test_create_stream_invalid_timing() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Try to create stream with end before start
@@ -169,14 +170,14 @@ fun test_create_stream_invalid_timing() {
         scenario.ctx()
     );
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 // === Tests: Stream Withdrawal ===
 
 #[test]
 fun test_withdraw_from_stream() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -216,13 +217,13 @@ fun test_withdraw_from_stream() {
         vault::stream_info(&account, string::utf8(b"treasury"), stream_id);
     assert!(claimed == 30_000_000, 1);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 #[expected_failure(abort_code = vault::EStreamCliffNotReached)]
 fun test_withdraw_before_cliff() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream with cliff
@@ -253,14 +254,14 @@ fun test_withdraw_before_cliff() {
         scenario.ctx()
     );
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 // === Tests: Stream Cancellation ===
 
 #[test]
 fun test_cancel_stream() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -307,14 +308,14 @@ fun test_cancel_stream() {
     assert!(refund_amount == 80_000_000, 0);
     refund.burn_for_testing();
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 // === Tests: Stream Management (Fork Enhancements) ===
 
 #[test]
 fun test_pause_and_resume_stream() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -354,12 +355,12 @@ fun test_pause_and_resume_stream() {
         vault::stream_info(&account, string::utf8(b"treasury"), stream_id);
     assert!(new_end == 14000, 2); // original 11000 + 3000 pause duration
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_add_and_remove_beneficiaries() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -403,12 +404,12 @@ fun test_add_and_remove_beneficiaries() {
     assert!(!additional.contains(&BENEFICIARY2), 8);
     assert!(!vault::is_authorized_beneficiary(&account, string::utf8(b"treasury"), stream_id, BENEFICIARY2), 9);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_transfer_stream() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create transferable stream
@@ -436,12 +437,12 @@ fun test_transfer_stream() {
     // Old beneficiary should be in additional beneficiaries
     assert!(additional.contains(&RECIPIENT), 1);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_update_stream_metadata() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -474,12 +475,12 @@ fun test_update_stream_metadata() {
     assert!(metadata.is_some(), 0);
     assert!(*metadata.borrow() == string::utf8(b"Employee salary for Q1 2025"), 1);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_reduce_stream_amount() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -526,13 +527,13 @@ fun test_reduce_stream_amount() {
         vault::stream_info(&account, string::utf8(b"treasury"), stream_id);
     assert!(total == 50_000_000, 0);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 #[expected_failure(abort_code = vault::ECannotReduceBelowClaimed)]
 fun test_reduce_stream_below_claimed_fails() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream and claim some
@@ -573,12 +574,12 @@ fun test_reduce_stream_below_claimed_fails() {
         40_000_000 // Less than 50 SUI already claimed
     );
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_set_stream_transferability() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -609,7 +610,7 @@ fun test_set_stream_transferability() {
     // Now transfer should fail (would need to add error check in vault.move)
     // This test just verifies the function works
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 // === Tests: Edge Cases ===
@@ -617,7 +618,7 @@ fun test_set_stream_transferability() {
 #[test]
 #[expected_failure(abort_code = vault::ETooManyBeneficiaries)]
 fun test_max_beneficiaries_limit() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -670,12 +671,12 @@ fun test_max_beneficiaries_limit() {
         @0x2000
     );
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_calculate_claimable_with_pause() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream: 100 SUI over 10 seconds
@@ -707,12 +708,12 @@ fun test_calculate_claimable_with_pause() {
     let claimable_paused = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
     assert!(claimable_paused == 20_000_000, 1); // Still 20 SUI
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 #[test]
 fun test_prune_completed_streams() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create stream
@@ -749,14 +750,14 @@ fun test_prune_completed_streams() {
     let pruned = vault::prune_stream(auth, &mut account, string::utf8(b"treasury"), stream_id);
     assert!(pruned == true, 0);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }
 
 // === Tests: Complex Scenarios ===
 
 #[test]
 fun test_multiple_streams_same_vault() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
+    let (mut scenario, mut account, mut clock) = start();
     let auth = account.new_auth(version::current(), DummyIntent());
     
     // Create multiple streams from same vault
@@ -816,5 +817,5 @@ fun test_multiple_streams_same_vault() {
     let (ben3, total3, _, _, _, _, _) = vault::stream_info(&account, string::utf8(b"treasury"), stream3);
     assert!(ben3 == BENEFICIARY3 && total3 == 50_000_000, 3);
     
-    end(scenario, extensions, account, clock);
+    end(scenario, account, clock);
 }

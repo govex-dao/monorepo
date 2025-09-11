@@ -6,7 +6,15 @@
 
 ## Fork Modifications
 
-### Performance Optimization (2025-09-10)
+**License**: All fork modifications are licensed under the Business Source License (BSL) 1.1
+
+### Architectural Optimizations (2025-09-10)
+
+**Extensions Module** (`extensions.move`):
+- **Problem**: Extensions is a shared global registry that will grow with ecosystem success
+- **Solution**: Table-based storage with dual lookup tables for O(1) operations
+- **Architecture**: Not an optimization but architecturally correct for a global registry
+- **Audit Benefit**: Simpler to verify correct usage of standard Sui Tables vs custom nested loops
 
 **User Module** (`user.move`):
 - **Problem**: `reorder_accounts` function had O(N*M) complexity with nested loops
@@ -14,14 +22,14 @@
 - **Impact**: Reordering 20 accounts reduced from ~400 to ~40 operations
 - **Benefit**: Better UX for account management without quadratic gas costs
 
-**Extensions Module** (`extensions.move`):
-- **Decision**: Kept original vector-based implementation
-- **Reason**: Only 3-5 core Account Protocol modules will be whitelisted
-- **Analysis**: O(N) scans are negligible at this scale, vector has lower storage overhead
-
 **Deps Module** (`deps.move`):
-- **Kept as vector-based**: Only manages 2-3 dependencies typically
-- **Reason**: O(N) with N=3 is acceptable; maintains `copy` + `drop` abilities
+- **Problem**: O(N²) duplicate checking during construction could become problematic as integrations grow
+- **Solution**: Uses VecSet for O(N log N) duplicate detection during construction only
+- **Storage**: Keeps vector-based storage for the deps themselves (maintains `copy` + `drop` abilities)
+- **Why not VecMap**: VecMap's `get()` has borrow checker issues - needs key to remain borrowed
+- **Why not Table**: Tables don't support `copy` or `drop` abilities which Deps requires
+- **Impact**: Construction time reduced from O(N²) to O(N log N), lookups remain O(N) (acceptable for N≤20)
+- **Note**: Different from Extensions - this manages per-account trusted packages, not global registry
 
 ### Major Change: Complete Removal of Object Locking
 
@@ -93,7 +101,31 @@ Our initial fix was to move to execution-time locking, but we realized that **lo
    - **prune_stream/prune_streams**: Clean up completed streams for vault closure
    - **Safe math utilities**: Overflow-protected calculations for vesting math
    
-   **Note**: Removed standalone `vesting.move` module - all streaming/vesting is now unified in `vault.move`. This ensures funds remain in the treasury until withdrawn, provides better security, simpler accounting, and maintains a single source of truth for DAO funds. The enhanced features enable sophisticated payment streams while maintaining simplicity and safety.
+4. **Restored and enhanced vesting module** (`vesting.move`): Comprehensive standalone vesting functionality:
+   
+   **Major Enhancements**:
+   - **Cancellability control**: `is_cancelable` flag for creating uncancelable vestings
+   - **Multiple beneficiaries**: Primary + additional beneficiaries (up to 100 total)
+   - **Pause/resume**: Vestings can be paused, extending the period appropriately
+   - **Transferability**: Primary beneficiary role can be transferred if enabled
+   - **Rate limiting**: Configurable withdrawal limits and minimum intervals
+   - **Cliff periods**: Optional cliff before any vesting begins
+   - **Metadata support**: Extensible metadata field for additional context
+   - **Comprehensive events**: Full audit trail of all vesting operations
+   
+   **Shared Utilities** (`stream_utils.move`):
+   - **Common calculations**: Linear vesting, cliff handling, pause adjustments
+   - **Overflow protection**: Safe math for all vesting calculations
+   - **Rate limit checks**: Shared validation logic
+   - **Consistency**: Ensures vault streams and vestings use identical math
+   
+   **Use Cases**:
+   - Employee vesting schedules that cannot be cancelled
+   - Investor token locks with cliff periods
+   - Team vestings with multiple recipients
+   - Pausable vestings for disputes or investigations
+   
+   **Architecture Decision**: Both vault streams (treasury-managed) and standalone vestings (independent) are supported. Vault streams keep funds in treasury until withdrawn, while vestings are fully independent objects. Both use the shared `stream_utils` module for consistent calculations.
 
 ## Project Overview
 
@@ -161,7 +193,7 @@ The `Outcome` is a struct that holds the status of the intent resolution, accord
 - **Configuration**: Set up the Smart Account's configuration based on the type of Smart Account. For each proposal, define an expiration epoch and schedule one or more execution times, making the intent recurring. Explicitly add and migrate to new dependencies to benefit from new features built by the Good Move team and the community.
 - **Granular Control**: Assign roles to addresses to define specific permissions for actions and users.
 - **Asset Management**: Manage and send coins or any other object type owned by an Account in a natural way. Containerize and spend coins with Vaults, and NFTs with Kiosks. Transfer and de/list NFTs from/to the Account's Kiosks.
-- **Payments and Vestings**: Pay people by issuing recurring transfer intents and create vestings. Cancel the payment or vesting if you made a mistake or if it hasn't been claimed.
+- **Payments and Vestings**: Pay people through vault streams or standalone vestings. Create uncancelable vestings for guaranteed payouts. Support multiple beneficiaries, pause/resume, and rate limiting. Cancel payments if configured as cancelable.
 - **Currency Management**: Lock a TreasuryCap and enable/disable the minting and/or burning of Coins. Update its CoinMetadata. Send and airdrop minted coins.
 - **Access Control**: Define any action in your own module and securely manage its execution via the Account. Check out the [examples](./package/examples/sources/). Secure your Caps access within the Account.
 - **Package Upgrades**: Lock your UpgradeCaps in your Account to enforce agreement on the code to be published. An optional time-lock built-in policy is provided by default to protect your users.
