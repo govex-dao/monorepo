@@ -90,7 +90,7 @@ fun setup_vault_with_funds(
 
 // === Critical Bug Tests ===
 
-// Test 1: Cancel respects cliff - THIS REVEALS A BUG IN cancel_stream
+// Test 1: Cancel respects cliff - FIXED: Now correctly returns 0 vested before cliff
 #[test]
 fun test_cancel_stream_respects_cliff() {
     let (mut scenario, extensions, mut account, mut clock) = start();
@@ -112,10 +112,9 @@ fun test_cancel_stream_respects_cliff() {
         auth, &mut account, b"treasury".to_string(), stream_id, &clock, scenario.ctx()
     );
 
-    // BUG: Current implementation ignores cliff in cancel_stream
-    // It should return 600 unvested, but it calculates linearly
-    assert!(refund.value() == 600, 0); // Should be 600
-    assert!(unvested == 600, 1); // Should be 600
+    // Correctly returns full amount as unvested since we're before cliff
+    assert!(refund.value() == 600, 0);
+    assert!(unvested == 600, 1);
 
     destroy(refund);
     end(scenario, extensions, account, clock);

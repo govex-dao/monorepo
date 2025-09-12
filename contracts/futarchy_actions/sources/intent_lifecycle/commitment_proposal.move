@@ -104,6 +104,19 @@ public struct PriceTier has store, copy, drop {
     lock_duration_ms: u64,
 }
 
+/// Constructor for PriceTier
+public fun new_price_tier(
+    twap_threshold: u128,
+    lock_amount: u64,
+    lock_duration_ms: u64,
+): PriceTier {
+    PriceTier {
+        twap_threshold,
+        lock_amount,
+        lock_duration_ms,
+    }
+}
+
 /// Commitment proposal for token locking/burning
 public struct CommitmentProposal<phantom AssetType, phantom StableType> has key, store {
     id: UID,

@@ -1,3 +1,10 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Each action (DepositAction, SpendAction) has a corresponding type marker
+/// - Type markers defined in framework_action_types (VaultDeposit, VaultSpend)
+/// - Enables compile-time type safety for action routing
+/// - No string-based action descriptors needed
+///
 /// Members can create multiple vaults with different balances and managers (using roles).
 /// This allows for a more flexible and granular way to manage funds.
 ///
@@ -65,10 +72,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -340,10 +347,9 @@ public fun new_deposit<Outcome, CoinType, IW: drop>(
     amount: u64,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"treasury", b"deposit");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         DepositAction<CoinType> { name, amount },
-        descriptor,
+        framework_action_types::vault_deposit(),
         intent_witness
     );
 }
@@ -382,10 +388,9 @@ public fun new_spend<Outcome, CoinType, IW: drop>(
     amount: u64,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"treasury", b"spend");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         SpendAction<CoinType> { name, amount },
-        descriptor,
+        framework_action_types::vault_spend(),
         intent_witness
     );
 }
@@ -617,19 +622,22 @@ public fun cancel_stream<Config, CoinType: drop>(
     
     // Calculate final vested amount (respecting cliff)
     let current_time = clock.timestamp_ms();
-    let mut vested_amount = if (current_time >= end_time) {
+    
+    // Check cliff FIRST before any linear calculation
+    let vested_amount = if (cliff_time.is_some() && current_time < *cliff_time.borrow()) {
+        // Before cliff - nothing is vested
+        0
+    } else if (current_time >= end_time) {
+        // After end - everything is vested
         total_amount
     } else if (current_time <= start_time) {
+        // Before start - nothing is vested
         0
     } else {
+        // Between start and end, after cliff - linear vesting
         let elapsed = current_time - start_time;
         let duration = end_time - start_time;
         mul_div_safe(total_amount, elapsed, duration)
-    };
-    
-    // Apply cliff restriction
-    if (cliff_time.is_some() && current_time < *cliff_time.borrow()) {
-        vested_amount = 0;
     };
     
     // Calculate final claimable and refundable amounts

@@ -5,7 +5,7 @@ module account_actions::vesting_comprehensive_tests;
 
 use std::{
     string::{Self, String},
-    option::{Self, Option},
+    option,
 };
 use sui::{
     test_utils::destroy,

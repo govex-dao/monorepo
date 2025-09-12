@@ -63,7 +63,8 @@ fun start(): (Scenario, Account<Config>, Clock) {
     let auth = account.new_auth(version::current(), DummyIntent());
     let coin = coin::mint_for_testing<SUI>(1_000_000_000, scenario.ctx());
     vault::deposit(auth, &mut account, string::utf8(b"treasury"), coin);
-    vault::deposit(auth, &mut account, string::utf8(b"secondary"), coin::mint_for_testing<SUI>(500_000_000, scenario.ctx()));
+    let auth2 = account.new_auth(version::current(), DummyIntent());
+    vault::deposit(auth2, &mut account, string::utf8(b"secondary"), coin::mint_for_testing<SUI>(500_000_000, scenario.ctx()));
     
     // create clock
     let mut clock = clock::create_for_testing(scenario.ctx());
@@ -136,6 +137,7 @@ fun test_create_stream_with_cliff() {
         option::some(6000), // cliff at 5 seconds
         10_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -166,6 +168,7 @@ fun test_create_stream_invalid_timing() {
         option::none(),
         10_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -192,6 +195,7 @@ fun test_withdraw_from_stream() {
         option::none(),
         50_000_000, // max 50 SUI per withdrawal
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -238,6 +242,7 @@ fun test_withdraw_before_cliff() {
         option::some(6000), // cliff at 5 seconds
         10_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -276,6 +281,7 @@ fun test_cancel_stream() {
         option::none(),
         10_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -295,8 +301,9 @@ fun test_cancel_stream() {
     
     // Cancel stream
     scenario.next_tx(OWNER);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     let (refund, refund_amount) = vault::cancel_stream<Config, SUI>(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -330,13 +337,15 @@ fun test_pause_and_resume_stream() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
     // Pause stream at t=2000
     clock::set_for_testing(&mut clock, 2000);
-    vault::pause_stream(auth, &mut account, string::utf8(b"treasury"), stream_id, &clock);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
+    vault::pause_stream(auth2, &mut account, string::utf8(b"treasury"), stream_id, &clock);
     
     // Verify stream is paused
     assert!(!vault::is_stream_active(&account, string::utf8(b"treasury"), stream_id, &clock), 0);
@@ -345,7 +354,8 @@ fun test_pause_and_resume_stream() {
     clock::set_for_testing(&mut clock, 5000);
     
     // Resume stream
-    vault::resume_stream(auth, &mut account, string::utf8(b"treasury"), stream_id, &clock);
+    let auth3 = account.new_auth(version::current(), DummyIntent());
+    vault::resume_stream(auth3, &mut account, string::utf8(b"treasury"), stream_id, &clock);
     
     // Verify stream is active and end time adjusted
     assert!(vault::is_stream_active(&account, string::utf8(b"treasury"), stream_id, &clock), 1);
@@ -375,13 +385,16 @@ fun test_add_and_remove_beneficiaries() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
     // Add additional beneficiaries
-    vault::add_stream_beneficiary(auth, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
-    vault::add_stream_beneficiary(auth, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY3);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
+    vault::add_stream_beneficiary(auth2, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
+    let auth3 = account.new_auth(version::current(), DummyIntent());
+    vault::add_stream_beneficiary(auth3, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY3);
     
     // Verify beneficiaries
     let (primary, additional) = vault::get_stream_beneficiaries(&account, string::utf8(b"treasury"), stream_id);
@@ -396,7 +409,8 @@ fun test_add_and_remove_beneficiaries() {
     assert!(vault::is_authorized_beneficiary(&account, string::utf8(b"treasury"), stream_id, BENEFICIARY3), 6);
     
     // Remove a beneficiary
-    vault::remove_stream_beneficiary(auth, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
+    let auth4 = account.new_auth(version::current(), DummyIntent());
+    vault::remove_stream_beneficiary(auth4, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
     
     // Verify removal
     let (_, additional) = vault::get_stream_beneficiaries(&account, string::utf8(b"treasury"), stream_id);
@@ -424,12 +438,14 @@ fun test_transfer_stream() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
     // Transfer to new beneficiary
-    vault::transfer_stream(auth, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
+    vault::transfer_stream(auth2, &mut account, string::utf8(b"treasury"), stream_id, BENEFICIARY2);
     
     // Verify transfer
     let (primary, additional) = vault::get_stream_beneficiaries(&account, string::utf8(b"treasury"), stream_id);
@@ -457,13 +473,15 @@ fun test_update_stream_metadata() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
     // Update metadata
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     vault::update_stream_metadata(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -495,6 +513,7 @@ fun test_reduce_stream_amount() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -514,8 +533,9 @@ fun test_reduce_stream_amount() {
     
     // Reduce total amount (but above claimed)
     scenario.next_tx(OWNER);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     vault::reduce_stream_amount(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -548,6 +568,7 @@ fun test_reduce_stream_below_claimed_fails() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -566,8 +587,9 @@ fun test_reduce_stream_below_claimed_fails() {
     
     // Try to reduce below claimed amount
     scenario.next_tx(OWNER);
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     vault::reduce_stream_amount(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -594,13 +616,15 @@ fun test_set_stream_transferability() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
     // Disable transferability
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     vault::set_stream_transferable(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -633,6 +657,7 @@ fun test_max_beneficiaries_limit() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -652,8 +677,9 @@ fun test_max_beneficiaries_limit() {
             else if (i == 8) @0x1008
             else @0x1009;
             
+        let loop_auth = account.new_auth(version::current(), DummyIntent());
         vault::add_stream_beneficiary(
-            auth,
+            loop_auth,
             &mut account,
             string::utf8(b"treasury"),
             stream_id,
@@ -663,8 +689,9 @@ fun test_max_beneficiaries_limit() {
     };
     
     // This should fail - exceeds max
+    let auth_fail = account.new_auth(version::current(), DummyIntent());
     vault::add_stream_beneficiary(
-        auth,
+        auth_fail,
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
@@ -691,6 +718,7 @@ fun test_calculate_claimable_with_pause() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -728,6 +756,7 @@ fun test_prune_completed_streams() {
         option::none(),
         100_000_000, // Allow full withdrawal
         0, // No interval limit
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
@@ -772,12 +801,14 @@ fun test_multiple_streams_same_vault() {
         option::none(),
         50_000_000,
         1000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
+    let auth2 = account.new_auth(version::current(), DummyIntent());
     let stream2 = vault::create_stream<Config, SUI>(
-        auth,
+        auth2,
         &mut account,
         string::utf8(b"treasury"),
         BENEFICIARY2,
@@ -787,12 +818,14 @@ fun test_multiple_streams_same_vault() {
         option::some(7000),
         100_000_000,
         2000,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );
     
+    let auth3 = account.new_auth(version::current(), DummyIntent());
     let stream3 = vault::create_stream<Config, SUI>(
-        auth,
+        auth3,
         &mut account,
         string::utf8(b"treasury"),
         BENEFICIARY3,
@@ -802,6 +835,7 @@ fun test_multiple_streams_same_vault() {
         option::none(),
         25_000_000,
         500,
+        10, // max_beneficiaries
         &clock,
         scenario.ctx()
     );

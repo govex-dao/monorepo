@@ -26,7 +26,7 @@ use account_extensions::extensions::Extensions;
 use account_actions::currency;
 use futarchy_core::version;
 use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig, ConfigParams},
+    futarchy_config::{Self, FutarchyConfig, ConfigParams, FutarchyOutcome},
     dao_config,
 };
 use futarchy_vault::{
@@ -307,8 +307,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     
     // Action registry removed - using statically-typed pattern
     
-    // Initialize the policy registry with no initial critical policies
-    policy_registry::initialize(&mut account, version::current(), vector::empty(), ctx);
+    // Initialize the policy registry
+    policy_registry::initialize(&mut account, version::current(), ctx);
     
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);
@@ -523,6 +523,150 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         timestamp: clock.timestamp_ms(),
     });
 }
+
+// === Init Actions Support ===
+
+// Removed InitWitness - it belongs in init_actions module
+// Removed create_dao_for_init - not needed, use create_dao_unshared
+
+/// Create DAO and return it without sharing (for init actions)
+/// 
+/// ## Hot Potato Pattern:
+/// Returns (Account, ProposalQueue, AccountSpotPool) as unshared objects
+/// These can be passed as `&mut` to init actions before being shared
+/// 
+/// ## Usage:
+/// 1. Call this to create unshared DAO components
+/// 2. Execute init actions with the unshared objects
+/// 3. Share the objects only after init succeeds
+/// 
+/// This ensures atomicity - if init fails, nothing is shared
+public fun create_dao_unshared<AssetType: drop, StableType>(
+    factory: &mut Factory,
+    extensions: &Extensions,
+    fee_manager: &mut FeeManager,
+    payment: Coin<SUI>,
+    min_asset_amount: u64,
+    min_stable_amount: u64,
+    dao_name: AsciiString,
+    icon_url_string: AsciiString,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    twap_start_delay: u64,
+    twap_step_max: u64,
+    twap_initial_observation: u128,
+    twap_threshold: u64,
+    amm_total_fee_bps: u64,
+    description: UTF8String,
+    max_outcomes: u64,
+    mut treasury_cap: Option<TreasuryCap<AssetType>>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Account<FutarchyConfig>, ProposalQueue<StableType>, AccountSpotPool<AssetType, StableType>) {
+    // Check factory is active
+    assert!(!factory.paused, EPaused);
+    
+    // Check if StableType is allowed
+    let stable_type_name = type_name::with_defining_ids<StableType>();
+    assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
+    
+    // Process payment
+    fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
+    
+    // Validate parameters (same as create_dao)
+    assert!(twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
+    assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
+    assert!(trading_period_ms <= MAX_TRADING_TIME, ELongTradingTime);
+    assert!(twap_start_delay <= MAX_TWAP_START_DELAY, ELongTwapDelayTime);
+    assert!((twap_start_delay + 60_000) < trading_period_ms, EDelayNearTotalTrading);
+    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHighTwapThreshold);
+    assert!(
+        twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
+        ETwapInitialTooLarge,
+    );
+    
+    // Create config parameters
+    let config_params = futarchy_config::new_config_params_from_values(
+        min_asset_amount,
+        min_stable_amount,
+        review_period_ms,
+        trading_period_ms,
+        twap_start_delay,
+        twap_step_max,
+        twap_initial_observation,
+        twap_threshold,
+        amm_total_fee_bps,
+        max_outcomes,
+        1_000_000,  // proposal_fee_per_outcome
+        10,         // max_concurrent_proposals
+        100_000_000, // required_bond_amount
+        86400000,   // proposal_recreation_window_ms (24 hours)
+        3,          // max_proposal_chain_depth
+        10,         // fee_escalation_basis_points
+        dao_name,
+        url::new_unsafe_from_bytes(icon_url_string.into_bytes()),
+        description,
+    );
+    
+    // Create the futarchy config
+    let config = futarchy_config::new(
+        config_params,
+        ctx
+    );
+    
+    // Create account with config
+    let mut account = account::new(
+        extensions,
+        config,
+        account_protocol::deps::new_deps(ctx),
+        version::current(),
+        ctx
+    );
+    
+    // Create spot pool
+    let spot_pool = account_spot_pool::new<AssetType, StableType>(
+        object::id(&account),
+        ctx
+    );
+    
+    // Create queue
+    let queue = priority_queue::new<StableType>(
+        &fee_manager,
+        ctx
+    );
+    
+    // Setup treasury cap if provided
+    if (treasury_cap.is_some()) {
+        let cap = treasury_cap.extract();
+        let auth = account::new_auth(&account, ctx);
+        currency::lock_cap(
+            auth,
+            &mut account,
+            cap,
+            option::none(), // max_supply
+            ctx
+        );
+    };
+    
+    // Update factory state
+    factory.dao_count = factory.dao_count + 1;
+    
+    // Emit event
+    let account_id = object::id_address(&account);
+    event::emit(DAOCreated {
+        account_id,
+        dao_name,
+        asset_type: get_type_string<AssetType>(),
+        stable_type: get_type_string<StableType>(),
+        creator: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+    
+    (account, queue, spot_pool)
+}
+
+// Init action execution has been moved to init_actions module
+// Factory only creates DAOs, doesn't know about actions
 
 // === Admin Functions ===
 

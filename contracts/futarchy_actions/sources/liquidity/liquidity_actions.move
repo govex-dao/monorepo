@@ -11,6 +11,7 @@ use sui::{
     tx_context::TxContext,
     balance::{Self, Balance},
     transfer,
+    bcs::{Self, BCS},
 };
 use account_protocol::{
     account::{Self, Account},
@@ -23,6 +24,9 @@ use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
 use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::spot_amm::{Self, SpotAMM};
 use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_one_shot_utils::action_data_structs::{Self, AddLiquidityAction};
+
+// === Friend Modules === (deprecated in 2024 edition, using public(package) instead)
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;
@@ -35,16 +39,10 @@ const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 
 // === Action Structs ===
 
-/// Action to add liquidity to a pool
-public struct AddLiquidityAction<phantom AssetType, phantom StableType> has store, copy {
-    pool_id: ID,
-    asset_amount: u64,
-    stable_amount: u64,
-    min_lp_amount: u64, // Slippage protection
-}
+// AddLiquidityAction moved to futarchy_one_shot_utils::action_data_structs
 
 /// Action to remove liquidity from a pool
-public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store {
+public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store, drop {
     pool_id: ID,
     lp_amount: u64,
     min_asset_amount: u64, // Slippage protection
@@ -225,8 +223,8 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     let vault = vault::borrow_vault(account, vault_name);
     assert!(vault::coin_type_exists<AssetType>(vault), EInsufficientVaultBalance);
     assert!(vault::coin_type_exists<StableType>(vault), EInsufficientVaultBalance);
-    assert!(vault::coin_type_value<AssetType>(vault) >= action.asset_amount, EInsufficientVaultBalance);
-    assert!(vault::coin_type_value<StableType>(vault) >= action.stable_amount, EInsufficientVaultBalance);
+    assert!(vault::coin_type_value<AssetType>(vault) >= action_data_structs::asset_amount(action), EInsufficientVaultBalance);
+    assert!(vault::coin_type_value<StableType>(vault) >= action_data_structs::stable_amount(action), EInsufficientVaultBalance);
     
     // Create resource request with action details (make a copy since action has copy ability)
     let mut request = resource_requests::new_request<AddLiquidityAction<AssetType, StableType>>(ctx);
@@ -247,9 +245,13 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     witness: IW,
     ctx: &mut TxContext,
 ): (ResourceReceipt<AddLiquidityAction<AssetType, StableType>>, LPToken<AssetType, StableType>) {
-    // Extract action from request and destructure to consume it
-    let AddLiquidityAction<AssetType, StableType> { pool_id, asset_amount: _, stable_amount: _, min_lp_amount } = 
+    // Extract action from request
+    let action: AddLiquidityAction<AssetType, StableType> = 
         resource_requests::get_context(&request, string::utf8(b"action"));
+    
+    // Get action parameters using accessor functions
+    let pool_id = action_data_structs::pool_id(&action);
+    let min_lp_amount = action_data_structs::min_lp_out(&action);
     
     // Verify pool ID matches
     assert!(pool_id == object::id(pool), EEmptyPool);
@@ -322,12 +324,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
 
 /// Delete an add liquidity action from an expired intent
 public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
-    let AddLiquidityAction<AssetType, StableType> {
-        pool_id: _,
-        asset_amount: _,
-        stable_amount: _,
-        min_lp_amount: _,
-    } = expired.remove_action();
+    let _action: AddLiquidityAction<AssetType, StableType> = expired.remove_action();
 }
 
 /// Delete a remove liquidity action from an expired intent
@@ -374,18 +371,13 @@ public fun new_add_liquidity_action<AssetType, StableType>(
     pool_id: ID,
     asset_amount: u64,
     stable_amount: u64,
-    min_lp_amount: u64,
+    min_lp_out: u64,
 ): AddLiquidityAction<AssetType, StableType> {
     assert!(asset_amount > 0, EInvalidAmount);
     assert!(stable_amount > 0, EInvalidAmount);
-    assert!(min_lp_amount > 0, EInvalidAmount);
+    assert!(min_lp_out > 0, EInvalidAmount);
     
-    AddLiquidityAction {
-        pool_id,
-        asset_amount,
-        stable_amount,
-        min_lp_amount,
-    }
+    action_data_structs::new_add_liquidity_action(pool_id, asset_amount, stable_amount, min_lp_out)
 }
 
 /// Create a new remove liquidity action
@@ -454,24 +446,24 @@ public fun new_set_pool_status_action(
 
 // === Getter Functions ===
 
-/// Get pool ID from AddLiquidityAction
+/// Get pool ID from AddLiquidityAction (alias for action_data_structs)
 public fun get_pool_id<AssetType, StableType>(action: &AddLiquidityAction<AssetType, StableType>): ID {
-    action.pool_id
+    action_data_structs::pool_id(action)
 }
 
-/// Get asset amount from AddLiquidityAction
+/// Get asset amount from AddLiquidityAction (alias for action_data_structs)
 public fun get_asset_amount<AssetType, StableType>(action: &AddLiquidityAction<AssetType, StableType>): u64 {
-    action.asset_amount
+    action_data_structs::asset_amount(action)
 }
 
-/// Get stable amount from AddLiquidityAction
+/// Get stable amount from AddLiquidityAction (alias for action_data_structs)
 public fun get_stable_amount<AssetType, StableType>(action: &AddLiquidityAction<AssetType, StableType>): u64 {
-    action.stable_amount
+    action_data_structs::stable_amount(action)
 }
 
-/// Get minimum LP amount from AddLiquidityAction
+/// Get minimum LP amount from AddLiquidityAction (alias for action_data_structs)
 public fun get_min_lp_amount<AssetType, StableType>(action: &AddLiquidityAction<AssetType, StableType>): u64 {
-    action.min_lp_amount
+    action_data_structs::min_lp_out(action)
 }
 
 /// Get pool ID from RemoveLiquidityAction
@@ -542,4 +534,52 @@ public fun get_is_paused(action: &SetPoolStatusAction): bool {
 /// Get LP token value helper
 public fun lp_value<AssetType, StableType>(lp_token: &LPToken<AssetType, StableType>): u64 {
     account_spot_pool::lp_token_amount(lp_token)
+}
+
+// === Deserialization Constructors ===
+
+/// Deserialize AddLiquidityAction from bytes (alias for action_data_structs)
+public(package) fun add_liquidity_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): AddLiquidityAction<AssetType, StableType> {
+    action_data_structs::add_liquidity_action_from_bytes(bytes)
+}
+
+/// Deserialize RemoveLiquidityAction from bytes
+public(package) fun remove_liquidity_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): RemoveLiquidityAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    RemoveLiquidityAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        lp_amount: bcs::peel_u64(&mut bcs),
+        min_asset_amount: bcs::peel_u64(&mut bcs),
+        min_stable_amount: bcs::peel_u64(&mut bcs),
+    }
+}
+
+/// Deserialize CreatePoolAction from bytes
+public(package) fun create_pool_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): CreatePoolAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    CreatePoolAction {
+        initial_asset_amount: bcs::peel_u64(&mut bcs),
+        initial_stable_amount: bcs::peel_u64(&mut bcs),
+        fee_bps: bcs::peel_u64(&mut bcs),
+        minimum_liquidity: bcs::peel_u64(&mut bcs),
+    }
+}
+
+/// Deserialize UpdatePoolParamsAction from bytes
+public(package) fun update_pool_params_action_from_bytes(bytes: vector<u8>): UpdatePoolParamsAction {
+    let mut bcs = bcs::new(bytes);
+    UpdatePoolParamsAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        new_fee_bps: bcs::peel_u64(&mut bcs),
+        new_minimum_liquidity: bcs::peel_u64(&mut bcs),
+    }
+}
+
+/// Deserialize SetPoolStatusAction from bytes
+public(package) fun set_pool_status_action_from_bytes(bytes: vector<u8>): SetPoolStatusAction {
+    let mut bcs = bcs::new(bytes);
+    SetPoolStatusAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        is_paused: bcs::peel_bool(&mut bcs),
+    }
 }

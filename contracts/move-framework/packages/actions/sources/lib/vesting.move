@@ -1,3 +1,8 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Actions use type markers: VestingCreate, VestingCancel
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
 /// - Multiple beneficiaries support
@@ -55,8 +60,10 @@ use account_protocol::{
     intents::{Expired, Intent},
     executable::Executable,
 };
-use account_extensions::action_descriptor;
+use account_extensions::framework_action_types::{Self, VestingCreate, VestingCancel};
 use account_actions::stream_utils;
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -214,13 +221,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: drop>(
     metadata: Option<String>,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new_with_target_address(
-        b"payments", 
-        b"create_vesting",
-        recipient
-    );
-    
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         CreateVestingAction<CoinType> { 
             amount, 
             start_timestamp, 
@@ -234,7 +235,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: drop>(
             is_cancelable,
             metadata,
         },
-        descriptor,
+        framework_action_types::vesting_create(),
         intent_witness
     );
 }
@@ -439,11 +440,11 @@ public fun cancel_vesting<Config, Outcome: store, CoinType, IW: drop>(
     // Return unvested balance to account
     if (to_refund > 0) {
         let refund = coin::from_balance(balance, ctx);
-        account.keep(refund);
+        account.keep(refund, ctx);
     } else if (balance.value() > 0) {
         // Should not happen with correct calculation, but handle gracefully
         let leftover = coin::from_balance(balance, ctx);
-        account.keep(leftover);
+        account.keep(leftover, ctx);
     } else {
         balance.destroy_zero();
     };
@@ -581,15 +582,9 @@ public fun new_cancel_vesting<Config, Outcome, IW: drop>(
     vesting_id: ID,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new_with_target(
-        b"payments", 
-        b"cancel_vesting",
-        vesting_id
-    );
-    
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         CancelVestingAction { vesting_id },
-        descriptor,
+        framework_action_types::vesting_cancel(),
         intent_witness
     );
 }

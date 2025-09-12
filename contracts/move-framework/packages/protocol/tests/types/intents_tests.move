@@ -25,6 +25,7 @@ const OWNER: address = @0xCAFE;
 public struct DummyIntent() has drop;
 public struct WrongIntent() has drop;
 public struct DummyAction has store {}
+public struct DummyActionType has drop {}
 
 // === Helpers ===
 
@@ -185,7 +186,7 @@ fun test_add_remove_action() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
+    intent.add_typed_action(DummyAction {}, DummyActionType {}, DummyIntent());
     assert!(intent.actions().length() == 1);
     intents.add_intent(intent);
 
@@ -218,7 +219,7 @@ fun test_pop_front_execution_time() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
+    intent.add_typed_action(DummyAction {}, DummyActionType {}, DummyIntent());
     
     let time = intent.pop_front_execution_time();
     assert!(time == 0);
@@ -366,7 +367,7 @@ fun test_error_delete_intent_actions_not_empty() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
+    intent.add_typed_action(DummyAction {}, DummyActionType {}, DummyIntent());
     intents.add_intent(intent);
     // remove intent
     let expired = intents.destroy_intent<bool>(b"one".to_string());

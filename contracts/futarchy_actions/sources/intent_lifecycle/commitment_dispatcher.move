@@ -17,9 +17,10 @@ use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_actions::{
     commitment_proposal::{Self, CommitmentProposal},
-    commitment_actions::{Self, CreateCommitmentProposalAction, ExecuteCommitmentAction, 
+    commitment_actions::{Self, ExecuteCommitmentAction, 
                          UpdateCommitmentRecipientAction, WithdrawUnlockedTokensAction},
 };
+use futarchy_one_shot_utils::action_data_structs::CreateCommitmentProposalAction;
 use futarchy_markets::{
     proposal::Proposal,
 };

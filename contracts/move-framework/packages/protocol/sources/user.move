@@ -1,18 +1,18 @@
-// ============================================================================
-// FORK NOTE: Modified from original implementation
-// 
-// CHANGES:
-// - Optimized reorder_accounts function from O(N*M) to O(N + M*log N)
-// - Uses VecSet for validation instead of repeated index_of + swap_remove
-// 
-// REASON:
-// The original implementation performed nested loops: for each address in the
-// new order, it would linearly search the existing accounts vector and swap_remove.
-// For 20 accounts, this meant ~400 operations. The new implementation creates
-// a VecSet for O(log N) validation, then directly replaces the vector.
-// This reduces gas costs for a simple UI reordering operation from quadratic
-// to near-linear complexity.
-// ============================================================================
+/// === FORK MODIFICATIONS ===
+/// REORDER OPTIMIZATION:
+/// - Optimized reorder_accounts function from O(N*M) to O(N + M*log N)
+/// - Uses VecSet for validation instead of repeated index_of + swap_remove
+/// 
+/// REASON:
+/// The original implementation performed nested loops: for each address in the
+/// new order, it would linearly search the existing accounts vector and swap_remove.
+/// For 20 accounts, this meant ~400 operations. The new implementation creates
+/// a VecSet for O(log N) validation, then directly replaces the vector.
+/// This reduces gas costs for a simple UI reordering operation from quadratic
+/// to near-linear complexity.
+///
+/// TYPE-BASED ACTION SYSTEM:
+/// - No direct changes, but user module works with type-based intents
 
 /// Users have a non-transferable User account object used to track Accounts in which they are a member.
 /// Each account type can define a way to send on-chain invites to Users.
@@ -33,7 +33,7 @@ use sui::{
     vec_set::{Self, VecSet},
     table::{Self, Table},
 };
-use account_protocol::account::Account;
+use account_protocol::account::{Self, Account};
 
 // === Errors ===
 
@@ -166,7 +166,7 @@ public fun add_account<Config, CW: drop>(
     account: &Account<Config>, 
     config_witness: CW,
 ) {
-    account.assert_is_config_module(config_witness);
+    account::assert_is_config_module(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     if (user.accounts.contains(&account_type)) {
@@ -182,7 +182,7 @@ public fun remove_account<Config, CW: drop>(
     account: &Account<Config>, 
     config_witness: CW,
 ) {
-    account.assert_is_config_module(config_witness);
+    account::assert_is_config_module(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
@@ -202,7 +202,7 @@ public fun send_invite<Config, CW: drop>(
     config_witness: CW,
     ctx: &mut TxContext,
 ) {
-    account.assert_is_config_module(config_witness);
+    account::assert_is_config_module(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     transfer::transfer(Invite { 

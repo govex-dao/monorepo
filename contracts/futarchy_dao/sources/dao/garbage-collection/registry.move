@@ -131,7 +131,7 @@ public fun delete_set_policy(expired: &mut Expired) {
 }
 
 public fun delete_remove_policy(expired: &mut Expired) {
-    futarchy_multisig::policy_actions::delete_remove_policy(expired);
+    futarchy_multisig::policy_actions::delete_remove_type_policy(expired);
 }
 
 // === Dissolution Actions ===

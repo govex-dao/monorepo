@@ -338,3 +338,37 @@ The architecture correctly:
 - Conditional token: `/contracts/futarchy/sources/markets/conditional_token.move`
 - AMM: `/contracts/futarchy/sources/markets/conditional_amm.move`
 - Oracle (critical): `/contracts/futarchy/sources/markets/oracle.move:473-492`
+
+
+
+Architecture Summary: Composable Governance Actions
+Our system uses a dual-pattern architecture that cleanly separates the construction of actions from their execution. This design leverages the full power of Programmable Transaction Blocks (PTBs) for maximum composability and security.
+1. Core Data Structures
+ActionSpec (The Blueprint)
+Data Structure: struct { action_type: TypeName, action_data: vector<u8> }
+Role: A lightweight, immutable, serializable description of a single action. It is a plan, not a live object.
+Used For: Staging actions for DAO initialization and for defining the payload of on-chain governance proposals.
+IntentSpec (The Blueprint Collection)
+Data Structure: struct { actions: vector<ActionSpec>, ... }
+Role: A container for a list of ActionSpec blueprints. It represents the complete set of actions for an init sequence or a proposal outcome.
+Intent (The Live Contract)
+Data Structure: struct { actions: Bag, ... }
+Role: A stateful object stored inside a live Account. It represents an approved, executable plan or a recurring task. It is not used for unapproved proposals to avoid state bloat.
+Executable (The Hot Potato)
+Data Structure: A hot potato struct that wraps a temporary Intent.
+Role: Securely passes the right to execute a sequence of actions between functions within a single atomic transaction. It cannot be stored or transferred across transaction boundaries.
+2. The Two-Phase Lifecycle
+Phase A: Construction (Building the IntentSpec Blueprint)
+How it's Called: Off-chain clients (SDKs, UIs) build a PTB.
+Dispatcher: The PTB acts as a "Builder Dispatcher."
+On-Chain Method: The PTB calls a single, centralized entry function: init_intent_builder::build_spec(action_id, params_bcs).
+This on-chain builder function uses an if/else chain on action_id to deserialize the params_bcs into a strongly-typed action data struct.
+It then creates and returns a validated ActionSpec.
+Result: The PTB assembles a list of ActionSpecs to create a complete IntentSpec object on-chain.
+Phase B: Execution (Processing the Executable Hot Potato)
+How it's Called: An approved proposal or init sequence kicks off the execution flow. A top-level entry function reads an IntentSpec and converts it into an Executable hot potato, which is then passed through a chain of calls in a PTB.
+Dispatcher: The PTB acts as the "Execution Dispatcher." There is no central on-chain main_dispatcher.
+On-Chain Method: The PTB calls a series of modular, category-specific entry functions (e.g., config_dispatcher::execute_config_actions, liquidity_dispatcher::execute_liquidity_actions).
+Each of these functions accepts the Executable hot potato, processes all actions relevant to its category in a loop, and then passes the updated hot potato on to the next call in the PTB.
+Each function has a unique signature, allowing the PTB to provide the specific resources (&mut SpotAMM, Coin<T>, etc.) that it needs.
+Finalization: The last call in the PTB is to a confirm_and_cleanup function that consumes the final Executable, ensuring the process is completed atomically and securely.

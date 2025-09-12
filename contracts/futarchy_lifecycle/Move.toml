@@ -11,6 +11,8 @@ futarchy_core = { local = "../futarchy_core" }
 futarchy_markets = { local = "../futarchy_markets" }
 futarchy_vault = { local = "../futarchy_vault" }
 futarchy_multisig = { local = "../futarchy_multisig" }
+futarchy_actions = { local = "../futarchy_actions" }
+AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
 futarchy_lifecycle = "0x0"
 futarchy_one_shot_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"
@@ -18,6 +20,8 @@ futarchy_core = "0x0"
 futarchy_markets = "0x0"
 futarchy_vault = "0x0"
 futarchy_multisig = "0x0"
+futarchy_actions = "0x0"
 account_protocol = "0xcfb7cce2dc7cf56d94e13f79713389753dc69cccfacced1aa33ca49a21899195"
 account_extensions = "0xa01921dfa6ad89fac820afa1150b047b96271ff6c555c656ba00b8cbeab33615"
 account_actions = "0x296ee4bbc14d74fa6978c576e5b33aac5c8840486df9eeb5e1b6cbbd696fb54c"
+futarchy_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"

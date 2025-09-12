@@ -6,13 +6,10 @@ module futarchy_multisig::security_council_actions;
 use std::{string::String, option::Option};
 use sui::object::ID;
 use account_protocol::intents::Expired;
+use futarchy_one_shot_utils::action_data_structs::{Self, CreateSecurityCouncilAction};
 
 /// Create a new Security Council (WeightedMultisig) for the DAO.
-public struct CreateSecurityCouncilAction has store {
-    members: vector<address>,
-    weights: vector<u64>,
-    threshold: u64,
-}
+// Moved to futarchy_one_shot_utils::action_data_structs
 
 /// Council's approval for an Operating Agreement change
 public struct ApproveOAChangeAction has store {
@@ -28,17 +25,17 @@ public fun new_create_council(
     weights: vector<u64>,
     threshold: u64,
 ): CreateSecurityCouncilAction {
-    CreateSecurityCouncilAction { members, weights, threshold }
+    action_data_structs::new_create_security_council_action(members, weights, threshold)
 }
 
 public fun get_create_council_params(
     action: &CreateSecurityCouncilAction
 ): (&vector<address>, &vector<u64>, u64) {
-    (&action.members, &action.weights, action.threshold)
+    (action_data_structs::council_members(action), action_data_structs::council_weights(action), action_data_structs::council_threshold(action))
 }
 
 public fun delete_create_council(expired: &mut Expired) {
-    let CreateSecurityCouncilAction {..} = expired.remove_action();
+    let _action: CreateSecurityCouncilAction = expired.remove_action();
 }
 
 public fun new_approve_oa_change(dao_id: ID, batch_id: ID, expires_at: u64): ApproveOAChangeAction {

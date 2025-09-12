@@ -1,3 +1,9 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Actions use type markers from framework_action_types module
+/// - AccessControlStore, AccessControlBorrow, AccessControlReturn
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// Developers can restrict access to functions in their own package with a Cap that can be locked into an Account. 
 /// The Cap can be borrowed upon approval and used in other move calls within the same ptb before being returned.
 /// 
@@ -25,10 +31,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, AccessControlBorrow, AccessControlReturn};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -70,8 +76,11 @@ public fun new_borrow<Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
     intent_witness: IW,    
 ) {
-    let descriptor = action_descriptor::new(b"access", b"borrow_cap");
-    intent.add_action_with_descriptor(BorrowAction<Cap> {}, descriptor, intent_witness);
+    intent.add_typed_action(
+        BorrowAction<Cap> {},
+        framework_action_types::access_control_borrow(),
+        intent_witness
+    );
 }
 
 /// Processes a BorrowAction and returns a Borrowed hot potato and the Cap.
@@ -100,8 +109,11 @@ public fun new_return<Outcome, Cap, IW: drop>(
     intent: &mut Intent<Outcome>, 
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"access", b"return_cap");
-    intent.add_action_with_descriptor(ReturnAction<Cap> {}, descriptor, intent_witness);
+    intent.add_typed_action(
+        ReturnAction<Cap> {},
+        framework_action_types::access_control_return(),
+        intent_witness
+    );
 }
 
 /// Returns a Cap to the Account and validates the ReturnAction.

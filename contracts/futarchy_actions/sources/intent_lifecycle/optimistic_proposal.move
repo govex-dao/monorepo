@@ -16,7 +16,8 @@ use sui::transfer;
 use account_protocol::{
     executable::{Self, Executable},
     account::{Self, Account},
-    intents::{Intent},
+    intent_spec::{Self, IntentSpec},
+    intents::Intent,
 };
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
@@ -82,7 +83,7 @@ public struct OptimisticProposal has key, store {
     
     // Core proposal data
     proposer: address,
-    intent: Intent<String>, // The action to execute
+    intent_spec: IntentSpec, // The action blueprint to execute
     description: String,
     
     // Challenge mechanics
@@ -132,7 +133,7 @@ public struct ResolveChallengeAction has store, drop {
 /// Create a new optimistic proposal
 public fun create_optimistic_proposal(
     proposer: address,
-    intent: Intent<String>,
+    intent_spec: IntentSpec,
     description: String,
     challenge_period_ms: u64,  // If 0, uses DAO config default
     metadata: String,
@@ -165,7 +166,7 @@ public fun create_optimistic_proposal(
     OptimisticProposal {
         id,
         proposer,
-        intent,
+        intent_spec,
         description,
         challenge_period_end,
         is_challenged: false,

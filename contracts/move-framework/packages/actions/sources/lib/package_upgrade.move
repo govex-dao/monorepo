@@ -1,3 +1,8 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Actions use type markers: PackageUpgrade, PackageCommit, PackageRestrict
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// Package managers can lock UpgradeCaps in the account. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
@@ -22,10 +27,10 @@ use account_protocol::{
 use account_actions::{
     version,
 };
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, PackageUpgrade, PackageCommit, PackageRestrict};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Error ===
 
@@ -200,10 +205,9 @@ public fun new_upgrade<Outcome, IW: drop>(
     digest: vector<u8>, 
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"upgrade", b"package");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         UpgradeAction { name, digest },
-        descriptor,
+        framework_action_types::package_upgrade(),
         intent_witness
     );
 }    
@@ -241,10 +245,9 @@ public fun new_commit<Outcome, IW: drop>(
     name: String,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"upgrade", b"commit");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         CommitAction { name },
-        descriptor,
+        framework_action_types::package_commit(),
         intent_witness
     );
 }    
@@ -282,10 +285,9 @@ public fun new_restrict<Outcome, IW: drop>(
     policy: u8, 
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"upgrade", b"restrict");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         RestrictAction { name, policy },
-        descriptor,
+        framework_action_types::package_restrict(),
         intent_witness
     );
 }    

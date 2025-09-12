@@ -1,3 +1,19 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Each config action has a corresponding type marker in framework_action_types
+/// - ConfigUpdateDeps, ConfigToggleUnverified, ConfigUpdateMetadata, 
+///   ConfigUpdateDeposits, ConfigManageWhitelist
+/// - Replaced string-based descriptors with compile-time type safety
+/// - add_typed_action() replaces add_action_with_descriptor()
+///
+/// ENHANCED CONFIG MANAGEMENT:
+/// - Better separation between config, deps, and metadata updates
+/// - Support for batch configuration changes in DAO governance
+//
+// The modifications ensure that DAOs can safely update their configuration
+// without risking inconsistent states during multi-step governance processes.
+// ============================================================================
+
 /// This module allows to manage Account settings.
 /// The actions are related to the modifications of all the fields of the Account (except Intents and Config).
 /// All these fields are encapsulated in the `Account` struct and each managed in their own module.
@@ -14,10 +30,11 @@ module account_protocol::config;
 
 // === Imports ===
 
-use std::string::String;
+use std::{string::String, option::Option, type_name::TypeName};
+use sui::{vec_set::{Self, VecSet}, event};
 use account_protocol::{
-    account::{Account, Auth},
-    intents::{Expired, Params},
+    account::{Self, Account, Auth},
+    intents::{Intent, Expired, Params},
     executable::Executable,
     deps::{Self, Dep},
     metadata,
@@ -25,9 +42,9 @@ use account_protocol::{
     intent_interface,
 };
 use account_extensions::extensions::Extensions;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, ConfigUpdateDeps, ConfigUpdateMetadata};
 
-// No use fun needed - add_action_with_descriptor is in intents module
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Aliases ===
 
@@ -40,6 +57,10 @@ use fun intent_interface::process_intent as Account.process_intent;
 public struct ConfigDepsIntent() has drop;
 /// Intent Witness
 public struct ToggleUnverifiedAllowedIntent() has drop;
+/// Intent Witness for deposit configuration
+public struct ConfigureDepositsIntent() has drop;
+/// Intent Witness for whitelist management
+public struct ManageWhitelistIntent() has drop;
 
 /// Action struct wrapping the deps account field into an action
 public struct ConfigDepsAction has store {
@@ -47,8 +68,32 @@ public struct ConfigDepsAction has store {
 }
 /// Action struct wrapping the unverified_allowed account field into an action
 public struct ToggleUnverifiedAllowedAction has store {}
+/// Action to configure object deposit settings
+public struct ConfigureDepositsAction has store {
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+}
+/// Action to manage type whitelist for deposits
+public struct ManageWhitelistAction has store {
+    add_types: vector<TypeName>,
+    remove_types: vector<TypeName>,
+}
 
 // === Public functions ===
+
+/// Authorized addresses can configure object deposit settings directly
+public fun configure_deposits<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+) {
+    account.verify(auth);
+    // Apply the configuration using the helper function
+    account.apply_deposit_config(enable, new_max, reset_counter);
+}
 
 /// Authorized addresses can edit the metadata of the account
 public fun edit_metadata<Config>(
@@ -58,7 +103,7 @@ public fun edit_metadata<Config>(
     values: vector<String>,
 ) {
     account.verify(auth);
-    *account.metadata_mut(version::current()) = metadata::from_keys_values(keys, values);
+    *account::metadata_mut(account, version::current()) = metadata::from_keys_values(keys, values);
 }
 
 /// Authorized addresses can update the existing dependencies of the account to the latest versions
@@ -90,7 +135,7 @@ public fun update_extensions_to_latest<Config>(
         i = i + 1;
     };
 
-    *account.deps_mut(version::current()) = 
+    *account::deps_mut(account, version::current()) = 
         deps::new_inner(extensions, account.deps(), new_names, new_addrs, new_versions);
 }
 
@@ -120,8 +165,11 @@ public fun request_config_deps<Config, Outcome: store>(
         ConfigDepsIntent(),   
         ctx,
         |intent, iw| {
-            let descriptor = action_descriptor::new(b"config", b"update_deps");
-            intent.add_action_with_descriptor(ConfigDepsAction { deps: deps_inner }, descriptor, iw);
+            intent.add_typed_action(
+                ConfigDepsAction { deps: deps_inner },
+                framework_action_types::config_update_deps(),
+                iw
+            );
         },
     );
 }
@@ -138,7 +186,7 @@ public fun execute_config_deps<Config, Outcome: store>(
         |executable, iw| {
             let action_ref = executable.next_action<_, ConfigDepsAction, _>(iw);
             let ConfigDepsAction { deps } = action_ref;
-            *account.deps_mut(version::current()).inner_mut() = *deps;
+            *account::deps_mut(account, version::current()).inner_mut() = *deps;
         }
     ); 
 } 
@@ -167,8 +215,11 @@ public fun request_toggle_unverified_allowed<Config, Outcome: store>(
         ToggleUnverifiedAllowedIntent(),
         ctx,
         |intent, iw| {
-            let descriptor = action_descriptor::new(b"config", b"toggle_unverified");
-            intent.add_action_with_descriptor(ToggleUnverifiedAllowedAction {}, descriptor, iw);
+            intent.add_typed_action(
+                ToggleUnverifiedAllowedAction {},
+                framework_action_types::config_toggle_unverified(),
+                iw
+            );
         },
     );
 }
@@ -184,7 +235,7 @@ public fun execute_toggle_unverified_allowed<Config, Outcome: store>(
         ToggleUnverifiedAllowedIntent(),
         |executable, iw| {
             let _action: &ToggleUnverifiedAllowedAction = executable.next_action(iw);
-            account.deps_mut(version::current()).toggle_unverified_allowed()
+            account::deps_mut(account, version::current()).toggle_unverified_allowed()
         },
     );    
 }
@@ -192,5 +243,104 @@ public fun execute_toggle_unverified_allowed<Config, Outcome: store>(
 /// Deletes the ToggleUnverifiedAllowedAction from an expired intent
 public fun delete_toggle_unverified_allowed(expired: &mut Expired) {
     let ToggleUnverifiedAllowedAction {} = expired.remove_action();
+}
+
+/// Creates an intent to configure object deposit settings
+public fun request_configure_deposits<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    outcome: Outcome,
+    params: Params,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    account.build_intent!(
+        params,
+        outcome,
+        b"ConfigureDepositsIntent".to_string(),
+        version::current(),
+        ConfigureDepositsIntent(),
+        ctx,
+        |intent, iw| {
+            intent.add_typed_action(
+                ConfigureDepositsAction { enable, new_max, reset_counter },
+                framework_action_types::config_update_deposits(),
+                iw
+            );
+        },
+    );
+}
+
+/// Executes an intent to configure object deposit settings
+public fun execute_configure_deposits<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        ConfigureDepositsIntent(),
+        |executable, iw| {
+            let action: &ConfigureDepositsAction = executable.next_action(iw);
+            account.apply_deposit_config(action.enable, action.new_max, action.reset_counter);
+        },
+    );
+}
+
+/// Deletes the ConfigureDepositsAction from an expired intent
+public fun delete_configure_deposits(expired: &mut Expired) {
+    let ConfigureDepositsAction { .. } = expired.remove_action();
+}
+
+/// Creates an intent to manage type whitelist
+public fun request_manage_whitelist<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    outcome: Outcome,
+    params: Params,
+    add_types: vector<TypeName>,
+    remove_types: vector<TypeName>,
+    ctx: &mut TxContext,
+) {
+    account.verify(auth);
+    account.build_intent!(
+        params,
+        outcome,
+        b"ManageWhitelistIntent".to_string(),
+        version::current(),
+        ManageWhitelistIntent(),
+        ctx,
+        |intent, iw| {
+            intent.add_typed_action(
+                ManageWhitelistAction { add_types, remove_types },
+                framework_action_types::config_manage_whitelist(),
+                iw
+            );
+        },
+    );
+}
+
+/// Executes an intent to manage type whitelist
+public fun execute_manage_whitelist<Config, Outcome: store>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        ManageWhitelistIntent(),
+        |executable, iw| {
+            let action: &ManageWhitelistAction = executable.next_action(iw);
+            account.apply_whitelist_changes(&action.add_types, &action.remove_types);
+        },
+    );
+}
+
+/// Deletes the ManageWhitelistAction from an expired intent
+public fun delete_manage_whitelist(expired: &mut Expired) {
+    let ManageWhitelistAction { .. } = expired.remove_action();
 }
 

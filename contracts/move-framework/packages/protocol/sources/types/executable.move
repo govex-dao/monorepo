@@ -1,3 +1,16 @@
+/// === FORK MODIFICATIONS ===
+/// This file has been modified to support the type-based action system:
+///
+/// NEW ADDITIONS IN THIS DIFF:
+/// - Added type_name imports for type-based action routing
+/// - Added current_action_type() to get the TypeName of current action
+/// - Added is_current_action<T>() to check if current action matches type T
+/// - Added peek_next_action_type() to look ahead at next action's type
+/// - Added find_action_by_type<T>() to search for specific action types
+///
+/// These changes enable compile-time type safety for action execution,
+/// replacing the previous string-based descriptor system with type checking.
+///
 /// The Executable struct is hot potato constructed from an Intent that has been resolved.
 /// It ensures that the actions are executed as intended as it can't be stored.
 /// Action index is tracked to ensure each action is executed exactly once.
@@ -6,6 +19,7 @@ module account_protocol::executable;
 
 // === Imports ===
 
+use std::type_name::{Self, TypeName};
 use account_protocol::intents::Intent;
 
 // === Structs ===
@@ -55,6 +69,31 @@ public fun next_action<Outcome: store, Action: store, IW: drop>(
     executable.intent().actions().borrow(action_idx)
 }
 
+/// Get the type of the current action
+public fun current_action_type<Outcome: store>(
+    executable: &Executable<Outcome>
+): TypeName {
+    let types = executable.intent().action_types();
+    *types.borrow(executable.action_idx)
+}
+
+/// Check if current action matches a specific type
+public fun is_current_action<Outcome: store, T: store + drop + copy>(
+    executable: &Executable<Outcome>
+): bool {
+    let current_type = current_action_type(executable);
+    current_type == type_name::with_defining_ids<T>()
+}
+
+/// Get type of action at specific index
+public fun action_type_at<Outcome: store>(
+    executable: &Executable<Outcome>,
+    idx: u64
+): TypeName {
+    let types = executable.intent().action_types();
+    *types.borrow(idx)
+}
+
 // === Package functions ===
 
 public(package) fun new<Outcome: store>(intent: Intent<Outcome>): Executable<Outcome> {
@@ -81,6 +120,8 @@ use account_protocol::intents;
 public struct TestOutcome has copy, drop, store {}
 #[test_only]
 public struct TestAction has store {}
+#[test_only]
+public struct TestActionType has drop {}
 #[test_only]
 public struct TestIntentWitness() has drop;
 
@@ -139,8 +180,8 @@ fun test_next_action() {
         ctx
     );
     
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
     let mut executable = new(intent);
     
@@ -179,7 +220,7 @@ fun test_contains_action() {
         ctx
     );
     
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
     let mut executable = new(intent);
     
@@ -277,9 +318,9 @@ fun test_executable_with_multiple_actions() {
     );
     
     // Add multiple actions
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
-    intents::add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
+    intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
     let mut executable = new(intent);
     

@@ -24,6 +24,7 @@ public struct WrongIntent() has drop;
 
 public struct Outcome has copy, drop, store {}
 public struct Action has store {}
+public struct ActionType has drop {}
 
 // === Tests ===
 
@@ -49,7 +50,7 @@ fun test_executable_flow() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(Action {}, DummyIntent());
+    intent.add_typed_action(Action {}, ActionType {}, DummyIntent());
 
     let mut executable = executable::new(intent);
     // verify initial state (pending action)

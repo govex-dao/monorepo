@@ -1,13 +1,16 @@
-// ============================================================================
-// FORK MODIFICATION NOTICE - Complete Removal of Object Locking
-// ============================================================================
-// This module has been dramatically simplified by removing ALL locking logic.
-// In DAO governance, multiple proposals competing for the same resources is 
-// natural and expected. The blockchain's ownership model already prevents 
-// double-spending - if an object is consumed by one intent, others will simply
-// fail when they try to access it.
-//
-// Changes in this fork:
+/// === FORK MODIFICATIONS ===
+/// COMPLETE REMOVAL OF OBJECT LOCKING:
+/// - Removed ALL pessimistic locking logic from original implementation
+/// - Multiple proposals can now reference the same objects
+/// - First-to-execute wins, others fail naturally (blockchain ownership model)
+/// - Eliminated ~100 lines of complex locking/unlocking code
+/// - Prevents permanent lock footgun from incomplete cleanup
+///
+/// TYPE-BASED ACTION SYSTEM:
+/// - OwnedWithdraw action uses type marker from framework_action_types
+/// - Compile-time type safety replaces string-based descriptors
+///
+/// Changes in this fork:
 // - new_withdraw(): Just adds the action - no validation or locking
 // - do_withdraw(): Just receives the object - no lock/unlock dance  
 // - delete_withdraw(): Trivial cleanup - no unlocking needed
@@ -27,18 +30,20 @@ module account_protocol::owned;
 
 // === Imports ===
 
+use std::type_name;
 use sui::{
     coin::{Self, Coin},
     transfer::Receiving
 };
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
 
-// No use fun needed - add_action_with_descriptor is in intents module
 use account_protocol::{
-    account::{Account, Auth},
+    account::{Self, Account, Auth},
     intents::{Expired, Intent},
     executable::Executable,
 };
+use account_extensions::framework_action_types::{Self, OwnedWithdraw};
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -64,11 +69,9 @@ public fun new_withdraw<Config, Outcome, IW: drop>(
 ) {
     intent.assert_is_account(account.addr());
     // No validation needed - conflicts are natural in DAO governance
-    let descriptor = action_descriptor::new(b"ownership", b"withdraw")
-        .with_target(object_id);
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         WithdrawAction { object_id },
-        descriptor,
+        framework_action_types::owned_withdraw(),
         intent_witness
     );
 }
@@ -85,9 +88,10 @@ public fun do_withdraw<Config, Outcome: store, T: key + store, IW: drop>(
     let action: &WithdrawAction = executable.next_action(intent_witness);
     assert!(receiving.receiving_object_id() == action.object_id, EWrongObject);
 
-    // Simply receive the object - no locking needed
-    // If the object isn't available, this will naturally fail
-    account.receive(receiving)
+    // Receive the object
+    let obj = account::receive(account, receiving);
+    
+    obj
 }
 
 /// Deletes a WithdrawAction from an expired intent
@@ -114,7 +118,7 @@ public fun merge_and_split<Config, CoinType>(
     // receive all coins
     let mut coins = vector::empty();
     to_merge.do!(|item| {
-        let coin = account.receive(item);
+        let coin = account::receive(account, item);
         coins.push_back(coin);
     });
 
@@ -139,7 +143,7 @@ fun merge<Config, CoinType>(
 }
 
 fun split<Config, CoinType>(
-    account: &Account<Config>, 
+    account: &mut Account<Config>, 
     mut coin: Coin<CoinType>,
     amounts: vector<u64>, 
     ctx: &mut TxContext
@@ -148,10 +152,10 @@ fun split<Config, CoinType>(
     let ids = amounts.map!(|amount| {
         let split = coin.split(amount, ctx);
         let id = object::id(&split);
-        account.keep(split);
+        account.keep(split, ctx);
         id
     });
-    account.keep(coin);
+    account.keep(coin, ctx);
 
     ids
 }

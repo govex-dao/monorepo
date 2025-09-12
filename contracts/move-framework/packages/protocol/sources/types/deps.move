@@ -1,18 +1,19 @@
-// ============================================================================
-// FORK MODIFICATION - VecSet Optimization for Duplicate Detection
-// ============================================================================
-// This module has been optimized to handle future growth to 10-20+ dependencies
-// (e.g., Cetus CLMM, Scallop, custom DAO packages, etc.)
-//
-// Changes in this fork:
-// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N) 
-//   duplicate detection during construction instead of O(N²) nested loops
-// - Storage remains vector-based to maintain `copy` + `drop` abilities
-// - Lookups remain O(N) which is acceptable for N≤20
-//
-// Why not VecMap: VecMap's get() method has borrow checker issues - the key
-// must remain borrowed while the reference is in use, incompatible with our API
-// 
+/// === FORK MODIFICATIONS ===
+/// VECSET OPTIMIZATION FOR DUPLICATE DETECTION:
+/// - Optimized to handle future growth to 10-20+ dependencies
+/// - Dependencies may include: Cetus CLMM, Scallop, custom DAO packages, etc.
+///
+/// Changes in this fork:
+/// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N) 
+///   duplicate detection during construction instead of O(N²) nested loops
+/// - Storage remains vector-based to maintain `copy` + `drop` abilities
+/// - Lookups remain O(N) which is acceptable for N≤20
+///
+/// TYPE-BASED ACTION SYSTEM:
+/// - No direct changes, but deps are used with type-based action routing
+///
+/// Why not VecMap: VecMap's get() method has borrow checker issues - the key
+/// must remain borrowed while the reference is in use, incompatible with our API
 // Why not Table: Tables don't support `copy` or `drop` abilities which Deps requires
 //
 // Performance impact:
@@ -94,15 +95,16 @@ public fun new(
 
     names.zip_do!(addresses, |name, addr| {
         let version = versions.remove(0);
-        // verify extensions
-        if (!unverified_allowed) 
-            assert!(extensions.is_extension(name, addr, version), ENotExtension);
         
         // O(log N) duplicate checking instead of O(N²)
         assert!(!name_set.contains(&name), EDepAlreadyExists);
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
+        
+        // verify extensions
+        if (!unverified_allowed) 
+            assert!(extensions.is_extension(name, addr, version), ENotExtension);
         
         // add dep
         inner.push_back(Dep { name, addr, version });
@@ -125,10 +127,11 @@ public fun new_latest_extensions(
     let mut addr_set = vec_set::empty<address>();
     
     names.do!(|name| {
-        let (addr, version) = extensions.get_latest_for_name(name);
-        
         // O(log N) duplicate checking
         assert!(!name_set.contains(&name), EDepAlreadyExists);
+        
+        let (addr, version) = extensions.get_latest_for_name(name);
+        
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
@@ -151,6 +154,7 @@ public fun new_inner(
     // AccountProtocol is mandatory and cannot be removed
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
     // second dependency must be AccountConfig (we don't know the name)
+    assert!(names.length() >= 2, EAccountConfigMissing);
     assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
 
     let mut inner = vector<Dep>[];
@@ -160,15 +164,16 @@ public fun new_inner(
 
     names.zip_do!(addresses, |name, addr| {
         let version = versions.remove(0);
-        // verify extensions
-        if (!deps.unverified_allowed) 
-            assert!(extensions.is_extension(name, addr, version), ENotExtension);
         
         // O(log N) duplicate checking
         assert!(!name_set.contains(&name), EDepAlreadyExists);
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
+        
+        // verify extensions
+        if (!deps.unverified_allowed) 
+            assert!(extensions.is_extension(name, addr, version), ENotExtension);
         
         // add dep
         inner.push_back(Dep { name, addr, version });

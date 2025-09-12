@@ -9,7 +9,7 @@ use sui::{
     clock,
 };
 use account_protocol::{
-    account,
+    account::{Self, Witness as AccountWitness},
     intents,
     deps,
     version,
@@ -31,6 +31,7 @@ public struct Key has copy, drop, store {}
 public struct Data has store {
     inner: bool
 }
+public struct DataActionType has drop {}
 public struct Asset has key, store {
     id: UID,
 }
@@ -53,9 +54,9 @@ fun test_create_and_share_account() {
 #[test]
 fun test_keep_object() {
     let mut scenario = ts::begin(OWNER);
-    let account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness(), scenario.ctx());
+    let mut account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness(), scenario.ctx());
 
-    account.keep(Asset { id: object::new(scenario.ctx()) });
+    account.keep(Asset { id: object::new(scenario.ctx()) }, scenario.ctx());
     scenario.next_tx(OWNER);
     let Asset { id } = scenario.take_from_address<Asset>(account.addr());
     id.delete();
@@ -224,10 +225,10 @@ fun test_receive_object() {
     let mut scenario = ts::begin(OWNER);
     let mut account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness(), scenario.ctx());
 
-    account.keep(Asset { id: object::new(scenario.ctx()) });
+    account.keep(Asset { id: object::new(scenario.ctx()) }, scenario.ctx());
     scenario.next_tx(OWNER);
     let id = object::id(&account);
-    let Asset { id } = account.receive(ts::most_recent_receiving_ticket<Asset>(&id));
+    let Asset { id } = account::receive(&mut account, ts::most_recent_receiving_ticket<Asset>(&id));
     id.delete();
 
     destroy(account);
@@ -243,7 +244,7 @@ fun test_account_getters_mut() {
     let mut account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness(), scenario.ctx());
 
     assert!(account.metadata_mut(version::current()).size() == 0);
-    assert!(account.deps_mut(version::current()).contains_name(b"AccountProtocol".to_string()));
+    assert!(account::deps_mut(&mut account, version::current()).contains_name(b"AccountProtocol".to_string()));
     assert!(account.intents_mut(version::current(), Witness()).length() == 0);
     assert!(account.config_mut(version::current(), Witness()) == &mut Config {});
 
@@ -445,7 +446,7 @@ fun test_error_cannot_confirm_execution_before_all_actions_executed() {
         DummyIntent(), 
         scenario.ctx()
     );
-    intent.add_action(Data { inner: true }, DummyIntent());
+    intent.add_typed_action(Data { inner: true }, DataActionType {}, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
     
     let (outcome, executable) = account.create_executable<Config, Outcome, Witness>(b"one".to_string(), &clock, version::current(), Witness());
@@ -697,7 +698,7 @@ fun test_error_cannot_execute_intent_not_called_from_config_module() {
         scenario.ctx()
     );
     account.insert_intent(intent, version::current(), DummyIntent());
-    let (_, executable) = account.create_executable<Config, Outcome, account::Witness>(b"one".to_string(), &clock, version::current(), account::not_config_witness());
+    let (_, executable) = account.create_executable<Config, Outcome, AccountWitness>(b"one".to_string(), &clock, version::current(), account::not_config_witness());
 
     destroy(executable);
     destroy(clock);
@@ -890,7 +891,7 @@ fun test_cancel_intent_wrong_witness() {
     account.insert_intent(intent, version::current(), DummyIntent());
     
     // This should fail - using wrong witness (not config witness)
-    let expired = account.cancel_intent<Config, Outcome, account::Witness>(
+    let expired = account.cancel_intent<Config, Outcome, AccountWitness>(
         b"test".to_string(),
         version::current(),
         account::not_config_witness()

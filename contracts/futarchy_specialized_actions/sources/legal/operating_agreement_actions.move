@@ -18,6 +18,7 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_one_shot_utils::action_data_structs::CreateOperatingAgreementAction;
 
 // === Errors ===
 const EInvalidLineId: u64 = 1;
@@ -33,13 +34,7 @@ const ACTION_REMOVE: u8 = 3;
 
 // === Action Structs ===
 
-/// Create a new (empty) Operating Agreement and store it in the Account
-/// Lines can be inserted subsequently via Insert* actions.
-public struct CreateOperatingAgreementAction has store {
-    /// Optional policy flags to set immediately (defaults are true in OA::new)
-    allow_insert: bool,
-    allow_remove: bool,
-}
+// CreateOperatingAgreementAction moved to futarchy_one_shot_utils::action_data_structs
 
 /// Represents a single atomic change to the operating agreement
 /// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
@@ -168,7 +163,7 @@ public fun delete_operating_agreement_action(expired: &mut Expired) {
 // === Intent Helper Functions ===
 // NOTE: Old helper functions that directly added to intents have been removed.
 // Use the new_*_action functions below to create action structs,
-// then add them with descriptors using add_action_with_descriptor.
+// then add them with typed actions using add_typed_action.
 
 // === Helper Functions ===
 

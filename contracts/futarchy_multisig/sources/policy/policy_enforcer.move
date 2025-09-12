@@ -57,79 +57,24 @@ public fun verify_council_ownership(
 
 // === Helper Functions ===
 
-/// Check if a pattern is typically critical (just a suggestion, not enforced)
+/// Check if a type is typically critical (just a suggestion, not enforced)
 /// DAOs can override this with their own policies
-public fun is_typically_critical(pattern: vector<u8>): bool {
+public fun is_typically_critical<T>(): bool {
+    use std::type_name;
+    use futarchy_utils::action_types;
+    
     // These are commonly critical but DAOs can configure as they wish
-    pattern == b"governance/set_pattern_policy" ||
-    pattern == b"governance/set_object_policy" ||
-    pattern == b"governance/register_council" ||
-    pattern == b"upgrade/package" ||
-    pattern == b"upgrade/restrict" ||
-    pattern == b"treasury/mint" ||
-    pattern == b"dissolution/initiate"
+    let type_name = type_name::get<T>();
+    type_name == type_name::get<action_types::SetTypePolicy>() ||
+    type_name == type_name::get<action_types::SetObjectPolicy>() ||
+    type_name == type_name::get<action_types::RegisterCouncil>() ||
+    type_name == type_name::get<action_types::PackageUpgrade>() ||
+    type_name == type_name::get<action_types::VaultMint>() ||
+    type_name == type_name::get<action_types::InitiateDissolution>()
 }
 
-// === Pattern Matching Optimization ===
-
-/// Check if pattern matches with wildcard support
-/// For ~100 patterns, linear search is acceptable (< 1ms)
-/// Patterns like "treasury/*" match "treasury/spend", "treasury/mint", etc.
-public fun pattern_matches(pattern: vector<u8>, action_pattern: vector<u8>): bool {
-    // Check for wildcard
-    let pattern_len = vector::length(&pattern);
-    if (pattern_len > 0 && *vector::borrow(&pattern, pattern_len - 1) == 42) { // 42 = '*'
-        // Wildcard pattern - check prefix
-        let prefix_len = pattern_len - 1;
-        if (vector::length(&action_pattern) < prefix_len) {
-            return false
-        };
-        
-        let mut i = 0;
-        while (i < prefix_len) {
-            if (*vector::borrow(&pattern, i) != *vector::borrow(&action_pattern, i)) {
-                return false
-            };
-            i = i + 1;
-        };
-        true
-    } else {
-        // Exact match
-        pattern == action_pattern
-    }
-}
-
-// === Efficient Pattern Lookup ===
-
-/// For ~100 patterns, linear search with early exit is efficient
-/// Returns first matching pattern and its policy
-public fun find_matching_pattern(
-    action_pattern: vector<u8>,
-    patterns: &vector<vector<u8>>,
-): Option<u64> {
-    let mut i = 0;
-    let len = vector::length(patterns);
-    
-    while (i < len) {
-        let pattern = vector::borrow(patterns, i);
-        if (pattern_matches(*pattern, action_pattern)) {
-            return option::some(i)
-        };
-        i = i + 1;
-    };
-    
-    option::none()
-}
-
-// === Gas Optimization Notes ===
-// For ~100 patterns:
-// - Linear search: ~100-200 gas per pattern check
-// - Total: ~10,000-20,000 gas for full scan
-// - This is negligible compared to storage operations (100,000+ gas)
-// 
-// Hash table would be:
-// - ~5,000 gas for hash computation
-// - ~10,000 gas for table lookup
-// - Not significantly better for small N
-//
-// Recommendation: Keep linear search for simplicity until >1000 patterns
+// === Type-Based Policy Notes ===
+// With type-based policies, we no longer need pattern matching.
+// TypeName comparison is O(1) and handled natively by Sui.
+// The policy registry directly maps TypeName -> PolicyRule.
+// This is more efficient and safer than string pattern matching.

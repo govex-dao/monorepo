@@ -8,6 +8,8 @@ use std::ascii::String as AsciiString;
 use std::string::String;
 use std::type_name;
 use std::option;
+use std::type_name::TypeName;
+use account_protocol::intent_spec::{Self, IntentSpec, ActionSpec};
 use std::vector;
 use sui::balance::{Balance};
 use sui::clock::Clock;
@@ -73,12 +75,53 @@ public struct TwapConfig has store {
     twap_threshold: u64,
 }
 
+/// Lightweight intent specification for proposals (no UID)
+public struct ProposalIntentSpec has store, copy, drop {
+    /// Human-readable description
+    description: String,
+    /// The action specifications
+    actions: vector<ActionSpec>,
+    /// Whether this requires voting
+    requires_voting: bool,
+}
+
+/// Create a ProposalIntentSpec from components
+public fun new_proposal_intent_spec(
+    description: String,
+    actions: vector<ActionSpec>,
+    requires_voting: bool,
+): ProposalIntentSpec {
+    ProposalIntentSpec {
+        description,
+        actions,
+        requires_voting,
+    }
+}
+
+/// Convert a ProposalIntentSpec to a full IntentSpec (creates new UID)
+public fun proposal_spec_to_intent_spec(
+    proposal_spec: &ProposalIntentSpec,
+    ctx: &mut TxContext,
+): IntentSpec {
+    intent_spec::new_intent_spec(
+        proposal_spec.description,
+        proposal_spec.actions,
+        proposal_spec.requires_voting,
+        ctx,
+    )
+}
+
+/// Get the actions from a ProposalIntentSpec
+public fun proposal_spec_actions(spec: &ProposalIntentSpec): &vector<ActionSpec> {
+    &spec.actions
+}
+
 /// Outcome-related data
 public struct OutcomeData has store {
     outcome_count: u64,
     outcome_messages: vector<String>,
     outcome_creators: vector<address>,
-    intent_keys: vector<option::Option<String>>,
+    intent_specs: vector<option::Option<ProposalIntentSpec>>,
     actions_per_outcome: vector<u64>,
     winning_outcome: Option<u64>,
 }
@@ -119,10 +162,15 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
 /// A scoped witness proving that a particular (proposal, outcome) owned the intent key.
 /// Only mintable by the module that has &mut Proposal and consumes the slot.
 /// This prevents cross-proposal cancellation attacks.
+/// 
+/// TECHNICAL DEBT: This witness structure is outdated after the IntentSpec refactor.
+/// The 'key' field is now meaningless since proposals no longer store live Intents.
+/// Should be updated to have an optional intent_key field that's only used for 
+/// non-proposal intents. For proposal-related cancellations, the key would be None.
 public struct CancelWitness has drop {
     proposal: address,
     outcome_index: u64,
-    key: String,
+    key: String,  // Deprecated - using "deprecated" as placeholder
 }
 
 // Getter functions for CancelWitness (for use in cancel_losing_intent_scoped)
@@ -211,7 +259,7 @@ public fun initialize_market<AssetType, StableType>(
     proposer: address, // The original proposer from the queue
     uses_dao_liquidity: bool,
     fee_escrow: Balance<StableType>, // DAO fees if any
-    intent_key_for_yes: Option<String>, // Intent key for YES outcome
+    intent_spec_for_yes: Option<ProposalIntentSpec>, // Intent spec for YES outcome
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID, u8) {
@@ -374,7 +422,7 @@ public fun initialize_market<AssetType, StableType>(
             outcome_count,
             outcome_messages: initial_outcome_messages,
             outcome_creators,
-            intent_keys: vector::tabulate!(outcome_count, |_| option::none<String>()),
+            intent_specs: vector::tabulate!(outcome_count, |_| option::none<ProposalIntentSpec>()),
             actions_per_outcome: vector::tabulate!(outcome_count, |_| 0),
             winning_outcome: option::none(),
         },
@@ -434,7 +482,7 @@ public fun new_premarket<AssetType, StableType>(
     proposer: address,
     uses_dao_liquidity: bool,
     fee_escrow: Balance<StableType>,
-    intent_key_for_yes: Option<String>,
+    intent_spec_for_yes: Option<ProposalIntentSpec>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
@@ -484,7 +532,7 @@ public fun new_premarket<AssetType, StableType>(
             outcome_count,
             outcome_messages,
             outcome_creators: vector::tabulate!(outcome_count, |_| proposer),
-            intent_keys: vector::tabulate!(outcome_count, |_| option::none<String>()),
+            intent_specs: vector::tabulate!(outcome_count, |_| option::none<ProposalIntentSpec>()),
             actions_per_outcome: vector::tabulate!(outcome_count, |_| 0),
             winning_outcome: option::none(),
         },
@@ -1139,22 +1187,22 @@ public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<Asset
     &proposal.outcome_data.outcome_messages
 }
 
-/// Get the intent key for a specific outcome
-public fun get_intent_key_for_outcome<AssetType, StableType>(
+/// Get the intent spec for a specific outcome
+public fun get_intent_spec_for_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     outcome_index: u64
-): &option::Option<String> {
-    vector::borrow(&proposal.outcome_data.intent_keys, outcome_index)
+): &option::Option<ProposalIntentSpec> {
+    vector::borrow(&proposal.outcome_data.intent_specs, outcome_index)
 }
 
 
-/// Take (move out) the intent key for a specific outcome and clear the slot.
-public fun take_intent_key_for_outcome<AssetType, StableType>(
+/// Take (move out) the intent spec for a specific outcome and clear the slot.
+public fun take_intent_spec_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64
-): option::Option<String> {
+): option::Option<ProposalIntentSpec> {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
-    let slot = vector::borrow_mut(&mut proposal.outcome_data.intent_keys, outcome_index);
+    let slot = vector::borrow_mut(&mut proposal.outcome_data.intent_specs, outcome_index);
     let old_value = *slot;
     *slot = option::none();
     old_value
@@ -1169,34 +1217,37 @@ public fun make_cancel_witness<AssetType, StableType>(
 ): option::Option<CancelWitness> {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
     let addr = object::uid_to_address(&proposal.id);
-    let mut key_opt = take_intent_key_for_outcome(proposal, outcome_index);
-    if (option::is_some(&key_opt)) {
-        let key = option::extract(&mut key_opt);
-        option::some(CancelWitness { proposal: addr, outcome_index, key })
+    let mut spec_opt = take_intent_spec_for_outcome(proposal, outcome_index);
+    if (option::is_some(&spec_opt)) {
+        // Note: CancelWitness still expects a key string, but we have a ProposalIntentSpec
+        // This is a temporary solution - CancelWitness should be updated in the future
+        let spec = option::extract(&mut spec_opt);
+        // ProposalIntentSpec has drop, so no need to destroy
+        option::some(CancelWitness { proposal: addr, outcome_index, key: b"deprecated".to_string() })
     } else {
         option::none<CancelWitness>()
     }
 }
 
-/// Set the intent key for a specific outcome and track action count
-/// Handles replacement if an intent key already exists
-public fun set_intent_key_for_outcome<AssetType, StableType>(
+/// Set the intent spec for a specific outcome and track action count
+/// Handles replacement if an intent spec already exists
+public fun set_intent_spec_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64,
-    intent_key: String,
+    intent_spec: ProposalIntentSpec,
     num_actions: u64,
     max_actions_per_outcome: u64,
 ) {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
     
-    let key_slot = vector::borrow_mut(&mut proposal.outcome_data.intent_keys, outcome_index);
+    let spec_slot = vector::borrow_mut(&mut proposal.outcome_data.intent_specs, outcome_index);
     let action_count = vector::borrow_mut(&mut proposal.outcome_data.actions_per_outcome, outcome_index);
     
     // Calculate new count for this outcome
     let mut new_outcome_count = *action_count;
     
-    if (option::is_some(key_slot)) {
-        // Replacing existing intent - reset count
+    if (option::is_some(spec_slot)) {
+        // Replacing existing intent - old spec is dropped automatically
         new_outcome_count = 0;
     };
     
@@ -1205,19 +1256,19 @@ public fun set_intent_key_for_outcome<AssetType, StableType>(
     // Check outcome limit only
     assert!(new_outcome_count <= max_actions_per_outcome, ETooManyActions);
     
-    // Set the intent key and update count
-    *key_slot = option::some(intent_key);
+    // Set the intent spec and update count
+    *spec_slot = option::some(intent_spec);
     *action_count = new_outcome_count;
 }
 
 
-/// Check if an outcome has an intent key
-public fun has_intent_key<AssetType, StableType>(
+/// Check if an outcome has an intent spec
+public fun has_intent_spec<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
     outcome_index: u64
 ): bool {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
-    option::is_some(vector::borrow(&proposal.outcome_data.intent_keys, outcome_index))
+    option::is_some(vector::borrow(&proposal.outcome_data.intent_specs, outcome_index))
 }
 
 /// Get the number of actions for a specific outcome
@@ -1229,19 +1280,19 @@ public fun get_actions_for_outcome<AssetType, StableType>(
     *vector::borrow(&proposal.outcome_data.actions_per_outcome, outcome_index)
 }
 
-/// Clear the intent key for an outcome and reset action count
-public fun clear_intent_key_for_outcome<AssetType, StableType>(
+/// Clear the intent spec for an outcome and reset action count
+public fun clear_intent_spec_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64,
 ) {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
     
-    let key_slot = vector::borrow_mut(&mut proposal.outcome_data.intent_keys, outcome_index);
+    let spec_slot = vector::borrow_mut(&mut proposal.outcome_data.intent_specs, outcome_index);
     let action_count = vector::borrow_mut(&mut proposal.outcome_data.actions_per_outcome, outcome_index);
     
-    if (option::is_some(key_slot)) {
-        // Clear the intent key
-        *key_slot = option::none();
+    if (option::is_some(spec_slot)) {
+        // Clear the intent spec (old spec is dropped automatically)
+        *spec_slot = option::none();
         
         // Reset this outcome's action count
         *action_count = 0;
@@ -1309,7 +1360,7 @@ public fun new_for_testing<AssetType, StableType>(
     winning_outcome: Option<u64>,
     fee_escrow: Balance<StableType>,
     treasury_address: address,
-    intent_keys: vector<option::Option<String>>,
+    intent_specs: vector<option::Option<ProposalIntentSpec>>,
     ctx: &mut TxContext
 ): Proposal<AssetType, StableType> {
     Proposal {

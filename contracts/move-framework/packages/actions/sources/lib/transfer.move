@@ -1,3 +1,8 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - TransferAction uses TransferObject type marker from framework_action_types
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// This module defines apis to transfer assets owned or managed by the account.
 /// The intents can implement transfers for any action type (e.g. see owned or vault).
 
@@ -9,10 +14,10 @@ use account_protocol::{
     intents::{Expired, Intent},
     executable::Executable,
 };
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, TransferObject};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Structs ===
 
@@ -30,10 +35,9 @@ public fun new_transfer<Outcome, IW: drop>(
     recipient: address,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"treasury", b"transfer");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         TransferAction { recipient },
-        descriptor,
+        framework_action_types::transfer_object(),
         intent_witness
     );
 }

@@ -6,10 +6,10 @@ use account_protocol::executable::{Self, Executable};
 use account_protocol::account::Account;
 use futarchy_multisig::policy_actions::{
     Self,
-    SetPatternPolicyAction,
+    SetTypePolicyAction,
     SetObjectPolicyAction,
     RegisterCouncilAction,
-    RemovePatternPolicyAction,
+    RemoveTypePolicyAction,
     RemoveObjectPolicyAction,
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
@@ -22,9 +22,9 @@ public fun try_execute_policy_action<IW: copy + drop, Outcome: store + drop + co
     witness: IW,
     _ctx: &mut TxContext,
 ): bool {
-    // Check for set pattern policy action
-    if (executable::contains_action<Outcome, SetPatternPolicyAction>(executable)) {
-        policy_actions::do_set_pattern_policy(
+    // Check for set type policy action
+    if (executable::contains_action<Outcome, SetTypePolicyAction>(executable)) {
+        policy_actions::do_set_type_policy(
             executable,
             account,
             version::current(),
@@ -55,9 +55,9 @@ public fun try_execute_policy_action<IW: copy + drop, Outcome: store + drop + co
         return true
     };
     
-    // Check for remove pattern policy action
-    if (executable::contains_action<Outcome, RemovePatternPolicyAction>(executable)) {
-        policy_actions::do_remove_pattern_policy(
+    // Check for remove type policy action
+    if (executable::contains_action<Outcome, RemoveTypePolicyAction>(executable)) {
+        policy_actions::do_remove_type_policy(
             executable,
             account,
             version::current(),

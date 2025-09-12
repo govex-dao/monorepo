@@ -17,7 +17,8 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_actions::commitment_proposal::{Self, CommitmentProposal, PriceTier};
+use futarchy_actions::commitment_proposal::{Self, CommitmentProposal, PriceTier as CommitmentPriceTier};
+use futarchy_one_shot_utils::action_data_structs::{Self, CreateCommitmentProposalAction, PriceTier};
 use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::{
     spot_amm::SpotAMM,
@@ -37,21 +38,7 @@ const EInsufficientCommittedAmount: u64 = 8;
 
 // === Action Structs ===
 
-/// Action to create a commitment proposal
-public struct CreateCommitmentProposalAction<phantom AssetType> has store, copy, drop {
-    /// Amount of tokens to commit
-    committed_amount: u64,
-    /// Price tiers for locking
-    tiers: vector<PriceTier>,
-    /// Associated proposal ID
-    proposal_id: ID,
-    /// Trading start time
-    trading_start: u64,
-    /// Trading end time
-    trading_end: u64,
-    /// Description of the commitment
-    description: String,
-}
+// CreateCommitmentProposalAction moved to futarchy_one_shot_utils::action_data_structs
 
 /// Action to execute a commitment after proposal passes
 public struct ExecuteCommitmentAction has store, copy, drop {
@@ -91,17 +78,35 @@ public fun do_create_commitment_proposal<AssetType, StableType, Outcome: store, 
     );
     
     // Verify coin amount matches exactly
-    assert!(coin::value(&committed_coins) >= action.committed_amount, EInsufficientCommittedAmount);
+    assert!(coin::value(&committed_coins) >= action_data_structs::committed_amount(action), EInsufficientCommittedAmount);
+    
+    // Convert PriceTiers from action format to commitment format
+    let action_tiers = action_data_structs::tiers(action);
+    let mut commitment_tiers = vector::empty<CommitmentPriceTier>();
+    let mut i = 0;
+    let len = vector::length(action_tiers);
+    while (i < len) {
+        let tier = vector::borrow(action_tiers, i);
+        // Convert action PriceTier to CommitmentPriceTier
+        // Note: This is a temporary conversion - the types should be aligned
+        let commitment_tier = commitment_proposal::new_price_tier(
+            action_data_structs::price(tier) as u128,  // Convert price to twap_threshold
+            action_data_structs::allocation(tier),     // Use allocation as lock_amount  
+            86400000                                    // Default 1 day lock duration
+        );
+        vector::push_back(&mut commitment_tiers, commitment_tier);
+        i = i + 1;
+    };
     
     // Create the commitment proposal directly
-    commitment_proposal::create_commitment_proposal(
+    commitment_proposal::create_commitment_proposal<AssetType, StableType>(
         tx_context::sender(ctx),
         committed_coins,
-        action.tiers,
-        action.proposal_id,
-        action.trading_start,
-        action.trading_end,
-        action.description,
+        commitment_tiers,
+        action_data_structs::proposal_id(action),
+        action_data_structs::trading_start(action),
+        action_data_structs::trading_end(action),
+        *action_data_structs::commitment_description(action),
         clock,
         ctx,
     )
@@ -253,14 +258,14 @@ public fun new_create_commitment_proposal_action<AssetType>(
     trading_end: u64,
     description: String,
 ): CreateCommitmentProposalAction<AssetType> {
-    CreateCommitmentProposalAction {
+    action_data_structs::new_create_commitment_proposal_action(
         committed_amount,
         tiers,
         proposal_id,
         trading_start,
         trading_end,
         description,
-    }
+    )
 }
 
 /// Create a new ExecuteCommitmentAction

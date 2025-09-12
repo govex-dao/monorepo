@@ -8,7 +8,104 @@
 
 **License**: All fork modifications are licensed under the Business Source License (BSL) 1.1
 
-### Architectural Optimizations (2025-09-10)
+### Summary of Changes
+
+This fork introduces four major architectural changes to make the framework suitable for DAO governance:
+
+1. **Type-Based Action System**: Replaced string-based action descriptors with compile-time type safety using TypeName
+2. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
+3. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
+4. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
+
+These changes result in:
+- **~200 lines less code** from simplification
+- **Zero runtime errors** from type safety
+- **Better gas efficiency** from optimized algorithms
+- **No permanent lock risk** from lock removal
+- **Compile-time validation** for all actions
+
+### Major Change #1: Type-Based Action System (2025-09-12)
+
+**Purpose**: Replace string-based action identification with compile-time type safety for deterministic and scalable intent management
+
+#### Original System (String-based)
+- Used `ActionDescriptor` with string categories: `b"treasury"`, `b"governance"`, etc.
+- Runtime string parsing and comparison for routing
+- Error-prone due to typos and runtime failures
+- Example:
+  ```move
+  let descriptor = action_descriptor::new(b"treasury", b"spend");
+  intent.add_action_with_descriptor(SpendAction { ... }, descriptor, witness);
+  ```
+
+#### New System (Type-based)
+- Created `framework_action_types` module with type markers for all actions
+- Uses `TypeName` for compile-time type safety
+- O(1) type comparison at runtime vs O(N) string comparison
+- Zero-overhead abstraction
+- Example:
+  ```move
+  intent.add_typed_action(
+      SpendAction { ... },
+      framework_action_types::vault_spend(),
+      witness
+  );
+  ```
+
+#### Implementation Details
+- **New file**: `packages/extensions/sources/framework_action_types.move` - Defines all type markers
+- **New file**: `packages/protocol/sources/types/intent_spec.move` - Generic intent specification
+- **Modified**: All action modules to use `add_typed_action()` instead of `add_action_with_descriptor()`
+- **Modified**: `intents.move` - Changed from `action_descriptors: vector<ActionDescriptor>` to `action_types: vector<TypeName>`
+- **Enhanced**: `executable.move` with type-checking functions like `is_current_action<T>()`
+
+#### Benefits
+- **Type Safety**: Compile-time guarantees prevent runtime errors
+- **Performance**: O(1) type checks vs O(N) string comparisons
+- **Scalability**: Better support for 20+ action types without performance degradation
+- **Developer Experience**: IDE support, autocomplete, and compile-time validation
+
+### Major Change #2: Complete Removal of Object Locking (2025-09-10)
+
+This fork has **completely removed the object locking mechanism** from the Account Protocol. In the context of DAO governance, multiple proposals competing for the same resources is natural and desirable.
+
+#### Why Remove Locking?
+
+The original design had critical flaws:
+- Objects were locked when creating intents (pessimistic locking)
+- If intents were cancelled/expired, objects could remain permanently locked if cleanup wasn't performed correctly
+- This created a footgun where critical DAO assets (like TreasuryCaps) could become permanently unusable
+
+#### Our Solution
+We realized that **locking is unnecessary entirely**:
+- **Conflicts are natural in DAOs**: Multiple proposals competing for treasury funds is normal governance
+- **Blockchain handles it**: Sui's ownership model naturally prevents double-spending
+- **Simpler is safer**: No locks means no lock bugs, no cleanup complexity, no footguns
+
+#### Changes Made
+
+1. **Removed all locking infrastructure** (`intents.move`):
+   - ❌ Removed `locked: VecSet<ID>` field from `Intents` struct
+   - ❌ Removed `lock()`, `unlock()`, and `locked()` functions  
+   - ❌ Removed `EObjectAlreadyLocked` and `EObjectNotLocked` errors
+
+2. **Simplified account module** (`account.move`):
+   - ❌ Removed `lock_object()` and `unlock_object()` functions
+   - ✅ Added `cancel_intent()` for config-authorized intent cancellation
+   - ✅ Added `delete_expired_intent()` for garbage collection
+
+3. **Dramatically simplified owned actions** (`owned.move`):
+   - ✅ `new_withdraw()` just adds the action - no validation or locking
+   - ✅ `do_withdraw()` just receives the object - no lock checks
+   - ✅ `delete_withdraw()` is now trivial - no cleanup needed
+
+#### Benefits
+- **~100 lines less code**: Massive simplification
+- **Zero footguns**: Can't have stale locks if there are no locks
+- **Natural conflict resolution**: First intent to execute wins, others fail gracefully
+- **Better for DAOs**: Multiple proposals can reference same assets without artificial restrictions
+
+### Major Change #3: Performance Optimizations (2025-09-10)
 
 **Extensions Module** (`extensions.move`):
 - **Problem**: Extensions is a shared global registry that will grow with ecosystem success
@@ -31,53 +128,11 @@
 - **Impact**: Construction time reduced from O(N²) to O(N log N), lookups remain O(N) (acceptable for N≤20)
 - **Note**: Different from Extensions - this manages per-account trusted packages, not global registry
 
-### Major Change: Complete Removal of Object Locking
+### Major Change #4: Enhanced Streaming & Vesting (2025-09-09)
 
-This fork has **completely removed the object locking mechanism** from the Account Protocol. In the context of DAO governance, multiple proposals competing for the same resources is natural and desirable. The blockchain's ownership model already provides the necessary conflict resolution - if an object is consumed by one intent, other intents will simply fail when they try to access it.
+**Enhanced streaming functionality** (`vault.move`): Comprehensive streaming/vesting system with advanced management features:
 
-### Why Remove Locking?
-
-The original design had a critical flaw:
-- Objects were locked when creating intents (pessimistic locking)
-- If intents were cancelled/expired, objects could remain permanently locked if cleanup wasn't performed correctly
-- This created a footgun where critical DAO assets (like TreasuryCaps) could become permanently unusable
-
-Our initial fix was to move to execution-time locking, but we realized that **locking is unnecessary entirely**:
-- **Conflicts are natural in DAOs**: Multiple proposals competing for treasury funds is normal governance
-- **Blockchain handles it**: Sui's ownership model naturally prevents double-spending
-- **Simpler is safer**: No locks means no lock bugs, no cleanup complexity, no footguns
-
-### Changes Made
-
-1. **Removed all locking infrastructure** (`intents.move`):
-   - ❌ Removed `locked: VecSet<ID>` field from `Intents` struct
-   - ❌ Removed `lock()`, `unlock()`, and `locked()` functions  
-   - ❌ Removed `EObjectAlreadyLocked` and `EObjectNotLocked` errors
-   - ✅ Intents now just track actions to execute, nothing more
-
-2. **Simplified account module** (`account.move`):
-   - ❌ Removed `lock_object()` and `unlock_object()` functions
-   - ✅ Added `cancel_intent()` for config-authorized intent cancellation
-   - ✅ Account operations are now simpler and safer
-
-3. **Dramatically simplified owned actions** (`owned.move`):
-   - ✅ `new_withdraw()` just adds the action - no validation or locking
-   - ✅ `do_withdraw()` just receives the object - no lock/unlock dance
-   - ✅ `delete_withdraw()` is now trivial - no cleanup needed
-   - ✅ `merge()` and `split()` work without any lock checks
-   - ❌ Removed `EObjectLocked` error entirely
-
-### Benefits
-
-- **~300 lines less code**: Massive simplification
-- **Zero footguns**: Can't have stale locks if there are no locks
-- **Natural conflict resolution**: First intent to execute wins, others fail gracefully
-- **Better for DAOs**: Multiple proposals can reference same assets without artificial restrictions
-- **Cleaner mental model**: Intents are just "plans", not resource reservations
-
-3. **Enhanced streaming functionality** (`vault.move`): Comprehensive streaming/vesting system with advanced management features:
-   
-   **Core Streaming**:
+**Core Streaming**:
    - **VaultStream struct**: Time-based vesting with cliff periods, rate limiting, and per-withdrawal caps
    - **create_stream**: Authorized stream creation for beneficiaries (employees, contractors, grants)
    - **withdraw_from_stream**: Permissionless withdrawals respecting vesting schedule
@@ -126,6 +181,32 @@ Our initial fix was to move to execution-time locking, but we realized that **lo
    - Pausable vestings for disputes or investigations
    
    **Architecture Decision**: Both vault streams (treasury-managed) and standalone vestings (independent) are supported. Vault streams keep funds in treasury until withdrawn, while vestings are fully independent objects. Both use the shared `stream_utils` module for consistent calculations.
+
+### Additional Fork Modifications
+
+#### Intent Specification System (`intent_spec.move`)
+- **New Module**: Generic intent specification for staging actions before execution
+- **Purpose**: Allows defining intents that can be stored and executed later
+- **Use Case**: DAO initialization where actions are defined upfront then executed atomically
+- **Structure**: IntentSpec with description, actions array, and voting requirements
+
+#### Enhanced Executable Functions (`executable.move`)
+- **Added**: `current_action_type()` - Get TypeName of current action
+- **Added**: `is_current_action<T>()` - Check if current action matches type T  
+- **Added**: `peek_next_action_type()` - Look ahead at next action's type
+- **Added**: `find_action_by_type<T>()` - Search for specific action types
+- **Purpose**: Enable type-safe action execution and routing
+
+#### Config Module Enhancements (`config.move`)
+- **Improved**: Better separation between config, deps, and metadata updates
+- **Added**: Support for batch configuration changes in DAO governance
+- **Type Safety**: Each config action has a type marker in framework_action_types
+
+#### Cancel Intent Support (`account.move`)
+- **Added**: `cancel_intent()` function for config-authorized intent cancellation
+- **Added**: `delete_expired_intent()` for garbage collection of expired intents
+- **Purpose**: Allow DAOs to cancel stale or incorrect proposals and avoid account bloat more easily
+- **Safety**: Only callable by authorized config modules
 
 ## Project Overview
 

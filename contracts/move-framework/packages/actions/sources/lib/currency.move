@@ -1,3 +1,9 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Actions use type markers from framework_action_types module
+/// - CurrencyLockCap, CurrencyMint, CurrencyBurn, CurrencyUpdate, CurrencyDisable
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// Authenticated users can lock a TreasuryCap in the Account to restrict minting and burning operations,
 /// as well as modifying the CoinMetadata.
 
@@ -20,10 +26,9 @@ use account_actions::{
     currency,
     version
 };
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
-
+use account_extensions::framework_action_types::{Self, CurrencyDisable, CurrencyMint, CurrencyBurn, CurrencyUpdate};
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -207,8 +212,11 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
     
-    let descriptor = action_descriptor::new(b"currency", b"disable_permissions");
-    intent.add_action_with_descriptor(DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon }, descriptor, intent_witness);
+    intent.add_typed_action(
+        DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon },
+        framework_action_types::currency_disable(),
+        intent_witness
+    );
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
@@ -253,8 +261,11 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
 
-    let descriptor = action_descriptor::new(b"currency", b"update_metadata");
-    intent.add_action_with_descriptor(UpdateAction<CoinType> { symbol, name, description, icon_url }, descriptor, intent_witness);
+    intent.add_typed_action(
+        UpdateAction<CoinType> { symbol, name, description, icon_url },
+        framework_action_types::currency_update(),
+        intent_witness
+    );
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
@@ -299,10 +310,9 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
     amount: u64,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"treasury", b"mint");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         MintAction<CoinType> { amount },
-        descriptor,
+        framework_action_types::currency_mint(),
         intent_witness
     );
 }
@@ -345,10 +355,9 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
     amount: u64, 
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"treasury", b"burn");
-    intent.add_action_with_descriptor(
+    intent.add_typed_action(
         BurnAction<CoinType> { amount },
-        descriptor,
+        framework_action_types::currency_burn(),
         intent_witness
     );
 }

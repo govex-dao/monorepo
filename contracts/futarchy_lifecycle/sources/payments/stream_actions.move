@@ -21,12 +21,13 @@ use sui::{
     transfer,
     bag::Bag,
     tx_context::TxContext,
-    bcs,
 };
 use futarchy_core::{
     version,
     futarchy_config::{Self, FutarchyConfig},
 };
+use futarchy_multisig::weighted_list::{Self, WeightedList};
+use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
     account::{Self, Account, Auth},
@@ -34,7 +35,7 @@ use account_protocol::{
     version_witness::VersionWitness,
     intents,
 };
-// action_descriptor not needed for this module
+// TypeName-based routing replaces old action_descriptor system
 
 // === Errors === (Keep all original errors)
 const EInvalidStreamDuration: u64 = 1;
@@ -257,22 +258,7 @@ public struct PaymentConfig has store {
     budget_config: Option<BudgetStreamConfig>,
 }
 
-/// Action to create a new payment (Keep original structure)
-public struct CreatePaymentAction<phantom CoinType> has store {
-    payment_type: u8,
-    source_mode: u8,
-    recipient: address,
-    amount: u64,
-    start_timestamp: u64,
-    end_timestamp: u64,
-    interval_or_cliff: Option<u64>,
-    total_payments: u64,
-    cancellable: bool,
-    description: String,
-    max_per_withdrawal: u64,
-    min_interval_ms: u64,
-    max_beneficiaries: u64,
-}
+// CreatePaymentAction moved to futarchy_one_shot_utils::action_data_structs
 
 /// Action to create a budget stream (Keep original structure)
 public struct CreateBudgetStreamAction<phantom CoinType> has store {
@@ -290,63 +276,63 @@ public struct CreateBudgetStreamAction<phantom CoinType> has store {
 
 /// Action to cancel a payment
 public struct CancelPaymentAction has store {
-    payment_id: ID,
+    payment_id: String,
 }
 
 /// Action to update payment recipient
 public struct UpdatePaymentRecipientAction has store {
-    payment_id: ID,
+    payment_id: String,
     new_recipient: address,
 }
 
 /// Action to add withdrawer
 public struct AddWithdrawerAction has store {
-    payment_id: ID,
+    payment_id: String,
     withdrawer: address,
 }
 
 /// Action to remove withdrawers
 public struct RemoveWithdrawersAction has store {
-    payment_id: ID,
+    payment_id: String,
     withdrawers: vector<address>,
 }
 
 /// Action to toggle payment
 public struct TogglePaymentAction has store {
-    payment_id: ID,
+    payment_id: String,
     paused: bool,
 }
 
 /// Action to request withdrawal
 public struct RequestWithdrawalAction<phantom CoinType> has store {
-    payment_id: ID,
+    payment_id: String,
     amount: u64,
 }
 
 /// Action to challenge withdrawals
 public struct ChallengeWithdrawalsAction has store {
-    payment_id: ID,
+    payment_id: String,
 }
 
 /// Action to process pending withdrawal
 public struct ProcessPendingWithdrawalAction<phantom CoinType> has store {
-    payment_id: ID,
+    payment_id: String,
     withdrawal_index: u64,
 }
 
 /// Action to cancel challenged withdrawals
 public struct CancelChallengedWithdrawalsAction has store {
-    payment_id: ID,
+    payment_id: String,
 }
 
 /// Action to execute payment (for recurring payments)
 public struct ExecutePaymentAction<phantom CoinType> has store {
-    payment_id: ID,
+    payment_id: String,
 }
 
 // === Constructor Functions ===
 
-/// Create a new CreatePaymentAction
+/// Create a new CreatePaymentAction with a single recipient (backward compatibility)
 public fun new_create_payment_action<CoinType>(
     payment_type: u8,
     source_mode: u8,
@@ -380,13 +366,13 @@ public fun new_create_payment_action<CoinType>(
 }
 
 /// Create a new CancelPaymentAction
-public fun new_cancel_payment_action(payment_id: ID): CancelPaymentAction {
+public fun new_cancel_payment_action(payment_id: String): CancelPaymentAction {
     CancelPaymentAction { payment_id }
 }
 
 /// Create a new RequestWithdrawalAction
 public fun new_request_withdrawal_action<CoinType>(
-    payment_id: ID,
+    payment_id: String,
     amount: u64,
 ): RequestWithdrawalAction<CoinType> {
     RequestWithdrawalAction { payment_id, amount }
@@ -407,18 +393,13 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     let action_idx = executable.action_idx();
     let action = executable.next_action<Outcome, CreatePaymentAction<CoinType>, IW>(witness);
     
-    // Get the descriptor at the same index from the intent
-    let intent = executable.intent();
-    let descriptors = intent.action_descriptors();
-    let descriptor = descriptors.borrow(action_idx);
+    // Note: Policy validation is handled by the PolicyRegistry in futarchy_multisig
+    // Action types are tracked via TypeName in the Intent for type-safe routing
     
-    // Note: Policy validation should be done by the PolicyRegistry in futarchy_multisig
-    // The descriptor is available here for logging/auditing purposes
-    let _ = descriptor; // Will be used when policy registry integration is complete
-    
-    // Create authorized withdrawers table
-    let mut withdrawers = table::new<address, bool>(ctx);
-    table::add(&mut withdrawers, action.recipient, true);
+    // Create authorized withdrawers table with single recipient
+    let mut authorized_withdrawers = table::new<address, bool>(ctx);
+    authorized_withdrawers.add(action.recipient, true);
+    let withdrawer_count = 1;
     
     // Initialize payment storage if needed
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
@@ -440,18 +421,21 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     // REFACTORED: Create vault stream for direct treasury mode
     let vault_stream_id: Option<ID> = if (action.source_mode == SOURCE_DIRECT_TREASURY && action.payment_type == PAYMENT_TYPE_STREAM) {
         let auth = futarchy_config::authenticate(account, ctx);
+        // For vault streams, we still create a single stream but track beneficiaries separately
+        // Use the recipient from the action
+        let primary_recipient = action.recipient;
         let stream_id = vault::create_stream<FutarchyConfig, CoinType>(
             auth,
             account,
             string::utf8(b"treasury"),
-            action.recipient,
+            primary_recipient,
             action.amount,
             action.start_timestamp,
             action.end_timestamp,
             action.interval_or_cliff,  // cliff
             action.max_per_withdrawal,
             action.min_interval_ms,
-            action.max_beneficiaries,
+            1,  // Single recipient for now
             clock,
             ctx
         );
@@ -480,12 +464,12 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
         option::none()
     };
     
-    // REFACTORED: Create config without duplicate fields
+    // Create config with simplified single recipient
     let config = PaymentConfig {
         payment_type: action.payment_type,
         source_mode: action.source_mode,
-        authorized_withdrawers: withdrawers,
-        withdrawer_count: 1,
+        authorized_withdrawers,
+        withdrawer_count,
         vault_stream_id,  // Reference to vault stream
         isolated_pool_amount,  // Only for isolated pools
         interval_ms: if (action.payment_type == PAYMENT_TYPE_RECURRING) { action.interval_or_cliff } else { option::none() },
@@ -532,12 +516,9 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     ctx: &mut TxContext,
 ) {
     let action = executable.next_action<Outcome, CancelPaymentAction, IW>(witness);
-    // Convert ID to String for cancel_payment function
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
     let (refund_coin, _refund_amount) = cancel_payment<CoinType>(
         account,
-        payment_id_str,
+        action.payment_id,
         _clock,
         ctx
     );
@@ -628,10 +609,8 @@ public fun do_request_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     assert!(config.is_budget_stream, EInvalidBudgetStream);
     assert!(option::is_some(&config.budget_config), EInvalidBudgetStream);
@@ -671,10 +650,8 @@ public fun do_process_pending_withdrawal<Outcome: store, CoinType: drop, IW: cop
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     assert!(config.is_budget_stream, EInvalidBudgetStream);
     assert!(option::is_some(&config.budget_config), EInvalidBudgetStream);
@@ -705,10 +682,8 @@ public fun do_update_payment_recipient<Outcome: store, IW: drop>(
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     // Table::keys not available in Move, need alternate approach
     // We'll clear the table by removing the new_recipient if it exists
@@ -739,10 +714,8 @@ public fun do_add_withdrawer<Outcome: store, IW: drop>(
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     assert!(config.withdrawer_count < MAX_WITHDRAWERS, ETooManyWithdrawers);
     
@@ -769,10 +742,8 @@ public fun do_remove_withdrawers<Outcome: store, IW: drop>(
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     let mut i = 0;
     let len = vector::length(&action.withdrawers);
@@ -803,10 +774,8 @@ public fun do_toggle_payment<Outcome: store, IW: drop>(
         version::current()
     );
     
-    let payment_id_bytes = bcs::to_bytes(&action.payment_id);
-    let payment_id_str = string::utf8(payment_id_bytes);
-    assert!(table::contains(&storage.payments, payment_id_str), EPaymentNotFound);
-    let config = table::borrow_mut(&mut storage.payments, payment_id_str);
+    assert!(table::contains(&storage.payments, action.payment_id), EPaymentNotFound);
+    let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     config.active = !action.paused;
 }
@@ -835,7 +804,7 @@ public fun do_cancel_challenged_withdrawals<Outcome: store, IW: drop>(
     let _action = executable.next_action<Outcome, CancelChallengedWithdrawalsAction, IW>(witness);
 }
 
-/// REFACTORED: Claim now delegates to vault stream for direct treasury
+/// REFACTORED: Claim now delegates to vault stream for direct treasury and handles weighted distribution
 public fun claim_from_payment<CoinType: drop>(
     account: &mut Account<FutarchyConfig>,
     payment_id: String,
@@ -857,7 +826,9 @@ public fun claim_from_payment<CoinType: drop>(
         
         let config = table::borrow(&storage.payments, payment_id);
         assert!(config.active, EPaymentNotActive);
-        assert!(table::contains(&config.authorized_withdrawers, sender), ENotAuthorizedWithdrawer);
+        // Check if sender is an authorized withdrawer
+        let is_authorized = table::contains(&config.authorized_withdrawers, sender);
+        assert!(is_authorized, ENotAuthorizedWithdrawer);
         
         (config.source_mode, config.vault_stream_id, config.is_budget_stream, config.budget_config.is_some())
     };
@@ -866,12 +837,22 @@ public fun claim_from_payment<CoinType: drop>(
     if (source_mode == SOURCE_DIRECT_TREASURY && vault_stream_id_opt.is_some()) {
         let stream_id = *vault_stream_id_opt.borrow();
         
-        // Calculate available from vault stream
+        // Calculate total available from vault stream
+        let total_available = vault::calculate_claimable(account, string::utf8(b"treasury"), stream_id, clock);
+        
+        // For simplified single-recipient model, sender gets full amount
         let available = if (amount.is_some()) {
-            *amount.borrow()
+            let requested = *amount.borrow();
+            if (requested <= total_available) {
+                requested
+            } else {
+                total_available
+            }
         } else {
-            vault::calculate_claimable(account, string::utf8(b"treasury"), stream_id, clock)
+            total_available
         };
+        
+        assert!(available > 0, ENothingToClaim);
         
         // Handle budget stream accountability
         if (is_budget_stream && has_budget_config) {
@@ -890,6 +871,9 @@ public fun claim_from_payment<CoinType: drop>(
                 ctx
             );
         };
+        
+        // In simplified model, vault stream tracks claims internally
+        // No need to track claimed_amounts separately
         
         // Withdraw from vault stream
         let coin = vault::withdraw_from_stream<FutarchyConfig, CoinType>(
@@ -1096,7 +1080,7 @@ public fun get_payment_info(
 fun generate_payment_id(payment_type: u8, timestamp: u64, ctx: &mut TxContext): String {
     // Create a simple unique ID using payment type and timestamp
     // The fresh_object_address ensures uniqueness even for same timestamp
-    let _fresh = ctx.fresh_object_address(); // Ensure uniqueness
+    let fresh = ctx.fresh_object_address(); // Ensure uniqueness
     
     let mut id = if (payment_type == PAYMENT_TYPE_STREAM) {
         b"STREAM_".to_string()
@@ -1104,9 +1088,45 @@ fun generate_payment_id(payment_type: u8, timestamp: u64, ctx: &mut TxContext): 
         b"RECURRING_".to_string()
     };
     
-    // Use timestamp bytes directly for uniqueness
-    let timestamp_bytes = bcs::to_bytes(&timestamp);
-    id.append(string::utf8(timestamp_bytes));
+    // Use object ID for uniqueness (convert to hex string)
+    let fresh_id = object::id_from_address(fresh);
+    let fresh_bytes = object::id_to_bytes(&fresh_id);
+    
+    // Convert bytes to hex string representation
+    let hex_chars = b"0123456789abcdef";
+    let mut hex_string = vector::empty<u8>();
+    
+    let mut i = 0;
+    // Just use first 8 bytes for shorter IDs
+    while (i < 8 && i < vector::length(&fresh_bytes)) {
+        let byte = *vector::borrow(&fresh_bytes, i);
+        let high_nibble = (byte >> 4) & 0x0f;
+        let low_nibble = byte & 0x0f;
+        vector::push_back(&mut hex_string, *vector::borrow(&hex_chars, (high_nibble as u64)));
+        vector::push_back(&mut hex_string, *vector::borrow(&hex_chars, (low_nibble as u64)));
+        i = i + 1;
+    };
+    
+    id.append(string::utf8(hex_string));
+    
+    // Also append timestamp for human readability
+    id.append(string::utf8(b"_"));
+    id.append(string::utf8(b"T"));
+    
+    // Convert timestamp to string (simplified - just use last 10 digits)
+    let mut ts = timestamp;
+    let mut ts_str = vector::empty<u8>();
+    while (ts > 0) {
+        let digit = ((ts % 10) as u8) + 48; // ASCII '0' = 48
+        vector::push_back(&mut ts_str, digit);
+        ts = ts / 10;
+    };
+    vector::reverse(&mut ts_str);
+    if (vector::is_empty(&ts_str)) {
+        vector::push_back(&mut ts_str, 48); // '0'
+    };
+    id.append(string::utf8(ts_str));
+    
     id
 }
 

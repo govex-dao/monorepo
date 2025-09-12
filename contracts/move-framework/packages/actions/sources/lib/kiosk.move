@@ -1,3 +1,8 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Actions use type markers: KioskTake, KioskList
+/// - Compile-time type safety replaces string-based descriptors
+///
 /// Authenticated users can place nfts from their kiosk into the account's without passing through the intent process.
 /// Nfts can be transferred into any other Kiosk. Upon resolution, the recipient must execute the transfer.
 /// The functions take the caller's kiosk and the account's kiosk to execute.
@@ -23,10 +28,10 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use account_actions::version;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use account_extensions::framework_action_types::{Self, KioskTake, KioskList};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Errors ===
 
@@ -154,7 +159,7 @@ public fun withdraw_profits<Config>(
     let profits_value = profits_mut.value();
     let profits = profits_mut.split(profits_value);
 
-    account.keep(coin::from_balance<SUI>(profits, ctx));
+    account.keep(coin::from_balance<SUI>(profits, ctx), ctx);
 }
 
 /// Closes the kiosk if empty
@@ -170,7 +175,7 @@ public fun close<Config>(
     let cap: KioskOwnerCap = account.remove_managed_asset(KioskOwnerKey(name), version::current());
     let profits = kiosk.close_and_withdraw(cap, ctx);
     
-    account.keep(profits);
+    account.keep(profits, ctx);
 }
 
 // Intent functions
@@ -183,9 +188,11 @@ public fun new_take<Outcome, IW: drop>(
     recipient: address,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"kiosk", b"take_nft")
-        .with_target(nft_id);
-    intent.add_action_with_descriptor(TakeAction { name, nft_id, recipient }, descriptor, intent_witness);
+    intent.add_typed_action(
+        TakeAction { name, nft_id, recipient },
+        framework_action_types::kiosk_take(),
+        intent_witness
+    );
 }
 
 /// Processes a TakeAction, resolves the rules and places the nft into the recipient's kiosk.
@@ -241,9 +248,11 @@ public fun new_list<Outcome, IW: drop>(
     price: u64,
     intent_witness: IW,
 ) {
-    let descriptor = action_descriptor::new(b"kiosk", b"list_nft")
-        .with_target(nft_id);
-    intent.add_action_with_descriptor(ListAction { name, nft_id, price }, descriptor, intent_witness);
+    intent.add_typed_action(
+        ListAction { name, nft_id, price },
+        framework_action_types::kiosk_list(),
+        intent_witness
+    );
 }
 
 /// Processes a ListAction and lists the nft for purchase.

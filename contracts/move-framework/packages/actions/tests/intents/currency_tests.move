@@ -212,7 +212,7 @@ fun test_request_execute_withdraw_and_burn() {
     let coin = cap.mint(5, scenario.ctx());
     assert!(cap.total_supply() == 5);
     let coin_id = object::id(&coin);
-    account.keep(coin);
+    account.keep(coin, scenario.ctx());
     scenario.next_tx(OWNER);
     let receiving = ts::most_recent_receiving_ticket<Coin<CURRENCY_INTENTS_TESTS>>(&object::id(&account));
 

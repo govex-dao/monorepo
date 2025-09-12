@@ -20,7 +20,6 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, GenericApproval};
 use futarchy_multisig::{
     coexec_common,
     security_council,
-    security_council_intents,
 };
 use futarchy_multisig::{
     security_council_actions,

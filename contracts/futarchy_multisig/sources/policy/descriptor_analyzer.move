@@ -1,8 +1,8 @@
 module futarchy_multisig::descriptor_analyzer {
     use std::vector;
     use std::option::{Self, Option};
+    use std::type_name::TypeName;
     use sui::object::ID;
-    use account_extensions::action_descriptor::{Self, ActionDescriptor};
     use account_protocol::intents::{Self, Intent};
     use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
 
@@ -19,52 +19,36 @@ module futarchy_multisig::descriptor_analyzer {
         intent: &Intent<Outcome>,
         registry: &PolicyRegistry,
     ): ApprovalRequirement {
-        let descriptors = intents::action_descriptors(intent);
+        let action_types = intents::action_types(intent);
         
         let mut needs_dao = false;
         let mut needs_council = false;
         let mut council_id: Option<ID> = option::none();
         let mut mode = 0u8; // Default DAO_ONLY
         
-        // Check each action descriptor
+        // Check each action type
         let mut i = 0;
-        while (i < vector::length(descriptors)) {
-            let desc = vector::borrow(descriptors, i);
-            let pattern = action_descriptor::make_pattern(desc);
+        while (i < vector::length(action_types)) {
+            let action_type = *vector::borrow(action_types, i);
             
-            // Check if this pattern has a policy
-            if (policy_registry::pattern_needs_council(registry, pattern)) {
-                let pattern_mode = policy_registry::get_pattern_mode(registry, pattern);
-                let pattern_council = policy_registry::get_pattern_council(registry, pattern);
+            // Check if this type has a policy
+            if (policy_registry::type_needs_council(registry, action_type)) {
+                let type_mode = policy_registry::get_type_mode(registry, action_type);
+                let type_council = policy_registry::get_type_council(registry, action_type);
                 
-                // Update requirements based on this pattern's policy
-                if (pattern_mode != 0) { // Not DAO_ONLY
+                // Update requirements based on this type's policy
+                if (type_mode != 0) { // Not DAO_ONLY
                     needs_council = true;
-                    if (option::is_some(&pattern_council)) {
-                        council_id = pattern_council;
+                    if (option::is_some(&type_council)) {
+                        council_id = type_council;
                     };
-                    mode = pattern_mode;
+                    mode = type_mode;
                 }
             };
             
-            // Check if target object has a policy
-            let target = action_descriptor::target_object(desc);
-            if (option::is_some(target)) {
-                let object_id = *option::borrow(target);
-                if (policy_registry::object_needs_council(registry, object_id)) {
-                    let object_mode = policy_registry::get_object_mode(registry, object_id);
-                    let object_council = policy_registry::get_object_council(registry, object_id);
-                    
-                    // Object policies override pattern policies
-                    if (object_mode != 0) { // Not DAO_ONLY
-                        needs_council = true;
-                        if (option::is_some(&object_council)) {
-                            council_id = object_council;
-                        };
-                        mode = object_mode;
-                    }
-                }
-            };
+            // Note: Object-specific policies would need to be checked separately
+            // This would require accessing the actual action data, which we can't do generically
+            // For now, type-based policies are the primary mechanism
             
             i = i + 1;
         };

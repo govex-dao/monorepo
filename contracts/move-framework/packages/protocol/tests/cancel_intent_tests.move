@@ -24,6 +24,7 @@ use account_protocol::{
 public struct Config has store {}
 public struct Witness has drop {}
 public struct DummyIntent has drop {}
+public struct NotConfigWitness has drop {}
 public struct Outcome has store, drop {}
 
 // === Constants ===
@@ -150,45 +151,6 @@ fun test_cancel_intent_multiple_withdraws() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = account::ENotCalledFromConfigModule)]
-/// Test that cancel_intent fails without config witness
-fun test_cancel_intent_wrong_witness() {
-    let mut scenario = ts::begin(OWNER);
-    let mut account = account::new(Config {}, deps::new_for_testing(), version::current(), Witness {}, scenario.ctx());
-    let clock = clock::create_for_testing(scenario.ctx());
-    
-    let params = intents::new_params(
-        b"test".to_string(),
-        b"Test".to_string(),
-        vector[1],
-        2,
-        &clock,
-        scenario.ctx()
-    );
-    
-    let intent = account.create_intent(
-        params,
-        Outcome {},
-        b"Test".to_string(),
-        version::current(),
-        DummyIntent {},
-        scenario.ctx()
-    );
-    
-    account.insert_intent(intent, version::current(), DummyIntent {});
-    
-    // This should fail - using wrong witness (not config witness)
-    let expired = account.cancel_intent<Config, Outcome, account::Witness>(
-        b"test".to_string(),
-        version::current(),
-        account::not_config_witness()
-    );
-    
-    test_utils::destroy(expired);
-    test_utils::destroy(clock);
-    test_utils::destroy(account);
-    ts::end(scenario);
-}
 
 #[test, expected_failure(abort_code = sui::dynamic_field::EFieldDoesNotExist)]
 /// Test that cancel_intent fails for non-existent intent

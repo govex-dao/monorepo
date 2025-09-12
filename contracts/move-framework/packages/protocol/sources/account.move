@@ -44,7 +44,8 @@ module account_protocol::account;
 
 use std::{
     string::String,
-    type_name,
+    type_name::{Self, TypeName},
+    option::Option,
 };
 use sui::{
     transfer::Receiving,
@@ -52,6 +53,8 @@ use sui::{
     dynamic_field as df,
     dynamic_object_field as dof,
     package,
+    vec_set::{Self, VecSet},
+    event,
 };
 use account_protocol::{
     metadata::{Self, Metadata},
@@ -74,6 +77,11 @@ const EManagedDataAlreadyExists: u64 = 7;
 const EManagedDataDoesntExist: u64 = 8;
 const EManagedAssetAlreadyExists: u64 = 9;
 const EManagedAssetDoesntExist: u64 = 10;
+const EDepositsDisabled: u64 = 11;
+const EObjectCountUnderflow: u64 = 12;
+const EWhitelistTooLarge: u64 = 13;
+const EObjectLimitReached: u64 = 14;
+const EMaxObjectsReached: u64 = 14;
 
 // === Structs ===
 
@@ -94,10 +102,43 @@ public struct Account<Config> has key, store {
     config: Config,
 }
 
+/// Object tracking state stored as dynamic field
+/// Separate struct to allow extensions to interact without circular deps
+public struct ObjectTracker has copy, drop, store {}
+
+public struct ObjectTrackerState has copy, store {
+    // Current object count (excluding coins)
+    object_count: u128,
+    // Whether permissionless deposits are enabled
+    deposits_open: bool,
+    // Maximum objects before auto-disabling deposits
+    max_objects: u128,
+    // Whitelisted types that bypass restrictions (O(1) lookups with VecSet)
+    whitelisted_types: VecSet<TypeName>,
+}
+
+// === Events ===
+
+
+
+
 /// Protected type ensuring provenance, authenticate an address to an account.
 public struct Auth {
     // address of the account that created the auth
     account_addr: address,
+}
+
+// === Upgradeable Configuration Functions ===
+// These are functions (not constants) so they can be changed in package upgrades
+
+/// Maximum whitelist size - can be changed in future upgrades
+public fun max_whitelist_size(): u64 {
+    50  // Reasonable limit - can increase in upgrades if needed
+}
+
+/// Default max objects - can be changed in future upgrades
+public fun default_max_objects(): u128 {
+    1000  // Adjust this in future upgrades if needed
 }
 
 //**************************************************************************************************//
@@ -106,6 +147,81 @@ public struct Auth {
 
 fun init(otw: ACCOUNT, ctx: &mut TxContext) {
     package::claim_and_keep(otw, ctx); // to create Display objects in the future
+}
+
+/// Initialize object tracking for an account (called during account creation)
+public(package) fun init_object_tracker<Config>(
+    account: &mut Account<Config>,
+    max_objects: u128,
+) {
+    if (!df::exists_(&account.id, ObjectTracker {})) {
+        df::add(&mut account.id, ObjectTracker {}, ObjectTrackerState {
+            object_count: 0,
+            deposits_open: true,
+            max_objects: if (max_objects > 0) max_objects else default_max_objects(),
+            whitelisted_types: vec_set::empty(),
+        });
+    }
+}
+
+/// Get or create object tracker state
+public(package) fun ensure_object_tracker<Config>(account: &mut Account<Config>): &mut ObjectTrackerState {
+    if (!df::exists_(&account.id, ObjectTracker {})) {
+        init_object_tracker(account, default_max_objects());
+    };
+    df::borrow_mut(&mut account.id, ObjectTracker {})
+}
+
+/// Apply deposit configuration changes
+public(package) fun apply_deposit_config<Config>(
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool
+) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = enable;
+    
+    if (new_max.is_some()) {
+        tracker.max_objects = *new_max.borrow();
+    };
+    
+    if (reset_counter) {
+        tracker.object_count = 0;
+    };
+}
+
+/// Apply whitelist changes
+public(package) fun apply_whitelist_changes<Config>(
+    account: &mut Account<Config>,
+    add_types: &vector<TypeName>,
+    remove_types: &vector<TypeName>
+) {
+    let tracker = ensure_object_tracker(account);
+    
+    // Remove types first
+    let mut i = 0;
+    while (i < remove_types.length()) {
+        let type_name = remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, &type_name);
+        i = i + 1;
+    };
+    
+    // Add new types with size check
+    i = 0;
+    while (i < add_types.length()) {
+        let type_name = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_name)) {
+            assert!(
+                vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
+                EWhitelistTooLarge
+            );
+            vec_set::insert(&mut tracker.whitelisted_types, type_name);
+        };
+        i = i + 1;
+    };
+    
+    // Whitelist updated
 }
 
 /// Verifies all actions have been processed and destroys the executable.
@@ -144,6 +260,20 @@ public fun delete_expired_intent<Config, Outcome: store + drop>(
     account.intents.destroy_intent<Outcome>(key)
 }
 
+/// Asserts that the function is called from the module defining the config of the account.
+public(package) fun assert_is_config_module<Config, CW: drop>(
+    _account: &Account<Config>, 
+    _config_witness: CW
+) {
+    let account_type = type_name::with_defining_ids<Config>();
+    let witness_type = type_name::with_defining_ids<CW>();
+    assert!(
+        account_type.address_string() == witness_type.address_string() &&
+        account_type.module_string() == witness_type.module_string(),
+        ENotCalledFromConfigModule
+    );
+}
+
 /// Cancel an active intent and return its Expired bag for GC draining.
 ///
 /// Security:
@@ -160,13 +290,50 @@ public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
     // Ensure the protocol dependency matches what this account expects
     account.deps().check(deps_witness);
     // Only the config module may cancel
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(account, config_witness);
     // Convert to Expired - deleters will handle unlocking during drain
     account.intents.destroy_intent<Outcome>(key)
 }
 
-/// Helper function to transfer an object to the account.
-public fun keep<Config, T: key + store>(account: &Account<Config>, obj: T) {
+/// Helper function to transfer an object to the account with tracking.
+/// Excludes Coin types and whitelisted types from restrictions.
+public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, ctx: &TxContext) {
+    let type_name = type_name::with_defining_ids<T>();
+    let is_coin = is_coin_type(type_name);
+    
+    // Check if type is whitelisted
+    let is_whitelisted = {
+        let tracker = ensure_object_tracker(account);
+        vec_set::contains(&tracker.whitelisted_types, &type_name)
+    };
+    
+    // Only apply restrictions to non-coin, non-whitelisted types
+    if (!is_coin && !is_whitelisted) {
+        // Get tracker state for checking
+        let (deposits_open, sender_is_self) = {
+            let tracker = ensure_object_tracker(account);
+            (tracker.deposits_open, ctx.sender() == account.addr())
+        };
+        
+        // Check if deposits are allowed
+        if (!deposits_open) {
+            // Allow self-deposits even when closed
+            assert!(sender_is_self, EDepositsDisabled);
+        };
+        
+        // Now update tracker state
+        let tracker = ensure_object_tracker(account);
+        
+        // Increment counter only for restricted types
+        tracker.object_count = tracker.object_count + 1;
+        
+        // Auto-disable if hitting threshold
+        if (tracker.object_count >= tracker.max_objects) {
+            tracker.deposits_open = false;
+            // Auto-disabled deposits at threshold
+        };
+    };
+    
     transfer::public_transfer(obj, account.addr());
 }
 
@@ -370,7 +537,7 @@ public fun new<Config, CW: drop>(
     };
 
     account.deps().check(version_witness);
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(&account, config_witness);
 
     account 
 }
@@ -382,7 +549,7 @@ public fun new_auth<Config, CW: drop>(
     config_witness: CW,
 ): Auth {
     account.deps().check(version_witness);
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(account, config_witness);
 
     Auth { account_addr: account.addr() }
 }
@@ -396,7 +563,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
     config_witness: CW,
 ): (Outcome, Executable<Outcome>) {
     account.deps().check(version_witness);
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(account, config_witness);
 
     let mut intent = account.intents.remove_intent<Outcome>(key);
     let time = intent.pop_front_execution_time();
@@ -415,7 +582,7 @@ public fun intents_mut<Config, CW: drop>(
     config_witness: CW,
 ): &mut Intents {
     account.deps().check(version_witness);
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(account, config_witness);
 
     &mut account.intents
 }
@@ -427,7 +594,7 @@ public fun config_mut<Config, CW: drop>(
     config_witness: CW,
 ): &mut Config {
     account.deps().check(version_witness);
-    account.assert_is_config_module(config_witness);
+    assert_is_config_module(account, config_witness);
 
     &mut account.config
 }
@@ -461,6 +628,120 @@ public fun config<Config>(account: &Account<Config>): &Config {
     &account.config
 }
 
+/// Returns object tracking stats (count, deposits_open, max)
+public fun object_stats<Config>(account: &Account<Config>): (u128, bool, u128) {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        (tracker.object_count, tracker.deposits_open, tracker.max_objects)
+    } else {
+        (0, true, default_max_objects())
+    }
+}
+
+/// Check if account is accepting object deposits
+public fun is_accepting_objects<Config>(account: &Account<Config>): bool {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        tracker.deposits_open && tracker.object_count < tracker.max_objects
+    } else {
+        true  // Default open if not initialized
+    }
+}
+
+/// Configure object deposit settings (requires Auth)
+public fun configure_object_deposits<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    enable: bool,
+    new_max: Option<u128>,
+    reset_counter: bool,
+) {
+    account.verify(auth);
+    
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = enable;
+    
+    if (new_max.is_some()) {
+        tracker.max_objects = *new_max.borrow();
+    };
+    
+    if (reset_counter) {
+        tracker.object_count = 0;
+    };
+}
+
+/// Manage whitelist for object types (requires Auth)
+public fun manage_type_whitelist<Config>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    add_types: vector<TypeName>,
+    remove_types: vector<TypeName>,
+) {
+    account.verify(auth);
+    
+    let tracker = ensure_object_tracker(account);
+    
+    // Remove types first (in case of duplicates in add/remove)
+    let mut i = 0;
+    while (i < remove_types.length()) {
+        let type_name = remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, &type_name);
+        i = i + 1;
+    };
+    
+    // Add new types (check size limit)
+    i = 0;
+    while (i < add_types.length()) {
+        let type_name = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_name)) {
+            // Check size limit before adding
+            assert!(
+                vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
+                EWhitelistTooLarge
+            );
+            vec_set::insert(&mut tracker.whitelisted_types, type_name);
+        };
+        i = i + 1;
+    };
+    // Whitelist updated
+}
+
+/// Get whitelisted types for inspection/debugging
+public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<TypeName> {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        vec_set::into_keys(tracker.whitelisted_types)  // Convert VecSet to vector
+    } else {
+        vector::empty()
+    }
+}
+
+/// Check if a specific type is whitelisted
+public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        let type_name = type_name::with_defining_ids<T>();
+        vec_set::contains(&tracker.whitelisted_types, &type_name)
+    } else {
+        false
+    }
+}
+
+/// Helper to check if a TypeName represents a Coin type
+fun is_coin_type(type_name: TypeName): bool {
+    // Check if the type is a Coin type by checking if it starts with
+    // the Coin module prefix from the Sui framework
+    let type_addr = type_name::get_address(&type_name);
+    
+    // Check if this is from the Sui framework and the module is "coin"
+    if (type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()) {
+        let module_name = type_name::get_module(&type_name);
+        module_name == b"coin".to_ascii_string()
+    } else {
+        false
+    }
+}
+
 //**************************************************************************************************//
 // Package functions                                                                                //
 //**************************************************************************************************//
@@ -485,30 +766,48 @@ public(package) fun deps_mut<Config>(
     &mut account.deps
 }
 
-/// Receives an object from an account, only used in owned action lib module.
+/// Receives an object from an account with tracking, only used in owned action lib module.
 public(package) fun receive<Config, T: key + store>(
     account: &mut Account<Config>, 
     receiving: Receiving<T>,
 ): T {
+    let type_name = type_name::with_defining_ids<T>();
+    let is_coin = is_coin_type(type_name);
+    
+    let tracker = ensure_object_tracker(account);
+    let is_whitelisted = vec_set::contains(&tracker.whitelisted_types, &type_name);
+    
+    // Only count non-coin, non-whitelisted types
+    if (!is_coin && !is_whitelisted) {
+        tracker.object_count = tracker.object_count + 1;
+        
+        // Auto-disable if hitting threshold
+        if (tracker.object_count >= tracker.max_objects) {
+            tracker.deposits_open = false;
+        };
+    };
+    
     transfer::public_receive(&mut account.id, receiving)
+}
+
+/// Track when an object leaves the account (withdrawal/burn/transfer)
+public(package) fun track_object_removal<Config>(
+    account: &mut Account<Config>,
+    _object_id: ID,
+) {
+    let tracker = ensure_object_tracker(account);
+    assert!(tracker.object_count > 0, EObjectCountUnderflow);
+    tracker.object_count = tracker.object_count - 1;
+    
+    // Re-enable deposits if we're back under 50% of threshold
+    if (tracker.object_count < tracker.max_objects / 2) {
+        tracker.deposits_open = true;
+    };
 }
 
 // REMOVED: lock_object and unlock_object - no locking in new design
 // Conflicts between intents are natural in DAO governance
 
-/// Asserts that the function is called from the module defining the config of the account.
-public(package) fun assert_is_config_module<Config, CW: drop>(
-    _account: &Account<Config>, 
-    _config_witness: CW
-) {
-    let account_type = type_name::with_defining_ids<Config>();
-    let witness_type = type_name::with_defining_ids<CW>();
-    assert!(
-        account_type.address_string() == witness_type.address_string() &&
-        account_type.module_string() == witness_type.module_string(),
-        ENotCalledFromConfigModule
-    );
-}
 
 //**************************************************************************************************//
 // Tests                                                                                            //
@@ -522,11 +821,11 @@ public fun init_for_testing(ctx: &mut TxContext) {
 }
 
 #[test_only]
-public struct Witness() has drop;
+public struct Witness has drop {}
 
 #[test_only]
 public fun not_config_witness(): Witness {
-    Witness()
+    Witness {}
 }
 
 // === Unit Tests ===
@@ -837,4 +1136,68 @@ fun test_assert_config_module_wrong_witness_module() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     assert_is_config_module(&account, version::witness());
     destroy(account);
+}
+
+// === Test Helper Functions ===
+
+#[test_only]
+public fun new_for_testing(ctx: &mut TxContext): Account<TestConfig> {
+    let deps = deps::new_for_testing();
+    new(TestConfig {}, deps, version::current(), TestWitness(), ctx)
+}
+
+#[test_only]
+public fun destroy_for_testing<Config>(account: Account<Config>) {
+    destroy(account);
+}
+
+#[test_only]
+public fun get_object_tracker<Config>(account: &Account<Config>): Option<ObjectTrackerState> {
+    if (df::exists_(&account.id, ObjectTracker {})) {
+        let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        option::some(*tracker)
+    } else {
+        option::none()
+    }
+}
+
+#[test_only]
+public fun track_object_addition<Config>(account: &mut Account<Config>, id: ID) {
+    let tracker = ensure_object_tracker(account);
+    tracker.object_count = tracker.object_count + 1;
+    if (tracker.object_count >= tracker.max_objects) {
+        tracker.deposits_open = false;
+    };
+}
+
+#[test_only]
+public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, max: u128) {
+    let tracker = ensure_object_tracker(account);
+    tracker.max_objects = max;
+}
+
+#[test_only]
+public fun enable_deposits_for_testing<Config>(account: &mut Account<Config>) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = true;
+}
+
+#[test_only]
+public fun close_deposits_for_testing<Config>(account: &mut Account<Config>) {
+    let tracker = ensure_object_tracker(account);
+    tracker.deposits_open = false;
+}
+
+#[test_only]
+public fun check_can_receive_object<Config, T>(account: &Account<Config>) {
+    let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+    let type_name = type_name::with_defining_ids<T>();
+    
+    assert!(tracker.deposits_open || tracker.whitelisted_types.contains(&type_name), EDepositsDisabled);
+    
+    // For test purposes, we'll treat all objects the same
+    // In production, coins don't count against limits but for tests this is fine
+    if (!tracker.whitelisted_types.contains(&type_name)) {
+        assert!(tracker.object_count < tracker.max_objects, EObjectLimitReached);
+    };
 }

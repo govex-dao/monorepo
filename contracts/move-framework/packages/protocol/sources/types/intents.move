@@ -1,7 +1,7 @@
 /// === FORK MODIFICATIONS ===
-/// This file has been modified from the original account.tech implementation to completely remove
-/// the object locking mechanism. Changes include:
+/// This file has been modified from the original account.tech implementation with two major changes:
 ///
+/// 1. REMOVED OBJECT LOCKING:
 /// Original design (pessimistic locking):
 /// - Intents struct contained a `locked: VecSet<ID>` field to track locked objects
 /// - Objects were locked when creating intents to prevent conflicts
@@ -15,11 +15,24 @@
 /// - Multiple intents can now reference the same objects
 /// - Conflicts are resolved naturally by the blockchain - first to execute wins
 ///
+/// 2. TYPE-BASED ACTION SYSTEM:
+/// Original design (string-based):
+/// - Used action_descriptors: vector<ActionDescriptor> with string categories
+/// - Runtime string parsing and comparison for action routing
+/// - add_action_with_descriptor() took descriptor with b"treasury", b"spend" etc
+///
+/// New design (type-based):
+/// - Changed to action_types: vector<TypeName> for compile-time type safety
+/// - Removed dependency on action_descriptor module entirely
+/// - Added add_typed_action<Outcome, Action, T, IW>() that captures type at compile-time
+/// - Type names captured using type_name::get<T>() for zero-overhead routing
+///
 /// Benefits:
 /// - Eliminates risk of stale locks that could make objects permanently unusable
+/// - Compile-time type safety for all actions
+/// - Better gas efficiency (no string comparisons)
 /// - Simplifies the codebase by ~100 lines
 /// - Better suits DAO governance where multiple proposals competing for resources is natural
-/// - Removes complex cleanup logic from cancellation/expiration paths
 ///
 /// This is the core module managing Intents.
 /// It provides the interface to create and execute intents which is used in the `account` module.
@@ -39,14 +52,13 @@ use sui::{
     dynamic_field,
     clock::Clock,
 };
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
 
 // === Aliases ===
 
 use fun dynamic_field::add as UID.df_add;
 use fun dynamic_field::borrow as UID.df_borrow;
 use fun dynamic_field::remove as UID.df_remove;
-// The add_action_with_descriptor function is defined in this module
+// Type-based action system - no string descriptors
 
 // === Errors ===
 
@@ -93,8 +105,8 @@ public struct Intent<Outcome> has store {
     role: String,
     // heterogenous array of actions to be executed in order
     actions: Bag,
-    // descriptors for each action (for approval tracking)
-    action_descriptors: vector<ActionDescriptor>,
+    // type names for each action (for approval tracking and routing)
+    action_types: vector<TypeName>,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome,
 }
@@ -165,29 +177,20 @@ public fun new_params_with_rand_key(
     (params, key)
 }
 
-public fun add_action<Outcome, Action: store, IW: drop>(
+// REMOVED: Old add_action function without types - use add_typed_action instead
+
+/// Add a typed action for type-safe routing and approval tracking
+public fun add_typed_action<Outcome, Action: store, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     action: Action,
+    action_type: T,
     intent_witness: IW,
 ) {
     intent.assert_is_witness(intent_witness);
 
     let idx = intent.actions().length();
     intent.actions_mut().add(idx, action);
-}
-
-/// Add an action with its descriptor for approval tracking
-public fun add_action_with_descriptor<Outcome, Action: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    action: Action,
-    descriptor: ActionDescriptor,
-    intent_witness: IW,
-) {
-    intent.assert_is_witness(intent_witness);
-
-    let idx = intent.actions().length();
-    intent.actions_mut().add(idx, action);
-    intent.action_descriptors_mut().push_back(descriptor);
+    intent.action_types_mut().push_back(type_name::with_defining_ids<T>());
 }
 
 public fun remove_action<Action: store>(
@@ -297,12 +300,12 @@ public fun actions_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Bag {
     &mut intent.actions
 }
 
-public fun action_descriptors<Outcome>(intent: &Intent<Outcome>): &vector<ActionDescriptor> {
-    &intent.action_descriptors
+public fun action_types<Outcome>(intent: &Intent<Outcome>): &vector<TypeName> {
+    &intent.action_types
 }
 
-public fun action_descriptors_mut<Outcome>(intent: &mut Intent<Outcome>): &mut vector<ActionDescriptor> {
-    &mut intent.action_descriptors
+public fun action_types_mut<Outcome>(intent: &mut Intent<Outcome>): &mut vector<TypeName> {
+    &mut intent.action_types
 }
 
 public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
@@ -392,7 +395,7 @@ public(package) fun new_intent<Outcome, IW: drop>(
         expiration_time,
         role: new_role<IW>(managed_name),
         actions: bag::new(ctx),
-        action_descriptors: vector::empty(),
+        action_types: vector::empty(),
         outcome,
     }
 }
@@ -463,6 +466,8 @@ use sui::clock;
 public struct TestOutcome has copy, drop, store {}
 #[test_only]
 public struct TestAction has store {}
+#[test_only]
+public struct TestActionType has drop {}
 #[test_only]
 public struct TestIntentWitness() has drop;
 #[test_only]
@@ -606,10 +611,10 @@ fun test_add_action() {
         ctx
     );
     
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
     assert_eq(intent.actions().length(), 1);
     
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
     assert_eq(intent.actions().length(), 2);
     
     destroy(intent);
@@ -640,8 +645,8 @@ fun test_remove_action() {
         ctx
     );
     
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
+    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
+    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
     add_intent(&mut intents, intent);
     
     let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string());

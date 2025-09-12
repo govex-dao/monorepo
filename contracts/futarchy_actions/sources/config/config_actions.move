@@ -4,15 +4,16 @@ module futarchy_actions::config_actions;
 
 // === Imports ===
 use std::{
-    string::String,
-    ascii::String as AsciiString,
+    string::{Self, String},
+    ascii::{Self, String as AsciiString},
     option::{Self, Option},
 };
 use sui::{
-    url::Url,
+    url::{Self, Url},
     event,
     object,
     clock::Clock,
+    bcs::{Self, BCS},
 };
 use account_protocol::{
     account::{Self, Account},
@@ -22,9 +23,10 @@ use account_protocol::{
 };
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 
+// === Friend Modules === (removed - deprecated in 2024 edition)
+
 // === Aliases ===
 use account_protocol::intents as protocol_intents;
-use fun protocol_intents::add_action as Intent.add_action;
 
 // === Errors ===
 const EEmptyName: u64 = 1;
@@ -218,6 +220,34 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     });
 }
 
+/// Internal version that works directly with action struct for init actions
+public fun do_set_proposals_enabled_internal(
+    account: &mut Account<FutarchyConfig>,
+    action: SetProposalsEnabledAction,  // Take by value to consume
+    _version: VersionWitness,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    let SetProposalsEnabledAction { enabled } = action;  // Destructure to consume
+    
+    // Get mutable config using internal function
+    let config = futarchy_config::internal_config_mut(account);
+    
+    // Apply the state change
+    if (enabled) {
+        futarchy_config::set_operational_state(config, futarchy_config::state_active());
+    } else {
+        futarchy_config::set_operational_state(config, futarchy_config::state_paused());
+    };
+    
+    // Emit event
+    event::emit(ProposalsEnabledChanged {
+        account_id: object::id(account),
+        enabled,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
 /// Execute an update name action
 public fun do_update_name<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
@@ -245,6 +275,35 @@ public fun do_update_name<Outcome: store, IW: drop>(
     event::emit(DaoNameChanged {
         account_id: object::id(account),
         new_name: action.new_name,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Internal version that works directly with action struct for init actions
+public fun do_update_name_internal(
+    account: &mut Account<FutarchyConfig>,
+    action: UpdateNameAction,  // Already takes by value
+    version: VersionWitness,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Destructure to consume the action
+    let UpdateNameAction { new_name } = action;
+    
+    // Validate
+    assert!(new_name.length() > 0, EEmptyName);
+    
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    
+    // Update the name by converting String to AsciiString
+    let ascii_name = new_name.to_ascii();
+    futarchy_config::set_dao_name(config, ascii_name);
+    
+    // Emit event
+    event::emit(DaoNameChanged {
+        account_id: object::id(account),
+        new_name,  // Use the destructured variable
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -1083,4 +1142,82 @@ public fun do_update_fee_params<Outcome: store, IW: drop>(
     ctx: &mut TxContext
 ) {
     do_update_queue_params<Outcome, IW>(executable, account, version, iw, clock, ctx);
+}
+
+// === Deserialization Constructors ===
+
+/// Deserialize SetProposalsEnabledAction from bytes
+public(package) fun set_proposals_enabled_action_from_bytes(bytes: vector<u8>): SetProposalsEnabledAction {
+    let mut bcs = bcs::new(bytes);
+    SetProposalsEnabledAction {
+        enabled: bcs.peel_bool(),
+    }
+}
+
+/// Deserialize UpdateNameAction from bytes
+public(package) fun update_name_action_from_bytes(bytes: vector<u8>): UpdateNameAction {
+    let mut bcs = bcs::new(bytes);
+    UpdateNameAction {
+        new_name: string::utf8(bcs.peel_vec_u8()),
+    }
+}
+
+/// Deserialize MetadataUpdateAction from bytes
+public(package) fun metadata_update_action_from_bytes(bytes: vector<u8>): MetadataUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    MetadataUpdateAction {
+        dao_name: if (bcs.peel_bool()) {
+            option::some(ascii::string(bcs.peel_vec_u8()))
+        } else {
+            option::none()
+        },
+        icon_url: if (bcs.peel_bool()) {
+            option::some(url::new_unsafe_from_bytes(bcs.peel_vec_u8()))
+        } else {
+            option::none()
+        },
+        description: if (bcs.peel_bool()) {
+            option::some(string::utf8(bcs.peel_vec_u8()))
+        } else {
+            option::none()
+        },
+    }
+}
+
+/// Deserialize TradingParamsUpdateAction from bytes
+public(package) fun trading_params_update_action_from_bytes(bytes: vector<u8>): TradingParamsUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    TradingParamsUpdateAction {
+        min_asset_amount: bcs.peel_option_u64(),
+        min_stable_amount: bcs.peel_option_u64(),
+        review_period_ms: bcs.peel_option_u64(),
+        trading_period_ms: bcs.peel_option_u64(),
+        amm_total_fee_bps: bcs.peel_option_u64(),
+    }
+}
+
+/// Deserialize TwapConfigUpdateAction from bytes
+public(package) fun twap_config_update_action_from_bytes(bytes: vector<u8>): TwapConfigUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    TwapConfigUpdateAction {
+        start_delay: bcs.peel_option_u64(),
+        step_max: bcs.peel_option_u64(),
+        initial_observation: bcs.peel_option_u128(),
+        threshold: bcs.peel_option_u64(),
+    }
+}
+
+/// Deserialize GovernanceUpdateAction from bytes
+public(package) fun governance_update_action_from_bytes(bytes: vector<u8>): GovernanceUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    GovernanceUpdateAction {
+        proposal_creation_enabled: bcs.peel_option_bool(),
+        max_outcomes: bcs.peel_option_u64(),
+        max_actions_per_outcome: bcs.peel_option_u64(),
+        required_bond_amount: bcs.peel_option_u64(),
+        max_intents_per_outcome: bcs.peel_option_u64(),
+        proposal_intent_expiry_ms: bcs.peel_option_u64(),
+        optimistic_challenge_fee: bcs.peel_option_u64(),
+        optimistic_challenge_period_ms: bcs.peel_option_u64(),
+    }
 }

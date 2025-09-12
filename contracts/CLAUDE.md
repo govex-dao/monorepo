@@ -4,6 +4,61 @@
 
 **Important Note**: Sui's execution model is atomic and does not have reentrancy risks like Ethereum. Race conditions are also unlikely due to Sui's object-centric model and transaction ordering guarantees. When you see defensive programming patterns in this codebase (like atomic check-and-delete patterns), they are primarily for code clarity and best practices rather than addressing actual race condition risks that would exist in other blockchain environments.
 
+## PTB-Driven Intent Architecture
+
+### Core Components & Their Roles
+
+#### 1. IntentSpec (The Blueprint)
+- **What**: Lightweight, immutable specification of actions to be executed
+- **Where**: Stored in Proposals and used during DAO initialization
+- **Structure**: 
+  - `ProposalIntentSpec` (no UID) for storage in proposals
+  - `account_protocol::IntentSpec` (with UID) for execution
+- **Purpose**: Defines WHAT actions will be executed before they're approved
+- **Key Point**: Never executed directly - must be converted to Intent/Executable first
+
+#### 2. Intent (The Live Contract)
+- **What**: Stateful object representing approved, executable actions
+- **Where**: Stored in Account's intents bag after approval
+- **Purpose**: Represents recurring or scheduled actions that persist
+- **Lifecycle**: Created from IntentSpec → Lives in Account → Executed via Executable
+
+#### 3. PTB as Dispatcher (The Orchestrator)
+- **What**: Programmable Transaction Blocks act as the primary dispatcher
+- **How**: Chain multiple entry functions in a single atomic transaction
+- **Pattern**: 
+  ```
+  1. execute_proposal() → creates Executable hot potato
+  2. execute_config_actions() → processes config actions
+  3. execute_liquidity_actions() → processes liquidity actions
+  4. execute_finalize() → confirms execution
+  ```
+- **Benefit**: Composable, flexible, no monolithic on-chain dispatcher needed
+
+#### 4. Init Actions (DAO Creation)
+- **What**: Special pattern for atomic DAO initialization
+- **How**: Uses hot potato pattern with unshared objects
+- **Pattern**:
+  ```
+  1. create_dao_unshared() → returns Account, Queue, AMM as hot potatoes
+  2. execute_init_config() → applies config actions
+  3. execute_init_liquidity() → sets up liquidity
+  4. finalize_and_share_dao() → shares objects publicly
+  ```
+
+### Type-Based Action Routing
+
+**Old System** (String-based):
+- Used `action_descriptor` with string categories like `b"treasury"`
+- Runtime string comparison for routing
+- Prone to typos and runtime errors
+
+**New System** (TypeName-based):
+- Uses `type_name::get<action_types::UpdateName>()` for compile-time safety
+- O(1) type comparison at runtime
+- Action types defined in `futarchy_utils::action_types`
+- Zero-cost abstraction with maximum safety
+
 ## Action Descriptor & Approval System
 
 ### Why Descriptors in Move Framework?
