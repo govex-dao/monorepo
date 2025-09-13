@@ -8,6 +8,7 @@ module futarchy_lifecycle::init_intent_builder;
 use std::type_name;
 use sui::bcs;
 use futarchy_actions::action_specs::{ActionSpec};
+use futarchy_actions::intent_spec;
 
 // Import all action type markers
 use futarchy_one_shot_utils::action_types;

@@ -13,6 +13,7 @@ use account_protocol::{
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_lifecycle::stream_actions;
+use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
 
 // === Public(friend) Functions ===
 
@@ -116,7 +117,7 @@ public fun try_execute_typed_stream_action<CoinType: drop, IW: copy + drop, Outc
     ctx: &mut TxContext,
 ): bool {
     // Try to execute CreatePaymentAction
-    if (executable::contains_action<Outcome, stream_actions::CreatePaymentAction<CoinType>>(executable)) {
+    if (executable::contains_action<Outcome, CreatePaymentAction<CoinType>>(executable)) {
         stream_actions::do_create_payment<Outcome, CoinType, IW>(
             executable,
             account,

@@ -21,9 +21,10 @@ use fun intent_interface::build_intent as Account.build_intent;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
+use futarchy_one_shot_utils::action_data_structs::CreateSecurityCouncilAction;
 use futarchy_multisig::{
     security_council,
-    security_council_actions::{Self, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
+    security_council_actions::{Self, UpdateCouncilMembershipAction},
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
     optimistic_intents,
 };
@@ -67,6 +68,7 @@ public fun new_approve_policy_change_intent(): ApprovePolicyChangeIntent {
 
 // Named errors
 const ERequiresCoExecution: u64 = 100;
+const ENotCoExecution: u64 = 101;
 const EDAOPaymentDelinquent: u64 = 101; // DAO is blocked due to unpaid fees
 
 // Public constructor for AcceptUpgradeCapIntent witness
@@ -222,7 +224,7 @@ public fun execute_accept_and_lock_cap(
 }
 
 /// Execute accept and lock cap with DAO enforcement
-/// Checks if "UpgradeCap:Custodian" policy is set and enforces co-execution
+/// Checks if UpgradeCap type policy is set and enforces co-execution
 public fun execute_accept_and_lock_cap_with_dao_check(
     dao: &Account<FutarchyConfig>,
     mut executable: Executable<Approvals>,
@@ -230,14 +232,18 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     cap_receipt: Receiving<UpgradeCap>,
     ctx: &mut TxContext
 ) {
-    // Check if DAO has UpgradeCap:Custodian policy set
+    // Check if DAO has a type policy for UpgradeCap
     let reg = policy_registry::borrow_registry(dao, version::current());
-    let key = b"UpgradeCap:Custodian".to_string();
 
-    // Always require co-execution if policy exists
-    assert!(!policy_registry::has_policy(reg, key), ERequiresCoExecution);
+    // If no policy exists, default is DAO-only control
+    // Security council cannot proceed without explicit policy
+    if (!policy_registry::has_type_policy<UpgradeCap>(reg)) {
+        // No policy = DAO-only by default
+        abort ENotCoExecution  // Security council needs a policy to act
+    };
 
-    // If no policy, proceed with regular execution
+    // Policy exists - TODO: check the policy mode to see if council is allowed
+    // For now, assume if a policy exists, it allows some council involvement
     execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
 }
 

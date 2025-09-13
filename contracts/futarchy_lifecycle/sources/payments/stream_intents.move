@@ -53,7 +53,7 @@ public fun create_stream_in_intent<Outcome: store, CoinType, IW: drop>(
         total_amount,
         start_timestamp,
         end_timestamp,
-        cliff_timestamp,
+        cliff_timestamp, // interval_or_cliff
         1, // total_payments: 1 for stream
         cancellable,
         description,
@@ -84,15 +84,19 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
 ) {
     // First add the stream creation action
     let action = stream_actions::new_create_payment_action<CoinType>(
+        0, // payment_type: STREAM_TYPE_LINEAR
+        1, // source_mode: SOURCE_ISOLATED_POOL
         recipient,
         total_amount,
         start_timestamp,
         end_timestamp,
-        cliff_timestamp,
+        cliff_timestamp, // interval_or_cliff
+        1, // total_payments: 1 for stream
         cancellable,
         description,
-        0, // STREAM_TYPE_LINEAR
-        option::some(b"isolated_pool".to_string()),
+        0, // max_per_withdrawal: 0 for unlimited
+        0, // min_interval_ms: 0 for no limit
+        0, // max_beneficiaries: 0 for unlimited
     );
     intent.add_typed_action(action, action_types::create_payment(), intent_witness);
 
@@ -120,17 +124,20 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
     ctx: &mut TxContext,
 ) {
     // First add the recurring payment action
-    let action = stream_actions::new_create_recurring_payment_action<CoinType>(
-        stream_actions::source_isolated_pool(),
+    let action = stream_actions::new_create_payment_action<CoinType>(
+        1, // payment_type: PAYMENT_TYPE_RECURRING
+        1, // source_mode: SOURCE_ISOLATED_POOL
         recipient,
-        amount_per_payment,
-        interval_ms,
+        amount_per_payment * total_payments, // total amount for all payments
+        clock.timestamp_ms(), // start_timestamp
+        if (end_timestamp.is_some()) { *end_timestamp.borrow() } else { 0 }, // end_timestamp
+        option::some(interval_ms), // interval_or_cliff (interval for recurring)
         total_payments,
-        end_timestamp,
         cancellable,
         description,
-        clock,
-        ctx,
+        0, // max_per_withdrawal: 0 for unlimited
+        0, // min_interval_ms: 0 for no limit
+        0, // max_beneficiaries: 0 for unlimited
     );
     intent.add_typed_action(action, action_types::create_payment(), intent_witness);
 
@@ -172,9 +179,8 @@ public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
     // Then add the execute payment action
     let action = stream_actions::new_execute_payment_action<CoinType>(
         payment_id,
-        amount,
     );
-    intent.add_typed_action(action, action_types::execute_payment(), intent_witness);
+    intent.add_typed_action(action, action_types::create_payment(), intent_witness);
 }
 
 /// Add a cancel stream action to an existing intent
@@ -186,9 +192,8 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
 ) {
     // Note: If there's a final claimable amount, a vault::SpendAction
     // should be added before this action to provide the final payment coin
-    let action = stream_actions::new_cancel_payment_action<CoinType>(
+    let action = stream_actions::new_cancel_payment_action(
         stream_id,
-        return_unclaimed,
     );
     intent.add_typed_action(action, action_types::cancel_payment(), intent_witness);
 }

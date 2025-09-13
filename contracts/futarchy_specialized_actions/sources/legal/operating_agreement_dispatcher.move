@@ -12,6 +12,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_one_shot_utils::action_data_structs::CreateOperatingAgreementAction;
 use futarchy_specialized_actions::{
     operating_agreement,
     operating_agreement_actions,
@@ -31,7 +32,7 @@ public fun try_execute_operating_agreement_action<IW: drop, Outcome: store + dro
     ctx: &mut TxContext,
 ): bool {
     // Create OA if it doesn't exist yet
-    if (executable::contains_action<Outcome, operating_agreement_actions::CreateOperatingAgreementAction>(executable)) {
+    if (executable::contains_action<Outcome, CreateOperatingAgreementAction>(executable)) {
         operating_agreement::execute_create_agreement<IW, FutarchyConfig, Outcome>(
             executable,
             account,

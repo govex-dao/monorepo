@@ -378,6 +378,13 @@ public fun new_request_withdrawal_action<CoinType>(
     RequestWithdrawalAction { payment_id, amount }
 }
 
+/// Create a new ExecutePaymentAction
+public fun new_execute_payment_action<CoinType>(
+    payment_id: String,
+): ExecutePaymentAction<CoinType> {
+    ExecutePaymentAction { payment_id }
+}
+
 // === Public Functions ===
 
 /// REFACTORED: Create payment now properly uses vault streams without duplication

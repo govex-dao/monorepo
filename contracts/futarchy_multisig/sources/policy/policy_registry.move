@@ -4,9 +4,11 @@
 module futarchy_multisig::policy_registry;
 
 use std::option::{Self, Option};
+use std::string::String;
 use std::vector;
 use std::type_name::{Self, TypeName};
 use sui::object::{ID, UID};
+use sui::package::UpgradeCap;
 use sui::table::{Self, Table};
 use sui::event;
 use sui::tx_context::TxContext;
@@ -283,4 +285,10 @@ public fun is_council_registered(registry: &PolicyRegistry, council_id: ID): boo
 /// Get all registered councils
 public fun get_registered_councils(registry: &PolicyRegistry): &vector<ID> {
     &registry.registered_councils
+}
+
+/// Check if a type-based policy exists
+public fun has_type_policy<T>(registry: &PolicyRegistry): bool {
+    let type_name = type_name::get<T>();
+    table::contains(&registry.type_policies, type_name)
 }
