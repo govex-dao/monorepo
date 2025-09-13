@@ -164,8 +164,8 @@ public fun new_price_tier(price: u64, allocation: u64): PriceTier {
 public fun price(tier: &PriceTier): u64 { tier.price }
 public fun allocation(tier: &PriceTier): u64 { tier.allocation }
 
-/// Action to create a commitment proposal
-public struct CreateCommitmentProposalAction<phantom AssetType> has store, drop, copy {
+/// Action to create a founder lock proposal
+public struct CreateFounderLockProposalAction<phantom AssetType> has store, drop, copy {
     committed_amount: u64,
     tiers: vector<PriceTier>,
     proposal_id: ID,
@@ -174,15 +174,15 @@ public struct CreateCommitmentProposalAction<phantom AssetType> has store, drop,
     description: String,
 }
 
-public fun new_create_commitment_proposal_action<AssetType>(
+public fun new_create_founder_lock_proposal_action<AssetType>(
     committed_amount: u64,
     tiers: vector<PriceTier>,
     proposal_id: ID,
     trading_start: u64,
     trading_end: u64,
     description: String,
-): CreateCommitmentProposalAction<AssetType> {
-    CreateCommitmentProposalAction {
+): CreateFounderLockProposalAction<AssetType> {
+    CreateFounderLockProposalAction {
         committed_amount,
         tiers,
         proposal_id,
@@ -192,13 +192,13 @@ public fun new_create_commitment_proposal_action<AssetType>(
     }
 }
 
-// Accessor functions for CreateCommitmentProposalAction
-public fun committed_amount<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): u64 { action.committed_amount }
-public fun tiers<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): &vector<PriceTier> { &action.tiers }
-public fun proposal_id<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): ID { action.proposal_id }
-public fun trading_start<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): u64 { action.trading_start }
-public fun trading_end<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): u64 { action.trading_end }
-public fun commitment_description<AssetType>(action: &CreateCommitmentProposalAction<AssetType>): &String { &action.description }
+// Accessor functions for CreateFounderLockProposalAction
+public fun committed_amount<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): u64 { action.committed_amount }
+public fun tiers<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): &vector<PriceTier> { &action.tiers }
+public fun proposal_id<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): ID { action.proposal_id }
+public fun trading_start<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): u64 { action.trading_start }
+public fun trading_end<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): u64 { action.trading_end }
+public fun founder_lock_description<AssetType>(action: &CreateFounderLockProposalAction<AssetType>): &String { &action.description }
 
 
 // ============= Deserialization Functions =============
@@ -265,8 +265,8 @@ public fun add_liquidity_action_from_bytes<AssetType, StableType>(bytes: vector<
     }
 }
 
-/// Deserialize CreateCommitmentProposalAction from bytes
-public fun create_commitment_proposal_action_from_bytes<AssetType>(bytes: vector<u8>): CreateCommitmentProposalAction<AssetType> {
+/// Deserialize CreateFounderLockProposalAction from bytes
+public fun create_founder_lock_proposal_action_from_bytes<AssetType>(bytes: vector<u8>): CreateFounderLockProposalAction<AssetType> {
     let mut bcs = bcs::new(bytes);
     
     // Deserialize price tiers
@@ -281,7 +281,7 @@ public fun create_commitment_proposal_action_from_bytes<AssetType>(bytes: vector
         i = i + 1;
     };
     
-    CreateCommitmentProposalAction {
+    CreateFounderLockProposalAction {
         committed_amount: bcs.peel_u64(),
         tiers,
         proposal_id: object::id_from_bytes(bcs.peel_vec_u8()),

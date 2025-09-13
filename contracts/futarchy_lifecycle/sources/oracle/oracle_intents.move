@@ -1,6 +1,3 @@
-/// User-facing API for creating oracle-related intents
-/// This module provides helper functions for creating oracle actions
-/// The actual intent creation must be done by the governance system that provides the Outcome
 module futarchy_lifecycle::oracle_intents;
 
 // === Imports ===
@@ -8,7 +5,8 @@ use std::string::String;
 use sui::clock::Clock;
 use account_protocol::intents::Intent;
 use futarchy_lifecycle::oracle_actions::{Self, PriceTier, RecipientMint};
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Witness ===
 
@@ -28,8 +26,7 @@ public fun read_oracle_price_in_intent<Outcome: store, AssetType, StableType, IW
     intent_witness: IW,
 ) {
     let action = oracle_actions::new_read_oracle_action<AssetType, StableType>(true);
-    let descriptor = action_descriptor::new(b"oracle", b"read_price");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::read_oracle_price(), intent_witness);
 }
 
 /// Add a conditional mint action to an existing intent
@@ -55,8 +52,7 @@ public fun conditional_mint_in_intent<Outcome: store, T, IW: drop>(
         is_repeatable,
         description,
     );
-    let descriptor = action_descriptor::new(b"oracle", b"conditional_mint");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
 }
 
 /// Add a founder reward mint action to an existing intent
@@ -78,8 +74,7 @@ public fun founder_reward_mint_in_intent<Outcome: store, T, IW: drop>(
         description,
         clock,
     );
-    let descriptor = action_descriptor::new(b"oracle", b"founder_reward");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
 }
 
 /// Add a liquidity incentive action to an existing intent
@@ -97,8 +92,7 @@ public fun liquidity_incentive_in_intent<Outcome: store, T, IW: drop>(
         min_price,
         description,
     );
-    let descriptor = action_descriptor::new(b"oracle", b"liquidity_incentive");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
 }
 
 /// Add a tiered mint action to an existing intent
@@ -118,8 +112,7 @@ public fun tiered_mint_in_intent<Outcome: store, T, IW: drop>(
         description,
         security_council_id
     );
-    let descriptor = action_descriptor::new(b"oracle", b"tiered_mint");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::tiered_mint(), intent_witness);
 }
 
 /// Add a tiered founder rewards action to an existing intent
@@ -143,8 +136,7 @@ public fun tiered_founder_rewards_in_intent<Outcome: store, T, IW: drop>(
         latest_time,
         description
     );
-    let descriptor = action_descriptor::new(b"oracle", b"tiered_founder_rewards");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::tiered_mint(), intent_witness);
 }
 
 /// Create a unique key for an oracle intent
@@ -157,4 +149,5 @@ public fun create_oracle_key(
     key.append(b"_".to_string());
     key.append(clock.timestamp_ms().to_string());
     key
-}
+}/// Factory for creating futarchy DAOs using account_protocol
+/// This is the main entry point for creating DAOs in the Futarchy protocol

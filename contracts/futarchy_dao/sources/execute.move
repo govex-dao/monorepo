@@ -7,11 +7,10 @@ use sui::{transfer, tx_context};
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
-    intent_spec::{Self, IntentSpec},
+    intents::{Self, Intent},
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_markets::proposal::{Self, Proposal, ProposalIntentSpec};
-use futarchy_actions::intent_factory;
+use futarchy_markets::proposal::{Self, Proposal};
 
 // === Errors ===
 
@@ -42,23 +41,23 @@ public entry fun execute_proposal<AssetType, StableType>(
     let winning_outcome = proposal::winning_outcome(proposal);
     assert!(winning_outcome == OUTCOME_YES, EProposalNotApproved);
     
-    // Get the ProposalIntentSpec for the winning outcome
-    let proposal_spec_opt = proposal::get_intent_spec_for_outcome(proposal, winning_outcome);
-    assert!(option::is_some(proposal_spec_opt), ENoIntentSpecForOutcome);
-    
-    // Convert ProposalIntentSpec to full IntentSpec (creates new UID)
-    let proposal_spec_ref = option::borrow(proposal_spec_opt);
-    let intent_spec = proposal::proposal_spec_to_intent_spec(proposal_spec_ref, ctx);
-    
-    // Convert the IntentSpec into an Executable hot potato
-    let executable = intent_factory::create_executable_from_spec(
+    // Get the intent key for the winning outcome
+    let intent_key_opt = if (winning_outcome == OUTCOME_YES) {
+        proposal::intent_key_for_yes(proposal)
+    } else {
+        proposal::intent_key_for_no(proposal)
+    };
+    assert!(option::is_some(&intent_key_opt), ENoIntentSpecForOutcome);
+
+    // Get the intent key
+    let intent_key = *option::borrow(&intent_key_opt);
+
+    // Create an executable from the account's intents
+    let executable = account::create_executable(
         account,
-        &intent_spec,
+        intent_key,
         ctx,
     );
-    
-    // Clean up the IntentSpec since we're done with it
-    intent_spec::destroy_intent_spec(intent_spec);
     
     // Transfer the Executable to the sender
     // The sender will then pass it through the appropriate category dispatchers
@@ -84,16 +83,16 @@ public entry fun execute_finalize<Outcome: store>(
 }
 
 /// Alternative entry point for optimistic proposals
-/// Converts an OptimisticProposal's IntentSpec into an Executable
+/// Creates an Executable from an existing intent key
 public entry fun execute_optimistic_proposal(
     account: &mut Account<FutarchyConfig>,
-    optimistic_spec: &IntentSpec,
+    intent_key: String,
     ctx: &mut TxContext,
 ) {
-    // Convert the IntentSpec into an Executable hot potato
-    let executable = intent_factory::create_executable_from_spec(
+    // Create an executable from the account's intents
+    let executable = account::create_executable(
         account,
-        optimistic_spec,
+        intent_key,
         ctx,
     );
     

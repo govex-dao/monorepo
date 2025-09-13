@@ -1,4 +1,3 @@
-/// Operating agreement intent creation using the CORRECT pattern with build_intent! macro
 module futarchy_specialized_actions::operating_agreement_intents;
 
 // === Imports ===
@@ -18,10 +17,10 @@ use futarchy_specialized_actions::{
     operating_agreement_actions,
 };
 use futarchy_core::version;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -50,8 +49,7 @@ public fun create_update_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_update_line_action(line_id, new_text);
-            let descriptor = action_descriptor::new(b"legal", b"update_line");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::update_line(), iw);
         }
     );
 }
@@ -79,8 +77,7 @@ public fun create_insert_line_after_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            let descriptor = action_descriptor::new(b"legal", b"insert_line");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::insert_line_after(), iw);
         }
     );
 }
@@ -106,8 +103,7 @@ public fun create_insert_line_at_beginning_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            let descriptor = action_descriptor::new(b"legal", b"insert_at_beginning");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::insert_line_at_beginning(), iw);
         }
     );
 }
@@ -129,8 +125,7 @@ public fun create_remove_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_remove_line_action(line_id);
-            let descriptor = action_descriptor::new(b"legal", b"remove_line");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::remove_line(), iw);
         }
     );
 }
@@ -159,8 +154,7 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
                 batch_id,
                 actions
             );
-            let descriptor = action_descriptor::new(b"legal", b"batch_update");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::batch_operating_agreement(), iw);
         }
     );
 }
@@ -187,8 +181,7 @@ public fun create_create_agreement_intent<Config, Outcome: store>(
                 allow_insert,
                 allow_remove
             );
-            let descriptor = action_descriptor::new(b"legal", b"create_agreement");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::create_operating_agreement(), iw);
         }
     );
 }

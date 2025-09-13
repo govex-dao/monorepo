@@ -70,18 +70,12 @@ module futarchy_utils::action_types {
     public struct RemoveCoinType has drop {}
     
     // ======== Memo Actions ========
-    
+
     /// Emit simple text memo
     public struct EmitMemo has drop {}
-    
-    /// Emit structured memo with metadata
-    public struct EmitStructuredMemo has drop {}
-    
-    /// Emit commitment signal
-    public struct EmitCommitment has drop {}
-    
-    /// Emit voting signal
-    public struct EmitSignal has drop {}
+
+    /// Emit accept/reject decision with reason
+    public struct EmitDecision has drop {}
     
     // ======== Optimistic Actions ========
     
@@ -140,7 +134,16 @@ module futarchy_utils::action_types {
     
     /// Remove verification level
     public struct RemoveVerificationLevel has drop {}
-    
+
+    /// Request verification for DAO
+    public struct RequestVerification has drop {}
+
+    /// Approve DAO verification
+    public struct ApproveVerification has drop {}
+
+    /// Reject DAO verification
+    public struct RejectVerification has drop {}
+
     /// Update recovery fee
     public struct UpdateRecoveryFee has drop {}
     
@@ -168,17 +171,17 @@ module futarchy_utils::action_types {
     /// Apply pending coin fees
     public struct ApplyPendingCoinFees has drop {}
     
-    // ======== Commitment Actions ========
-    
-    /// Create commitment proposal
-    public struct CreateCommitmentProposal has drop {}
-    
-    /// Execute commitment
-    public struct ExecuteCommitment has drop {}
-    
-    /// Update commitment recipient
-    public struct UpdateCommitmentRecipient has drop {}
-    
+    // ======== Founder Lock Actions ========
+
+    /// Create founder lock proposal
+    public struct CreateFounderLockProposal has drop {}
+
+    /// Execute founder lock
+    public struct ExecuteFounderLock has drop {}
+
+    /// Update founder lock recipient
+    public struct UpdateFounderLockRecipient has drop {}
+
     /// Withdraw unlocked tokens
     public struct WithdrawUnlockedTokens has drop {}
     
@@ -215,15 +218,32 @@ module futarchy_utils::action_types {
     public struct BatchOperatingAgreement has drop {}
     
     // ======== Oracle Actions ========
-    
+
     /// Read oracle price
     public struct ReadOraclePrice has drop {}
-    
+
     /// Conditional mint based on oracle
     public struct ConditionalMint has drop {}
-    
+
     /// Tiered mint based on milestones
     public struct TieredMint has drop {}
+
+    // ======== Option Grant Actions ========
+
+    /// Create option grant with strike price
+    public struct CreateOptionGrant has drop {}
+
+    /// Create token grant with vesting
+    public struct CreateTokenGrant has drop {}
+
+    /// Exercise vested options
+    public struct ExerciseOptions has drop {}
+
+    /// Claim vested tokens
+    public struct ClaimVestedTokens has drop {}
+
+    /// Cancel grant (by DAO)
+    public struct CancelGrant has drop {}
     
     // ======== Stream/Payment Actions ========
     
@@ -426,9 +446,9 @@ module futarchy_utils::action_types {
     public fun batch_distribute(): BatchDistribute { BatchDistribute {} }
     public fun batch_operating_agreement(): BatchOperatingAgreement { BatchOperatingAgreement {} }
     public fun conditional_mint(): ConditionalMint { ConditionalMint {} }
-    public fun create_commitment_proposal(): CreateCommitmentProposal { CreateCommitmentProposal {} }
+    public fun create_founder_lock_proposal(): CreateFounderLockProposal { CreateFounderLockProposal {} }
     public fun create_operating_agreement(): CreateOperatingAgreement { CreateOperatingAgreement {} }
-    public fun execute_commitment(): ExecuteCommitment { ExecuteCommitment {} }
+    public fun execute_founder_lock(): ExecuteFounderLock { ExecuteFounderLock {} }
     public fun finalize_dissolution(): FinalizeDissolution { FinalizeDissolution {} }
     public fun governance_update(): GovernanceUpdate { GovernanceUpdate {} }
     public fun initiate_dissolution(): InitiateDissolution { InitiateDissolution {} }
@@ -445,11 +465,20 @@ module futarchy_utils::action_types {
     public fun tiered_mint(): TieredMint { TieredMint {} }
     public fun trading_params_update(): TradingParamsUpdate { TradingParamsUpdate {} }
     public fun twap_config_update(): TwapConfigUpdate { TwapConfigUpdate {} }
-    public fun update_commitment_recipient(): UpdateCommitmentRecipient { UpdateCommitmentRecipient {} }
+    public fun update_founder_lock_recipient(): UpdateFounderLockRecipient { UpdateFounderLockRecipient {} }
     public fun update_line(): UpdateLine { UpdateLine {} }
     public fun update_name(): UpdateName { UpdateName {} }
     public fun withdraw_unlocked_tokens(): WithdrawUnlockedTokens { WithdrawUnlockedTokens {} }
-    
+
+    /// Create RequestVerification witness
+    public fun request_verification(): RequestVerification { RequestVerification {} }
+
+    /// Create ApproveVerification witness
+    public fun approve_verification(): ApproveVerification { ApproveVerification {} }
+
+    /// Create RejectVerification witness
+    public fun reject_verification(): RejectVerification { RejectVerification {} }
+
     /// Create CreatePayment witness
     public fun create_payment(): CreatePayment { CreatePayment {} }
     
@@ -458,4 +487,25 @@ module futarchy_utils::action_types {
     
     /// Create CancelPayment witness
     public fun cancel_payment(): CancelPayment { CancelPayment {} }
+
+    /// Create EmitMemo witness
+    public fun emit_memo(): EmitMemo { EmitMemo {} }
+
+    /// Create EmitDecision witness
+    public fun emit_decision(): EmitDecision { EmitDecision {} }
+
+    /// Create CreateOptionGrant witness
+    public fun create_option_grant(): CreateOptionGrant { CreateOptionGrant {} }
+
+    /// Create CreateTokenGrant witness
+    public fun create_token_grant(): CreateTokenGrant { CreateTokenGrant {} }
+
+    /// Create ExerciseOptions witness
+    public fun exercise_options(): ExerciseOptions { ExerciseOptions {} }
+
+    /// Create ClaimVestedTokens witness
+    public fun claim_vested_tokens(): ClaimVestedTokens { ClaimVestedTokens {} }
+
+    /// Create CancelGrant witness
+    public fun cancel_grant(): CancelGrant { CancelGrant {} }
 }

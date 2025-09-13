@@ -13,6 +13,8 @@ use std::{
 use sui::{
     clock::Clock,
     coin::{Self, Coin},
+    event,
+    object::{Self, ID},
     sui::SUI,
     vec_set::VecSet,
 };
@@ -28,10 +30,38 @@ use futarchy_lifecycle::{
 use futarchy_markets::{
     fee::{Self, FeeManager, FeeAdminCap},
 };
+use futarchy_dao::futarchy_dao;
 
 // === Errors ===
 const EInvalidAdminCap: u64 = 1;
 const ECapNotFound: u64 = 2;
+
+// === Events ===
+public struct VerificationRequested has copy, drop {
+    dao_id: ID,
+    verification_id: ID,
+    requester: address,
+    attestation_url: String,
+    level: u8,
+    timestamp: u64,
+}
+
+public struct VerificationApproved has copy, drop {
+    dao_id: ID,
+    verification_id: ID,
+    level: u8,
+    attestation_url: String,
+    validator: address,
+    timestamp: u64,
+}
+
+public struct VerificationRejected has copy, drop {
+    dao_id: ID,
+    verification_id: ID,
+    reason: String,
+    validator: address,
+    timestamp: u64,
+}
 const EInvalidFeeAmount: u64 = 3;
 
 // === Action Structs ===
@@ -85,6 +115,28 @@ public struct AddVerificationLevelAction has store {
 /// Remove a verification level
 public struct RemoveVerificationLevelAction has store {
     level: u8,
+}
+
+/// Request verification for a DAO
+public struct RequestVerificationAction has store {
+    dao_id: ID,
+    level: u8,
+    attestation_url: String,
+}
+
+/// Approve DAO verification request
+public struct ApproveVerificationAction has store {
+    dao_id: ID,
+    verification_id: ID,
+    level: u8,
+    attestation_url: String,
+}
+
+/// Reject DAO verification request
+public struct RejectVerificationAction has store {
+    dao_id: ID,
+    verification_id: ID,
+    reason: String,
 }
 
 /// Update the recovery fee
@@ -179,6 +231,18 @@ public fun new_add_verification_level(level: u8, fee: u64): AddVerificationLevel
 
 public fun new_remove_verification_level(level: u8): RemoveVerificationLevelAction {
     RemoveVerificationLevelAction { level }
+}
+
+public fun new_request_verification(dao_id: ID, level: u8, attestation_url: String): RequestVerificationAction {
+    RequestVerificationAction { dao_id, level, attestation_url }
+}
+
+public fun new_approve_verification(dao_id: ID, verification_id: ID, level: u8, attestation_url: String): ApproveVerificationAction {
+    ApproveVerificationAction { dao_id, verification_id, level, attestation_url }
+}
+
+public fun new_reject_verification(dao_id: ID, verification_id: ID, reason: String): RejectVerificationAction {
+    RejectVerificationAction { dao_id, verification_id, reason }
 }
 
 public fun new_update_recovery_fee(new_fee: u64): UpdateRecoveryFeeAction {
@@ -456,6 +520,124 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
     );
     
     fee::remove_verification_level(fee_manager, cap, action.level, clock, ctx);
+}
+
+/// Execute request verification action
+/// DAOs can request verification by paying the required fee
+/// Multiple verification requests can be pending with unique IDs
+public fun do_request_verification<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    fee_manager: &mut FeeManager,
+    payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, RequestVerificationAction, IW>(executable, witness);
+
+    // Generate unique verification ID
+    let verification_uid = object::new(ctx);
+    let verification_id = object::uid_to_inner(&verification_uid);
+    object::delete(verification_uid);
+
+    // Deposit the verification payment to fee manager
+    fee::deposit_verification_payment(
+        fee_manager,
+        payment,
+        action.level,
+        clock,
+        ctx
+    );
+
+    // Emit event for the verification request
+    event::emit(VerificationRequested {
+        dao_id: action.dao_id,
+        verification_id,
+        requester: ctx.sender(),
+        attestation_url: action.attestation_url,
+        level: action.level,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // The actual verification will be done by approve_verification or reject_verification
+}
+
+/// Execute approve verification action
+/// Validators can approve a specific verification request by its ID
+public fun do_approve_verification<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    target_dao: &mut Account<FutarchyConfig>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, ApproveVerificationAction, IW>(executable, witness);
+
+    // Verify we have the validator capability
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+        account,
+        b"protocol:validator_admin_cap".to_string(),
+        version
+    );
+
+    // Verify the DAO ID matches
+    assert!(object::id(target_dao) == action.dao_id, EInvalidAdminCap);
+
+    // Get the DAO's config and update verification level and attestation URL
+    let dao_config = account::config_mut(target_dao, version, futarchy_dao::witness());
+    futarchy_config::set_verification_level(dao_config, action.level);
+    futarchy_config::set_attestation_url(dao_config, action.attestation_url);
+
+    // Emit event for transparency with verification ID
+    event::emit(VerificationApproved {
+        dao_id: action.dao_id,
+        verification_id: action.verification_id,
+        level: action.level,
+        attestation_url: action.attestation_url,
+        validator: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Execute reject verification action
+/// Validators can reject a specific verification request with a reason
+public fun do_reject_verification<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    target_dao: &mut Account<FutarchyConfig>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let action = executable::next_action<Outcome, RejectVerificationAction, IW>(executable, witness);
+
+    // Verify we have the validator capability
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+        account,
+        b"protocol:validator_admin_cap".to_string(),
+        version
+    );
+
+    // Verify the DAO ID matches
+    assert!(object::id(target_dao) == action.dao_id, EInvalidAdminCap);
+
+    // Get the DAO's config and ensure verification level stays at 0
+    let dao_config = account::config_mut(target_dao, version, futarchy_dao::witness());
+    futarchy_config::set_verification_level(dao_config, 0);
+
+    // Emit event for transparency with verification ID
+    event::emit(VerificationRejected {
+        dao_id: action.dao_id,
+        verification_id: action.verification_id,
+        reason: action.reason,
+        validator: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
 }
 
 /// Execute update recovery fee action

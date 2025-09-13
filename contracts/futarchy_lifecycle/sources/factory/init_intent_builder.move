@@ -7,7 +7,7 @@ module futarchy_lifecycle::init_intent_builder;
 // === Imports ===
 use std::type_name;
 use sui::bcs;
-use account_protocol::intent_spec::{Self, ActionSpec};
+use futarchy_actions::action_specs::{ActionSpec};
 
 // Import all action type markers
 use futarchy_one_shot_utils::action_types;

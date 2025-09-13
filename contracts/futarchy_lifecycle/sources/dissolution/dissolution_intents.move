@@ -11,10 +11,10 @@ use account_protocol::{
     metadata,
 };
 use futarchy_lifecycle::dissolution_actions;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Witness ===
 
@@ -43,8 +43,7 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         burn_unsold_tokens,
         final_operations_deadline,
     );
-    let descriptor = action_descriptor::new(b"dissolution", b"initiate");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::initiate_dissolution(), intent_witness);
 }
 
 /// Add a batch distribute action to an existing intent
@@ -54,8 +53,7 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_batch_distribute_action(asset_types);
-    let descriptor = action_descriptor::new(b"dissolution", b"distribute");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::batch_distribute(), intent_witness);
 }
 
 /// Add a finalize dissolution action to an existing intent
@@ -69,8 +67,7 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         final_recipient,
         destroy_account,
     );
-    let descriptor = action_descriptor::new(b"dissolution", b"finalize");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::finalize_dissolution(), intent_witness);
 }
 
 /// Add a cancel dissolution action to an existing intent
@@ -80,8 +77,7 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_cancel_dissolution_action(reason);
-    let descriptor = action_descriptor::new(b"dissolution", b"cancel");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::cancel_dissolution(), intent_witness);
 }
 
 /// Create a unique key for a dissolution intent
@@ -104,7 +100,7 @@ public fun create_prorata_distribution<CoinType>(
 ): (vector<address>, vector<u64>) {
     let mut recipients = vector::empty();
     let mut amounts = vector::empty();
-    
+
     // Calculate total balance
     let mut total_balance = 0;
     let mut i = 0;
@@ -112,7 +108,7 @@ public fun create_prorata_distribution<CoinType>(
         total_balance = total_balance + *balances.borrow(i);
         i = i + 1;
     };
-    
+
     // Calculate pro-rata amounts
     if (total_balance > 0) {
         i = 0;
@@ -120,16 +116,16 @@ public fun create_prorata_distribution<CoinType>(
             let holder = *holders.borrow(i);
             let balance = *balances.borrow(i);
             let amount = (total_amount * balance) / total_balance;
-            
+
             if (amount > 0) {
                 recipients.push_back(holder);
                 amounts.push_back(amount);
             };
-            
+
             i = i + 1;
         };
     };
-    
+
     (recipients, amounts)
 }
 
@@ -140,13 +136,13 @@ public fun create_equal_distribution(
 ): vector<u64> {
     let count = recipients.length();
     let amount_per_recipient = total_amount / count;
-    
+
     let mut amounts = vector::empty();
     let mut i = 0;
     while (i < count) {
         amounts.push_back(amount_per_recipient);
         i = i + 1;
     };
-    
+
     amounts
 }

@@ -16,10 +16,10 @@ use sui::package::UpgradeCap;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_vault::custody_actions;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 /// Intent witness for upgrade-cap approvals
 public struct UpgradeCapIntent has copy, drop {}
@@ -35,7 +35,7 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
     ctx: &mut TxContext
 ) {
     let dao_id = object::id(dao); // Get ID before the macro
-    
+
     dao.build_intent!(
         params,
         outcome,
@@ -52,8 +52,7 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
                 b"".to_string(),
                 expires_at
             );
-            let descriptor = action_descriptor::new(b"security", b"approve_upgrade_cap");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::approve_custody(), iw);
         }
     );
 }

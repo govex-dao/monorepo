@@ -48,6 +48,9 @@ const EEmptyRecipients: u64 = 12;
 const ETierOutOfBounds: u64 = 13;
 const EInvalidSecurityCouncil: u64 = 14;
 const ERecipientNotFound: u64 = 15;
+const EInsufficientPaymentForStrike: u64 = 16;
+const ENotVestedYet: u64 = 17;
+const ENoVestedTokensAvailable: u64 = 18;
 
 // === Constants ===
 const MAX_MINT_PERCENTAGE: u64 = 500; // 5% max mint per execution (in basis points)
@@ -96,7 +99,7 @@ public struct ReadOraclePriceAction<phantom AssetType, phantom StableType> has s
 }
 
 /// Action to read oracle price and conditionally mint tokens
-/// This is used for founder rewards, liquidity incentives, etc.
+/// This is used for founder rewards, liquidity incentives, employee options, etc.
 public struct ConditionalMintAction<phantom T> has store {
     /// Address to receive minted tokens
     recipient: address,
@@ -120,6 +123,23 @@ public struct ConditionalMintAction<phantom T> has store {
     max_executions: u64,
     /// Current execution count
     execution_count: u64,
+
+    // Option-specific fields
+    /// Strike price for options (0 = free grant, >0 = option with strike price)
+    strike_price: u64,
+    /// Whether this requires payment at strike price to exercise
+    is_option: bool,
+
+    // Vesting fields
+    /// Cliff period in milliseconds (no vesting during cliff)
+    cliff_duration_ms: u64,
+    /// Total vesting duration in milliseconds (after cliff)
+    vesting_duration_ms: u64,
+    /// Start time for vesting calculation
+    vesting_start_time: Option<u64>,
+    /// Amount already vested and claimed
+    vested_amount: u64,
+
     /// Description of the mint purpose
     description: String,
 }
@@ -223,18 +243,18 @@ public fun new_conditional_mint<T>(
 ): ConditionalMintAction<T> {
     assert!(mint_amount > 0, EInvalidMintAmount);
     assert!(price_threshold > 0, EInvalidThreshold);
-    
+
     // Validate time range if both are specified
     if (earliest_time.is_some() && latest_time.is_some()) {
         let earliest = *earliest_time.borrow();
         let latest = *latest_time.borrow();
         assert!(latest > earliest, ETimeConditionNotMet);
-        
+
         // Max 5 years validity (in milliseconds)
         let max_duration = 5 * 365 * 24 * 60 * 60 * 1000; // 5 years
         assert!(latest - earliest <= max_duration, ETimeConditionNotMet);
     };
-    
+
     ConditionalMintAction {
         recipient,
         mint_amount,
@@ -247,10 +267,52 @@ public fun new_conditional_mint<T>(
         last_execution: option::none(),
         max_executions: if (is_repeatable) 0 else 1,
         execution_count: 0,
+        strike_price: 0, // Default to free grant
+        is_option: false,
+        cliff_duration_ms: 0,
+        vesting_duration_ms: 0,
+        vesting_start_time: option::none(),
+        vested_amount: 0,
         description,
     }
 }
 
+
+/// Create an employee stock option with strike price and vesting
+public fun new_employee_option<T>(
+    recipient: address,
+    option_amount: u64,
+    strike_price: u64,
+    price_threshold: u128, // Market price must reach this to enable exercise
+    cliff_duration_ms: u64,
+    vesting_duration_ms: u64,
+    expiry_ms: u64,
+    description: String,
+    clock: &Clock,
+): ConditionalMintAction<T> {
+    let now = clock.timestamp_ms();
+
+    ConditionalMintAction {
+        recipient,
+        mint_amount: option_amount,
+        price_threshold,
+        is_above_threshold: true, // Options typically require price above threshold
+        earliest_execution_time: option::some(now + cliff_duration_ms),
+        latest_execution_time: option::some(now + expiry_ms),
+        is_repeatable: false,
+        cooldown_ms: 0,
+        last_execution: option::none(),
+        max_executions: 1,
+        execution_count: 0,
+        strike_price,
+        is_option: true,
+        cliff_duration_ms,
+        vesting_duration_ms,
+        vesting_start_time: option::some(now),
+        vested_amount: 0,
+        description,
+    }
+}
 
 /// Create a founder reward mint with explicit time bounds
 public fun new_founder_reward_mint<T>(
@@ -614,9 +676,121 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
     };
 }
 
+// === Vesting and Option Functions ===
+
+/// Calculate how much has vested based on time
+fun calculate_vested_amount(
+    action: &ConditionalMintAction,
+    clock: &Clock,
+): u64 {
+    // If no vesting schedule, everything is immediately available
+    if (action.vesting_duration_ms == 0) {
+        return action.mint_amount
+    };
+
+    // Get vesting start time
+    let vesting_start = if (action.vesting_start_time.is_some()) {
+        *action.vesting_start_time.borrow()
+    } else {
+        return 0 // No vesting has started
+    };
+
+    let now = clock.timestamp_ms();
+
+    // Still in cliff period
+    if (now < vesting_start + action.cliff_duration_ms) {
+        return 0
+    };
+
+    // Calculate time since cliff ended
+    let cliff_end = vesting_start + action.cliff_duration_ms;
+    let time_since_cliff = now - cliff_end;
+
+    // If past total vesting duration, everything is vested
+    if (time_since_cliff >= action.vesting_duration_ms) {
+        return action.mint_amount
+    };
+
+    // Calculate proportional vesting
+    let vested = safe_mul_div_u64(
+        action.mint_amount,
+        time_since_cliff,
+        action.vesting_duration_ms
+    );
+
+    vested
+}
+
+/// Exercise an option by paying the strike price
+public fun exercise_option<AssetType, StableType, Outcome: store, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    payment: Coin<StableType>, // Payment in stable coin at strike price
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get the action from executable
+    let action = executable::next_action<Outcome, ConditionalMintAction<AssetType>, IW>(executable, witness);
+
+    // Verify this is an option (not a grant)
+    assert!(action.is_option, EInvalidMintAmount);
+    assert!(action.strike_price > 0, EInvalidMintAmount);
+
+    // Calculate vested amount available to exercise
+    let vested_available = calculate_vested_amount(&action, clock);
+    let claimable = vested_available - action.vested_amount;
+    assert!(claimable > 0, ENoVestedTokensAvailable);
+
+    // Calculate required payment
+    let required_payment = safe_mul_div_u64(claimable, action.strike_price, 1_000_000_000); // Assuming 9 decimals
+    assert!(coin::value(&payment) >= required_payment, EInsufficientPaymentForStrike);
+
+    // Take exact payment amount
+    let payment_to_dao = if (coin::value(&payment) > required_payment) {
+        let change = coin::value(&payment) - required_payment;
+        let change_coin = coin::split(&mut payment, change, ctx);
+        transfer::public_transfer(change_coin, action.recipient);
+        payment
+    } else {
+        payment
+    };
+
+    // Transfer payment to DAO treasury
+    transfer::public_transfer(payment_to_dao, account::account_address(account));
+
+    // Mint the vested tokens
+    let minted_coin = currency::do_mint<FutarchyConfig, Outcome, AssetType, IW>(
+        executable,
+        account,
+        version,
+        witness,
+        ctx
+    );
+
+    // Verify minted amount
+    assert!(coin::value(&minted_coin) == claimable, EInvalidMintAmount);
+
+    // Transfer to recipient
+    transfer::public_transfer(minted_coin, action.recipient);
+
+    // Update vested amount in action
+    // Note: This would need to be stored in the Intent for persistence
+    // action.vested_amount = vested_available;
+
+    event::emit(ConditionalMintExecuted {
+        recipient: action.recipient,
+        amount_minted: claimable,
+        price_at_execution: spot_amm::get_twap_mut(spot_pool, clock),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
 // === Helper Functions ===
 
-/// Safe multiplication with overflow protection  
+/// Safe multiplication with overflow protection
 fun safe_mul_u128(a: u128, b: u128): u128 {
     let max_u128 = 340282366920938463463374607431768211455u128;
     assert!(a == 0 || b <= max_u128 / a, EOverflow);
@@ -634,7 +808,7 @@ fun safe_mul_div_u64(a: u64, b: u64, c: u64): u64 {
     let a_u128 = (a as u128);
     let b_u128 = (b as u128);
     let c_u128 = (c as u128);
-    
+
     let result = safe_div_u128(safe_mul_u128(a_u128, b_u128), c_u128);
     assert!(result <= (std::u64::max_value!() as u128), EOverflow);
     (result as u64)
@@ -656,6 +830,12 @@ public fun delete_conditional_mint<T>(expired: &mut Expired) {
         last_execution: _,
         max_executions: _,
         execution_count: _,
+        strike_price: _,
+        is_option: _,
+        cliff_duration_ms: _,
+        vesting_duration_ms: _,
+        vesting_start_time: _,
+        vested_amount: _,
         description: _,
     } = expired.remove_action();
 }
@@ -708,6 +888,12 @@ public fun delete_recurring_mint<T>(expired: &mut Expired) {
             last_execution: _,
             max_executions: _,
             execution_count: _,
+            strike_price: _,
+            is_option: _,
+            cliff_duration_ms: _,
+            vesting_duration_ms: _,
+            vesting_start_time: _,
+            vested_amount: _,
             description: _,
         } = mint_configs.pop_back();
     };

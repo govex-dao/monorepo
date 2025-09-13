@@ -20,6 +20,16 @@ public struct InitActionSpecs has store, drop, copy {
 
 // === Constructors ===
 
+public fun new_action_spec(
+    action_type: TypeName,
+    action_data: vector<u8>
+): ActionSpec {
+    ActionSpec {
+        action_type,
+        action_data
+    }
+}
+
 public fun new_init_specs(): InitActionSpecs {
     InitActionSpecs {
         actions: vector::empty(),
@@ -41,18 +51,18 @@ public fun add_action(
 
 // === Accessors ===
 
-public fun actions(specs: &InitActionSpecs): &vector<ActionSpec> { 
-    &specs.actions 
-}
-
-public fun action_count(specs: &InitActionSpecs): u64 {
-    vector::length(&specs.actions)
-}
-
 public fun action_type(spec: &ActionSpec): TypeName {
     spec.action_type
 }
 
 public fun action_data(spec: &ActionSpec): &vector<u8> {
     &spec.action_data
+}
+
+public fun actions(specs: &InitActionSpecs): &vector<ActionSpec> { 
+    &specs.actions 
+}
+
+public fun action_count(specs: &InitActionSpecs): u64 {
+    vector::length(&specs.actions)
 }

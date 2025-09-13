@@ -54,7 +54,6 @@ These changes result in:
 
 #### Implementation Details
 - **New file**: `packages/extensions/sources/framework_action_types.move` - Defines all type markers
-- **New file**: `packages/protocol/sources/types/intent_spec.move` - Generic intent specification
 - **Modified**: All action modules to use `add_typed_action()` instead of `add_action_with_descriptor()`
 - **Modified**: `intents.move` - Changed from `action_descriptors: vector<ActionDescriptor>` to `action_types: vector<TypeName>`
 - **Enhanced**: `executable.move` with type-checking functions like `is_current_action<T>()`
@@ -184,11 +183,6 @@ We realized that **locking is unnecessary entirely**:
 
 ### Additional Fork Modifications
 
-#### Intent Specification System (`intent_spec.move`)
-- **New Module**: Generic intent specification for staging actions before execution
-- **Purpose**: Allows defining intents that can be stored and executed later
-- **Use Case**: DAO initialization where actions are defined upfront then executed atomically
-- **Structure**: IntentSpec with description, actions array, and voting requirements
 
 #### Enhanced Executable Functions (`executable.move`)
 - **Added**: `current_action_type()` - Get TypeName of current action

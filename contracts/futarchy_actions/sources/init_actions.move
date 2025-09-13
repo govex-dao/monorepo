@@ -174,7 +174,7 @@ fun try_execute_with_all_dispatchers<AssetType: drop + store, StableType: drop +
     };
     
     // Add other dispatchers here as needed:
-    // if (commitment_dispatcher::try_execute_init_action(...)) { return true };
+    // if (incentives_and_options_dispatcher::try_execute_init_action(...)) { return true };
     // if (vault_governance_dispatcher::try_execute_init_action(...)) { return true };
     
     false // Action not handled by any dispatcher

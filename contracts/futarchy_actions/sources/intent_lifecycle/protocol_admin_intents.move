@@ -1,5 +1,3 @@
-/// Protocol admin intents for transferring admin capabilities to a futarchy DAO
-/// This module enables the initial migration of protocol admin caps to be governed by a DAO
 module futarchy_actions::protocol_admin_intents;
 
 // === Imports ===
@@ -19,7 +17,6 @@ use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_lifecycle::factory::{FactoryOwnerCap, ValidatorAdminCap};
 use futarchy_markets::fee::FeeAdminCap;
-
 // === Aliases ===
 use fun intent_interface::process_intent as Account.process_intent;
 

@@ -36,10 +36,10 @@ public fun try_execute_memo_action<IW: drop, Outcome: store + drop + copy>(
         );
         return true
     };
-    
-    // Try to execute EmitStructuredMemoAction
-    if (executable::contains_action<Outcome, memo_actions::EmitStructuredMemoAction>(executable)) {
-        memo_actions::do_emit_structured_memo<Outcome, IW>(
+
+    // Try to execute EmitDecisionAction
+    if (executable::contains_action<Outcome, memo_actions::EmitDecisionAction>(executable)) {
+        memo_actions::do_emit_decision<Outcome, IW>(
             executable,
             account,
             version::current(),
@@ -49,32 +49,6 @@ public fun try_execute_memo_action<IW: drop, Outcome: store + drop + copy>(
         );
         return true
     };
-    
-    // Try to execute EmitCommitmentAction
-    if (executable::contains_action<Outcome, memo_actions::EmitCommitmentAction>(executable)) {
-        memo_actions::do_emit_commitment<Outcome, IW>(
-            executable,
-            account,
-            version::current(),
-            witness,
-            clock,
-            ctx
-        );
-        return true
-    };
-    
-    // Try to execute EmitSignalAction
-    if (executable::contains_action<Outcome, memo_actions::EmitSignalAction>(executable)) {
-        memo_actions::do_emit_signal<Outcome, IW>(
-            executable,
-            account,
-            version::current(),
-            witness,
-            clock,
-            ctx
-        );
-        return true
-    };
-    
+
     false
 }

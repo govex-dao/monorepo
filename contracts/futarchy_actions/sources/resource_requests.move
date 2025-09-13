@@ -139,3 +139,33 @@ public fun take_context<T, V: store>(
 public fun context_mut<T>(request: &mut ResourceRequest<T>): &mut UID {
     &mut request.context
 }
+
+// === Action-Specific Helpers ===
+
+/// Create a new resource request with an action stored as context
+public fun new_resource_request<T: store>(action: T, ctx: &mut TxContext): ResourceRequest<T> {
+    let mut request = new_request<T>(ctx);
+    add_context(&mut request, string::utf8(b"action"), action);
+    request
+}
+
+/// Extract the action from a resource request
+public fun extract_action<T: store>(mut request: ResourceRequest<T>): T {
+    let action = take_context<T, T>(&mut request, string::utf8(b"action"));
+    // Clean up the request
+    let ResourceRequest { id, context } = request;
+    object::delete(id);
+    object::delete(context);
+    action
+}
+
+/// Create a receipt after fulfilling a request with an action
+public fun create_receipt<T: drop>(action: T): ResourceReceipt<T> {
+    // Drop the action since it's been processed
+    let _ = action;
+
+    // Create a dummy receipt (ID doesn't matter since action is dropped)
+    ResourceReceipt<T> {
+        request_id: object::id_from_address(@0x0),
+    }
+}

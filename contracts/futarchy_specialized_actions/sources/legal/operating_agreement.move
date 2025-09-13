@@ -22,6 +22,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_multisig::policy_registry;
+use futarchy_one_shot_utils::action_data_structs::CreateOperatingAgreementAction;
 use futarchy_specialized_actions::operating_agreement_actions::{Self,
     UpdateLineAction,
     InsertLineAfterAction,
@@ -33,7 +34,6 @@ use futarchy_specialized_actions::operating_agreement_actions::{Self,
     SetGlobalImmutableAction,
     BatchOperatingAgreementAction,
     OperatingAgreementAction,
-    CreateOperatingAgreementAction,
     get_update_line_params,
     get_insert_line_after_params,
     get_insert_line_at_beginning_params,

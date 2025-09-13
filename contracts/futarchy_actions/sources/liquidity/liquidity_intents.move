@@ -1,24 +1,22 @@
-/// User-facing API for creating liquidity-related intents
-/// This module provides helper functions for creating liquidity actions
-/// The actual intent creation must be done by the governance system that provides the Outcome
 module futarchy_actions::liquidity_intents;
 
 // === Imports ===
-use std::string::String;
+use std::{string::String, type_name};
 use sui::{
     clock::Clock,
     object::ID,
+    bcs,
 };
 use account_protocol::{
     intents::Intent,
 };
 use futarchy_actions::liquidity_actions;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
 
 // === Witness ===
 
 /// Witness type for liquidity intents
-public struct LiquidityIntent has drop {}
+public struct LiquidityIntent has copy, drop {}
 
 /// Create a LiquidityIntent witness
 public fun witness(): LiquidityIntent {
@@ -42,8 +40,7 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
         stable_amount,
         min_lp_amount,
     );
-    let descriptor = action_descriptor::new(b"liquidity", b"add_liquidity");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::add_liquidity(), intent_witness);
 }
 
 /// Add a remove liquidity action to an existing intent
@@ -61,8 +58,7 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
         min_asset_amount,
         min_stable_amount,
     );
-    let descriptor = action_descriptor::new(b"liquidity", b"remove_liquidity");
-    intent.add_action_with_descriptor(action, descriptor, intent_witness);
+    intent.add_typed_action(action, action_types::remove_liquidity(), intent_witness);
 }
 
 /// Create a unique key for a liquidity intent

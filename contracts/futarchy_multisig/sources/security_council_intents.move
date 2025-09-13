@@ -31,10 +31,10 @@ use futarchy_vault::custody_actions;
 use futarchy_multisig::policy_registry;
 use account_actions::package_upgrade;
 use account_extensions::extensions::Extensions;
-use account_extensions::action_descriptor::{Self, ActionDescriptor};
+use futarchy_utils::action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_action_with_descriptor as Intent.add_action_with_descriptor;
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // witnesses
 public struct RequestPackageUpgradeIntent has copy, drop {}
@@ -166,7 +166,7 @@ public fun request_accept_and_lock_cap(
         !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
         EDAOPaymentDelinquent
     );
-    
+
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -183,7 +183,7 @@ public fun request_accept_and_lock_cap(
 
     // now it's safe to borrow security_council (no locking at creation)
     owned::new_withdraw(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
-    
+
     // Use generic custody accept action
     {
         let resource_key = package_name; // resource identifier
@@ -192,10 +192,9 @@ public fun request_accept_and_lock_cap(
             resource_key,
             b"".to_string()   // optional context
         );
-        let descriptor = action_descriptor::new(b"security", b"accept_upgrade_cap");
-        intent.add_action_with_descriptor(
+        intent.add_typed_action(
             action,
-            descriptor,
+            action_types::accept_into_custody(),
             AcceptUpgradeCapIntent{}
         );
     };
@@ -234,15 +233,15 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     // Check if DAO has UpgradeCap:Custodian policy set
     let reg = policy_registry::borrow_registry(dao, version::current());
     let key = b"UpgradeCap:Custodian".to_string();
-    
+
     // Always require co-execution if policy exists
     assert!(!policy_registry::has_policy(reg, key), ERequiresCoExecution);
-    
+
     // If no policy, proceed with regular execution
     execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
 }
 
-// Cleanup for “accept and lock cap” (must unlock the object via the Account)
+// Cleanup for "accept and lock cap" (must unlock the object via the Account)
 public fun delete_accept_upgrade_cap(
     expired: &mut Expired,
     security_council: &mut Account<WeightedMultisig>
@@ -284,8 +283,7 @@ public fun request_update_council_membership(
                 new_weights,
                 new_threshold
             );
-            let descriptor = action_descriptor::new(b"security", b"update_membership");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::update_council_membership(), iw);
         }
     );
 }
@@ -351,8 +349,7 @@ public fun request_create_security_council<Outcome: store + drop + copy>(
                 weights,
                 threshold
             );
-            let descriptor = action_descriptor::new(b"security", b"create_council");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::create_security_council(), iw);
         }
     );
 }
@@ -401,7 +398,7 @@ public fun request_approve_policy_removal(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -412,7 +409,7 @@ public fun request_approve_policy_removal(
         |intent, iw| {
             // Create metadata for the policy removal approval
             let metadata = vector::empty<String>();
-            
+
             let action = security_council_actions::new_approve_generic(
                 dao_id,
                 b"policy_remove".to_string(),
@@ -420,8 +417,7 @@ public fun request_approve_policy_removal(
                 metadata,
                 expires_at
             );
-            let descriptor = action_descriptor::new(b"security", b"add_members");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::approve_generic(), iw);
         }
     );
 }
@@ -440,7 +436,7 @@ public fun request_approve_policy_set(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -458,7 +454,7 @@ public fun request_approve_policy_set(
             metadata.push_back(std::string::utf8(id_hex));
             metadata.push_back(b"intent_key_prefix".to_string());
             metadata.push_back(intent_key_prefix);
-            
+
             let action = security_council_actions::new_approve_generic(
                 dao_id,
                 b"policy_set".to_string(),
@@ -466,8 +462,7 @@ public fun request_approve_policy_set(
                 metadata,
                 expires_at
             );
-            let descriptor = action_descriptor::new(b"security", b"remove_members");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::approve_generic(), iw);
         }
     );
 }
@@ -490,7 +485,7 @@ const EBatchTooLarge: u64 = 101;
 
 /// Security Council can clean up specific expired intents by key
 /// This is a hot path - council members can execute this without needing a proposal
-/// 
+///
 /// Note: Due to Sui's Bag limitations, we cannot iterate through all intents.
 /// Callers must provide the specific intent keys to clean up.
 public fun cleanup_expired_council_intents(
@@ -501,17 +496,17 @@ public fun cleanup_expired_council_intents(
 ) {
     // Verify the caller is a council member
     security_council.verify(auth_from_member);
-    
+
     // Validate batch size to prevent gas exhaustion
     let len = intent_keys.length();
     assert!(len <= MAX_CLEANUP_BATCH_SIZE, EBatchTooLarge);
-    
+
     // Clean up each specified intent if it's expired
     let mut i = 0;
-    
+
     while (i < len) {
         let key = *intent_keys.borrow(i);
-        
+
         // Atomic check-and-delete pattern to avoid TOCTOU
         // The delete_expired_intent function internally checks if expired
         let intents_store = account::intents(security_council);
@@ -525,15 +520,15 @@ public fun cleanup_expired_council_intents(
                     key,
                     clock
                 );
-                
+
                 // Drain the expired intent's actions
                 drain_council_expired(&mut expired, security_council);
-                
+
                 // Destroy the empty expired object
                 intents::destroy_empty_expired(expired);
             };
         };
-        
+
         i = i + 1;
     };
 }
@@ -546,28 +541,28 @@ fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<
     security_council_actions::delete_approve_generic(expired);
     security_council_actions::delete_sweep_intents(expired);
     security_council_actions::delete_council_create_optimistic_intent(expired);
-    
+
     // Delete optimistic intent actions
     optimistic_intents::delete_execute_optimistic_intent_action(expired);
     optimistic_intents::delete_cancel_optimistic_intent_action(expired);
     optimistic_intents::delete_create_optimistic_intent_action(expired);
     optimistic_intents::delete_challenge_optimistic_intents_action(expired);
     optimistic_intents::delete_cleanup_expired_intents_action(expired);
-    
+
     // Delete package upgrade actions
     package_upgrade::delete_upgrade(expired);
     package_upgrade::delete_commit(expired);
-    
+
     // Delete owned withdraw if present
     owned::delete_withdraw(expired, security_council);
-    
+
     // Delete custody actions
     custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
 }
 
 /// Security Council can propose a sweep of specific expired intents
 /// This requires multisig approval but can clean up many intents at once
-/// 
+///
 /// Note: The intent_keys must be stored in the action since we need them
 /// at execution time to identify which intents to clean.
 public fun request_sweep_expired_intents(
@@ -579,7 +574,7 @@ public fun request_sweep_expired_intents(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -590,8 +585,7 @@ public fun request_sweep_expired_intents(
         |intent, iw| {
             // Store the keys in the action so we know what to clean at execution
             let action = security_council_actions::new_sweep_intents_with_keys(intent_keys);
-            let descriptor = action_descriptor::new(b"security", b"sweep_intents");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::sweep_intents(), iw);
         }
     );
 }
@@ -603,13 +597,13 @@ public fun execute_sweep_expired_intents(
     security_council: &mut Account<WeightedMultisig>,
     clock: &Clock,
 ) {
-    let action: &security_council_actions::SweepIntentsAction = 
+    let action: &security_council_actions::SweepIntentsAction =
         executable.next_action(SweepExpiredIntentsIntent{});
     let intent_keys = security_council_actions::get_sweep_keys(action);
-    
+
     // Clean up the specified expired intents
     cleanup_expired_council_intents_internal(security_council, intent_keys, clock);
-    
+
     security_council.confirm_execution(executable);
 }
 
@@ -622,10 +616,10 @@ fun cleanup_expired_council_intents_internal(
     // Process each intent key
     let mut i = 0;
     let len = intent_keys.length();
-    
+
     while (i < len) {
         let key = *intent_keys.borrow(i);
-        
+
         // Atomic check-and-delete pattern
         let intents_store = account::intents(security_council);
         if (intents::contains(intents_store, key)) {
@@ -638,15 +632,15 @@ fun cleanup_expired_council_intents_internal(
                     key,
                     clock
                 );
-                
+
                 // Drain the expired intent's actions
                 drain_council_expired(&mut expired, security_council);
-                
+
                 // Destroy the empty expired object
                 intents::destroy_empty_expired(expired);
             };
         };
-        
+
         i = i + 1;
     };
 }
@@ -712,7 +706,7 @@ public fun request_create_optimistic_intent(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -728,15 +722,14 @@ public fun request_create_optimistic_intent(
                 title,
                 description
             );
-            let descriptor = action_descriptor::new(b"security", b"optimistic_intent");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::council_create_optimistic_intent(), iw);
         }
     );
 }
 
 /// Execute a matured optimistic intent (after 10-day waiting period)
 public fun request_execute_optimistic_intent(
-    security_council: &mut Account<WeightedMultisig>, 
+    security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
     params: Params,
     dao_id: ID,
@@ -745,7 +738,7 @@ public fun request_execute_optimistic_intent(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -759,8 +752,7 @@ public fun request_execute_optimistic_intent(
             let action = optimistic_intents::new_execute_optimistic_intent_action(
                 optimistic_intent_id
             );
-            let descriptor = action_descriptor::new(b"security", b"challenge_intent");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::council_execute_optimistic_intent(), iw);
         }
     );
 }
@@ -777,7 +769,7 @@ public fun request_cancel_optimistic_intent(
 ) {
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
-    
+
     security_council.build_intent!(
         params,
         outcome,
@@ -791,8 +783,7 @@ public fun request_cancel_optimistic_intent(
                 optimistic_intent_id,
                 reason
             );
-            let descriptor = action_descriptor::new(b"security", b"reject_proposal");
-            intent.add_action_with_descriptor(action, descriptor, iw);
+            intent.add_typed_action(action, action_types::council_cancel_optimistic_intent(), iw);
         }
     );
 }
