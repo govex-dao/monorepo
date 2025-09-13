@@ -27062,9 +27062,10 @@ use fun intent_interface::build_intent as Account.build_intent;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
+use futarchy_one_shot_utils::action_data_structs::CreateSecurityCouncilAction;
 use futarchy_multisig::{
     security_council,
-    security_council_actions::{Self, UpdateCouncilMembershipAction, CreateSecurityCouncilAction},
+    security_council_actions::{Self, UpdateCouncilMembershipAction},
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
     optimistic_intents,
 };
@@ -27108,6 +27109,7 @@ public fun new_approve_policy_change_intent(): ApprovePolicyChangeIntent {
 
 // Named errors
 const ERequiresCoExecution: u64 = 100;
+const ENotCoExecution: u64 = 101;
 const EDAOPaymentDelinquent: u64 = 101; // DAO is blocked due to unpaid fees
 
 // Public constructor for AcceptUpgradeCapIntent witness
@@ -27263,7 +27265,7 @@ public fun execute_accept_and_lock_cap(
 }
 
 /// Execute accept and lock cap with DAO enforcement
-/// Checks if "UpgradeCap:Custodian" policy is set and enforces co-execution
+/// Checks if UpgradeCap type policy is set and enforces co-execution
 public fun execute_accept_and_lock_cap_with_dao_check(
     dao: &Account<FutarchyConfig>,
     mut executable: Executable<Approvals>,
@@ -27271,14 +27273,18 @@ public fun execute_accept_and_lock_cap_with_dao_check(
     cap_receipt: Receiving<UpgradeCap>,
     ctx: &mut TxContext
 ) {
-    // Check if DAO has UpgradeCap:Custodian policy set
+    // Check if DAO has a type policy for UpgradeCap
     let reg = policy_registry::borrow_registry(dao, version::current());
-    let key = b"UpgradeCap:Custodian".to_string();
 
-    // Always require co-execution if policy exists
-    assert!(!policy_registry::has_policy(reg, key), ERequiresCoExecution);
+    // If no policy exists, default is DAO-only control
+    // Security council cannot proceed without explicit policy
+    if (!policy_registry::has_type_policy<UpgradeCap>(reg)) {
+        // No policy = DAO-only by default
+        abort ENotCoExecution  // Security council needs a policy to act
+    };
 
-    // If no policy, proceed with regular execution
+    // Policy exists - TODO: check the policy mode to see if council is allowed
+    // For now, assume if a policy exists, it allows some council involvement
     execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
 }
 
@@ -30150,9 +30156,11 @@ public fun init_all_default_policies(
 module futarchy_multisig::policy_registry;
 
 use std::option::{Self, Option};
+use std::string::String;
 use std::vector;
 use std::type_name::{Self, TypeName};
 use sui::object::{ID, UID};
+use sui::package::UpgradeCap;
 use sui::table::{Self, Table};
 use sui::event;
 use sui::tx_context::TxContext;
@@ -30429,6 +30437,12 @@ public fun is_council_registered(registry: &PolicyRegistry, council_id: ID): boo
 /// Get all registered councils
 public fun get_registered_councils(registry: &PolicyRegistry): &vector<ID> {
     &registry.registered_councils
+}
+
+/// Check if a type-based policy exists
+public fun has_type_policy<T>(registry: &PolicyRegistry): bool {
+    let type_name = type_name::get<T>();
+    table::contains(&registry.type_policies, type_name)
 }module futarchy_multisig::descriptor_analyzer {
     use std::vector;
     use std::option::{Self, Option};
@@ -33510,6 +33524,7 @@ use account_protocol::{
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_lifecycle::stream_actions;
+use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
 
 // === Public(friend) Functions ===
 
@@ -33613,7 +33628,7 @@ public fun try_execute_typed_stream_action<CoinType: drop, IW: copy + drop, Outc
     ctx: &mut TxContext,
 ): bool {
     // Try to execute CreatePaymentAction
-    if (executable::contains_action<Outcome, stream_actions::CreatePaymentAction<CoinType>>(executable)) {
+    if (executable::contains_action<Outcome, CreatePaymentAction<CoinType>>(executable)) {
         stream_actions::do_create_payment<Outcome, CoinType, IW>(
             executable,
             account,
@@ -34069,6 +34084,13 @@ public fun new_request_withdrawal_action<CoinType>(
     amount: u64,
 ): RequestWithdrawalAction<CoinType> {
     RequestWithdrawalAction { payment_id, amount }
+}
+
+/// Create a new ExecutePaymentAction
+public fun new_execute_payment_action<CoinType>(
+    payment_id: String,
+): ExecutePaymentAction<CoinType> {
+    ExecutePaymentAction { payment_id }
 }
 
 // === Public Functions ===
@@ -35314,17 +35336,20 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
     ctx: &mut TxContext,
 ) {
     // First add the recurring payment action
-    let action = stream_actions::new_create_recurring_payment_action<CoinType>(
-        stream_actions::source_isolated_pool(),
+    let action = stream_actions::new_create_payment_action<CoinType>(
+        1, // payment_type: PAYMENT_TYPE_RECURRING
+        1, // source_mode: SOURCE_ISOLATED_POOL
         recipient,
-        amount_per_payment,
-        interval_ms,
+        amount_per_payment * total_payments, // total amount for all payments
+        clock.timestamp_ms(), // start_timestamp
+        if (end_timestamp.is_some()) { *end_timestamp.borrow() } else { 0 }, // end_timestamp
+        option::some(interval_ms), // interval_or_cliff (interval for recurring)
         total_payments,
-        end_timestamp,
         cancellable,
         description,
-        clock,
-        ctx,
+        0, // max_per_withdrawal: 0 for unlimited
+        0, // min_interval_ms: 0 for no limit
+        0, // max_beneficiaries: 0 for unlimited
     );
     intent.add_typed_action(action, action_types::create_payment(), intent_witness);
 
@@ -35366,9 +35391,8 @@ public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
     // Then add the execute payment action
     let action = stream_actions::new_execute_payment_action<CoinType>(
         payment_id,
-        amount,
     );
-    intent.add_typed_action(action, action_types::execute_payment(), intent_witness);
+    intent.add_typed_action(action, action_types::create_payment(), intent_witness);
 }
 
 /// Add a cancel stream action to an existing intent
@@ -35380,9 +35404,8 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
 ) {
     // Note: If there's a final claimable amount, a vault::SpendAction
     // should be added before this action to provide the final payment coin
-    let action = stream_actions::new_cancel_payment_action<CoinType>(
+    let action = stream_actions::new_cancel_payment_action(
         stream_id,
-        return_unclaimed,
     );
     intent.add_typed_action(action, action_types::cancel_payment(), intent_witness);
 }
@@ -38914,6 +38937,7 @@ module futarchy_lifecycle::init_intent_builder;
 use std::type_name;
 use sui::bcs;
 use futarchy_actions::action_specs::{ActionSpec};
+use futarchy_actions::intent_spec;
 
 // Import all action type markers
 use futarchy_one_shot_utils::action_types;

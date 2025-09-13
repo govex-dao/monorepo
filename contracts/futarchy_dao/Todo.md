@@ -2,6 +2,7 @@
 
 # Todo for V2
 - [ ] Create dao with instant approved intents
+- [ ] option to pass moveframework account to DAO
 - [ ] Create dao in launch pad
 - [ ] Make launchpad have small fee for creating dao non refundable 
 - [ ] Create dao should take coins Should be able to route some coins into amm
