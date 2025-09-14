@@ -3,10 +3,11 @@ module futarchy_lifecycle::oracle_intents;
 // === Imports ===
 use std::string::String;
 use sui::clock::Clock;
-use account_protocol::intents::Intent;
+use account_protocol::intents::{Self, Intent};
 use futarchy_lifecycle::oracle_actions::{Self, PriceTier, RecipientMint};
 use futarchy_utils::action_types;
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+use std::option::Option;
+use sui::object::ID;
 
 // === Witness ===
 
@@ -26,7 +27,12 @@ public fun read_oracle_price_in_intent<Outcome: store, AssetType, StableType, IW
     intent_witness: IW,
 ) {
     let action = oracle_actions::new_read_oracle_action<AssetType, StableType>(true);
-    intent.add_typed_action(action, action_types::read_oracle_price(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::ReadOraclePrice {},
+        intent_witness
+    );
 }
 
 /// Add a conditional mint action to an existing intent
@@ -52,7 +58,12 @@ public fun conditional_mint_in_intent<Outcome: store, T, IW: drop>(
         is_repeatable,
         description,
     );
-    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::ConditionalMint {},
+        intent_witness
+    );
 }
 
 /// Add a founder reward mint action to an existing intent
@@ -74,7 +85,12 @@ public fun founder_reward_mint_in_intent<Outcome: store, T, IW: drop>(
         description,
         clock,
     );
-    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::ConditionalMint {},
+        intent_witness
+    );
 }
 
 /// Add a liquidity incentive action to an existing intent
@@ -92,7 +108,12 @@ public fun liquidity_incentive_in_intent<Outcome: store, T, IW: drop>(
         min_price,
         description,
     );
-    intent.add_typed_action(action, action_types::conditional_mint(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::ConditionalMint {},
+        intent_witness
+    );
 }
 
 /// Add a tiered mint action to an existing intent
@@ -112,7 +133,12 @@ public fun tiered_mint_in_intent<Outcome: store, T, IW: drop>(
         description,
         security_council_id
     );
-    intent.add_typed_action(action, action_types::tiered_mint(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::TieredMint {},
+        intent_witness
+    );
 }
 
 /// Add a tiered founder rewards action to an existing intent
@@ -136,7 +162,12 @@ public fun tiered_founder_rewards_in_intent<Outcome: store, T, IW: drop>(
         latest_time,
         description
     );
-    intent.add_typed_action(action, action_types::tiered_mint(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::TieredMint {},
+        intent_witness
+    );
 }
 
 /// Create a unique key for an oracle intent

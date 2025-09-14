@@ -1,8 +1,17 @@
-/// === FORK MODIFICATIONS ===
-/// TYPE-BASED ACTION SYSTEM:
-/// - Actions use type markers: PackageUpgrade, PackageCommit, PackageRestrict
-/// - Compile-time type safety replaces string-based descriptors
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Type-Based Package Upgrade Management
+// ============================================================================
+// This module manages UpgradeCap operations with timelock for Account.
+//
+// CHANGES IN THIS FORK:
+// - Actions use type markers: PackageUpgrade, PackageCommit, PackageRestrict
+// - Added 'drop' ability to UpgradeAction and RestrictAction structs
+// - Integrated BCS validation for action deserialization
+// - Actions use typed Intent system with add_typed_action()
+// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
+// - Type-safe action validation through ActionSpec comparison
+// - Compile-time type safety replaces string-based descriptors
+// ============================================================================
 /// Package managers can lock UpgradeCaps in the account. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
 /// Upon locking, the user can define an optional timelock corresponding to the minimum delay between an upgrade proposal and its execution.
@@ -17,11 +26,12 @@ use sui::{
     package::{Self, UpgradeCap, UpgradeTicket, UpgradeReceipt},
     clock::Clock,
     vec_map::{Self, VecMap},
+    bcs::{Self, BCS},
 };
 use account_protocol::{
     account::{Account, Auth},
-    intents::{Expired, Intent},
-    executable::Executable,
+    intents::{Self, Expired, Intent},
+    executable::{Self, Executable},
     version_witness::VersionWitness,
 };
 use account_actions::{
@@ -60,19 +70,19 @@ public struct UpgradeIndex has store {
 }
 
 /// Action to upgrade a package using a locked UpgradeCap.
-public struct UpgradeAction has store {
+public struct UpgradeAction has store, drop {
     // name of the package
     name: String,
     // digest of the package build we want to publish
     digest: vector<u8>,
 }
 /// Action to commit an upgrade.
-public struct CommitAction has store {
+public struct CommitAction has store, drop {
     // name of the package
     name: String,
 }
 /// Action to restrict the policy of a locked UpgradeCap.
-public struct RestrictAction has store {
+public struct RestrictAction has store, drop {
     // name of the package
     name: String,
     // downgrades to this policy
@@ -218,25 +228,38 @@ public fun do_upgrade<Config, Outcome: store, IW: drop>(
     account: &mut Account<Config>,
     clock: &Clock,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ): UpgradeTicket {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &UpgradeAction = executable.next_action(intent_witness);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader).to_string();
+    let digest = bcs::peel_vec_u8(&mut reader);
+
     assert!(
-        clock.timestamp_ms() >= executable.intent().creation_time() + get_time_delay(account, action.name), 
+        clock.timestamp_ms() >= executable.intent().creation_time() + get_time_delay(account, name),
         EUpgradeTooEarly
     );
 
-    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(action.name), version_witness);
+    let cap: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
     let policy = cap.policy();
 
-    cap.authorize_upgrade(policy, action.digest) // return ticket
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    cap.authorize_upgrade(policy, digest) // return ticket
 }    
 
 /// Deletes an UpgradeAction from an expired intent.
 public fun delete_upgrade(expired: &mut Expired) {
-    let UpgradeAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }
 
 /// Creates a new CommitAction and adds it to an intent.
@@ -259,23 +282,34 @@ public fun do_commit<Config, Outcome: store, IW: drop>(
     account: &mut Account<Config>,
     receipt: UpgradeReceipt,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &CommitAction = executable.next_action(intent_witness);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
 
-    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(action.name), version_witness);
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader).to_string();
+
+    let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
     cap_mut.commit_upgrade(receipt);
     let new_package_addr = cap_mut.package().to_address();
 
     // update the index with the new package address
     let index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version_witness);
-    *index_mut.packages_info.get_mut(&action.name) = new_package_addr;
+    *index_mut.packages_info.get_mut(&name) = new_package_addr;
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 public fun delete_commit(expired: &mut Expired) {
-    let CommitAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }
 
 /// Creates a new RestrictAction and adds it to an intent.
@@ -297,27 +331,39 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
-    
-    let action: &RestrictAction = executable.next_action(intent_witness);
 
-    if (action.policy == package::additive_policy()) {
-        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(action.name), version_witness);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader).to_string();
+    let policy = bcs::peel_u8(&mut reader);
+
+    if (policy == package::additive_policy()) {
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
         cap_mut.only_additive_upgrades();
-    } else if (action.policy == package::dep_only_policy()) {
-        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(action.name), version_witness);
+    } else if (policy == package::dep_only_policy()) {
+        let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
         cap_mut.only_dep_upgrades();
     } else {
-        let cap: UpgradeCap = account.remove_managed_asset(UpgradeCapKey(action.name), version_witness);
+        let cap: UpgradeCap = account.remove_managed_asset(UpgradeCapKey(name), version_witness);
         package::make_immutable(cap);
     };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Deletes a RestrictAction from an expired intent.
 public fun delete_restrict(expired: &mut Expired) {
-    let RestrictAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }
 
 // === Package Funtions ===

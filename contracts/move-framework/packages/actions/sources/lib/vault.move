@@ -1,10 +1,17 @@
-/// === FORK MODIFICATIONS ===
-/// TYPE-BASED ACTION SYSTEM:
-/// - Each action (DepositAction, SpendAction) has a corresponding type marker
-/// - Type markers defined in framework_action_types (VaultDeposit, VaultSpend)
-/// - Enables compile-time type safety for action routing
-/// - No string-based action descriptors needed
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Type-Based Vault Management with Streaming
+// ============================================================================
+// This module manages multi-vault treasury operations with streaming support.
+//
+// CHANGES IN THIS FORK:
+// - Actions use type markers: VaultDeposit, VaultSpend
+// - Added 'drop' ability to DepositAction and SpendAction structs
+// - Integrated BCS validation for action deserialization
+// - Actions use typed Intent system with add_typed_action()
+// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
+// - Type-safe action validation through ActionSpec comparison
+// - Compile-time type safety replaces string-based descriptors
+// ============================================================================
 /// Members can create multiple vaults with different balances and managers (using roles).
 /// This allows for a more flexible and granular way to manage funds.
 ///
@@ -64,12 +71,14 @@ use sui::{
     object::{Self, ID},
     transfer,
     tx_context,
+    bcs::{Self, BCS},
 };
 use account_protocol::{
-    account::{Account, Auth},
-    intents::{Expired, Intent},
-    executable::Executable,
+    account::{Self, Account, Auth},
+    intents::{Self, Expired, Intent},
+    executable::{Self, Executable},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_actions::version;
 use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
@@ -97,8 +106,9 @@ const ENotTransferable: u64 = 13;
 const ENotCancellable: u64 = 14;
 const EBeneficiaryAlreadyExists: u64 = 15;
 const EBeneficiaryNotFound: u64 = 16;
-const ECannotReduceBelowClaimed: u64 = 17;
-const ETooManyBeneficiaries: u64 = 18;
+const EUnsupportedActionVersion: u64 = 17;
+const ECannotReduceBelowClaimed: u64 = 18;
+const ETooManyBeneficiaries: u64 = 19;
 
 // === Constants ===
 const MAX_BENEFICIARIES: u64 = 100;
@@ -223,14 +233,14 @@ public struct StreamAmountReduced has copy, drop {
 }
 
 /// Action to deposit an amount of this coin to the targeted Vault.
-public struct DepositAction<phantom CoinType> has store {
+public struct DepositAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
     // exact amount to be deposited
     amount: u64,
 }
 /// Action to be used within intent making good use of the returned coin, similar to owned::withdraw.
-public struct SpendAction<phantom CoinType> has store {
+public struct SpendAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
     // amount to withdraw
@@ -360,25 +370,39 @@ public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
     account: &mut Account<Config>,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &DepositAction<CoinType> = executable.next_action(intent_witness);
-    assert!(action.amount == coin.value(), EIntentAmountMismatch);
-        
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(action.name), version_witness);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+    let amount = bcs::peel_u64(&mut reader);
+
+    assert!(amount == coin.value(), EIntentAmountMismatch);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
     if (!vault.coin_type_exists<CoinType>()) {
         vault.bag.add(type_name::with_defining_ids<CoinType>(), coin.into_balance());
     } else {
         let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
         balance_mut.join(coin.into_balance());
     };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Deletes a DepositAction from an expired intent.
 public fun delete_deposit<CoinType>(expired: &mut Expired) {
-    let DepositAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
 }
 
 /// Creates a SpendAction and adds it to an intent with descriptor.
@@ -400,26 +424,45 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
     ctx: &mut TxContext
 ): Coin<CoinType> {
     executable.intent().assert_is_account(account.addr());
-    
-    let action: &SpendAction<CoinType> = executable.next_action(intent_witness);
-        
-    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(action.name), version_witness);
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
-    let coin = coin::take(balance_mut, action.amount, ctx);
 
-    if (balance_mut.value() == 0) 
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+    let amount = bcs::peel_u64(&mut reader);
+
+    // CRITICAL: Validate all bytes consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
+    let coin = coin::take(balance_mut, amount, ctx);
+
+    if (balance_mut.value() == 0)
         vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
-        
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     coin
 }
 
 /// Deletes a SpendAction from an expired intent.
 public fun delete_spend<CoinType>(expired: &mut Expired) {
-    let SpendAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
 }
 
 // === Stream Functions ===

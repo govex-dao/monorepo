@@ -1,6 +1,20 @@
 - [ ] Trade back weird octothorpe stuff in headersMobile no footer on trader and create
 
 # Todo for V2
+  Timeline
+
+  Immediate (Before ANY deployment):
+  Next Sprint:
+  - Create BCS helper functions for common patterns
+  - Add comprehensive malformed data tests
+  - Document breaking changes and migration guide
+
+  Future:
+  - Consider removing intent witness pattern if truly unused
+  - Add telemetry for action execution
+  - Implement batch action optimizations
+
+
 - [ ] Create dao with instant approved intents
 - [ ] option to pass moveframework account to DAO
 - [ ] Create dao in launch pad

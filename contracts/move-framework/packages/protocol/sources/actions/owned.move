@@ -1,23 +1,24 @@
-/// === FORK MODIFICATIONS ===
-/// COMPLETE REMOVAL OF OBJECT LOCKING:
-/// - Removed ALL pessimistic locking logic from original implementation
-/// - Multiple proposals can now reference the same objects
-/// - First-to-execute wins, others fail naturally (blockchain ownership model)
-/// - Eliminated ~100 lines of complex locking/unlocking code
-/// - Prevents permanent lock footgun from incomplete cleanup
-///
-/// TYPE-BASED ACTION SYSTEM:
-/// - OwnedWithdraw action uses type marker from framework_action_types
-/// - Compile-time type safety replaces string-based descriptors
-///
-/// Changes in this fork:
+// ============================================================================
+// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
+// ============================================================================
+// This module manages withdrawal and transfer of owned objects from Account.
+//
+// CHANGES IN THIS FORK:
+// - REMOVED: ALL pessimistic locking logic from original implementation
+// - Multiple proposals can now reference the same objects
+// - First-to-execute wins, others fail naturally via blockchain ownership
 // - new_withdraw(): Just adds the action - no validation or locking
-// - do_withdraw(): Just receives the object - no lock/unlock dance  
+// - do_withdraw(): Just receives the object - no lock/unlock dance
 // - delete_withdraw(): Trivial cleanup - no unlocking needed
 // - merge_and_split(): Works without any lock checks
 // - REMOVED: EObjectLocked error entirely
+// - OwnedWithdraw action uses type marker from framework_action_types
+// - Compile-time type safety replaces string-based descriptors
 //
-// This eliminates ~50 lines of locking code and removes the critical footgun
+// RATIONALE:
+// Eliminates ~100 lines of locking code and removes the critical footgun
+// where objects could become permanently locked from incomplete cleanup.
+// ============================================================================
 // where objects could be permanently locked if cleanup wasn't performed 
 // correctly. The system is now simpler, safer, and more suitable for DAOs.
 // ============================================================================
@@ -30,18 +31,18 @@ module account_protocol::owned;
 
 // === Imports ===
 
-use std::type_name;
 use sui::{
     coin::{Self, Coin},
-    transfer::Receiving
+    transfer::Receiving,
+    bcs::{Self, BCS}
 };
 
 use account_protocol::{
     account::{Self, Account, Auth},
-    intents::{Expired, Intent},
+    intents::{Self, Expired, Intent},
     executable::Executable,
 };
-use account_extensions::framework_action_types::{Self, OwnedWithdraw};
+use account_extensions::framework_action_types;
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -53,7 +54,7 @@ const EWrongObject: u64 = 0;
 // === Structs ===
 
 /// Action guarding access to account owned objects which can only be received via this action
-public struct WithdrawAction has store {
+public struct WithdrawAction has store, drop {
     // the owned object we want to access
     object_id: ID,
 }
@@ -79,18 +80,27 @@ public fun new_withdraw<Config, Outcome, IW: drop>(
 /// Executes a WithdrawAction and returns the object
 public fun do_withdraw<Config, Outcome: store, T: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,  
+    account: &mut Account<Config>,
     receiving: Receiving<T>,
     intent_witness: IW,
-): T {    
+): T {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &WithdrawAction = executable.next_action(intent_witness);
-    assert!(receiving.receiving_object_id() == action.object_id, EWrongObject);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
 
-    // Receive the object
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let object_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+
+    assert!(receiving.receiving_object_id() == object_id, EWrongObject);
+
+    // Receive the object and increment action index
     let obj = account::receive(account, receiving);
-    
+    account_protocol::executable::increment_action_idx(executable);
+
     obj
 }
 
@@ -99,7 +109,14 @@ public fun do_withdraw<Config, Outcome: store, T: key + store, IW: drop>(
 public fun delete_withdraw<Config>(expired: &mut Expired, account: &Account<Config>) {
     expired.assert_is_account(account.addr());
 
-    let WithdrawAction { object_id: _ } = expired.remove_action();
+    let spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the value, but we must peel it to consume the bytes
+    let WithdrawAction { object_id: _ } = WithdrawAction {
+        object_id: object::id_from_bytes(bcs::peel_vec_u8(&mut reader))
+    };
     // No unlock needed - objects are only locked during execution, not during intent creation
 }
 
@@ -130,7 +147,7 @@ public fun merge_and_split<Config, CoinType>(
 
 fun merge<Config, CoinType>(
     account: &Account<Config>,
-    coins: vector<Coin<CoinType>>, 
+    coins: vector<Coin<CoinType>>,
     ctx: &mut TxContext
 ): Coin<CoinType> {
     let mut merged = coin::zero<CoinType>(ctx);

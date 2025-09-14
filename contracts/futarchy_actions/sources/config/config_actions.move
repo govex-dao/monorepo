@@ -104,13 +104,13 @@ public struct SlashDistributionChanged has copy, drop {
 /// Action to enable or disable proposals
 /// This is a protocol-level action that should only be used in emergencies
 /// It must go through the normal futarchy governance process
-public struct SetProposalsEnabledAction has store {
+public struct SetProposalsEnabledAction has store, drop, copy {
     enabled: bool,
 }
 
 /// Action to update the DAO name
 /// This must go through the normal futarchy governance process
-public struct UpdateNameAction has store {
+public struct UpdateNameAction has store, drop, copy {
     new_name: String,
 }
 
@@ -176,7 +176,7 @@ public struct QueueParamsUpdateAction has store, drop {
 }
 
 /// Wrapper for different config action types (for batch operations)
-public struct ConfigAction has store, drop {
+public struct ConfigAction has store, drop, copy {
     config_type: u8,
     // Only one of these will be populated
     trading_params: Option<TradingParamsUpdateAction>,

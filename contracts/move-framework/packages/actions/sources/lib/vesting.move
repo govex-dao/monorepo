@@ -1,8 +1,17 @@
-/// === FORK MODIFICATIONS ===
-/// TYPE-BASED ACTION SYSTEM:
-/// - Actions use type markers: VestingCreate, VestingCancel
-/// - Compile-time type safety replaces string-based descriptors
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Type-Based Vesting Management
+// ============================================================================
+// This module provides comprehensive vesting functionality with streaming.
+//
+// CHANGES IN THIS FORK:
+// - Actions use type markers: VestingCreate, VestingCancel
+// - Added 'drop' ability to CreateAction and CancelAction structs
+// - Integrated BCS validation for action deserialization
+// - Actions use typed Intent system with add_typed_action()
+// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
+// - Type-safe action validation through ActionSpec comparison
+// - Compile-time type safety replaces string-based descriptors
+// ============================================================================
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
 /// - Multiple beneficiaries support
@@ -42,8 +51,8 @@ module account_actions::vesting;
 // === Imports ===
 
 use std::{
-    string::String,
-    option::Option,
+    string::{Self, String},
+    option::{Self, Option},
     u64,
 };
 use sui::{
@@ -54,11 +63,12 @@ use sui::{
     object::{Self, ID},
     transfer,
     tx_context,
+    bcs::{Self, BCS},
 };
 use account_protocol::{
     account::Account,
-    intents::{Expired, Intent},
-    executable::Executable,
+    intents::{Self, Expired, Intent},
+    executable::{Self, Executable},
 };
 use account_extensions::framework_action_types::{Self, VestingCreate, VestingCancel};
 use account_actions::stream_utils;
@@ -125,7 +135,7 @@ public struct ClaimCap has key {
 }
 
 /// Action for creating a comprehensive vesting
-public struct CreateVestingAction<phantom CoinType> has store {
+public struct CreateVestingAction<phantom CoinType> has store, drop {
     amount: u64,
     start_timestamp: u64,
     end_timestamp: u64,
@@ -140,7 +150,7 @@ public struct CreateVestingAction<phantom CoinType> has store {
 }
 
 /// Action for canceling a vesting
-public struct CancelVestingAction has store {
+public struct CancelVestingAction has store, drop {
     vesting_id: ID,
 }
 
@@ -246,20 +256,45 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     _account: &mut Account<Config>, 
     coin: Coin<CoinType>,
     clock: &Clock,
-    intent_witness: IW,
+    _intent_witness: IW,
     ctx: &mut TxContext,
-) {    
-    let action: &CreateVestingAction<CoinType> = executable.next_action(intent_witness);
-    
-    // Validate parameters
-    assert!(action.amount > 0, EInvalidVestingParameters);
-    assert!(action.end_timestamp > action.start_timestamp, EInvalidVestingParameters);
-    assert!(action.start_timestamp >= clock.timestamp_ms(), EInvalidVestingParameters);
-    if (action.cliff_time.is_some()) {
-        let cliff = *action.cliff_time.borrow();
-        assert!(cliff >= action.start_timestamp && cliff <= action.end_timestamp, EInvalidVestingParameters);
+) {
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let amount = bcs::peel_u64(&mut reader);
+    let start_timestamp = bcs::peel_u64(&mut reader);
+    let end_timestamp = bcs::peel_u64(&mut reader);
+    let cliff_time = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_u64(&mut reader))
+    } else {
+        option::none()
     };
-    assert!(action.max_beneficiaries > 0 && action.max_beneficiaries <= MAX_BENEFICIARIES, EInvalidVestingParameters);
+    let recipient = bcs::peel_address(&mut reader);
+    let max_beneficiaries = bcs::peel_u64(&mut reader);
+    let max_per_withdrawal = bcs::peel_u64(&mut reader);
+    let min_interval_ms = bcs::peel_u64(&mut reader);
+    let is_transferable = bcs::peel_bool(&mut reader);
+    let is_cancelable = bcs::peel_bool(&mut reader);
+    let metadata = if (bcs::peel_bool(&mut reader)) {
+        option::some(string::utf8(bcs::peel_vec_u8(&mut reader)))
+    } else {
+        option::none()
+    };
+
+    // Validate parameters
+    assert!(amount > 0, EInvalidVestingParameters);
+    assert!(end_timestamp > start_timestamp, EInvalidVestingParameters);
+    assert!(start_timestamp >= clock.timestamp_ms(), EInvalidVestingParameters);
+    if (cliff_time.is_some()) {
+        let cliff = *cliff_time.borrow();
+        assert!(cliff >= start_timestamp && cliff <= end_timestamp, EInvalidVestingParameters);
+    };
+    assert!(max_beneficiaries > 0 && max_beneficiaries <= MAX_BENEFICIARIES, EInvalidVestingParameters);
 
     let id = object::new(ctx);
     let vesting_id = id.to_inner();
@@ -268,23 +303,23 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
         id,
         balance: coin.into_balance(),
         claimed_amount: 0,
-        start_timestamp: action.start_timestamp,
-        end_timestamp: action.end_timestamp,
-        cliff_time: action.cliff_time,
-        primary_beneficiary: action.recipient,
+        start_timestamp,
+        end_timestamp,
+        cliff_time,
+        primary_beneficiary: recipient,
         additional_beneficiaries: vector::empty(),
-        max_beneficiaries: action.max_beneficiaries,
-        max_per_withdrawal: action.max_per_withdrawal,
-        min_interval_ms: action.min_interval_ms,
+        max_beneficiaries,
+        max_per_withdrawal,
+        min_interval_ms,
         last_withdrawal_time: 0,
         is_paused: false,
         paused_at: option::none(),
         paused_duration: 0,
-        is_transferable: action.is_transferable,
-        is_cancelable: action.is_cancelable,
-        metadata: action.metadata,
+        is_transferable,
+        is_cancelable,
+        metadata,
     };
-    
+
     let claim_cap = ClaimCap {
         id: object::new(ctx),
         vesting_id,
@@ -293,14 +328,17 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     // Emit creation event
     event::emit(VestingCreated {
         vesting_id,
-        beneficiary: action.recipient,
-        amount: action.amount,
-        start_time: action.start_timestamp,
-        end_time: action.end_timestamp,
+        beneficiary: recipient,
+        amount,
+        start_time: start_timestamp,
+        end_time: end_timestamp,
     });
 
-    transfer::transfer(claim_cap, action.recipient);
+    transfer::transfer(claim_cap, recipient);
     transfer::share_object(vesting);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Claims vested funds (no auth needed, just be an authorized beneficiary)
@@ -382,11 +420,19 @@ public fun cancel_vesting<Config, Outcome: store, CoinType, IW: drop>(
     account: &mut Account<Config>,
     vesting: Vesting<CoinType>,
     clock: &Clock,
-    intent_witness: IW,
+    _intent_witness: IW,
     ctx: &mut TxContext,
 ) {
-    let action: &CancelVestingAction = executable.next_action(intent_witness);
-    assert!(object::id(&vesting) == action.vesting_id, EWrongVesting);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let vesting_id = bcs::peel_address(&mut reader).to_id();
+
+    assert!(object::id(&vesting) == vesting_id, EWrongVesting);
     assert!(vesting.is_cancelable, EVestingNotCancelable);
 
     let Vesting { 
@@ -455,6 +501,9 @@ public fun cancel_vesting<Config, Outcome: store, CoinType, IW: drop>(
         refunded_amount: to_refund + unvested_claimed,
         final_payment,
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Pauses a vesting
@@ -591,24 +640,49 @@ public fun new_cancel_vesting<Config, Outcome, IW: drop>(
 
 /// Deletes the CreateVestingAction
 public fun delete_vesting_action<CoinType>(expired: &mut Expired) {
-    let CreateVestingAction<CoinType> { 
-        amount: _, 
-        start_timestamp: _, 
-        end_timestamp: _, 
+    use sui::bcs;
+    use std::string;
+
+    let spec = account_protocol::intents::remove_action_spec(expired);
+    let action_data = account_protocol::intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+
+    // We don't need the values, but we must peel them to consume the bytes
+    let CreateVestingAction<CoinType> {
+        amount: _,
+        start_timestamp: _,
+        end_timestamp: _,
         cliff_time: _,
-        recipient: _, 
+        recipient: _,
         max_beneficiaries: _,
         max_per_withdrawal: _,
         min_interval_ms: _,
         is_transferable: _,
         is_cancelable: _,
         metadata: _,
-    } = expired.remove_action();
+    } = CreateVestingAction {
+        amount: bcs::peel_u64(&mut reader),
+        start_timestamp: bcs::peel_u64(&mut reader),
+        end_timestamp: bcs::peel_u64(&mut reader),
+        cliff_time: bcs::peel_option_u64(&mut reader),
+        recipient: bcs::peel_address(&mut reader),
+        max_beneficiaries: bcs::peel_u64(&mut reader),
+        max_per_withdrawal: bcs::peel_u64(&mut reader),
+        min_interval_ms: bcs::peel_u64(&mut reader),
+        is_transferable: bcs::peel_bool(&mut reader),
+        is_cancelable: bcs::peel_bool(&mut reader),
+        metadata: (if (bcs::peel_bool(&mut reader)) {
+            option::some(string::utf8(bcs::peel_vec_u8(&mut reader)))
+        } else {
+            option::none()
+        }),
+    };
 }
 
 /// Deletes the CancelVestingAction
 public fun delete_cancel_vesting_action(expired: &mut Expired) {
-    let CancelVestingAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }
 
 // === Private Functions ===

@@ -162,7 +162,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     _market: &MarketState,
     outcome_index: u64,
     clock: &Clock,
-    _ctx: &mut TxContext
+    ctx: &mut TxContext
 ): Executable<Outcome> {
     // Get the intent key from the proposal for the specified outcome
     let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, outcome_index);
@@ -179,6 +179,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
         clock,
         version::current(),
         GovernanceWitness{},
+        ctx,
     );
     
     executable

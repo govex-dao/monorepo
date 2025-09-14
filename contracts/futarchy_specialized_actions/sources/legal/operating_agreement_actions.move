@@ -13,7 +13,7 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
-    executable::Executable,
+    executable::{Self, Executable},
     intents::{Intent, Expired},
     version_witness::VersionWitness,
 };
@@ -40,7 +40,7 @@ const ACTION_REMOVE: u8 = 3;
 /// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
 /// Individual actions (UpdateLineAction, InsertLineAfterAction, etc.) are handled
 /// directly in the dispatcher. This wrapper is only used within batch operations.
-public struct OperatingAgreementAction has store, drop {
+public struct OperatingAgreementAction has store, drop, copy {
     action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
     // Only fields relevant to the action_type will be populated
     line_id: Option<ID>, // Used for Update, Remove, and as the *previous* line for Insert After
@@ -49,52 +49,52 @@ public struct OperatingAgreementAction has store, drop {
 }
 
 /// Action to update a line in the operating agreement
-public struct UpdateLineAction has store {
+public struct UpdateLineAction has store, drop, copy {
     line_id: ID,
     new_text: String,
 }
 
 /// Action to insert a line after another line
-public struct InsertLineAfterAction has store {
+public struct InsertLineAfterAction has store, drop, copy {
     prev_line_id: ID,
     text: String,
     difficulty: u64,
 }
 
 /// Action to insert a line at the beginning
-public struct InsertLineAtBeginningAction has store {
+public struct InsertLineAtBeginningAction has store, drop, copy {
     text: String,
     difficulty: u64,
 }
 
 /// Action to remove a line
-public struct RemoveLineAction has store {
+public struct RemoveLineAction has store, drop, copy {
     line_id: ID,
 }
 
 /// Action to set a line as immutable (one-way lock)
-public struct SetLineImmutableAction has store {
+public struct SetLineImmutableAction has store, drop, copy {
     line_id: ID,
 }
 
 /// Action to control whether insertions are allowed (one-way lock)
-public struct SetInsertAllowedAction has store {
+public struct SetInsertAllowedAction has store, drop, copy {
     allowed: bool,
 }
 
 /// Action to control whether removals are allowed (one-way lock)
-public struct SetRemoveAllowedAction has store {
+public struct SetRemoveAllowedAction has store, drop, copy {
     allowed: bool,
 }
 
 /// Action to set the entire operating agreement as globally immutable (one-way lock)
 /// This is the ultimate lock - once set, NO changes can be made to the agreement
-public struct SetGlobalImmutableAction has store {
+public struct SetGlobalImmutableAction has store, drop, copy {
     // No fields needed - this is a one-way operation to true
 }
 
 /// Batch action for multiple operating agreement changes
-public struct BatchOperatingAgreementAction has store {
+public struct BatchOperatingAgreementAction has store, drop, copy {
     batch_id: ID,  // Unique ID for this batch
     actions: vector<OperatingAgreementAction>,
 }

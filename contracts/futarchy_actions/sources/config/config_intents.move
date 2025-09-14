@@ -16,7 +16,7 @@ use sui::{
 use account_protocol::{
     account::Account,
     executable::Executable,
-    intents::{Intent, Params},
+    intents::{Self, Intent, Params},
     intent_interface,
 };
 use futarchy_core::version;
@@ -24,8 +24,7 @@ use futarchy_actions::config_actions;
 use futarchy_utils::action_types;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 
-// === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// === Use Fun Aliases === (removed, using add_action_spec directly)
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -54,7 +53,12 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_set_proposals_enabled_action(enabled);
-            intent.add_typed_action(action, action_types::set_proposals_enabled(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::SetProposalsEnabled {},
+                iw
+            );
         }
     );
 }
@@ -76,7 +80,12 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_update_name_action(new_name);
-            intent.add_typed_action(action, action_types::update_name(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateName {},
+                iw
+            );
         }
     );
 }
@@ -106,7 +115,12 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
                 option::some(icon_url),
                 option::some(description)
             );
-            intent.add_typed_action(action, action_types::metadata_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::SetMetadata {},
+                iw
+            );
         }
     );
 }
@@ -137,7 +151,12 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
                 option::some(trading_period_ms),
                 option::none() // amm_total_fee_bps
             );
-            intent.add_typed_action(action, action_types::trading_params_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateTradingConfig {},
+                iw
+            );
         }
     );
 }
@@ -167,7 +186,12 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
                 option::some(initial_observation),
                 option::some(threshold)
             );
-            intent.add_typed_action(action, action_types::twap_config_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateTwapConfig {},
+                iw
+            );
         }
     );
 }
@@ -201,7 +225,12 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::none(), // optimistic_challenge_fee - not specified
                 option::none()  // optimistic_challenge_period_ms - not specified
             );
-            intent.add_typed_action(action, action_types::governance_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateGovernance {},
+                iw
+            );
         }
     );
 }
@@ -239,7 +268,12 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
                 optimistic_challenge_fee,
                 optimistic_challenge_period_ms
             );
-            intent.add_typed_action(action, action_types::governance_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateGovernance {},
+                iw
+            );
         }
     );
 }
@@ -269,7 +303,12 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
                 protocol_bps,
                 burn_bps
             );
-            intent.add_typed_action(action, action_types::slash_distribution_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateSlashDistribution {},
+                iw
+            );
         }
     );
 }
@@ -298,7 +337,12 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
                 option::none(), // max_queue_size - not specified
                 option::some(fee_escalation_basis_points)
             );
-            intent.add_typed_action(action, action_types::queue_params_update(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateQueueParams {},
+                iw
+            );
         }
     );
 }

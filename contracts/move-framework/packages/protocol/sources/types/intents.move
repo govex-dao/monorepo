@@ -1,39 +1,31 @@
-/// === FORK MODIFICATIONS ===
-/// This file has been modified from the original account.tech implementation with two major changes:
-///
-/// 1. REMOVED OBJECT LOCKING:
-/// Original design (pessimistic locking):
-/// - Intents struct contained a `locked: VecSet<ID>` field to track locked objects
-/// - Objects were locked when creating intents to prevent conflicts
-/// - Required explicit unlocking when intents were cancelled/expired
-/// - Could lead to permanently locked objects if cleanup wasn't performed
-///
-/// New design (no locking):
-/// - Removed the `locked` field entirely from Intents struct
-/// - Removed lock(), unlock(), and locked() functions
-/// - Removed EObjectAlreadyLocked and EObjectNotLocked errors
-/// - Multiple intents can now reference the same objects
-/// - Conflicts are resolved naturally by the blockchain - first to execute wins
-///
-/// 2. TYPE-BASED ACTION SYSTEM:
-/// Original design (string-based):
-/// - Used action_descriptors: vector<ActionDescriptor> with string categories
-/// - Runtime string parsing and comparison for action routing
-/// - add_action_with_descriptor() took descriptor with b"treasury", b"spend" etc
-///
-/// New design (type-based):
-/// - Changed to action_types: vector<TypeName> for compile-time type safety
-/// - Removed dependency on action_descriptor module entirely
-/// - Added add_typed_action<Outcome, Action, T, IW>() that captures type at compile-time
-/// - Type names captured using type_name::get<T>() for zero-overhead routing
-///
-/// Benefits:
-/// - Eliminates risk of stale locks that could make objects permanently unusable
-/// - Compile-time type safety for all actions
-/// - Better gas efficiency (no string comparisons)
-/// - Simplifies the codebase by ~100 lines
-/// - Better suits DAO governance where multiple proposals competing for resources is natural
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
+// ============================================================================
+// Core module managing Intents with type-safe action execution.
+//
+// MAJOR CHANGES IN THIS FORK:
+//
+// 1. REMOVED OBJECT LOCKING:
+//    Original: Intents had `locked: VecSet<ID>` field for pessimistic locking
+//    New: No locking - multiple intents can reference same objects
+//    - Removed lock(), unlock(), and locked() functions
+//    - Removed EObjectAlreadyLocked and EObjectNotLocked errors
+//    - Conflicts resolved naturally by blockchain (first to execute wins)
+//
+// 2. TYPE-BASED ACTION SYSTEM:
+//    Original: Used action_descriptors with string categories (b"treasury")
+//    New: Uses action_types: vector<TypeName> for compile-time safety
+//    - Removed dependency on action_descriptor module
+//    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
+//    - Type names captured using type_name::get<T>() for zero-overhead routing
+//
+// BENEFITS:
+// - Eliminates risk of permanently locked objects from incomplete cleanup
+// - Compile-time type safety for all actions
+// - Better gas efficiency (no string comparisons)
+// - Simplifies codebase by ~100 lines
+// - Better suits DAO governance where competing proposals are natural
+// ============================================================================
 /// This is the core module managing Intents.
 /// It provides the interface to create and execute intents which is used in the `account` module.
 /// In the new design, there is no locking - multiple intents can reference the same objects.
@@ -46,6 +38,8 @@ module account_protocol::intents;
 use std::{
     string::String,
     type_name::{Self, TypeName},
+    bcs,
+    vector,
 };
 use sui::{
     bag::{Self, Bag},
@@ -71,8 +65,32 @@ const EKeyAlreadyExists: u64 = 6;
 const EWrongAccount: u64 = 7;
 const EWrongWitness: u64 = 8;
 const ESingleExecution: u64 = 9;
+const EMaxPlaceholdersExceeded: u64 = 10;
+const EUnsupportedActionVersion: u64 = 11;
+const EActionDataTooLarge: u64 = 12;
+
+// Version constants
+const CURRENT_ACTION_VERSION: u8 = 1;
+
+// === Limits ===
+
+/// Maximum number of placeholders allowed in a single intent.
+/// Exposed as a function to allow future upgrades to change this value.
+public fun max_placeholders(): u64 { 50 }
+
+/// Maximum size for action data in bytes (4KB).
+/// Exposed as a function to allow future upgrades to change this value.
+/// Prevents excessively large action data that could cause DoS.
+public fun max_action_data_size(): u64 { 4096 }
 
 // === Structs ===
+
+/// A blueprint for a single action within an intent.
+public struct ActionSpec has store, copy, drop {
+    version: u8,                // Version byte for forward compatibility
+    action_type: TypeName,      // The type of the action struct
+    action_data: vector<u8>,    // The BCS-serialized action struct
+}
 
 /// Parent struct protecting the intents
 public struct Intents has store {
@@ -101,12 +119,12 @@ public struct Intent<Outcome> has store {
     execution_times: vector<u64>,
     // the intent can be deleted from this timestamp
     expiration_time: u64,
-    // role for the intent 
+    // role for the intent
     role: String,
-    // heterogenous array of actions to be executed in order
-    actions: Bag,
-    // type names for each action (for approval tracking and routing)
-    action_types: vector<TypeName>,
+    // Structured action specifications for type-safe routing (single source of truth)
+    action_specs: vector<ActionSpec>,
+    // Counter for unique placeholder IDs
+    next_placeholder_id: u64,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome,
 }
@@ -115,10 +133,8 @@ public struct Intent<Outcome> has store {
 public struct Expired {
     // address of the account that created the intent
     account: address,
-    // index of the first action in the bag
-    start_index: u64,
-    // actions that expired
-    actions: Bag
+    // action specs that expired or were executed
+    action_specs: vector<ActionSpec>,
 }
 
 /// Params of an intent to reduce boilerplate.
@@ -135,6 +151,42 @@ public struct ParamsFieldsV1 has copy, drop, store {
 }
 
 // === Public functions ===
+
+/// Reserve a placeholder ID for use during intent creation
+public(package) fun reserve_placeholder_id<Outcome>(
+    intent: &mut Intent<Outcome>
+): u64 {
+    let id = intent.next_placeholder_id;
+    assert!(id < max_placeholders(), EMaxPlaceholdersExceeded);
+    intent.next_placeholder_id = id + 1;
+    id
+}
+
+/// Add an action specification to the intent
+public fun add_action_spec<Outcome, Action: store + drop, T: drop, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action_struct: Action,
+    action_type_witness: T,
+    intent_witness: IW,
+) {
+    intent.assert_is_witness(intent_witness);
+
+    let action_data_bytes = bcs::to_bytes(&action_struct);
+
+    // Validate action data size to prevent excessively large actions
+    assert!(
+        action_data_bytes.length() <= max_action_data_size(),
+        EActionDataTooLarge
+    );
+
+    // Create and store the action spec with BCS-serialized action (single source of truth)
+    let spec = ActionSpec {
+        version: CURRENT_ACTION_VERSION,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data: action_data_bytes,
+    };
+    intent.action_specs.push_back(spec);
+}
 
 public fun new_params(
     key: String,
@@ -180,33 +232,27 @@ public fun new_params_with_rand_key(
 // REMOVED: Old add_action function without types - use add_typed_action instead
 
 /// Add a typed action for type-safe routing and approval tracking
-public fun add_typed_action<Outcome, Action: store, T: drop, IW: drop>(
+/// This is now equivalent to add_action_spec
+public fun add_typed_action<Outcome, Action: store + drop, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     action: Action,
     action_type: T,
     intent_witness: IW,
 ) {
-    intent.assert_is_witness(intent_witness);
-
-    let idx = intent.actions().length();
-    intent.actions_mut().add(idx, action);
-    intent.action_types_mut().push_back(type_name::with_defining_ids<T>());
+    add_action_spec(intent, action, action_type, intent_witness);
 }
 
-public fun remove_action<Action: store>(
-    expired: &mut Expired, 
-): Action {
-    let idx = expired.start_index;
-    expired.start_index = idx + 1;
-
-    expired.actions.remove(idx)
+public fun remove_action_spec(
+    expired: &mut Expired,
+): ActionSpec {
+    expired.action_specs.remove(0)
 }
 
 public use fun destroy_empty_expired as Expired.destroy_empty;
 public fun destroy_empty_expired(expired: Expired) {
-    let Expired { actions, .. } = expired;
-    assert!(actions.is_empty(), EActionsNotEmpty);
-    actions.destroy_empty();
+    let Expired { action_specs, .. } = expired;
+    assert!(action_specs.is_empty(), EActionsNotEmpty);
+    // vector doesn't need explicit destroy
 }
 
 // === View functions ===
@@ -292,20 +338,9 @@ public fun role<Outcome>(intent: &Intent<Outcome>): String {
     intent.role
 }
 
-public fun actions<Outcome>(intent: &Intent<Outcome>): &Bag {
-    &intent.actions
-}
-
-public fun actions_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Bag {
-    &mut intent.actions
-}
-
-public fun action_types<Outcome>(intent: &Intent<Outcome>): &vector<TypeName> {
-    &intent.action_types
-}
-
-public fun action_types_mut<Outcome>(intent: &mut Intent<Outcome>): &mut vector<TypeName> {
-    &mut intent.action_types
+// Actions are now accessed through action_specs
+public fun action_count<Outcome>(intent: &Intent<Outcome>): u64 {
+    intent.action_specs.length()
 }
 
 public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
@@ -316,19 +351,37 @@ public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
     &mut intent.outcome
 }
 
+public fun action_specs<Outcome>(intent: &Intent<Outcome>): &vector<ActionSpec> {
+    &intent.action_specs
+}
+
+public fun action_spec_version(spec: &ActionSpec): u8 {
+    spec.version
+}
+
+public fun action_spec_type(spec: &ActionSpec): TypeName {
+    spec.action_type
+}
+
+public fun action_spec_data(spec: &ActionSpec): &vector<u8> {
+    &spec.action_data
+}
+
+public fun action_spec_action_data(spec: ActionSpec): vector<u8> {
+    let ActionSpec { version: _, action_data, .. } = spec;
+    action_data
+}
+
 public use fun expired_account as Expired.account;
 public fun expired_account(expired: &Expired): address {
     expired.account
 }
 
-public use fun expired_start_index as Expired.start_index;
-public fun expired_start_index(expired: &Expired): u64 {
-    expired.start_index
-}
+// start_index no longer exists in ActionSpec-based design
 
-public use fun expired_actions as Expired.actions;
-public fun expired_actions(expired: &Expired): &Bag {
-    &expired.actions
+public use fun expired_action_specs as Expired.action_specs;
+public fun expired_action_specs(expired: &Expired): &vector<ActionSpec> {
+    &expired.action_specs
 }
 
 public fun assert_is_account<Outcome>(
@@ -384,7 +437,7 @@ public(package) fun new_intent<Outcome, IW: drop>(
     } = id.df_remove(true);
     id.delete();
 
-    Intent<Outcome> { 
+    Intent<Outcome> {
         type_: type_name::with_defining_ids<IW>(),
         key,
         description,
@@ -394,8 +447,8 @@ public(package) fun new_intent<Outcome, IW: drop>(
         execution_times,
         expiration_time,
         role: new_role<IW>(managed_name),
-        actions: bag::new(ctx),
-        action_types: vector::empty(),
+        action_specs: vector::empty(),
+        next_placeholder_id: 0,
         outcome,
     }
 }
@@ -432,9 +485,9 @@ public(package) fun destroy_intent<Outcome: store + drop>(
     intents: &mut Intents,
     key: String,
 ): Expired {
-    let Intent<Outcome> { account, actions, .. } = intents.inner.remove(key);
-    
-    Expired { account, start_index: 0, actions }
+    let Intent<Outcome> { account, action_specs, .. } = intents.inner.remove(key);
+
+    Expired { account, action_specs }
 }
 
 // === Private functions ===

@@ -10,23 +10,26 @@
 
 ### Summary of Changes
 
-This fork introduces four major architectural changes to make the framework suitable for DAO governance:
+This fork introduces five major architectural changes to make the framework suitable for DAO governance:
 
-1. **Type-Based Action System**: Replaced string-based action descriptors with compile-time type safety using TypeName
+1. **Type-Based Action System with BCS Validation**: Replaced string-based action descriptors with compile-time type safety using TypeName and secure BCS deserialization
 2. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
 3. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
 4. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
+5. **Standardized Fork Documentation**: Consistent modification notices across all files
 
 These changes result in:
 - **~200 lines less code** from simplification
 - **Zero runtime errors** from type safety
+- **Enhanced security** from BCS validation preventing data injection
 - **Better gas efficiency** from optimized algorithms
 - **No permanent lock risk** from lock removal
 - **Compile-time validation** for all actions
+- **Clear traceability** of all modifications
 
-### Major Change #1: Type-Based Action System (2025-09-12)
+### Major Change #1: Type-Based Action System with BCS Validation (2025-09-14)
 
-**Purpose**: Replace string-based action identification with compile-time type safety for deterministic and scalable intent management
+**Purpose**: Replace string-based action identification with compile-time type safety and secure BCS validation for deterministic and scalable intent management
 
 #### Original System (String-based)
 - Used `ActionDescriptor` with string categories: `b"treasury"`, `b"governance"`, etc.
@@ -38,11 +41,11 @@ These changes result in:
   intent.add_action_with_descriptor(SpendAction { ... }, descriptor, witness);
   ```
 
-#### New System (Type-based)
+#### New System (Type-based with BCS)
 - Created `framework_action_types` module with type markers for all actions
 - Uses `TypeName` for compile-time type safety
 - O(1) type comparison at runtime vs O(N) string comparison
-- Zero-overhead abstraction
+- BCS validation ensures complete consumption of serialized data
 - Example:
   ```move
   intent.add_typed_action(
@@ -54,13 +57,24 @@ These changes result in:
 
 #### Implementation Details
 - **New file**: `packages/extensions/sources/framework_action_types.move` - Defines all type markers
-- **Modified**: All action modules to use `add_typed_action()` instead of `add_action_with_descriptor()`
-- **Modified**: `intents.move` - Changed from `action_descriptors: vector<ActionDescriptor>` to `action_types: vector<TypeName>`
-- **Enhanced**: `executable.move` with type-checking functions like `is_current_action<T>()`
+- **New file**: `packages/protocol/sources/bcs_validation.move` - Validates BCS deserialization
+- **Modified**: All action modules to:
+  - Use `add_typed_action()` instead of `add_action_with_descriptor()`
+  - Add `drop` ability to action structs (e.g., `struct SpendAction has store, drop`)
+  - Integrate BCS validation for secure deserialization
+  - Enhanced imports for better modularity (e.g., `bcs::Self`, `intents::Self`)
+- **Modified**: `intents.move` - Changed from `action_descriptors: vector<ActionDescriptor>` to `action_specs: vector<ActionSpec>` with TypeName + BCS data
+- **Enhanced**: `executable.move` with ExecutionContext and type-checking functions
+
+#### Security Enhancement
+- **BCS Validation**: New `bcs_validation` module ensures all bytes are consumed during deserialization
+- **Prevents Attacks**: Blocks malicious payloads with trailing data that could affect execution
+- **Type Safety**: Actions validate their type via BCS comparison with ActionSpec
 
 #### Benefits
 - **Type Safety**: Compile-time guarantees prevent runtime errors
 - **Performance**: O(1) type checks vs O(N) string comparisons
+- **Security**: BCS validation prevents data injection attacks
 - **Scalability**: Better support for 20+ action types without performance degradation
 - **Developer Experience**: IDE support, autocomplete, and compile-time validation
 
@@ -181,15 +195,46 @@ We realized that **locking is unnecessary entirely**:
    
    **Architecture Decision**: Both vault streams (treasury-managed) and standalone vestings (independent) are supported. Vault streams keep funds in treasury until withdrawn, while vestings are fully independent objects. Both use the shared `stream_utils` module for consistent calculations.
 
+### Standardized Fork Documentation (2025-09-14)
+
+All modified files now include standardized fork modification notices with consistent formatting:
+
+```move
+// ============================================================================
+// FORK MODIFICATION NOTICE - [Descriptive Title]
+// ============================================================================
+// [Brief description of module purpose]
+//
+// CHANGES IN THIS FORK:
+// - [List of specific changes]
+//
+// [Optional RATIONALE section for complex changes]
+// ============================================================================
+```
+
+This standardization ensures:
+- **Clarity**: Every modification is clearly documented at the file level
+- **Traceability**: Easy to identify what changed and why
+- **Consistency**: Uniform format across all 14+ modified files
+- **Maintainability**: Future developers can quickly understand fork differences
+
 ### Additional Fork Modifications
 
 
 #### Enhanced Executable Functions (`executable.move`)
+- **Added**: `ExecutionContext` - Embedded context for passing data between actions
+  - `created_objects: Table<u64, ID>` - Maps placeholder IDs to real object IDs
+  - Supports up to 50 placeholders for complex multi-step operations
+  - Enables actions to reference objects created by previous actions
 - **Added**: `current_action_type()` - Get TypeName of current action
-- **Added**: `is_current_action<T>()` - Check if current action matches type T  
+- **Added**: `is_current_action<T>()` - Check if current action matches type T
 - **Added**: `peek_next_action_type()` - Look ahead at next action's type
 - **Added**: `find_action_by_type<T>()` - Search for specific action types
-- **Purpose**: Enable type-safe action execution and routing
+- **Added**: Placeholder management functions:
+  - `add_placeholder()` - Register a new object ID with placeholder
+  - `get_placeholder()` - Retrieve object ID by placeholder
+  - `remove_placeholder()` - Clean up used placeholder
+- **Purpose**: Enable type-safe action execution and data passing between actions
 
 #### Config Module Enhancements (`config.move`)
 - **Improved**: Better separation between config, deps, and metadata updates

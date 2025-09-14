@@ -10,7 +10,7 @@ use sui::{
 use account_protocol::{
     account::Account,
     executable::Executable,
-    intents::{Intent, Params},
+    intents::{Self, Intent, Params},
     intent_interface,
 };
 use futarchy_specialized_actions::{
@@ -19,8 +19,7 @@ use futarchy_specialized_actions::{
 use futarchy_core::version;
 use futarchy_utils::action_types;
 
-// === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// === Use Fun Aliases === (removed, using add_action_spec directly)
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -49,7 +48,12 @@ public fun create_update_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_update_line_action(line_id, new_text);
-            intent.add_typed_action(action, action_types::update_line(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::UpdateLine {},
+                iw
+            );
         }
     );
 }
@@ -77,7 +81,12 @@ public fun create_insert_line_after_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            intent.add_typed_action(action, action_types::insert_line_after(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::InsertLineAfter {},
+                iw
+            );
         }
     );
 }
@@ -103,7 +112,12 @@ public fun create_insert_line_at_beginning_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            intent.add_typed_action(action, action_types::insert_line_at_beginning(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::InsertLineAtBeginning {},
+                iw
+            );
         }
     );
 }
@@ -125,7 +139,12 @@ public fun create_remove_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_remove_line_action(line_id);
-            intent.add_typed_action(action, action_types::remove_line(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::RemoveLine {},
+                iw
+            );
         }
     );
 }
@@ -154,7 +173,12 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
                 batch_id,
                 actions
             );
-            intent.add_typed_action(action, action_types::batch_operating_agreement(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::BatchOperatingAgreement {},
+                iw
+            );
         }
     );
 }
@@ -181,7 +205,12 @@ public fun create_create_agreement_intent<Config, Outcome: store>(
                 allow_insert,
                 allow_remove
             );
-            intent.add_typed_action(action, action_types::create_operating_agreement(), iw);
+            intents::add_action_spec(
+                intent,
+                action,
+                action_types::CreateOperatingAgreement {},
+                iw
+            );
         }
     );
 }

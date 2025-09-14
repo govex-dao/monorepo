@@ -1,16 +1,20 @@
-/// === FORK MODIFICATIONS ===
-/// This file has been modified to support the type-based action system:
-///
-/// NEW ADDITIONS IN THIS DIFF:
-/// - Added type_name imports for type-based action routing
-/// - Added current_action_type() to get the TypeName of current action
-/// - Added is_current_action<T>() to check if current action matches type T
-/// - Added peek_next_action_type() to look ahead at next action's type
-/// - Added find_action_by_type<T>() to search for specific action types
-///
-/// These changes enable compile-time type safety for action execution,
-/// replacing the previous string-based descriptor system with type checking.
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Type-Based Executable Hot Potato
+// ============================================================================
+// Hot potato ensuring actions are executed as intended (can't be stored).
+//
+// CHANGES IN THIS FORK:
+// - Added type_name imports for type-based action routing
+// - Added current_action_type() to get the TypeName of current action
+// - Added is_current_action<T>() to check if current action matches type T
+// - Added peek_next_action_type() to look ahead at next action's type
+// - Added find_action_by_type<T>() to search for specific action types
+// - Added ExecutionContext for passing data between actions
+//
+// RATIONALE:
+// Enables compile-time type safety for action execution, replacing the
+// previous string-based descriptor system with type checking.
+// ============================================================================
 /// The Executable struct is hot potato constructed from an Intent that has been resolved.
 /// It ensures that the actions are executed as intended as it can't be stored.
 /// Action index is tracked to ensure each action is executed exactly once.
@@ -20,16 +24,41 @@ module account_protocol::executable;
 // === Imports ===
 
 use std::type_name::{Self, TypeName};
-use account_protocol::intents::Intent;
+use sui::table::{Self, Table};
+use sui::object::{Self, ID};
+use sui::tx_context::TxContext;
+use account_protocol::intents::{Self, Intent};
+
+// === Error Constants ===
+
+const EPlaceholderAlreadyExists: u64 = 100;
+const EPlaceholderNotFound: u64 = 101;
+const EMaxPlaceholdersExceeded: u64 = 102;
+
+// === Limits ===
+
+/// Maximum number of placeholders allowed in ExecutionContext.
+/// Exposed as a function to allow future upgrades to change this value.
+public fun max_placeholders(): u64 { 50 }
 
 // === Structs ===
 
+/// The temporary "workbench" for passing data between actions in a single transaction.
+/// This is embedded directly in the Executable for logical cohesion.
+public struct ExecutionContext has store {
+    // Maps a temporary u64 placeholder ID to the real ID of a newly created object
+    created_objects: Table<u64, ID>,
+}
+
 /// Hot potato ensuring the actions in the intent are executed as intended.
+/// Now enhanced with ExecutionContext for data passing between actions.
 public struct Executable<Outcome: store> {
     // intent to return or destroy (if execution_times empty) after execution
     intent: Intent<Outcome>,
-    // current action index
+    // current action index for sequential processing
     action_idx: u64,
+    // context for passing data between actions via placeholders
+    context: ExecutionContext,
 }
 
 // === View functions ===
@@ -44,37 +73,15 @@ public fun action_idx<Outcome: store>(executable: &Executable<Outcome>): u64 {
     executable.action_idx
 }
 
-public fun contains_action<Outcome: store, Action: store>(
-    executable: &mut Executable<Outcome>,
-): bool {
-    let actions_length = executable.intent().actions().length();
-    let mut contains = false;
-    
-    actions_length.do!(|i| {
-        if (executable.intent.actions().contains_with_type<u64, Action>(i)) contains = true;
-    });
-
-    contains
-}
-
-public fun next_action<Outcome: store, Action: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    intent_witness: IW,
-): &Action {
-    executable.intent.assert_is_witness(intent_witness);
-
-    let action_idx = executable.action_idx;
-    executable.action_idx = executable.action_idx + 1;
-    
-    executable.intent().actions().borrow(action_idx)
-}
+// Actions are now stored as BCS bytes in ActionSpec
+// The dispatcher must deserialize them when needed
 
 /// Get the type of the current action
 public fun current_action_type<Outcome: store>(
     executable: &Executable<Outcome>
 ): TypeName {
-    let types = executable.intent().action_types();
-    *types.borrow(executable.action_idx)
+    let specs = executable.intent().action_specs();
+    intents::action_spec_type(specs.borrow(executable.action_idx))
 }
 
 /// Check if current action matches a specific type
@@ -90,18 +97,87 @@ public fun action_type_at<Outcome: store>(
     executable: &Executable<Outcome>,
     idx: u64
 ): TypeName {
-    let types = executable.intent().action_types();
-    *types.borrow(idx)
+    let specs = executable.intent().action_specs();
+    intents::action_spec_type(specs.borrow(idx))
+}
+
+/// Increment the action index to mark progress
+public fun increment_action_idx<Outcome: store>(
+    executable: &mut Executable<Outcome>
+) {
+    executable.action_idx = executable.action_idx + 1;
+}
+
+// === ExecutionContext Methods ===
+
+/// Get a mutable reference to the execution context
+public fun context_mut<Outcome: store>(
+    executable: &mut Executable<Outcome>
+): &mut ExecutionContext {
+    &mut executable.context
+}
+
+/// Get a reference to the execution context
+public fun context<Outcome: store>(
+    executable: &Executable<Outcome>
+): &ExecutionContext {
+    &executable.context
+}
+
+/// Register a newly created object ID with a placeholder ID
+public fun register_placeholder(
+    context: &mut ExecutionContext,
+    placeholder_id: u64,
+    object_id: ID,
+) {
+    assert!(
+        !table::contains(&context.created_objects, placeholder_id),
+        EPlaceholderAlreadyExists
+    );
+    assert!(
+        table::length(&context.created_objects) < max_placeholders(),
+        EMaxPlaceholdersExceeded
+    );
+    table::add(&mut context.created_objects, placeholder_id, object_id);
+}
+
+/// Resolve a placeholder ID to get the actual object ID
+public fun resolve_placeholder(
+    context: &ExecutionContext,
+    placeholder_id: u64,
+): ID {
+    assert!(
+        table::contains(&context.created_objects, placeholder_id),
+        EPlaceholderNotFound
+    );
+    *table::borrow(&context.created_objects, placeholder_id)
+}
+
+/// Check if a placeholder has been registered
+public fun has_placeholder(
+    context: &ExecutionContext,
+    placeholder_id: u64,
+): bool {
+    table::contains(&context.created_objects, placeholder_id)
 }
 
 // === Package functions ===
 
-public(package) fun new<Outcome: store>(intent: Intent<Outcome>): Executable<Outcome> {
-    Executable { intent, action_idx: 0 }
+public(package) fun new<Outcome: store>(
+    intent: Intent<Outcome>,
+    ctx: &mut TxContext, // Now takes TxContext to create the table
+): Executable<Outcome> {
+    let context = ExecutionContext {
+        created_objects: table::new(ctx),
+    };
+    Executable { intent, action_idx: 0, context }
 }
 
 public(package) fun destroy<Outcome: store>(executable: Executable<Outcome>): Intent<Outcome> {
-    let Executable { intent, .. } = executable;
+    let Executable { intent, context, .. } = executable;
+    // Clean up the context's table
+    let ExecutionContext { created_objects } = context;
+    table::destroy_empty(created_objects);
     intent
 }
 
@@ -148,8 +224,8 @@ fun test_new_executable() {
         ctx
     );
     
-    let executable = new(intent);
-    
+    let executable = new(intent, ctx);
+
     assert_eq(action_idx(&executable), 0);
     assert_eq(intent(&executable).key(), b"test_key".to_string());
     
@@ -183,7 +259,7 @@ fun test_next_action() {
     intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
-    let mut executable = new(intent);
+    let mut executable = new(intent, ctx);
     
     assert_eq(action_idx(&executable), 0);
     
@@ -222,7 +298,7 @@ fun test_contains_action() {
     
     intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
-    let mut executable = new(intent);
+    let mut executable = new(intent, ctx);
     
     assert!(contains_action<_, TestAction>(&mut executable));
     
@@ -253,7 +329,7 @@ fun test_contains_action_empty() {
         ctx
     );
     
-    let mut executable = new(intent);
+    let mut executable = new(intent, ctx);
     
     assert!(!contains_action<_, TestAction>(&mut executable));
     
@@ -284,7 +360,7 @@ fun test_destroy_executable() {
         ctx
     );
     
-    let executable = new(intent);
+    let executable = new(intent, ctx);
     let recovered_intent = destroy(executable);
     
     assert_eq(recovered_intent.key(), b"test_key".to_string());
@@ -322,7 +398,7 @@ fun test_executable_with_multiple_actions() {
     intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     intents::add_typed_action(&mut intent, TestAction {}, TestActionType {}, TestIntentWitness());
     
-    let mut executable = new(intent);
+    let mut executable = new(intent, ctx);
     
     assert_eq(action_idx(&executable), 0);
     assert_eq(intent(&executable).actions().length(), 3);
@@ -361,7 +437,7 @@ fun test_intent_access() {
         ctx
     );
     
-    let executable = new(intent);
+    let executable = new(intent, ctx);
     let intent_ref = intent(&executable);
     
     assert_eq(intent_ref.key(), b"test_key".to_string());

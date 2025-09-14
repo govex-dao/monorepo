@@ -5,7 +5,7 @@ use sui::object::ID;
 use account_protocol::intents::Expired;
 
 /// DAO-side approval to accept an object R into council custody.
-public struct ApproveCustodyAction<phantom R> has store {
+public struct ApproveCustodyAction<phantom R> has store, drop, copy {
     dao_id: ID,
     object_id: ID,
     resource_key: String,
@@ -14,7 +14,7 @@ public struct ApproveCustodyAction<phantom R> has store {
 }
 
 /// Council action to accept an object R into custody.
-public struct AcceptIntoCustodyAction<phantom R> has store {
+public struct AcceptIntoCustodyAction<phantom R> has store, drop, copy {
     object_id: ID,
     resource_key: String,
     context: String,

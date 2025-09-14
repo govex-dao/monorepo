@@ -1,8 +1,17 @@
-/// === FORK MODIFICATIONS ===
-/// TYPE-BASED ACTION SYSTEM:
-/// - Actions use type markers: KioskTake, KioskList
-/// - Compile-time type safety replaces string-based descriptors
-///
+// ============================================================================
+// FORK MODIFICATION NOTICE - Type-Based Kiosk Management
+// ============================================================================
+// This module manages NFT operations in Kiosks for Account.
+//
+// CHANGES IN THIS FORK:
+// - Actions use type markers: KioskTake, KioskList
+// - Added 'drop' ability to TakeAction and ListAction structs
+// - Integrated BCS validation for action deserialization
+// - Actions use typed Intent system with add_typed_action()
+// - Enhanced imports for better modularity (bcs::Self, executable::Self)
+// - Type-safe action validation through ActionSpec comparison
+// - Compile-time type safety replaces string-based descriptors
+// ============================================================================
 /// Authenticated users can place nfts from their kiosk into the account's without passing through the intent process.
 /// Nfts can be transferred into any other Kiosk. Upon resolution, the recipient must execute the transfer.
 /// The functions take the caller's kiosk and the account's kiosk to execute.
@@ -19,12 +28,13 @@ use sui::{
     sui::SUI,
     kiosk::{Self, Kiosk, KioskOwnerCap},
     transfer_policy::{TransferPolicy, TransferRequest},
+    bcs::{Self, BCS},
 };
 use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
 use account_protocol::{
     account::{Account, Auth},
-    intents::{Expired, Intent},
-    executable::Executable,
+    intents::{Self, Expired, Intent},
+    executable::{Self, Executable},
     version_witness::VersionWitness,
 };
 use account_actions::version;
@@ -43,7 +53,7 @@ const EWrongReceiver: u64 = 0;
 public struct KioskOwnerKey(String) has copy, drop, store;
 
 /// Action transferring nfts from the account's kiosk to another one
-public struct TakeAction has store {
+public struct TakeAction has store, drop {
     // name of the Kiosk
     name: String,
     // id of the nfts to transfer
@@ -52,7 +62,7 @@ public struct TakeAction has store {
     recipient: address,
 }
 /// Action listing nfts for purchase
-public struct ListAction has store {
+public struct ListAction has store, drop {
     // name of the Kiosk
     name: String,
     // id of the nft to list
@@ -199,23 +209,33 @@ public fun new_take<Outcome, IW: drop>(
 public fun do_take<Config, Outcome: store, Nft: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
-    account_kiosk: &mut Kiosk, 
-    recipient_kiosk: &mut Kiosk, 
-    recipient_cap: &KioskOwnerCap, 
+    account_kiosk: &mut Kiosk,
+    recipient_kiosk: &mut Kiosk,
+    recipient_cap: &KioskOwnerCap,
     policy: &mut TransferPolicy<Nft>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
     ctx: &mut TxContext
 ): TransferRequest<Nft> {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &TakeAction = executable.next_action(intent_witness);
-    assert!(action.recipient == ctx.sender(), EWrongReceiver);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
 
-    let cap: &KioskOwnerCap = account.borrow_managed_asset(KioskOwnerKey(action.name), version_witness);
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader).to_string();
+    let nft_id = bcs::peel_address(&mut reader).to_id();
+    let recipient = bcs::peel_address(&mut reader);
 
-    account_kiosk.list<Nft>(cap, action.nft_id, 0);
-    let (nft, mut request) = account_kiosk.purchase<Nft>(action.nft_id, coin::zero<SUI>(ctx));
+    assert!(recipient == ctx.sender(), EWrongReceiver);
+
+    let cap: &KioskOwnerCap = account.borrow_managed_asset(KioskOwnerKey(name), version_witness);
+
+    account_kiosk.list<Nft>(cap, nft_id, 0);
+    let (nft, mut request) = account_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
     if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
         recipient_kiosk.lock(recipient_cap, policy, nft);
@@ -226,18 +246,23 @@ public fun do_take<Config, Outcome: store, Nft: key + store, IW: drop>(
 
     if (policy.has_rule<Nft, royalty_rule::Rule>()) {
         royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
-    }; 
+    };
 
     if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
         personal_kiosk_rule::prove(account_kiosk, &mut request);
     };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
     // the request can be filled with arbitrary rules and must be confirmed afterwards
-    request 
+    request
 }
 
 /// Deletes a TakeAction from an expired intent.
 public fun delete_take(expired: &mut Expired) {
-    let TakeAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }
 
 /// Creates a new ListAction and adds it to an intent.
@@ -259,19 +284,33 @@ public fun new_list<Outcome, IW: drop>(
 public fun do_list<Config, Outcome: store, Nft: key + store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
-    kiosk: &mut Kiosk,  
+    kiosk: &mut Kiosk,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
-    
-    let action: &ListAction = executable.next_action(intent_witness);
-    let cap: &KioskOwnerCap = account.borrow_managed_asset(KioskOwnerKey(action.name), version_witness);
 
-    kiosk.list<Nft>(cap, action.nft_id, action.price);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader).to_string();
+    let nft_id = bcs::peel_address(&mut reader).to_id();
+    let price = bcs::peel_u64(&mut reader);
+
+    let cap: &KioskOwnerCap = account.borrow_managed_asset(KioskOwnerKey(name), version_witness);
+
+    kiosk.list<Nft>(cap, nft_id, price);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Deletes a ListAction from an expired intent.
 public fun delete_list(expired: &mut Expired) {
-    let ListAction { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
 }

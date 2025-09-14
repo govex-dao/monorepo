@@ -12,7 +12,7 @@ use sui::object::{Self, ID};
 use sui::event;
 use account_protocol::{
     intents::{Expired, Intent},
-    executable::{Self, Executable},
+    executable::{Self, Executable, ExecutionContext},
     account::{Self, Account},
     version_witness::VersionWitness,
 };
@@ -94,13 +94,13 @@ public struct TierExecuted has copy, drop {
 // === Structs ===
 
 /// Simple action to read oracle price
-public struct ReadOraclePriceAction<phantom AssetType, phantom StableType> has store, drop {
+public struct ReadOraclePriceAction<phantom AssetType, phantom StableType> has store, drop, copy {
     emit_event: bool,
 }
 
 /// Action to read oracle price and conditionally mint tokens
 /// This is used for founder rewards, liquidity incentives, employee options, etc.
-public struct ConditionalMintAction<phantom T> has store {
+public struct ConditionalMintAction<phantom T> has store, drop, copy {
     /// Address to receive minted tokens
     recipient: address,
     /// Amount of tokens to mint if condition is met
@@ -152,7 +152,7 @@ public struct RecipientMint has store, copy, drop {
 }
 
 /// A price tier with multiple recipients
-public struct PriceTier has store {
+public struct PriceTier has store, copy, drop {
     /// Price threshold that must be reached (scaled by 1e12)
     price_threshold: u128,
     /// Whether price must be above (true) or below (false) threshold
@@ -167,7 +167,7 @@ public struct PriceTier has store {
 
 /// Multi-tiered mint action for cofounders
 /// Each tier can be executed independently when its price is reached
-public struct TieredMintAction<phantom T> has store {
+public struct TieredMintAction<phantom T> has store, drop, copy {
     /// All price tiers with their recipients
     tiers: vector<PriceTier>,
     /// Earliest time any tier can execute (milliseconds)

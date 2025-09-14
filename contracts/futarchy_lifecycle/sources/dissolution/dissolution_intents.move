@@ -13,8 +13,7 @@ use account_protocol::{
 use futarchy_lifecycle::dissolution_actions;
 use futarchy_utils::action_types;
 
-// === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// === Use Fun Aliases === (removed, using add_action_spec directly)
 
 // === Witness ===
 
@@ -43,7 +42,12 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         burn_unsold_tokens,
         final_operations_deadline,
     );
-    intent.add_typed_action(action, action_types::initiate_dissolution(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::InitiateDissolution {},
+        intent_witness
+    );
 }
 
 /// Add a batch distribute action to an existing intent
@@ -53,7 +57,12 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_batch_distribute_action(asset_types);
-    intent.add_typed_action(action, action_types::batch_distribute(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::BatchDistribute {},
+        intent_witness
+    );
 }
 
 /// Add a finalize dissolution action to an existing intent
@@ -67,7 +76,12 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         final_recipient,
         destroy_account,
     );
-    intent.add_typed_action(action, action_types::finalize_dissolution(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::FinalizeDissolution {},
+        intent_witness
+    );
 }
 
 /// Add a cancel dissolution action to an existing intent
@@ -77,7 +91,12 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_cancel_dissolution_action(reason);
-    intent.add_typed_action(action, action_types::cancel_dissolution(), intent_witness);
+    intents::add_action_spec(
+        intent,
+        action,
+        action_types::CancelDissolution {},
+        intent_witness
+    );
 }
 
 /// Create a unique key for a dissolution intent

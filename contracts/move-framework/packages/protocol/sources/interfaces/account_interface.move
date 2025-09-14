@@ -1,3 +1,14 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Enhanced Account Interface
+// ============================================================================
+// High-level functions to create Account "methods" with specific configs.
+//
+// CHANGES IN THIS FORK:
+// - Enhanced interface to support typed Intent system
+// - Integration with new BCS-based action validation
+// - Support for hot potato pattern with Executable
+// - Improved type safety through compile-time checks
+// ============================================================================
 /// [Account Interface] - High level functions to create required "methods" for the account.
 ///
 /// 1. Define a new Account type with a specific config and default dependencies.
@@ -167,10 +178,11 @@ public macro fun execute_intent<$Config, $Outcome, $CW: drop>(
     $clock: &Clock,
     $version_witness: VersionWitness,
     $config_witness: $CW,
+    $ctx: &mut TxContext,
     $validate_outcome: |$Outcome|,
 ): Executable<$Outcome> {
     let (outcome, executable) = account::create_executable<_, $Outcome, _>(
-        $account, $key, $clock, $version_witness, $config_witness
+        $account, $key, $clock, $version_witness, $config_witness, $ctx
     );
 
     $validate_outcome(outcome);

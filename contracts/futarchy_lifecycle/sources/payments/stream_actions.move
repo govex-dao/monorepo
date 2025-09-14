@@ -31,7 +31,7 @@ use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
     account::{Self, Account, Auth},
-    executable::Executable,
+    executable::{Self, Executable, ExecutionContext},
     version_witness::VersionWitness,
     intents,
 };
@@ -261,7 +261,7 @@ public struct PaymentConfig has store {
 // CreatePaymentAction moved to futarchy_one_shot_utils::action_data_structs
 
 /// Action to create a budget stream (Keep original structure)
-public struct CreateBudgetStreamAction<phantom CoinType> has store {
+public struct CreateBudgetStreamAction<phantom CoinType> has store, drop, copy {
     recipient: address,
     amount: u64,
     start_timestamp: u64,
@@ -272,62 +272,73 @@ public struct CreateBudgetStreamAction<phantom CoinType> has store {
     description: String,
     budget_period_ms: Option<u64>,
     max_per_period: Option<u64>,
+    placeholder_out: Option<u64>, // Where to write the stream ID
 }
 
 /// Action to cancel a payment
-public struct CancelPaymentAction has store {
-    payment_id: String,
+public struct CancelPaymentAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
 }
 
 /// Action to update payment recipient
-public struct UpdatePaymentRecipientAction has store {
-    payment_id: String,
+public struct UpdatePaymentRecipientAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     new_recipient: address,
 }
 
 /// Action to add withdrawer
-public struct AddWithdrawerAction has store {
-    payment_id: String,
+public struct AddWithdrawerAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     withdrawer: address,
 }
 
 /// Action to remove withdrawers
-public struct RemoveWithdrawersAction has store {
-    payment_id: String,
+public struct RemoveWithdrawersAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     withdrawers: vector<address>,
 }
 
 /// Action to toggle payment
-public struct TogglePaymentAction has store {
-    payment_id: String,
+public struct TogglePaymentAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     paused: bool,
 }
 
 /// Action to request withdrawal
-public struct RequestWithdrawalAction<phantom CoinType> has store {
-    payment_id: String,
+public struct RequestWithdrawalAction<phantom CoinType> has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     amount: u64,
 }
 
 /// Action to challenge withdrawals
-public struct ChallengeWithdrawalsAction has store {
-    payment_id: String,
+public struct ChallengeWithdrawalsAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
 }
 
 /// Action to process pending withdrawal
-public struct ProcessPendingWithdrawalAction<phantom CoinType> has store {
-    payment_id: String,
+public struct ProcessPendingWithdrawalAction<phantom CoinType> has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
     withdrawal_index: u64,
 }
 
 /// Action to cancel challenged withdrawals
-public struct CancelChallengedWithdrawalsAction has store {
-    payment_id: String,
+public struct CancelChallengedWithdrawalsAction has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
 }
 
 /// Action to execute payment (for recurring payments)
-public struct ExecutePaymentAction<phantom CoinType> has store {
-    payment_id: String,
+public struct ExecutePaymentAction<phantom CoinType> has store, drop, copy {
+    payment_id: Option<String>,      // Direct payment ID
+    placeholder_in: Option<u64>,     // Or read from placeholder
 }
 
 // === Constructor Functions ===
@@ -585,6 +596,21 @@ public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + dr
     table::add(&mut storage.payments, payment_id, config);
     vector::push_back(&mut storage.payment_ids, payment_id);
     storage.total_payments = storage.total_payments + 1;
+
+    // Register payment ID in placeholder if specified
+    // Note: We need to convert String to ID for placeholder system
+    // Using a hash of the string as a pseudo-ID
+    if (action.placeholder_out.is_some()) {
+        let context = executable::context_mut(executable);
+        // Create a deterministic ID from the payment_id string
+        let payment_id_bytes = *string::bytes(&payment_id);
+        let payment_pseudo_id = object::id_from_bytes(payment_id_bytes);
+        executable::register_placeholder(
+            context,
+            *action.placeholder_out.borrow(),
+            payment_pseudo_id
+        );
+    };
 }
 
 /// Execute do_execute_payment action (for recurring payments)

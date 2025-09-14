@@ -1,19 +1,22 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Complete Removal of Object Locking
+// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
 // ============================================================================
-// This module has been modified to remove ALL object locking functionality.
-// In DAO governance contexts, multiple proposals competing for the same 
-// resources is natural and desirable. The blockchain's ownership model already
-// provides necessary conflict resolution.
+// Core module managing Account<Config> with intent-based action execution.
 //
-// Changes in this fork:
+// CHANGES IN THIS FORK:
 // - REMOVED: lock_object() function - no longer needed
-// - REMOVED: unlock_object() function - no longer needed  
+// - REMOVED: unlock_object() function - no longer needed
 // - ADDED: cancel_intent() function - allows config-authorized intent cancellation
+// - Intent system now uses typed actions with BCS validation
+// - Integration with new typed Intent system
+// - Type safety through compile-time checks
+// - Removed ~100 lines of object locking code
 //
-// The removal of locking eliminates ~100 lines of complex code and prevents
-// the critical footgun where objects could become permanently locked if cleanup
-// wasn't performed correctly after intent cancellation/expiration.
+// RATIONALE:
+// In DAO governance, multiple proposals competing for the same resources is
+// natural and desirable. The blockchain's ownership model already provides
+// necessary conflict resolution. Removal prevents the critical footgun where
+// objects could become permanently locked if cleanup wasn't performed correctly.
 // ============================================================================
 
 /// This is the core module managing the account Account<Config>.
@@ -114,7 +117,8 @@ public struct ObjectTrackerState has copy, store {
     // Maximum objects before auto-disabling deposits
     max_objects: u128,
     // Whitelisted types that bypass restrictions (O(1) lookups with VecSet)
-    whitelisted_types: VecSet<TypeName>,
+    // Store canonical string representation for serializability
+    whitelisted_types: VecSet<String>,
 }
 
 // === Events ===
@@ -138,7 +142,7 @@ public fun max_whitelist_size(): u64 {
 
 /// Default max objects - can be changed in future upgrades
 public fun default_max_objects(): u128 {
-    1000  // Adjust this in future upgrades if needed
+    10000  // Adjust this in future upgrades if needed
 }
 
 //**************************************************************************************************//
@@ -194,29 +198,29 @@ public(package) fun apply_deposit_config<Config>(
 /// Apply whitelist changes
 public(package) fun apply_whitelist_changes<Config>(
     account: &mut Account<Config>,
-    add_types: &vector<TypeName>,
-    remove_types: &vector<TypeName>
+    add_types: &vector<String>,
+    remove_types: &vector<String>
 ) {
     let tracker = ensure_object_tracker(account);
-    
+
     // Remove types first
     let mut i = 0;
     while (i < remove_types.length()) {
-        let type_name = remove_types[i];
-        vec_set::remove(&mut tracker.whitelisted_types, &type_name);
+        let type_str = &remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, type_str);
         i = i + 1;
     };
-    
+
     // Add new types with size check
     i = 0;
     while (i < add_types.length()) {
-        let type_name = add_types[i];
-        if (!vec_set::contains(&tracker.whitelisted_types, &type_name)) {
+        let type_str = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_str)) {
             assert!(
                 vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
                 EWhitelistTooLarge
             );
-            vec_set::insert(&mut tracker.whitelisted_types, type_name);
+            vec_set::insert(&mut tracker.whitelisted_types, type_str);
         };
         i = i + 1;
     };
@@ -230,7 +234,7 @@ public fun confirm_execution<Config, Outcome: drop + store>(
     account: &mut Account<Config>, 
     executable: Executable<Outcome>,
 ) {
-    let actions_length = executable.intent().actions().length();
+    let actions_length = executable.intent().action_specs().length();
     assert!(executable.action_idx() == actions_length, EActionsRemaining);
     
     let intent = executable.destroy();
@@ -304,7 +308,9 @@ public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, c
     // Check if type is whitelisted
     let is_whitelisted = {
         let tracker = ensure_object_tracker(account);
-        vec_set::contains(&tracker.whitelisted_types, &type_name)
+        let ascii_str = type_name::into_string(type_name);
+        let type_str = ascii_str.to_string();
+        vec_set::contains(&tracker.whitelisted_types, &type_str)
     };
     
     // Only apply restrictions to non-coin, non-whitelisted types
@@ -557,10 +563,11 @@ public fun new_auth<Config, CW: drop>(
 /// Returns a tuple of the outcome that must be validated and the executable. Can only be called from the config module.
 public fun create_executable<Config, Outcome: store + copy, CW: drop>(
     account: &mut Account<Config>,
-    key: String, 
+    key: String,
     clock: &Clock,
     version_witness: VersionWitness,
     config_witness: CW,
+    ctx: &mut TxContext, // Now essential for creating ExecutionContext
 ): (Outcome, Executable<Outcome>) {
     account.deps().check(version_witness);
     assert_is_config_module(account, config_witness);
@@ -571,7 +578,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
 
     (
         *intent.outcome(),
-        executable::new(intent) 
+        executable::new(intent, ctx) // Pass ctx to create ExecutionContext
     )
 }
 
@@ -674,32 +681,32 @@ public fun configure_object_deposits<Config>(
 public fun manage_type_whitelist<Config>(
     auth: Auth,
     account: &mut Account<Config>,
-    add_types: vector<TypeName>,
-    remove_types: vector<TypeName>,
+    add_types: vector<String>,
+    remove_types: vector<String>,
 ) {
     account.verify(auth);
-    
+
     let tracker = ensure_object_tracker(account);
-    
+
     // Remove types first (in case of duplicates in add/remove)
     let mut i = 0;
     while (i < remove_types.length()) {
-        let type_name = remove_types[i];
-        vec_set::remove(&mut tracker.whitelisted_types, &type_name);
+        let type_str = &remove_types[i];
+        vec_set::remove(&mut tracker.whitelisted_types, type_str);
         i = i + 1;
     };
-    
+
     // Add new types (check size limit)
     i = 0;
     while (i < add_types.length()) {
-        let type_name = add_types[i];
-        if (!vec_set::contains(&tracker.whitelisted_types, &type_name)) {
+        let type_str = add_types[i];
+        if (!vec_set::contains(&tracker.whitelisted_types, &type_str)) {
             // Check size limit before adding
             assert!(
                 vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
                 EWhitelistTooLarge
             );
-            vec_set::insert(&mut tracker.whitelisted_types, type_name);
+            vec_set::insert(&mut tracker.whitelisted_types, type_str);
         };
         i = i + 1;
     };
@@ -707,7 +714,7 @@ public fun manage_type_whitelist<Config>(
 }
 
 /// Get whitelisted types for inspection/debugging
-public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<TypeName> {
+public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<String> {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         vec_set::into_keys(tracker.whitelisted_types)  // Convert VecSet to vector
@@ -720,8 +727,11 @@ public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<Type
 public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
+        // Convert TypeName to String for the lookup
         let type_name = type_name::with_defining_ids<T>();
-        vec_set::contains(&tracker.whitelisted_types, &type_name)
+        let ascii_str = type_name::into_string(type_name);
+        let type_str = ascii_str.to_string();
+        vec_set::contains(&tracker.whitelisted_types, &type_str)
     } else {
         false
     }
@@ -775,7 +785,9 @@ public(package) fun receive<Config, T: key + store>(
     let is_coin = is_coin_type(type_name);
     
     let tracker = ensure_object_tracker(account);
-    let is_whitelisted = vec_set::contains(&tracker.whitelisted_types, &type_name);
+    let ascii_str = type_name::into_string(type_name);
+    let type_str = ascii_str.to_string();
+    let is_whitelisted = vec_set::contains(&tracker.whitelisted_types, &type_str);
     
     // Only count non-coin, non-whitelisted types
     if (!is_coin && !is_whitelisted) {
@@ -1192,12 +1204,14 @@ public fun close_deposits_for_testing<Config>(account: &mut Account<Config>) {
 public fun check_can_receive_object<Config, T>(account: &Account<Config>) {
     let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
     let type_name = type_name::with_defining_ids<T>();
-    
-    assert!(tracker.deposits_open || tracker.whitelisted_types.contains(&type_name), EDepositsDisabled);
-    
+    let ascii_str = type_name::into_string(type_name);
+    let type_str = ascii_str.to_string();
+
+    assert!(tracker.deposits_open || tracker.whitelisted_types.contains(&type_str), EDepositsDisabled);
+
     // For test purposes, we'll treat all objects the same
     // In production, coins don't count against limits but for tests this is fine
-    if (!tracker.whitelisted_types.contains(&type_name)) {
+    if (!tracker.whitelisted_types.contains(&type_str)) {
         assert!(tracker.object_count < tracker.max_objects, EObjectLimitReached);
     };
 }

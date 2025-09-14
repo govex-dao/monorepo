@@ -14,7 +14,7 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
-    executable::Executable,
+    executable::{Self, Executable},
     intents::Expired,
     version_witness::VersionWitness,
 };
@@ -38,7 +38,7 @@ const EOverflow: u64 = 9;
 // === Action Structs ===
 
 /// Action to initiate DAO dissolution
-public struct InitiateDissolutionAction has store {
+public struct InitiateDissolutionAction has store, drop, copy {
     reason: String,
     distribution_method: u8, // 0: pro-rata, 1: equal, 2: custom
     burn_unsold_tokens: bool,
@@ -46,23 +46,23 @@ public struct InitiateDissolutionAction has store {
 }
 
 /// Action to batch distribute multiple assets
-public struct BatchDistributeAction has store {
+public struct BatchDistributeAction has store, drop, copy {
     asset_types: vector<String>, // Type names of assets to distribute
 }
 
 /// Action to finalize dissolution and destroy the DAO
-public struct FinalizeDissolutionAction has store {
+public struct FinalizeDissolutionAction has store, drop, copy {
     final_recipient: address, // For any remaining dust
     destroy_account: bool,
 }
 
 /// Action to cancel dissolution (if allowed)
-public struct CancelDissolutionAction has store {
+public struct CancelDissolutionAction has store, drop, copy {
     reason: String,
 }
 
 /// Action to calculate pro rata shares for distribution
-public struct CalculateProRataSharesAction has store {
+public struct CalculateProRataSharesAction has store, drop, copy {
     /// Total supply of asset tokens (excluding DAO-owned)
     total_supply: u64,
     /// Whether to exclude DAO treasury tokens
@@ -70,13 +70,13 @@ public struct CalculateProRataSharesAction has store {
 }
 
 /// Action to cancel all active streams
-public struct CancelAllStreamsAction has store {
+public struct CancelAllStreamsAction has store, drop, copy {
     /// Whether to return stream balances to treasury
     return_to_treasury: bool,
 }
 
 /// Action to withdraw all AMM liquidity
-public struct WithdrawAmmLiquidityAction<phantom AssetType, phantom StableType> has store {
+public struct WithdrawAmmLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
     /// Pool ID to withdraw from
     pool_id: ID,
     /// Whether to burn LP tokens after withdrawal
@@ -84,7 +84,7 @@ public struct WithdrawAmmLiquidityAction<phantom AssetType, phantom StableType> 
 }
 
 /// Action to distribute all treasury assets pro rata
-public struct DistributeAssetsAction<phantom CoinType> has store {
+public struct DistributeAssetsAction<phantom CoinType> has store, drop, copy {
     /// Holders who will receive distributions (address -> token amount held)
     holders: vector<address>,
     /// Amount of tokens each holder has
