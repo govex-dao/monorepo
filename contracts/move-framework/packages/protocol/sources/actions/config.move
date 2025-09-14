@@ -1,16 +1,16 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Configuration Management
+// FORK MODIFICATION NOTICE - Config with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module manages Account settings and configuration updates.
 //
 // CHANGES IN THIS FORK:
-// - Config actions use type markers in framework_action_types
-// - ConfigUpdateDeps, ConfigToggleUnverified, ConfigUpdateMetadata,
-//   ConfigUpdateDeposits, ConfigManageWhitelist type markers
-// - Replaced string-based descriptors with compile-time type safety
-// - add_typed_action() replaces add_action_with_descriptor()
+// - Config actions use type markers: ConfigUpdateDeps, ConfigToggleUnverified,
+//   ConfigUpdateDeposits, ConfigManageWhitelist
+// - Implemented serialize-then-destroy pattern for all 4 action types
+// - Added destruction functions for explicit resource management
+// - Actions serialize to bytes before adding to intent via add_typed_action()
 // - Better separation between config, deps, and metadata updates
-// - Support for batch configuration changes in DAO governance
+// - Type-safe action validation through compile-time TypeName comparison
 //
 // RATIONALE:
 // Ensures DAOs can safely update configuration without risking inconsistent
@@ -67,19 +67,19 @@ public struct ConfigureDepositsIntent() has drop;
 public struct ManageWhitelistIntent() has drop;
 
 /// Action struct wrapping the deps account field into an action
-public struct ConfigDepsAction has store, drop {
+public struct ConfigDepsAction has drop, store {
     deps: vector<Dep>,
 }
 /// Action struct wrapping the unverified_allowed account field into an action
-public struct ToggleUnverifiedAllowedAction has store, drop {}
+public struct ToggleUnverifiedAllowedAction has drop, store {}
 /// Action to configure object deposit settings
-public struct ConfigureDepositsAction has store, drop {
+public struct ConfigureDepositsAction has drop, store {
     enable: bool,
     new_max: Option<u128>,
     reset_counter: bool,
 }
 /// Action to manage type whitelist for deposits
-public struct ManageWhitelistAction has store, drop {
+public struct ManageWhitelistAction has drop, store {
     add_types: vector<String>,
     remove_types: vector<String>,
 }
@@ -101,6 +101,28 @@ fun peel_deps_as_vectors(reader: &mut BCS): (vector<String>, vector<address>, ve
         i = i + 1;
     };
     (names, addrs, versions)
+}
+
+// === Destruction Functions ===
+
+/// Destroy a ConfigDepsAction after serialization
+public fun destroy_config_deps_action(action: ConfigDepsAction) {
+    let ConfigDepsAction { deps: _ } = action;
+}
+
+/// Destroy a ToggleUnverifiedAllowedAction after serialization
+public fun destroy_toggle_unverified_action(action: ToggleUnverifiedAllowedAction) {
+    let ToggleUnverifiedAllowedAction {} = action;
+}
+
+/// Destroy a ConfigureDepositsAction after serialization
+public fun destroy_configure_deposits_action(action: ConfigureDepositsAction) {
+    let ConfigureDepositsAction { enable: _, new_max: _, reset_counter: _ } = action;
+}
+
+/// Destroy a ManageWhitelistAction after serialization
+public fun destroy_manage_whitelist_action(action: ManageWhitelistAction) {
+    let ManageWhitelistAction { add_types: _, remove_types: _ } = action;
 }
 
 /// Helper to deserialize vector<String>
@@ -200,11 +222,21 @@ public fun request_config_deps<Config, Outcome: store>(
         ConfigDepsIntent(),   
         ctx,
         |intent, iw| {
+            // Create the action struct
+            let action = ConfigDepsAction { deps: deps_inner };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                ConfigDepsAction { deps: deps_inner },
                 framework_action_types::config_update_deps(),
+                action_data,
                 iw
             );
+
+            // Explicitly destroy the action struct
+            destroy_config_deps_action(action);
         },
     );
 }
@@ -271,11 +303,21 @@ public fun request_toggle_unverified_allowed<Config, Outcome: store>(
         ToggleUnverifiedAllowedIntent(),
         ctx,
         |intent, iw| {
+            // Create the action struct
+            let action = ToggleUnverifiedAllowedAction {};
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                ToggleUnverifiedAllowedAction {},
                 framework_action_types::config_toggle_unverified(),
+                action_data,
                 iw
             );
+
+            // Explicitly destroy the action struct
+            destroy_toggle_unverified_action(action);
         },
     );
 }
@@ -325,11 +367,21 @@ public fun request_configure_deposits<Config, Outcome: store>(
         ConfigureDepositsIntent(),
         ctx,
         |intent, iw| {
+            // Create the action struct
+            let action = ConfigureDepositsAction { enable, new_max, reset_counter };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                ConfigureDepositsAction { enable, new_max, reset_counter },
                 framework_action_types::config_update_deposits(),
+                action_data,
                 iw
             );
+
+            // Explicitly destroy the action struct
+            destroy_configure_deposits_action(action);
         },
     );
 }
@@ -395,11 +447,21 @@ public fun request_manage_whitelist<Config, Outcome: store>(
         ManageWhitelistIntent(),
         ctx,
         |intent, iw| {
+            // Create the action struct
+            let action = ManageWhitelistAction { add_types, remove_types };
+
+            // Serialize it
+            let action_data = bcs::to_bytes(&action);
+
+            // Add to intent with pre-serialized bytes
             intent.add_typed_action(
-                ManageWhitelistAction { add_types, remove_types },
                 framework_action_types::config_manage_whitelist(),
+                action_data,
                 iw
             );
+
+            // Explicitly destroy the action struct
+            destroy_manage_whitelist_action(action);
         },
     );
 }

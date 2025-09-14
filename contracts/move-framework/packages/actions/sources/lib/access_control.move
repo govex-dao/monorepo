@@ -1,15 +1,15 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Access Control
+// FORK MODIFICATION NOTICE - Access Control with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module manages capability-based access control for Account actions.
 //
 // CHANGES IN THIS FORK:
-// - Actions use type markers from framework_action_types module
-// - AccessControlStore, AccessControlBorrow, AccessControlReturn type markers
-// - Added BCS validation for action deserialization
-// - Actions validate their type via BCS comparison with ActionSpec
-// - Integrated with new Intent system using add_typed_action()
-// - Compile-time type safety replaces string-based descriptors
+// - Actions use type markers: AccessControlBorrow, AccessControlReturn
+// - Implemented serialize-then-destroy pattern for resource safety
+// - Added destruction functions: destroy_borrow_action, destroy_return_action
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Enforces matching ReturnAction for every BorrowAction in intent
+// - Type-safe action validation through compile-time TypeName comparison
 // ============================================================================
 /// Developers can restrict access to functions in their own package with a Cap that can be locked into an Account. 
 /// The Cap can be borrowed upon approval and used in other move calls within the same ptb before being returned.
@@ -43,7 +43,7 @@ use account_actions::version;
 use account_extensions::framework_action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// Removed - add_typed_action is now called directly
 
 // === Errors ===
 
@@ -56,9 +56,9 @@ const ENoReturn: u64 = 0;
 public struct CapKey<phantom Cap>() has copy, drop, store;
 
 /// Action giving access to the Cap.
-public struct BorrowAction<phantom Cap> has store, drop {}
+public struct BorrowAction<phantom Cap> has drop, store {}
 /// This hot potato is created upon approval to ensure the cap is returned.
-public struct ReturnAction<phantom Cap> has store, drop {}
+public struct ReturnAction<phantom Cap> has drop, store {}
 
 // === Public functions ===
 
@@ -79,18 +79,40 @@ public fun has_lock<Config, Cap>(
     account.has_managed_asset(CapKey<Cap>())
 }
 
+// === Destruction Functions ===
+
+/// Destroy a BorrowAction after serialization
+public fun destroy_borrow_action<Cap>(action: BorrowAction<Cap>) {
+    let BorrowAction {} = action;
+}
+
+/// Destroy a ReturnAction after serialization
+public fun destroy_return_action<Cap>(action: ReturnAction<Cap>) {
+    let ReturnAction {} = action;
+}
+
 // Intent functions
 
 /// Creates and returns a BorrowAction.
 public fun new_borrow<Outcome, Cap, IW: drop>(
-    intent: &mut Intent<Outcome>, 
-    intent_witness: IW,    
+    intent: &mut Intent<Outcome>,
+    intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = BorrowAction<Cap> {};
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        BorrowAction<Cap> {},
         framework_action_types::access_control_borrow(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_borrow_action(action);
 }
 
 /// Processes a BorrowAction and returns a Borrowed hot potato and the Cap.
@@ -141,14 +163,24 @@ public fun delete_borrow<Cap>(expired: &mut Expired) {
 
 /// Creates and returns a ReturnAction.
 public fun new_return<Outcome, Cap, IW: drop>(
-    intent: &mut Intent<Outcome>, 
+    intent: &mut Intent<Outcome>,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = ReturnAction<Cap> {};
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        ReturnAction<Cap> {},
         framework_action_types::access_control_return(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_return_action(action);
 }
 
 /// Returns a Cap to the Account and validates the ReturnAction.

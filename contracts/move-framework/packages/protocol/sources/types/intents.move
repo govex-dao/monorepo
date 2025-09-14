@@ -1,18 +1,20 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
+// FORK MODIFICATION NOTICE - Intents with Serialize-Then-Destroy Pattern
 // ============================================================================
 // Core module managing Intents with type-safe action execution.
 //
 // MAJOR CHANGES IN THIS FORK:
 //
 // 1. REMOVED OBJECT LOCKING:
-//    Original: Intents had `locked: VecSet<ID>` field for pessimistic locking
-//    New: No locking - multiple intents can reference same objects
-//    - Removed lock(), unlock(), and locked() functions
-//    - Removed EObjectAlreadyLocked and EObjectNotLocked errors
+//    - No locking - multiple intents can reference same objects
 //    - Conflicts resolved naturally by blockchain (first to execute wins)
 //
-// 2. TYPE-BASED ACTION SYSTEM:
+// 2. SERIALIZE-THEN-DESTROY PATTERN:
+//    - add_typed_action() now accepts pre-serialized bytes instead of action structs
+//    - Enables explicit destruction of action structs after serialization
+//    - Maintains BCS compatibility while improving resource safety
+//
+// 3. TYPE-BASED ACTION SYSTEM:
 //    Original: Used action_descriptors with string categories (b"treasury")
 //    New: Uses action_types: vector<TypeName> for compile-time safety
 //    - Removed dependency on action_descriptor module
@@ -45,6 +47,7 @@ use sui::{
     bag::{Self, Bag},
     dynamic_field,
     clock::Clock,
+    object::{Self, ID},
 };
 
 // === Aliases ===
@@ -135,6 +138,10 @@ public struct Expired {
     account: address,
     // action specs that expired or were executed
     action_specs: vector<ActionSpec>,
+    // NEW: Track which actions were executed for proper destruction
+    executed_actions: vector<bool>,
+    // intent ID for tracking
+    intent_id: ID,
 }
 
 /// Params of an intent to reduce boilerplate.
@@ -162,16 +169,14 @@ public(package) fun reserve_placeholder_id<Outcome>(
     id
 }
 
-/// Add an action specification to the intent
-public fun add_action_spec<Outcome, Action: store + drop, T: drop, IW: drop>(
+/// Add an action specification with pre-serialized bytes (serialize-then-destroy pattern)
+public fun add_action_spec<Outcome, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
-    action_struct: Action,
     action_type_witness: T,
+    action_data_bytes: vector<u8>,
     intent_witness: IW,
 ) {
     intent.assert_is_witness(intent_witness);
-
-    let action_data_bytes = bcs::to_bytes(&action_struct);
 
     // Validate action data size to prevent excessively large actions
     assert!(
@@ -179,7 +184,7 @@ public fun add_action_spec<Outcome, Action: store + drop, T: drop, IW: drop>(
         EActionDataTooLarge
     );
 
-    // Create and store the action spec with BCS-serialized action (single source of truth)
+    // Create and store the action spec with BCS-serialized action
     let spec = ActionSpec {
         version: CURRENT_ACTION_VERSION,
         action_type: type_name::with_defining_ids<T>(),
@@ -231,28 +236,53 @@ public fun new_params_with_rand_key(
 
 // REMOVED: Old add_action function without types - use add_typed_action instead
 
-/// Add a typed action for type-safe routing and approval tracking
-/// This is now equivalent to add_action_spec
-public fun add_typed_action<Outcome, Action: store + drop, T: drop, IW: drop>(
+/// Add a typed action with pre-serialized bytes (serialize-then-destroy pattern)
+/// Callers must serialize the action and then explicitly destroy it
+public fun add_typed_action<Outcome, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
-    action: Action,
     action_type: T,
+    action_data: vector<u8>,
     intent_witness: IW,
 ) {
-    add_action_spec(intent, action, action_type, intent_witness);
+    add_action_spec(intent, action_type, action_data, intent_witness);
 }
 
 public fun remove_action_spec(
     expired: &mut Expired,
 ): ActionSpec {
+    // Also mark as not executed when removing
+    expired.executed_actions.remove(0);
     expired.action_specs.remove(0)
+}
+
+/// Mark an action as executed in the Expired struct
+public fun mark_action_executed(
+    expired: &mut Expired,
+    index: u64,
+) {
+    let executed = vector::borrow_mut(&mut expired.executed_actions, index);
+    *executed = true;
+}
+
+/// Check if an action was executed
+public fun is_action_executed(
+    expired: &Expired,
+    index: u64,
+): bool {
+    *vector::borrow(&expired.executed_actions, index)
+}
+
+/// Get the number of actions in the Expired struct
+public fun expired_action_count(expired: &Expired): u64 {
+    expired.action_specs.length()
 }
 
 public use fun destroy_empty_expired as Expired.destroy_empty;
 public fun destroy_empty_expired(expired: Expired) {
-    let Expired { action_specs, .. } = expired;
+    let Expired { action_specs, executed_actions, .. } = expired;
     assert!(action_specs.is_empty(), EActionsNotEmpty);
-    // vector doesn't need explicit destroy
+    assert!(executed_actions.is_empty(), EActionsNotEmpty);
+    // vectors don't need explicit destroy
 }
 
 // === View functions ===
@@ -485,9 +515,19 @@ public(package) fun destroy_intent<Outcome: store + drop>(
     intents: &mut Intents,
     key: String,
 ): Expired {
-    let Intent<Outcome> { account, action_specs, .. } = intents.inner.remove(key);
+    let Intent<Outcome> { account, action_specs, key, .. } = intents.inner.remove(key);
+    let num_actions = action_specs.length();
+    let mut executed_actions = vector::empty<bool>();
+    let mut i = 0;
+    while (i < num_actions) {
+        vector::push_back(&mut executed_actions, false);
+        i = i + 1;
+    };
 
-    Expired { account, action_specs }
+    // Create a dummy ID for now - in production you might want to use a hash of the key
+    let intent_id = object::id_from_address(@0x0);
+
+    Expired { account, action_specs, executed_actions, intent_id }
 }
 
 // === Private functions ===

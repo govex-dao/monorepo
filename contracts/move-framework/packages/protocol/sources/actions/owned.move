@@ -1,5 +1,5 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
+// FORK MODIFICATION NOTICE - Owned Objects with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module manages withdrawal and transfer of owned objects from Account.
 //
@@ -7,11 +7,9 @@
 // - REMOVED: ALL pessimistic locking logic from original implementation
 // - Multiple proposals can now reference the same objects
 // - First-to-execute wins, others fail naturally via blockchain ownership
-// - new_withdraw(): Just adds the action - no validation or locking
-// - do_withdraw(): Just receives the object - no lock/unlock dance
-// - delete_withdraw(): Trivial cleanup - no unlocking needed
-// - merge_and_split(): Works without any lock checks
-// - REMOVED: EObjectLocked error entirely
+// - Implemented serialize-then-destroy pattern for WithdrawAction
+// - Added destroy_withdraw_action function for explicit destruction
+// - Actions serialize to bytes before adding to intent via add_typed_action()
 // - OwnedWithdraw action uses type marker from framework_action_types
 // - Compile-time type safety replaces string-based descriptors
 //
@@ -54,9 +52,16 @@ const EWrongObject: u64 = 0;
 // === Structs ===
 
 /// Action guarding access to account owned objects which can only be received via this action
-public struct WithdrawAction has store, drop {
+public struct WithdrawAction has drop, store {
     // the owned object we want to access
     object_id: ID,
+}
+
+// === Destruction Functions ===
+
+/// Destroy a WithdrawAction after serialization
+public fun destroy_withdraw_action(action: WithdrawAction) {
+    let WithdrawAction { object_id: _ } = action;
 }
 
 // === Public functions ===
@@ -70,11 +75,22 @@ public fun new_withdraw<Config, Outcome, IW: drop>(
 ) {
     intent.assert_is_account(account.addr());
     // No validation needed - conflicts are natural in DAO governance
+
+    // Create the action struct
+    let action = WithdrawAction { object_id };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        WithdrawAction { object_id },
         framework_action_types::owned_withdraw(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_withdraw_action(action);
 }
 
 /// Executes a WithdrawAction and returns the object

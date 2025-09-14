@@ -1,16 +1,15 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Package Upgrade Management
+// FORK MODIFICATION NOTICE - Package Upgrade with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module manages UpgradeCap operations with timelock for Account.
 //
 // CHANGES IN THIS FORK:
 // - Actions use type markers: PackageUpgrade, PackageCommit, PackageRestrict
-// - Added 'drop' ability to UpgradeAction and RestrictAction structs
-// - Integrated BCS validation for action deserialization
-// - Actions use typed Intent system with add_typed_action()
-// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
-// - Type-safe action validation through ActionSpec comparison
-// - Compile-time type safety replaces string-based descriptors
+// - Implemented serialize-then-destroy pattern for all 3 action types
+// - Added destruction functions: destroy_upgrade_action, destroy_commit_action, destroy_restrict_action
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
+// - Type-safe action validation through compile-time TypeName comparison
 // ============================================================================
 /// Package managers can lock UpgradeCaps in the account. Caps can't be unlocked, this is to enforce the policies.
 /// Any rule can be defined for the upgrade lock. The module provide a timelock rule by default, based on execution time.
@@ -33,6 +32,7 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_actions::{
     version,
@@ -40,13 +40,14 @@ use account_actions::{
 use account_extensions::framework_action_types::{Self, PackageUpgrade, PackageCommit, PackageRestrict};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// Removed - add_typed_action is now called directly
 
 // === Error ===
 
 const ELockAlreadyExists: u64 = 0;
 const EUpgradeTooEarly: u64 = 1;
 const EPackageDoesntExist: u64 = 2;
+const EUnsupportedActionVersion: u64 = 3;
 
 // === Structs ===
 
@@ -70,19 +71,19 @@ public struct UpgradeIndex has store {
 }
 
 /// Action to upgrade a package using a locked UpgradeCap.
-public struct UpgradeAction has store, drop {
+public struct UpgradeAction has drop, store {
     // name of the package
     name: String,
     // digest of the package build we want to publish
     digest: vector<u8>,
 }
 /// Action to commit an upgrade.
-public struct CommitAction has store, drop {
+public struct CommitAction has drop, store {
     // name of the package
     name: String,
 }
 /// Action to restrict the policy of a locked UpgradeCap.
-public struct RestrictAction has store, drop {
+public struct RestrictAction has drop, store {
     // name of the package
     name: String,
     // downgrades to this policy
@@ -204,7 +205,24 @@ public fun get_package_name<Config>(
     };
     
     package_name
-} 
+}
+
+// === Destruction Functions ===
+
+/// Destroy an UpgradeAction after serialization
+public fun destroy_upgrade_action(action: UpgradeAction) {
+    let UpgradeAction { name: _, digest: _ } = action;
+}
+
+/// Destroy a CommitAction after serialization
+public fun destroy_commit_action(action: CommitAction) {
+    let CommitAction { name: _ } = action;
+}
+
+/// Destroy a RestrictAction after serialization
+public fun destroy_restrict_action(action: RestrictAction) {
+    let RestrictAction { name: _, policy: _ } = action;
+}
 
 // Intent functions
 
@@ -212,14 +230,24 @@ public fun get_package_name<Config>(
 public fun new_upgrade<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     name: String,
-    digest: vector<u8>, 
+    digest: vector<u8>,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = UpgradeAction { name, digest };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        UpgradeAction { name, digest },
         framework_action_types::package_upgrade(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_upgrade_action(action);
 }    
 
 /// Processes an UpgradeAction and returns a UpgradeTicket.
@@ -237,10 +265,17 @@ public fun do_upgrade<Config, Outcome: store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
     let action_data = intents::action_spec_data(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let name = bcs::peel_vec_u8(&mut reader).to_string();
     let digest = bcs::peel_vec_u8(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     assert!(
         clock.timestamp_ms() >= executable.intent().creation_time() + get_time_delay(account, name),
@@ -268,11 +303,21 @@ public fun new_commit<Outcome, IW: drop>(
     name: String,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = CommitAction { name };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        CommitAction { name },
         framework_action_types::package_commit(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_commit_action(action);
 }    
 
 // must be called after UpgradeAction is processed, there cannot be any other action processed before
@@ -291,9 +336,16 @@ public fun do_commit<Config, Outcome: store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
     let action_data = intents::action_spec_data(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let name = bcs::peel_vec_u8(&mut reader).to_string();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);
     cap_mut.commit_upgrade(receipt);
@@ -316,14 +368,24 @@ public fun delete_commit(expired: &mut Expired) {
 public fun new_restrict<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     name: String,
-    policy: u8, 
+    policy: u8,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = RestrictAction { name, policy };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        RestrictAction { name, policy },
         framework_action_types::package_restrict(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_restrict_action(action);
 }    
 
 /// Processes a RestrictAction and updates the UpgradeCap policy.
@@ -340,10 +402,17 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
     let action_data = intents::action_spec_data(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let name = bcs::peel_vec_u8(&mut reader).to_string();
     let policy = bcs::peel_u8(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     if (policy == package::additive_policy()) {
         let cap_mut: &mut UpgradeCap = account.borrow_managed_asset_mut(UpgradeCapKey(name), version_witness);

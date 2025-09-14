@@ -1,16 +1,15 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Kiosk Management
+// FORK MODIFICATION NOTICE - Kiosk Management with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module manages NFT operations in Kiosks for Account.
 //
 // CHANGES IN THIS FORK:
 // - Actions use type markers: KioskTake, KioskList
-// - Added 'drop' ability to TakeAction and ListAction structs
-// - Integrated BCS validation for action deserialization
-// - Actions use typed Intent system with add_typed_action()
-// - Enhanced imports for better modularity (bcs::Self, executable::Self)
-// - Type-safe action validation through ActionSpec comparison
-// - Compile-time type safety replaces string-based descriptors
+// - Implemented serialize-then-destroy pattern for both action types
+// - Added destruction functions: destroy_take_action, destroy_list_action
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Returns TransferRequest hot potato for completing NFT transfers
+// - Type-safe action validation through compile-time TypeName comparison
 // ============================================================================
 /// Authenticated users can place nfts from their kiosk into the account's without passing through the intent process.
 /// Nfts can be transferred into any other Kiosk. Upon resolution, the recipient must execute the transfer.
@@ -41,7 +40,7 @@ use account_actions::version;
 use account_extensions::framework_action_types::{Self, KioskTake, KioskList};
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// Removed - add_typed_action is now called directly
 
 // === Errors ===
 
@@ -53,7 +52,7 @@ const EWrongReceiver: u64 = 0;
 public struct KioskOwnerKey(String) has copy, drop, store;
 
 /// Action transferring nfts from the account's kiosk to another one
-public struct TakeAction has store, drop {
+public struct TakeAction has drop, store {
     // name of the Kiosk
     name: String,
     // id of the nfts to transfer
@@ -62,7 +61,7 @@ public struct TakeAction has store, drop {
     recipient: address,
 }
 /// Action listing nfts for purchase
-public struct ListAction has store, drop {
+public struct ListAction has drop, store {
     // name of the Kiosk
     name: String,
     // id of the nft to list
@@ -188,6 +187,18 @@ public fun close<Config>(
     account.keep(profits, ctx);
 }
 
+// === Destruction Functions ===
+
+/// Destroy a TakeAction after serialization
+public fun destroy_take_action(action: TakeAction) {
+    let TakeAction { name: _, nft_id: _, recipient: _ } = action;
+}
+
+/// Destroy a ListAction after serialization
+public fun destroy_list_action(action: ListAction) {
+    let ListAction { name: _, nft_id: _, price: _ } = action;
+}
+
 // Intent functions
 
 /// Creates a new TakeAction and adds it to an intent.
@@ -198,11 +209,21 @@ public fun new_take<Outcome, IW: drop>(
     recipient: address,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = TakeAction { name, nft_id, recipient };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        TakeAction { name, nft_id, recipient },
         framework_action_types::kiosk_take(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_take_action(action);
 }
 
 /// Processes a TakeAction, resolves the rules and places the nft into the recipient's kiosk.
@@ -273,11 +294,21 @@ public fun new_list<Outcome, IW: drop>(
     price: u64,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = ListAction { name, nft_id, price };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        ListAction { name, nft_id, price },
         framework_action_types::kiosk_list(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_list_action(action);
 }
 
 /// Processes a ListAction and lists the nft for purchase.
@@ -314,3 +345,4 @@ public fun delete_list(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
+

@@ -1,16 +1,15 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Vesting Management
+// FORK MODIFICATION NOTICE - Vesting with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module provides comprehensive vesting functionality with streaming.
 //
 // CHANGES IN THIS FORK:
 // - Actions use type markers: VestingCreate, VestingCancel
-// - Added 'drop' ability to CreateAction and CancelAction structs
-// - Integrated BCS validation for action deserialization
-// - Actions use typed Intent system with add_typed_action()
-// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
-// - Type-safe action validation through ActionSpec comparison
-// - Compile-time type safety replaces string-based descriptors
+// - Implemented serialize-then-destroy pattern for both action types
+// - Added destruction functions: destroy_create_vesting_action, destroy_cancel_vesting_action
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Comprehensive vesting features: cliff periods, multiple beneficiaries, pausable
+// - Type-safe action validation through compile-time TypeName comparison
 // ============================================================================
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
@@ -135,7 +134,7 @@ public struct ClaimCap has key {
 }
 
 /// Action for creating a comprehensive vesting
-public struct CreateVestingAction<phantom CoinType> has store, drop {
+public struct CreateVestingAction<phantom CoinType> has drop, store {
     amount: u64,
     start_timestamp: u64,
     end_timestamp: u64,
@@ -150,7 +149,7 @@ public struct CreateVestingAction<phantom CoinType> has store, drop {
 }
 
 /// Action for canceling a vesting
-public struct CancelVestingAction has store, drop {
+public struct CancelVestingAction has drop, store {
     vesting_id: ID,
 }
 
@@ -212,6 +211,30 @@ public struct VestingTransferred has copy, drop {
     new_beneficiary: address,
 }
 
+// === Destruction Functions ===
+
+/// Destroy a CreateVestingAction after serialization
+public fun destroy_create_vesting_action<CoinType>(action: CreateVestingAction<CoinType>) {
+    let CreateVestingAction {
+        amount: _,
+        start_timestamp: _,
+        end_timestamp: _,
+        cliff_time: _,
+        recipient: _,
+        max_beneficiaries: _,
+        max_per_withdrawal: _,
+        min_interval_ms: _,
+        is_transferable: _,
+        is_cancelable: _,
+        metadata: _,
+    } = action;
+}
+
+/// Destroy a CancelVestingAction after serialization
+public fun destroy_cancel_vesting_action(action: CancelVestingAction) {
+    let CancelVestingAction { vesting_id: _ } = action;
+}
+
 // === Public Functions ===
 
 /// Proposes to create a comprehensive vesting
@@ -231,23 +254,33 @@ public fun new_vesting<Config, Outcome, CoinType, IW: drop>(
     metadata: Option<String>,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = CreateVestingAction<CoinType> {
+        amount,
+        start_timestamp,
+        end_timestamp,
+        cliff_time,
+        recipient,
+        max_beneficiaries,
+        max_per_withdrawal,
+        min_interval_ms,
+        is_transferable,
+        is_cancelable,
+        metadata,
+    };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        CreateVestingAction<CoinType> { 
-            amount, 
-            start_timestamp, 
-            end_timestamp,
-            cliff_time,
-            recipient,
-            max_beneficiaries,
-            max_per_withdrawal,
-            min_interval_ms,
-            is_transferable,
-            is_cancelable,
-            metadata,
-        },
         framework_action_types::vesting_create(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_create_vesting_action(action);
 }
 
 /// Creates the Vesting and ClaimCap objects from a CreateVestingAction
@@ -626,16 +659,26 @@ public fun update_metadata<CoinType>(
 
 /// Proposes to cancel a vesting
 public fun new_cancel_vesting<Config, Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>, 
+    intent: &mut Intent<Outcome>,
     _account: &Account<Config>,
     vesting_id: ID,
     intent_witness: IW,
 ) {
+    // Create the action struct
+    let action = CancelVestingAction { vesting_id };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        CancelVestingAction { vesting_id },
         framework_action_types::vesting_cancel(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_cancel_vesting_action(action);
 }
 
 /// Deletes the CreateVestingAction

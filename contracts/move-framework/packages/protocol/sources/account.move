@@ -1,5 +1,5 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Object Locking Removal & Type-Based Actions
+// FORK MODIFICATION NOTICE - Account with Hot Potato Execution
 // ============================================================================
 // Core module managing Account<Config> with intent-based action execution.
 //
@@ -7,8 +7,8 @@
 // - REMOVED: lock_object() function - no longer needed
 // - REMOVED: unlock_object() function - no longer needed
 // - ADDED: cancel_intent() function - allows config-authorized intent cancellation
-// - Intent system now uses typed actions with BCS validation
-// - Integration with new typed Intent system
+// - Modified create_executable() - no longer passes ctx (no ExecutionContext needed)
+// - Integration with hot potato results instead of ExecutionContext
 // - Type safety through compile-time checks
 // - Removed ~100 lines of object locking code
 //
@@ -578,7 +578,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
 
     (
         *intent.outcome(),
-        executable::new(intent, ctx) // Pass ctx to create ExecutionContext
+        executable::new(intent) // No ctx needed - using hot potato results
     )
 }
 

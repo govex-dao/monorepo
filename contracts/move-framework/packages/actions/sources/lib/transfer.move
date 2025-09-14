@@ -1,16 +1,15 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Type-Based Transfer Operations
+// FORK MODIFICATION NOTICE - Transfer with Serialize-Then-Destroy Pattern
 // ============================================================================
 // This module defines APIs to transfer assets owned or managed by Account.
 //
 // CHANGES IN THIS FORK:
 // - TransferAction uses TransferObject type marker from framework_action_types
-// - Added 'drop' ability to TransferAction struct
-// - Integrated BCS validation for action deserialization
-// - Actions use typed Intent system with add_typed_action()
-// - Enhanced imports for better modularity (bcs::Self, executable::Self, intents::Self)
-// - Type-safe action validation through ActionSpec comparison
-// - Compile-time type safety replaces string-based descriptors
+// - Implemented serialize-then-destroy pattern for resource safety
+// - Added destroy_transfer_action function for explicit destruction
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
+// - Type-safe action validation through compile-time TypeName comparison
 // ============================================================================
 /// This module defines apis to transfer assets owned or managed by the account.
 /// The intents can implement transfers for any action type (e.g. see owned or vault).
@@ -19,22 +18,34 @@ module account_actions::transfer;
 
 // === Imports ===
 
-use sui::bcs::{Self, BCS};
+use sui::bcs;
 use account_protocol::{
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
+    bcs_validation,
 };
 use account_extensions::framework_action_types;
 
 // === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+// Removed - add_typed_action is now called directly
+
+// === Errors ===
+
+const EUnsupportedActionVersion: u64 = 0;
 
 // === Structs ===
 
 /// Action used in combination with other actions (like WithdrawAction) to transfer objects to a recipient.
-public struct TransferAction has store, drop {
+public struct TransferAction has store {
     // address to transfer to
     recipient: address,
+}
+
+// === Destruction Functions ===
+
+/// Destroy a TransferAction after serialization
+public fun destroy_transfer_action(action: TransferAction) {
+    let TransferAction { recipient: _ } = action;
 }
 
 // === Public functions ===
@@ -45,11 +56,21 @@ public fun new_transfer<Outcome, IW: drop>(
     recipient: address,
     intent_witness: IW,
 ) {
+    // Create the action struct (no drop)
+    let action = TransferAction { recipient };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
     intent.add_typed_action(
-        TransferAction { recipient },
         framework_action_types::transfer_object(),
+        action_data,
         intent_witness
     );
+
+    // Explicitly destroy the action struct
+    destroy_transfer_action(action);
 }
 
 /// Processes a TransferAction and transfers an object to a recipient.
@@ -63,9 +84,16 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
     let spec = specs.borrow(executable.action_idx());
     let action_data = intents::action_spec_data(spec);
 
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
     let recipient = bcs::peel_address(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     transfer::public_transfer(object, recipient);
     executable::increment_action_idx(executable);
@@ -76,3 +104,4 @@ public fun delete_transfer(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
+

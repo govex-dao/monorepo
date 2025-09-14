@@ -1,3 +1,14 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Currency Intents with Hot Potato Results
+// ============================================================================
+// Intent helper module for currency operations.
+//
+// CHANGES IN THIS FORK:
+// - Updated to consume hot potato results (MintResult) from do_mint
+// - Added action_results::consume_mint_result() calls
+// - Ensures proper cleanup of hot potato results in intent chains
+// ============================================================================
+
 module account_actions::currency_intents;
 
 // === Imports ===
@@ -16,7 +27,8 @@ use account_protocol::{
     executable::Executable,
     intents::Params,
     owned,
-    intent_interface
+    intent_interface,
+    action_results
 };
 use account_actions::{
     transfer as acc_transfer,
@@ -189,7 +201,9 @@ public fun execute_mint_and_transfer<Config, Outcome: store, CoinType>(
         version::current(),
         MintAndTransferIntent(),
         |executable, iw| {
-            let coin = currency::do_mint<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
+            let (coin, result) = currency::do_mint<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
+            // Consume the hot potato result
+            action_results::consume_mint_result(result);
             acc_transfer::do_transfer(executable, coin, iw);
         }
     );
