@@ -103,6 +103,7 @@ public fun execute_intent(
     account: &mut Account<WeightedMultisig>,
     key: String,
     clock: &Clock,
+    ctx: &mut TxContext,
 ): Executable<Approvals> {
     let executable = account_protocol::account_interface::execute_intent!(
         account,
@@ -110,6 +111,7 @@ public fun execute_intent(
         clock,
         version::current(),
         Witness{},
+        ctx,
         |outcome: Approvals| {
             // final check before allowing execution
             weighted_multisig::validate_outcome(outcome, account.config(), b"".to_string());

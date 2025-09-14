@@ -19,6 +19,7 @@ use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
 use futarchy_vault::custody_actions;
 
 // Error codes
+const EActionTypeMismatch: u64 = 4;
 const EObjectIdMismatch: u64 = 5;
 const EResourceKeyMismatch: u64 = 6;
 const EWithdrawnObjectIdMismatch: u64 = 7;
@@ -39,17 +40,37 @@ public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // DAO approves
-    let approve: &custody_actions::ApproveCustodyAction<R> =
-        coexec_common::extract_action(&mut futarchy_exec, version::current());
+    // Verify we're at the right action types
+    use account_protocol::{executable, intents};
+    use futarchy_vault::custody_actions;
+
+    // Verify DAO action type
+    coexec_common::verify_current_action<FutarchyOutcome, custody_actions::ApproveCustodyAction<R>>(
+        &futarchy_exec,
+        EActionTypeMismatch
+    );
+
+    // Get action data safely with bounds checking
+    let dao_action_data = coexec_common::get_current_action_data(&futarchy_exec);
+
+    // Deserialize the approve action
+    let approve = custody_actions::approve_custody_action_from_bytes<R>(*dao_action_data);
     let (dao_id_expected, obj_id_expected, res_key_ref, _ctx_ref, expires_at) =
-        custody_actions::get_approve_custody_params(approve);
-    
-    // Council accepts
-    let accept: &custody_actions::AcceptIntoCustodyAction<R> =
-        coexec_common::extract_action(&mut council_exec, intent_witness);
+        custody_actions::get_approve_custody_params(&approve);
+
+    // Verify Council action type
+    coexec_common::verify_current_action<Approvals, custody_actions::AcceptIntoCustodyAction<R>>(
+        &council_exec,
+        EActionTypeMismatch
+    );
+
+    // Get council action data safely with bounds checking
+    let council_action_data = coexec_common::get_current_action_data(&council_exec);
+
+    // Deserialize the accept action
+    let accept = custody_actions::accept_into_custody_action_from_bytes<R>(*council_action_data);
     let (obj_id_council, res_key_council_ref, _ctx2_ref) =
-        custody_actions::get_accept_params(accept);
+        custody_actions::get_accept_params(&accept);
     
     // Policy/expiry checks
     coexec_common::enforce_custodian_policy(dao, council, policy_key);

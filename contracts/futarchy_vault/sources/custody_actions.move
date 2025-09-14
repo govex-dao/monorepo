@@ -327,3 +327,29 @@ public fun delete_accept_into_custody<R>(expired: &mut Expired) {
     let _spec = protocol_intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }
+
+// === Deserialization Functions ===
+
+/// Deserialize ApproveCustodyAction from bytes
+public fun approve_custody_action_from_bytes<R>(bytes: vector<u8>): ApproveCustodyAction<R> {
+    let mut bcs = bcs::new(bytes);
+
+    ApproveCustodyAction<R> {
+        dao_id: object::id_from_address(bcs.peel_address()),
+        object_id: object::id_from_address(bcs.peel_address()),
+        resource_key: string::utf8(bcs.peel_vec_u8()),
+        context: string::utf8(bcs.peel_vec_u8()),
+        expires_at: bcs.peel_u64(),
+    }
+}
+
+/// Deserialize AcceptIntoCustodyAction from bytes
+public fun accept_into_custody_action_from_bytes<R>(bytes: vector<u8>): AcceptIntoCustodyAction<R> {
+    let mut bcs = bcs::new(bytes);
+
+    AcceptIntoCustodyAction<R> {
+        object_id: object::id_from_address(bcs.peel_address()),
+        resource_key: string::utf8(bcs.peel_vec_u8()),
+        context: string::utf8(bcs.peel_vec_u8()),
+    }
+}

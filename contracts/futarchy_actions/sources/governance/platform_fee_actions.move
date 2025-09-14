@@ -164,13 +164,18 @@ public fun destroy_collect_platform_fee(action: CollectPlatformFeeAction) {
 
 /// Delete action from expired intent
 public fun delete_collect_platform_fee(expired: &mut Expired) {
-    let CollectPlatformFeeAction { vault_name: _, max_amount: _ } = expired.remove_action();
+    let spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_data(&spec);
+    let mut reader = bcs::new(*action_data);
+    // Deserialize and consume the data
+    let _ = bcs::peel_vec_u8(&mut reader); // vault_name
+    let _ = bcs::peel_u64(&mut reader); // max_amount
 }
 
 // === Intent Creation Functions (with serialize-then-destroy pattern) ===
 
 /// Add a CollectPlatformFee action to an intent
-public fun new_collect_platform_fee<Outcome, IW: drop>(
+public fun add_collect_platform_fee_to_intent<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     vault_name: String,
     max_amount: u64,

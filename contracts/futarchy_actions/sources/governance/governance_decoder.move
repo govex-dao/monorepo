@@ -7,10 +7,7 @@ use std::{string::String, type_name};
 use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use futarchy_actions::governance_actions::{
-    CreateProposalAction,
-    ProposalReservationAction,
-};
+use futarchy_actions::governance_actions::CreateProposalAction;
 
 // === Decoder Objects ===
 
@@ -19,10 +16,8 @@ public struct CreateProposalActionDecoder has key, store {
     id: UID,
 }
 
-/// Decoder for ProposalReservationAction
-public struct ProposalReservationActionDecoder has key, store {
-    id: UID,
-}
+// ProposalReservationActionDecoder removed - action type not yet implemented
+
 
 // === Decoder Functions ===
 
@@ -81,26 +76,7 @@ public fun decode_create_proposal_action(
     ]
 }
 
-/// Decode a ProposalReservationAction
-public fun decode_proposal_reservation_action(
-    _decoder: &ProposalReservationActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-
-    let reservation_id = bcs::peel_address(&mut bcs_data);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"reservation_id".to_string(),
-            reservation_id.to_string(),
-            b"ID".to_string(),
-        ),
-    ]
-}
+// decode_proposal_reservation_action removed - action type not yet implemented
 
 // === Registration Functions ===
 
@@ -110,7 +86,7 @@ public fun register_decoders(
     ctx: &mut TxContext,
 ) {
     register_create_proposal_decoder(registry, ctx);
-    register_proposal_reservation_decoder(registry, ctx);
+    // register_proposal_reservation_decoder(registry, ctx);  // Not yet implemented
 }
 
 fun register_create_proposal_decoder(
@@ -122,11 +98,13 @@ fun register_create_proposal_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_proposal_reservation_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = ProposalReservationActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<ProposalReservationAction>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}
+// Commented out until ProposalReservationAction is implemented
+// fun register_proposal_reservation_decoder(
+//     registry: &mut ActionDecoderRegistry,
+//     ctx: &mut TxContext,
+// ) {
+//     let decoder = ProposalReservationActionDecoder { id: object::new(ctx) };
+//     // ProposalReservationAction not yet implemented
+//     // let type_key = type_name::with_defining_ids<ProposalReservationAction>();
+//     // dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+// }

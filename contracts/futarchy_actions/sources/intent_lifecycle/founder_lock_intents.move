@@ -6,7 +6,7 @@ use sui::{clock::Clock, object::ID};
 use account_protocol::intents::Intent;
 use futarchy_actions::incentives_and_options_actions;
 use futarchy_actions::incentives_and_options_proposal::PriceTier;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;

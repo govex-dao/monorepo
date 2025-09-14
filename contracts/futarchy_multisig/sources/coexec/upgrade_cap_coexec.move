@@ -16,7 +16,7 @@ use account_protocol::{
     owned, // withdraw helper
 };
 use futarchy_core::version;
-use futarchy_core::futarchy_config::{Self, FutarchyConfig, GenericApproval};
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_multisig::{
     coexec_common,
     security_council,

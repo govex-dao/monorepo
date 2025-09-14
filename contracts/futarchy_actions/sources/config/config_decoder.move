@@ -4,7 +4,7 @@ module futarchy_actions::config_decoder;
 // === Imports ===
 
 use std::{string::String, type_name, ascii};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs, url};
+use sui::{object::{Self, UID}, dynamic_object_field, bcs::{Self, BCS}, url};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_actions::config_actions::{

@@ -4,22 +4,24 @@ module futarchy_lifecycle::oracle_actions;
 use std::string::{Self, String};
 use std::vector;
 use std::option::{Self, Option};
-use sui::coin::{Self, Coin};
+use sui::coin::{Self, Coin, TreasuryCap};
 use sui::clock::Clock;
 use sui::transfer;
 use sui::tx_context::TxContext;
 use sui::object::{Self, ID};
 use sui::event;
+use sui::bcs::{Self, BCS};
 use account_protocol::{
-    intents::{Expired, Intent},
-    executable::{Self, Executable, ExecutionContext},
+    intents::{Self, Expired, Intent, ActionSpec},
+    executable::{Self, Executable},
     account::{Self, Account},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_actions::currency;
 use futarchy_core::{
     action_validation,
-    action_types,{
+    action_types,
     futarchy_config::FutarchyConfig,
     version,
 };
@@ -32,6 +34,7 @@ use futarchy_markets::{
 use futarchy_multisig::{
     weighted_multisig::{Self, WeightedMultisig},
 };
+// ResourceRequest removed - using direct execution pattern
 
 // === Errors ===
 const EPriceThresholdNotMet: u64 = 0;
@@ -453,14 +456,26 @@ public fun do_read_oracle_price<AssetType, StableType, Outcome: store, IW: drop>
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ReadOraclePriceAction<AssetType, StableType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ReadOraclePrice>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let emit_event = reader.peel_bool();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
+    // Increment action index
+    executable::increment_action_idx(executable);
+
     // Read the price
     assert!(spot_amm::is_twap_ready(spot_pool, clock), ETwapNotReady);
     let price = spot_amm::get_twap_mut(spot_pool, clock);
-    
+
     // Emit event if requested
-    if (action.emit_event) {
+    if (emit_event) {
         event::emit(OraclePriceRead {
             oracle_type: 0, // Spot oracle
             price,
@@ -479,20 +494,29 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Get the action from the executable and extract necessary data
-    let action = executable::next_action<Outcome, ConditionalMintAction<AssetType>, IW>(executable, witness);
-    
-    // Extract all needed values from action before any mutable operations
-    let recipient = action.recipient;
-    let mint_amount = action.mint_amount;
-    let price_threshold = action.price_threshold;
-    let is_above_threshold = action.is_above_threshold;
-    let is_repeatable = action.is_repeatable;
-    let execution_count = action.execution_count;
-    let cooldown_ms = action.cooldown_ms;
-    let earliest_time = action.earliest_execution_time;
-    let latest_time = action.latest_execution_time;
-    let last_execution = action.last_execution;
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ConditionalMint>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let recipient = bcs::peel_address(&mut reader);
+    let mint_amount = bcs::peel_u64(&mut reader);
+    let price_threshold = bcs::peel_u128(&mut reader);
+    let is_above_threshold = bcs::peel_bool(&mut reader);
+    let is_repeatable = bcs::peel_bool(&mut reader);
+    let execution_count = bcs::peel_u64(&mut reader);
+    let cooldown_ms = bcs::peel_u64(&mut reader);
+    let has_earliest = bcs::peel_bool(&mut reader);
+    let earliest_time = if (has_earliest) { option::some(bcs::peel_u64(&mut reader)) } else { option::none() };
+    let has_latest = bcs::peel_bool(&mut reader);
+    let latest_time = if (has_latest) { option::some(bcs::peel_u64(&mut reader)) } else { option::none() };
+    let has_last = bcs::peel_bool(&mut reader);
+    let last_execution = if (has_last) { option::some(bcs::peel_u64(&mut reader)) } else { option::none() };
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     // Validate time conditions
     let now = clock.timestamp_ms();
@@ -541,7 +565,7 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
         mint_amount
     };
     
-    // Now we can safely call do_mint since we're no longer borrowing from action
+    // Mint using stored TreasuryCap
     let minted_coin = currency::do_mint<FutarchyConfig, Outcome, AssetType, IW>(
         executable,
         account,
@@ -549,14 +573,13 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
         witness,
         ctx
     );
-    
-    // Verify the minted amount matches what we calculated
-    let minted_value = coin::value(&minted_coin);
-    assert!(minted_value == actual_mint, EInvalidMintAmount);
-    
+
+    // Verify minted amount
+    assert!(coin::value(&minted_coin) == actual_mint, EInvalidMintAmount);
+
     // Transfer to recipient
     transfer::public_transfer(minted_coin, recipient);
-    
+
     // Emit event
     event::emit(ConditionalMintExecuted {
         recipient,
@@ -564,7 +587,12 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
         price_at_execution: current_price,
         timestamp: now,
     });
+
+    // Increment action index after all is done
+    executable::increment_action_idx(executable);
 }
+
+// fulfill_conditional_mint removed - using direct execution pattern
 
 /// Execute tiered mint using stored TreasuryCap
 public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop>(
@@ -576,8 +604,19 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Get the action from executable
-    let action = executable::next_action<Outcome, TieredMintAction<AssetType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::TieredMint>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: TieredMintAction<AssetType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Validate time conditions
     let now = clock.timestamp_ms();
@@ -734,8 +773,18 @@ public fun exercise_option<AssetType, StableType, Outcome: store, IW: copy + dro
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Get the action from executable
-    let action = executable::next_action<Outcome, ConditionalMintAction<AssetType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ConditionalMint>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: ConditionalMintAction<AssetType> = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Verify this is an option (not a grant)
     assert!(action.is_option, EInvalidMintAmount);

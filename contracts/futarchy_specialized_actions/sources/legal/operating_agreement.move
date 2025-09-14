@@ -13,7 +13,7 @@ use sui::{
     event,
     dynamic_field as df,
     object::{Self, ID, UID},
-    tx_context::TxContext,
+    tx_context::{Self, TxContext},
 };
 use account_protocol::{
     account::{Self, Account},
@@ -337,7 +337,7 @@ public fun new(
     agreement
 }
 
-// === Execution Functions (Called by action_dispatcher) ===
+// === Execution Functions (Called by PTB) ===
 
 /// Execute creation of a fresh OperatingAgreement and store it in the Account
 /// This creates an empty OA (no lines), with the allow_insert/remove flags set as requested.
@@ -904,6 +904,50 @@ public fun set_global_immutable(
         immutable: true,
         timestamp_ms: clock.timestamp_ms(),
     });
+}
+
+// === Public Wrapper Functions ===
+
+/// Public wrapper for updating a line
+public fun update_line(
+    agreement: &mut OperatingAgreement,
+    line_id: ID,
+    new_text: String,
+    clock: &Clock,
+) {
+    update_line_internal(agreement, line_id, new_text, clock);
+}
+
+/// Public wrapper for inserting a line after another line, returns the new line ID
+public fun insert_line_after(
+    agreement: &mut OperatingAgreement,
+    prev_line_id: ID,
+    new_text: String,
+    new_difficulty: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    insert_line_after_internal(agreement, prev_line_id, new_text, new_difficulty, clock, ctx)
+}
+
+/// Public wrapper for inserting a line at the beginning, returns the new line ID
+public fun insert_line_at_beginning(
+    agreement: &mut OperatingAgreement,
+    new_text: String,
+    new_difficulty: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    insert_line_at_beginning_internal(agreement, new_text, new_difficulty, clock, ctx)
+}
+
+/// Public wrapper for removing a line
+public fun remove_line(
+    agreement: &mut OperatingAgreement,
+    line_id: ID,
+    clock: &Clock,
+) {
+    remove_line_internal(agreement, line_id, clock);
 }
 
 // === View Functions ===

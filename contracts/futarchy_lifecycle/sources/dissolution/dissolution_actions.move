@@ -276,11 +276,18 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &CalculateProRataSharesAction = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let total_supply = action.total_supply;
-    let exclude_dao_tokens = action.exclude_dao_tokens;
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let total_supply = bcs::peel_u64(&mut reader);
+    let exclude_dao_tokens = bcs::peel_bool(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
     let config = account::config(account);
@@ -317,10 +324,17 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action: &CancelAllStreamsAction = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let return_to_treasury = action.return_to_treasury;
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CancelAllStreams>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let return_to_treasury = bcs::peel_bool(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
     let config = account::config(account);
@@ -353,6 +367,9 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     
     let _ = payment_ids;
     let _ = version;
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute withdraw AMM liquidity action
@@ -363,11 +380,18 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
-    let action: &WithdrawAmmLiquidityAction<AssetType, StableType> = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let pool_id = action.pool_id;
-    let burn_lp_tokens = action.burn_lp_tokens;
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::WithdrawAmmLiquidity>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = ID::from_bytes(bcs::peel_vec_u8(&mut reader));
+    let burn_lp_tokens = bcs::peel_bool(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
     let config = account::config(account);
@@ -414,12 +438,19 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     mut distribution_coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
-    let action: &DistributeAssetsAction<CoinType> = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let holders = &action.holders;
-    let holder_amounts = &action.holder_amounts;
-    let total_distribution_amount = action.total_distribution_amount;
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::DistributeAssets>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let holders = bcs::peel_vec_address(&mut reader);
+    let holder_amounts = bcs::peel_vec_u64(&mut reader);
+    let total_distribution_amount = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
     let config = account::config(account);
@@ -482,6 +513,9 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     
     let _ = version;
     let _ = ctx;
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 // === Cleanup Functions ===

@@ -5,6 +5,7 @@ module futarchy_actions::founder_lock_actions;
 use std::string::{Self, String};
 use std::vector;
 use std::option::{Self, Option};
+use sui::bcs::{Self, BCS};
 use sui::coin::{Self, Coin};
 use sui::clock::{Self, Clock};
 use sui::transfer;
@@ -13,6 +14,7 @@ use sui::object::{Self, ID};
 use sui::event;
 use account_protocol::{
     executable::{Self, Executable},
+    intents,
     account::{Self, Account},
     version_witness::VersionWitness,
 };
@@ -31,6 +33,7 @@ use futarchy_markets::{
     spot_amm::SpotAMM,
     proposal::Proposal,
 };
+use futarchy_core::{action_types, action_validation};
 
 // === Errors ===
 const EInvalidProposalId: u64 = 0;
@@ -125,10 +128,18 @@ public fun do_create_founder_lock_proposal<AssetType, StableType, Outcome: store
     _clock: &Clock,
     ctx: &mut TxContext,
 ): ResourceRequest<CreateFounderLockProposalAction<AssetType>> {
-    let action = executable::next_action<Outcome, CreateFounderLockProposalAction<AssetType>, IW>(
-        executable,
-        witness
-    );
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreateFounderLockProposal>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: CreateFounderLockProposalAction<AssetType> = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Return a resource request for the committed coins
     resource_requests::new_resource_request(action, ctx)
@@ -195,10 +206,18 @@ public fun do_execute_founder_lock<AssetType, StableType, Outcome: store, IW: dr
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ExecuteFounderLockAction, IW>(
-        executable,
-        witness
-    );
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ExecuteFounderLock>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: ExecuteFounderLockAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Validate IDs match
     assert!(
@@ -224,10 +243,18 @@ public fun do_update_founder_lock_recipient<AssetType, StableType, Outcome: stor
     founder_lock: &mut FounderLockProposal<AssetType, StableType>,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateFounderLockRecipientAction, IW>(
-        executable,
-        witness
-    );
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateFounderLockRecipient>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateFounderLockRecipientAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Validate IDs match
     assert!(
@@ -253,10 +280,18 @@ public fun do_withdraw_unlocked_tokens<AssetType, StableType, Outcome: store, IW
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, WithdrawUnlockedTokensAction, IW>(
-        executable,
-        witness
-    );
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::WithdrawUnlockedTokens>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: WithdrawUnlockedTokensAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Validate IDs match
     assert!(

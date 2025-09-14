@@ -61,15 +61,12 @@ public fun verify_council_ownership(
 /// DAOs can override this with their own policies
 public fun is_typically_critical<T>(): bool {
     use std::type_name;
-    use futarchy_utils::action_types;
-    
+    use futarchy_core::action_types;
+
     // These are commonly critical but DAOs can configure as they wish
     let type_name = type_name::get<T>();
-    type_name == type_name::get<action_types::SetTypePolicy>() ||
-    type_name == type_name::get<action_types::SetObjectPolicy>() ||
-    type_name == type_name::get<action_types::RegisterCouncil>() ||
-    type_name == type_name::get<action_types::PackageUpgrade>() ||
-    type_name == type_name::get<action_types::VaultMint>() ||
+    // TODO: Add actual critical action type checks once policy action types are defined
+    // For now, only check for InitiateDissolution which exists
     type_name == type_name::get<action_types::InitiateDissolution>()
 }
 

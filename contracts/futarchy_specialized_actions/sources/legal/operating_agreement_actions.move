@@ -1,5 +1,6 @@
-/// Operating agreement actions for futarchy DAOs
+/// Operating agreement actions for futarchy DAOs with composable hot potato support
 /// This module defines action structs and execution logic for operating agreement changes
+/// Uses hot potato pattern for passing IDs between actions in atomic transactions
 module futarchy_specialized_actions::operating_agreement_actions;
 
 // === Imports ===
@@ -54,7 +55,7 @@ public struct CreateOperatingAgreementAction has store, drop, copy {
 /// Represents a single atomic change to the operating agreement
 /// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
 /// Individual actions (UpdateLineAction, InsertLineAfterAction, etc.) are handled
-/// directly in the dispatcher. This wrapper is only used within batch operations.
+/// directly by PTB calls. This wrapper is only used within batch operations.
 public struct OperatingAgreementAction has store, drop, copy {
     action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
     // Only fields relevant to the action_type will be populated
@@ -391,7 +392,7 @@ public fun do_set_line_immutable<Outcome: store, IW: drop>(
         version::current()
     );
 
-    operating_agreement::set_line_immutable(agreement, line_id);
+    operating_agreement::set_line_immutable(agreement, line_id, _clock);
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -432,7 +433,7 @@ public fun do_set_insert_allowed<Outcome: store, IW: drop>(
         version::current()
     );
 
-    operating_agreement::set_insert_allowed(agreement, allowed);
+    operating_agreement::set_insert_allowed(agreement, allowed, _clock);
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -473,7 +474,7 @@ public fun do_set_remove_allowed<Outcome: store, IW: drop>(
         version::current()
     );
 
-    operating_agreement::set_remove_allowed(agreement, allowed);
+    operating_agreement::set_remove_allowed(agreement, allowed, _clock);
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -513,7 +514,7 @@ public fun do_set_global_immutable<Outcome: store, IW: drop>(
         version::current()
     );
 
-    operating_agreement::set_global_immutable(agreement);
+    operating_agreement::set_global_immutable(agreement, _clock);
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -740,9 +741,7 @@ public fun destroy_operating_agreement_action(action: OperatingAgreementAction) 
 }
 
 // === Intent Helper Functions ===
-// NOTE: Old helper functions that directly added to intents have been removed.
-// Use the new_*_action functions below to create action structs,
-// then add them with typed actions using add_typed_action.
+// NOTE: Helper functions to create action specs and add them to intents
 
 // === Helper Functions ===
 

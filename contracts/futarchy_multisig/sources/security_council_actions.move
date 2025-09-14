@@ -3,13 +3,44 @@
 /// through its own internal M-of-N governance process.
 module futarchy_multisig::security_council_actions;
 
-use std::{string::String, option::Option};
-use sui::object::ID;
-use account_protocol::intents::Expired;
+use std::{string::{Self, String}, option::Option};
+use sui::{object::{Self, ID}, bcs::{Self, BCS}, clock::Clock, tx_context::TxContext};
+use account_protocol::{
+    intents::{Self as protocol_intents, Expired, Intent, ActionSpec},
+    executable::{Self, Executable},
+    account::{Self, Account},
+    version_witness::VersionWitness,
+    bcs_validation,
+    action_validation,
+};
+use futarchy_core::{futarchy_config::FutarchyConfig, version};
 use futarchy_one_shot_utils::action_data_structs::{Self, CreateSecurityCouncilAction};
 
 /// Create a new Security Council (WeightedMultisig) for the DAO.
 // Moved to futarchy_one_shot_utils::action_data_structs
+
+// === Constants ===
+const EUnsupportedActionVersion: u64 = 1;
+/// Error when member and weight vectors have different lengths
+const EMemberWeightMismatch: u64 = 2;
+/// Error when member list is empty
+const EEmptyMemberList: u64 = 3;
+/// Error when threshold is zero
+const EInvalidThreshold: u64 = 4;
+/// Error when threshold exceeds total weight
+const EThresholdExceedsTotalWeight: u64 = 5;
+
+// === Witness Types for Action Validation ===
+public struct CreateSecurityCouncilWitness has drop {}
+public struct ApproveOAChangeWitness has drop {}
+public struct UpdateUpgradeRulesWitness has drop {}
+public struct UpdateCouncilMembershipWitness has drop {}
+public struct UnlockAndReturnUpgradeCapWitness has drop {}
+public struct ApproveGenericWitness has drop {}
+public struct SweepIntentsWitness has drop {}
+public struct CouncilCreateOptimisticIntentWitness has drop {}
+public struct CouncilExecuteOptimisticIntentWitness has drop {}
+public struct CouncilCancelOptimisticIntentWitness has drop {}
 
 /// Council's approval for an Operating Agreement change
 public struct ApproveOAChangeAction has store {
@@ -20,7 +51,7 @@ public struct ApproveOAChangeAction has store {
 
 // --- Constructors, Getters, Cleanup ---
 
-public fun new_create_council(
+public fun new_create_council_action(
     members: vector<address>,
     weights: vector<u64>,
     threshold: u64,
@@ -38,7 +69,7 @@ public fun delete_create_council(expired: &mut Expired) {
     let _action: CreateSecurityCouncilAction = expired.remove_action();
 }
 
-public fun new_approve_oa_change(dao_id: ID, batch_id: ID, expires_at: u64): ApproveOAChangeAction {
+public fun new_approve_oa_change_action(dao_id: ID, batch_id: ID, expires_at: u64): ApproveOAChangeAction {
     ApproveOAChangeAction { dao_id, batch_id, expires_at }
 }
 
@@ -105,10 +136,660 @@ public struct CouncilCancelOptimisticIntentAction has store {
     reason: String,
 }
 
-// --- Constructors, Getters, Cleanup ---
+// === Execution Functions (do_ pattern) ===
+
+/// Execute create security council action
+public fun do_create_security_council<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<CreateSecurityCouncilWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let members_len = bcs::peel_vec_length(&mut reader);
+    let mut members = vector[];
+    let mut i = 0;
+    while (i < members_len) {
+        members.push_back(bcs::peel_address(&mut reader));
+        i = i + 1;
+    };
+
+    let weights_len = bcs::peel_vec_length(&mut reader);
+    let mut weights = vector[];
+    i = 0;
+    while (i < weights_len) {
+        weights.push_back(bcs::peel_u64(&mut reader));
+        i = i + 1;
+    };
+
+    let threshold = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Input validation
+    assert!(members.length() == weights.length(), EMemberWeightMismatch);
+    assert!(members.length() > 0, EEmptyMemberList);
+    assert!(threshold > 0, EInvalidThreshold);
+
+    // Calculate total weight and ensure threshold doesn't exceed it
+    let mut total_weight = 0u64;
+    let mut j = 0;
+    while (j < weights.length()) {
+        total_weight = total_weight + *weights.borrow(j);
+        j = j + 1;
+    };
+    assert!(threshold <= total_weight, EThresholdExceedsTotalWeight);
+
+    // Note: Actual security council creation logic would go here
+    // This is just the validation and deserialization
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute approve OA change action
+public fun do_approve_oa_change<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<ApproveOAChangeWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let batch_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expires_at = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute update upgrade rules action
+public fun do_update_upgrade_rules<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<UpdateUpgradeRulesWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let package_name = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute update council membership action
+public fun do_update_council_membership<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<UpdateCouncilMembershipWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+
+    // Read new members
+    let members_len = bcs::peel_vec_length(&mut reader);
+    let mut new_members = vector[];
+    let mut i = 0;
+    while (i < members_len) {
+        new_members.push_back(bcs::peel_address(&mut reader));
+        i = i + 1;
+    };
+
+    // Read new weights
+    let weights_len = bcs::peel_vec_length(&mut reader);
+    let mut new_weights = vector[];
+    i = 0;
+    while (i < weights_len) {
+        new_weights.push_back(bcs::peel_u64(&mut reader));
+        i = i + 1;
+    };
+
+    let new_threshold = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Input validation
+    assert!(new_members.length() == new_weights.length(), EMemberWeightMismatch);
+    assert!(new_members.length() > 0, EEmptyMemberList);
+    assert!(new_threshold > 0, EInvalidThreshold);
+
+    // Calculate total weight and ensure threshold doesn't exceed it
+    let mut total_weight = 0u64;
+    let mut j = 0;
+    while (j < new_weights.length()) {
+        total_weight = total_weight + *new_weights.borrow(j);
+        j = j + 1;
+    };
+    assert!(new_threshold <= total_weight, EThresholdExceedsTotalWeight);
+
+    // Note: Actual council update logic would go here
+    // This is just the validation and deserialization
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute unlock and return upgrade cap action
+public fun do_unlock_and_return_upgrade_cap<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<UnlockAndReturnUpgradeCapWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let package_name = string::utf8(bcs::peel_vec_u8(&mut reader));
+    let return_vault_name = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute approve generic action
+public fun do_approve_generic<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<ApproveGenericWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let action_type = string::utf8(bcs::peel_vec_u8(&mut reader));
+    let resource_key = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Read metadata vector
+    let metadata_len = bcs::peel_vec_length(&mut reader);
+    let mut metadata = vector[];
+    let mut i = 0;
+    while (i < metadata_len) {
+        metadata.push_back(string::utf8(bcs::peel_vec_u8(&mut reader)));
+        i = i + 1;
+    };
+
+    let expires_at = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute sweep intents action
+public fun do_sweep_intents<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<SweepIntentsWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+
+    // Read intent keys vector
+    let keys_len = bcs::peel_vec_length(&mut reader);
+    let mut intent_keys = vector[];
+    let mut i = 0;
+    while (i < keys_len) {
+        intent_keys.push_back(string::utf8(bcs::peel_vec_u8(&mut reader)));
+        i = i + 1;
+    };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute council create optimistic intent action
+public fun do_council_create_optimistic_intent<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<CouncilCreateOptimisticIntentWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let intent_key = string::utf8(bcs::peel_vec_u8(&mut reader));
+    let title = string::utf8(bcs::peel_vec_u8(&mut reader));
+    let description = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute council execute optimistic intent action
+public fun do_council_execute_optimistic_intent<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<CouncilExecuteOptimisticIntentWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let intent_id = object::id_from_address(bcs::peel_address(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute council cancel optimistic intent action
+public fun do_council_cancel_optimistic_intent<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<CouncilCancelOptimisticIntentWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let intent_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let reason = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+// === New Constructor Functions with Serialize-Then-Destroy Pattern ===
+
+/// Create and add a create security council action to an intent
+public fun new_create_security_council<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&members));
+    data.append(bcs::to_bytes(&weights));
+    data.append(bcs::to_bytes(&threshold));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CreateSecurityCouncilWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add an approve OA change action to an intent
+public fun new_approve_oa_change<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    batch_id: ID,
+    expires_at: u64,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
+    data.append(bcs::to_bytes(&object::id_to_address(&batch_id)));
+    data.append(bcs::to_bytes(&expires_at));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        ApproveOAChangeWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add an update upgrade rules action to an intent
+public fun new_update_upgrade_rules<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    package_name: String,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&package_name.as_bytes()));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        UpdateUpgradeRulesWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add an update council membership action to an intent
+public fun new_update_council_membership<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_members: vector<address>,
+    new_weights: vector<u64>,
+    new_threshold: u64,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&new_members));
+    data.append(bcs::to_bytes(&new_weights));
+    data.append(bcs::to_bytes(&new_threshold));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        UpdateCouncilMembershipWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add an unlock and return upgrade cap action to an intent
+public fun new_unlock_and_return_upgrade_cap<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    package_name: String,
+    return_vault_name: String,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&package_name.as_bytes()));
+    data.append(bcs::to_bytes(&return_vault_name.as_bytes()));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        UnlockAndReturnUpgradeCapWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add an approve generic action to an intent
+public fun new_approve_generic<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    action_type: String,
+    resource_key: String,
+    metadata: vector<String>,
+    expires_at: u64,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
+    data.append(bcs::to_bytes(&action_type.as_bytes()));
+    data.append(bcs::to_bytes(&resource_key.as_bytes()));
+
+    // Serialize metadata vector
+    data.append(bcs::to_bytes(&metadata.length()));
+    let mut i = 0;
+    while (i < metadata.length()) {
+        data.append(bcs::to_bytes(&metadata[i].as_bytes()));
+        i = i + 1;
+    };
+
+    data.append(bcs::to_bytes(&expires_at));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        ApproveGenericWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add a sweep intents action to an intent
+public fun new_sweep_intents<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    intent_keys: vector<String>,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&intent_keys.length()));
+    let mut i = 0;
+    while (i < intent_keys.length()) {
+        data.append(bcs::to_bytes(&intent_keys[i].as_bytes()));
+        i = i + 1;
+    };
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SweepIntentsWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add a council create optimistic intent action to an intent
+public fun new_council_create_optimistic_intent<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    intent_key: String,
+    title: String,
+    description: String,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
+    data.append(bcs::to_bytes(&intent_key.as_bytes()));
+    data.append(bcs::to_bytes(&title.as_bytes()));
+    data.append(bcs::to_bytes(&description.as_bytes()));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CouncilCreateOptimisticIntentWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add a council execute optimistic intent action to an intent
+public fun new_council_execute_optimistic_intent<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    intent_id: ID,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
+    data.append(bcs::to_bytes(&object::id_to_address(&intent_id)));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CouncilExecuteOptimisticIntentWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+/// Create and add a council cancel optimistic intent action to an intent
+public fun new_council_cancel_optimistic_intent<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    intent_id: ID,
+    reason: String,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
+    data.append(bcs::to_bytes(&object::id_to_address(&intent_id)));
+    data.append(bcs::to_bytes(&reason.as_bytes()));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CouncilCancelOptimisticIntentWitness {},
+        data,
+        intent_witness,
+    );
+}
+
+// === Legacy Constructors (deprecated - use new_* functions above) ===
 
 // Optimistic Intent Constructors
-public fun new_council_create_optimistic_intent(
+public fun new_council_create_optimistic_intent_action(
     dao_id: ID,
     intent_key: String,
     title: String,
@@ -127,7 +808,7 @@ public fun delete_council_create_optimistic_intent(expired: &mut Expired) {
     let CouncilCreateOptimisticIntentAction {..} = expired.remove_action();
 }
 
-public fun new_council_execute_optimistic_intent(
+public fun new_council_execute_optimistic_intent_action(
     dao_id: ID,
     intent_id: ID,
 ): CouncilExecuteOptimisticIntentAction {
@@ -144,7 +825,7 @@ public fun delete_council_execute_optimistic_intent(expired: &mut Expired) {
     let CouncilExecuteOptimisticIntentAction {..} = expired.remove_action();
 }
 
-public fun new_council_cancel_optimistic_intent(
+public fun new_council_cancel_optimistic_intent_action(
     dao_id: ID,
     intent_id: ID,
     reason: String,
@@ -163,7 +844,7 @@ public fun delete_council_cancel_optimistic_intent(expired: &mut Expired) {
 }
 
 // Other Constructors
-public fun new_update_upgrade_rules(package_name: String): UpdateUpgradeRulesAction {
+public fun new_update_upgrade_rules_action(package_name: String): UpdateUpgradeRulesAction {
     UpdateUpgradeRulesAction { package_name }
 }
 
@@ -171,7 +852,7 @@ public fun get_update_upgrade_rules_params(action: &UpdateUpgradeRulesAction): &
     &action.package_name
 }
 
-public fun new_update_council_membership(
+public fun new_update_council_membership_action(
     new_members: vector<address>,
     new_weights: vector<u64>,
     new_threshold: u64,
@@ -185,7 +866,7 @@ public fun get_update_council_membership_params(
     (&action.new_members, &action.new_weights, action.new_threshold)
 }
 
-public fun new_unlock_and_return_cap(package_name: String, return_vault_name: String): UnlockAndReturnUpgradeCapAction {
+public fun new_unlock_and_return_cap_action(package_name: String, return_vault_name: String): UnlockAndReturnUpgradeCapAction {
     UnlockAndReturnUpgradeCapAction { package_name, return_vault_name }
 }
 
@@ -207,7 +888,7 @@ public fun delete_unlock_and_return_cap(expired: &mut Expired) {
 
 // --- Generic Approval Functions ---
 
-public fun new_approve_generic(
+public fun new_approve_generic_action(
     dao_id: ID,
     action_type: String,
     resource_key: String,
@@ -241,7 +922,7 @@ public fun delete_approve_generic(expired: &mut Expired) {
 
 // --- Sweep Intents Functions ---
 
-public fun new_sweep_intents_with_keys(intent_keys: vector<String>): SweepIntentsAction {
+public fun new_sweep_intents_action(intent_keys: vector<String>): SweepIntentsAction {
     SweepIntentsAction { intent_keys }
 }
 
@@ -251,5 +932,52 @@ public fun get_sweep_keys(action: &SweepIntentsAction): &vector<String> {
 
 public fun delete_sweep_intents(expired: &mut Expired) {
     let SweepIntentsAction {..} = expired.remove_action();
+}
+
+// === Destruction Functions ===
+
+/// Destroy an UpdateUpgradeRulesAction
+public fun destroy_update_upgrade_rules(action: UpdateUpgradeRulesAction) {
+    let UpdateUpgradeRulesAction { package_name: _ } = action;
+}
+
+/// Destroy an UpdateCouncilMembershipAction
+public fun destroy_update_council_membership(action: UpdateCouncilMembershipAction) {
+    let UpdateCouncilMembershipAction { new_members: _, new_weights: _, new_threshold: _ } = action;
+}
+
+/// Destroy an UnlockAndReturnUpgradeCapAction
+public fun destroy_unlock_and_return_upgrade_cap(action: UnlockAndReturnUpgradeCapAction) {
+    let UnlockAndReturnUpgradeCapAction { package_name: _, return_vault_name: _ } = action;
+}
+
+/// Destroy an ApproveGenericAction
+public fun destroy_approve_generic(action: ApproveGenericAction) {
+    let ApproveGenericAction { dao_id: _, action_type: _, resource_key: _, metadata: _, expires_at: _ } = action;
+}
+
+/// Destroy a SweepIntentsAction
+public fun destroy_sweep_intents(action: SweepIntentsAction) {
+    let SweepIntentsAction { intent_keys: _ } = action;
+}
+
+/// Destroy a CouncilCreateOptimisticIntentAction
+public fun destroy_council_create_optimistic_intent(action: CouncilCreateOptimisticIntentAction) {
+    let CouncilCreateOptimisticIntentAction { dao_id: _, intent_key: _, title: _, description: _ } = action;
+}
+
+/// Destroy a CouncilExecuteOptimisticIntentAction
+public fun destroy_council_execute_optimistic_intent(action: CouncilExecuteOptimisticIntentAction) {
+    let CouncilExecuteOptimisticIntentAction { dao_id: _, intent_id: _ } = action;
+}
+
+/// Destroy a CouncilCancelOptimisticIntentAction
+public fun destroy_council_cancel_optimistic_intent(action: CouncilCancelOptimisticIntentAction) {
+    let CouncilCancelOptimisticIntentAction { dao_id: _, intent_id: _, reason: _ } = action;
+}
+
+/// Destroy an ApproveOAChangeAction
+public fun destroy_approve_oa_change(action: ApproveOAChangeAction) {
+    let ApproveOAChangeAction { dao_id: _, batch_id: _, expires_at: _ } = action;
 }
 

@@ -21,6 +21,7 @@ use sui::{
     transfer,
     bag::Bag,
     tx_context::TxContext,
+    bcs::{Self, BCS},
 };
 use futarchy_core::{
     action_validation,
@@ -29,12 +30,12 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
 };
 use futarchy_multisig::weighted_list::{Self, WeightedList};
-use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
+// CreatePaymentAction is defined locally in this module
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
     bcs_validation,
     account::{Self, Account, Auth},
-    executable::{Self, Executable, ExecutionContext},
+    executable::{Self, Executable},
     version_witness::VersionWitness,
     intents,
 };
@@ -306,7 +307,22 @@ public struct PaymentConfig has store {
     budget_config: Option<BudgetStreamConfig>,
 }
 
-// CreatePaymentAction moved to futarchy_one_shot_utils::action_data_structs
+/// Action to create a payment (stream or one-time)
+public struct CreatePaymentAction<phantom CoinType> has store, drop, copy {
+    payment_type: u8,
+    source_mode: u8,
+    recipient: address,
+    amount: u64,
+    start_timestamp: u64,
+    end_timestamp: u64,
+    interval_or_cliff: u64,
+    total_payments: u64,
+    cancellable: bool,
+    description: String,
+    max_per_withdrawal: u64,
+    min_interval_ms: u64,
+    max_beneficiaries: u64,
+}
 
 /// Action to create a budget stream (Keep original structure)
 public struct CreateBudgetStreamAction<phantom CoinType> has store, drop, copy {
@@ -426,7 +442,10 @@ public fun new_create_payment_action<CoinType>(
 
 /// Create a new CancelPaymentAction
 public fun new_cancel_payment_action(payment_id: String): CancelPaymentAction {
-    CancelPaymentAction { payment_id }
+    CancelPaymentAction {
+        payment_id: option::some(payment_id),
+        placeholder_in: option::none()
+    }
 }
 
 /// Create a new RequestWithdrawalAction
@@ -434,14 +453,21 @@ public fun new_request_withdrawal_action<CoinType>(
     payment_id: String,
     amount: u64,
 ): RequestWithdrawalAction<CoinType> {
-    RequestWithdrawalAction { payment_id, amount }
+    RequestWithdrawalAction {
+        payment_id: option::some(payment_id),
+        placeholder_in: option::none(),
+        amount
+    }
 }
 
 /// Create a new ExecutePaymentAction
 public fun new_execute_payment_action<CoinType>(
     payment_id: String,
 ): ExecutePaymentAction<CoinType> {
-    ExecutePaymentAction { payment_id }
+    ExecutePaymentAction {
+        payment_id: option::some(payment_id),
+        placeholder_in: option::none()
+    }
 }
 
 // === Public Functions ===
@@ -455,9 +481,20 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Get the current action index before calling next_action
-    let action_idx = executable.action_idx();
-    let action = executable.next_action<Outcome, CreatePaymentAction<CoinType>, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreatePayment>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: CreatePaymentAction<CoinType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get the current action index and increment
+    let action_idx = executable::action_idx(executable);
+    executable::increment_action_idx(executable);
     
     // Note: Policy validation is handled by the PolicyRegistry in futarchy_multisig
     // Action types are tracked via TypeName in the Intent for type-safe routing
@@ -570,6 +607,9 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
         start_timestamp: action.start_timestamp,
         end_timestamp: action.end_timestamp,
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_cancel_payment action
@@ -581,7 +621,16 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     _clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, CancelPaymentAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CancelPayment>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: CancelPaymentAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     let (refund_coin, _refund_amount) = cancel_payment<CoinType>(
         account,
         action.payment_id,
@@ -604,7 +653,16 @@ public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + dr
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, CreateBudgetStreamAction<CoinType>, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreateBudgetStream>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: CreateBudgetStreamAction<CoinType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let mut config = PaymentConfig {
         payment_type: PAYMENT_TYPE_STREAM,
@@ -673,7 +731,16 @@ public fun do_execute_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let _action = executable.next_action<Outcome, ExecutePaymentAction<CoinType>, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ExecutePayment>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let _action: ExecutePaymentAction<CoinType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Execute and increment
     executable::increment_action_idx(executable);
@@ -688,7 +755,16 @@ public fun do_request_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, RequestWithdrawalAction<CoinType>, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RequestWithdrawal>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: RequestWithdrawalAction<CoinType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -718,6 +794,9 @@ public fun do_request_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop
     budget_config.next_withdrawal_id = withdrawal_id + 1;
     
     table::add(&mut budget_config.pending_withdrawals, withdrawal_id, withdrawal);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_process_pending_withdrawal action
@@ -729,7 +808,16 @@ public fun do_process_pending_withdrawal<Outcome: store, CoinType: drop, IW: cop
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, ProcessPendingWithdrawalAction<CoinType>, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ProcessPendingWithdrawal>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: ProcessPendingWithdrawalAction<CoinType> = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -750,6 +838,9 @@ public fun do_process_pending_withdrawal<Outcome: store, CoinType: drop, IW: cop
     
     assert!(clock::timestamp_ms(clock) >= withdrawal.processes_at, EWithdrawalNotReady);
     assert!(!withdrawal.is_challenged, EWithdrawalChallenged);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_update_payment_recipient action
@@ -761,7 +852,16 @@ public fun do_update_payment_recipient<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, UpdatePaymentRecipientAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdatePaymentRecipient>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: UpdatePaymentRecipientAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -793,7 +893,16 @@ public fun do_add_withdrawer<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, AddWithdrawerAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::AddWithdrawer>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: AddWithdrawerAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -821,7 +930,16 @@ public fun do_remove_withdrawers<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, RemoveWithdrawersAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RemoveWithdrawers>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: RemoveWithdrawersAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -842,6 +960,9 @@ public fun do_remove_withdrawers<Outcome: store, IW: drop>(
         };
         i = i + 1;
     };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_toggle_payment action
@@ -853,7 +974,16 @@ public fun do_toggle_payment<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable.next_action<Outcome, TogglePaymentAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::TogglePayment>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: TogglePaymentAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
     
     let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
         account,
@@ -865,6 +995,9 @@ public fun do_toggle_payment<Outcome: store, IW: drop>(
     let config = table::borrow_mut(&mut storage.payments, action.payment_id);
     
     config.active = !action.paused;
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_challenge_withdrawals action
@@ -876,7 +1009,16 @@ public fun do_challenge_withdrawals<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let _action = executable.next_action<Outcome, ChallengeWithdrawalsAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ChallengeWithdrawals>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let _action: ChallengeWithdrawalsAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Execute and increment
     executable::increment_action_idx(executable);
@@ -891,7 +1033,16 @@ public fun do_cancel_challenged_withdrawals<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let _action = executable.next_action<Outcome, CancelChallengedWithdrawalsAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CancelChallengedWithdrawals>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let _action: CancelChallengedWithdrawalsAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Execute and increment
     executable::increment_action_idx(executable);

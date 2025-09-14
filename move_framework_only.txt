@@ -77,11 +77,6 @@ public fun length(extensions: &Extensions): u64 {
     extensions.by_name.length()
 }
 
-/// Returns the number of extensions (alias for length)
-public fun size(extensions: &Extensions): u64 {
-    extensions.by_name.length()
-}
-
 /// Returns the extension by name
 public fun get_by_name(extensions: &Extensions, name: String): &Extension {
     assert!(extensions.by_name.contains(name), EExtensionNotFound);
@@ -1532,7 +1527,12 @@ fun test_reorder_accounts_wrong_account() {
 }// ============================================================================
 // FORK MODIFICATION NOTICE - BCS Validation Security Module
 // ============================================================================
-// NEW FILE: Added to support type-based action system with proper validation.
+// NEW FILE added to the fork for BCS deserialization security.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Added validate_all_bytes_consumed() function
+// - Prevents trailing data attacks in action deserialization
+// - Required by all decoder modules for security
 //
 // PURPOSE:
 // - Ensures all BCS bytes are consumed when deserializing actions
@@ -1567,6 +1567,149 @@ public fun validate_all_bytes_consumed(reader: BCS) {
     // Check if there are any remaining bytes
     let remaining = reader.into_remainder_bytes();
     assert!(remaining.is_empty(), ETrailingActionData);
+}// ============================================================================
+// Action Type Validation Helper Module
+// ============================================================================
+// This module provides a centralized type validation helper for action handlers.
+// It ensures type safety by verifying that action specs match expected types
+// before deserialization, preventing type confusion vulnerabilities.
+//
+// SECURITY: This is a critical security module that prevents wrong actions
+// from being executed by wrong handlers.
+// ============================================================================
+
+module account_protocol::action_validation;
+
+// === Imports ===
+
+use std::type_name::{Self, TypeName};
+use account_protocol::intents::{Self, ActionSpec};
+
+// === Errors ===
+
+const EWrongActionType: u64 = 0;
+
+// === Public Functions ===
+
+/// Assert that an ActionSpec has the expected action type.
+/// This MUST be called before deserializing action data in any do_* function.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to validate
+///
+/// # Aborts
+/// * `EWrongActionType` - If the action type doesn't match the expected type
+///
+/// # Example
+/// ```move
+/// public fun do_spend<...>(...) {
+///     let spec = specs.borrow(executable.action_idx());
+///     action_validation::assert_action_type<VaultSpend>(spec);
+///     // Now safe to deserialize
+///     let action_data = intents::action_spec_data(spec);
+/// }
+/// ```
+public fun assert_action_type<T: drop>(spec: &ActionSpec) {
+    let expected_type = type_name::with_defining_ids<T>();
+    assert!(
+        intents::action_spec_type(spec) == expected_type,
+        EWrongActionType
+    );
+}
+
+/// Assert that an ActionSpec has the expected action type with custom error.
+/// Useful when modules want to use their own error codes.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to validate
+/// * `error_code` - Custom error code to use if validation fails
+///
+/// # Aborts
+/// * Custom error code if the action type doesn't match
+public fun assert_action_type_with_error<T: drop>(
+    spec: &ActionSpec,
+    error_code: u64
+) {
+    let expected_type = type_name::with_defining_ids<T>();
+    assert!(
+        intents::action_spec_type(spec) == expected_type,
+        error_code
+    );
+}
+
+/// Check if an ActionSpec matches the expected type without aborting.
+/// Returns true if types match, false otherwise.
+///
+/// # Type Parameters
+/// * `T` - The expected action type (must have `drop`)
+///
+/// # Arguments
+/// * `spec` - The ActionSpec to check
+///
+/// # Returns
+/// * `bool` - true if action type matches, false otherwise
+public fun is_action_type<T: drop>(spec: &ActionSpec): bool {
+    let expected_type = type_name::with_defining_ids<T>();
+    intents::action_spec_type(spec) == expected_type
+}
+
+/// Get the TypeName for a given action type.
+/// Useful for modules that need to work with TypeNames directly.
+///
+/// # Type Parameters
+/// * `T` - The action type (must have `drop`)
+///
+/// # Returns
+/// * `TypeName` - The TypeName of the action type
+public fun get_action_type_name<T: drop>(): TypeName {
+    type_name::with_defining_ids<T>()
+}
+
+// === Test Functions ===
+
+#[test_only]
+use account_protocol::intents::test_helpers;
+
+#[test_only]
+public struct TestAction has drop {}
+
+#[test_only]
+public struct WrongAction has drop {}
+
+#[test]
+fun test_assert_action_type_success() {
+    let spec = test_helpers::create_test_action_spec<TestAction>();
+    assert_action_type<TestAction>(&spec);
+    // Should not abort
+}
+
+#[test]
+#[expected_failure(abort_code = EWrongActionType)]
+fun test_assert_action_type_failure() {
+    let spec = test_helpers::create_test_action_spec<TestAction>();
+    assert_action_type<WrongAction>(&spec);
+    // Should abort with EWrongActionType
+}
+
+#[test]
+fun test_is_action_type() {
+    let spec = test_helpers::create_test_action_spec<TestAction>();
+    assert!(is_action_type<TestAction>(&spec));
+    assert!(!is_action_type<WrongAction>(&spec));
+}
+
+#[test]
+#[expected_failure(abort_code = 999)]
+fun test_assert_action_type_with_custom_error() {
+    let spec = test_helpers::create_test_action_spec<TestAction>();
+    assert_action_type_with_error<WrongAction>(&spec, 999);
+    // Should abort with custom error 999
 }// ============================================================================
 // FORK MODIFICATION NOTICE - Account with Hot Potato Execution
 // ============================================================================
@@ -2310,11 +2453,11 @@ public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
 fun is_coin_type(type_name: TypeName): bool {
     // Check if the type is a Coin type by checking if it starts with
     // the Coin module prefix from the Sui framework
-    let type_addr = type_name::get_address(&type_name);
+    let type_addr = type_name::address_string(&type_name);
     
     // Check if this is from the Sui framework and the module is "coin"
     if (type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()) {
-        let module_name = type_name::get_module(&type_name);
+        let module_name = type_name::module_string(&type_name);
         module_name == b"coin".to_ascii_string()
     } else {
         false
@@ -3474,7 +3617,7 @@ public fun chain_results(chain: &ResultChain): &vector<ID> {
 //    New: Uses action_types: vector<TypeName> for compile-time safety
 //    - Removed dependency on action_descriptor module
 //    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
-//    - Type names captured using type_name::get<T>() for zero-overhead routing
+//    - Type names captured using type_name::with_defining_ids<T>() for zero-overhead routing
 //
 // BENEFITS:
 // - Eliminates risk of permanently locked objects from incomplete cleanup
@@ -5040,7 +5183,34 @@ fun test_multiple_entries() {
     assert_eq(get(&metadata, b"version".to_string()), b"1.0".to_string());
     
     destroy(metadata);
-}/// Simple, elegant schema system with active decoder objects
+}// ============================================================================
+// FORK MODIFICATION NOTICE - On-Chain Schema System
+// ============================================================================
+// NEW FILE added to the fork for self-describing actions.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Created ActionDecoderRegistry as global shared object
+// - Added HumanReadableField for standardized decoded output
+// - Added assert_decoder_exists for mandatory validation
+// - Decoders attached as dynamic object fields keyed by TypeName
+//
+// PURPOSE:
+// Provides the foundation for on-chain action decoding, ensuring all actions
+// can be transparently decoded and displayed to users before execution.
+//
+// ARCHITECTURE:
+// - ActionDecoderRegistry: Global shared object holding all decoders
+// - HumanReadableField: Standard format for decoded field display
+// - Decoder objects attached as dynamic fields keyed by TypeName
+//
+// KEY DESIGN PRINCIPLES:
+// - Protocol layer provides structure, application layer provides decoders
+// - Mandatory validation at application boundary (entry functions)
+// - Clean separation - protocol remains unaware of specific decoders
+// - Universal transparency through self-describing actions
+// ============================================================================
+
+/// Simple, elegant schema system with active decoder objects
 /// Each action module provides its own decoder that knows how to decode its actions
 module account_protocol::schema;
 
@@ -5115,7 +5285,19 @@ public fun has_decoder(
     action_type: TypeName,
 ): bool {
     dynamic_object_field::exists_(registry_id(registry), action_type)
-}/// Decoder validation helper module
+}
+
+/// Assert that a decoder exists for the given action type
+/// Aborts with EDecoderNotFound if the decoder is not registered
+public fun assert_decoder_exists(
+    registry: &ActionDecoderRegistry,
+    action_type: TypeName,
+) {
+    assert!(has_decoder(registry, action_type), EDecoderNotFound);
+}
+
+// === Errors ===
+const EDecoderNotFound: u64 = 1;/// Decoder validation helper module
 /// Provides functions to check if decoders exist for action types
 module account_protocol::decoder_validation;
 
@@ -5221,6 +5403,7 @@ module account_protocol::owned;
 
 // === Imports ===
 
+
 use sui::{
     coin::{Self, Coin},
     transfer::Receiving,
@@ -5228,6 +5411,7 @@ use sui::{
 };
 
 use account_protocol::{
+    action_validation,
     account::{Self, Account, Auth},
     intents::{Self, Expired, Intent},
     executable::Executable,
@@ -5297,6 +5481,11 @@ public fun do_withdraw<Config, Outcome: store, T: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::OwnedWithdraw>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -6227,6 +6416,23 @@ public fun current(): VersionWitness {
 public fun get(): u64 {
     VERSION
 }
+// ============================================================================
+// FORK ADDITION - Currency Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of currency actions (minting, burning,
+// metadata updates) for transparency. Part of the mandatory decoder system
+// that ensures all actions can be decoded and displayed to users.
+//
+// IMPLEMENTATION:
+// - Handles MintAction, BurnAction, UpdateAction, DisableAction
+// - Complex Option<T> handling for metadata fields
+// - Uses BCS deserialization with peel_* functions and macros
+// - Security validation via validate_all_bytes_consumed()
+// ============================================================================
+
 /// Decoder for currency actions - tightly coupled with currency action definitions
 module account_actions::currency_decoder;
 
@@ -6441,7 +6647,7 @@ fun register_mint_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = MintActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<MintAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<MintAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -6450,7 +6656,7 @@ fun register_burn_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = BurnActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<BurnAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<BurnAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -6459,7 +6665,7 @@ fun register_disable_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = DisableActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<DisableAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DisableAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -6468,9 +6674,26 @@ fun register_update_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = UpdateActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<UpdateAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<UpdateAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}/// Decoder for vault actions - tightly coupled with vault action definitions
+}// ============================================================================
+// FORK ADDITION - Vault Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of vault actions (treasury operations)
+// for transparency. Part of the mandatory decoder system that ensures all
+// actions can be decoded and displayed to users before execution.
+//
+// IMPLEMENTATION:
+// - Handles SpendAction and DepositAction for treasury management
+// - Uses BCS deserialization with peel_* functions
+// - Security validation via validate_all_bytes_consumed()
+// - Returns vector<HumanReadableField> for universal display
+// ============================================================================
+
+/// Decoder for vault actions - tightly coupled with vault action definitions
 /// This module knows exactly how to decode SpendAction and DepositAction
 module account_actions::vault_decoder;
 
@@ -6584,7 +6807,7 @@ fun register_spend_decoder(
     };
 
     // Use placeholder for generic registration
-    let type_key = type_name::get<SpendAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
 
     // Attach decoder as dynamic object field
     dynamic_object_field::add(
@@ -6603,7 +6826,7 @@ fun register_deposit_decoder(
         id: object::new(ctx),
     };
 
-    let type_key = type_name::get<DepositAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DepositAction<CoinPlaceholder>>();
 
     dynamic_object_field::add(
         schema::registry_id_mut(registry),
@@ -6616,15 +6839,32 @@ fun register_deposit_decoder(
 
 /// Check if a SpendAction decoder is registered
 public fun has_spend_decoder(registry: &ActionDecoderRegistry): bool {
-    let type_key = type_name::get<SpendAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
     dynamic_object_field::exists_(schema::registry_id(registry), type_key)
 }
 
 /// Check if a DepositAction decoder is registered
 public fun has_deposit_decoder(registry: &ActionDecoderRegistry): bool {
-    let type_key = type_name::get<DepositAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DepositAction<CoinPlaceholder>>();
     dynamic_object_field::exists_(schema::registry_id(registry), type_key)
-}/// Decoder for kiosk actions - tightly coupled with kiosk action definitions
+}// ============================================================================
+// FORK ADDITION - Kiosk Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of kiosk (NFT) actions for transparency.
+// Part of the mandatory decoder system that ensures all actions can be
+// decoded and displayed to users before execution.
+//
+// IMPLEMENTATION:
+// - Handles TakeAction and ListAction for NFT operations
+// - Uses object::id_from_bytes() for ID deserialization
+// - Converts IDs to addresses for string representation
+// - Returns vector<HumanReadableField> for universal display
+// ============================================================================
+
+/// Decoder for kiosk actions - tightly coupled with kiosk action definitions
 module account_actions::kiosk_decoder;
 
 // === Imports ===
@@ -6738,7 +6978,7 @@ fun register_take_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = TakeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<TakeAction>();
+    let type_key = type_name::with_defining_ids<TakeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -6747,15 +6987,38 @@ fun register_list_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = ListActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<ListAction>();
+    let type_key = type_name::with_defining_ids<ListAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}/// Main decoder registry initialization module
+}// ============================================================================
+// FORK MODIFICATION NOTICE - Decoder Registry Initialization
+// ============================================================================
+// NEW FILE added to the fork for decoder system initialization.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Added RegistryInfo shared object to store registry ID dynamically
+// - Added RegistryCreated event emission for off-chain indexing
+// - Added DECODER_REGISTRY_INIT one-time witness pattern
+// - Removed hardcoded REGISTRY_ID constant - now discoverable at runtime
+// - Single transaction deployment - no manual ID updates needed
+//
+// PURPOSE:
+// Central initialization point for all action decoders. Creates and shares
+// the global ActionDecoderRegistry during protocol deployment.
+//
+// BENEFITS:
+// - Deploy once, fully configured
+// - No constants to update post-deployment
+// - Registry ID discoverable through multiple methods
+// - Clean, professional deployment process
+// ============================================================================
+
+/// Main decoder registry initialization module
 /// Registers all decoders during protocol deployment
 module account_actions::decoder_registry_init;
 
 // === Imports ===
 
-use sui::{transfer, object};
+use sui::{transfer, object::{Self, ID, UID}, event};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use account_actions::{
     vault_decoder,
@@ -6767,7 +7030,24 @@ use account_actions::{
     access_control_decoder,
 };
 
+// === Events ===
+
+/// Emitted when the registry is created, containing its ID
+public struct RegistryCreated has copy, drop {
+    registry_id: ID,
+}
+
 // === Structs ===
+
+/// One-time witness for initialization
+public struct DECODER_REGISTRY_INIT has drop {}
+
+/// Registry info object that stores the registry ID
+/// This is a shared object that anyone can read to get the registry ID
+public struct RegistryInfo has key, store {
+    id: UID,
+    registry_id: ID,
+}
 
 /// Admin capability for decoder management
 public struct DecoderAdminCap has key, store {
@@ -6778,9 +7058,12 @@ public struct DecoderAdminCap has key, store {
 
 /// Initialize the decoder registry with all action decoders
 /// This is called once during protocol deployment
-fun init(ctx: &mut TxContext) {
+fun init(witness: DECODER_REGISTRY_INIT, ctx: &mut TxContext) {
     // Create the decoder registry
     let mut registry = schema::init_registry(ctx);
+
+    // Get the registry ID before sharing
+    let registry_id = object::id(&registry);
 
     // Register all decoders
     register_all_decoders(&mut registry, ctx);
@@ -6788,14 +7071,29 @@ fun init(ctx: &mut TxContext) {
     // Share the registry for public access
     transfer::public_share_object(registry);
 
+    // Create and share a RegistryInfo object that stores the registry ID
+    let info = RegistryInfo {
+        id: object::new(ctx),
+        registry_id,
+    };
+    transfer::public_share_object(info);
+
     // Create admin capability
     let admin_cap = DecoderAdminCap {
         id: object::new(ctx),
     };
     transfer::transfer(admin_cap, ctx.sender());
+
+    // Emit event with the registry ID for off-chain indexing
+    event::emit(RegistryCreated { registry_id });
 }
 
 // === Public Functions ===
+
+/// Get the registry ID from the shared RegistryInfo object
+public fun get_registry_id(info: &RegistryInfo): ID {
+    info.registry_id
+}
 
 /// Register all decoders from all action modules
 public fun register_all_decoders(
@@ -6824,11 +7122,6 @@ public fun register_all_decoders(
     access_control_decoder::register_decoders(registry, ctx);
 }
 
-/// Get the ID of a decoder registry (for storing in Account)
-public fun get_registry_id(registry: &ActionDecoderRegistry): ID {
-    object::id(registry)
-}
-
 /// Update decoders (requires admin capability)
 public fun update_decoders(
     registry: &mut ActionDecoderRegistry,
@@ -6837,7 +7130,23 @@ public fun update_decoders(
 ) {
     // This allows re-registration of decoders after updates
     register_all_decoders(registry, ctx);
-}/// Decoder for package upgrade actions
+}// ============================================================================
+// FORK ADDITION - Package Upgrade Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of package upgrade actions for transparency.
+// Critical for DAO governance to understand contract upgrade proposals.
+//
+// IMPLEMENTATION:
+// - Handles UpgradeAction and RestrictAction for package management
+// - Decodes digest (32 bytes) and policy fields
+// - Uses BCS deserialization with security validation
+// - Returns vector<HumanReadableField> for universal display
+// ============================================================================
+
+/// Decoder for package upgrade actions
 module account_actions::package_upgrade_decoder;
 
 // === Imports ===
@@ -6999,7 +7308,7 @@ fun register_upgrade_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = UpgradeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<UpgradeAction>();
+    let type_key = type_name::with_defining_ids<UpgradeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -7008,7 +7317,7 @@ fun register_commit_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CommitActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CommitAction>();
+    let type_key = type_name::with_defining_ids<CommitAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -7017,9 +7326,26 @@ fun register_restrict_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = RestrictActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<RestrictAction>();
+    let type_key = type_name::with_defining_ids<RestrictAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}/// Decoder for vesting actions - tightly coupled with vesting action definitions
+}// ============================================================================
+// FORK ADDITION - Vesting Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of vesting actions for transparency.
+// Part of the mandatory decoder system that ensures all actions can be
+// decoded and displayed to users before execution.
+//
+// IMPLEMENTATION:
+// - Uses BCS deserialization with peel_* functions
+// - Security validation via validate_all_bytes_consumed()
+// - Returns vector<HumanReadableField> for universal display
+// - Handles CreateVestingAction and CancelVestingAction
+// ============================================================================
+
+/// Decoder for vesting actions - tightly coupled with vesting action definitions
 module account_actions::vesting_decoder;
 
 // === Imports ===
@@ -7188,7 +7514,7 @@ fun register_create_vesting_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CreateVestingActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CreateVestingAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<CreateVestingAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -7197,9 +7523,25 @@ fun register_cancel_vesting_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CancelVestingActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CancelVestingAction>();
+    let type_key = type_name::with_defining_ids<CancelVestingAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}/// Decoder for transfer actions - tightly coupled with transfer action definitions
+}// ============================================================================
+// FORK ADDITION - Transfer Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of transfer actions for transparency.
+// Part of the mandatory decoder system that ensures all actions can be
+// decoded and displayed to users before execution.
+//
+// IMPLEMENTATION:
+// - Simple single-field decoder for TransferAction
+// - Uses BCS deserialization with security validation
+// - Returns vector<HumanReadableField> for universal display
+// ============================================================================
+
+/// Decoder for transfer actions - tightly coupled with transfer action definitions
 module account_actions::transfer_decoder;
 
 // === Imports ===
@@ -7254,9 +7596,26 @@ fun register_transfer_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = TransferActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<TransferAction>();
+    let type_key = type_name::with_defining_ids<TransferAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}/// Decoder for access control actions - tightly coupled with access control action definitions
+}// ============================================================================
+// FORK ADDITION - Access Control Action Decoder
+// ============================================================================
+// NEW FILE added to the fork for on-chain action decoding.
+//
+// PURPOSE:
+// Provides human-readable decoding of access control actions for transparency.
+// Part of the mandatory decoder system that ensures all actions can be
+// decoded and displayed to users before execution.
+//
+// IMPLEMENTATION:
+// - Handles BorrowAction and ReturnAction (empty structs)
+// - Minimal decoder as these actions have no fields
+// - Still validates BCS consumption for security
+// - Returns action type information for display
+// ============================================================================
+
+/// Decoder for access control actions - tightly coupled with access control action definitions
 module account_actions::access_control_decoder;
 
 // === Imports ===
@@ -7345,7 +7704,7 @@ fun register_borrow_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = BorrowActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<BorrowAction<CapPlaceholder>>();
+    let type_key = type_name::with_defining_ids<BorrowAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -7354,7 +7713,7 @@ fun register_return_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = ReturnActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<ReturnAction<CapPlaceholder>>();
+    let type_key = type_name::with_defining_ids<ReturnAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }// ============================================================================
 // FORK MODIFICATION NOTICE - Kiosk Management with Serialize-Then-Destroy Pattern
@@ -7389,6 +7748,7 @@ use sui::{
 };
 use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
 use account_protocol::{
+    action_validation,
     account::{Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -7601,6 +7961,10 @@ public fun do_take<Config, Outcome: store, Nft: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<KioskTake>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -7682,6 +8046,10 @@ public fun do_list<Config, Outcome: store, Nft: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<KioskList>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize
@@ -7734,6 +8102,7 @@ use sui::{
     bcs::{Self, BCS},
 };
 use account_protocol::{
+    action_validation,
     account::{Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -7969,6 +8338,10 @@ public fun do_upgrade<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageUpgrade>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -8040,6 +8413,10 @@ public fun do_commit<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageCommit>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -8106,6 +8483,10 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageRestrict>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -8494,7 +8875,7 @@ module account_actions::vault;
 
 use std::{
     string::String,
-    type_name::{Self, TypeName},
+    type_name::TypeName,
     option::Option,
     u128,
     u64,
@@ -8517,6 +8898,7 @@ use account_protocol::{
     executable::{Self, Executable},
     version_witness::VersionWitness,
     bcs_validation,
+    action_validation,
 };
 use account_actions::version;
 use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
@@ -8838,6 +9220,10 @@ public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VaultDeposit>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -8910,6 +9296,10 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VaultSpend>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -8975,6 +9365,7 @@ use std::{
     string::{Self, String},
     ascii,
     option,
+
 };
 use sui::{
     coin::{Self, Coin, TreasuryCap, CoinMetadata},
@@ -8983,6 +9374,7 @@ use sui::{
     object,
 };
 use account_protocol::{
+    action_validation,
     account::{Self, Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -9244,6 +9636,11 @@ public fun do_disable<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyDisable>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -9324,6 +9721,11 @@ public fun do_update<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyUpdate>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -9425,6 +9827,11 @@ public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyMint>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -9507,6 +9914,11 @@ public fun do_burn<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyBurn>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -9563,13 +9975,15 @@ module account_actions::transfer;
 
 // === Imports ===
 
+
 use sui::bcs;
 use account_protocol::{
+    action_validation,
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
     bcs_validation,
 };
-use account_extensions::framework_action_types;
+use account_extensions::framework_action_types::{Self, TransferObject};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -9627,6 +10041,11 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<TransferObject>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -9683,9 +10102,10 @@ module account_actions::access_control;
 
 // === Imports ===
 
-use std::type_name;
+
 use sui::bcs::{Self, BCS};
 use account_protocol::{
+    action_validation,
     account::{Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -9779,13 +10199,18 @@ public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec and verify it's a BorrowAction
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::AccessControlBorrow>(spec);
+
+
     let _action_data = intents::action_spec_data(spec);
 
     // CRITICAL: Verify that a matching ReturnAction exists in the intent
     // This ensures the borrowed capability will be returned
     let current_idx = executable.action_idx();
     let mut return_found = false;
-    let return_action_type = type_name::get<framework_action_types::AccessControlReturn>();
+    let return_action_type = action_validation::get_action_type_name<framework_action_types::AccessControlReturn>();
 
     // Search from the next action onwards
     let mut i = current_idx + 1;
@@ -9848,6 +10273,11 @@ public fun do_return<Config, Outcome: store, Cap: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec and verify it's a ReturnAction
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::AccessControlReturn>(spec);
+
+
     let _action_data = intents::action_spec_data(spec);
 
     // For ReturnAction<Cap>, there's no data to deserialize (empty struct)
@@ -9874,6 +10304,13 @@ public fun delete_return<Cap>(expired: &mut Expired) {
 // - Actions serialize to bytes before adding to intent via add_typed_action()
 // - Comprehensive vesting features: cliff periods, multiple beneficiaries, pausable
 // - Type-safe action validation through compile-time TypeName comparison
+//
+// COMPOSABILITY IMPROVEMENTS (2025-09-14):
+// - claim_vesting() now returns Coin<CoinType> for PTB composability
+// - Added claim_vesting_to() for direct transfers to recipients
+// - Added claim_vesting_to_self() convenience function
+// - Added batch claim functions: claim_two_vestings(), claim_three_vestings()
+// - Fixed design flaw: separated authorization from payment destination
 // ============================================================================
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
@@ -9917,6 +10354,7 @@ use std::{
     string::{Self, String},
     option::{Self, Option},
     u64,
+
 };
 use sui::{
     balance::Balance,
@@ -9929,6 +10367,7 @@ use sui::{
     bcs::{Self, BCS},
 };
 use account_protocol::{
+    action_validation,
     account::Account,
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -10151,7 +10590,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: drop>(
 /// Creates the Vesting and ClaimCap objects from a CreateVestingAction
 public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<Config>, 
+    _account: &mut Account<Config>,
     coin: Coin<CoinType>,
     clock: &Clock,
     _intent_witness: IW,
@@ -10160,6 +10599,11 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VestingCreate>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize

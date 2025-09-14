@@ -24,7 +24,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_actions::config_actions;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
@@ -420,7 +420,7 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
 }
 
 // === Intent Processing ===
-// Note: Processing of config intents is handled by the action_dispatcher module
-// which executes all actions in the executable. The process_intent! macro is not
+// Note: Processing of config intents is handled by PTB calls
+// which execute actions directly. The process_intent! macro is not
 // used here because it doesn't support passing additional parameters (account, clock, ctx)
 // that are needed by the action execution functions.

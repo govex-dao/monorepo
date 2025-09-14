@@ -11,7 +11,7 @@ use futarchy_multisig::security_council_actions_with_placeholders::{
     CreateSecurityCouncilAction,
     SetPolicyFromPlaceholderAction,
 };
-use futarchy_multisig::action_types;
+use futarchy_core::action_types;
 use futarchy_utils::policy_registry;
 
 /// Intent witness for security council operations

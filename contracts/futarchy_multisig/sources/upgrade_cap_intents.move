@@ -16,7 +16,7 @@ use sui::package::UpgradeCap;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_vault::custody_actions;
-use futarchy_utils::action_types;
+use futarchy_one_shot_utils::action_types;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;

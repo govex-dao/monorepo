@@ -14,7 +14,7 @@ use account_protocol::{
     intents::Intent,
 };
 use futarchy_lifecycle::stream_actions;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 use account_extensions::framework_action_types;
 
 // === Use Fun Aliases ===

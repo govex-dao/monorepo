@@ -5,13 +5,18 @@ module futarchy_lifecycle::dissolution_intents;
 
 // === Imports ===
 use std::string::String;
-use sui::clock::Clock;
+use sui::{
+    clock::Clock,
+    bcs,
+};
 use account_protocol::{
     intents::{Self, Intent},
     metadata,
 };
 use futarchy_lifecycle::dissolution_actions;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
 
@@ -42,12 +47,13 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         burn_unsold_tokens,
         final_operations_deadline,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::InitiateDissolution {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::initiate_dissolution(),
+        action_data,
         intent_witness
     );
+    dissolution_actions::destroy_initiate_dissolution(action);
 }
 
 /// Add a batch distribute action to an existing intent
@@ -57,12 +63,13 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_batch_distribute_action(asset_types);
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::BatchDistribute {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::batch_distribute(),
+        action_data,
         intent_witness
     );
+    dissolution_actions::destroy_batch_distribute(action);
 }
 
 /// Add a finalize dissolution action to an existing intent
@@ -76,12 +83,13 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         final_recipient,
         destroy_account,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::FinalizeDissolution {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::finalize_dissolution(),
+        action_data,
         intent_witness
     );
+    dissolution_actions::destroy_finalize_dissolution(action);
 }
 
 /// Add a cancel dissolution action to an existing intent
@@ -91,12 +99,13 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_cancel_dissolution_action(reason);
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::CancelDissolution {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::cancel_dissolution(),
+        action_data,
         intent_witness
     );
+    dissolution_actions::destroy_cancel_dissolution(action);
 }
 
 /// Create a unique key for a dissolution intent

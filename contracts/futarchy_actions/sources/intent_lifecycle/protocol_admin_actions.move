@@ -11,6 +11,7 @@ use std::{
     type_name::{Self, TypeName},
 };
 use sui::{
+    bcs::{Self, BCS},
     clock::Clock,
     coin::{Self, Coin},
     event,
@@ -21,6 +22,7 @@ use sui::{
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
+    intents,
     version_witness::VersionWitness,
 };
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
@@ -31,6 +33,7 @@ use futarchy_markets::{
     fee::{Self, FeeManager, FeeAdminCap},
 };
 use futarchy_dao::futarchy_dao;
+use futarchy_core::{action_types, action_validation};
 
 // === Errors ===
 const EInvalidAdminCap: u64 = 1;
@@ -316,7 +319,19 @@ public fun do_set_factory_paused<Outcome: store, IW: drop>(
     factory: &mut Factory,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, SetFactoryPausedAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::SetFactoryPaused>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: SetFactoryPausedAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
     let _ = ctx;
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
@@ -342,8 +357,19 @@ public fun do_add_stable_type<Outcome: store, IW: drop, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, AddStableTypeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::AddStableType>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: AddStableTypeAction = bcs.peel();
     let _ = action; // Just consume it
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
         account,
@@ -364,8 +390,19 @@ public fun do_remove_stable_type<Outcome: store, IW: drop, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, RemoveStableTypeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RemoveStableType>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: RemoveStableTypeAction = bcs.peel();
     let _ = action; // Just consume it
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FactoryOwnerCap>(
         account,
@@ -386,7 +423,18 @@ public fun do_update_dao_creation_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateDaoCreationFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateDaoCreationFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateDaoCreationFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -407,7 +455,18 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateProposalFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateProposalFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateProposalFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -434,7 +493,18 @@ public fun do_update_monthly_dao_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateMonthlyDaoFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateMonthlyDaoFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateMonthlyDaoFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -462,7 +532,18 @@ public fun do_update_verification_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateVerificationFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateVerificationFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateVerificationFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -490,7 +571,18 @@ public fun do_add_verification_level<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, AddVerificationLevelAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::AddVerificationLevel>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: AddVerificationLevelAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -511,7 +603,18 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, RemoveVerificationLevelAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RemoveVerificationLevel>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: RemoveVerificationLevelAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -535,7 +638,18 @@ public fun do_request_verification<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, RequestVerificationAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RequestVerification>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: RequestVerificationAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Generate unique verification ID
     let verification_uid = object::new(ctx);
@@ -575,7 +689,18 @@ public fun do_approve_verification<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ApproveVerificationAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ApproveVerification>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: ApproveVerificationAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Verify we have the validator capability
     let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
@@ -614,7 +739,18 @@ public fun do_reject_verification<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, RejectVerificationAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RejectVerification>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: RejectVerificationAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 
     // Verify we have the validator capability
     let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
@@ -650,7 +786,18 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateRecoveryFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateRecoveryFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateRecoveryFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -671,7 +818,18 @@ public fun do_apply_dao_fee_discount<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ApplyDaoFeeDiscountAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ApplyDaoFeeDiscount>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: ApplyDaoFeeDiscountAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -699,8 +857,19 @@ public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, WithdrawFeesToTreasuryAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::WithdrawFeesToTreasury>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: WithdrawFeesToTreasuryAction = bcs.peel();
     let _ = action; // Just consume it
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -727,7 +896,18 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, AddCoinFeeConfigAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::AddCoinFeeConfig>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: AddCoinFeeConfigAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -759,7 +939,18 @@ public fun do_update_coin_monthly_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateCoinMonthlyFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateCoinMonthlyFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateCoinMonthlyFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -787,7 +978,18 @@ public fun do_update_coin_creation_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateCoinCreationFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateCoinCreationFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateCoinCreationFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -815,7 +1017,18 @@ public fun do_update_coin_proposal_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateCoinProposalFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateCoinProposalFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateCoinProposalFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -843,7 +1056,18 @@ public fun do_update_coin_recovery_fee<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, UpdateCoinRecoveryFeeAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdateCoinRecoveryFee>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: UpdateCoinRecoveryFeeAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
@@ -876,7 +1100,18 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ApplyPendingCoinFeesAction, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::ApplyPendingCoinFees>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let action: ApplyPendingCoinFeesAction = bcs.peel();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     let _ = account;
     let _ = version;
     let _ = ctx;

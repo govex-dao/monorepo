@@ -6,6 +6,7 @@ use sui::{
     clock::Clock,
     object::{Self, ID},
     tx_context::TxContext,
+    bcs,
 };
 use account_protocol::{
     account::Account,
@@ -18,6 +19,8 @@ use futarchy_specialized_actions::{
 };
 use futarchy_core::version;
 use futarchy_utils::action_types;
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
 
@@ -48,12 +51,13 @@ public fun create_update_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_update_line_action(line_id, new_text);
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::UpdateLine {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::update_line(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_update_line(action);
         }
     );
 }
@@ -81,12 +85,13 @@ public fun create_insert_line_after_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::InsertLineAfter {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::insert_line_after(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_insert_line_after(action);
         }
     );
 }
@@ -112,12 +117,13 @@ public fun create_insert_line_at_beginning_intent<Config, Outcome: store>(
                 text,
                 difficulty
             );
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::InsertLineAtBeginning {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::insert_line_at_beginning(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_insert_line_at_beginning(action);
         }
     );
 }
@@ -139,12 +145,13 @@ public fun create_remove_line_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = operating_agreement_actions::new_remove_line_action(line_id);
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::RemoveLine {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::remove_line(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_remove_line(action);
         }
     );
 }
@@ -173,12 +180,13 @@ public fun create_batch_operating_agreement_intent<Config, Outcome: store>(
                 batch_id,
                 actions
             );
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::BatchOperatingAgreement {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::batch_operating_agreement(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_batch_operating_agreement(action);
         }
     );
 }
@@ -205,12 +213,13 @@ public fun create_create_agreement_intent<Config, Outcome: store>(
                 allow_insert,
                 allow_remove
             );
-            intents::add_action_spec(
-                intent,
-                action,
-                action_types::CreateOperatingAgreement {},
+            let action_data = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::create_operating_agreement(),
+                action_data,
                 iw
             );
+            operating_agreement_actions::destroy_create_operating_agreement(action);
         }
     );
 }

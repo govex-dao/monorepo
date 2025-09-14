@@ -14,17 +14,22 @@ use sui::{
     table::{Self, Table},
     transfer,
     tx_context::{Self, TxContext},
+    bcs::{Self, BCS},
 };
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
+    intents,
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     priority_queue,
     proposal_fee_manager::{Self, ProposalFeeManager},
     dao_payment_tracker::{Self, DaoPaymentTracker},
+    action_validation,
+    action_types,
 };
 use futarchy_actions::{
     resource_requests::{Self, ResourceRequest, ResourceReceipt},
@@ -203,7 +208,19 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): ResourceRequest<CreateProposalAction> {
-    let action = executable.next_action<Outcome, CreateProposalAction, IW>(witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreateProposal>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let action: CreateProposalAction = reader.peel();
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Get reservation period from DAO config or use override
     let config = account::config(account);

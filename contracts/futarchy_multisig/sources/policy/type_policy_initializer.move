@@ -6,7 +6,7 @@ use sui::object::ID;
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
 
 // Import action types
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 use account_extensions::framework_action_types;
 
 // === Constants ===

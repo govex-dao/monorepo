@@ -2,19 +2,38 @@
 /// These are critical governance actions that typically require DAO approval
 module futarchy_multisig::policy_actions;
 
-use std::option::{Self, Option};
-use std::type_name::{Self, TypeName};
-use sui::object::{Self, ID};
+use std::{option::{Self, Option}, type_name::{Self, TypeName}, string::{Self, String}};
+use sui::{object::{Self, ID}, bcs::{Self, BCS}, clock::Clock, tx_context::TxContext};
 use account_protocol::{
-    intents::{Intent, Expired},
-    executable::Executable,
-    account::Account,
+    intents::{Self as protocol_intents, Intent, Expired, ActionSpec},
+    executable::{Self, Executable},
+    account::{Self, Account},
+    version_witness::VersionWitness,
+    bcs_validation,
+    action_validation,
 };
-use futarchy_utils::action_types;
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
-use futarchy_core::version;
-use account_protocol::version_witness::VersionWitness;
+use futarchy_core::{futarchy_config::FutarchyConfig, version};
+
+// === Constants ===
+const EUnsupportedActionVersion: u64 = 1;
+/// Error when mode value is invalid (must be 0-3)
+const EInvalidMode: u64 = 2;
+/// Error when council_id is required but not provided
+const EMissingCouncilId: u64 = 3;
+
+// Valid mode constants for reference
+const MODE_DAO_ONLY: u8 = 0;
+const MODE_COUNCIL_ONLY: u8 = 1;
+const MODE_DAO_OR_COUNCIL: u8 = 2;
+const MODE_DAO_AND_COUNCIL: u8 = 3;
+
+// === Witness Types for Action Validation ===
+public struct SetTypePolicyWitness has drop {}
+public struct SetObjectPolicyWitness has drop {}
+public struct RegisterCouncilWitness has drop {}
+public struct RemoveTypePolicyWitness has drop {}
+public struct RemoveObjectPolicyWitness has drop {}
 
 // === Action Structs ===
 
@@ -47,24 +66,35 @@ public struct RemoveObjectPolicyAction has store {
     object_id: ID,
 }
 
-// === Action Creation Functions ===
+// === Action Creation Functions (New Serialize-Then-Destroy Pattern) ===
 
-/// Create action to set a type policy with descriptor
+/// Create and add a set type policy action to an intent
 public fun new_set_type_policy<Outcome, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     council_id: Option<ID>,
     mode: u8,
     intent_witness: IW,
 ) {
-    let action = SetTypePolicyAction {
-        action_type: std::type_name::get<T>(),
-        council_id,
-        mode,
-    };
-    intent.add_typed_action(action, action_types::set_object_policy(), intent_witness);
+    // Create action struct
+    let action_type = type_name::get<T>();
+    let action = SetTypePolicyAction { action_type, council_id, mode };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetTypePolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_set_type_policy(action);
 }
 
-/// Create action to set a type policy by TypeName
+/// Create and add a set type policy action by name to an intent
 public fun new_set_type_policy_by_name<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     action_type: TypeName,
@@ -72,15 +102,25 @@ public fun new_set_type_policy_by_name<Outcome, IW: drop>(
     mode: u8,
     intent_witness: IW,
 ) {
-    let action = SetTypePolicyAction {
-        action_type,
-        council_id,
-        mode,
-    };
-    intent.add_typed_action(action, action_types::set_object_policy(), intent_witness);
+    // Create action struct
+    let action = SetTypePolicyAction { action_type, council_id, mode };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetTypePolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_set_type_policy(action);
 }
 
-/// Create action to set an object-specific policy with descriptor
+/// Create and add a set object policy action to an intent
 public fun new_set_object_policy<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     object_id: ID,
@@ -88,61 +128,135 @@ public fun new_set_object_policy<Outcome, IW: drop>(
     mode: u8,
     intent_witness: IW,
 ) {
-    let action = SetObjectPolicyAction {
-        object_id,
-        council_id,
-        mode,
-    };
-    intent.add_typed_action(action, action_types::set_object_policy(), intent_witness);
+    // Create action struct
+    let action = SetObjectPolicyAction { object_id, council_id, mode };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetObjectPolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_set_object_policy(action);
 }
 
-/// Create action to register a new security council with descriptor
+/// Create and add a register council action to an intent
 public fun new_register_council<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     council_id: ID,
     intent_witness: IW,
 ) {
-    let action = RegisterCouncilAction {
-        council_id,
-    };
-    intent.add_typed_action(action, action_types::register_council(), intent_witness);
+    // Create action struct
+    let action = RegisterCouncilAction { council_id };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        RegisterCouncilWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_register_council(action);
 }
 
-/// Create action to remove a type policy
+/// Create and add a remove type policy action to an intent
 public fun new_remove_type_policy<Outcome, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
     intent_witness: IW,
 ) {
-    let action = RemoveTypePolicyAction {
-        action_type: std::type_name::get<T>(),
-    };
-    intent.add_typed_action(action, action_types::remove_object_policy(), intent_witness);
+    // Create action struct
+    let action_type = type_name::get<T>();
+    let action = RemoveTypePolicyAction { action_type };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        RemoveTypePolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_remove_type_policy(action);
 }
 
-/// Create action to remove an object policy
+/// Create and add a remove object policy action to an intent
 public fun new_remove_object_policy<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     object_id: ID,
     intent_witness: IW,
 ) {
-    let action = RemoveObjectPolicyAction {
-        object_id,
-    };
-    intent.add_typed_action(action, action_types::remove_object_policy(), intent_witness);
+    // Create action struct
+    let action = RemoveObjectPolicyAction { object_id };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        RemoveObjectPolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_remove_object_policy(action);
 }
 
-// === Action Execution Functions ===
+// === Action Execution Functions (do_ pattern) ===
 
-/// Process set type policy action
-public fun do_set_type_policy<Config: store, Outcome: store, IW: drop>(
+/// Execute set type policy action
+public fun do_set_type_policy<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    version_witness: VersionWitness,
-    intent_witness: IW,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    let action: &SetTypePolicyAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<SetTypePolicyWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let action: SetTypePolicyAction = bcs::peel(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Input validation
+    assert!(action.mode <= 3, EInvalidMode);
+    // If mode requires council (1, 2, or 3), council_id must be provided
+    if (action.mode != MODE_DAO_ONLY) {
+        assert!(action.council_id.is_some(), EMissingCouncilId);
+    };
+
+    // Execute the action
     let dao_id = object::id(account);
-    let registry = policy_registry::borrow_registry_mut(account, version_witness);
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
     policy_registry::set_type_policy_by_name(
         registry,
         dao_id,
@@ -150,19 +264,48 @@ public fun do_set_type_policy<Config: store, Outcome: store, IW: drop>(
         action.council_id,
         action.mode
     );
-    // Action processing is handled by the dispatcher
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
-/// Process set object policy action
-public fun do_set_object_policy<Config: store, Outcome: store, IW: drop>(
+/// Execute set object policy action
+public fun do_set_object_policy<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    version_witness: VersionWitness,
-    intent_witness: IW,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    let action: &SetObjectPolicyAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<SetObjectPolicyWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let action: SetObjectPolicyAction = bcs::peel(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Input validation
+    assert!(action.mode <= 3, EInvalidMode);
+    // If mode requires council (1, 2, or 3), council_id must be provided
+    if (action.mode != MODE_DAO_ONLY) {
+        assert!(action.council_id.is_some(), EMissingCouncilId);
+    };
+
+    // Execute the action
     let dao_id = object::id(account);
-    let registry = policy_registry::borrow_registry_mut(account, version_witness);
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
     policy_registry::set_object_policy(
         registry,
         dao_id,
@@ -170,38 +313,81 @@ public fun do_set_object_policy<Config: store, Outcome: store, IW: drop>(
         action.council_id,
         action.mode
     );
-    // Action processing is handled by the dispatcher
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
-/// Process register council action
-public fun do_register_council<Config: store, Outcome: store, IW: drop>(
+/// Execute register council action
+public fun do_register_council<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    version_witness: VersionWitness,
-    intent_witness: IW,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    let action: &RegisterCouncilAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<RegisterCouncilWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let action: RegisterCouncilAction = bcs::peel(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Execute the action
     let dao_id = object::id(account);
-    let registry = policy_registry::borrow_registry_mut(account, version_witness);
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
     policy_registry::register_council(
         registry,
         dao_id,
         action.council_id
     );
-    // Action processing is handled by the dispatcher
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
-/// Process remove type policy action
-public fun do_remove_type_policy<Config: store, Outcome: store, IW: drop>(
+/// Execute remove type policy action
+public fun do_remove_type_policy<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    version_witness: VersionWitness,
-    intent_witness: IW,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    let action: &RemoveTypePolicyAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<RemoveTypePolicyWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let action: RemoveTypePolicyAction = bcs::peel(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Execute the action - remove by setting to DAO_ONLY with no council
     let dao_id = object::id(account);
-    let registry = policy_registry::borrow_registry_mut(account, version_witness);
-    // To remove a policy, set it to DAO_ONLY mode with no council
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
     policy_registry::set_type_policy_by_name(
         registry,
         dao_id,
@@ -209,20 +395,41 @@ public fun do_remove_type_policy<Config: store, Outcome: store, IW: drop>(
         option::none(),
         policy_registry::MODE_DAO_ONLY()
     );
-    // Action processing is handled by the dispatcher
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
-/// Process remove object policy action
-public fun do_remove_object_policy<Config: store, Outcome: store, IW: drop>(
+/// Execute remove object policy action
+public fun do_remove_object_policy<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    version_witness: VersionWitness,
-    intent_witness: IW,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
 ) {
-    let action: &RemoveObjectPolicyAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<RemoveObjectPolicyWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let action: RemoveObjectPolicyAction = bcs::peel(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Execute the action - remove by setting to DAO_ONLY with no council
     let dao_id = object::id(account);
-    let registry = policy_registry::borrow_registry_mut(account, version_witness);
-    // To remove a policy, set it to DAO_ONLY mode with no council
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
     policy_registry::set_object_policy(
         registry,
         dao_id,
@@ -230,7 +437,9 @@ public fun do_remove_object_policy<Config: store, Outcome: store, IW: drop>(
         option::none(),
         policy_registry::MODE_DAO_ONLY()
     );
-    // Action processing is handled by the dispatcher
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 // === Delete Functions for Expired Intents ===
@@ -285,6 +494,68 @@ public fun get_remove_type_policy_params(action: &RemoveTypePolicyAction): TypeN
 /// Get object_id from RemoveObjectPolicyAction
 public fun get_remove_object_policy_params(action: &RemoveObjectPolicyAction): ID {
     action.object_id
+}
+
+// === Destruction Functions ===
+
+/// Destroy a SetTypePolicyAction
+public fun destroy_set_type_policy(action: SetTypePolicyAction) {
+    let SetTypePolicyAction { action_type: _, council_id: _, mode: _ } = action;
+}
+
+/// Destroy a SetObjectPolicyAction
+public fun destroy_set_object_policy(action: SetObjectPolicyAction) {
+    let SetObjectPolicyAction { object_id: _, council_id: _, mode: _ } = action;
+}
+
+/// Destroy a RegisterCouncilAction
+public fun destroy_register_council(action: RegisterCouncilAction) {
+    let RegisterCouncilAction { council_id: _ } = action;
+}
+
+/// Destroy a RemoveTypePolicyAction
+public fun destroy_remove_type_policy(action: RemoveTypePolicyAction) {
+    let RemoveTypePolicyAction { action_type: _ } = action;
+}
+
+/// Destroy a RemoveObjectPolicyAction
+public fun destroy_remove_object_policy(action: RemoveObjectPolicyAction) {
+    let RemoveObjectPolicyAction { object_id: _ } = action;
+}
+
+// === Legacy Action Constructors (deprecated - use new_* functions above) ===
+
+/// Create a set type policy action (legacy)
+public fun new_set_type_policy_action(
+    action_type: TypeName,
+    council_id: Option<ID>,
+    mode: u8,
+): SetTypePolicyAction {
+    SetTypePolicyAction { action_type, council_id, mode }
+}
+
+/// Create a set object policy action (legacy)
+public fun new_set_object_policy_action(
+    object_id: ID,
+    council_id: Option<ID>,
+    mode: u8,
+): SetObjectPolicyAction {
+    SetObjectPolicyAction { object_id, council_id, mode }
+}
+
+/// Create a register council action (legacy)
+public fun new_register_council_action(council_id: ID): RegisterCouncilAction {
+    RegisterCouncilAction { council_id }
+}
+
+/// Create a remove type policy action (legacy)
+public fun new_remove_type_policy_action(action_type: TypeName): RemoveTypePolicyAction {
+    RemoveTypePolicyAction { action_type }
+}
+
+/// Create a remove object policy action (legacy)
+public fun new_remove_object_policy_action(object_id: ID): RemoveObjectPolicyAction {
+    RemoveObjectPolicyAction { object_id }
 }
 
 // === Aliases for backward compatibility ===

@@ -98,6 +98,9 @@ public struct ExecuteCouncilAction has drop {}
 public struct CreatePolicy has drop {}
 public struct UpdatePolicy has drop {}
 public struct RemovePolicy has drop {}
+public struct SetTypePolicy has drop {}
+public struct SetObjectPolicy has drop {}
+public struct RegisterCouncil has drop {}
 
 // === Memo Action Types ===
 
@@ -110,6 +113,7 @@ public struct AddStableType has drop {}
 public struct RemoveStableType has drop {}
 public struct UpdateDaoCreationFee has drop {}
 public struct UpdateProposalFee has drop {}
+public struct UpdateMonthlyDaoFee has drop {}
 public struct UpdateTreasuryAddress has drop {}
 public struct WithdrawProtocolFees has drop {}
 
@@ -117,6 +121,14 @@ public struct WithdrawProtocolFees has drop {}
 
 public struct CreateFounderLock has drop {}
 public struct UnlockFounderTokens has drop {}
+
+// === Package Upgrade Action Types ===
+
+public struct PackageUpgrade has drop {}
+
+// === Vault Action Types ===
+
+public struct VaultMint has drop {}
 
 // === Accessor Functions ===
 
@@ -204,6 +216,9 @@ public fun execute_council_action(): TypeName { type_name::with_defining_ids<Exe
 public fun create_policy(): TypeName { type_name::with_defining_ids<CreatePolicy>() }
 public fun update_policy(): TypeName { type_name::with_defining_ids<UpdatePolicy>() }
 public fun remove_policy(): TypeName { type_name::with_defining_ids<RemovePolicy>() }
+public fun set_type_policy(): TypeName { type_name::with_defining_ids<SetTypePolicy>() }
+public fun set_object_policy(): TypeName { type_name::with_defining_ids<SetObjectPolicy>() }
+public fun register_council(): TypeName { type_name::with_defining_ids<RegisterCouncil>() }
 
 // Memo actions
 public fun memo(): TypeName { type_name::with_defining_ids<Memo>() }
@@ -214,9 +229,16 @@ public fun add_stable_type(): TypeName { type_name::with_defining_ids<AddStableT
 public fun remove_stable_type(): TypeName { type_name::with_defining_ids<RemoveStableType>() }
 public fun update_dao_creation_fee(): TypeName { type_name::with_defining_ids<UpdateDaoCreationFee>() }
 public fun update_proposal_fee(): TypeName { type_name::with_defining_ids<UpdateProposalFee>() }
+public fun update_monthly_dao_fee(): TypeName { type_name::with_defining_ids<UpdateMonthlyDaoFee>() }
 public fun update_treasury_address(): TypeName { type_name::with_defining_ids<UpdateTreasuryAddress>() }
 public fun withdraw_protocol_fees(): TypeName { type_name::with_defining_ids<WithdrawProtocolFees>() }
 
 // Founder lock actions
 public fun create_founder_lock(): TypeName { type_name::with_defining_ids<CreateFounderLock>() }
 public fun unlock_founder_tokens(): TypeName { type_name::with_defining_ids<UnlockFounderTokens>() }
+
+// Package upgrade actions
+public fun package_upgrade(): TypeName { type_name::with_defining_ids<PackageUpgrade>() }
+
+// Vault actions
+public fun vault_mint(): TypeName { type_name::with_defining_ids<VaultMint>() }

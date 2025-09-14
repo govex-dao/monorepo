@@ -10,9 +10,11 @@ use sui::{
 use account_protocol::{
     intents::{Self, Intent},
 };
+
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 use std::option;
 use futarchy_actions::liquidity_actions;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 
 // === Witness ===
 
@@ -41,12 +43,13 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
         stable_amount,
         min_lp_amount,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::AddLiquidity {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::add_liquidity(),
+        action_data,
         intent_witness
     );
+    liquidity_actions::destroy_add_liquidity(action);
 }
 
 /// Add a remove liquidity action to an existing intent
@@ -64,12 +67,13 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
         min_asset_amount,
         min_stable_amount,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::RemoveLiquidity {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::remove_liquidity(),
+        action_data,
         intent_witness
     );
+    liquidity_actions::destroy_remove_liquidity(action);
 }
 
 /// Add a create pool action to an existing intent
@@ -89,12 +93,13 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
         minimum_liquidity,
         placeholder_out,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::CreatePool {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::create_pool(),
+        action_data,
         intent_witness
     );
+    liquidity_actions::destroy_create_pool(action);
 }
 
 /// Add an update pool params action using placeholder
@@ -112,12 +117,13 @@ public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
         new_fee_bps,
         new_minimum_liquidity,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::UpdatePoolParams {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::update_pool_params(),
+        action_data,
         intent_witness
     );
+    liquidity_actions::destroy_update_pool_params(action);
 }
 
 /// Add a set pool status action using placeholder
@@ -133,12 +139,13 @@ public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
         placeholder_in,
         is_paused,
     );
-    intents::add_action_spec(
-        intent,
-        action,
-        action_types::SetPoolStatus {},
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::set_pool_status(),
+        action_data,
         intent_witness
     );
+    liquidity_actions::destroy_set_pool_status(action);
 }
 
 /// Helper to create pool and configure it in a single intent using placeholders

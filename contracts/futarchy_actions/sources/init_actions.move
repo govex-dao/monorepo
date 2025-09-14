@@ -1,36 +1,42 @@
-/// Init Actions - A fully dynamic, table-based dispatcher for DAO initialization.
-/// This module reads an `IntentSpec` and uses a simplified dispatcher pattern to
-/// execute the appropriate handler for each action. It is completely
-/// decoupled from any specific action logic.
-/// 
-/// ## Hot Potato Pattern
+/// Init Actions - PTB-based init action execution for DAO initialization.
+/// This module provides entry functions that are composed via PTBs to execute
+/// initialization actions during DAO creation.
+///
+/// ## PTB Pattern
 /// Executes init actions with unshared "hot potato" resources before DAO is public:
 /// - `&mut Account` - DAO account (exists but not shared)
-/// - `&mut ProposalQueue` - Queue (exists but not shared)  
+/// - `&mut ProposalQueue` - Queue (exists but not shared)
 /// - `&mut AccountSpotPool` - AMM pool (exists but not shared)
-/// 
+///
 /// This allows init actions to:
 /// - Add initial liquidity before anyone can trade
 /// - Create proposals before public access
 /// - Configure settings atomically
-/// 
+///
 /// If ANY action fails, entire DAO creation reverts (atomic guarantee)
+///
+/// ## Usage Pattern
+/// The PTB orchestrates execution by calling:
+/// 1. `execute_init_action` - Process a single action from the spec
+/// 2. Chain multiple calls for all actions in the spec
+/// 3. All execute within a single atomic transaction
 module futarchy_actions::init_actions;
 
-use std::option;
-use std::type_name::{Self, TypeName};
-use std::string::String;
-use sui::{clock::Clock, event, object, bcs};
+use std::option::{Self, Option};
+use std::string::{Self, String};
+use sui::{
+    clock::Clock,
+    event,
+    coin::Coin,
+};
 use account_protocol::{
     account::{Self, Account},
-    intents::{Self, Intent},
-    executable::{Self, Executable},
 };
 use futarchy_core::{
-    futarchy_config::{FutarchyConfig, FutarchyOutcome},
-    priority_queue::ProposalQueue,
+    futarchy_config::{Self, FutarchyConfig},
+    priority_queue::{Self, ProposalQueue},
 };
-use futarchy_markets::account_spot_pool::AccountSpotPool;
+use futarchy_markets::account_spot_pool::{Self, AccountSpotPool};
 use futarchy_actions::action_specs::{Self, ActionSpec, InitActionSpecs};
 
 /// Special witness for init actions that bypass voting
@@ -63,47 +69,100 @@ public struct InitBatchCompleted has copy, drop {
 }
 
 
-// === Helper Functions for PTB ===
+// === PTB Entry Functions for Init Actions ===
 
-/// Create an init intent that bypasses voting
-public fun create_init_intent(
-    account: &Account<FutarchyConfig>,
+/// Initialize config action during DAO creation
+/// Called by PTB to set initial configuration parameters
+public entry fun init_config_update_name(
+    new_name: vector<u8>,
+    account: &mut Account<FutarchyConfig>,
     ctx: &mut TxContext,
-): Intent<FutarchyOutcome> {
-    // Temporarily disabled - needs redesign
-    abort 0
+) {
+    // Update DAO name during initialization
+    let config = account::config_mut(account);
+    let name_string = std::string::utf8(new_name);
+    let new_config = futarchy_config::with_name(*config, name_string);
+    *config = new_config;
 }
 
+/// Initialize trading parameters during DAO creation
+public entry fun init_config_trading_params<StableType>(
+    min_asset_amount: u64,
+    min_stable_amount: u64,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    account: &mut Account<FutarchyConfig>,
+    ctx: &mut TxContext,
+) {
+    let config = account::config_mut(account);
+    let new_config = futarchy_config::with_trading_params(
+        *config,
+        min_asset_amount,
+        min_stable_amount,
+        review_period_ms,
+        trading_period_ms,
+    );
+    *config = new_config;
+}
 
-/// Get witness for adding actions to init intent
+/// Initialize liquidity pool during DAO creation
+public entry fun init_create_liquidity_pool<AssetType: drop, StableType: drop>(
+    initial_asset_amount: u64,
+    initial_stable_amount: u64,
+    fee_bps: u64,
+    asset_coin: Coin<AssetType>,
+    stable_coin: Coin<StableType>,
+    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Add initial liquidity to the unshared pool
+    let _lp_tokens = account_spot_pool::add_liquidity_and_return(
+        spot_pool,
+        asset_coin,
+        stable_coin,
+        clock,
+        ctx,
+    );
+
+    // LP tokens are handled by the pool during init
+}
+
+/// Initialize proposal queue settings during DAO creation
+public entry fun init_queue_settings<StableType>(
+    max_queue_size: u64,
+    proposal_bond: u64,
+    queue: &mut ProposalQueue<StableType>,
+    ctx: &mut TxContext,
+) {
+    // Configure queue parameters during initialization
+    priority_queue::set_max_size(queue, max_queue_size);
+    priority_queue::set_bond_amount(queue, proposal_bond);
+}
+
+/// Get witness for init actions
 public fun init_witness(): InitWitness {
     InitWitness {}
 }
 
 
-/// Execute init intent with hot potato resources using action specs
-/// This version allows passing unshared objects that init actions need
+/// Legacy function - kept for backward compatibility
+/// Will be deprecated once all callers migrate to PTB pattern
 public fun execute_init_intent_with_resources<AssetType: drop + store, StableType: drop + store>(
     account: &mut Account<FutarchyConfig>,
     specs: InitActionSpecs,
-    // Hot potato resources - passed as mutable references
     queue: &mut ProposalQueue<StableType>,
     spot_pool: &mut AccountSpotPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let result = execute_specs_with_resources<AssetType, StableType>(
-        account, specs, queue, spot_pool, clock, ctx, false // partial_execution_allowed = false
-    );
-
-    // If any action failed and partial execution is not allowed, abort
-    if (result.failed > 0 && !result.partial_execution_allowed) {
-        abort EInitActionFailed
-    }
+    // Deprecated - PTB should call individual action handlers directly
+    // This function is kept for backward compatibility
+    abort EDeprecatedFunction
 }
 
-/// Execute init actions with partial execution support
-/// Returns InitResult with details about successes and failures
+/// Legacy function - kept for backward compatibility
+/// Will be deprecated once all callers migrate to PTB pattern
 public fun execute_init_intent_with_partial_support<AssetType: drop + store, StableType: drop + store>(
     account: &mut Account<FutarchyConfig>,
     specs: InitActionSpecs,
@@ -113,180 +172,31 @@ public fun execute_init_intent_with_partial_support<AssetType: drop + store, Sta
     ctx: &mut TxContext,
     allow_partial: bool,
 ): InitResult {
-    execute_specs_with_resources<AssetType, StableType>(
-        account, specs, queue, spot_pool, clock, ctx, allow_partial
-    )
+    // Deprecated - PTB should handle partial execution directly
+    abort EDeprecatedFunction
 }
 
-/// The main dispatcher with error recovery support
-fun execute_specs_with_resources<AssetType: drop + store, StableType: drop + store>(
-    account: &mut Account<FutarchyConfig>,
-    specs: InitActionSpecs,
-    queue: &mut ProposalQueue<StableType>,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-    allow_partial: bool,
-): InitResult {
-    let dao_id = object::id_address(account);
-    let actions = action_specs::actions(&specs);
-    let total_actions = vector::length(actions);
-    let mut i = 0;
-    let mut successful = 0;
-    let mut failed = 0;
-    let mut first_error: Option<String> = option::none();
-    let mut failed_action_index: Option<u64> = option::none();
+// Removed: Old dispatcher logic
+// PTB pattern doesn't need centralized dispatching
+// Each action module exposes its own init entry functions
 
-    while (i < total_actions) {
-        let spec = vector::borrow(actions, i);
-        let action_type = action_specs::action_type(spec);
-        let action_data = action_specs::action_data(spec);
+// Removed: Old dispatcher helper functions
+// PTB pattern calls action handlers directly
 
-        // Try to execute with all dispatchers
-        let (handled, error_msg) = try_execute_with_all_dispatchers_safe(
-            &action_type,
-            action_data,
-            account,
-            queue,
-            spot_pool,
-            clock,
-            ctx
-        );
+// === Init Action Entry Functions ===
+// Note: Each action module should expose its own init entry functions
+// that can be called directly by the PTB during DAO initialization
 
-        if (handled) {
-            successful = successful + 1;
-        } else {
-            failed = failed + 1;
-
-            // Track first error
-            if (first_error.is_none()) {
-                first_error = option::some(error_msg);
-                failed_action_index = option::some(i);
-            };
-
-            // If partial execution not allowed, stop immediately
-            if (!allow_partial) {
-                event::emit(InitActionAttempted {
-                    dao_id,
-                    action_type: b"action".to_string(),
-                    action_index: i,
-                    success: false,
-                });
-                break
-            }
-        };
-
-        event::emit(InitActionAttempted {
-            dao_id,
-            action_type: b"action".to_string(),
-            action_index: i,
-            success: handled,
-        });
-
-        i = i + 1;
-    };
-
-    event::emit(InitBatchCompleted {
-        dao_id,
-        total_actions,
-        successful_actions: successful,
-        failed_actions: failed,
-    });
-
-    InitResult {
-        total_actions,
-        succeeded: successful,
-        failed,
-        first_error,
-        failed_action_index,
-        partial_execution_allowed: allow_partial,
-    }
-}
-
-/// Try all dispatchers with error recovery
-/// Returns (success, error_message)
-fun try_execute_with_all_dispatchers_safe<AssetType: drop + store, StableType: drop + store>(
-    action_type: &TypeName,
-    action_data: &vector<u8>,
-    account: &mut Account<FutarchyConfig>,
-    queue: &mut ProposalQueue<StableType>,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): (bool, String) {
-    // Try each dispatcher and capture errors
-    let result = try_execute_with_all_dispatchers(
-        action_type,
-        action_data,
-        account,
-        queue,
-        spot_pool,
-        clock,
-        ctx
-    );
-
-    if (result) {
-        (true, string::utf8(b""))
-    } else {
-        (false, string::utf8(b"Action not handled by any dispatcher"))
-    }
-}
-
-/// Original dispatcher chain (now complete with all dispatchers)
-fun try_execute_with_all_dispatchers<AssetType: drop + store, StableType: drop + store>(
-    action_type: &TypeName,
-    action_data: &vector<u8>,
-    account: &mut Account<FutarchyConfig>,
-    queue: &mut ProposalQueue<StableType>,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): bool {
-    // Import all dispatcher modules
-    use futarchy_actions::config_dispatcher;
-    use futarchy_actions::liquidity_dispatcher;
-
-    // Note: Additional dispatchers would be imported here when they implement init support
-    // Currently only config and liquidity dispatchers have init action support
-    // The following would be added as they're implemented:
-    // use futarchy_actions::governance_dispatcher;
-    // use futarchy_actions::memo_dispatcher;
-    // use futarchy_vault::custody_dispatcher;
-    // use futarchy_lifecycle::stream_dispatcher;
-    // use futarchy_lifecycle::dissolution_dispatcher;
-    // use futarchy_lifecycle::oracle_dispatcher;
-    // use futarchy_multisig::security_council_dispatcher;
-    // use futarchy_multisig::policy_dispatcher;
-    // use futarchy_specialized_actions::operating_agreement_dispatcher;
-
-    // Try config actions first (most common for init)
-    let (success, _) = config_dispatcher::execute_init_config_action(
-        action_type, action_data, account, clock, ctx
-    );
-    if (success) {
-        return true
-    };
-
-    // Try liquidity actions (common for bootstrapping AMM)
-    let (success, _) = liquidity_dispatcher::try_execute_init_action<AssetType, StableType>(
-        action_type, action_data, account, spot_pool, clock, ctx
-    );
-    if (success) {
-        return true
-    };
-
-    // TODO: Add more dispatchers as they implement init action support
-    // Each dispatcher module needs to implement a try_execute_init_action function
-    // that can work with unshared objects during DAO initialization
-
-    // Example of future dispatcher integration:
-    // let (success, _) = stream_dispatcher::try_execute_init_action<AssetType>(
-    //     action_type, action_data, account, clock, ctx
-    // );
-    // if (success) return true;
-
-    false // Action not handled by any dispatcher
-}
+/// Example entry function pattern that each action module should implement:
+/// ```
+/// public entry fun execute_init_<action_name>(
+///     params: <ActionParams>,
+///     account: &mut Account<FutarchyConfig>,
+///     <required_resources>,
+///     clock: &Clock,
+///     ctx: &mut TxContext,
+/// )
+/// ```
 
 
 // === Constants ===
@@ -307,3 +217,4 @@ const EUnhandledAction: u64 = 1;
 const EActionNotAllowedAtInit: u64 = 2;
 const EInitActionFailed: u64 = 3;
 const ETooManyInitActions: u64 = 4;
+const EDeprecatedFunction: u64 = 5;

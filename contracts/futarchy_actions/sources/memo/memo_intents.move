@@ -11,7 +11,7 @@ use account_protocol::{
 };
 use futarchy_actions::memo_actions;
 use futarchy_core::version;
-use futarchy_utils::action_types;
+use futarchy_core::action_types;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;

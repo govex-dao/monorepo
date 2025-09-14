@@ -2,6 +2,7 @@
 module futarchy_multisig::coexec_common;
 
 use std::string::String;
+use std::type_name;
 use sui::{
     clock::Clock,
     object::{Self, ID},
@@ -26,6 +27,8 @@ const EDigestMismatch: u64 = 5;
 const EActionTypeMismatch: u64 = 6;
 const EMetadataMissing: u64 = 7;
 const EDAOMismatch: u64 = 8;
+const EActionIndexOutOfBounds: u64 = 9;
+const ENoActionsInIntent: u64 = 10;
 
 // === Policy Validation ===
 
@@ -91,25 +94,72 @@ public fun confirm_both_executables<DaoOutcome: store + drop, CouncilOutcome: st
 
 // === Action Extraction Helpers ===
 
-/// Generic helper to check if an action exists and extract it
-/// This pattern is common across all co-exec modules
-public fun extract_action_with_check<Outcome: store, Action: store, W: drop>(
-    executable: &mut account_protocol::executable::Executable<Outcome>,
-    witness: W,
+/// Check if the current action matches the expected type
+/// This replaces the old contains_action functionality
+public fun verify_current_action<Outcome: store, Action: store + drop + copy>(
+    executable: &account_protocol::executable::Executable<Outcome>,
     error_code: u64,
-): &Action {
+) {
     use account_protocol::executable;
-    assert!(executable::contains_action<Outcome, Action>(executable), error_code);
-    executable::next_action(executable, witness)
+    assert!(executable::is_current_action<Outcome, Action>(executable), error_code);
 }
 
-/// Extract an action without checking if it exists first
-/// Use when you're certain the action is present
-public fun extract_action<Outcome: store, Action: store, W: drop>(
-    executable: &mut account_protocol::executable::Executable<Outcome>,
-    witness: W,
-): &Action {
-    account_protocol::executable::next_action(executable, witness)
+/// Get the current action's type for validation
+public fun get_current_action_type<Outcome: store>(
+    executable: &account_protocol::executable::Executable<Outcome>
+): type_name::TypeName {
+    use account_protocol::executable;
+    executable::current_action_type(executable)
+}
+
+/// Check if we're at the expected action index
+public fun verify_action_index<Outcome: store>(
+    executable: &account_protocol::executable::Executable<Outcome>,
+    expected_idx: u64,
+    error_code: u64,
+) {
+    use account_protocol::executable;
+    assert!(executable::action_idx(executable) == expected_idx, error_code);
+}
+
+/// Advance to the next action after processing current one
+/// This replaces the old next_action functionality
+public fun advance_action<Outcome: store>(
+    executable: &mut account_protocol::executable::Executable<Outcome>
+) {
+    use account_protocol::executable;
+    executable::increment_action_idx(executable);
+}
+
+/// Safely get action data with bounds checking
+public fun get_current_action_data<Outcome: store>(
+    executable: &account_protocol::executable::Executable<Outcome>
+): &vector<u8> {
+    use account_protocol::{executable, intents};
+
+    let intent = executable::intent(executable);
+    let specs = intents::action_specs(intent);
+    let action_count = specs.length();
+
+    // Validate we have actions
+    assert!(action_count > 0, ENoActionsInIntent);
+
+    // Validate current index is in bounds
+    let current_idx = executable::action_idx(executable);
+    assert!(current_idx < action_count, EActionIndexOutOfBounds);
+
+    // Safe to access now
+    let spec = specs.borrow(current_idx);
+    intents::action_spec_data(spec)
+}
+
+/// Peek at the type of an action at a specific index
+public fun peek_action_type_at<Outcome: store>(
+    executable: &account_protocol::executable::Executable<Outcome>,
+    idx: u64
+): type_name::TypeName {
+    use account_protocol::executable;
+    executable::action_type_at(executable, idx)
 }
 
 // === Common Co-Execution Pattern ===

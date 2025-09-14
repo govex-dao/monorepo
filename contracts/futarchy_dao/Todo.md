@@ -1,3 +1,130 @@
+look at my actions
+do I have the legos or even th. full code ready to make an action
+where it can be say executed x times every y days
+if price > Z
+mint A tokens from tresury
+sell in amm and deposit tokens out back into treasury?
+whats missing if i cant
+Model
+ThinkingThoughts
+(experimental)
+Manual: 32768
+Expand to view model thoughts
+
+chevron_right
+
+
+====
+You are on the verge of a significant and powerful architectural insight. Yes, absolutely. Refactoring your stream_actions into a more generic, repeatable pattern is precisely the right direction.
+What you've intuitively discovered is that a "payment stream" is just one specific instance of a more general concept: a recurring, stateful, on-chain task.
+Your idea to "sell tokens if price > Z" is another instance of this same pattern. By abstracting your stream logic, you can create a powerful, unified system for all kinds of automated, recurring DAO operations.
+Let's call this new, refactored concept a "Programmable Task" or "Automated Strategy."
+How to Refactor Your Streams into a Generic "Task" System
+Here’s a blueprint for how you can evolve your current stream_actions and payment_actions into this more powerful, generic framework.
+1. Define the Generic "Task" Interface
+Instead of a PaymentConfig struct, you create a more generic Task struct. This object holds the core scheduling and state information common to all recurring actions.
+code
+Rust
+// In a new module, e.g., `futarchy_dao::automated_tasks`
+
+public struct Task<phantom T> has key, store {
+    id: UID,
+    dao_id: ID,
+
+    // --- Scheduling & State (from your stream logic) ---
+    start_time: u64,
+    end_time: Option<u64>,
+    interval_ms: u64,          // How often it can run
+    last_execution_ms: u64,
+    execution_count: u64,
+    max_executions: Option<u64>,
+    is_active: bool,
+    is_cancellable: bool,
+
+    // --- The "Payload" ---
+    // This is the generic part. It holds the specific action data.
+    // T would be `StreamPayload`, `TreasuryStrategyPayload`, etc.
+    payload: T,
+}
+
+// Example Payloads
+public struct StreamPayload<phantom CoinType> has store, drop, copy {
+    recipient: address,
+    amount_per_period: u64,
+    source_vault: String, // e.g., "treasury"
+}
+
+public struct TreasuryStrategyPayload<phantom Asset, phantom Stable> has store, drop, copy {
+    price_threshold: u128,
+    amount_to_sell: u64,
+    spot_pool_id: ID,
+}
+2. Create a Unified crank_task Function
+This is the heart of the system. It's a single, permissionless entry function that can execute any type of Task. It reads the Task's payload and routes it to the correct execution logic.
+code
+Rust
+public entry fun crank_task<T: store>(
+    task: &mut Task<T>,
+    // ... required resources like `account`, `spot_pool`, `clock`, `ctx`
+) {
+    // --- 1. Generic Scheduling Checks ---
+    let now = clock.timestamp_ms();
+    assert!(task.is_active, ETaskNotActive);
+    assert!(now >= task.start_time, ETaskNotStarted);
+    if (task.end_time.is_some()) {
+        assert!(now < *task.end_time.borrow(), ETaskEnded);
+    }
+    assert!(now >= task.last_execution_ms + task.interval_ms, ENotReady);
+    if (task.max_executions.is_some()) {
+        assert!(task.execution_count < *task.max_executions.borrow(), EExecutionsExceeded);
+    }
+
+    // --- 2. Dispatch to the Correct Logic based on Payload Type `T` ---
+    // This requires a dispatcher system.
+    // We can use dynamic fields or a series of `if/else if` with type_name checks.
+
+    let type_name = type_name::get<T>();
+
+    if (type_name == type_name::get<StreamPayload<SUI>>()) {
+        // We know T is StreamPayload<SUI>, so we can safely handle it.
+        // This is a conceptual example; Move's type system needs careful handling here.
+        execute_stream_payload(task.payload, ...);
+    } else if (type_name == type_name::get<TreasuryStrategyPayload<MyAsset, MyStable>>()) {
+        execute_treasury_payload(task.payload, ...);
+    } else {
+        abort EUnknownTaskType;
+    }
+
+
+    // --- 3. Update Generic State ---
+    task.last_execution_ms = now;
+    task.execution_count += 1;
+}
+(This dispatching logic is complex in Move. A more Move-native way would be to have separate crank_stream_task and crank_treasury_task functions, but the underlying Task struct remains generic).
+3. How This Refactor Solves Your Problem
+Your original stream_actions and payment_actions become the first implementation of this new, generic system.
+Your existing stream logic is placed inside execute_stream_payload. It gets the recipient and amount_per_period from the payload and performs the vault withdrawal.
+Your new treasury logic is placed inside execute_treasury_payload. It gets the price_threshold and amount_to_sell from its payload, checks the oracle, and performs the mint-swap-deposit sequence.
+Now, both a simple payment stream and your sophisticated treasury management strategy are just two different "payloads" running on the same underlying "automated task" engine.
+Benefits of This Refactored Approach
+Massive Reusability: The core logic for scheduling, starting, stopping, and tracking executions is written once in the generic Task and crank_task system. You never have to write it again.
+Extensibility: Want to add a new automated task?
+Define a new Payload struct with the parameters it needs.
+Write an execute_..._payload function for it.
+Add it to the dispatcher.
+You don't have to touch the core scheduling engine. Examples of new tasks you could easily add:
+Automated Rebalancing: A task that rebalances a portfolio between two assets in the DAO's vault.
+LP Fee Compounding: A task that automatically claims trading fees and re-deposits them as liquidity.
+Debt Repayment: A task that makes periodic payments on a loan from another protocol.
+Simplified Governance: The DAO only needs to vote on creating and configuring Task objects. The governance proposal for creating a payment stream looks almost identical to the proposal for creating a treasury strategy—only the payload differs.
+Clearer Architecture: This separates concerns beautifully.
+The Task system handles the "when" (scheduling).
+The Payload and its execute function handle the "what" (the specific action).
+You are absolutely on the right track. Refactoring your streams into a generic, repeatable pattern is a significant level-up for your protocol's architecture. It turns a single-purpose feature into a powerful, extensible platform for DAO automation.
+
+
+
+
 - [ ] Trade back weird octothorpe stuff in headersMobile no footer on trader and create
 
 This is an excellent question, and it moves us from pure architecture to business strategy. The platform you've designed is not a simple "no-code DAO generator." It is a professional-grade, high-assurance **on-chain automation and governance engine**. The pricing should reflect that level of sophistication and the value it provides.
@@ -117,7 +244,7 @@ Your platform is an enterprise-grade piece of infrastructure. The price should r
   - Add telemetry for action execution
   - Implement batch action optimizations
 
-
+- [ ] fix incentives around proposal mutation. if mutators outcomes wins, proposers must still get refunded if they only create two options. other wise incentive for mutators to just sligtly position themselves around the  proposal creators, settigs: (i.e changing a few words or characters in a memo proposal or chaning a number by a small amount and hedging by going either side of the origional) in order to steal the proposal creators fee. or for proposer to create proposals with n_max option to block anyone from mutating their proposal 
 - [ ] Create dao with instant approved intents
 - [ ] option to pass moveframework account to DAO
 - [ ] Create dao in launch pad
