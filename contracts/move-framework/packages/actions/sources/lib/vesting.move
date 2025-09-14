@@ -10,6 +10,13 @@
 // - Actions serialize to bytes before adding to intent via add_typed_action()
 // - Comprehensive vesting features: cliff periods, multiple beneficiaries, pausable
 // - Type-safe action validation through compile-time TypeName comparison
+//
+// COMPOSABILITY IMPROVEMENTS (2025-09-14):
+// - claim_vesting() now returns Coin<CoinType> for PTB composability
+// - Added claim_vesting_to() for direct transfers to recipients
+// - Added claim_vesting_to_self() convenience function
+// - Added batch claim functions: claim_two_vestings(), claim_three_vestings()
+// - Fixed design flaw: separated authorization from payment destination
 // ============================================================================
 /// This module provides comprehensive vesting functionality similar to vault streams.
 /// A vesting has configurable parameters for maximum flexibility:
@@ -92,6 +99,7 @@ const EInvalidVestingParameters: u64 = 12;
 const ECliffNotReached: u64 = 13;
 const EWithdrawalLimitExceeded: u64 = 14;
 const EWithdrawalTooSoon: u64 = 15;
+const EInvalidInput: u64 = 16;
 
 // === Constants ===
 
@@ -374,13 +382,14 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
-/// Claims vested funds (no auth needed, just be an authorized beneficiary)
+/// Claims vested funds and returns the coin for composability
+/// Caller must be an authorized beneficiary
 public fun claim_vesting<CoinType>(
     vesting: &mut Vesting<CoinType>,
     amount: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): Coin<CoinType> {
     // Check if sender is authorized beneficiary
     let sender = tx_context::sender(ctx);
     let is_authorized = vesting.primary_beneficiary == sender || 
@@ -434,9 +443,8 @@ public fun claim_vesting<CoinType>(
     vesting.claimed_amount = vesting.claimed_amount + amount;
     vesting.last_withdrawal_time = current_time;
     
-    // Transfer payment
+    // Create payment coin
     let payment = coin::from_balance(vesting.balance.split(amount), ctx);
-    transfer::public_transfer(payment, sender);
     
     // Emit event
     event::emit(VestingClaimed {
@@ -445,6 +453,89 @@ public fun claim_vesting<CoinType>(
         amount,
         remaining: vesting.balance.value(),
     });
+
+    // Return the coin for composability
+    payment
+}
+
+/// Convenience function: Claims vested funds and transfers to a specific recipient
+/// This wraps the composable claim_vesting function for simple use cases
+public fun claim_vesting_to<CoinType>(
+    vesting: &mut Vesting<CoinType>,
+    amount: u64,
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let payment = claim_vesting(vesting, amount, clock, ctx);
+    transfer::public_transfer(payment, recipient);
+}
+
+/// Convenience function: Claims vested funds and transfers to sender
+/// This is the simplest way to claim for yourself
+public fun claim_vesting_to_self<CoinType>(
+    vesting: &mut Vesting<CoinType>,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    claim_vesting_to(vesting, amount, tx_context::sender(ctx), clock, ctx);
+}
+
+/// Batch claim function: Claims from two vestings and combines the coins
+/// This is useful for users with multiple vesting schedules who want to claim
+/// and combine their vested tokens in a single transaction
+public fun claim_two_vestings<CoinType>(
+    vesting1: &mut Vesting<CoinType>,
+    amount1: u64,
+    vesting2: &mut Vesting<CoinType>,
+    amount2: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    // Claim from both vestings
+    let mut coin1 = claim_vesting(vesting1, amount1, clock, ctx);
+    let coin2 = claim_vesting(vesting2, amount2, clock, ctx);
+
+    // Combine the coins
+    coin1.join(coin2);
+    coin1
+}
+
+/// Batch claim function: Claims from three vestings and combines the coins
+public fun claim_three_vestings<CoinType>(
+    vesting1: &mut Vesting<CoinType>,
+    amount1: u64,
+    vesting2: &mut Vesting<CoinType>,
+    amount2: u64,
+    vesting3: &mut Vesting<CoinType>,
+    amount3: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    // Claim from all three vestings
+    let mut coin1 = claim_vesting(vesting1, amount1, clock, ctx);
+    let coin2 = claim_vesting(vesting2, amount2, clock, ctx);
+    let coin3 = claim_vesting(vesting3, amount3, clock, ctx);
+
+    // Combine all coins
+    coin1.join(coin2);
+    coin1.join(coin3);
+    coin1
+}
+
+/// Batch claim with transfer: Claims from two vestings and sends to recipient
+public fun claim_two_vestings_to<CoinType>(
+    vesting1: &mut Vesting<CoinType>,
+    amount1: u64,
+    vesting2: &mut Vesting<CoinType>,
+    amount2: u64,
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    let combined = claim_two_vestings(vesting1, amount1, vesting2, amount2, clock, ctx);
+    transfer::public_transfer(combined, recipient);
 }
 
 /// Cancels a vesting, returning unvested funds to the account

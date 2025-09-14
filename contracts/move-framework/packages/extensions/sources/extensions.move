@@ -77,11 +77,6 @@ public fun length(extensions: &Extensions): u64 {
     extensions.by_name.length()
 }
 
-/// Returns the number of extensions (alias for length)
-public fun size(extensions: &Extensions): u64 {
-    extensions.by_name.length()
-}
-
 /// Returns the extension by name
 public fun get_by_name(extensions: &Extensions, name: String): &Extension {
     assert!(extensions.by_name.contains(name), EExtensionNotFound);

@@ -10,7 +10,7 @@
 
 ### Summary of Changes
 
-This fork introduces six major architectural changes to make the framework suitable for DAO governance:
+This fork introduces eight major architectural changes to make the framework suitable for DAO governance:
 
 1. **Serialize-Then-Destroy Pattern**: Novel resource safety pattern maintaining BCS compatibility while enforcing explicit lifecycle management
 2. **Hot Potato Results with Zero Storage Cost**: Replaced ExecutionContext with compile-time safe result chaining, eliminating ~200 gas per operation
@@ -18,6 +18,8 @@ This fork introduces six major architectural changes to make the framework suita
 4. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
 5. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
 6. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
+7. **On-Chain Schema System**: Self-describing actions via decoupled schema registry, eliminating decoder maintenance burden
+8. **Vesting Composability**: Full PTB integration for vesting claims with flexible destinations
 
 These changes result in:
 - **~200 gas saved per action** from eliminating ExecutionContext Table operations
@@ -345,6 +347,114 @@ This standardization ensures:
 - **Added**: `delete_expired_intent()` for garbage collection of expired intents
 - **Purpose**: Allow DAOs to cancel stale or incorrect proposals and avoid account bloat more easily
 - **Safety**: Only callable by authorized config modules
+
+### Major Change #7: On-Chain Schema System (2025-09-14)
+
+**Purpose**: Eliminate the "Decoder Maintenance Problem" where every new action type breaks all downstream tools
+
+#### The Problem
+Without schemas, every wallet, SDK, and tool needs hardcoded knowledge of every action type. Adding a new action breaks everything downstream.
+
+#### The Solution: Self-Describing Actions
+
+**Clean Architecture**:
+- `ActionSpec` remains unchanged - `action_type` is the schema key
+- `ActionSchemaRegistry` stores schemas (single source of truth)
+- No redundant flags or API fragmentation
+- Complete decoupling between intent creation and schema existence
+
+**Implementation**:
+```move
+// Schema registry (shared object)
+public struct ActionSchemaRegistry has key {
+    schemas: Table<TypeName, ActionSchema>,
+}
+
+// Action modules register schemas once during init
+public fun init(registry: &mut ActionSchemaRegistry) {
+    let schema = schema::new_action_schema(
+        type_name::get<TransferAction>(),
+        vector[
+            schema::new_field_schema(
+                b"recipient".to_string(),
+                b"Address to receive tokens".to_string(),
+                schema::address_type(),
+                false
+            ),
+            // ... more fields
+        ],
+        b"Transfer tokens to recipient".to_string()
+    );
+    schema::register_schema(registry, schema);
+}
+
+// Clients decode any action universally
+async function decodeAction(spec: ActionSpec): Promise<DecodedAction> {
+    const schema = await registry.getSchema(spec.action_type);
+    if (!schema) return { type: spec.action_type, data: "Unknown" };
+    return universalDecode(spec.action_data, schema);
+}
+```
+
+**Benefits**:
+- **Future-proof**: New actions automatically decodeable
+- **Decentralized**: No SDK dependency
+- **Transparent**: Users see exact on-chain schema
+- **Zero maintenance**: Write schema once, works forever
+
+**Files Added**:
+- `protocol/sources/schema.move` - Schema types and registry
+- `actions/sources/decoders/` - Complete decoder implementations for all actions
+- `DECODER_ARCHITECTURE.md` - Clean architecture documentation
+
+### Major Change #8: Vesting Composability (2025-09-14)
+
+**Purpose**: Fix non-composable vesting design and enable PTB integration
+
+#### The Problem
+Original `claim_vesting()` transferred directly to sender, preventing:
+- Chaining with other operations in PTBs
+- Flexible payment destinations
+- DeFi composability (stake, swap, split)
+
+#### The Solution: Composable Returns
+```move
+// Old: Non-composable
+public fun claim_vesting(...) {
+    transfer::public_transfer(payment, sender);
+}
+
+// New: Composable
+public fun claim_vesting(...): Coin<CoinType> {
+    return payment;
+}
+```
+
+**Improvements**:
+- `claim_vesting()` now returns `Coin<CoinType>` for PTB composability
+- Added `claim_vesting_to(recipient)` for direct transfers
+- Added `claim_vesting_to_self()` convenience function
+- Added batch claims: `claim_two_vestings()`, `claim_three_vestings()`
+- Fixed design flaw: separated authorization from payment destination
+
+**Benefits**:
+- **Full PTB composability**: Chain vesting claims with any operation
+- **Flexible destinations**: Send to any address, not just sender
+- **DeFi ready**: Claim and stake/swap/split in one transaction
+- **No lint warnings**: Eliminates self-transfer anti-pattern
+
+### Minor Improvements (2025-09-14)
+
+**Code Cleanup**:
+- Removed redundant `size()` function from extensions module (kept `length()`)
+- Fixed whitespace and formatting in account.move and intents.move
+- Added comprehensive fork modification notices to all new files
+
+**Decoder System Implementation**:
+- Created 7 complete decoders: vault, currency, package_upgrade, vesting, transfer, kiosk, access_control
+- Implemented security validation with `validate_all_bytes_consumed()`
+- Used proper ID to address conversion: `id.id_to_address().to_string()`
+- Clean architecture: Protocol layer unaware of decoders, validation at application boundary
 
 ## Project Overview
 

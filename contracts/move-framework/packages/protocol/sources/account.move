@@ -52,7 +52,7 @@ use std::{
 };
 use sui::{
     transfer::Receiving,
-    clock::Clock, 
+    clock::Clock,
     dynamic_field as df,
     dynamic_object_field as dof,
     package,
@@ -528,13 +528,13 @@ public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + s
 
 /// Creates a new account with default dependencies. Can only be called from the config module.
 public fun new<Config, CW: drop>(
-    config: Config, 
+    config: Config,
     deps: Deps,
     version_witness: VersionWitness,
     config_witness: CW,
     ctx: &mut TxContext
 ): Account<Config> {
-    let account = Account<Config> { 
+    let account = Account<Config> {
         id: object::new(ctx),
         metadata: metadata::empty(),
         deps,
@@ -545,7 +545,7 @@ public fun new<Config, CW: drop>(
     account.deps().check(version_witness);
     assert_is_config_module(&account, config_witness);
 
-    account 
+    account
 }
 
 /// Returns an Auth object that can be used to call gated functions. Can only be called from the config module.
