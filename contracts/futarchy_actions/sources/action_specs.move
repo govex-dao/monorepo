@@ -4,6 +4,7 @@
 module futarchy_actions::action_specs;
 
 use std::type_name::TypeName;
+use account_protocol::schema::{Self, ActionDecoderRegistry};
 
 /// Generic action specification - can hold ANY action data
 /// The action_type tells us how to interpret the action_data bytes
@@ -39,10 +40,28 @@ public fun new_init_specs(): InitActionSpecs {
 /// Add a generic action specification
 /// The caller is responsible for BCS-serializing the action data
 public fun add_action(
-    specs: &mut InitActionSpecs, 
+    specs: &mut InitActionSpecs,
     action_type: TypeName,
     action_data: vector<u8>
 ) {
+    vector::push_back(&mut specs.actions, ActionSpec {
+        action_type,
+        action_data,
+    });
+}
+
+/// Add an action specification with mandatory schema validation
+/// Ensures a decoder exists for the action type before adding it
+public fun add_action_validated(
+    specs: &mut InitActionSpecs,
+    registry: &ActionDecoderRegistry,
+    action_type: TypeName,
+    action_data: vector<u8>
+) {
+    // Enforce that a decoder for this action type has been registered
+    schema::assert_decoder_exists(registry, action_type);
+
+    // Add the action
     vector::push_back(&mut specs.actions, ActionSpec {
         action_type,
         action_data,

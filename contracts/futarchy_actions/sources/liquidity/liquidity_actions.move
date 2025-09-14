@@ -17,11 +17,17 @@ use sui::{
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable, ExecutionContext},
-    intents::Expired,
+    intents::{Self, Expired, ActionSpec},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_actions::vault;
-use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
+use futarchy_core::{
+    futarchy_config::{Self, FutarchyConfig},
+    version,
+    action_validation,
+    action_types,
+};
 use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::spot_amm::{Self, SpotAMM};
 use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
@@ -50,6 +56,32 @@ public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has s
     min_stable_amount: u64, // Slippage protection
 }
 
+/// Action to perform a swap in the pool
+public struct SwapAction<phantom AssetType, phantom StableType> has store, drop {
+    pool_id: ID,
+    swap_asset: bool, // true = swap asset for stable, false = swap stable for asset
+    amount_in: u64,
+    min_amount_out: u64, // Slippage protection
+}
+
+/// Action to collect fees from the pool
+public struct CollectFeesAction<phantom AssetType, phantom StableType> has store, drop {
+    pool_id: ID,
+}
+
+/// Action to enable or disable a pool
+public struct SetPoolEnabledAction has store, drop {
+    pool_id: ID,
+    enabled: bool,
+}
+
+/// Action to withdraw accumulated fees to treasury
+public struct WithdrawFeesAction<phantom AssetType, phantom StableType> has store, drop {
+    pool_id: ID,
+    asset_amount: u64,
+    stable_amount: u64,
+}
+
 /// Action to create a new liquidity pool
 public struct CreatePoolAction<phantom AssetType, phantom StableType> has store, drop, copy {
     initial_asset_amount: u64,
@@ -76,7 +108,7 @@ public struct SetPoolStatusAction has store, drop, copy {
 
 // === Execution Functions ===
 
-/// Execute a create pool action
+/// Execute a create pool action with type validation
 /// Creates a hot potato ResourceRequest that must be fulfilled with coins and pool
 public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
@@ -85,7 +117,34 @@ public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW:
     witness: IW,
     ctx: &mut TxContext,
 ): resource_requests::ResourceRequest<CreatePoolAction<AssetType, StableType>> {
-    let action = executable::next_action<Outcome, CreatePoolAction<AssetType, StableType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreatePool>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let initial_asset_amount = bcs::peel_u64(&mut reader);
+    let initial_stable_amount = bcs::peel_u64(&mut reader);
+    let fee_bps = bcs::peel_u64(&mut reader);
+    let minimum_liquidity = bcs::peel_u64(&mut reader);
+    let placeholder_out = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_u64(&mut reader))
+    } else {
+        option::none()
+    };
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct
+    let action = CreatePoolAction<AssetType, StableType> {
+        initial_asset_amount,
+        initial_stable_amount,
+        fee_bps,
+        minimum_liquidity,
+        placeholder_out,
+    };
     
     // Validate parameters
     assert!(action.initial_asset_amount > 0, EInvalidAmount);
@@ -109,7 +168,7 @@ public fun do_create_pool<AssetType: drop, StableType: drop, Outcome: store, IW:
     request
 }
 
-/// Execute an update pool params action
+/// Execute an update pool params action with type validation
 /// Updates fee and minimum liquidity requirements for a pool
 public fun do_update_pool_params<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
@@ -118,19 +177,36 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &UpdatePoolParamsAction = executable::next_action(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::UpdatePoolParams>(spec);
+
+    let action_data = intents::action_spec_data(spec);
     let context = executable::context(executable);
 
-    // Get pool ID from placeholder or direct ID
-    let pool_id = if (action.placeholder_in.is_some()) {
-        executable::resolve_placeholder(context, *action.placeholder_in.borrow())
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = if (bcs::peel_bool(&mut reader)) {
+        option::some(object::id_from_address(bcs::peel_address(&mut reader)))
     } else {
-        *action.pool_id.borrow()
+        option::none()
     };
+    let placeholder_in = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_u64(&mut reader))
+    } else {
+        option::none()
+    };
+    let new_fee_bps = bcs::peel_u64(&mut reader);
+    let new_minimum_liquidity = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Get action parameters
-    let new_fee_bps = action.new_fee_bps;
-    let new_minimum_liquidity = action.new_minimum_liquidity;
+    // Get pool ID from placeholder or direct ID
+    let pool_id = if (placeholder_in.is_some()) {
+        executable::resolve_placeholder(context, *placeholder_in.borrow())
+    } else {
+        *pool_id.borrow()
+    };
     
     // Validate parameters
     assert!(new_fee_bps <= 10000, EInvalidRatio);
@@ -141,13 +217,16 @@ public fun do_update_pool_params<Outcome: store, IW: drop>(
     let stored_pool_id = futarchy_config::spot_pool_id(config);
     assert!(stored_pool_id.is_some(), EEmptyPool);
     assert!(pool_id == *stored_pool_id.borrow(), EEmptyPool);
-    
+
     // Note: The pool object must be passed by the caller since it's a shared object
     // This function just validates the action - actual update happens in dispatcher
     // which has access to the pool object
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
-/// Execute a set pool status action
+/// Execute a set pool status action with type validation
 /// Pauses or unpauses trading in a pool
 public fun do_set_pool_status<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
@@ -156,18 +235,35 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &SetPoolStatusAction = executable::next_action(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::SetPoolEnabled>(spec);
+
+    let action_data = intents::action_spec_data(spec);
     let context = executable::context(executable);
 
-    // Get pool ID from placeholder or direct ID
-    let pool_id = if (action.placeholder_in.is_some()) {
-        executable::resolve_placeholder(context, *action.placeholder_in.borrow())
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = if (bcs::peel_bool(&mut reader)) {
+        option::some(object::id_from_address(bcs::peel_address(&mut reader)))
     } else {
-        *action.pool_id.borrow()
+        option::none()
     };
+    let placeholder_in = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_u64(&mut reader))
+    } else {
+        option::none()
+    };
+    let is_paused = bcs::peel_bool(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Get action parameters
-    let is_paused = action.is_paused;
+    // Get pool ID from placeholder or direct ID
+    let pool_id = if (placeholder_in.is_some()) {
+        executable::resolve_placeholder(context, *placeholder_in.borrow())
+    } else {
+        *pool_id.borrow()
+    };
     
     // Verify this pool belongs to the DAO
     let config = account::config(account);
@@ -178,9 +274,12 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     // Note: The pool object must be passed by the caller since it's a shared object
     // This function just validates the action - actual update happens in dispatcher
     // which has access to the pool object
-    
+
     // Store the status for future reference
     let _ = is_paused;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Fulfill pool creation request with coins from vault
@@ -249,7 +348,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     (resource_requests::fulfill(request), pool_id)
 }
 
-/// Execute add liquidity - creates request for vault coins
+/// Execute add liquidity with type validation - creates request for vault coins
 public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -257,7 +356,28 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     witness: IW,
     ctx: &mut TxContext,
 ): ResourceRequest<AddLiquidityAction<AssetType, StableType>> {
-    let action = executable::next_action<Outcome, AddLiquidityAction<AssetType, StableType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::AddLiquidity>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let asset_amount = bcs::peel_u64(&mut reader);
+    let stable_amount = bcs::peel_u64(&mut reader);
+    let min_lp_out = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct
+    let action = action_data_structs::new_add_liquidity_action<AssetType, StableType>(
+        pool_id,
+        asset_amount,
+        stable_amount,
+        min_lp_out
+    );
     
     // Check vault has sufficient balance
     let vault_name = string::utf8(DEFAULT_VAULT_NAME);
@@ -272,7 +392,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
     let action_copy = *action;
     resource_requests::add_context(&mut request, string::utf8(b"action"), action_copy);
     resource_requests::add_context(&mut request, string::utf8(b"account_id"), object::id(account));
-    
+
     request
 }
 
@@ -328,7 +448,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     (resource_requests::fulfill(request), lp_token)
 }
 
-/// Execute remove liquidity and return coins to caller
+/// Execute remove liquidity with type validation and return coins to caller
 public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     _account: &mut Account<FutarchyConfig>,
@@ -338,7 +458,28 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     lp_token: LPToken<AssetType, StableType>,
     ctx: &mut TxContext,
 ): (Coin<AssetType>, Coin<StableType>) {
-    let action = executable::next_action<Outcome, RemoveLiquidityAction<AssetType, StableType>, IW>(executable, witness);
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::RemoveLiquidity>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let lp_amount = bcs::peel_u64(&mut reader);
+    let min_asset_amount = bcs::peel_u64(&mut reader);
+    let min_stable_amount = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct
+    let action = RemoveLiquidityAction<AssetType, StableType> {
+        pool_id,
+        lp_amount,
+        min_asset_amount,
+        min_stable_amount,
+    };
     
     // Verify pool ID matches
     assert!(action.pool_id == object::id(pool), EEmptyPool);
@@ -354,12 +495,130 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
         action.min_stable_amount,
         ctx
     );
-    
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
+
     // Return coins to caller to deposit back to vault
     // The caller (dispatcher) is responsible for depositing to vault
     (asset_coin, stable_coin)
 }
 
+/// Execute a swap action with type validation
+public fun do_swap<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    _account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    _ctx: &mut TxContext,
+): ResourceRequest<SwapAction<AssetType, StableType>> {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::Swap>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let swap_asset = bcs::peel_bool(&mut reader);
+    let amount_in = bcs::peel_u64(&mut reader);
+    let min_amount_out = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct
+    let action = SwapAction<AssetType, StableType> {
+        pool_id,
+        swap_asset,
+        amount_in,
+        min_amount_out,
+    };
+
+    // Validate parameters
+    assert!(action.amount_in > 0, EInvalidAmount);
+    assert!(action.min_amount_out > 0, EInvalidAmount);
+
+    // Create resource request
+    let mut request = resource_requests::new_request<SwapAction<AssetType, StableType>>(_ctx);
+    resource_requests::add_context(&mut request, string::utf8(b"pool_id"), pool_id);
+    resource_requests::add_context(&mut request, string::utf8(b"swap_asset"), swap_asset as u64);
+    resource_requests::add_context(&mut request, string::utf8(b"amount_in"), amount_in);
+    resource_requests::add_context(&mut request, string::utf8(b"min_amount_out"), min_amount_out);
+
+    request
+}
+
+/// Execute collect fees action with type validation
+public fun do_collect_fees<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    _ctx: &mut TxContext,
+) {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CollectFees>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Verify this pool belongs to the DAO
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), EEmptyPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EEmptyPool);
+
+    // Note: Actual fee collection happens in dispatcher with pool access
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
+}
+
+/// Execute withdraw fees action with type validation
+public fun do_withdraw_fees<AssetType: drop, StableType: drop, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    witness: IW,
+    _ctx: &mut TxContext,
+) {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::WithdrawFees>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let asset_amount = bcs::peel_u64(&mut reader);
+    let stable_amount = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Verify this pool belongs to the DAO
+    let config = account::config(account);
+    let stored_pool_id = futarchy_config::spot_pool_id(config);
+    assert!(stored_pool_id.is_some(), EEmptyPool);
+    assert!(pool_id == *stored_pool_id.borrow(), EEmptyPool);
+
+    // Validate amounts
+    assert!(asset_amount > 0 || stable_amount > 0, EInvalidAmount);
+
+    // Note: Actual withdrawal happens in dispatcher with pool access
+    let _ = asset_amount;
+    let _ = stable_amount;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
+}
 
 // === Cleanup Functions ===
 
@@ -408,9 +667,43 @@ public fun delete_set_pool_status(expired: &mut Expired) {
     } = expired.remove_action();
 }
 
+/// Delete a swap action from an expired intent
+public fun delete_swap<AssetType, StableType>(expired: &mut Expired) {
+    let SwapAction<AssetType, StableType> {
+        pool_id: _,
+        swap_asset: _,
+        amount_in: _,
+        min_amount_out: _,
+    } = expired.remove_action();
+}
+
+/// Delete a collect fees action from an expired intent
+public fun delete_collect_fees<AssetType, StableType>(expired: &mut Expired) {
+    let CollectFeesAction<AssetType, StableType> {
+        pool_id: _,
+    } = expired.remove_action();
+}
+
+/// Delete a set pool enabled action from an expired intent
+public fun delete_set_pool_enabled(expired: &mut Expired) {
+    let SetPoolEnabledAction {
+        pool_id: _,
+        enabled: _,
+    } = expired.remove_action();
+}
+
+/// Delete a withdraw fees action from an expired intent
+public fun delete_withdraw_fees<AssetType, StableType>(expired: &mut Expired) {
+    let WithdrawFeesAction<AssetType, StableType> {
+        pool_id: _,
+        asset_amount: _,
+        stable_amount: _,
+    } = expired.remove_action();
+}
+
 // === Helper Functions ===
 
-/// Create a new add liquidity action
+/// Create a new add liquidity action with serialization
 public fun new_add_liquidity_action<AssetType, StableType>(
     pool_id: ID,
     asset_amount: u64,
@@ -420,11 +713,12 @@ public fun new_add_liquidity_action<AssetType, StableType>(
     assert!(asset_amount > 0, EInvalidAmount);
     assert!(stable_amount > 0, EInvalidAmount);
     assert!(min_lp_out > 0, EInvalidAmount);
-    
-    action_data_structs::new_add_liquidity_action(pool_id, asset_amount, stable_amount, min_lp_out)
+
+    let action = action_data_structs::new_add_liquidity_action(pool_id, asset_amount, stable_amount, min_lp_out);
+    action
 }
 
-/// Create a new remove liquidity action
+/// Create a new remove liquidity action with serialization
 public fun new_remove_liquidity_action<AssetType, StableType>(
     pool_id: ID,
     lp_amount: u64,
@@ -432,16 +726,20 @@ public fun new_remove_liquidity_action<AssetType, StableType>(
     min_stable_amount: u64,
 ): RemoveLiquidityAction<AssetType, StableType> {
     assert!(lp_amount > 0, EInvalidAmount);
-    
-    RemoveLiquidityAction {
+
+    let action = RemoveLiquidityAction<AssetType, StableType> {
         pool_id,
         lp_amount,
         min_asset_amount,
         min_stable_amount,
-    }
+    };
+    let bytes = bcs::to_bytes(&action);
+    // Destroy the action struct after serialization
+    let RemoveLiquidityAction { pool_id: _, lp_amount: _, min_asset_amount: _, min_stable_amount: _ } = action;
+    bytes
 }
 
-/// Create a new create pool action
+/// Create a new create pool action with serialization
 public fun new_create_pool_action<AssetType, StableType>(
     initial_asset_amount: u64,
     initial_stable_amount: u64,
@@ -454,16 +752,20 @@ public fun new_create_pool_action<AssetType, StableType>(
     assert!(fee_bps <= 10000, EInvalidRatio); // Max 100%
     assert!(minimum_liquidity > 0, EInvalidAmount);
 
-    CreatePoolAction {
+    let action = CreatePoolAction<AssetType, StableType> {
         initial_asset_amount,
         initial_stable_amount,
         fee_bps,
         minimum_liquidity,
         placeholder_out,
-    }
+    };
+    let bytes = bcs::to_bytes(&action);
+    // Destroy the action struct after serialization
+    let CreatePoolAction { initial_asset_amount: _, initial_stable_amount: _, fee_bps: _, minimum_liquidity: _, placeholder_out: _ } = action;
+    bytes
 }
 
-/// Create a new update pool params action
+/// Create a new update pool params action with serialization
 public fun new_update_pool_params_action(
     pool_id: Option<ID>,
     placeholder_in: Option<u64>,
@@ -474,15 +776,16 @@ public fun new_update_pool_params_action(
     assert!(new_minimum_liquidity > 0, EInvalidAmount);
     assert!(pool_id.is_some() || placeholder_in.is_some(), EInvalidAmount);
 
-    UpdatePoolParamsAction {
+    let action = UpdatePoolParamsAction {
         pool_id,
         placeholder_in,
         new_fee_bps,
         new_minimum_liquidity,
-    }
+    };
+    action
 }
 
-/// Create a new set pool status action
+/// Create a new set pool status action with serialization
 public fun new_set_pool_status_action(
     pool_id: Option<ID>,
     placeholder_in: Option<u64>,
@@ -490,11 +793,69 @@ public fun new_set_pool_status_action(
 ): SetPoolStatusAction {
     assert!(pool_id.is_some() || placeholder_in.is_some(), EInvalidAmount);
 
-    SetPoolStatusAction {
+    let action = SetPoolStatusAction {
         pool_id,
         placeholder_in,
         is_paused,
-    }
+    };
+    action
+}
+
+/// Create a new swap action with serialization
+public fun new_swap_action<AssetType, StableType>(
+    pool_id: ID,
+    swap_asset: bool,
+    amount_in: u64,
+    min_amount_out: u64,
+): SwapAction<AssetType, StableType> {
+    assert!(amount_in > 0, EInvalidAmount);
+    assert!(min_amount_out > 0, EInvalidAmount);
+
+    let action = SwapAction<AssetType, StableType> {
+        pool_id,
+        swap_asset,
+        amount_in,
+        min_amount_out,
+    };
+    action
+}
+
+/// Create a new collect fees action with serialization
+public fun new_collect_fees_action<AssetType, StableType>(
+    pool_id: ID,
+): CollectFeesAction<AssetType, StableType> {
+    let action = CollectFeesAction<AssetType, StableType> {
+        pool_id,
+    };
+    action
+}
+
+/// Create a new set pool enabled action with serialization
+public fun new_set_pool_enabled_action(
+    pool_id: ID,
+    enabled: bool,
+): SetPoolEnabledAction {
+    let action = SetPoolEnabledAction {
+        pool_id,
+        enabled,
+    };
+    action
+}
+
+/// Create a new withdraw fees action with serialization
+public fun new_withdraw_fees_action<AssetType, StableType>(
+    pool_id: ID,
+    asset_amount: u64,
+    stable_amount: u64,
+): WithdrawFeesAction<AssetType, StableType> {
+    assert!(asset_amount > 0 || stable_amount > 0, EInvalidAmount);
+
+    let action = WithdrawFeesAction<AssetType, StableType> {
+        pool_id,
+        asset_amount,
+        stable_amount,
+    };
+    action
 }
 
 // === Getter Functions ===
@@ -589,6 +950,88 @@ public fun lp_value<AssetType, StableType>(lp_token: &LPToken<AssetType, StableT
     account_spot_pool::lp_token_amount(lp_token)
 }
 
+// === Destruction Functions ===
+
+/// Destroy CreatePoolAction after use
+public fun destroy_create_pool_action<AssetType, StableType>(action: CreatePoolAction<AssetType, StableType>) {
+    let CreatePoolAction {
+        initial_asset_amount: _,
+        initial_stable_amount: _,
+        fee_bps: _,
+        minimum_liquidity: _,
+        placeholder_out: _,
+    } = action;
+}
+
+/// Destroy UpdatePoolParamsAction after use
+public fun destroy_update_pool_params_action(action: UpdatePoolParamsAction) {
+    let UpdatePoolParamsAction {
+        pool_id: _,
+        placeholder_in: _,
+        new_fee_bps: _,
+        new_minimum_liquidity: _,
+    } = action;
+}
+
+/// Destroy AddLiquidityAction after use (delegate to action_data_structs)
+public fun destroy_add_liquidity_action<AssetType, StableType>(action: AddLiquidityAction<AssetType, StableType>) {
+    // AddLiquidityAction has drop ability, so it will be automatically dropped
+    let _ = action;
+}
+
+/// Destroy RemoveLiquidityAction after use
+public fun destroy_remove_liquidity_action<AssetType, StableType>(action: RemoveLiquidityAction<AssetType, StableType>) {
+    let RemoveLiquidityAction {
+        pool_id: _,
+        lp_amount: _,
+        min_asset_amount: _,
+        min_stable_amount: _,
+    } = action;
+}
+
+/// Destroy SetPoolStatusAction after use
+public fun destroy_set_pool_status_action(action: SetPoolStatusAction) {
+    let SetPoolStatusAction {
+        pool_id: _,
+        placeholder_in: _,
+        is_paused: _,
+    } = action;
+}
+
+/// Destroy SwapAction after use
+public fun destroy_swap_action<AssetType, StableType>(action: SwapAction<AssetType, StableType>) {
+    let SwapAction {
+        pool_id: _,
+        swap_asset: _,
+        amount_in: _,
+        min_amount_out: _,
+    } = action;
+}
+
+/// Destroy CollectFeesAction after use
+public fun destroy_collect_fees_action<AssetType, StableType>(action: CollectFeesAction<AssetType, StableType>) {
+    let CollectFeesAction {
+        pool_id: _,
+    } = action;
+}
+
+/// Destroy SetPoolEnabledAction after use
+public fun destroy_set_pool_enabled_action(action: SetPoolEnabledAction) {
+    let SetPoolEnabledAction {
+        pool_id: _,
+        enabled: _,
+    } = action;
+}
+
+/// Destroy WithdrawFeesAction after use
+public fun destroy_withdraw_fees_action<AssetType, StableType>(action: WithdrawFeesAction<AssetType, StableType>) {
+    let WithdrawFeesAction {
+        pool_id: _,
+        asset_amount: _,
+        stable_amount: _,
+    } = action;
+}
+
 // === Deserialization Constructors ===
 
 /// Deserialize AddLiquidityAction from bytes (alias for action_data_structs)
@@ -657,5 +1100,43 @@ public(package) fun set_pool_status_action_from_bytes(bytes: vector<u8>): SetPoo
             option::none()
         },
         is_paused: bcs::peel_bool(&mut bcs),
+    }
+}
+
+/// Deserialize SwapAction from bytes
+public(package) fun swap_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): SwapAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    SwapAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        swap_asset: bcs::peel_bool(&mut bcs),
+        amount_in: bcs::peel_u64(&mut bcs),
+        min_amount_out: bcs::peel_u64(&mut bcs),
+    }
+}
+
+/// Deserialize CollectFeesAction from bytes
+public(package) fun collect_fees_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): CollectFeesAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    CollectFeesAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+    }
+}
+
+/// Deserialize SetPoolEnabledAction from bytes
+public(package) fun set_pool_enabled_action_from_bytes(bytes: vector<u8>): SetPoolEnabledAction {
+    let mut bcs = bcs::new(bytes);
+    SetPoolEnabledAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        enabled: bcs::peel_bool(&mut bcs),
+    }
+}
+
+/// Deserialize WithdrawFeesAction from bytes
+public(package) fun withdraw_fees_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): WithdrawFeesAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    WithdrawFeesAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        asset_amount: bcs::peel_u64(&mut bcs),
+        stable_amount: bcs::peel_u64(&mut bcs),
     }
 }

@@ -176,7 +176,7 @@ fun register_upgrade_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = UpgradeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<UpgradeAction>();
+    let type_key = type_name::with_defining_ids<UpgradeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -185,7 +185,7 @@ fun register_commit_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CommitActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CommitAction>();
+    let type_key = type_name::with_defining_ids<CommitAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -194,6 +194,6 @@ fun register_restrict_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = RestrictActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<RestrictAction>();
+    let type_key = type_name::with_defining_ids<RestrictAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

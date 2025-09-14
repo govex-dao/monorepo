@@ -69,7 +69,7 @@ const OUTCOME_REJECTED: u64 = 1;
 public struct ProposalActivated has copy, drop {
     proposal_id: ID,
     dao_id: ID,
-    intent_key: Option<String>,
+    has_intent_spec: bool,
     timestamp: u64,
 }
 
@@ -93,7 +93,7 @@ public struct ProposalIntentExecuted has copy, drop {
 /// Execute approved proposal with fee coin for second-order proposals
 public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: copy + drop>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
@@ -106,22 +106,27 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
 ) {
     // Verify market is finalized
     assert!(market_state::is_finalized(market), EMarketNotFinalized);
-    
+
     // Verify proposal was approved (YES outcome won)
     let winning_outcome = market_state::get_winning_outcome(market);
     assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-    
-    // Get the intent key for the winning outcome (YES = 0)  
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
-    assert!(intent_key_opt.is_some(), ENoIntentKey);
-    let intent_key = *intent_key_opt.borrow();
-    
-    // Execute the proposal intent
+
+    // Create the outcome object (using existing FutarchyOutcome structure)
+    let outcome = futarchy_config::new_futarchy_outcome(
+        b"jit_execution".to_string(), // Temporary key for just-in-time execution
+        option::some(proposal::get_id(proposal)),
+        option::none(), // market_id not needed for execution
+        winning_outcome,
+        0 // amount not relevant here
+    );
+
+    // Execute the proposal intent with IntentSpec
     let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
         account,
         proposal,
         market,
         winning_outcome,
+        outcome,
         clock,
         ctx
     );
@@ -193,7 +198,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let uses_dao_liquidity = priority_queue::uses_dao_liquidity(&queued_proposal);
     let proposer = priority_queue::get_proposer(&queued_proposal);
     let data = *priority_queue::get_proposal_data(&queued_proposal);
-    let intent_key = *priority_queue::get_intent_key(&queued_proposal);
+    let intent_spec = *priority_queue::get_intent_spec(&queued_proposal);
     
     // Extract bond (mutable borrow needed)
     let mut bond = priority_queue::extract_bond(&mut queued_proposal);
@@ -214,22 +219,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         balance::zero<StableType>()
     };
     
-    // If a YES intent key was provided, enforce a strict TTL bound now.
-    // This avoids long-lived stale intents bloating the account.
-    if (intent_key.is_some()) {
-        let key = *intent_key.borrow();
-        // Check if the account actually has this intent
-        let intents_store = account::intents(account);
-        if (intents::contains(intents_store, key)) {
-            // We standardize Futarchy proposal intents to FutarchyOutcome for typed access
-            let intent_ref = intents::get<FutarchyOutcome>(intents_store, key);
-            let max_expiry = clock.timestamp_ms() + futarchy_config::proposal_intent_expiry_ms(config);
-            assert!(
-                intents::expiration_time(intent_ref) <= max_expiry, 
-                EIntentExpiryTooLong
-            );
-        };
-    };
+    // Intent specs are now stored in proposals, no need to check intent keys
     
     // If this proposal uses DAO liquidity, mark the spot pool
     if (uses_dao_liquidity) {
@@ -260,23 +250,12 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         proposer,
         uses_dao_liquidity,
         fee_escrow,
-        intent_key, // Pass the intent key for YES outcome
+        intent_spec, // Pass the IntentSpec from the queued proposal
         clock,
         ctx,
     );
     
-    // Initialize intent keys vector and set YES outcome intent if provided
-    // Note: We'll need to add a function to update the proposal's intent keys
-    // For now, store the intent key in futarchy config if provided
-    if (intent_key.is_some()) {
-        let key = *intent_key.borrow();
-        futarchy_core::futarchy_config::register_proposal(
-            account,
-            proposal_id,
-            key,
-            ctx
-        );
-    };
+    // IntentSpecs are stored directly in proposals now, no need for separate registration
     
     // Destroy the remaining bond option (should be none after extraction)
     bond.destroy_none();
@@ -403,7 +382,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
 /// Note: This version may not handle all action types that require specific coin types
 public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
     clock: &Clock,
@@ -411,22 +390,27 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
 ) {
     // Verify market is finalized
     assert!(market_state::is_finalized(market), EMarketNotFinalized);
-    
+
     // Verify proposal was approved (YES outcome won)
     let winning_outcome = market_state::get_winning_outcome(market);
     assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-    
-    // Get the intent key for the winning outcome (YES = 0)
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
-    assert!(intent_key_opt.is_some(), ENoIntentKey);
-    let intent_key = *intent_key_opt.borrow();
-    
-    // Execute the proposal intent
+
+    // Create the outcome object (using existing FutarchyOutcome structure)
+    let outcome = futarchy_config::new_futarchy_outcome(
+        b"jit_execution".to_string(), // Temporary key for just-in-time execution
+        option::some(proposal::get_id(proposal)),
+        option::none(), // market_id not needed for execution
+        winning_outcome,
+        0 // amount not relevant here
+    );
+
+    // Execute the proposal intent with IntentSpec
     let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
         account,
         proposal,
         market,
-        winning_outcome,  // Pass the actual winning outcome
+        winning_outcome,
+        outcome,
         clock,
         ctx
     );
@@ -462,7 +446,7 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
 /// This version can handle all action types including those requiring specific coin types
 public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
     intent_witness: IW,
     clock: &Clock,
@@ -470,22 +454,27 @@ public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: 
 ) {
     // Verify market is finalized
     assert!(market_state::is_finalized(market), EMarketNotFinalized);
-    
+
     // Verify proposal was approved (YES outcome won)
     let winning_outcome = market_state::get_winning_outcome(market);
     assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-    
-    // Get the intent key for the winning outcome (YES = 0)  
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
-    assert!(intent_key_opt.is_some(), ENoIntentKey);
-    let intent_key = *intent_key_opt.borrow();
-    
-    // Execute using FutarchyOutcome
+
+    // Create the outcome object (using existing FutarchyOutcome structure)
+    let outcome = futarchy_config::new_futarchy_outcome(
+        b"jit_execution".to_string(), // Temporary key for just-in-time execution
+        option::some(proposal::get_id(proposal)),
+        option::none(), // market_id not needed for execution
+        winning_outcome,
+        0 // amount not relevant here
+    );
+
+    // Execute the proposal intent with IntentSpec
     let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
         account,
         proposal,
         market,
-        winning_outcome,  // Pass the actual winning outcome
+        winning_outcome,
+        outcome,
         clock,
         ctx
     );

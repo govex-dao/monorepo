@@ -4,7 +4,7 @@ module futarchy_specialized_actions::governance_intents;
 
 // === Imports ===
 use std::string::{Self, String};
-use std::option;
+use std::option::{Self, Option};
 use std::vector;
 use sui::{
     clock::Clock,
@@ -17,6 +17,7 @@ use account_protocol::{
     intents::{Self, Intent, Params},
     intent_interface,
 };
+use futarchy_actions::action_specs::{Self, InitActionSpecs};
 use futarchy_core::version;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
@@ -154,25 +155,35 @@ public fun create_dissolution_intent<Outcome: store + drop + copy>(
 // === Execution Functions ===
 
 /// Execute a governance intent from an approved proposal
-/// This retrieves the stored intent and converts it to an executable for execution
-/// The intent should have been created when the proposal was submitted to the queue
+/// This creates an Intent just-in-time from the stored IntentSpec blueprint
+/// and immediately converts it to an executable for execution
 public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
     _market: &MarketState,
     outcome_index: u64,
+    outcome: Outcome,
     clock: &Clock,
     ctx: &mut TxContext
 ): Executable<Outcome> {
-    // Get the intent key from the proposal for the specified outcome
-    let intent_key_opt = proposal::get_intent_key_for_outcome(proposal, outcome_index);
-    
-    // Extract the intent key - if no key exists, this indicates no action was defined for this outcome
-    assert!(option::is_some(intent_key_opt), 4); // EIntentNotFound
-    let intent_key = *option::borrow(intent_key_opt);
-    
-    // Execute the intent - pull it from the account and create an executable
-    // The intent was previously stored when the proposal was created
+    // Get the intent spec from the proposal for the specified outcome
+    let intent_spec_opt = proposal::take_intent_spec_for_outcome(proposal, outcome_index);
+
+    // Extract the intent spec - if no spec exists, this indicates no action was defined for this outcome
+    assert!(option::is_some(&intent_spec_opt), 4); // EIntentNotFound
+    let intent_spec = option::extract(&mut intent_spec_opt);
+    option::destroy_none(intent_spec_opt);
+
+    // Create and store Intent temporarily, then immediately create Executable
+    let intent_key = create_and_store_intent_from_spec(
+        account,
+        intent_spec,
+        outcome,
+        clock,
+        ctx
+    );
+
+    // Now create the executable from the stored intent
     let (_outcome, executable) = account::create_executable<FutarchyConfig, Outcome, GovernanceWitness>(
         account,
         intent_key,
@@ -181,7 +192,7 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
         GovernanceWitness{},
         ctx,
     );
-    
+
     executable
 }
 
@@ -204,6 +215,65 @@ public fun create_standard_params(
         clock,
         ctx
     )
+}
+
+/// Create and store an Intent from an InitActionSpecs blueprint
+/// Returns the intent key for immediate execution
+public fun create_and_store_intent_from_spec<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    spec: InitActionSpecs,
+    outcome: Outcome,
+    clock: &Clock,
+    ctx: &mut TxContext
+): String {
+    // Generate a unique key for this just-in-time intent
+    let mut intent_key = b"jit_intent_".to_string();
+    intent_key.append(clock.timestamp_ms().to_string());
+    intent_key.append(b"_".to_string());
+    intent_key.append(object::id_address(account).to_string());
+
+    // Create intent parameters with immediate execution
+    let params = intents::new_params(
+        intent_key,
+        b"Just-in-time Proposal Execution".to_string(),
+        vector[clock.timestamp_ms()], // Execute immediately
+        clock.timestamp_ms() + 3_600_000, // 1 hour expiry
+        clock,
+        ctx
+    );
+
+    // Create the intent using the account module
+    let mut intent = account::create_intent(
+        account,
+        params,
+        outcome,
+        b"ProposalExecution".to_string(),
+        version::current(),
+        witness(),
+        ctx
+    );
+
+    // Add all actions from the spec to the intent
+    let actions = action_specs::actions(&spec);
+    let i = 0;
+    let len = vector::length(actions);
+    while (i < len) {
+        let action = vector::borrow(actions, i);
+        // Add the action to the intent using the serialized bytes
+        intents::add_typed_action(
+            &mut intent,
+            *action_specs::action_type(action),
+            *action_specs::action_data(action),
+            witness()
+        );
+        i = i + 1;
+    };
+
+    // Store the intent in the account
+    let key_copy = intent_key;
+    account::insert_intent(account, intent, version::current(), witness());
+
+    key_copy
 }
 
 // === Notes ===

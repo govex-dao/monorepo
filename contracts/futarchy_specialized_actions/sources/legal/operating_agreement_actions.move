@@ -6,18 +6,28 @@ module futarchy_specialized_actions::operating_agreement_actions;
 use std::{
     string::String,
     option::{Self, Option},
+    vector,
+    type_name,
 };
 use sui::{
-    object::ID,
+    object::{Self, ID},
     clock::Clock,
+    tx_context::TxContext,
 };
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
-    intents::{Intent, Expired},
+    intents::{Self as protocol_intents, Intent, Expired, ActionSpec},
     version_witness::VersionWitness,
+    bcs_validation,
+    action_validation,
 };
-use futarchy_core::futarchy_config::FutarchyConfig;
+use sui::bcs::{Self, BCS};
+use futarchy_core::{
+    futarchy_config::FutarchyConfig,
+    version,
+};
+use futarchy_specialized_actions::operating_agreement::{Self, OperatingAgreement, OperatingAgreementKey};
 use futarchy_one_shot_utils::action_data_structs::CreateOperatingAgreementAction;
 
 // === Errors ===
@@ -25,6 +35,7 @@ const EInvalidLineId: u64 = 1;
 const EEmptyText: u64 = 2;
 const EInvalidDifficulty: u64 = 3;
 const EInvalidActionType: u64 = 4;
+const EUnsupportedActionVersion: u64 = 5;
 
 // === Constants ===
 const ACTION_UPDATE: u8 = 0;
@@ -34,7 +45,11 @@ const ACTION_REMOVE: u8 = 3;
 
 // === Action Structs ===
 
-// CreateOperatingAgreementAction moved to futarchy_one_shot_utils::action_data_structs
+/// Create a new operating agreement for the DAO
+public struct CreateOperatingAgreementAction has store, drop, copy {
+    allow_insert: bool,
+    allow_remove: bool,
+}
 
 /// Represents a single atomic change to the operating agreement
 /// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
@@ -99,9 +114,508 @@ public struct BatchOperatingAgreementAction has store, drop, copy {
     actions: vector<OperatingAgreementAction>,
 }
 
-// === Execution Functions ===
-// Note: These do_* functions are not used. The action_dispatcher directly calls
-// operating_agreement module functions. Keeping struct definitions only.
+// === Execution Functions (PTB Pattern) ===
+
+/// Execute create operating agreement action
+public fun do_create_operating_agreement<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    // Using a witness type for CreateOperatingAgreement
+    action_validation::assert_action_type<CreateOperatingAgreementWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let allow_insert = bcs::peel_bool(&mut reader);
+    let allow_remove = bcs::peel_bool(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Initialize operating agreement if needed
+    if (!account::has_managed_data(account, AgreementKey {})) {
+        let agreement = operating_agreement::new(
+            allow_insert,
+            allow_remove,
+            ctx
+        );
+        account::add_managed_data(
+            account,
+            AgreementKey {},
+            agreement,
+            version::current()
+        );
+    };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute update line action
+public fun do_update_line<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    // Using a witness type for UpdateLine
+    action_validation::assert_action_type<UpdateLineWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let line_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let new_text = bcs::peel_vec_u8(&mut reader).to_string();
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Validate
+    assert!(new_text.length() > 0, EEmptyText);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::update_line(agreement, line_id, new_text);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute insert line after action
+public fun do_insert_line_after<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    // Using a witness type for InsertLineAfter
+    action_validation::assert_action_type<InsertLineAfterWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let prev_line_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let text = bcs::peel_vec_u8(&mut reader).to_string();
+    let difficulty = bcs::peel_u64(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Validate
+    assert!(text.length() > 0, EEmptyText);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::insert_line_after(
+        agreement,
+        prev_line_id,
+        text,
+        difficulty,
+        ctx
+    );
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute insert line at beginning action
+public fun do_insert_line_at_beginning<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<InsertLineAtBeginningWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let text = bcs::peel_vec_u8(&mut reader).to_string();
+    let difficulty = bcs::peel_u64(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Validate
+    assert!(text.length() > 0, EEmptyText);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::insert_line_at_beginning(
+        agreement,
+        text,
+        difficulty,
+        ctx
+    );
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute remove line action
+public fun do_remove_line<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<RemoveLineWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let line_id = object::id_from_address(bcs::peel_address(&mut reader));
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::remove_line(agreement, line_id);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute set line immutable action
+public fun do_set_line_immutable<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<SetLineImmutableWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let line_id = object::id_from_address(bcs::peel_address(&mut reader));
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::set_line_immutable(agreement, line_id);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute set insert allowed action
+public fun do_set_insert_allowed<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<SetInsertAllowedWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let allowed = bcs::peel_bool(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::set_insert_allowed(agreement, allowed);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute set remove allowed action
+public fun do_set_remove_allowed<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<SetRemoveAllowedWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let allowed = bcs::peel_bool(&mut reader);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::set_remove_allowed(agreement, allowed);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute set global immutable action
+public fun do_set_global_immutable<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<SetGlobalImmutableWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // No parameters to deserialize for this action
+    let reader = bcs::new(*action_data);
+
+    // Security: ensure no unexpected data
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    operating_agreement::set_global_immutable(agreement);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute batch operating agreement action
+public fun do_batch_operating_agreement<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL: Assert action type before deserialization
+    action_validation::assert_action_type<BatchOperatingAgreementWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let batch_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let actions_count = bcs::peel_vec_length(&mut reader);
+
+    let agreement: &mut OperatingAgreement = account::borrow_managed_data_mut(
+        account,
+        AgreementKey {},
+        version::current()
+    );
+
+    // Process each action in the batch
+    let mut i = 0;
+    while (i < actions_count) {
+        // Deserialize each OperatingAgreementAction
+        let action_type = bcs::peel_u8(&mut reader);
+
+        // Read option for line_id
+        let has_line_id = bcs::peel_bool(&mut reader);
+        let line_id = if (has_line_id) {
+            option::some(object::id_from_address(bcs::peel_address(&mut reader)))
+        } else {
+            option::none()
+        };
+
+        // Read option for text
+        let has_text = bcs::peel_bool(&mut reader);
+        let text_str = if (has_text) {
+            option::some(bcs::peel_vec_u8(&mut reader).to_string())
+        } else {
+            option::none()
+        };
+
+        // Read option for difficulty
+        let has_difficulty = bcs::peel_bool(&mut reader);
+        let difficulty = if (has_difficulty) {
+            option::some(bcs::peel_u64(&mut reader))
+        } else {
+            option::none()
+        };
+
+        if (action_type == ACTION_UPDATE) {
+            operating_agreement::update_line(
+                agreement,
+                *line_id.borrow(),
+                *text_str.borrow()
+            );
+        } else if (action_type == ACTION_INSERT_AFTER) {
+            operating_agreement::insert_line_after(
+                agreement,
+                *line_id.borrow(),
+                *text_str.borrow(),
+                *difficulty.borrow(),
+                ctx
+            );
+        } else if (action_type == ACTION_INSERT_AT_BEGINNING) {
+            operating_agreement::insert_line_at_beginning(
+                agreement,
+                *text_str.borrow(),
+                *difficulty.borrow(),
+                ctx
+            );
+        } else if (action_type == ACTION_REMOVE) {
+            operating_agreement::remove_line(agreement, *line_id.borrow());
+        };
+
+        i = i + 1;
+    };
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
 
 // === Cleanup Functions ===
 
@@ -160,6 +674,71 @@ public fun delete_operating_agreement_action(expired: &mut Expired) {
     let OperatingAgreementAction { action_type: _, line_id: _, text: _, difficulty: _ } = expired.remove_action();
 }
 
+// === Destruction Functions ===
+
+/// Destroy a CreateOperatingAgreementAction
+public fun destroy_create_operating_agreement(action: CreateOperatingAgreementAction) {
+    let CreateOperatingAgreementAction { allow_insert: _, allow_remove: _ } = action;
+}
+
+/// Destroy an UpdateLineAction
+public fun destroy_update_line(action: UpdateLineAction) {
+    let UpdateLineAction { line_id: _, new_text: _ } = action;
+}
+
+/// Destroy an InsertLineAfterAction
+public fun destroy_insert_line_after(action: InsertLineAfterAction) {
+    let InsertLineAfterAction { prev_line_id: _, text: _, difficulty: _ } = action;
+}
+
+/// Destroy an InsertLineAtBeginningAction
+public fun destroy_insert_line_at_beginning(action: InsertLineAtBeginningAction) {
+    let InsertLineAtBeginningAction { text: _, difficulty: _ } = action;
+}
+
+/// Destroy a RemoveLineAction
+public fun destroy_remove_line(action: RemoveLineAction) {
+    let RemoveLineAction { line_id: _ } = action;
+}
+
+/// Destroy a SetLineImmutableAction
+public fun destroy_set_line_immutable(action: SetLineImmutableAction) {
+    let SetLineImmutableAction { line_id: _ } = action;
+}
+
+/// Destroy a SetInsertAllowedAction
+public fun destroy_set_insert_allowed(action: SetInsertAllowedAction) {
+    let SetInsertAllowedAction { allowed: _ } = action;
+}
+
+/// Destroy a SetRemoveAllowedAction
+public fun destroy_set_remove_allowed(action: SetRemoveAllowedAction) {
+    let SetRemoveAllowedAction { allowed: _ } = action;
+}
+
+/// Destroy a SetGlobalImmutableAction
+public fun destroy_set_global_immutable(action: SetGlobalImmutableAction) {
+    let SetGlobalImmutableAction {} = action;
+}
+
+/// Destroy a BatchOperatingAgreementAction
+public fun destroy_batch_operating_agreement(action: BatchOperatingAgreementAction) {
+    let BatchOperatingAgreementAction { batch_id: _, actions } = action;
+    // Destroy each action in the batch
+    let mut i = 0;
+    while (i < actions.length()) {
+        let act = actions.pop_back();
+        destroy_operating_agreement_action(act);
+        i = i + 1;
+    };
+    actions.destroy_empty();
+}
+
+/// Destroy an OperatingAgreementAction
+public fun destroy_operating_agreement_action(action: OperatingAgreementAction) {
+    let OperatingAgreementAction { action_type: _, line_id: _, text: _, difficulty: _ } = action;
+}
+
 // === Intent Helper Functions ===
 // NOTE: Old helper functions that directly added to intents have been removed.
 // Use the new_*_action functions below to create action structs,
@@ -172,83 +751,256 @@ public fun get_batch_id(batch: &BatchOperatingAgreementAction): ID {
     batch.batch_id
 }
 
-/// Create a new create OA action
-public fun new_create_operating_agreement_action(
+// === Construction Functions with Serialize-Then-Destroy Pattern ===
+
+/// Create and add a CreateOperatingAgreement action to an intent
+public fun new_create_operating_agreement<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
     allow_insert: bool,
-    allow_remove: bool
-): CreateOperatingAgreementAction {
-    CreateOperatingAgreementAction { allow_insert, allow_remove }
+    allow_remove: bool,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&allow_insert));
+    data.append(bcs::to_bytes(&allow_remove));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CreateOperatingAgreementWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new update line action
-public fun new_update_line_action(line_id: ID, new_text: String): UpdateLineAction {
+/// Create and add an UpdateLine action to an intent
+public fun new_update_line<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    line_id: ID,
+    new_text: String,
+    intent_witness: IW,
+) {
     assert!(new_text.length() > 0, EEmptyText);
-    UpdateLineAction { line_id, new_text }
+
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&line_id)));
+    data.append(bcs::to_bytes(&new_text.as_bytes()));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        UpdateLineWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new insert line after action
-public fun new_insert_line_after_action(
+/// Create and add an InsertLineAfter action to an intent
+public fun new_insert_line_after<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
     prev_line_id: ID,
     text: String,
     difficulty: u64,
-): InsertLineAfterAction {
+    intent_witness: IW,
+) {
     assert!(text.length() > 0, EEmptyText);
-    // Difficulty of 0 is valid for unanimous decisions
-    InsertLineAfterAction { prev_line_id, text, difficulty }
+
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&prev_line_id)));
+    data.append(bcs::to_bytes(&text.as_bytes()));
+    data.append(bcs::to_bytes(&difficulty));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        InsertLineAfterWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new insert line at beginning action
-public fun new_insert_line_at_beginning_action(
+/// Create and add an InsertLineAtBeginning action to an intent
+public fun new_insert_line_at_beginning<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
     text: String,
     difficulty: u64,
-): InsertLineAtBeginningAction {
+    intent_witness: IW,
+) {
     assert!(text.length() > 0, EEmptyText);
-    // Difficulty of 0 is valid for unanimous decisions
-    InsertLineAtBeginningAction { text, difficulty }
+
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&text.as_bytes()));
+    data.append(bcs::to_bytes(&difficulty));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        InsertLineAtBeginningWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new remove line action
-public fun new_remove_line_action(line_id: ID): RemoveLineAction {
-    RemoveLineAction { line_id }
+/// Create and add a RemoveLine action to an intent
+public fun new_remove_line<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    line_id: ID,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let data = bcs::to_bytes(&object::id_to_address(&line_id));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        RemoveLineWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new set line immutable action
-public fun new_set_line_immutable_action(line_id: ID): SetLineImmutableAction {
-    SetLineImmutableAction { line_id }
+/// Create and add a SetLineImmutable action to an intent
+public fun new_set_line_immutable<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    line_id: ID,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let data = bcs::to_bytes(&object::id_to_address(&line_id));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetLineImmutableWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new set insert allowed action
-public fun new_set_insert_allowed_action(allowed: bool): SetInsertAllowedAction {
-    SetInsertAllowedAction { allowed }
+/// Create and add a SetInsertAllowed action to an intent
+public fun new_set_insert_allowed<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    allowed: bool,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let data = bcs::to_bytes(&allowed);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetInsertAllowedWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new set remove allowed action
-public fun new_set_remove_allowed_action(allowed: bool): SetRemoveAllowedAction {
-    SetRemoveAllowedAction { allowed }
+/// Create and add a SetRemoveAllowed action to an intent
+public fun new_set_remove_allowed<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    allowed: bool,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let data = bcs::to_bytes(&allowed);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetRemoveAllowedWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new set global immutable action
-public fun new_set_global_immutable_action(): SetGlobalImmutableAction {
-    SetGlobalImmutableAction { }
+/// Create and add a SetGlobalImmutable action to an intent
+public fun new_set_global_immutable<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    intent_witness: IW,
+) {
+    // Serialize action data (empty)
+    let data = vector[];
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetGlobalImmutableWitness {},
+        data,
+        intent_witness,
+    );
 }
 
-/// Create a new batch operating agreement action
-public fun new_batch_operating_agreement_action(
+// Note: Old direct constructor functions have been removed.
+// Use the new_* functions above that follow the serialize-then-destroy pattern.
+
+/// Create and add a BatchOperatingAgreement action to an intent
+public fun new_batch_operating_agreement(
+    intent: &mut Intent,
     batch_id: ID,
-    actions: vector<OperatingAgreementAction>
-): BatchOperatingAgreementAction {
-    BatchOperatingAgreementAction { batch_id, actions }
+    actions: vector<OperatingAgreementAction>,
+) {
+    let action = BatchOperatingAgreementAction { batch_id, actions };
+
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&batch_id)));
+
+    // Serialize the vector of actions
+    data.append(bcs::to_bytes(&actions.length()));
+    let mut i = 0;
+    while (i < actions.length()) {
+        let act = actions.borrow(i);
+        data.append(bcs::to_bytes(&act.action_type));
+
+        // Serialize option fields
+        if (act.line_id.is_some()) {
+            data.append(bcs::to_bytes(&true));
+            data.append(bcs::to_bytes(&object::id_to_address(act.line_id.borrow())));
+        } else {
+            data.append(bcs::to_bytes(&false));
+        };
+
+        if (act.text.is_some()) {
+            data.append(bcs::to_bytes(&true));
+            data.append(bcs::to_bytes(&act.text.borrow().as_bytes()));
+        } else {
+            data.append(bcs::to_bytes(&false));
+        };
+
+        if (act.difficulty.is_some()) {
+            data.append(bcs::to_bytes(&true));
+            data.append(bcs::to_bytes(act.difficulty.borrow()));
+        } else {
+            data.append(bcs::to_bytes(&false));
+        };
+
+        i = i + 1;
+    };
+
+    // Add to intent spec
+    protocol_intents::add_action(
+        spec,
+        type_name::with_defining_ids<action_types::BatchOperatingAgreement>(),
+        data,
+    );
+
+    // Destroy the action struct
+    destroy_batch_operating_agreement(action);
 }
 
-/// Create a new operating agreement action (flexible type)
-public fun new_operating_agreement_action(
+/// Helper to create an OperatingAgreementAction for batch operations
+public fun create_operating_agreement_action(
     action_type: u8,
     line_id: Option<ID>,
     text: Option<String>,
     difficulty: Option<u64>,
 ): OperatingAgreementAction {
     assert!(action_type <= ACTION_REMOVE, EInvalidActionType);
-    
+
     // Validate based on action type
     if (action_type == ACTION_UPDATE) {
         assert!(line_id.is_some(), EInvalidLineId);
@@ -265,7 +1017,7 @@ public fun new_operating_agreement_action(
     } else if (action_type == ACTION_REMOVE) {
         assert!(line_id.is_some(), EInvalidLineId);
     };
-    
+
     OperatingAgreementAction {
         action_type,
         line_id,

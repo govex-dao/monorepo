@@ -56,7 +56,7 @@ module account_actions::vault;
 
 use std::{
     string::String,
-    type_name::{Self, TypeName},
+    type_name::TypeName,
     option::Option,
     u128,
     u64,
@@ -79,6 +79,7 @@ use account_protocol::{
     executable::{Self, Executable},
     version_witness::VersionWitness,
     bcs_validation,
+    action_validation,
 };
 use account_actions::version;
 use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
@@ -400,6 +401,10 @@ public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VaultDeposit>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -472,6 +477,10 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VaultSpend>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization

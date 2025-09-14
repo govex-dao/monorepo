@@ -18,13 +18,15 @@ module account_actions::transfer;
 
 // === Imports ===
 
+
 use sui::bcs;
 use account_protocol::{
+    action_validation,
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
     bcs_validation,
 };
-use account_extensions::framework_action_types;
+use account_extensions::framework_action_types::{Self, TransferObject};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -82,6 +84,11 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<TransferObject>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization

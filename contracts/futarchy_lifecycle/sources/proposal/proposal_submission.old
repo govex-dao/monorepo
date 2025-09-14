@@ -1,0 +1,307 @@
+/// Module for submitting proposals with IntentSpecs
+/// Provides entry functions for users to submit proposals with actions
+module futarchy_lifecycle::proposal_submission;
+
+// === Imports ===
+use std::{
+    type_name::{Self, TypeName},
+    vector,
+    string::String,
+    option::{Self, Option},
+};
+use sui::{
+    object,
+    coin::{Self, Coin},
+    clock::Clock,
+    sui::SUI,
+    tx_context::TxContext,
+};
+use account_protocol::account::{Self, Account};
+use futarchy_core::{
+    futarchy_config::{Self, FutarchyConfig},
+    priority_queue::{Self, ProposalQueue, QueuedProposal},
+    proposal_fee_manager::{Self, ProposalFeeManager},
+};
+use futarchy_actions::action_specs::{Self, InitActionSpecs};
+
+// === Errors ===
+const EProposalsDisabled: u64 = 1;
+const EInsufficientFee: u64 = 2;
+const ETooManyOutcomes: u64 = 3;
+const ENoOutcomes: u64 = 4;
+const EIntentSpecRequired: u64 = 5;
+const EQueueFull: u64 = 6;
+
+// === Entry Functions ===
+
+/// Submit a proposal with IntentSpecs for the YES outcome
+/// The IntentSpecs define what actions will execute if the proposal passes
+public entry fun submit_proposal_with_intent<StableCoin>(
+    account: &Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableCoin>,
+    fee_manager: &mut ProposalFeeManager,
+    fee_payment: Coin<SUI>,
+    // Proposal metadata
+    title: String,
+    description: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+    // Liquidity amounts for each outcome
+    initial_asset_amounts: vector<u64>,
+    initial_stable_amounts: vector<u64>,
+    // IntentSpec for YES outcome (what happens if proposal passes)
+    yes_intent_spec: InitActionSpecs,
+    // Options
+    uses_dao_liquidity: bool,
+    bond: Option<Coin<StableCoin>>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate proposal creation is enabled
+    let config = account.config();
+    assert!(
+        futarchy_config::proposals_enabled(config),
+        EProposalsDisabled
+    );
+
+    // Validate outcome count
+    let outcome_count = vector::length(&outcome_messages);
+    assert!(outcome_count > 0, ENoOutcomes);
+    assert!(
+        outcome_count <= futarchy_config::max_outcomes(config),
+        ETooManyOutcomes
+    );
+
+    // Calculate required fee
+    let required_fee = futarchy_config::proposal_fee_per_outcome(config) * outcome_count;
+    assert!(coin::value(&fee_payment) >= required_fee, EInsufficientFee);
+
+    // Process fee payment
+    proposal_fee_manager::deposit_proposal_fee(
+        fee_manager,
+        fee_payment,
+        clock,
+        ctx
+    );
+
+    // Create proposal data
+    let proposal_data = priority_queue::new_proposal_data(
+        title,
+        description,
+        outcome_messages,
+        outcome_details,
+        initial_asset_amounts,
+        initial_stable_amounts,
+    );
+
+    // Create queued proposal with IntentSpec
+    let queued_proposal = priority_queue::new_queued_proposal(
+        object::id(account),
+        required_fee,
+        uses_dao_liquidity,
+        ctx.sender(),
+        proposal_data,
+        bond,
+        option::some(yes_intent_spec), // Pass the IntentSpec for YES outcome
+        clock,
+    );
+
+    // Insert into queue
+    let eviction_opt = priority_queue::insert(queue, queued_proposal, clock, ctx);
+
+    // Handle eviction if it occurred
+    if (option::is_some(&eviction_opt)) {
+        let eviction_info = option::extract(&mut eviction_opt);
+        handle_eviction(eviction_info, fee_manager, clock, ctx);
+    };
+    option::destroy_none(eviction_opt);
+}
+
+/// Submit a proposal with different IntentSpecs for multiple outcomes
+/// Allows specifying what happens for each outcome (YES, NO, etc.)
+public entry fun submit_proposal_with_multiple_intents<StableCoin>(
+    account: &Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableCoin>,
+    fee_manager: &mut ProposalFeeManager,
+    fee_payment: Coin<SUI>,
+    // Proposal metadata
+    title: String,
+    description: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+    // Liquidity amounts for each outcome
+    initial_asset_amounts: vector<u64>,
+    initial_stable_amounts: vector<u64>,
+    // IntentSpecs for each outcome
+    intent_specs: vector<Option<InitActionSpecs>>,
+    // Options
+    uses_dao_liquidity: bool,
+    bond: Option<Coin<StableCoin>>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validate proposal creation is enabled
+    let config = account.config();
+    assert!(
+        futarchy_config::proposals_enabled(config),
+        EProposalsDisabled
+    );
+
+    // Validate outcome count
+    let outcome_count = vector::length(&outcome_messages);
+    assert!(outcome_count > 0, ENoOutcomes);
+    assert!(
+        outcome_count <= futarchy_config::max_outcomes(config),
+        ETooManyOutcomes
+    );
+    assert!(
+        vector::length(&intent_specs) == outcome_count,
+        EIntentSpecRequired
+    );
+
+    // For now, we only support single outcome with intent (YES)
+    // Future enhancement: store multiple IntentSpecs in proposal
+    let yes_intent = if (vector::length(&intent_specs) > 0) {
+        *vector::borrow(&intent_specs, 0)
+    } else {
+        option::none()
+    };
+
+    // Calculate required fee
+    let required_fee = futarchy_config::proposal_fee_per_outcome(config) * outcome_count;
+    assert!(coin::value(&fee_payment) >= required_fee, EInsufficientFee);
+
+    // Process fee payment
+    proposal_fee_manager::deposit_proposal_fee(
+        fee_manager,
+        fee_payment,
+        clock,
+        ctx
+    );
+
+    // Create proposal data
+    let proposal_data = priority_queue::new_proposal_data(
+        title,
+        description,
+        outcome_messages,
+        outcome_details,
+        initial_asset_amounts,
+        initial_stable_amounts,
+    );
+
+    // Create queued proposal
+    let queued_proposal = priority_queue::new_queued_proposal(
+        object::id(account),
+        required_fee,
+        uses_dao_liquidity,
+        ctx.sender(),
+        proposal_data,
+        bond,
+        yes_intent, // For now, only YES outcome has intent
+        clock,
+    );
+
+    // Insert into queue
+    let eviction_opt = priority_queue::insert(queue, queued_proposal, clock, ctx);
+
+    // Handle eviction if it occurred
+    if (option::is_some(&eviction_opt)) {
+        let eviction_info = option::extract(&mut eviction_opt);
+        handle_eviction(eviction_info, fee_manager, clock, ctx);
+    };
+    option::destroy_none(eviction_opt);
+}
+
+/// Submit a simple proposal without any IntentSpecs
+/// Used for proposals that don't execute on-chain actions
+public entry fun submit_simple_proposal<StableCoin>(
+    account: &Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableCoin>,
+    fee_manager: &mut ProposalFeeManager,
+    fee_payment: Coin<SUI>,
+    // Proposal metadata
+    title: String,
+    description: String,
+    outcome_messages: vector<String>,
+    outcome_details: vector<String>,
+    // Liquidity amounts for each outcome
+    initial_asset_amounts: vector<u64>,
+    initial_stable_amounts: vector<u64>,
+    // Options
+    uses_dao_liquidity: bool,
+    bond: Option<Coin<StableCoin>>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    submit_proposal_with_multiple_intents(
+        account,
+        queue,
+        fee_manager,
+        fee_payment,
+        title,
+        description,
+        outcome_messages,
+        outcome_details,
+        initial_asset_amounts,
+        initial_stable_amounts,
+        vector::empty(), // No intent specs
+        uses_dao_liquidity,
+        bond,
+        clock,
+        ctx,
+    );
+}
+
+// === Internal Functions ===
+
+/// Handle proposal eviction
+fun handle_eviction<StableCoin>(
+    eviction_info: priority_queue::EvictionInfo,
+    fee_manager: &mut ProposalFeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Process eviction - return fees to evicted proposer
+    let evicted_fee = priority_queue::eviction_info_fee(&eviction_info);
+    let evicted_proposer = priority_queue::eviction_info_proposer(&eviction_info);
+
+    // Refund the evicted proposer's fee
+    let refund = proposal_fee_manager::refund_proposal_fee(
+        fee_manager,
+        priority_queue::eviction_info_proposal_id(&eviction_info),
+        clock,
+        ctx
+    );
+
+    if (option::is_some(&refund)) {
+        let refund_coin = option::extract(&mut refund);
+        sui::transfer::public_transfer(refund_coin, evicted_proposer);
+    };
+    option::destroy_none(refund);
+
+    // Clean up eviction info
+    priority_queue::destroy_eviction_info(eviction_info);
+}
+
+// === Builder Functions (for SDK) ===
+
+// === Builder Functions ===
+// These would typically be implemented in the SDK/UI layer
+// They show the pattern for building IntentSpecs for common proposal types
+
+// === Notes ===
+//
+// This module provides the primary interface for submitting proposals with IntentSpecs.
+// The IntentSpecs define what actions will be executed if the proposal passes.
+//
+// Key improvements over the old system:
+// 1. No need to pre-create and store Intents in the Account
+// 2. IntentSpecs are lightweight and don't consume storage until needed
+// 3. Actions are created just-in-time when proposal passes
+// 4. Multiple outcomes can have different actions (future enhancement)
+//
+// The SDK is responsible for:
+// - Building the appropriate IntentSpecs for the proposal type
+// - Ensuring action parameters are valid
+// - Serializing actions correctly
+// - Managing coin objects for fees and bonds

@@ -184,7 +184,7 @@ fun register_create_vesting_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CreateVestingActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CreateVestingAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<CreateVestingAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -193,6 +193,6 @@ fun register_cancel_vesting_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = CancelVestingActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<CancelVestingAction>();
+    let type_key = type_name::with_defining_ids<CancelVestingAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

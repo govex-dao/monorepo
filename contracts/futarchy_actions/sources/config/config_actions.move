@@ -17,11 +17,16 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
-    executable::Executable,
+    executable::{Self, Executable},
     intents::{Expired, Intent},
     version_witness::VersionWitness,
+    bcs_validation,
 };
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::{
+    futarchy_config::{Self, FutarchyConfig},
+    action_validation,
+    action_types,
+};
 
 // === Friend Modules === (removed - deprecated in 2024 edition)
 
@@ -35,6 +40,8 @@ const EEmptyString: u64 = 3;
 const EMismatchedKeyValueLength: u64 = 4;
 const EInvalidConfigType: u64 = 5;
 const EInvalidSlashDistribution: u64 = 6;
+const EWrongAction: u64 = 7;
+const EUnsupportedActionVersion: u64 = 8;
 
 // === Witness ===
 
@@ -198,26 +205,46 @@ public fun do_set_proposals_enabled<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    // Extract the action
-    let action: &SetProposalsEnabledAction = executable.next_action(intent_witness);
-    let enabled = action.enabled;
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::SetProposalsEnabled>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let enabled = reader.peel_bool();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     // Get mutable config using internal function (no witness needed since we're in the same package)
     let config = futarchy_config::internal_config_mut(account);
-    
+
     // Apply the state change
     if (enabled) {
         futarchy_config::set_operational_state(config, futarchy_config::state_active());
     } else {
         futarchy_config::set_operational_state(config, futarchy_config::state_paused());
     };
-    
+
     // Emit event
     event::emit(ProposalsEnabledChanged {
         account_id: object::id(account),
         enabled,
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Internal version that works directly with action struct for init actions
@@ -257,26 +284,47 @@ public fun do_update_name<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    // Extract the action
-    let action: &UpdateNameAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::UpdateName>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let new_name = string::utf8(reader.peel_vec_u8());
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     // Validate
-    assert!(action.new_name.length() > 0, EEmptyName);
-    
+    assert!(new_name.length() > 0, EEmptyName);
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Update the name by converting String to AsciiString
     // Note: This will fail at runtime if the string contains non-ASCII characters
-    let ascii_name = action.new_name.to_ascii();
+    let ascii_name = new_name.to_ascii();
     futarchy_config::set_dao_name(config, ascii_name);
-    
+
     // Emit event
     event::emit(DaoNameChanged {
         account_id: object::id(account),
-        new_name: action.new_name,
+        new_name,
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Internal version that works directly with action struct for init actions
@@ -319,14 +367,46 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &TradingParamsUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::TradingParamsUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let min_asset_amount = reader.peel_option_u64();
+    let min_stable_amount = reader.peel_option_u64();
+    let review_period_ms = reader.peel_option_u64();
+    let trading_period_ms = reader.peel_option_u64();
+    let amm_total_fee_bps = reader.peel_option_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = TradingParamsUpdateAction {
+        min_asset_amount,
+        min_stable_amount,
+        review_period_ms,
+        trading_period_ms,
+        amm_total_fee_bps,
+    };
+
     // Validate parameters
-    validate_trading_params_update(action);
-    
+    validate_trading_params_update(&action);
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Apply updates if provided
     if (action.min_asset_amount.is_some()) {
         futarchy_config::set_min_asset_amount(config, *action.min_asset_amount.borrow());
@@ -343,12 +423,15 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
     if (action.amm_total_fee_bps.is_some()) {
         futarchy_config::set_amm_total_fee_bps(config, *action.amm_total_fee_bps.borrow());
     };
-    
+
     // Emit event
     event::emit(TradingParamsChanged {
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a metadata update action
@@ -360,7 +443,47 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &MetadataUpdateAction = executable.next_action(intent_witness);
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::MetadataUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let dao_name = if (reader.peel_bool()) {
+        option::some(ascii::string(reader.peel_vec_u8()))
+    } else {
+        option::none()
+    };
+    let icon_url = if (reader.peel_bool()) {
+        option::some(url::new_unsafe_from_bytes(reader.peel_vec_u8()))
+    } else {
+        option::none()
+    };
+    let description = if (reader.peel_bool()) {
+        option::some(string::utf8(reader.peel_vec_u8()))
+    } else {
+        option::none()
+    };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = MetadataUpdateAction {
+        dao_name,
+        icon_url,
+        description,
+    };
     
     // Validate parameters
     validate_metadata_update(action);
@@ -384,6 +507,9 @@ public fun do_update_metadata<Outcome: store, IW: drop>(
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a TWAP config update action
@@ -395,14 +521,44 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &TwapConfigUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::TwapConfigUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let start_delay = reader.peel_option_u64();
+    let step_max = reader.peel_option_u64();
+    let initial_observation = reader.peel_option_u128();
+    let threshold = reader.peel_option_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = TwapConfigUpdateAction {
+        start_delay,
+        step_max,
+        initial_observation,
+        threshold,
+    };
+
     // Validate parameters
-    validate_twap_config_update(action);
-    
+    validate_twap_config_update(&action);
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Apply updates if provided
     if (action.start_delay.is_some()) {
         futarchy_config::set_amm_twap_start_delay(config, *action.start_delay.borrow());
@@ -416,12 +572,15 @@ public fun do_update_twap_config<Outcome: store, IW: drop>(
     if (action.threshold.is_some()) {
         futarchy_config::set_twap_threshold(config, *action.threshold.borrow());
     };
-    
+
     // Emit event
     event::emit(TwapConfigChanged {
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a governance update action
@@ -433,14 +592,52 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &GovernanceUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::GovernanceUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let proposal_creation_enabled = reader.peel_option_bool();
+    let max_outcomes = reader.peel_option_u64();
+    let max_actions_per_outcome = reader.peel_option_u64();
+    let required_bond_amount = reader.peel_option_u64();
+    let max_intents_per_outcome = reader.peel_option_u64();
+    let proposal_intent_expiry_ms = reader.peel_option_u64();
+    let optimistic_challenge_fee = reader.peel_option_u64();
+    let optimistic_challenge_period_ms = reader.peel_option_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = GovernanceUpdateAction {
+        proposal_creation_enabled,
+        max_outcomes,
+        max_actions_per_outcome,
+        required_bond_amount,
+        max_intents_per_outcome,
+        proposal_intent_expiry_ms,
+        optimistic_challenge_fee,
+        optimistic_challenge_period_ms,
+    };
+
     // Validate parameters
-    validate_governance_update(action);
-    
+    validate_governance_update(&action);
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Apply updates if provided
     if (action.proposal_creation_enabled.is_some()) {
         let enabled = *action.proposal_creation_enabled.borrow();
@@ -471,12 +668,15 @@ public fun do_update_governance<Outcome: store, IW: drop>(
     if (action.optimistic_challenge_period_ms.is_some()) {
         futarchy_config::set_optimistic_challenge_period_ms(config, *action.optimistic_challenge_period_ms.borrow());
     };
-    
+
     // Emit event
     event::emit(GovernanceSettingsChanged {
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a metadata table update action
@@ -489,25 +689,83 @@ public fun do_update_metadata_table<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &MetadataTableUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::MetadataTableUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let keys = {
+        let len = reader.peel_vec_length();
+        let mut result = vector[];
+        let mut i = 0;
+        while (i < len) {
+            result.push_back(string::utf8(reader.peel_vec_u8()));
+            i = i + 1;
+        };
+        result
+    };
+    let values = {
+        let len = reader.peel_vec_length();
+        let mut result = vector[];
+        let mut i = 0;
+        while (i < len) {
+            result.push_back(string::utf8(reader.peel_vec_u8()));
+            i = i + 1;
+        };
+        result
+    };
+    let keys_to_remove = {
+        let len = reader.peel_vec_length();
+        let mut result = vector[];
+        let mut i = 0;
+        while (i < len) {
+            result.push_back(string::utf8(reader.peel_vec_u8()));
+            i = i + 1;
+        };
+        result
+    };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = MetadataTableUpdateAction {
+        keys,
+        values,
+        keys_to_remove,
+    };
+
     // Validate parameters
     assert!(action.keys.length() == action.values.length(), EMismatchedKeyValueLength);
-    
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Metadata table operations would be implemented here when available in futarchy_config
     // Currently, futarchy_config doesn't have a metadata table, so we validate the action
     // and emit the event to track the attempted change
     let _ = config;
     let _ = action;
-    
+
     // Emit event
     event::emit(MetadataChanged {
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a queue params update action
@@ -519,14 +777,44 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &QueueParamsUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::QueueParamsUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let max_proposer_funded = reader.peel_option_u64();
+    let max_concurrent_proposals = reader.peel_option_u64();
+    let max_queue_size = reader.peel_option_u64();
+    let fee_escalation_basis_points = reader.peel_option_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = QueueParamsUpdateAction {
+        max_proposer_funded,
+        max_concurrent_proposals,
+        max_queue_size,
+        fee_escalation_basis_points,
+    };
+
     // Validate parameters
-    validate_queue_params_update(action);
-    
+    validate_queue_params_update(&action);
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Apply updates if provided
     if (action.max_concurrent_proposals.is_some()) {
         futarchy_config::set_max_concurrent_proposals(config, *action.max_concurrent_proposals.borrow());
@@ -535,12 +823,15 @@ public fun do_update_queue_params<Outcome: store, IW: drop>(
         futarchy_config::set_fee_escalation_basis_points(config, *action.fee_escalation_basis_points.borrow());
     };
     // Note: max_proposer_funded and max_queue_size may not have setters in futarchy_config yet
-    
+
     // Emit event
     event::emit(GovernanceSettingsChanged {
         account_id: object::id(account),
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a slash distribution update action
@@ -552,16 +843,46 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &SlashDistributionUpdateAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::SlashDistributionUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let slasher_reward_bps = reader.peel_u16();
+    let dao_treasury_bps = reader.peel_u16();
+    let protocol_bps = reader.peel_u16();
+    let burn_bps = reader.peel_u16();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct for validation
+    let action = SlashDistributionUpdateAction {
+        slasher_reward_bps,
+        dao_treasury_bps,
+        protocol_bps,
+        burn_bps,
+    };
+
     // Validate that they sum to 10000 (100%)
-    let total = (action.slasher_reward_bps as u64) + (action.dao_treasury_bps as u64) + 
+    let total = (action.slasher_reward_bps as u64) + (action.dao_treasury_bps as u64) +
                 (action.protocol_bps as u64) + (action.burn_bps as u64);
     assert!(total == 10000, EInvalidSlashDistribution);
-    
+
     // Get mutable config through Account protocol with witness
     let config = account::config_mut(account, version, ConfigActionsWitness {});
-    
+
     // Update the slash distribution
     futarchy_config::update_slash_distribution(
         config,
@@ -570,7 +891,7 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
         action.protocol_bps,
         action.burn_bps
     );
-    
+
     // Emit event
     event::emit(SlashDistributionChanged {
         account_id: object::id(account),
@@ -580,6 +901,9 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
         burn_bps: action.burn_bps,
         timestamp: clock.timestamp_ms(),
     });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a batch config action that can contain any type of config update
@@ -592,8 +916,25 @@ public fun do_batch_config<Outcome: store, IW: drop>(
     _clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action: &ConfigAction = executable.next_action(intent_witness);
-    
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    // Note: ConfigAction is a wrapper type that may not be in action_types
+    // Using a generic config type check here
+    // action_validation::assert_action_type<action_types::ConfigAction>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the action
+    let action = config_action_from_bytes(*action_data);
+
     // Validate that the correct field is populated for the config_type
     if (action.config_type == CONFIG_TYPE_TRADING_PARAMS) {
         assert!(action.trading_params.is_some(), EInvalidConfigType);
@@ -610,9 +951,97 @@ public fun do_batch_config<Outcome: store, IW: drop>(
     } else {
         abort EInvalidConfigType
     };
-    
+
     // Note: The actual config updates should be handled by the individual
     // do_ functions for each action type. This wrapper provides type safety.
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+// === Destruction Functions ===
+
+/// Destroy a SetProposalsEnabledAction
+public fun destroy_set_proposals_enabled(action: SetProposalsEnabledAction) {
+    let SetProposalsEnabledAction { enabled: _ } = action;
+}
+
+/// Destroy an UpdateNameAction
+public fun destroy_update_name(action: UpdateNameAction) {
+    let UpdateNameAction { new_name: _ } = action;
+}
+
+/// Destroy a TradingParamsUpdateAction
+public fun destroy_trading_params_update(action: TradingParamsUpdateAction) {
+    let TradingParamsUpdateAction {
+        min_asset_amount: _,
+        min_stable_amount: _,
+        review_period_ms: _,
+        trading_period_ms: _,
+        amm_total_fee_bps: _,
+    } = action;
+}
+
+/// Destroy a MetadataUpdateAction
+public fun destroy_metadata_update(action: MetadataUpdateAction) {
+    let MetadataUpdateAction {
+        dao_name: _,
+        icon_url: _,
+        description: _,
+    } = action;
+}
+
+/// Destroy a TwapConfigUpdateAction
+public fun destroy_twap_config_update(action: TwapConfigUpdateAction) {
+    let TwapConfigUpdateAction {
+        start_delay: _,
+        step_max: _,
+        initial_observation: _,
+        threshold: _,
+    } = action;
+}
+
+/// Destroy a GovernanceUpdateAction
+public fun destroy_governance_update(action: GovernanceUpdateAction) {
+    let GovernanceUpdateAction {
+        proposal_creation_enabled: _,
+        max_outcomes: _,
+        max_actions_per_outcome: _,
+        required_bond_amount: _,
+        max_intents_per_outcome: _,
+        proposal_intent_expiry_ms: _,
+        optimistic_challenge_fee: _,
+        optimistic_challenge_period_ms: _,
+    } = action;
+}
+
+/// Destroy a MetadataTableUpdateAction
+public fun destroy_metadata_table_update(action: MetadataTableUpdateAction) {
+    let MetadataTableUpdateAction {
+        keys: _,
+        values: _,
+        keys_to_remove: _,
+    } = action;
+}
+
+/// Destroy a SlashDistributionUpdateAction
+public fun destroy_slash_distribution_update(action: SlashDistributionUpdateAction) {
+    let SlashDistributionUpdateAction {
+        slasher_reward_bps: _,
+        dao_treasury_bps: _,
+        protocol_bps: _,
+        burn_bps: _,
+    } = action;
+}
+
+/// Destroy a QueueParamsUpdateAction
+public fun destroy_queue_params_update(action: QueueParamsUpdateAction) {
+    let QueueParamsUpdateAction {
+        max_proposer_funded: _,
+        max_concurrent_proposals: _,
+        max_queue_size: _,
+        fee_escalation_basis_points: _,
+    } = action;
 }
 
 // === Cleanup Functions ===
@@ -851,6 +1280,227 @@ public fun new_queue_params_update_action(
     };
     validate_queue_params_update(&action);
     action
+}
+
+// === Intent Creation Functions (with serialize-then-destroy pattern) ===
+
+/// Add a SetProposalsEnabled action to an intent
+public fun new_set_proposals_enabled<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    enabled: bool,
+    intent_witness: IW,
+) {
+    // Create, serialize, add, destroy
+    let action = SetProposalsEnabledAction { enabled };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::set_proposals_enabled(),
+        action_data,
+        intent_witness
+    );
+    destroy_set_proposals_enabled(action);
+}
+
+/// Add an UpdateName action to an intent
+public fun new_update_name<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_name: String,
+    intent_witness: IW,
+) {
+    assert!(new_name.length() > 0, EEmptyName);
+    let action = UpdateNameAction { new_name };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::update_name(),
+        action_data,
+        intent_witness
+    );
+    destroy_update_name(action);
+}
+
+/// Add a TradingParamsUpdate action to an intent
+public fun new_trading_params_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    min_asset_amount: Option<u64>,
+    min_stable_amount: Option<u64>,
+    review_period_ms: Option<u64>,
+    trading_period_ms: Option<u64>,
+    amm_total_fee_bps: Option<u64>,
+    intent_witness: IW,
+) {
+    let action = TradingParamsUpdateAction {
+        min_asset_amount,
+        min_stable_amount,
+        review_period_ms,
+        trading_period_ms,
+        amm_total_fee_bps,
+    };
+    validate_trading_params_update(&action);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::trading_params_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_trading_params_update(action);
+}
+
+/// Add a MetadataUpdate action to an intent
+public fun new_metadata_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_name: Option<AsciiString>,
+    icon_url: Option<Url>,
+    description: Option<String>,
+    intent_witness: IW,
+) {
+    let action = MetadataUpdateAction {
+        dao_name,
+        icon_url,
+        description,
+    };
+    validate_metadata_update(&action);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::metadata_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_metadata_update(action);
+}
+
+/// Add a TwapConfigUpdate action to an intent
+public fun new_twap_config_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    start_delay: Option<u64>,
+    step_max: Option<u64>,
+    initial_observation: Option<u128>,
+    threshold: Option<u64>,
+    intent_witness: IW,
+) {
+    let action = TwapConfigUpdateAction {
+        start_delay,
+        step_max,
+        initial_observation,
+        threshold,
+    };
+    validate_twap_config_update(&action);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::twap_config_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_twap_config_update(action);
+}
+
+/// Add a GovernanceUpdate action to an intent
+public fun new_governance_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    proposal_creation_enabled: Option<bool>,
+    max_outcomes: Option<u64>,
+    max_actions_per_outcome: Option<u64>,
+    required_bond_amount: Option<u64>,
+    max_intents_per_outcome: Option<u64>,
+    proposal_intent_expiry_ms: Option<u64>,
+    optimistic_challenge_fee: Option<u64>,
+    optimistic_challenge_period_ms: Option<u64>,
+    intent_witness: IW,
+) {
+    let action = GovernanceUpdateAction {
+        proposal_creation_enabled,
+        max_outcomes,
+        max_actions_per_outcome,
+        required_bond_amount,
+        max_intents_per_outcome,
+        proposal_intent_expiry_ms,
+        optimistic_challenge_fee,
+        optimistic_challenge_period_ms,
+    };
+    validate_governance_update(&action);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::governance_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_governance_update(action);
+}
+
+/// Add a MetadataTableUpdate action to an intent
+public fun new_metadata_table_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    keys: vector<String>,
+    values: vector<String>,
+    keys_to_remove: vector<String>,
+    intent_witness: IW,
+) {
+    assert!(keys.length() == values.length(), EMismatchedKeyValueLength);
+    let action = MetadataTableUpdateAction {
+        keys,
+        values,
+        keys_to_remove,
+    };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::metadata_table_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_metadata_table_update(action);
+}
+
+/// Add a SlashDistributionUpdate action to an intent
+public fun new_slash_distribution_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    slasher_reward_bps: u16,
+    dao_treasury_bps: u16,
+    protocol_bps: u16,
+    burn_bps: u16,
+    intent_witness: IW,
+) {
+    // Validate that they sum to 10000 (100%)
+    let total = (slasher_reward_bps as u64) + (dao_treasury_bps as u64) +
+                (protocol_bps as u64) + (burn_bps as u64);
+    assert!(total == 10000, EInvalidSlashDistribution);
+
+    let action = SlashDistributionUpdateAction {
+        slasher_reward_bps,
+        dao_treasury_bps,
+        protocol_bps,
+        burn_bps,
+    };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::slash_distribution_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_slash_distribution_update(action);
+}
+
+/// Add a QueueParamsUpdate action to an intent
+public fun new_queue_params_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    max_proposer_funded: Option<u64>,
+    max_concurrent_proposals: Option<u64>,
+    max_queue_size: Option<u64>,
+    fee_escalation_basis_points: Option<u64>,
+    intent_witness: IW,
+) {
+    let action = QueueParamsUpdateAction {
+        max_proposer_funded,
+        max_concurrent_proposals,
+        max_queue_size,
+        fee_escalation_basis_points,
+    };
+    validate_queue_params_update(&action);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::queue_params_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_queue_params_update(action);
 }
 
 // === Getter Functions ===
@@ -1219,5 +1869,104 @@ public(package) fun governance_update_action_from_bytes(bytes: vector<u8>): Gove
         proposal_intent_expiry_ms: bcs.peel_option_u64(),
         optimistic_challenge_fee: bcs.peel_option_u64(),
         optimistic_challenge_period_ms: bcs.peel_option_u64(),
+    }
+}
+
+/// Deserialize MetadataTableUpdateAction from bytes
+public(package) fun metadata_table_update_action_from_bytes(bytes: vector<u8>): MetadataTableUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    MetadataTableUpdateAction {
+        keys: {
+            let len = bcs.peel_vec_length();
+            let mut result = vector[];
+            let mut i = 0;
+            while (i < len) {
+                result.push_back(string::utf8(bcs.peel_vec_u8()));
+                i = i + 1;
+            };
+            result
+        },
+        values: {
+            let len = bcs.peel_vec_length();
+            let mut result = vector[];
+            let mut i = 0;
+            while (i < len) {
+                result.push_back(string::utf8(bcs.peel_vec_u8()));
+                i = i + 1;
+            };
+            result
+        },
+        keys_to_remove: {
+            let len = bcs.peel_vec_length();
+            let mut result = vector[];
+            let mut i = 0;
+            while (i < len) {
+                result.push_back(string::utf8(bcs.peel_vec_u8()));
+                i = i + 1;
+            };
+            result
+        },
+    }
+}
+
+/// Deserialize QueueParamsUpdateAction from bytes
+public(package) fun queue_params_update_action_from_bytes(bytes: vector<u8>): QueueParamsUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    QueueParamsUpdateAction {
+        max_proposer_funded: bcs.peel_option_u64(),
+        max_concurrent_proposals: bcs.peel_option_u64(),
+        max_queue_size: bcs.peel_option_u64(),
+        fee_escalation_basis_points: bcs.peel_option_u64(),
+    }
+}
+
+/// Deserialize SlashDistributionUpdateAction from bytes
+public(package) fun slash_distribution_update_action_from_bytes(bytes: vector<u8>): SlashDistributionUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    SlashDistributionUpdateAction {
+        slasher_reward_bps: bcs.peel_u16(),
+        dao_treasury_bps: bcs.peel_u16(),
+        protocol_bps: bcs.peel_u16(),
+        burn_bps: bcs.peel_u16(),
+    }
+}
+
+/// Deserialize ConfigAction from bytes
+public(package) fun config_action_from_bytes(bytes: vector<u8>): ConfigAction {
+    let mut bcs = bcs::new(bytes);
+    let config_type = bcs.peel_u8();
+
+    ConfigAction {
+        config_type,
+        trading_params: if (config_type == CONFIG_TYPE_TRADING_PARAMS) {
+            option::some(trading_params_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
+        metadata: if (config_type == CONFIG_TYPE_METADATA) {
+            option::some(metadata_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
+        twap_config: if (config_type == CONFIG_TYPE_TWAP) {
+            option::some(twap_config_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
+        governance: if (config_type == CONFIG_TYPE_GOVERNANCE) {
+            option::some(governance_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
+        metadata_table: if (config_type == CONFIG_TYPE_METADATA_TABLE) {
+            option::some(metadata_table_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
+        queue_params: if (config_type == CONFIG_TYPE_QUEUE_PARAMS) {
+            option::some(queue_params_update_action_from_bytes(bcs.into_remainder_bytes()))
+        } else {
+            option::none()
+        },
     }
 }

@@ -1,7 +1,13 @@
 // ============================================================================
-// FORK ADDITION - On-Chain Schema System
+// FORK MODIFICATION NOTICE - On-Chain Schema System
 // ============================================================================
 // NEW FILE added to the fork for self-describing actions.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Created ActionDecoderRegistry as global shared object
+// - Added HumanReadableField for standardized decoded output
+// - Added assert_decoder_exists for mandatory validation
+// - Decoders attached as dynamic object fields keyed by TypeName
 //
 // PURPOSE:
 // Provides the foundation for on-chain action decoding, ensuring all actions
@@ -95,3 +101,15 @@ public fun has_decoder(
 ): bool {
     dynamic_object_field::exists_(registry_id(registry), action_type)
 }
+
+/// Assert that a decoder exists for the given action type
+/// Aborts with EDecoderNotFound if the decoder is not registered
+public fun assert_decoder_exists(
+    registry: &ActionDecoderRegistry,
+    action_type: TypeName,
+) {
+    assert!(has_decoder(registry, action_type), EDecoderNotFound);
+}
+
+// === Errors ===
+const EDecoderNotFound: u64 = 1;

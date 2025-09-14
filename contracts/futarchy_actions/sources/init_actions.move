@@ -36,6 +36,16 @@ use futarchy_actions::action_specs::{Self, ActionSpec, InitActionSpecs};
 /// Special witness for init actions that bypass voting
 public struct InitWitness has drop {}
 
+/// Result of init action execution with detailed error tracking
+public struct InitResult has drop {
+    total_actions: u64,
+    succeeded: u64,
+    failed: u64,
+    first_error: Option<String>,
+    failed_action_index: Option<u64>,
+    partial_execution_allowed: bool,
+}
+
 /// Event emitted for each init action attempted (for launchpad tracking)
 public struct InitActionAttempted has copy, drop {
     dao_id: address,
@@ -82,12 +92,33 @@ public fun execute_init_intent_with_resources<AssetType: drop + store, StableTyp
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    execute_specs_with_resources<AssetType, StableType>(
-        account, specs, queue, spot_pool, clock, ctx
+    let result = execute_specs_with_resources<AssetType, StableType>(
+        account, specs, queue, spot_pool, clock, ctx, false // partial_execution_allowed = false
     );
+
+    // If any action failed and partial execution is not allowed, abort
+    if (result.failed > 0 && !result.partial_execution_allowed) {
+        abort EInitActionFailed
+    }
 }
 
-/// The main dispatcher. Iterates through specs and calls handlers via the simplified pattern.
+/// Execute init actions with partial execution support
+/// Returns InitResult with details about successes and failures
+public fun execute_init_intent_with_partial_support<AssetType: drop + store, StableType: drop + store>(
+    account: &mut Account<FutarchyConfig>,
+    specs: InitActionSpecs,
+    queue: &mut ProposalQueue<StableType>,
+    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+    allow_partial: bool,
+): InitResult {
+    execute_specs_with_resources<AssetType, StableType>(
+        account, specs, queue, spot_pool, clock, ctx, allow_partial
+    )
+}
+
+/// The main dispatcher with error recovery support
 fun execute_specs_with_resources<AssetType: drop + store, StableType: drop + store>(
     account: &mut Account<FutarchyConfig>,
     specs: InitActionSpecs,
@@ -95,20 +126,24 @@ fun execute_specs_with_resources<AssetType: drop + store, StableType: drop + sto
     spot_pool: &mut AccountSpotPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+    allow_partial: bool,
+): InitResult {
     let dao_id = object::id_address(account);
     let actions = action_specs::actions(&specs);
+    let total_actions = vector::length(actions);
     let mut i = 0;
     let mut successful = 0;
     let mut failed = 0;
-    
-    while (i < vector::length(actions)) {
+    let mut first_error: Option<String> = option::none();
+    let mut failed_action_index: Option<u64> = option::none();
+
+    while (i < total_actions) {
         let spec = vector::borrow(actions, i);
         let action_type = action_specs::action_type(spec);
         let action_data = action_specs::action_data(spec);
 
-        // The dispatcher chain. Each module returns true if it handled the action.
-        let handled = try_execute_with_all_dispatchers(
+        // Try to execute with all dispatchers
+        let (handled, error_msg) = try_execute_with_all_dispatchers_safe(
             &action_type,
             action_data,
             account,
@@ -117,18 +152,33 @@ fun execute_specs_with_resources<AssetType: drop + store, StableType: drop + sto
             clock,
             ctx
         );
-        
+
         if (handled) {
             successful = successful + 1;
         } else {
             failed = failed + 1;
-            // In the simplified pattern, we always abort on failure
-            abort EInitActionFailed
+
+            // Track first error
+            if (first_error.is_none()) {
+                first_error = option::some(error_msg);
+                failed_action_index = option::some(i);
+            };
+
+            // If partial execution not allowed, stop immediately
+            if (!allow_partial) {
+                event::emit(InitActionAttempted {
+                    dao_id,
+                    action_type: b"action".to_string(),
+                    action_index: i,
+                    success: false,
+                });
+                break
+            }
         };
 
         event::emit(InitActionAttempted {
             dao_id,
-            action_type: b"action".to_string(), // TypeName cannot be converted to string
+            action_type: b"action".to_string(),
             action_index: i,
             success: handled,
         });
@@ -138,13 +188,51 @@ fun execute_specs_with_resources<AssetType: drop + store, StableType: drop + sto
 
     event::emit(InitBatchCompleted {
         dao_id,
-        total_actions: i,
+        total_actions,
         successful_actions: successful,
         failed_actions: failed,
     });
+
+    InitResult {
+        total_actions,
+        succeeded: successful,
+        failed,
+        first_error,
+        failed_action_index,
+        partial_execution_allowed: allow_partial,
+    }
 }
 
-/// Try all dispatchers with the simplified pattern
+/// Try all dispatchers with error recovery
+/// Returns (success, error_message)
+fun try_execute_with_all_dispatchers_safe<AssetType: drop + store, StableType: drop + store>(
+    action_type: &TypeName,
+    action_data: &vector<u8>,
+    account: &mut Account<FutarchyConfig>,
+    queue: &mut ProposalQueue<StableType>,
+    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (bool, String) {
+    // Try each dispatcher and capture errors
+    let result = try_execute_with_all_dispatchers(
+        action_type,
+        action_data,
+        account,
+        queue,
+        spot_pool,
+        clock,
+        ctx
+    );
+
+    if (result) {
+        (true, string::utf8(b""))
+    } else {
+        (false, string::utf8(b"Action not handled by any dispatcher"))
+    }
+}
+
+/// Original dispatcher chain (now complete with all dispatchers)
 fun try_execute_with_all_dispatchers<AssetType: drop + store, StableType: drop + store>(
     action_type: &TypeName,
     action_data: &vector<u8>,
@@ -154,35 +242,65 @@ fun try_execute_with_all_dispatchers<AssetType: drop + store, StableType: drop +
     clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
+    // Import all dispatcher modules
     use futarchy_actions::config_dispatcher;
     use futarchy_actions::liquidity_dispatcher;
-    
-    // The dispatcher chain. Each module returns (bool, String) for (success, description).
-    // This is the simplified pattern - no complex child objects or registry
+
+    // Note: Additional dispatchers would be imported here when they implement init support
+    // Currently only config and liquidity dispatchers have init action support
+    // The following would be added as they're implemented:
+    // use futarchy_actions::governance_dispatcher;
+    // use futarchy_actions::memo_dispatcher;
+    // use futarchy_vault::custody_dispatcher;
+    // use futarchy_lifecycle::stream_dispatcher;
+    // use futarchy_lifecycle::dissolution_dispatcher;
+    // use futarchy_lifecycle::oracle_dispatcher;
+    // use futarchy_multisig::security_council_dispatcher;
+    // use futarchy_multisig::policy_dispatcher;
+    // use futarchy_specialized_actions::operating_agreement_dispatcher;
+
+    // Try config actions first (most common for init)
     let (success, _) = config_dispatcher::execute_init_config_action(
         action_type, action_data, account, clock, ctx
     );
     if (success) {
         return true
     };
-    
+
+    // Try liquidity actions (common for bootstrapping AMM)
     let (success, _) = liquidity_dispatcher::try_execute_init_action<AssetType, StableType>(
         action_type, action_data, account, spot_pool, clock, ctx
     );
     if (success) {
         return true
     };
-    
-    // Add other dispatchers here as needed:
-    // if (incentives_and_options_dispatcher::try_execute_init_action(...)) { return true };
-    // if (vault_governance_dispatcher::try_execute_init_action(...)) { return true };
-    
+
+    // TODO: Add more dispatchers as they implement init action support
+    // Each dispatcher module needs to implement a try_execute_init_action function
+    // that can work with unshared objects during DAO initialization
+
+    // Example of future dispatcher integration:
+    // let (success, _) = stream_dispatcher::try_execute_init_action<AssetType>(
+    //     action_type, action_data, account, clock, ctx
+    // );
+    // if (success) return true;
+
     false // Action not handled by any dispatcher
 }
 
 
 // === Constants ===
 const MAX_INIT_ACTIONS: u64 = 50; // Reasonable limit to prevent gas issues
+
+// === Public Getters for InitResult ===
+public fun result_succeeded(result: &InitResult): u64 { result.succeeded }
+public fun result_failed(result: &InitResult): u64 { result.failed }
+public fun result_first_error(result: &InitResult): &Option<String> { &result.first_error }
+public fun result_failed_index(result: &InitResult): &Option<u64> { &result.failed_action_index }
+public fun result_is_complete_success(result: &InitResult): bool { result.failed == 0 }
+public fun result_is_partial_success(result: &InitResult): bool {
+    result.succeeded > 0 && result.failed > 0 && result.partial_execution_allowed
+}
 
 // === Errors ===
 const EUnhandledAction: u64 = 1;

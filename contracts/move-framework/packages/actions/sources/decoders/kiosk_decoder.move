@@ -129,7 +129,7 @@ fun register_take_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = TakeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<TakeAction>();
+    let type_key = type_name::with_defining_ids<TakeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -138,6 +138,6 @@ fun register_list_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = ListActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<ListAction>();
+    let type_key = type_name::with_defining_ids<ListAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

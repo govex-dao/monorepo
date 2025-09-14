@@ -129,7 +129,7 @@ fun register_spend_decoder(
     };
 
     // Use placeholder for generic registration
-    let type_key = type_name::get<SpendAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
 
     // Attach decoder as dynamic object field
     dynamic_object_field::add(
@@ -148,7 +148,7 @@ fun register_deposit_decoder(
         id: object::new(ctx),
     };
 
-    let type_key = type_name::get<DepositAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DepositAction<CoinPlaceholder>>();
 
     dynamic_object_field::add(
         schema::registry_id_mut(registry),
@@ -161,12 +161,12 @@ fun register_deposit_decoder(
 
 /// Check if a SpendAction decoder is registered
 public fun has_spend_decoder(registry: &ActionDecoderRegistry): bool {
-    let type_key = type_name::get<SpendAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
     dynamic_object_field::exists_(schema::registry_id(registry), type_key)
 }
 
 /// Check if a DepositAction decoder is registered
 public fun has_deposit_decoder(registry: &ActionDecoderRegistry): bool {
-    let type_key = type_name::get<DepositAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DepositAction<CoinPlaceholder>>();
     dynamic_object_field::exists_(schema::registry_id(registry), type_key)
 }

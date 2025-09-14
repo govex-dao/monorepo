@@ -104,7 +104,7 @@ fun register_borrow_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = BorrowActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<BorrowAction<CapPlaceholder>>();
+    let type_key = type_name::with_defining_ids<BorrowAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -113,6 +113,6 @@ fun register_return_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = ReturnActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<ReturnAction<CapPlaceholder>>();
+    let type_key = type_name::with_defining_ids<ReturnAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

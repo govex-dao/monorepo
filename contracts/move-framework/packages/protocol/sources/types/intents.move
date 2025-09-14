@@ -19,7 +19,7 @@
 //    New: Uses action_types: vector<TypeName> for compile-time safety
 //    - Removed dependency on action_descriptor module
 //    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
-//    - Type names captured using type_name::get<T>() for zero-overhead routing
+//    - Type names captured using type_name::with_defining_ids<T>() for zero-overhead routing
 //
 // BENEFITS:
 // - Eliminates risk of permanently locked objects from incomplete cleanup

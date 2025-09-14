@@ -23,6 +23,8 @@ use sui::{
     tx_context::TxContext,
 };
 use futarchy_core::{
+    action_validation,
+    action_types,
     version,
     futarchy_config::{Self, FutarchyConfig},
 };
@@ -30,12 +32,58 @@ use futarchy_multisig::weighted_list::{Self, WeightedList};
 use futarchy_one_shot_utils::action_data_structs::CreatePaymentAction;
 use account_actions::{vault::{Self, Vault, VaultKey}, vault_intents};
 use account_protocol::{
+    bcs_validation,
     account::{Self, Account, Auth},
     executable::{Self, Executable, ExecutionContext},
     version_witness::VersionWitness,
     intents,
 };
 // TypeName-based routing replaces old action_descriptor system
+
+
+// === Missing Action Structs for Decoders ===
+
+/// Action to create a stream payment
+public struct CreateStreamAction<phantom CoinType> has store, drop, copy {
+    recipient: address,
+    amount_per_period: u64,
+    period_duration_ms: u64,
+    start_time: u64,
+    end_time: Option<u64>,
+    cliff_time: Option<u64>,
+    cancellable: bool,
+    description: String,
+}
+
+/// Action to cancel a stream
+public struct CancelStreamAction has store, drop, copy {
+    stream_id: ID,
+    reason: String,
+}
+
+/// Action to withdraw from a stream
+public struct WithdrawStreamAction has store, drop, copy {
+    stream_id: ID,
+    amount: u64,
+}
+
+/// Action to update stream parameters
+public struct UpdateStreamAction has store, drop, copy {
+    stream_id: ID,
+    new_recipient: Option<address>,
+    new_amount_per_period: Option<u64>,
+}
+
+/// Action to pause a stream
+public struct PauseStreamAction has store, drop, copy {
+    stream_id: ID,
+    reason: String,
+}
+
+/// Action to resume a paused stream
+public struct ResumeStreamAction has store, drop, copy {
+    stream_id: ID,
+}
 
 // === Errors === (Keep all original errors)
 const EInvalidStreamDuration: u64 = 1;
@@ -542,6 +590,9 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     );
     // Transfer the refunded coin to the sender
     transfer::public_transfer(refund_coin, tx_context::sender(ctx));
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_create_budget_stream action
@@ -623,6 +674,9 @@ public fun do_execute_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     _ctx: &mut TxContext,
 ) {
     let _action = executable.next_action<Outcome, ExecutePaymentAction<CoinType>, IW>(witness);
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_request_withdrawal action
@@ -823,6 +877,9 @@ public fun do_challenge_withdrawals<Outcome: store, IW: drop>(
     _ctx: &mut TxContext,
 ) {
     let _action = executable.next_action<Outcome, ChallengeWithdrawalsAction, IW>(witness);
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute do_cancel_challenged_withdrawals action
@@ -835,6 +892,9 @@ public fun do_cancel_challenged_withdrawals<Outcome: store, IW: drop>(
     _ctx: &mut TxContext,
 ) {
     let _action = executable.next_action<Outcome, CancelChallengedWithdrawalsAction, IW>(witness);
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// REFACTORED: Claim now delegates to vault stream for direct treasury and handles weighted distribution

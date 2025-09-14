@@ -407,7 +407,68 @@ async function decodeAction(spec: ActionSpec): Promise<DecodedAction> {
 - `actions/sources/decoders/` - Complete decoder implementations for all actions
 - `DECODER_ARCHITECTURE.md` - Clean architecture documentation
 
-### Major Change #8: Vesting Composability (2025-09-14)
+### Major Change #8: Critical Security Fix - Action Type Validation (2025-09-14)
+
+**Purpose**: Fix critical type confusion vulnerability in action handlers that could allow wrong actions to be executed by wrong handlers
+
+#### The Vulnerability
+
+All `do_*` functions in the Move Framework were missing type validation before deserializing action data:
+
+```move
+// VULNERABLE CODE - No type checking!
+public fun do_spend<...>(...) {
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+    let action_data = intents::action_spec_data(spec);
+    // Directly deserializes without checking action type!
+    let mut reader = bcs::new(*action_data);
+    let name = bcs::peel_vec_u8(&mut reader);  // Could be wrong data!
+}
+```
+
+This allowed potential attacks:
+- **Type Confusion**: Wrong action types could be passed to wrong handlers
+- **DoS Attacks**: Malformed data causing transaction aborts
+- **Potential Asset Theft**: If byte layouts coincidentally matched between different actions
+
+#### The Fix
+
+Added type assertions to all 16 `do_*` functions across 8 files:
+
+```move
+// FIXED CODE - Type validation before deserialization
+public fun do_spend<...>(...) {
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    let expected_type = type_name::with_defining_ids<VaultSpend>();
+    assert!(intents::action_spec_type(spec) == expected_type, EWrongActionType);
+
+    let action_data = intents::action_spec_data(spec);
+    // Now safe to deserialize
+}
+```
+
+**Files Fixed**:
+- `vault.move` (2 functions): `do_deposit`, `do_spend`
+- `currency.move` (4 functions): `do_disable`, `do_update`, `do_mint`, `do_burn`
+- `transfer.move` (1 function): `do_transfer`
+- `vesting.move` (1 function): `do_vesting`
+- `access_control.move` (2 functions): `do_borrow`, `do_return`
+- `package_upgrade.move` (3 functions): `do_upgrade`, `do_commit`, `do_restrict`
+- `kiosk.move` (2 functions): `do_take`, `do_list`
+- `owned.move` (1 function): `do_withdraw`
+
+#### Security Impact
+
+- **Before**: Actions could theoretically be executed by wrong handlers
+- **After**: Type mismatch causes immediate abort with `EWrongActionType`
+- **Performance**: Minimal overhead (one type comparison)
+- **Compatibility**: No breaking changes to APIs
+
+### Major Change #9: Vesting Composability (2025-09-14)
 
 **Purpose**: Fix non-composable vesting design and enable PTB integration
 

@@ -13,6 +13,7 @@ use futarchy_utils::version;
 // === Errors ===
 const EProposalNotPassed: u64 = 1;
 const EProposalAlreadyExecuted: u64 = 2;
+const ENotAllActionsExecuted: u64 = 3;
 
 // === Entry Functions ===
 
@@ -51,11 +52,16 @@ public fun execute_proposal_start(
 }
 
 /// Finalize proposal execution - consumes the Executable hot potato
-/// The ExecutionContext is automatically cleaned up when Executable is destroyed
+/// CRITICAL: This function MUST verify that all actions in the proposal were executed
 public fun execute_proposal_end(
     account: &mut Account<FutarchyConfig>,
     executable: Executable<ProposalOutcome>,
 ) {
+    // Verify all actions were executed
+    let total_actions = executable::intent(&executable).action_specs().length();
+    let executed_actions = executable::action_idx(&executable);
+    assert!(executed_actions == total_actions, ENotAllActionsExecuted);
+
     // Confirm execution - this will destroy the Executable and its embedded context
     account::confirm_execution(
         account,

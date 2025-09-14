@@ -1,7 +1,12 @@
 // ============================================================================
 // FORK MODIFICATION NOTICE - BCS Validation Security Module
 // ============================================================================
-// NEW FILE: Added to support type-based action system with proper validation.
+// NEW FILE added to the fork for BCS deserialization security.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Added validate_all_bytes_consumed() function
+// - Prevents trailing data attacks in action deserialization
+// - Required by all decoder modules for security
 //
 // PURPOSE:
 // - Ensures all BCS bytes are consumed when deserializing actions

@@ -69,6 +69,6 @@ fun register_transfer_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = TransferActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<TransferAction>();
+    let type_key = type_name::with_defining_ids<TransferAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

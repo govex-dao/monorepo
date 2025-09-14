@@ -741,11 +741,11 @@ public fun is_type_whitelisted<Config, T>(account: &Account<Config>): bool {
 fun is_coin_type(type_name: TypeName): bool {
     // Check if the type is a Coin type by checking if it starts with
     // the Coin module prefix from the Sui framework
-    let type_addr = type_name::get_address(&type_name);
+    let type_addr = type_name::address_string(&type_name);
     
     // Check if this is from the Sui framework and the module is "coin"
     if (type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()) {
-        let module_name = type_name::get_module(&type_name);
+        let module_name = type_name::module_string(&type_name);
         module_name == b"coin".to_ascii_string()
     } else {
         false

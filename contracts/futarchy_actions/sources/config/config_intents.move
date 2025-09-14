@@ -7,6 +7,8 @@ use std::{
     string::String,
     ascii::String as AsciiString,
     option::{Self, Option},
+    type_name,
+    bcs,
 };
 use sui::{
     clock::Clock,
@@ -18,6 +20,7 @@ use account_protocol::{
     executable::Executable,
     intents::{Self, Intent, Params},
     intent_interface,
+    schema::{Self, ActionDecoderRegistry},
 };
 use futarchy_core::version;
 use futarchy_actions::config_actions;
@@ -38,11 +41,18 @@ public struct ConfigIntent has copy, drop {}
 /// Create intent to enable/disable proposals
 public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     enabled: bool,
     ctx: &mut TxContext
 ) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<config_actions::SetProposalsEnabledAction>()
+    );
+
     // Use standard DAO settings for intent params (expiry, etc.)
     account.build_intent!(
         params,
@@ -53,10 +63,11 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_set_proposals_enabled_action(enabled);
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::SetProposalsEnabled {},
+                action_bytes,
                 iw
             );
         }
@@ -66,11 +77,18 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
 /// Create intent to update DAO name
 public fun create_update_name_intent<Outcome: store + drop + copy>(
     account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
     params: Params,
     outcome: Outcome,
     new_name: String,
     ctx: &mut TxContext
 ) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<config_actions::UpdateNameAction>()
+    );
+
     account.build_intent!(
         params,
         outcome,
@@ -80,10 +98,11 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
         ctx,
         |intent, iw| {
             let action = config_actions::new_update_name_action(new_name);
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateName {},
+                action_bytes,
                 iw
             );
         }
@@ -115,10 +134,11 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
                 option::some(icon_url),
                 option::some(description)
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::SetMetadata {},
+                action_bytes,
                 iw
             );
         }
@@ -151,10 +171,11 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
                 option::some(trading_period_ms),
                 option::none() // amm_total_fee_bps
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateTradingConfig {},
+                action_bytes,
                 iw
             );
         }
@@ -186,10 +207,11 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
                 option::some(initial_observation),
                 option::some(threshold)
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateTwapConfig {},
+                action_bytes,
                 iw
             );
         }
@@ -225,10 +247,11 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::none(), // optimistic_challenge_fee - not specified
                 option::none()  // optimistic_challenge_period_ms - not specified
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateGovernance {},
+                action_bytes,
                 iw
             );
         }
@@ -268,10 +291,11 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
                 optimistic_challenge_fee,
                 optimistic_challenge_period_ms
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateGovernance {},
+                action_bytes,
                 iw
             );
         }
@@ -303,10 +327,11 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
                 protocol_bps,
                 burn_bps
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateSlashDistribution {},
+                action_bytes,
                 iw
             );
         }
@@ -337,10 +362,11 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
                 option::none(), // max_queue_size - not specified
                 option::some(fee_escalation_basis_points)
             );
-            intents::add_action_spec(
+            let action_bytes = bcs::to_bytes(&action);
+            intents::add_typed_action(
                 intent,
-                action,
                 action_types::UpdateQueueParams {},
+                action_bytes,
                 iw
             );
         }

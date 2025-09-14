@@ -229,7 +229,7 @@ fun register_mint_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = MintActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<MintAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<MintAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -238,7 +238,7 @@ fun register_burn_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = BurnActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<BurnAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<BurnAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -247,7 +247,7 @@ fun register_disable_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = DisableActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<DisableAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<DisableAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -256,6 +256,6 @@ fun register_update_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = UpdateActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::get<UpdateAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<UpdateAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

@@ -28,6 +28,7 @@ use sui::{
     bcs::{Self, BCS},
 };
 use account_protocol::{
+    action_validation,
     account::{Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -263,6 +264,10 @@ public fun do_upgrade<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageUpgrade>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -334,6 +339,10 @@ public fun do_commit<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageCommit>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
@@ -400,6 +409,10 @@ public fun do_restrict<Config, Outcome: store, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<PackageRestrict>(spec);
+
     let action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization

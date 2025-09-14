@@ -3,8 +3,9 @@
 module futarchy_lifecycle::dissolution_actions;
 
 // === Imports ===
-use std::string::String;
+use std::{string::{Self, String}, vector};
 use sui::{
+    bcs::{Self, BCS},
     coin::{Self, Coin},
     balance::{Self, Balance},
     object::ID,
@@ -15,10 +16,15 @@ use sui::{
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
-    intents::Expired,
+    intents::{Self, Expired, ActionSpec},
     version_witness::VersionWitness,
+    bcs_validation,
 };
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::{
+    futarchy_config::{Self, FutarchyConfig},
+    action_validation,
+    action_types,
+};
 use futarchy_vault::{
     futarchy_vault,
 };
@@ -103,34 +109,40 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &InitiateDissolutionAction = executable.next_action(copy intent_witness);
-    
-    // Extract parameters from action
-    let reason = &action.reason;
-    let distribution_method = action.distribution_method;
-    let burn_unsold_tokens = action.burn_unsold_tokens;
-    let deadline = action.final_operations_deadline;
-    
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::InitiateDissolution>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let reason_bytes = bcs::peel_vec_u8(&mut reader);
+    let reason = string::utf8(reason_bytes);
+    let distribution_method = bcs::peel_u8(&mut reader);
+    let burn_unsold_tokens = bcs::peel_bool(&mut reader);
+    let final_operations_deadline = bcs::peel_u64(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     // Get the config and set dissolution state
     let config = account::config_mut(account, version, intent_witness);
-    
+
     // 1. Set dissolution state in config (operational_state = DISSOLVING)
     futarchy_config::set_operational_state(config, futarchy_config::state_dissolving());
-    
+
     // 2. Pause all normal operations by disabling proposals
     futarchy_config::set_proposals_enabled_internal(config, false);
-    
+
     // 3. Record dissolution parameters in config metadata
-    // Store the dissolution parameters for later use
-    // Note: In a real implementation, we'd store these in a DissolutionState struct
-    // For now, we just validate them
     assert!(reason.length() > 0, EInvalidRatio);
     assert!(distribution_method <= 2, EInvalidRatio);
-    assert!(deadline > 0, EInvalidThreshold);
-    
-    // 4. Begin asset tallying process is handled by subsequent actions
+    assert!(final_operations_deadline > 0, EInvalidThreshold);
+
     let _ = burn_unsold_tokens;
-    let _ = version;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a distribute asset action
@@ -143,33 +155,40 @@ public fun do_batch_distribute<Outcome: store, IW: drop>(
     intent_witness: IW,
     ctx: &mut TxContext,
 ) {
-    let action: &BatchDistributeAction = executable.next_action(intent_witness);
-    
-    // Extract parameters
-    let asset_types = &action.asset_types;
-    
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::DistributeAsset>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let asset_types_count = bcs::peel_vec_length(&mut reader);
+    let mut asset_types = vector::empty<String>();
+    let mut i = 0;
+    while (i < asset_types_count) {
+        let asset_type_bytes = bcs::peel_vec_u8(&mut reader);
+        asset_types.push_back(string::utf8(asset_type_bytes));
+        i = i + 1;
+    };
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     // Verify dissolution is active
     let config = account::config(account);
     assert!(
         futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
         EDissolutionNotActive
     );
-    
-    // Note: This action serves as a coordinator for multiple distribute actions
-    // The actual typed DistributeAssetsAction<CoinType> actions would need to be
-    // added to the executable for each specific coin type.
-    // This is because Move doesn't support runtime type information.
-    // 
-    // In practice, when creating the dissolution intent, you would:
-    // 1. Add this BatchDistributeAction to mark the batch operation
-    // 2. Add individual DistributeAssetsAction<CoinType> for each asset type
-    // 3. The executor would process them in sequence
-    
-    // For now, just validate that we have asset types to distribute
+
+    // Validate that we have asset types to distribute
     assert!(asset_types.length() > 0, EEmptyAssetList);
-    
+
     let _ = version;
     let _ = ctx;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a finalize dissolution action
@@ -180,38 +199,36 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &FinalizeDissolutionAction = executable.next_action(copy intent_witness);
-    
-    // Extract parameters
-    let final_recipient = action.final_recipient;
-    let destroy_account = action.destroy_account;
-    
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::FinalizeDissolution>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let final_recipient = bcs::peel_address(&mut reader);
+    let destroy_account = bcs::peel_bool(&mut reader);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     // Verify dissolution is active
     let config = account::config_mut(account, version, intent_witness);
     assert!(
         futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
-        EDissolutionNotActive  
+        EDissolutionNotActive
     );
-    
-    // 1. Verify all assets have been distributed
-    // In a real implementation, we'd check that all vaults are empty or minimal
-    // For now, we just validate the recipient
+
     assert!(final_recipient != @0x0, EInvalidRecipient);
-    
-    // 2. Send any remaining dust to final_recipient
-    // This would require checking all vault balances and transferring remainders
-    // Implementation would iterate through all coin types in vaults
-    
-    // 3. Mark DAO as fully dissolved
+
     futarchy_config::set_operational_state(config, futarchy_config::state_dissolved());
-    
-    // 4. Destroy account if specified
+
     if (destroy_account) {
         // Account destruction would need special handling
-        // The dissolved state already prevents any further operations
     };
-    
-    let _ = version;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute a cancel dissolution action
@@ -222,36 +239,33 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &CancelDissolutionAction = executable.next_action(copy intent_witness);
-    
-    // Extract parameters
-    let reason = &action.reason;
-    
-    // Get the config
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CancelDissolution>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let reason_bytes = bcs::peel_vec_u8(&mut reader);
+    let reason = string::utf8(reason_bytes);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     let config = account::config_mut(account, version, intent_witness);
-    
-    // 1. Verify dissolution can be cancelled (must be in dissolving state)
+
     assert!(
         futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
         ENotDissolving
     );
-    
-    // Validate cancellation reason
+
     assert!(reason.length() > 0, EInvalidRatio);
-    
-    // 2. Revert operational state to ACTIVE
+
     futarchy_config::set_operational_state(config, futarchy_config::state_active());
-    
-    // 3. Resume normal operations by re-enabling proposals
     futarchy_config::set_proposals_enabled_internal(config, true);
-    
-    // 4. Return any collected assets to vault
-    // In a real implementation, this would involve:
-    // - Checking if any assets were moved to a dissolution pool
-    // - Moving them back to the main vault
-    // - Restoring any paused streams or recurring payments
-    
-    let _ = version;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute calculate pro rata shares action
@@ -289,6 +303,9 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     
     let _ = exclude_dao_tokens;
     let _ = version;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute cancel all streams action
@@ -374,6 +391,9 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     let _ = burn_lp_tokens;
     let _ = version;
     let _ = ctx;
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
 }
 
 /// Execute distribute assets action
@@ -541,14 +561,52 @@ public fun new_initiate_dissolution_action(
 ): InitiateDissolutionAction {
     assert!(distribution_method <= 2, EInvalidRatio); // 0, 1, or 2
     assert!(reason.length() > 0, EInvalidRatio);
-    
-    InitiateDissolutionAction {
+
+    let action = InitiateDissolutionAction {
         reason,
         distribution_method,
         burn_unsold_tokens,
         final_operations_deadline,
-    }
+    };
+    action
 }
+
+/// Create a new batch distribute action
+public fun new_batch_distribute_action(
+    asset_types: vector<String>,
+): BatchDistributeAction {
+    assert!(asset_types.length() > 0, EEmptyAssetList);
+
+    let action = BatchDistributeAction {
+        asset_types,
+    };
+    action
+}
+
+/// Create a new finalize dissolution action
+public fun new_finalize_dissolution_action(
+    final_recipient: address,
+    destroy_account: bool,
+): FinalizeDissolutionAction {
+    assert!(final_recipient != @0x0, EInvalidRecipient);
+
+    let action = FinalizeDissolutionAction {
+        final_recipient,
+        destroy_account,
+    };
+    action
+}
+
+/// Create a new cancel dissolution action
+public fun new_cancel_dissolution_action(
+    reason: String,
+): CancelDissolutionAction {
+    assert!(reason.length() > 0, EInvalidRatio);
+
+    let action = CancelDissolutionAction {
+        reason,
+    };
+    action
 
 /// Create a new batch distribute action
 public fun new_batch_distribute_action(

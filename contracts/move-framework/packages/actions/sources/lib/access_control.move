@@ -31,9 +31,10 @@ module account_actions::access_control;
 
 // === Imports ===
 
-use std::type_name;
+
 use sui::bcs::{Self, BCS};
 use account_protocol::{
+    action_validation,
     account::{Account, Auth},
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -127,13 +128,18 @@ public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec and verify it's a BorrowAction
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::AccessControlBorrow>(spec);
+
+
     let _action_data = intents::action_spec_data(spec);
 
     // CRITICAL: Verify that a matching ReturnAction exists in the intent
     // This ensures the borrowed capability will be returned
     let current_idx = executable.action_idx();
     let mut return_found = false;
-    let return_action_type = type_name::get<framework_action_types::AccessControlReturn>();
+    let return_action_type = action_validation::get_action_type_name<framework_action_types::AccessControlReturn>();
 
     // Search from the next action onwards
     let mut i = current_idx + 1;
@@ -196,6 +202,11 @@ public fun do_return<Config, Outcome: store, Cap: key + store, IW: drop>(
     // Get BCS bytes from ActionSpec and verify it's a ReturnAction
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::AccessControlReturn>(spec);
+
+
     let _action_data = intents::action_spec_data(spec);
 
     // For ReturnAction<Cap>, there's no data to deserialize (empty struct)

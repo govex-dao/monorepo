@@ -60,6 +60,7 @@ use std::{
     string::{Self, String},
     option::{Self, Option},
     u64,
+
 };
 use sui::{
     balance::Balance,
@@ -72,6 +73,7 @@ use sui::{
     bcs::{Self, BCS},
 };
 use account_protocol::{
+    action_validation,
     account::Account,
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
@@ -294,7 +296,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: drop>(
 /// Creates the Vesting and ClaimCap objects from a CreateVestingAction
 public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<Config>, 
+    _account: &mut Account<Config>,
     coin: Coin<CoinType>,
     clock: &Clock,
     _intent_witness: IW,
@@ -303,6 +305,11 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     // Get BCS bytes from ActionSpec
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<VestingCreate>(spec);
+
+
     let action_data = intents::action_spec_data(spec);
 
     // Create BCS reader and deserialize

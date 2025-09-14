@@ -19,6 +19,7 @@ use sui::transfer;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use account_protocol::account::{Self, Account};
+use futarchy_actions::action_specs::{Self, InitActionSpecs};
 
 // === Events ===
 
@@ -52,10 +53,10 @@ public struct ProposalQueued has copy, drop {
     queue_position: u64,
 }
 
-/// Emitted when an evicted proposal has an associated intent that needs cleanup
+/// Emitted when an evicted proposal has an associated intent spec that needs cleanup
 public struct EvictedIntentNeedsCleanup has copy, drop {
     proposal_id: ID,
-    intent_key: String,
+    has_intent_spec: bool,
     dao_id: ID,
     timestamp: u64,
 }
@@ -107,7 +108,7 @@ public struct QueuedProposal<phantom StableCoin> has store {
     fee: u64,
     timestamp: u64,
     priority_score: PriorityScore,
-    intent_key: Option<String>,
+    intent_spec: Option<InitActionSpecs>,
     uses_dao_liquidity: bool,
     data: ProposalData,
     queue_entry_time: u64,  // Track when proposal entered queue for grace period
@@ -504,13 +505,13 @@ public fun insert<StableCoin>(
             });
             
             // Clean up evicted proposal
-            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_key, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = evicted;
-            
-            if (intent_key.is_some()) {
-                let key = intent_key.extract();
+            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_spec, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = evicted;
+
+            if (intent_spec.is_some()) {
+                let _ = intent_spec.extract();
                 event::emit(EvictedIntentNeedsCleanup {
                     proposal_id,
-                    intent_key: key,
+                    has_intent_spec: true,
                     dao_id,
                     timestamp: current_time,
                 });
@@ -624,7 +625,7 @@ public fun new_queued_proposal<StableCoin>(
     proposer: address,
     data: ProposalData,
     bond: Option<Coin<StableCoin>>,
-    intent_key: Option<String>,
+    intent_spec: Option<InitActionSpecs>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
@@ -654,7 +655,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
     proposer: address,
     data: ProposalData,
     bond: Option<Coin<StableCoin>>,
-    intent_key: Option<String>,
+    intent_spec: Option<InitActionSpecs>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
@@ -713,7 +714,7 @@ public fun get_proposer<StableCoin>(proposal: &QueuedProposal<StableCoin>): addr
 public fun get_fee<StableCoin>(proposal: &QueuedProposal<StableCoin>): u64 { proposal.fee }
 public fun get_timestamp<StableCoin>(proposal: &QueuedProposal<StableCoin>): u64 { proposal.timestamp }
 public fun get_priority_score<StableCoin>(proposal: &QueuedProposal<StableCoin>): &PriorityScore { &proposal.priority_score }
-public fun get_intent_key<StableCoin>(proposal: &QueuedProposal<StableCoin>): &Option<String> { &proposal.intent_key }
+public fun get_intent_spec<StableCoin>(proposal: &QueuedProposal<StableCoin>): &Option<InitActionSpecs> { &proposal.intent_spec }
 public fun get_uses_dao_liquidity<StableCoin>(proposal: &QueuedProposal<StableCoin>): bool { proposal.uses_dao_liquidity }
 public fun get_data<StableCoin>(proposal: &QueuedProposal<StableCoin>): &ProposalData { &proposal.data }
 public fun get_dao_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): ID { proposal.dao_id }
@@ -990,7 +991,7 @@ public entry fun cancel_proposal<StableCoin>(
     let proposer_addr = proposal.proposer;
     
     let removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
-    let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_key: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
+    let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_spec: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
     
     // Get the fee refunded as a Coin
     let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -1131,7 +1132,7 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         fee: _,
         timestamp: _,
         priority_score: _,
-        intent_key: _,
+        intent_spec: _,
         uses_dao_liquidity: _,
         data: _,
         queue_entry_time: _,

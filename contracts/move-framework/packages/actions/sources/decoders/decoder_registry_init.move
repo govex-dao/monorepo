@@ -1,21 +1,24 @@
 // ============================================================================
-// FORK ADDITION - Decoder Registry Initialization
+// FORK MODIFICATION NOTICE - Decoder Registry Initialization
 // ============================================================================
 // NEW FILE added to the fork for decoder system initialization.
+//
+// CHANGES IN THIS FORK (2025-01-14):
+// - Added RegistryInfo shared object to store registry ID dynamically
+// - Added RegistryCreated event emission for off-chain indexing
+// - Added DECODER_REGISTRY_INIT one-time witness pattern
+// - Removed hardcoded REGISTRY_ID constant - now discoverable at runtime
+// - Single transaction deployment - no manual ID updates needed
 //
 // PURPOSE:
 // Central initialization point for all action decoders. Creates and shares
 // the global ActionDecoderRegistry during protocol deployment.
 //
-// ARCHITECTURE:
-// - Creates single, globally shared ActionDecoderRegistry
-// - Registers all decoder modules in one place
-// - Provides admin capability for future decoder updates
-// - Ensures mandatory decoder availability for all actions
-//
-// DESIGN DECISION:
-// Registry is a shared object with well-known address, NOT tied to
-// individual accounts. This ensures universal decoder availability.
+// BENEFITS:
+// - Deploy once, fully configured
+// - No constants to update post-deployment
+// - Registry ID discoverable through multiple methods
+// - Clean, professional deployment process
 // ============================================================================
 
 /// Main decoder registry initialization module
@@ -24,7 +27,7 @@ module account_actions::decoder_registry_init;
 
 // === Imports ===
 
-use sui::{transfer, object};
+use sui::{transfer, object::{Self, ID, UID}, event};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use account_actions::{
     vault_decoder,
@@ -36,7 +39,24 @@ use account_actions::{
     access_control_decoder,
 };
 
+// === Events ===
+
+/// Emitted when the registry is created, containing its ID
+public struct RegistryCreated has copy, drop {
+    registry_id: ID,
+}
+
 // === Structs ===
+
+/// One-time witness for initialization
+public struct DECODER_REGISTRY_INIT has drop {}
+
+/// Registry info object that stores the registry ID
+/// This is a shared object that anyone can read to get the registry ID
+public struct RegistryInfo has key, store {
+    id: UID,
+    registry_id: ID,
+}
 
 /// Admin capability for decoder management
 public struct DecoderAdminCap has key, store {
@@ -47,9 +67,12 @@ public struct DecoderAdminCap has key, store {
 
 /// Initialize the decoder registry with all action decoders
 /// This is called once during protocol deployment
-fun init(ctx: &mut TxContext) {
+fun init(witness: DECODER_REGISTRY_INIT, ctx: &mut TxContext) {
     // Create the decoder registry
     let mut registry = schema::init_registry(ctx);
+
+    // Get the registry ID before sharing
+    let registry_id = object::id(&registry);
 
     // Register all decoders
     register_all_decoders(&mut registry, ctx);
@@ -57,14 +80,29 @@ fun init(ctx: &mut TxContext) {
     // Share the registry for public access
     transfer::public_share_object(registry);
 
+    // Create and share a RegistryInfo object that stores the registry ID
+    let info = RegistryInfo {
+        id: object::new(ctx),
+        registry_id,
+    };
+    transfer::public_share_object(info);
+
     // Create admin capability
     let admin_cap = DecoderAdminCap {
         id: object::new(ctx),
     };
     transfer::transfer(admin_cap, ctx.sender());
+
+    // Emit event with the registry ID for off-chain indexing
+    event::emit(RegistryCreated { registry_id });
 }
 
 // === Public Functions ===
+
+/// Get the registry ID from the shared RegistryInfo object
+public fun get_registry_id(info: &RegistryInfo): ID {
+    info.registry_id
+}
 
 /// Register all decoders from all action modules
 public fun register_all_decoders(
@@ -91,11 +129,6 @@ public fun register_all_decoders(
 
     // Register access control action decoders
     access_control_decoder::register_decoders(registry, ctx);
-}
-
-/// Get the ID of a decoder registry (for storing in Account)
-public fun get_registry_id(registry: &ActionDecoderRegistry): ID {
-    object::id(registry)
 }
 
 /// Update decoders (requires admin capability)
