@@ -91,6 +91,10 @@ router.get('/proposal-image', async (req: Request, res: Response) => {
       tradingStartDate, tradingPeriodMs
     } = req.query;
 
+    console.log('DEBUG volume:', volume);
+    console.log('DEBUG Number(volume):', Number(volume));
+    console.log('DEBUG typeof volume:', typeof volume);
+
     const svg = await generateProposalOG({
       title: title as string,
       description: description as string || "",

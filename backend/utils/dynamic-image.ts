@@ -139,8 +139,8 @@ export interface ProposalOgParams {
   winningOutcome?: number | null;
   outcomeMessages: string[] | undefined;
   traders?: number;
-  trades?: number;
-  volume?: number;
+  trades? : number;
+  volume: number;
   tradingStartDate: Date;
   tradingPeriodMs: number
 }
@@ -522,7 +522,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     winningOutcome,
     outcomeMessages,
     trades = 0,
-    volume = 0,
+    volume,
     tradingStartDate,
     tradingPeriodMs
   } = params;
