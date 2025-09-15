@@ -221,7 +221,7 @@ app.get('/daos', async (req, res) => {
 
             return {
             ...dao,
-            dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.dao_id),
+            dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.icon_url),
             minAssetAmount: dao.minAssetAmount.toString(),
             minStableAmount: dao.minStableAmount.toString(),
             timestamp: dao.timestamp.toString(),
@@ -296,7 +296,7 @@ app.get('/dao/:daoId/proposals', async (req, res) => {
                 proposal_id: proposal.proposal_id,
                 dao_id: proposal.dao_id,
                 dao_name: proposal.dao?.dao_name,
-                dao_icon: await processAndGetBase64Icon(proposal.dao?.icon_cache_path || null, proposal.dao_id),
+                dao_icon: await processAndGetBase64Icon(proposal.dao?.icon_cache_path, proposal.dao?.icon_url),
                 asset_type: proposal.dao?.assetType,
                 stable_type: proposal.dao?.stableType,
                 proposer: proposal.proposer,
@@ -365,7 +365,7 @@ app.get('/search', async (req, res) => {
             return {
                 type: 'dao',
                 ...dao,
-                dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.dao_id)
+                dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.icon_url)
             };
         }));
 
@@ -386,6 +386,7 @@ app.get('/search', async (req, res) => {
                         dao_id: true,
                         dao_name: true,
                         icon_cache_path: true,
+                        icon_url: true,
                         verification: {
                             select: { verified: true }
                         }
@@ -403,10 +404,7 @@ app.get('/search', async (req, res) => {
                 ...proposal,
                 dao: proposal.dao ? {
                     ...proposal.dao,
-                    dao_icon: await processAndGetBase64Icon(
-                        proposal.dao.icon_cache_path || null, 
-                        proposal.dao.dao_id
-                    )
+                    dao_icon: await processAndGetBase64Icon( proposal.dao.icon_cache_path,  proposal.dao.icon_url)
                 } : null
             }))),  // Added missing comma here
         };
@@ -507,7 +505,7 @@ app.get('/proposals', async (req, res) => {
                 proposal_id: proposal.proposal_id,
                 dao_id: proposal.dao_id,
                 dao_name: proposal.dao?.dao_name,
-                dao_icon: await processAndGetBase64Icon(proposal.dao?.icon_cache_path || null, proposal.dao_id),
+                dao_icon: await processAndGetBase64Icon(proposal.dao?.icon_cache_path, proposal.dao?.icon_url),
                 asset_type: proposal.dao?.assetType,
                 stable_type: proposal.dao?.stableType,
                 proposer: proposal.proposer,
@@ -643,10 +641,7 @@ app.get('/proposals/:id', async (req, res) => {
                 minStableAmount: serializeBigInt(proposal.dao.minStableAmount)
               }
             : null,
-          dao_icon: await processAndGetBase64Icon(
-            proposal.dao?.icon_cache_path || null,
-            proposal.dao_id
-          ),
+          dao_icon: await processAndGetBase64Icon( proposal.dao?.icon_cache_path, proposal.dao?.icon_url),
           winning_outcome: proposal.result ? serializeBigInt(proposal.result.winning_outcome) : null,
           dao_name: proposal.dao?.dao_name || null,
           dao_verified: proposal.dao?.verification?.verified || false,
