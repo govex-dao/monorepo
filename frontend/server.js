@@ -134,20 +134,9 @@ function generateOgMetaTags(ogData, canonicalUrl) {
 }
 
 function buildProposalOgData(proposal, apiUrl) {
-  const proposalImageParams = new URLSearchParams({
-    title: proposal.title,
-    daoName: proposal.dao_name,
-    daoLogo: proposal.dao_icon_url || "",
-    currentState: proposal.current_state.toString(),
-    winningOutcome: proposal.winning_outcome.toString(),
-    outcomeMessages: JSON.stringify(proposal.outcome_messages || []),
-    traders: proposal.traders.toString(),
-    trades: proposal.trades.toString(),
-    tradingStartDate: proposal.created_at
-      ? new Date(parseInt(proposal.created_at)).toISOString()
-      : new Date().toISOString(),
-    tradingPeriodMs: proposal.trading_period_ms?.toString() || "0",
-  });
+  // Use the proposal ID endpoint instead of proposal-image to get correct volume
+  // The /proposal/:propId endpoint calculates volume from database
+  const proposalId = proposal.proposal_id || proposal.market_state_id;
 
   // Calculate trading status
   let tradingStatus = "";
@@ -191,7 +180,7 @@ function buildProposalOgData(proposal, apiUrl) {
     title: `${proposal.title} - ${proposal.dao_name}`,
     description: tradingStatus + outcomeInfo + priceInfo,
     keywords: `${proposal.dao_name}, ${proposal.outcome_messages?.slice(0, 2).join(", ")}, ${proposal.title}, futarchy, prediction market, trade, vote, AMM`,
-    image: `${apiUrl}og/proposal-image?${proposalImageParams.toString()}`,
+    image: `${apiUrl}og/proposal/${proposalId}`,
     type: "article",
   };
 }

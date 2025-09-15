@@ -527,9 +527,6 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     tradingPeriodMs
   } = params;
 
-  // Debug log to confirm volume is received
-  console.log(`[DEBUG] generateProposalOG received - volume: ${volume}, trades: ${trades}`);
-
   const { width, height } = OG_IMAGE_DIMENSIONS;
 
   // Sanitize and limit description
@@ -546,16 +543,12 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   const { lines: titleLines, fontSize: titleFontSize } = wrapText(title, width - 96, 103, { maxHeight: height - 252 });
   // ONLY use cached image - no external URL fetching
   let daoImage = null;
-  console.log(daoLogo)
   if (daoLogo && daoLogo !== "placeholder" && daoLogo.startsWith('/dao-images/')) {
     try {
-      console.log(daoLogo)
       const imagePath = path.join(process.cwd(), 'public', daoLogo.substring(1));
       const imageBuffer = await fs.readFile(imagePath);
       daoImage = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-      console.log(daoImage)
     } catch (err) {
-      console.log(err)
       logSecurityError('readCachedProposalImage', err);
     }
   }
@@ -678,11 +671,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
       width: cardWidth,
       height: cardHeight,
       title: 'VOLUME',
-      value: (() => {
-        const formatted = "$" + formatNumber(volume);
-        console.log(`[DEBUG] In SVG creation - raw volume: ${volume}, formatted: ${formatted}`);
-        return formatted;
-      })(),
+      value: "$" + formatNumber(volume),
       subtitle: '',
       color: COLORS.text.primary
     })}
@@ -717,12 +706,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
 
   ${createOutcomeSection()}
   ${createStatsSection()}
-  <!-- DEBUG: volume=${volume} -->
 </svg>`;
-
-  console.log(`[DEBUG] FINAL SVG about to be returned - volume in SVG comment: ${volume}`);
-  console.log(`[DEBUG] SVG stats section includes: ${svg.includes('VOLUME')}`);
-
   return svg;
 }
 
