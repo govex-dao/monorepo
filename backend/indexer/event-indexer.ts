@@ -56,7 +56,7 @@ const EVENTS_TO_TRACK: EventTracker[] = [
         callback: handleProposalResults,
     },
     {
-        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::conditional_amm::SwapEvent`,
+        type: `${CONFIG.FUTARCHY_CONTRACT.packageId}::amm::SwapEvent`,
         filter: {
             MoveEventModule: {
                 module: 'amm',
