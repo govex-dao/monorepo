@@ -91,6 +91,8 @@ router.get('/proposal-image', async (req: Request, res: Response) => {
       tradingStartDate, tradingPeriodMs
     } = req.query;
 
+    console.log(`[DEBUG] /proposal-image endpoint - volume param: ${volume}, will use: ${Number(volume) || 0}`);
+
     const svg = await generateProposalOG({
       title: title as string,
       description: description as string || "",
@@ -125,7 +127,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
 
     // --- LOG 1: Confirm the input from the URL ---
-    console.log(`[DEBUG] Received request for propId: ${propId}`);
+    console.log(`[DEBUG] Received request for propId: ${propId}, returnJson: ${returnJson}, format: ${req.query.format}, accept: ${req.headers.accept}`);
 
     // Validate input
     if (!validateId(propId)) {
