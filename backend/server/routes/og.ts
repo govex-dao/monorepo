@@ -124,6 +124,9 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     const { propId } = req.params;
     const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
 
+    // --- LOG 1: Confirm the input from the URL ---
+    console.log(`[DEBUG] Received request for propId: ${propId}`);
+
     // Validate input
     if (!validateId(propId)) {
       res.status(400).json({ error: 'Invalid proposal ID format' });
@@ -160,7 +163,13 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       }
     });
 
-    if (!proposal) return res.status(404).json({ error: 'Proposal not found' });
+    if (!proposal) {
+      console.error(`[DEBUG] CRITICAL: No proposal found for propId "${propId}". Aborting.`);
+      return res.status(404).json({ error: 'Proposal not found' });
+    }
+
+    // --- LOG 2: Verify the proposal object and the ID you will use for the next query ---
+    console.log(`[DEBUG] Found proposal. Will query swaps with proposal_id: "${proposal.proposal_id}"`);
 
     // Get trading statistics
     const [swapCount, uniqueTraders, swapEvents] = await Promise.all([
@@ -183,6 +192,15 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       })
     ]);
 
+    // --- LOG 3: See what the database query actually returned ---
+    console.log(`[DEBUG] Swap count returned from query: ${swapCount}`);
+    console.log(`[DEBUG] Number of swap events found in array: ${swapEvents.length}`);
+    if (swapEvents.length === 0) {
+      console.warn(`[DEBUG] WARNING: The swapEvents array is empty. This is why totalVolume will be 0.`);
+    } else {
+      console.log(`[DEBUG] First event found: amount_out is ${swapEvents[0].amount_out}, is_buy is ${swapEvents[0].is_buy}`);
+    }
+
     // Parse outcome messages safely
     let outcomeMessages: string[] | undefined;
     try {
@@ -202,6 +220,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       );
     }, 0);
 
+    // --- LOG 4: Check the final calculated value before sending the response ---
+    console.log(`[DEBUG] Final calculated totalVolume: ${totalVolume}`);
 
     // Return JSON if requested
     if (returnJson) {
