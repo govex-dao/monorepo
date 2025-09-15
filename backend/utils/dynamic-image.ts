@@ -527,6 +527,9 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     tradingPeriodMs
   } = params;
 
+  // Debug log to confirm volume is received
+  console.log(`[DEBUG] generateProposalOG received - volume: ${volume}, trades: ${trades}`);
+
   const { width, height } = OG_IMAGE_DIMENSIONS;
 
   // Sanitize and limit description
@@ -675,20 +678,24 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
       width: cardWidth,
       height: cardHeight,
       title: 'VOLUME',
-      value: "$" + formatNumber(volume),
+      value: (() => {
+        const formatted = "$" + formatNumber(volume);
+        console.log(`[DEBUG] In SVG creation - raw volume: ${volume}, formatted: ${formatted}`);
+        return formatted;
+      })(),
       subtitle: '',
       color: COLORS.text.primary
     })}
 </g>`;
   };
 
-  return `
+  const svg = `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
   ${svgDefs}
-  
+
   <!-- Background -->
   <rect width="${width}" height="${height}" fill="url(#bg)"/>
-  
+
       <!-- DAO Avatar -->
   ${createAvatar({
     x: 56,
@@ -699,10 +706,10 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
     clipId: 'daoLogoClip',
     showGlow: true
   })}
-  
+
   <!-- DAO Name -->
   <text x="110" y="75" font-family="Roboto, sans-serif" font-size="32" font-weight="600" fill="${COLORS.text.primary}" letter-spacing="0.02em">${escapeXml(daoName)}</text>
-  
+
   <!-- Proposal Title -->
   ${titleLines.map((line, index) =>
     `<text x="32" width="${width - 96}" y="${200 + (index * (titleFontSize + 12))}" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="700" fill="${COLORS.text.primary}" letter-spacing="-0.02em">${escapeXml(line)}</text>`
@@ -710,7 +717,13 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
 
   ${createOutcomeSection()}
   ${createStatsSection()}
+  <!-- DEBUG: volume=${volume} -->
 </svg>`;
+
+  console.log(`[DEBUG] FINAL SVG about to be returned - volume in SVG comment: ${volume}`);
+  console.log(`[DEBUG] SVG stats section includes: ${svg.includes('VOLUME')}`);
+
+  return svg;
 }
 
 // General Govex/Futarchy OG Image Generator

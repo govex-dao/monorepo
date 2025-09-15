@@ -243,6 +243,10 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       });
     }
 
+    // Add debug log to confirm volume is being passed
+    console.log(`[DEBUG] Passing to generateProposalOG - volume: ${totalVolume}, trades: ${swapCount}, traders: ${uniqueTraders.length}`);
+    console.log(`[DEBUG] DATA BEING PASSED TO generateProposalOG: volume is ${totalVolume}, type: ${typeof totalVolume}`);
+
     const svg = await generateProposalOG({
       title: proposal.title,
       description: proposal.details || "",
@@ -262,6 +266,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     sendPngResponse(res, png);
   } catch (error) {
     logSecurityError('generateProposalOG', error);
+    console.error(`[DEBUG] Error generating OG image: ${error}`);
     res.status(500).json({ error: 'Failed to generate image' });
   }
 });
