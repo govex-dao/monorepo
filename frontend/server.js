@@ -134,21 +134,6 @@ function generateOgMetaTags(ogData, canonicalUrl) {
 }
 
 function buildProposalOgData(proposal, apiUrl) {
-  const proposalImageParams = new URLSearchParams({
-    title: proposal.title,
-    daoName: proposal.dao_name,
-    daoLogo: proposal.dao_icon_url || "",
-    currentState: proposal.current_state.toString(),
-    winningOutcome: proposal.winning_outcome.toString(),
-    outcomeMessages: JSON.stringify(proposal.outcome_messages || []),
-    traders: proposal.traders.toString(),
-    trades: proposal.trades.toString(),
-    tradingStartDate: proposal.created_at
-      ? new Date(parseInt(proposal.created_at)).toISOString()
-      : new Date().toISOString(),
-    tradingPeriodMs: proposal.trading_period_ms?.toString() || "0",
-  });
-
   // Calculate trading status
   let tradingStatus = "";
   if (proposal.created_at && proposal.trading_period_ms) {
@@ -174,8 +159,8 @@ function buildProposalOgData(proposal, apiUrl) {
       const startTime = parseInt(proposal.created_at);
       const endTime = startTime + parseInt(proposal.trading_period_ms);
       const hasEnded = now >= endTime;
-      
-      outcomeInfo = hasEnded 
+
+      outcomeInfo = hasEnded
         ? ` • Won: ${winningMessage}`
         : ` • Currently winning: ${winningMessage}`;
     }
@@ -187,11 +172,16 @@ function buildProposalOgData(proposal, apiUrl) {
     priceInfo = ` • ${proposal.trades} trades by ${proposal.traders} traders`;
   }
 
+  // Add volume information if available
+  if (proposal.volume !== undefined && proposal.volume > 0) {
+    priceInfo += ` • Volume: $${proposal.volume.toFixed(2)}`;
+  }
+
   return {
     title: `${proposal.title} - ${proposal.dao_name}`,
     description: tradingStatus + outcomeInfo + priceInfo,
     keywords: `${proposal.dao_name}, ${proposal.outcome_messages?.slice(0, 2).join(", ")}, ${proposal.title}, futarchy, prediction market, trade, vote, AMM`,
-    image: `${apiUrl}og/proposal-image?${proposalImageParams.toString()}`,
+    image: `${apiUrl}og/proposal/${proposal.id || proposal.proposal_id}`,
     type: "article",
   };
 }
