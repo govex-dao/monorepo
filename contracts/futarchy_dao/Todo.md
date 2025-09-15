@@ -244,6 +244,7 @@ Your platform is an enterprise-grade piece of infrastructure. The price should r
   - Add telemetry for action execution
   - Implement batch action optimizations
 
+- [ ] seperate out just multsig???? as have leading multisige implementation???
 - [ ] fix incentives around proposal mutation. if mutators outcomes wins, proposers must still get refunded if they only create two options. other wise incentive for mutators to just sligtly position themselves around the  proposal creators, settigs: (i.e changing a few words or characters in a memo proposal or chaning a number by a small amount and hedging by going either side of the origional) in order to steal the proposal creators fee. or for proposer to create proposals with n_max option to block anyone from mutating their proposal 
 - [ ] Create dao with instant approved intents
 - [ ] option to pass moveframework account to DAO
