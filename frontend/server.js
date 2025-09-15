@@ -137,6 +137,7 @@ function buildProposalOgData(proposal, apiUrl) {
   // Use the proposal ID endpoint instead of proposal-image to get correct volume
   // The /proposal/:propId endpoint calculates volume from database
   const proposalId = proposal.proposal_id || proposal.market_state_id;
+  console.log('[DEBUG] Building OG data - proposalId:', proposalId, 'proposal_id:', proposal.proposal_id, 'market_state_id:', proposal.market_state_id);
 
   // Calculate trading status
   let tradingStatus = "";
@@ -176,11 +177,14 @@ function buildProposalOgData(proposal, apiUrl) {
     priceInfo = ` • ${proposal.trades} trades by ${proposal.traders} traders`;
   }
 
+  const imageUrl = `${apiUrl}og/proposal/${proposalId}`;
+  console.log('[DEBUG] OG Image URL:', imageUrl);
+
   return {
     title: `${proposal.title} - ${proposal.dao_name}`,
     description: tradingStatus + outcomeInfo + priceInfo,
     keywords: `${proposal.dao_name}, ${proposal.outcome_messages?.slice(0, 2).join(", ")}, ${proposal.title}, futarchy, prediction market, trade, vote, AMM`,
-    image: `${apiUrl}og/proposal/${proposalId}`,
+    image: imageUrl,
     type: "article",
   };
 }
