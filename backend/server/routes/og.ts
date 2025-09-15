@@ -225,8 +225,9 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     // --- LOG 4: Check the final calculated value before sending the response ---
     console.log(`[DEBUG] Final calculated totalVolume: ${totalVolume}`);
 
-    // Return JSON if requested
+    // Return JSON if requested (but log it for debugging)
     if (returnJson) {
+      console.log(`[DEBUG] Returning JSON instead of image - volume would have been: ${totalVolume}`);
       return res.json({
         id: proposal.proposal_id,
         title: proposal.title,
