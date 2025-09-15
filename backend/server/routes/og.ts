@@ -124,7 +124,9 @@ router.get('/proposal-image', async (req: Request, res: Response) => {
 router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response) => {
   try {
     const { propId } = req.params;
-    const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
+    // Only return JSON if explicitly requested via query param
+    // Don't check Accept header as OG crawlers may send various headers
+    const returnJson = req.query.format === 'json';
 
     // --- LOG 1: Confirm the input from the URL ---
     console.log(`[DEBUG] Received request for propId: ${propId}, returnJson: ${returnJson}, format: ${req.query.format}, accept: ${req.headers.accept}`);
