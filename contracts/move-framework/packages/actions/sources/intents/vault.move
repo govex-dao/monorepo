@@ -1,12 +1,11 @@
 // ============================================================================
-// FORK MODIFICATION NOTICE - Vault Intents with Hot Potato Results
+// FORK MODIFICATION NOTICE - Vault Intents
 // ============================================================================
 // Intent helper module for vault operations.
 //
 // CHANGES IN THIS FORK:
-// - Updated to consume hot potato results (SpendResult) from do_spend
-// - Added action_results::consume_spend_result() calls
-// - Ensures proper cleanup of hot potato results in intent chains
+// - PTBs handle object flow naturally - no ExecutionContext needed
+// - Removed ActionResult consumption - no longer needed
 // ============================================================================
 
 module account_actions::vault_intents;
@@ -19,7 +18,6 @@ use account_protocol::{
     executable::Executable,
     intents::Params,
     intent_interface,
-    action_results,
 };
 use account_actions::{
     transfer as acc_transfer,
@@ -91,9 +89,7 @@ public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            let (coin, result) = vault::do_spend<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
-            // Consume the hot potato result
-            action_results::consume_spend_result(result);
+            let coin = vault::do_spend<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
             acc_transfer::do_transfer(executable, coin, iw);
         }
     );

@@ -83,7 +83,6 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
     initial_stable_amount: u64,
     fee_bps: u64,
     minimum_liquidity: u64,
-    placeholder_out: option::Option<u64>,
     intent_witness: IW,
 ) {
     let action = liquidity_actions::new_create_pool_action<AssetType, StableType>(
@@ -91,7 +90,6 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
         initial_stable_amount,
         fee_bps,
         minimum_liquidity,
-        placeholder_out,
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
@@ -102,18 +100,16 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
     liquidity_actions::destroy_create_pool(action);
 }
 
-/// Add an update pool params action using placeholder
+/// Add an update pool params action
 public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
-    pool_id: option::Option<ID>,
-    placeholder_in: option::Option<u64>,
+    pool_id: ID,
     new_fee_bps: u64,
     new_minimum_liquidity: u64,
     intent_witness: IW,
 ) {
     let action = liquidity_actions::new_update_pool_params_action(
         pool_id,
-        placeholder_in,
         new_fee_bps,
         new_minimum_liquidity,
     );
@@ -126,17 +122,15 @@ public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
     liquidity_actions::destroy_update_pool_params(action);
 }
 
-/// Add a set pool status action using placeholder
+/// Add a set pool status action
 public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
-    pool_id: option::Option<ID>,
-    placeholder_in: option::Option<u64>,
+    pool_id: ID,
     is_paused: bool,
     intent_witness: IW,
 ) {
     let action = liquidity_actions::new_set_pool_status_action(
         pool_id,
-        placeholder_in,
         is_paused,
     );
     let action_data = bcs::to_bytes(&action);
@@ -148,7 +142,22 @@ public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
     liquidity_actions::destroy_set_pool_status(action);
 }
 
-/// Helper to create pool and configure it in a single intent using placeholders
+/// Helper to create pool in an intent
+///
+/// Note on chaining: Pool creation uses the ResourceRequest pattern which allows
+/// proper chaining within a single PTB (Programmable Transaction Block):
+///
+/// 1. do_create_pool() returns ResourceRequest<CreatePoolAction>
+/// 2. fulfill_create_pool() consumes the request and returns (ResourceReceipt, pool_id)
+/// 3. The pool_id can be used immediately in subsequent actions within the same PTB
+///
+/// Example PTB composition:
+/// - Call do_create_pool() → get ResourceRequest
+/// - Call fulfill_create_pool() → get pool_id
+/// - Call do_add_liquidity() using the pool_id
+/// - Call do_update_pool_params() using the pool_id
+///
+/// All these can be chained in a single atomic transaction using PTB composition.
 public fun create_and_configure_pool<Outcome: store, AssetType, StableType, IW: drop>(
     intent: &mut Intent<Outcome>,
     initial_asset_amount: u64,
@@ -157,22 +166,19 @@ public fun create_and_configure_pool<Outcome: store, AssetType, StableType, IW: 
     minimum_liquidity: u64,
     intent_witness: IW,
 ) {
-    // Reserve a placeholder for the pool ID
-    let pool_placeholder = intents::reserve_placeholder_id(intent);
-
-    // Create pool and write ID to placeholder
+    // Create the pool action - this will generate a ResourceRequest during execution
+    // The ResourceRequest pattern ensures proper chaining of dependent actions
     create_pool_to_intent<Outcome, AssetType, StableType, IW>(
         intent,
         initial_asset_amount,
         initial_stable_amount,
         fee_bps,
         minimum_liquidity,
-        option::some(pool_placeholder),
         intent_witness
     );
 
-    // Can add subsequent actions that use the pool ID from placeholder
-    // For example, could immediately set status or update params
+    // Note: Subsequent actions that need the pool_id should be added to the same intent
+    // and will be executed in the same PTB transaction, allowing access to the newly created pool_id
 }
 
 /// Create a unique key for a liquidity intent

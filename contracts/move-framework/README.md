@@ -10,27 +10,29 @@
 
 ### Summary of Changes
 
-This fork introduces eight major architectural changes to make the framework suitable for DAO governance:
+This fork introduces major architectural changes to make the framework suitable for DAO governance:
 
 1. **Serialize-Then-Destroy Pattern**: Novel resource safety pattern maintaining BCS compatibility while enforcing explicit lifecycle management
-2. **Hot Potato Results with Zero Storage Cost**: Replaced ExecutionContext with compile-time safe result chaining, eliminating ~200 gas per operation
-3. **Type-Based Action System with BCS Validation**: Replaced string-based action descriptors with compile-time type safety using TypeName
-4. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
-5. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
-6. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
-7. **On-Chain Schema System**: Self-describing actions via decoupled schema registry, eliminating decoder maintenance burden
-8. **Vesting Composability**: Full PTB integration for vesting claims with flexible destinations
+2. **Type-Based Action System with BCS Validation**: Replaced string-based action descriptors with compile-time type safety using TypeName
+3. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
+4. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
+5. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
+6. **On-Chain Schema System**: Self-describing actions via decoupled schema registry, eliminating decoder maintenance burden
+7. **Vesting Composability**: Full PTB integration for vesting claims with flexible destinations
+8. **Simplified Architecture**: Removed ExecutionContext - PTBs handle object flow naturally
 
 These changes result in:
-- **~200 gas saved per action** from eliminating ExecutionContext Table operations
+- **Atomic DAO initialization** through natural PTB object flow
 - **Resource safety** through serialize-then-destroy pattern
 - **Zero runtime errors** from type safety
 - **Enhanced security** from comprehensive BCS validation
-- **Better gas efficiency** from optimized algorithms
+- **Better gas efficiency** from optimized algorithms and no ExecutionContext overhead
 - **No permanent lock risk** from lock removal
+- **Simpler debugging** with direct parameter passing
 - **Compile-time validation** for all actions
 
-### Major Change #1: Serialize-Then-Destroy Pattern & Hot Potato Results (2025-09-14)
+
+### Major Change #1: Serialize-Then-Destroy Pattern (2025-09-16)
 
 **Purpose**: Achieve resource safety and eliminate storage costs while maintaining BCS compatibility
 
@@ -38,8 +40,7 @@ These changes result in:
 Move's BCS serialization requires the `drop` ability, but `drop` removes resource safety guarantees. We needed a pattern that:
 - Works with BCS serialization
 - Enforces explicit resource management
-- Eliminates ExecutionContext's expensive Table storage (~200 gas per operation)
-- Enables zero-cost data passing between actions
+- Maintains resource safety without runtime overhead
 
 #### The Solution: Serialize-Then-Destroy Pattern
 
@@ -76,25 +77,22 @@ public fun new_spend<Outcome, CoinType, IW: drop>(...) {
 }
 ```
 
-#### Hot Potato Results
+#### ExecutionContext for Data Sharing
 
-**Replaced ExecutionContext** with hot potato result types:
-- `SpendResult`, `MintResult`, `TransferResult`, etc.
-- No abilities - must be consumed (true hot potato)
-- Zero storage cost - passed directly between functions
-- Compile-time enforcement of data dependencies
+**Re-added ExecutionContext** for complex DAO initialization flows:
+- Tables for storing IDs and arbitrary data
+- String keys for readable debugging
+- ~200 gas per operation (worth it for atomic DAO init)
+- Enables: deposit coins → add liquidity → create multisig → configure streams
 
 **Example Usage**:
 ```move
-public fun do_spend<...>(...): (Coin<CoinType>, SpendResult) {
+public fun do_spend<...>(...): Coin<CoinType> {
     // ... perform spend ...
-    let result = action_results::new_spend_result(coin_id, amount, vault_name);
-    (coin, result)  // Return hot potato that must be consumed
+    executable::set_placeholder(executable, string::utf8(b"last_spend_coin"), coin_id);
+    executable::set_data(executable, string::utf8(b"last_spend_amount"), bcs::to_bytes(&amount));
+    coin  // Return coin directly, no result wrapper needed
 }
-
-// In intent module - must consume the result
-let (coin, result) = vault::do_spend(...);
-action_results::consume_spend_result(result);  // Explicit consumption
 ```
 
 #### Implementation Scope
@@ -219,10 +217,10 @@ We realized that **locking is unnecessary entirely**:
 - **Audit Benefit**: Simpler to verify correct usage of standard Sui Tables vs custom nested loops
 
 **User Module** (`user.move`):
-- **Problem**: `reorder_accounts` function had O(N*M) complexity with nested loops
-- **Solution**: Uses VecSet for O(N + M*log N) validation
-- **Impact**: Reordering 20 accounts reduced from ~400 to ~40 operations
-- **Benefit**: Better UX for account management without quadratic gas costs
+- **Reverted to Original**: The `reorder_accounts` function uses the original simpler approach
+- **Rationale**: Duplicates are already prevented during `add_account`, making VecSet unnecessary
+- **Simplicity**: The original O(N*M) approach is sufficient for typical use cases with N≤20 accounts
+- **Note**: Original engineer correctly identified that the optimization added unnecessary complexity
 
 **Deps Module** (`deps.move`):
 - **Problem**: O(N²) duplicate checking during construction could become problematic as integrations grow
@@ -324,12 +322,12 @@ This standardization ensures:
 - **Added**: `find_action_by_type<T>()` - Search for specific action types
 - **Purpose**: Enable type-safe action execution with zero storage overhead
 
-#### Hot Potato Action Results (`action_results.move`)
-- **New Module**: Defines hot potato result types for action chaining
-- **Result Types**: `SpendResult`, `MintResult`, `TransferResult`, etc.
-- **Consumption Functions**: `consume_spend_result()`, `consume_mint_result()`, etc.
-- **Zero Cost**: No storage, no abilities - pure compile-time enforcement
-- **Purpose**: Replace ExecutionContext with type-safe, zero-cost result passing
+#### ExecutionContext Updates (`executable.move`)
+- **Re-added**: ExecutionContext struct with Tables
+- **Helper Functions**: `set_placeholder()`, `get_placeholder()`, `set_data()`, `get_data()`
+- **Storage**: Tables for IDs and arbitrary data
+- **Cost**: ~200 gas per operation (acceptable for DAO initialization)
+- **Purpose**: Enable complex atomic flows in DAO creation
 
 #### BCS Validation Security (`bcs_validation.move`)
 - **New Module**: Ensures secure BCS deserialization
@@ -495,8 +493,8 @@ public fun claim_vesting(...): Coin<CoinType> {
 - `claim_vesting()` now returns `Coin<CoinType>` for PTB composability
 - Added `claim_vesting_to(recipient)` for direct transfers
 - Added `claim_vesting_to_self()` convenience function
-- Added batch claims: `claim_two_vestings()`, `claim_three_vestings()`
 - Fixed design flaw: separated authorization from payment destination
+- Note: Batch claims removed as PTBs handle this natively
 
 **Benefits**:
 - **Full PTB composability**: Chain vesting claims with any operation
@@ -516,6 +514,40 @@ public fun claim_vesting(...): Coin<CoinType> {
 - Implemented security validation with `validate_all_bytes_consumed()`
 - Used proper ID to address conversion: `id.id_to_address().to_string()`
 - Clean architecture: Protocol layer unaware of decoders, validation at application boundary
+
+### Major Change #10: Removed ExecutionContext (2025-09-16)
+
+**Purpose**: Simplify architecture by removing unnecessary ExecutionContext
+
+#### The Problem
+ExecutionContext was added for sharing data between actions, but analysis revealed:
+- **PTBs handle object flow naturally**: Direct parameter passing between functions
+- **No inter-action communication needed**: Each action receives needed objects
+- **Unnecessary complexity**: Added ~200 gas overhead without solving real problems
+
+#### The Solution: Direct PTB Object Flow
+```move
+// Old: Complex context management
+executable::set_placeholder(executable, "coin_id", coin);
+// ... later action ...
+let coin = executable::get_placeholder(executable, "coin_id");
+
+// New: Natural PTB flow
+let coin = vault::do_spend(...);  // Returns coin
+transfer::do_transfer(coin, ...);  // Receives coin directly
+```
+
+**Files Modified**:
+- **Deleted**: `protocol/sources/types/context_keys.move` - Not needed
+- **Simplified**: `executable.move` - Removed ExecutionContext struct and functions
+- **Simplified**: `vault.move` - Removed context storage calls
+- **Simplified**: `currency.move` - Removed context storage calls
+
+**Benefits**:
+- **Simpler**: No Tables, no key management, no serialization
+- **Clearer**: Object flow visible in PTB calls
+- **More Efficient**: ~200 gas saved per execution
+- **Easier Debugging**: Direct parameter passing vs hidden state
 
 ## Project Overview
 
@@ -691,6 +723,29 @@ Furthermore, the `AccountProtocol` shouldn't need to be upgraded since its funct
 6. **Vaults**: Allows members to open containers for Coins and assign members to them via roles. Coins held there can be transferred, paid and more using the Spend action.
 
 7. **Package Upgrades**: Secure UpgradeCaps by locking them into the Account and set a TimeLock.
+
+## Recent Changes (2025-09-16)
+
+### Reversions Based on Original Engineer Feedback
+
+After review with the original Account Protocol engineer, the following optimizations were reverted to the simpler original implementations:
+
+1. **User::reorder_accounts**: Reverted to original O(N*M) approach
+   - VecSet optimization was unnecessary since duplicates are already prevented
+   - Simpler code is more maintainable and sufficient for N≤20 accounts
+
+2. **Vesting batch claims**: Removed `claim_two_vestings()` and `claim_three_vestings()`
+   - PTBs (Programmable Transaction Blocks) handle batch operations natively
+   - Unnecessary API surface area that duplicates PTB functionality
+
+### Maintained Improvements
+
+The following improvements remain as they provide clear benefits:
+- Type-based action system with compile-time safety
+- Object locking removal (both engineers agreed)
+- Extensions module with Tables (architecturally correct)
+- Vesting composability (returning Coin for chaining)
+- IntentSpec pattern for atomic DAO initialization
 
 ## Additional Information
 

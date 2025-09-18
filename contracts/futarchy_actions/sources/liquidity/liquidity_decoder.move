@@ -7,17 +7,18 @@ use std::{string::String, type_name, option::{Self, Option}};
 use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-// TODO: Fix imports - these action structs need to be exported from liquidity_actions
-// use futarchy_actions::liquidity_actions::{
-//     CreatePoolAction,
-//     UpdatePoolParamsAction,
-//     AddLiquidityAction,
-//     RemoveLiquidityAction,
-//     SwapAction,
-//     CollectFeesAction,
-//     SetPoolEnabledAction,
-//     WithdrawFeesAction,
-// };
+// Import action structs from liquidity_actions (now properly exported)
+use futarchy_actions::liquidity_actions::{
+    CreatePoolAction,
+    UpdatePoolParamsAction,
+    RemoveLiquidityAction,
+    SwapAction,
+    CollectFeesAction,
+    SetPoolEnabledAction,
+    WithdrawFeesAction,
+    SetPoolStatusAction,
+};
+use futarchy_one_shot_utils::action_data_structs::{AddLiquidityAction};
 
 // === Decoder Objects ===
 
@@ -58,6 +59,11 @@ public struct SetPoolEnabledActionDecoder has key, store {
 
 /// Decoder for WithdrawFeesAction
 public struct WithdrawFeesActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for SetPoolStatusAction
+public struct SetPoolStatusActionDecoder has key, store {
     id: UID,
 }
 

@@ -764,3 +764,69 @@ The `deploy_verified.sh` script handles most edge cases automatically and provid
 - Conditional token: `/contracts/futarchy/sources/markets/conditional_token.move`
 - AMM: `/contracts/futarchy/sources/markets/conditional_amm.move`
 - Oracle (critical): `/contracts/futarchy/sources/markets/oracle.move:473-492`
+## ExecutionContext Removal & PTB Architecture
+
+### Key Changes Made (2025-09-18)
+- **Removed ExecutionContext** entirely - PTBs handle object flow naturally
+- **Removed placeholder system** - Use direct IDs instead of indices
+- **Kept ResourceRequest pattern** - Valid for external resources (hot potato)
+
+### Architecture Decisions
+
+#### What Was Removed
+1. **ExecutionContext** - Unnecessary complexity, PTBs handle object flow
+2. **Placeholder system** - `placeholder_in/placeholder_out` fields removed
+3. **ActionResults** - No longer needed without ExecutionContext
+4. **resolve_placeholder()** calls - Function never existed
+
+#### What Was Kept
+1. **ResourceRequest pattern** - For actions needing external resources (AMMs, shared objects)
+2. **IntentSpec** - Blueprint for proposals and DAO initialization
+3. **Direct ID passing** - All actions use explicit IDs
+
+### Pattern Guidelines
+
+**Good Pattern - Direct Execution:**
+```move
+public fun do_action(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    pool_id: ID,  // Direct ID, no placeholders
+)
+```
+
+**Good Pattern - ResourceRequest for External Resources:**
+```move
+// When action needs resources not in Account
+public fun do_create_pool(...): ResourceRequest<CreatePoolAction> {
+    // Returns hot potato for external resources
+}
+
+// Caller fulfills with actual resources
+public fun fulfill_create_pool(
+    request: ResourceRequest<CreatePoolAction>,
+    asset_coin: Coin<AssetType>,   // External resource
+    stable_coin: Coin<StableType>,  // External resource
+): ResourceReceipt<CreatePoolAction>
+```
+
+### When to Use ResourceRequest
+
+**Use ResourceRequest when action needs:**
+1. **Shared objects** that can't be stored in Account (AMM pools, ProposalQueues)
+2. **External coins** from users (not from DAO vault)
+3. **Special capabilities** like TreasuryCap for minting
+
+**Don't use ResourceRequest for:**
+- Config updates (modify Account directly)
+- Vault operations (coins already in Account)
+- Stream management (streams stored in Account)
+- Dissolution actions (use Account's resources)
+
+### Files Updated in Remove-ExecutionContext Commit
+- Removed `action_results.move` - No longer needed
+- Removed `security_council_*_with_placeholders.move` - Deprecated pattern
+- Updated `executable.move` - Removed ExecutionContext
+- Updated `vault.move`, `currency.move` - Removed context usage
+- Updated all action files - Removed placeholder fields
+- Simplified liquidity actions - Direct ID passing

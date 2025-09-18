@@ -5,12 +5,12 @@
 //
 // CHANGES IN THIS FORK:
 // - Actions use type markers: CurrencyMint, CurrencyBurn, CurrencyUpdate, CurrencyDisable
-// - Added hot potato result types (MintResult) for zero-cost action chaining
 // - Implemented serialize-then-destroy pattern for all 4 action types
 // - Added destruction functions: destroy_mint_action, destroy_burn_action, etc.
 // - Actions serialize to bytes before adding to intent via add_typed_action()
 // - Enhanced BCS validation: version checks + validate_all_bytes_consumed
 // - Type-safe action validation through compile-time TypeName comparison
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
 // ============================================================================
 /// Authenticated users can lock a TreasuryCap in the Account to restrict minting and burning operations,
 /// as well as modifying the CoinMetadata.
@@ -44,7 +44,6 @@ use account_actions::{
     version
 };
 use account_extensions::framework_action_types::{Self, CurrencyDisable, CurrencyMint, CurrencyBurn, CurrencyUpdate};
-use account_protocol::action_results::{Self, MintResult};
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
 
@@ -479,7 +478,7 @@ public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
-): (Coin<CoinType>, MintResult) {
+): Coin<CoinType> {
     executable.intent().assert_is_account(account.addr());
 
     // Get BCS bytes from ActionSpec
@@ -518,16 +517,13 @@ public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
     // Mint the coin
     let coin = cap_mut.mint(amount, ctx);
 
-    // Create result for hot potato chaining
-    let result = action_results::new_mint_result(
-        object::id(&coin),
-        amount
-    );
+    // Store coin info in context for potential use by later actions
+    // PTBs handle object flow naturally - no context storage needed
 
     // Increment action index
     executable::increment_action_idx(executable);
 
-    (coin, result)
+    coin
 }
 
 /// Deletes a MintAction from an expired intent.

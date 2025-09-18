@@ -7,8 +7,7 @@
 // - REMOVED: lock_object() function - no longer needed
 // - REMOVED: unlock_object() function - no longer needed
 // - ADDED: cancel_intent() function - allows config-authorized intent cancellation
-// - Modified create_executable() - no longer passes ctx (no ExecutionContext needed)
-// - Integration with hot potato results instead of ExecutionContext
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
 // - Type safety through compile-time checks
 // - Removed ~100 lines of object locking code
 //
@@ -567,7 +566,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
     clock: &Clock,
     version_witness: VersionWitness,
     config_witness: CW,
-    ctx: &mut TxContext, // Now essential for creating ExecutionContext
+    ctx: &mut TxContext, // Kept for API compatibility
 ): (Outcome, Executable<Outcome>) {
     account.deps().check(version_witness);
     assert_is_config_module(account, config_witness);
@@ -578,7 +577,7 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
 
     (
         *intent.outcome(),
-        executable::new(intent) // No ctx needed - using hot potato results
+        executable::new(intent, ctx) // ctx no longer used but kept for API compatibility
     )
 }
 

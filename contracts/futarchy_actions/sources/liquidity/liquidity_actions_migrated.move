@@ -1,5 +1,5 @@
 /// Liquidity-related actions for futarchy DAOs - MIGRATED VERSION
-/// This module defines action structs with placeholder support for the assembly line pattern
+/// This module defines action structs using direct IDs instead of placeholders
 module futarchy_actions::liquidity_actions_migrated;
 
 // === Imports ===
@@ -35,31 +35,25 @@ const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 // === MIGRATED Action Structs ===
 
 /// Action to create a new liquidity pool
-/// MIGRATED: Added placeholder_out for pool ID
 public struct CreatePoolAction<phantom AssetType, phantom StableType> has store, drop, copy {
     initial_asset_amount: u64,
     initial_stable_amount: u64,
     fee_bps: u64,
     minimum_liquidity: u64,
-    placeholder_out: Option<u64>, // NEW: Optional placeholder to write pool ID
 }
 
 /// Action to add liquidity to an existing pool
-/// MIGRATED: Added placeholder_in for pool reference
 public struct AddLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
-    pool_placeholder_in: Option<u64>, // NEW: Read pool ID from placeholder
-    pool_id: Option<ID>, // Alternative: Direct pool ID (for backward compat)
+    pool_id: ID, // Direct pool ID
     asset_amount: u64,
     stable_amount: u64,
     min_lp_amount: u64, // Slippage protection
 }
 
 /// Action to remove liquidity from a pool
-/// MIGRATED: Added placeholder_in for pool reference
 /// NOTE: This action should be preceded by a WithdrawAction to get the LP tokens
 public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
-    pool_placeholder_in: Option<u64>, // NEW: Read pool ID from placeholder
-    pool_id: Option<ID>, // Alternative: Direct pool ID
+    pool_id: ID, // Direct pool ID
     lp_token_id: ID, // ID of the LP token to withdraw (used with WithdrawAction)
     lp_amount: u64, // Amount of LP tokens to remove
     min_asset_amount: u64, // Slippage protection
@@ -68,87 +62,46 @@ public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has s
 }
 
 /// Action to update pool parameters
-/// MIGRATED: Added placeholder_in for pool reference
 public struct UpdatePoolParamsAction has store, drop, copy {
-    pool_placeholder_in: Option<u64>, // NEW: Read pool ID from placeholder
-    pool_id: Option<ID>, // Alternative: Direct pool ID
+    pool_id: ID, // Direct pool ID
     new_fee_bps: u64,
     new_minimum_liquidity: u64,
 }
 
 // === Constructor Functions ===
 
-/// Create a new pool action with optional placeholder output
+/// Create a new pool action
 public fun new_create_pool<AssetType, StableType>(
     initial_asset_amount: u64,
     initial_stable_amount: u64,
     fee_bps: u64,
     minimum_liquidity: u64,
-    placeholder_out: Option<u64>,
 ): CreatePoolAction<AssetType, StableType> {
     CreatePoolAction {
         initial_asset_amount,
         initial_stable_amount,
         fee_bps,
         minimum_liquidity,
-        placeholder_out,
     }
 }
 
-/// Create an add liquidity action that reads pool from placeholder
-public fun new_add_liquidity_from_placeholder<AssetType, StableType>(
-    pool_placeholder_in: u64,
-    asset_amount: u64,
-    stable_amount: u64,
-    min_lp_amount: u64,
-): AddLiquidityAction<AssetType, StableType> {
-    AddLiquidityAction {
-        pool_placeholder_in: option::some(pool_placeholder_in),
-        pool_id: option::none(),
-        asset_amount,
-        stable_amount,
-        min_lp_amount,
-    }
-}
-
-/// Create an add liquidity action with direct pool ID (backward compat)
-public fun new_add_liquidity_direct<AssetType, StableType>(
+/// Create an add liquidity action
+public fun new_add_liquidity<AssetType, StableType>(
     pool_id: ID,
     asset_amount: u64,
     stable_amount: u64,
     min_lp_amount: u64,
 ): AddLiquidityAction<AssetType, StableType> {
     AddLiquidityAction {
-        pool_placeholder_in: option::none(),
-        pool_id: option::some(pool_id),
+        pool_id,
         asset_amount,
         stable_amount,
         min_lp_amount,
     }
 }
 
-/// Create a remove liquidity action that reads pool from placeholder
-public fun new_remove_liquidity_from_placeholder<AssetType, StableType>(
-    pool_placeholder_in: u64,
-    lp_token_id: ID,
-    lp_amount: u64,
-    min_asset_amount: u64,
-    min_stable_amount: u64,
-    vault_name: Option<String>,
-): RemoveLiquidityAction<AssetType, StableType> {
-    RemoveLiquidityAction {
-        pool_placeholder_in: option::some(pool_placeholder_in),
-        pool_id: option::none(),
-        lp_token_id,
-        lp_amount,
-        min_asset_amount,
-        min_stable_amount,
-        vault_name,
-    }
-}
-
-/// Create a remove liquidity action with direct pool ID
-public fun new_remove_liquidity_direct<AssetType, StableType>(
+/// Create a remove liquidity action
+public fun new_remove_liquidity<AssetType, StableType>(
     pool_id: ID,
     lp_token_id: ID,
     lp_amount: u64,
@@ -157,8 +110,7 @@ public fun new_remove_liquidity_direct<AssetType, StableType>(
     vault_name: Option<String>,
 ): RemoveLiquidityAction<AssetType, StableType> {
     RemoveLiquidityAction {
-        pool_placeholder_in: option::none(),
-        pool_id: option::some(pool_id),
+        pool_id,
         lp_token_id,
         lp_amount,
         min_asset_amount,
@@ -223,7 +175,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop>(
     ctx: &mut TxContext,
 ) {
     // Direct pool ID access
-    let pool_id = *params.pool_id.borrow();
+    let pool_id = params.pool_id;
 
     // Verify pool ID matches
     assert!(object::id(pool) == pool_id, 0);
@@ -254,7 +206,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop>(
     ctx: &mut TxContext,
 ) {
     // Direct pool ID access
-    let pool_id = *params.pool_id.borrow();
+    let pool_id = params.pool_id;
 
     // Verify pool ID matches
     assert!(object::id(pool) == pool_id, 0);
@@ -299,8 +251,7 @@ public fun request_remove_liquidity<Config, AssetType, StableType, Outcome, IW: 
 
     // Step 2: Add RemoveLiquidityAction to remove liquidity using the withdrawn LP token
     let action = RemoveLiquidityAction<AssetType, StableType> {
-        pool_placeholder_in: option::none(),
-        pool_id: option::some(pool_id),
+        pool_id,
         lp_token_id,
         lp_amount,
         min_asset_amount,

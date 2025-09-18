@@ -336,73 +336,62 @@ public struct CreateBudgetStreamAction<phantom CoinType> has store, drop, copy {
     description: String,
     budget_period_ms: Option<u64>,
     max_per_period: Option<u64>,
-    placeholder_out: Option<u64>, // Where to write the stream ID
 }
 
 /// Action to cancel a payment
 public struct CancelPaymentAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
 }
 
 /// Action to update payment recipient
 public struct UpdatePaymentRecipientAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     new_recipient: address,
 }
 
 /// Action to add withdrawer
 public struct AddWithdrawerAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     withdrawer: address,
 }
 
 /// Action to remove withdrawers
 public struct RemoveWithdrawersAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     withdrawers: vector<address>,
 }
 
 /// Action to toggle payment
 public struct TogglePaymentAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     paused: bool,
 }
 
 /// Action to request withdrawal
 public struct RequestWithdrawalAction<phantom CoinType> has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     amount: u64,
 }
 
 /// Action to challenge withdrawals
 public struct ChallengeWithdrawalsAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
 }
 
 /// Action to process pending withdrawal
 public struct ProcessPendingWithdrawalAction<phantom CoinType> has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
     withdrawal_index: u64,
 }
 
 /// Action to cancel challenged withdrawals
 public struct CancelChallengedWithdrawalsAction has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
 }
 
 /// Action to execute payment (for recurring payments)
 public struct ExecutePaymentAction<phantom CoinType> has store, drop, copy {
-    payment_id: Option<String>,      // Direct payment ID
-    placeholder_in: Option<u64>,     // Or read from placeholder
+    payment_id: String,      // Direct payment ID
 }
 
 // === Constructor Functions ===
@@ -443,8 +432,7 @@ public fun new_create_payment_action<CoinType>(
 /// Create a new CancelPaymentAction
 public fun new_cancel_payment_action(payment_id: String): CancelPaymentAction {
     CancelPaymentAction {
-        payment_id: option::some(payment_id),
-        placeholder_in: option::none()
+        payment_id
     }
 }
 
@@ -454,8 +442,7 @@ public fun new_request_withdrawal_action<CoinType>(
     amount: u64,
 ): RequestWithdrawalAction<CoinType> {
     RequestWithdrawalAction {
-        payment_id: option::some(payment_id),
-        placeholder_in: option::none(),
+        payment_id,
         amount
     }
 }
@@ -465,14 +452,14 @@ public fun new_execute_payment_action<CoinType>(
     payment_id: String,
 ): ExecutePaymentAction<CoinType> {
     ExecutePaymentAction {
-        payment_id: option::some(payment_id),
-        placeholder_in: option::none()
+        payment_id
     }
 }
 
 // === Public Functions ===
 
 /// REFACTORED: Create payment now properly uses vault streams without duplication
+/// Returns the payment ID for PTB chaining
 public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -480,7 +467,7 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): String {
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
@@ -645,6 +632,7 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
 }
 
 /// Execute do_create_budget_stream action
+/// Returns the payment ID for PTB chaining
 public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -652,7 +640,7 @@ public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + dr
     witness: IW,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): String {
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
@@ -706,20 +694,8 @@ public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + dr
     vector::push_back(&mut storage.payment_ids, payment_id);
     storage.total_payments = storage.total_payments + 1;
 
-    // Register payment ID in placeholder if specified
-    // Note: We need to convert String to ID for placeholder system
-    // Using a hash of the string as a pseudo-ID
-    if (action.placeholder_out.is_some()) {
-        let context = executable::context_mut(executable);
-        // Create a deterministic ID from the payment_id string
-        let payment_id_bytes = *string::bytes(&payment_id);
-        let payment_pseudo_id = object::id_from_bytes(payment_id_bytes);
-        executable::register_placeholder(
-            context,
-            *action.placeholder_out.borrow(),
-            payment_pseudo_id
-        );
-    };
+    // Return payment ID for PTB chaining
+    payment_id
 }
 
 /// Execute do_execute_payment action (for recurring payments)

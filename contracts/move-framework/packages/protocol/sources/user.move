@@ -1,18 +1,10 @@
 /// === FORK MODIFICATIONS ===
-/// REORDER OPTIMIZATION:
-/// - Optimized reorder_accounts function from O(N*M) to O(N + M*log N)
-/// - Uses VecSet for validation instead of repeated index_of + swap_remove
-/// 
-/// REASON:
-/// The original implementation performed nested loops: for each address in the
-/// new order, it would linearly search the existing accounts vector and swap_remove.
-/// For 20 accounts, this meant ~400 operations. The new implementation creates
-/// a VecSet for O(log N) validation, then directly replaces the vector.
-/// This reduces gas costs for a simple UI reordering operation from quadratic
-/// to near-linear complexity.
-///
 /// TYPE-BASED ACTION SYSTEM:
-/// - No direct changes, but user module works with type-based intents
+/// - Updated to use type_name::with_defining_ids for better type safety
+/// - No other structural changes, user module works with type-based intents
+///
+/// NOTE: The reorder_accounts function uses the original simple approach
+/// as duplicates are already prevented during add_account operations
 
 /// Users have a non-transferable User account object used to track Accounts in which they are a member.
 /// Each account type can define a way to send on-chain invites to Users.
@@ -30,7 +22,6 @@ use std::{
 };
 use sui::{
     vec_map::{Self, VecMap},
-    vec_set::{Self, VecSet},
     table::{Self, Table},
 };
 use account_protocol::account::{Self, Account};
@@ -133,31 +124,19 @@ public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     assert!(user.accounts.contains(&account_type), ENoAccountsToReorder);
 
-    // Get the current accounts
-    let current_accounts = user.accounts[&account_type];
-    assert!(current_accounts.length() == addrs.length(), EWrongNumberOfAccounts);
+    // Original simpler approach - no VecSet needed since duplicates are prevented in add_account
+    let accounts = user.accounts.get_mut(&account_type);
+    assert!(accounts.length() == addrs.length(), EWrongNumberOfAccounts);
 
-    // O(N) - Create a VecSet from original accounts for O(log N) validation
-    let mut account_set = vec_set::empty();
-    current_accounts.do!(|addr| {
-        account_set.insert(addr);
+    let mut new_order = vector[];
+    addrs.do!(|addr| {
+        let (exists, idx) = accounts.index_of(&addr);
+        assert!(exists, EAccountNotFound);
+        accounts.swap_remove(idx);
+        new_order.push_back(addr);
     });
 
-    // O(M * log N) - Validate all addresses are in the original set
-    addrs.do_ref!(|addr| {
-        assert!(account_set.contains(addr), EAccountNotFound);
-    });
-    
-    // Check for duplicates in the new order
-    let mut check_duplicates = vec_set::empty();
-    addrs.do_ref!(|addr| {
-        assert!(!check_duplicates.contains(addr), EAccountNotFound);
-        check_duplicates.insert(*addr);
-    });
-
-    // O(1) - Remove old and insert new order
-    user.accounts.remove(&account_type);
-    user.accounts.insert(account_type, addrs);
+    *accounts = new_order;
 }
 // === Config-only functions ===
 

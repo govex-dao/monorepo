@@ -5,12 +5,12 @@
 //
 // CHANGES IN THIS FORK:
 // - Actions use type markers: VaultDeposit, VaultSpend
-// - Added hot potato result types (SpendResult) for zero-cost action chaining
 // - Implemented serialize-then-destroy pattern for resource safety
 // - Added destruction functions for all action structs
 // - Actions serialize to bytes before adding to intent via add_typed_action()
 // - Enhanced BCS validation: version checks + validate_all_bytes_consumed
 // - Type-safe action validation through compile-time TypeName comparison
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
 // ============================================================================
 /// Members can create multiple vaults with different balances and managers (using roles).
 /// This allows for a more flexible and granular way to manage funds.
@@ -56,7 +56,7 @@ module account_actions::vault;
 
 use std::{
     string::String,
-    type_name::TypeName,
+    type_name::{Self, TypeName},
     option::Option,
     u128,
     u64,
@@ -83,7 +83,6 @@ use account_protocol::{
 };
 use account_actions::version;
 use account_extensions::framework_action_types::{Self, VaultDeposit, VaultSpend};
-use account_protocol::action_results::{Self, SpendResult};
 
 // === Use Fun Aliases ===
 // Removed - add_typed_action is now called directly
@@ -471,7 +470,7 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     version_witness: VersionWitness,
     _intent_witness: IW,
     ctx: &mut TxContext
-): (Coin<CoinType>, SpendResult) {
+): Coin<CoinType> {
     executable.intent().assert_is_account(account.addr());
 
     // Get BCS bytes from ActionSpec
@@ -502,16 +501,12 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     if (balance_mut.value() == 0)
         vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
 
-    // Create result for hot potato chaining
-    let result = action_results::new_spend_result(
-        object::id(&coin),
-        amount,
-        name
-    );
+    // Store coin info in context for potential use by later actions
+    // PTBs handle object flow naturally - no context storage needed
 
     // Increment action index
     executable::increment_action_idx(executable);
-    (coin, result)
+    coin
 }
 
 /// Deletes a SpendAction from an expired intent.
