@@ -43,11 +43,21 @@ public struct TransferAction has store {
     recipient: address,
 }
 
+/// Action to transfer to the transaction sender (perfect for crank fees)
+public struct TransferToSenderAction has store {
+    // No recipient field needed - uses tx_context::sender()
+}
+
 // === Destruction Functions ===
 
 /// Destroy a TransferAction after serialization
 public fun destroy_transfer_action(action: TransferAction) {
     let TransferAction { recipient: _ } = action;
+}
+
+/// Destroy a TransferToSenderAction after serialization
+public fun destroy_transfer_to_sender_action(action: TransferToSenderAction) {
+    let TransferToSenderAction {} = action;
 }
 
 // === Public functions ===
@@ -108,6 +118,64 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
 
 /// Deletes a TransferAction from an expired intent.
 public fun delete_transfer(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, automatically cleaned up
+}
+
+/// Creates a TransferToSenderAction and adds it to an intent
+public fun new_transfer_to_sender<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    intent_witness: IW,
+) {
+    // Create the action struct with no fields
+    let action = TransferToSenderAction {};
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with type marker for TransferToSender
+    intent.add_typed_action(
+        framework_action_types::transfer_to_sender(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_transfer_to_sender_action(action);
+}
+
+/// Processes a TransferToSenderAction and transfers an object to the transaction sender
+public fun do_transfer_to_sender<Outcome: store, T: key + store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    object: T,
+    _intent_witness: IW,
+    ctx: &mut TxContext,
+) {
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<TransferToSender>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // No fields to deserialize for TransferToSenderAction
+    // Just validate that the data is empty (only struct marker)
+    let reader = bcs::new(*action_data);
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Transfer to the transaction sender (the cranker!)
+    transfer::public_transfer(object, tx_context::sender(ctx));
+    executable::increment_action_idx(executable);
+}
+
+/// Deletes a TransferToSenderAction from an expired intent.
+public fun delete_transfer_to_sender(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, automatically cleaned up
 }

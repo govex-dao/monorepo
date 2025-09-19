@@ -120,9 +120,8 @@ public struct RemoveVerificationLevelAction has store {
     level: u8,
 }
 
-/// Request verification for a DAO
+/// Request verification for the DAO itself (only the DAO can request its own verification)
 public struct RequestVerificationAction has store {
-    dao_id: ID,
     level: u8,
     attestation_url: String,
 }
@@ -139,6 +138,13 @@ public struct ApproveVerificationAction has store {
 public struct RejectVerificationAction has store {
     dao_id: ID,
     verification_id: ID,
+    reason: String,
+}
+
+/// Set DAO quality score (admin-only, uses ValidatorAdminCap)
+public struct SetDaoScoreAction has store {
+    dao_id: ID,
+    score: u64,
     reason: String,
 }
 
@@ -236,8 +242,8 @@ public fun new_remove_verification_level(level: u8): RemoveVerificationLevelActi
     RemoveVerificationLevelAction { level }
 }
 
-public fun new_request_verification(dao_id: ID, level: u8, attestation_url: String): RequestVerificationAction {
-    RequestVerificationAction { dao_id, level, attestation_url }
+public fun new_request_verification(level: u8, attestation_url: String): RequestVerificationAction {
+    RequestVerificationAction { level, attestation_url }
 }
 
 public fun new_approve_verification(dao_id: ID, verification_id: ID, level: u8, attestation_url: String): ApproveVerificationAction {
@@ -246,6 +252,10 @@ public fun new_approve_verification(dao_id: ID, verification_id: ID, level: u8, 
 
 public fun new_reject_verification(dao_id: ID, verification_id: ID, reason: String): RejectVerificationAction {
     RejectVerificationAction { dao_id, verification_id, reason }
+}
+
+public fun new_set_dao_score(dao_id: ID, score: u64, reason: String): SetDaoScoreAction {
+    SetDaoScoreAction { dao_id, score, reason }
 }
 
 public fun new_update_recovery_fee(new_fee: u64): UpdateRecoveryFeeAction {
@@ -306,6 +316,12 @@ public fun new_update_coin_recovery_fee(
     new_fee: u64,
 ): UpdateCoinRecoveryFeeAction {
     UpdateCoinRecoveryFeeAction { coin_type, new_fee }
+}
+
+public fun new_apply_pending_coin_fees(
+    coin_type: TypeName,
+): ApplyPendingCoinFeesAction {
+    ApplyPendingCoinFeesAction { coin_type }
 }
 
 // === Execution Functions ===
@@ -626,7 +642,8 @@ public fun do_remove_verification_level<Outcome: store, IW: drop>(
 }
 
 /// Execute request verification action
-/// DAOs can request verification by paying the required fee
+/// DAOs can request verification for themselves by paying the required fee
+/// Only the DAO itself can request its own verification (executed through governance)
 /// Multiple verification requests can be pending with unique IDs
 public fun do_request_verification<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
@@ -651,6 +668,9 @@ public fun do_request_verification<Outcome: store, IW: drop>(
     // Increment action index
     executable::increment_action_idx(executable);
 
+    // Get the DAO's own ID - only the DAO can request verification for itself
+    let dao_id = object::id(account);
+
     // Generate unique verification ID
     let verification_uid = object::new(ctx);
     let verification_id = object::uid_to_inner(&verification_uid);
@@ -667,9 +687,9 @@ public fun do_request_verification<Outcome: store, IW: drop>(
 
     // Emit event for the verification request
     event::emit(VerificationRequested {
-        dao_id: action.dao_id,
+        dao_id,  // Using the DAO's own ID
         verification_id,
-        requester: ctx.sender(),
+        requester: dao_id.id_to_address(),  // The DAO is the requester
         attestation_url: action.attestation_url,
         level: action.level,
         timestamp: clock.timestamp_ms(),

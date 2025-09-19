@@ -1,7 +1,11 @@
 module futarchy_actions::protocol_admin_intents;
 
 // === Imports ===
-use std::string::String;
+use std::{
+    string::String,
+    type_name::TypeName,
+    bcs,
+};
 use sui::{
     transfer::Receiving,
     object::ID,
@@ -10,13 +14,18 @@ use account_protocol::{
     account::{Self, Account, Auth},
     executable::Executable,
     owned,
-    intents::{Self, Params},
+    intents::{Self, Intent, Params},
     intent_interface,
 };
-use futarchy_core::version;
+use futarchy_core::{
+    version,
+    action_types,
+};
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_lifecycle::factory::{FactoryOwnerCap, ValidatorAdminCap};
 use futarchy_markets::fee::FeeAdminCap;
+use futarchy_actions::protocol_admin_actions;
+
 // === Aliases ===
 use fun intent_interface::process_intent as Account.process_intent;
 
@@ -257,4 +266,285 @@ public entry fun migrate_validator_cap_to_dao(
         cap,
         version::current()
     );
+}
+
+// === New Intent Helper Functions for All Protocol Admin Actions ===
+
+// === Factory Admin Intent Helpers ===
+
+/// Add set factory paused action to an intent
+public fun add_set_factory_paused_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    paused: bool,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_set_factory_paused(paused);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::set_factory_paused(), action_data, intent_witness);
+}
+
+/// Add stable type to factory whitelist
+public fun add_stable_type_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    stable_type: TypeName,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_add_stable_type(stable_type);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::add_stable_type(), action_data, intent_witness);
+}
+
+/// Remove stable type from factory whitelist
+public fun remove_stable_type_from_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    stable_type: TypeName,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_remove_stable_type(stable_type);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::remove_stable_type(), action_data, intent_witness);
+}
+
+// === Fee Management Intent Helpers ===
+
+/// Update DAO creation fee
+public fun add_update_dao_creation_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_dao_creation_fee(new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_dao_creation_fee(), action_data, intent_witness);
+}
+
+/// Update proposal fee
+public fun add_update_proposal_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_proposal_fee(new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_proposal_fee(), action_data, intent_witness);
+}
+
+/// Update monthly DAO fee
+public fun add_update_monthly_dao_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_monthly_dao_fee(new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_monthly_dao_fee(), action_data, intent_witness);
+}
+
+/// Update verification fee
+public fun add_update_verification_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    level: u8,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_verification_fee(level, new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_verification_fee(), action_data, intent_witness);
+}
+
+/// Update recovery fee
+public fun add_update_recovery_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_recovery_fee(new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_recovery_fee(), action_data, intent_witness);
+}
+
+/// Withdraw fees to treasury
+public fun add_withdraw_fees_to_treasury_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    amount: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_withdraw_fees_to_treasury(amount);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::withdraw_fees_to_treasury(), action_data, intent_witness);
+}
+
+// === Verification Intent Helpers ===
+
+/// Add verification level
+public fun add_verification_level_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    level: u8,
+    fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_add_verification_level(level, fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::add_verification_level(), action_data, intent_witness);
+}
+
+/// Remove verification level
+public fun remove_verification_level_from_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    level: u8,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_remove_verification_level(level);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::remove_verification_level(), action_data, intent_witness);
+}
+
+/// Request DAO verification (DAO requests its own verification)
+public fun add_request_verification_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    level: u8,
+    attestation_url: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_request_verification(level, attestation_url);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::request_verification(), action_data, intent_witness);
+}
+
+/// Approve verification request (validator action)
+public fun add_approve_verification_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    verification_id: ID,
+    level: u8,
+    attestation_url: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_approve_verification(dao_id, verification_id, level, attestation_url);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::approve_verification(), action_data, intent_witness);
+}
+
+/// Reject verification request (validator action)
+public fun add_reject_verification_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    verification_id: ID,
+    reason: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_reject_verification(dao_id, verification_id, reason);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::reject_verification(), action_data, intent_witness);
+}
+
+// === DAO Management Intent Helpers ===
+
+/// Set DAO score
+public fun add_set_dao_score_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    score: u64,
+    reason: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_set_dao_score(dao_id, score, reason);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::set_dao_score(), action_data, intent_witness);
+}
+
+/// Apply DAO fee discount
+public fun add_apply_dao_fee_discount_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    dao_id: ID,
+    discount_amount: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_apply_dao_fee_discount(dao_id, discount_amount);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::apply_dao_fee_discount(), action_data, intent_witness);
+}
+
+// === Coin Fee Configuration Intent Helpers ===
+
+/// Add coin fee configuration
+public fun add_coin_fee_config_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    decimals: u8,
+    dao_monthly_fee: u64,
+    dao_creation_fee: u64,
+    proposal_fee_per_outcome: u64,
+    recovery_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_add_coin_fee_config(
+        coin_type,
+        decimals,
+        dao_monthly_fee,
+        dao_creation_fee,
+        proposal_fee_per_outcome,
+        recovery_fee
+    );
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::add_coin_fee_config(), action_data, intent_witness);
+}
+
+/// Update coin monthly fee
+public fun add_update_coin_monthly_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_coin_monthly_fee(coin_type, new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_coin_monthly_fee(), action_data, intent_witness);
+}
+
+/// Update coin creation fee
+public fun add_update_coin_creation_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_coin_creation_fee(coin_type, new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_coin_creation_fee(), action_data, intent_witness);
+}
+
+/// Update coin proposal fee
+public fun add_update_coin_proposal_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_coin_proposal_fee(coin_type, new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_coin_proposal_fee(), action_data, intent_witness);
+}
+
+/// Update coin recovery fee
+public fun add_update_coin_recovery_fee_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    new_fee: u64,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_update_coin_recovery_fee(coin_type, new_fee);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::update_coin_recovery_fee(), action_data, intent_witness);
+}
+
+/// Apply pending coin fees
+public fun add_apply_pending_coin_fees_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    coin_type: TypeName,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_apply_pending_coin_fees(coin_type);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::apply_pending_coin_fees(), action_data, intent_witness);
 }

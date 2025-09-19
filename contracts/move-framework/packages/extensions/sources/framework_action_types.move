@@ -32,9 +32,12 @@ module account_extensions::framework_action_types {
     public struct VaultSpend has drop {}
     
     // ======== Transfer Actions ========
-    
+
     /// Transfer object ownership
     public struct TransferObject has drop {}
+
+    /// Transfer object to transaction sender (for crank incentives)
+    public struct TransferToSender has drop {}
     
     // ======== Currency Actions ========
     

@@ -57,6 +57,7 @@ public struct FutarchyConfig has store, copy, drop {
 
     // Verification configuration
     verification_level: u8,        // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
+    dao_score: u64,                // DAO quality score (0-unlimited, higher = better, admin-set only)
 }
 
 /// Dynamic state stored on Account<FutarchyConfig> via dynamic fields
@@ -111,6 +112,7 @@ public fun new<AssetType: drop, StableType: drop>(
         review_to_trading_fee: 1_000_000_000,    // 1 SUI default
         finalization_fee: 1_000_000_000,         // 1 SUI default
         verification_level: 0,                    // Unverified by default
+        dao_score: 0,                              // No score by default
     }
 }
 
@@ -183,6 +185,10 @@ public fun finalization_fee(config: &FutarchyConfig): u64 {
 
 public fun verification_level(config: &FutarchyConfig): u8 {
     config.verification_level
+}
+
+public fun dao_score(config: &FutarchyConfig): u64 {
+    config.dao_score
 }
 
 // === Getters for SlashDistribution ===
@@ -277,6 +283,16 @@ public fun with_verification_level(
 ): FutarchyConfig {
     FutarchyConfig {
         verification_level,
+        ..config
+    }
+}
+
+public fun with_dao_score(
+    config: FutarchyConfig,
+    dao_score: u64,
+): FutarchyConfig {
+    FutarchyConfig {
+        dao_score,
         ..config
     }
 }

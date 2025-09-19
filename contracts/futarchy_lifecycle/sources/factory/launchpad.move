@@ -119,6 +119,16 @@ public struct Contribution has store, drop, copy {
     max_total: u64, // cap; u64::MAX means "no cap"
 }
 
+/// Key type for storing refunds separately from contributions
+public struct RefundKey has copy, drop, store {
+    contributor: address,
+}
+
+/// Record for tracking refunds due to hard cap
+public struct RefundRecord has store, drop {
+    amount: u64,
+}
+
 /// Cap-bin dynamic fields for aggregating contributions by cap
 public struct ThresholdKey has copy, drop, store { 
     cap: u64 
@@ -149,6 +159,7 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     state: u8,
     total_raised: u64,
     min_raise_amount: u64,
+    max_raise_amount: Option<u64>, // The new creator-defined hard cap
     deadline_ms: u64,
     /// Balance of the token being sold to contributors.
     raise_token_vault: Balance<RaiseToken>,
@@ -170,6 +181,7 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     settlement_done: bool,
     settlement_in_progress: bool,  // Track if settlement has started
     final_total_eligible: u64,     // T* after enforcing caps
+    final_raise_amount: u64,       // The final amount after applying the hard cap
     /// Pre-created DAO ID (if DAO was created before raise)
     dao_id: Option<ID>,
     /// Whether init actions can still be added
@@ -443,6 +455,7 @@ public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin:
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
+    max_raise_amount: Option<u64>, // Add the new parameter
     description: String,
     // DAOParameters passed as individual fields for entry function compatibility
     dao_name: ascii::String,
@@ -498,9 +511,14 @@ public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin:
         assert!(tokens_for_raise.value() == total_supply, EWrongTotalSupply);
         tokens_for_raise.value()
     };
-    
+
     // Check that StableCoin is allowed
     assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
+
+    // Validate the new parameter
+    if (option::is_some(&max_raise_amount)) {
+        assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidStateForAction);
+    };
     
     let dao_params = DAOParameters {
         dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
@@ -512,7 +530,7 @@ public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin:
     };
     
     init_raise_with_founder<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, description, dao_params, clock, ctx
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, description, dao_params, clock, ctx
     );
 }
 
@@ -522,6 +540,7 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
+    max_raise_amount: Option<u64>, // Add the new parameter
     description: String,
     dao_name: ascii::String,
     dao_description: String,
@@ -540,9 +559,14 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
 ) {
     // CRITICAL: Ensure we're selling 100% of the total supply
     assert!(tokens_for_raise.value() == treasury_cap.total_supply(), EWrongTotalSupply);
-    
+
     // Check that StableCoin is allowed
     assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
+
+    // Validate the new parameter
+    if (option::is_some(&max_raise_amount)) {
+        assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidStateForAction);
+    };
     
     let dao_params = DAOParameters {
         dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
@@ -554,7 +578,7 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     };
     
     init_raise<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, description, dao_params, clock, ctx
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, description, dao_params, clock, ctx
     );
 }
 
@@ -888,11 +912,26 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop, StableCoin: dr
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.settlement_done, ESettlementNotStarted);
 
-    // Use FINAL eligible total, not naive total_raised
-    let final_total = raise.final_total_eligible;
-    assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
-    assert!(final_total > 0, EMinRaiseNotMet);
-    
+    // Use T* from the settlement algorithm
+    let consensual_total = raise.final_total_eligible;
+    assert!(consensual_total >= raise.min_raise_amount, EMinRaiseNotMet);
+    assert!(consensual_total > 0, EMinRaiseNotMet);
+
+    // --- THE CRUCIAL HYBRID LOGIC ---
+    // The final raise is the lesser of the market consensus and the creator's hard cap.
+    let final_total = if (option::is_some(&raise.max_raise_amount)) {
+        math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
+    } else {
+        consensual_total
+    };
+
+    // Store this final capped amount for claims and refunds
+    raise.final_raise_amount = final_total;
+
+    // SECURITY: Verify invariants
+    assert!(raise.final_raise_amount <= raise.final_total_eligible, EInvalidSettlementState);
+    assert!(raise.final_raise_amount <= raise.stable_coin_vault.value(), EInvalidSettlementState);
+
     // Check if DAO was pre-created
     if (raise.dao_id.is_some()) {
         // Extract the unshared DAO components
@@ -935,13 +974,13 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop, StableCoin: dr
         abort EDaoNotPreCreated
     };
     
-    // Transfer ONLY T* to the creator; remainder stays for refunds
-    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(final_total), ctx);
+    // Transfer the final, capped amount to the creator
+    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
     transfer::public_transfer(raised_funds, raise.creator);
 
     event::emit(RaiseSuccessful {
         raise_id: object::id(raise),
-        total_raised: final_total,
+        total_raised: raise.final_raise_amount,
     });
 }
 
@@ -967,14 +1006,29 @@ public entry fun claim_success_and_create_dao_with_init<RaiseToken: drop, Stable
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.settlement_done, ESettlementNotStarted);
 
-    // Use FINAL eligible total, not naive total_raised
-    let final_total = raise.final_total_eligible;
+    // Use T* from the settlement algorithm
+    let consensual_total = raise.final_total_eligible;
 
-    assert!(final_total >= raise.min_raise_amount, EMinRaiseNotMet);
-    assert!(final_total > 0, EMinRaiseNotMet);
-    
+    assert!(consensual_total >= raise.min_raise_amount, EMinRaiseNotMet);
+    assert!(consensual_total > 0, EMinRaiseNotMet);
+
     // SECURITY: Final total cannot exceed total raised
-    assert!(final_total <= raise.total_raised, EInvalidSettlementState);
+    assert!(consensual_total <= raise.total_raised, EInvalidSettlementState);
+
+    // --- THE CRUCIAL HYBRID LOGIC ---
+    // The final raise is the lesser of the market consensus and the creator's hard cap.
+    let final_total = if (option::is_some(&raise.max_raise_amount)) {
+        math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
+    } else {
+        consensual_total
+    };
+
+    // Store this final capped amount for claims and refunds
+    raise.final_raise_amount = final_total;
+
+    // SECURITY: Verify invariants
+    assert!(raise.final_raise_amount <= raise.final_total_eligible, EInvalidSettlementState);
+    assert!(raise.final_raise_amount <= raise.stable_coin_vault.value(), EInvalidSettlementState);
 
     // Extract the TreasuryCap if available
     let treasury_cap = if (raise.treasury_cap.is_some()) {
@@ -1048,13 +1102,13 @@ public entry fun claim_success_and_create_dao_with_init<RaiseToken: drop, Stable
     transfer::public_share_object(queue);
     account_spot_pool::share(spot_pool);
 
-    // Transfer ONLY T* to the creator; remainder stays for refunds
-    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(final_total), ctx);
+    // Transfer the final, capped amount to the creator
+    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
     transfer::public_transfer(raised_funds, raise.creator);
 
     event::emit(RaiseSuccessful {
         raise_id: object::id(raise),
-        total_raised: final_total, // interpret as final eligible
+        total_raised: raise.final_raise_amount,
     });
 }
 
@@ -1122,17 +1176,29 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     assert!(rec.amount > 0, EInvalidStateForAction);
     assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
 
-    // Eligibility: cap must be >= final_total
-    let final_total = raise.final_total_eligible;
-    if (!(rec.max_total >= final_total)) {
+    // Step 1: Eligibility check is still against the CONSENSUS total (T*)
+    // This respects the outcome of the settlement phase.
+    let consensual_total = raise.final_total_eligible;
+    if (!(rec.max_total >= consensual_total)) {
+        // This user was filtered out by the market. They get a 100% refund.
+        // We put their full contribution back so they can claim it.
+        df::add(&mut raise.id, key, rec);
         raise.claiming = false;
         abort ENotEligibleForTokens
     };
 
-    let tokens_to_claim = math::mul_div_to_64(
+    // Step 2: Pro-rata calculation for ELIGIBLE users
+    // Calculate the user's share of the consensual total
+    let accepted_amount = math::mul_div_to_64(
         rec.amount,
+        raise.final_raise_amount, // Use the final, possibly capped amount
+        consensual_total          // But scale it relative to the larger consensus pool
+    );
+
+    let tokens_to_claim = math::mul_div_to_64(
+        accepted_amount,
         raise.tokens_for_sale_amount,
-        final_total
+        raise.final_raise_amount
     );
 
     let tokens = coin::from_balance(raise.raise_token_vault.split(tokens_to_claim), ctx);
@@ -1141,9 +1207,24 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     event::emit(TokensClaimed {
         raise_id: object::id(raise),
         contributor: who,
-        contribution_amount: rec.amount,
+        contribution_amount: accepted_amount,
         tokens_claimed: tokens_to_claim,
     });
+
+    // Step 3: Handle any refund due
+    let refund_due = rec.amount - accepted_amount;
+    if (refund_due > 0) {
+        // Use a separate RefundKey to prevent double-claiming
+        let refund_key = RefundKey { contributor: who };
+        // Only add if no existing refund (safety check)
+        if (!df::exists_(&raise.id, refund_key)) {
+            df::add(&mut raise.id, refund_key, RefundRecord { amount: refund_due });
+        } else {
+            // If refund already exists, add to it
+            let existing: &mut RefundRecord = df::borrow_mut(&mut raise.id, refund_key);
+            existing.amount = existing.amount + refund_due;
+        };
+    };
 
     raise.claiming = false;
 }
@@ -1213,6 +1294,34 @@ public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
             timestamp: clock.timestamp_ms(),
         });
     };
+}
+
+/// Refund for eligible contributors who were partially refunded due to hard cap
+public entry fun claim_hard_cap_refund<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    ctx: &mut TxContext,
+) {
+    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+
+    let who = ctx.sender();
+    let refund_key = RefundKey { contributor: who };
+
+    // Check if user has a refund due to hard cap
+    assert!(df::exists_(&raise.id, refund_key), ENotAContributor);
+
+    // Remove and get refund record
+    let refund_rec: RefundRecord = df::remove(&mut raise.id, refund_key);
+
+    // Create refund coin
+    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(refund_rec.amount), ctx);
+    transfer::public_transfer(refund_coin, who);
+
+    event::emit(RefundClaimed {
+        raise_id: object::id(raise),
+        contributor: who,
+        amount: refund_rec.amount,
+    });
 }
 
 /// Refund for contributors whose cap excluded them (after successful raise).
@@ -1327,6 +1436,7 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
+    max_raise_amount: Option<u64>,
     description: String,
     dao_params: DAOParameters,
     clock: &Clock,
@@ -1339,6 +1449,7 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
         state: STATE_FUNDING,
         total_raised: 0,
         min_raise_amount,
+        max_raise_amount,
         deadline_ms: clock.timestamp_ms() + LAUNCHPAD_DURATION_MS,
         raise_token_vault: tokens_for_raise.into_balance(),
         tokens_for_sale_amount: tokens_for_sale,
@@ -1352,6 +1463,9 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
         settlement_done: false,
         settlement_in_progress: false,
         final_total_eligible: 0,
+        final_raise_amount: 0,
+        dao_id: option::none(),
+        intents_locked: false,
     };
 
     event::emit(RaiseCreated {
@@ -1373,6 +1487,7 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
+    max_raise_amount: Option<u64>,
     description: String,
     dao_params: DAOParameters,
     clock: &Clock,
@@ -1385,6 +1500,7 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
         state: STATE_FUNDING,
         total_raised: 0,
         min_raise_amount,
+        max_raise_amount,
         deadline_ms: clock.timestamp_ms() + LAUNCHPAD_DURATION_MS,
         raise_token_vault: tokens_for_raise.into_balance(),
         tokens_for_sale_amount: tokens_for_sale,
@@ -1398,6 +1514,9 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
         settlement_done: false,
         settlement_in_progress: false,
         final_total_eligible: 0,
+        final_raise_amount: 0,
+        dao_id: option::none(),
+        intents_locked: false,
     };
 
     event::emit(RaiseCreated {

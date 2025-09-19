@@ -293,18 +293,12 @@ public fun decode_request_verification_action(
     action_data: vector<u8>,
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
-    let dao_id = bcs::peel_address(&mut bcs_data);
     let level = bcs::peel_u8(&mut bcs_data);
     let attestation_url = bcs::peel_vec_u8(&mut bcs_data).to_string();
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
     vector[
-        schema::new_field(
-            b"dao_id".to_string(),
-            dao_id.to_string(),
-            b"ID".to_string(),
-        ),
         schema::new_field(
             b"level".to_string(),
             level.to_string(),

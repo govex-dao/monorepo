@@ -117,6 +117,34 @@ public struct UpdateMonthlyDaoFee has drop {}
 public struct UpdateTreasuryAddress has drop {}
 public struct WithdrawProtocolFees has drop {}
 
+// === Verification Action Types ===
+
+public struct UpdateVerificationFee has drop {}
+public struct AddVerificationLevel has drop {}
+public struct RemoveVerificationLevel has drop {}
+public struct RequestVerification has drop {}
+public struct ApproveVerification has drop {}
+public struct RejectVerification has drop {}
+
+// === DAO Score Action Types ===
+
+public struct SetDaoScore has drop {}
+
+// === Fee Management Action Types ===
+
+public struct UpdateRecoveryFee has drop {}
+public struct WithdrawFeesToTreasury has drop {}
+public struct ApplyDaoFeeDiscount has drop {}
+
+// === Coin Fee Config Action Types ===
+
+public struct AddCoinFeeConfig has drop {}
+public struct UpdateCoinMonthlyFee has drop {}
+public struct UpdateCoinCreationFee has drop {}
+public struct UpdateCoinProposalFee has drop {}
+public struct UpdateCoinRecoveryFee has drop {}
+public struct ApplyPendingCoinFees has drop {}
+
 // === Founder Lock Action Types ===
 
 public struct CreateFounderLock has drop {}
@@ -242,3 +270,27 @@ public fun package_upgrade(): TypeName { type_name::with_defining_ids<PackageUpg
 
 // Vault actions
 public fun vault_mint(): TypeName { type_name::with_defining_ids<VaultMint>() }
+
+// Verification actions
+public fun update_verification_fee(): TypeName { type_name::with_defining_ids<UpdateVerificationFee>() }
+public fun add_verification_level(): TypeName { type_name::with_defining_ids<AddVerificationLevel>() }
+public fun remove_verification_level(): TypeName { type_name::with_defining_ids<RemoveVerificationLevel>() }
+public fun request_verification(): TypeName { type_name::with_defining_ids<RequestVerification>() }
+public fun approve_verification(): TypeName { type_name::with_defining_ids<ApproveVerification>() }
+public fun reject_verification(): TypeName { type_name::with_defining_ids<RejectVerification>() }
+
+// DAO Score actions
+public fun set_dao_score(): TypeName { type_name::with_defining_ids<SetDaoScore>() }
+
+// Fee Management actions
+public fun update_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateRecoveryFee>() }
+public fun withdraw_fees_to_treasury(): TypeName { type_name::with_defining_ids<WithdrawFeesToTreasury>() }
+public fun apply_dao_fee_discount(): TypeName { type_name::with_defining_ids<ApplyDaoFeeDiscount>() }
+
+// Coin Fee Config actions
+public fun add_coin_fee_config(): TypeName { type_name::with_defining_ids<AddCoinFeeConfig>() }
+public fun update_coin_monthly_fee(): TypeName { type_name::with_defining_ids<UpdateCoinMonthlyFee>() }
+public fun update_coin_creation_fee(): TypeName { type_name::with_defining_ids<UpdateCoinCreationFee>() }
+public fun update_coin_proposal_fee(): TypeName { type_name::with_defining_ids<UpdateCoinProposalFee>() }
+public fun update_coin_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateCoinRecoveryFee>() }
+public fun apply_pending_coin_fees(): TypeName { type_name::with_defining_ids<ApplyPendingCoinFees>() }
