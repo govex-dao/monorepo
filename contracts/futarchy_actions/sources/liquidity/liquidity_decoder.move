@@ -14,7 +14,6 @@ use futarchy_actions::liquidity_actions::{
     RemoveLiquidityAction,
     SwapAction,
     CollectFeesAction,
-    SetPoolEnabledAction,
     WithdrawFeesAction,
     SetPoolStatusAction,
 };
@@ -49,11 +48,6 @@ public struct SwapActionDecoder has key, store {
 
 /// Decoder for CollectFeesAction
 public struct CollectFeesActionDecoder has key, store {
-    id: UID,
-}
-
-/// Decoder for SetPoolEnabledAction
-public struct SetPoolEnabledActionDecoder has key, store {
     id: UID,
 }
 
@@ -181,8 +175,8 @@ public fun register_decoders(
     register_remove_liquidity_decoder(registry, ctx);
     register_swap_decoder(registry, ctx);
     register_collect_fees_decoder(registry, ctx);
-    register_set_pool_enabled_decoder(registry, ctx);
     register_withdraw_fees_decoder(registry, ctx);
+    register_set_pool_status_decoder(registry, ctx);
 }
 
 fun register_create_pool_decoder(
@@ -239,14 +233,6 @@ fun register_collect_fees_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_set_pool_enabled_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = SetPoolEnabledActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<SetPoolEnabledAction>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}
 
 fun register_withdraw_fees_decoder(
     registry: &mut ActionDecoderRegistry,

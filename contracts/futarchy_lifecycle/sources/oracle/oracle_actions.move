@@ -73,13 +73,6 @@ public struct MintOperation has copy, drop {
 
 // === Events ===
 
-/// Emitted when oracle price is read
-public struct OraclePriceRead has copy, drop {
-    oracle_type: u8, // 0 = spot, 1 = conditional
-    price: u128,
-    timestamp: u64,
-}
-
 /// Emitted when tokens are minted based on oracle conditions
 public struct ConditionalMintExecuted has copy, drop {
     recipient: address,
@@ -98,10 +91,6 @@ public struct TierExecuted has copy, drop {
 
 // === Structs ===
 
-/// Simple action to read oracle price
-public struct ReadOraclePriceAction<phantom AssetType, phantom StableType> has store, drop, copy {
-    emit_event: bool,
-}
 
 /// Action to read oracle price and conditionally mint tokens
 /// This is used for founder rewards, liquidity incentives, employee options, etc.
@@ -227,13 +216,6 @@ public fun new_price_tier(
         description,
         executed: false,
     }
-}
-
-/// Create a simple oracle read action
-public fun new_read_oracle_action<AssetType, StableType>(
-    emit_event: bool,
-): ReadOraclePriceAction<AssetType, StableType> {
-    ReadOraclePriceAction { emit_event }
 }
 
 public fun new_conditional_mint<T>(
@@ -445,44 +427,6 @@ public fun new_tiered_founder_rewards<T>(
 }
 
 // === Execution Functions ===
-
-/// Execute a read oracle price action
-public fun do_read_oracle_price<AssetType, StableType, Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
-    _version: VersionWitness,
-    witness: IW,
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
-    clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ReadOraclePrice>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let emit_event = reader.peel_bool();
-    bcs_validation::validate_all_bytes_consumed(reader);
-    
-    // Increment action index
-    executable::increment_action_idx(executable);
-
-    // Read the price
-    assert!(spot_amm::is_twap_ready(spot_pool, clock), ETwapNotReady);
-    let price = spot_amm::get_twap_mut(spot_pool, clock);
-
-    // Emit event if requested
-    if (emit_event) {
-        event::emit(OraclePriceRead {
-            oracle_type: 0, // Spot oracle
-            price,
-            timestamp: clock.timestamp_ms(),
-        });
-    };
-}
 
 /// Execute conditional mint using stored TreasuryCap
 public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy + drop>(

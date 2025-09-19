@@ -8,17 +8,11 @@ use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_lifecycle::oracle_actions::{
-    ReadOraclePriceAction,
     ConditionalMintAction,
     TieredMintAction,
 };
 
 // === Decoder Objects ===
-
-/// Decoder for ReadOraclePriceAction
-public struct ReadOraclePriceActionDecoder has key, store {
-    id: UID,
-}
 
 /// Decoder for ConditionalMintAction
 public struct ConditionalMintActionDecoder has key, store {
@@ -36,33 +30,6 @@ public struct StablePlaceholder has drop, store {}
 public struct CoinPlaceholder has drop, store {}
 
 // === Decoder Functions ===
-
-/// Decode a ReadOraclePriceAction
-public fun decode_read_oracle_price_action<AssetType, StableType>(
-    _decoder: &ReadOraclePriceActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-
-    let pool_id = bcs::peel_address(&mut bcs_data);
-    let min_observations = bcs::peel_u64(&mut bcs_data);
-
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"pool_id".to_string(),
-            pool_id.to_string(),
-            b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"min_observations".to_string(),
-            min_observations.to_string(),
-            b"u64".to_string(),
-        ),
-    ]
-}
 
 /// Decode a ConditionalMintAction
 public fun decode_conditional_mint_action<CoinType>(
@@ -152,18 +119,8 @@ public fun register_decoders(
     registry: &mut ActionDecoderRegistry,
     ctx: &mut TxContext,
 ) {
-    register_read_oracle_price_decoder(registry, ctx);
     register_conditional_mint_decoder(registry, ctx);
     register_tiered_mint_decoder(registry, ctx);
-}
-
-fun register_read_oracle_price_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = ReadOraclePriceActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<ReadOraclePriceAction<AssetPlaceholder, StablePlaceholder>>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
 fun register_conditional_mint_decoder(

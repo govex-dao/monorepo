@@ -69,12 +69,6 @@ public struct CollectFeesAction<phantom AssetType, phantom StableType> has store
     pool_id: ID,
 }
 
-/// Action to enable or disable a pool
-public struct SetPoolEnabledAction has store, drop {
-    pool_id: ID,
-    enabled: bool,
-}
-
 /// Action to withdraw accumulated fees to treasury
 public struct WithdrawFeesAction<phantom AssetType, phantom StableType> has store, drop {
     pool_id: ID,
@@ -207,7 +201,7 @@ public fun do_set_pool_status<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::SetPoolEnabled>(spec);
+    action_validation::assert_action_type<action_types::SetPoolStatus>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -615,14 +609,6 @@ public fun delete_collect_fees<AssetType, StableType>(expired: &mut Expired) {
     } = expired.remove_action();
 }
 
-/// Delete a set pool enabled action from an expired intent
-public fun delete_set_pool_enabled(expired: &mut Expired) {
-    let SetPoolEnabledAction {
-        pool_id: _,
-        enabled: _,
-    } = expired.remove_action();
-}
-
 /// Delete a withdraw fees action from an expired intent
 public fun delete_withdraw_fees<AssetType, StableType>(expired: &mut Expired) {
     let WithdrawFeesAction<AssetType, StableType> {
@@ -745,18 +731,6 @@ public fun new_collect_fees_action<AssetType, StableType>(
 ): CollectFeesAction<AssetType, StableType> {
     let action = CollectFeesAction<AssetType, StableType> {
         pool_id,
-    };
-    action
-}
-
-/// Create a new set pool enabled action with serialization
-public fun new_set_pool_enabled_action(
-    pool_id: ID,
-    enabled: bool,
-): SetPoolEnabledAction {
-    let action = SetPoolEnabledAction {
-        pool_id,
-        enabled,
     };
     action
 }
@@ -931,14 +905,6 @@ public fun destroy_collect_fees_action<AssetType, StableType>(action: CollectFee
     } = action;
 }
 
-/// Destroy SetPoolEnabledAction after use
-public fun destroy_set_pool_enabled_action(action: SetPoolEnabledAction) {
-    let SetPoolEnabledAction {
-        pool_id: _,
-        enabled: _,
-    } = action;
-}
-
 /// Destroy WithdrawFeesAction after use
 public fun destroy_withdraw_fees_action<AssetType, StableType>(action: WithdrawFeesAction<AssetType, StableType>) {
     let WithdrawFeesAction {
@@ -957,7 +923,6 @@ public use fun new_add_liquidity_action;
 public use fun new_remove_liquidity_action;
 public use fun new_swap_action;
 public use fun new_collect_fees_action;
-public use fun new_set_pool_enabled_action;
 public use fun new_withdraw_fees_action;
 public use fun new_set_pool_status_action;
 
@@ -969,7 +934,6 @@ public use fun destroy_remove_liquidity_action as RemoveLiquidityAction.destroy;
 public use fun destroy_set_pool_status_action as SetPoolStatusAction.destroy;
 public use fun destroy_swap_action as SwapAction.destroy;
 public use fun destroy_collect_fees_action as CollectFeesAction.destroy;
-public use fun destroy_set_pool_enabled_action as SetPoolEnabledAction.destroy;
 public use fun destroy_withdraw_fees_action as WithdrawFeesAction.destroy;
 
 // === Deserialization Constructors ===
@@ -1036,15 +1000,6 @@ public(package) fun collect_fees_action_from_bytes<AssetType, StableType>(bytes:
     let mut bcs = bcs::new(bytes);
     CollectFeesAction {
         pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
-    }
-}
-
-/// Deserialize SetPoolEnabledAction from bytes
-public(package) fun set_pool_enabled_action_from_bytes(bytes: vector<u8>): SetPoolEnabledAction {
-    let mut bcs = bcs::new(bytes);
-    SetPoolEnabledAction {
-        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
-        enabled: bcs::peel_bool(&mut bcs),
     }
 }
 

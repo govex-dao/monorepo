@@ -10,26 +10,31 @@ GovernanceUpdate             - Change governance parameters
 MetadataTableUpdate          - Modify metadata key-value pairs
 SlashDistributionUpdate      - Adjust slash fee distribution
 QueueParamsUpdate            - Update proposal queue settings
-ConfigBatch                  - Bundle multiple config changes
+ConfigAction                 - Bundle multiple config changes
 
 ## Governance Actions
 CreateProposal               - Create new futarchy proposal
 CollectPlatformFee          - Collect fees for platform treasury
 
 ## Liquidity Actions
+CreatePool                   - Create new AMM pool
 AddLiquidity                 - Add tokens to AMM pool
 RemoveLiquidity              - Remove tokens from AMM pool
-CreatePool                   - Create new AMM pool
 UpdatePoolParams             - Modify pool parameters
 SetPoolStatus                - Enable/disable pool trading
+Swap                         - Execute AMM swap
+CollectFees                  - Collect AMM trading fees
+WithdrawFees                 - Withdraw collected fees
 
 ## Vault Actions
 AddCoinType                  - Allow new coin in vault
 RemoveCoinType               - Remove allowed coin from vault
+ApproveCustody               - Approve asset custody transfer
+AcceptIntoCustody            - Accept asset into custody
 
 ## Memo Actions
 EmitMemo                     - Post text message on-chain
-EmitDecision                 - Record accept/reject decision
+EmitDecision                 - Record governance decision
 
 ## Optimistic Actions
 CreateOptimisticProposal     - Create challenge-based proposal
@@ -52,6 +57,10 @@ UpdateMonthlyDaoFee          - Update monthly maintenance fee
 UpdateVerificationFee        - Change verification cost
 AddVerificationLevel         - Add verification tier
 RemoveVerificationLevel      - Remove verification tier
+RequestVerification          - Request DAO verification
+ApproveVerification          - Approve verification request
+RejectVerification           - Reject verification request
+SetDaoScore                  - Set DAO quality score
 UpdateRecoveryFee            - Change recovery cost
 WithdrawFeesToTreasury       - Collect protocol fees
 ApplyDaoFeeDiscount          - Apply fee discount
@@ -70,6 +79,7 @@ WithdrawUnlockedTokens             - Claim tokens after unlock period
 
 ## Operating Agreement Actions
 CreateOperatingAgreement     - Initialize legal document
+OperatingAgreement           - Process agreement changes
 UpdateLine                   - Modify agreement text
 InsertLineAfter              - Add line after specific line
 InsertLineAtBeginning        - Add line at start
@@ -81,18 +91,23 @@ SetGlobalImmutable           - Lock entire agreement
 BatchOperatingAgreement      - Multiple agreement changes
 
 ## Oracle Actions (Mint New Tokens)
-ReadOraclePrice              - Get TWAP price from oracle
 ConditionalMint              - Mint new tokens if price condition met (inflationary)
 TieredMint                   - Milestone-based minting for founders/investors (inflationary)
 
 ## Stream/Payment Actions
 CreatePayment                - Create one-time/recurring payment
+CreateStream                 - Create continuous payment stream
 CreateBudgetStream           - Create budget-limited stream
-CancelPayment                - Stop payment stream
+CancelPayment                - Stop payment
+CancelStream                 - Cancel stream
 UpdatePaymentRecipient       - Change payment recipient
+UpdateStream                 - Update stream parameters
 AddWithdrawer                - Add payment withdrawer
 RemoveWithdrawers            - Remove payment withdrawers
 TogglePayment                - Pause/resume payment
+PauseStream                  - Pause stream temporarily
+ResumeStream                 - Resume paused stream
+WithdrawStream               - Withdraw from stream
 RequestWithdrawal            - Request stream withdrawal
 ChallengeWithdrawals         - Challenge withdrawal request
 ProcessPendingWithdrawal     - Execute pending withdrawal
@@ -110,77 +125,59 @@ WithdrawAmmLiquidity         - Pull AMM liquidity
 DistributeAssets             - Send assets to holders
 
 ## Policy Actions
-SetPatternPolicy             - Set pattern-based rule
+SetTypePolicy                - Set type-based rule
 SetObjectPolicy              - Set object-specific rule
 RegisterCouncil              - Register security council
-SetTypePolicy                - Set type-based rule
-PackageUpgrade               - Upgrade package code
-VaultMint                    - Mint from vault
-RemovePatternPolicy          - Remove pattern rule
-RemoveObjectPolicy           - Remove object rule
+RemoveTypePolicy             - Remove type-based rule
+RemoveObjectPolicy           - Remove object-specific rule
 
 ## Security Council Actions
-CreateSecurityCouncil        - Create council account
-ApproveOAChange              - Approve agreement change
-UpdateUpgradeRules           - Modify upgrade policy
 UpdateCouncilMembership      - Change council members
-UnlockAndReturnUpgradeCap    - Return upgrade capability
-ApproveGeneric               - Approve any action
+UnlockAndReturnUpgradeCap    - Return upgrade capability to DAO
+ApproveGeneric               - Approve any action (OA changes, upgrade rules, policies, etc.)
 SweepIntents                 - Clean expired intents
 CouncilCreateOptimisticIntent    - Council creates optimistic intent
 CouncilExecuteOptimisticIntent   - Council executes optimistic intent
 CouncilCancelOptimisticIntent    - Council cancels optimistic intent
 
-## Custody Actions
-ApproveCustody               - Approve custody transfer
-AcceptIntoCustody            - Accept asset custody
-
-## Dispatcher Registry Actions
-RegisterActionType           - Register action handler
-UnregisterActionType         - Remove action handler
-BatchRegisterActionTypes     - Register multiple handlers
-UpdateHandlerConfig          - Update handler settings
-
 # Move Framework Actions
 
 ## Vault Actions
-VaultDeposit                 - Deposit coins into vault
-VaultSpend                   - Spend coins from vault
+Deposit                      - Deposit coins into vault
+Spend                        - Spend coins from vault
 
 ## Transfer Actions
-TransferObject               - Transfer object ownership
+Transfer                     - Transfer object ownership
+TransferToSender             - Transfer object to sender
 
 ## Currency Actions
-CurrencyLockCap              - Lock treasury cap for future use
-CurrencyDisable              - Disable currency operations
-CurrencyMint                 - Mint new currency
-CurrencyBurn                 - Burn currency
-CurrencyUpdate               - Update currency metadata
+Disable                      - Disable currency (coin / token) operations
+Mint                         - Mint new currency (coin / token)
+Burn                         - Burn currency (coin / token)
+Update                       - Update currency (coin / token) metadata
 
 ## Access Control Actions
-AccessControlStore           - Store/lock capability
-AccessControlBorrow          - Borrow capability
-AccessControlReturn          - Return borrowed capability
+Borrow                       - Borrow capability (safely use admin object)
+Return                       - Return borrowed capability (safely use admin object)
 
 ## Package Upgrade Actions
-PackageUpgrade               - Upgrade package
-PackageCommit                - Commit upgrade
-PackageRestrict              - Restrict upgrade policy
+Upgrade                      - Upgrade package
+Commit                       - Commit upgrade
+Restrict                     - Restrict upgrade policy
 
 ## Kiosk Actions
-KioskTake                    - Take item from kiosk
-KioskList                    - List item in kiosk
+Take                         - Take item from kiosk (onchain selling primative)
+List                         - List item in kiosk (onchain selling primative)
 
 ## Vesting Actions
-VestingCreate                - Create vesting schedule
-VestingCancel                - Cancel vesting schedule
+CreateVesting                - Create vesting schedule
+CancelVesting                - Cancel vesting schedule
 
 ## Configuration Actions
-ConfigUpdateDeps             - Update account dependencies
-ConfigToggleUnverified       - Toggle unverified packages allowed
-ConfigUpdateMetadata         - Update account metadata
-ConfigUpdateDeposits         - Configure object deposit settings
-ConfigManageWhitelist        - Manage type whitelist for deposits
+ConfigDeps                   - Update account dependencies
+ToggleUnverifiedAllowed      - Toggle unverified packages allowed
+ConfigureDeposits            - Configure object deposit settings
+ManageWhitelist              - Manage type whitelist for deposits
 
 ## Owned Actions
-OwnedWithdraw                - Withdraw owned object
+Withdraw                     - Withdraw owned object

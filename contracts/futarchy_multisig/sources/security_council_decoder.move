@@ -8,8 +8,6 @@ use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_multisig::security_council_actions::{
-    ApproveOAChangeAction,
-    UpdateUpgradeRulesAction,
     UpdateCouncilMembershipAction,
     UnlockAndReturnUpgradeCapAction,
     ApproveGenericAction,
@@ -31,16 +29,6 @@ use futarchy_multisig::optimistic_intents::{
 };
 
 // === Decoder Objects ===
-
-/// Decoder for ApproveOAChangeAction
-public struct ApproveOAChangeActionDecoder has key, store {
-    id: UID,
-}
-
-/// Decoder for UpdateUpgradeRulesAction
-public struct UpdateUpgradeRulesActionDecoder has key, store {
-    id: UID,
-}
 
 /// Decoder for UpdateCouncilMembershipAction
 public struct UpdateCouncilMembershipActionDecoder has key, store {
@@ -126,52 +114,6 @@ fun decode_option_type_name(bcs_data: &mut BCS): Option<TypeName> {
 }
 
 // === Decoder Functions ===
-
-/// Decode an ApproveOAChangeAction
-public fun decode_approve_oa_change_action(
-    _decoder: &ApproveOAChangeActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-
-    let change_id = bcs::peel_address(&mut bcs_data);
-    let approval_note = bcs::peel_vec_u8(&mut bcs_data).to_string();
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"change_id".to_string(),
-            change_id.to_string(),
-            b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"approval_note".to_string(),
-            approval_note,
-            b"String".to_string(),
-        ),
-    ]
-}
-
-/// Decode an UpdateUpgradeRulesAction
-public fun decode_update_upgrade_rules_action(
-    _decoder: &UpdateUpgradeRulesActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-
-    let new_rules = bcs::peel_vec_u8(&mut bcs_data).to_string();
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"new_rules".to_string(),
-            new_rules,
-            b"String".to_string(),
-        ),
-    ]
-}
 
 /// Decode an UpdateCouncilMembershipAction
 public fun decode_update_council_membership_action(
@@ -616,8 +558,6 @@ public fun register_decoders(
     ctx: &mut TxContext,
 ) {
     // Security council actions
-    register_approve_oa_change_decoder(registry, ctx);
-    register_update_upgrade_rules_decoder(registry, ctx);
     register_update_council_membership_decoder(registry, ctx);
     register_unlock_and_return_upgrade_cap_decoder(registry, ctx);
     register_approve_generic_decoder(registry, ctx);
@@ -636,24 +576,6 @@ public fun register_decoders(
     register_execute_optimistic_intent_decoder(registry, ctx);
     register_cancel_optimistic_intent_decoder(registry, ctx);
     register_cleanup_expired_intents_decoder(registry, ctx);
-}
-
-fun register_approve_oa_change_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = ApproveOAChangeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<ApproveOAChangeAction>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}
-
-fun register_update_upgrade_rules_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = UpdateUpgradeRulesActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<UpdateUpgradeRulesAction>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
 fun register_update_council_membership_decoder(

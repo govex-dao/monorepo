@@ -24,7 +24,7 @@ public struct AddLiquidity has drop {}
 public struct RemoveLiquidity has drop {}
 public struct Swap has drop {}
 public struct CollectFees has drop {}
-public struct SetPoolEnabled has drop {}
+public struct SetPoolStatus has drop {}
 public struct WithdrawFees has drop {}
 
 // === Governance Action Types ===
@@ -62,7 +62,6 @@ public struct ProcessPayment has drop {}
 
 // === Oracle Action Types ===
 
-public struct ReadOraclePrice has drop {}
 public struct ConditionalMint has drop {}
 public struct TieredMint has drop {}
 
@@ -178,7 +177,7 @@ public fun add_liquidity(): TypeName { type_name::with_defining_ids<AddLiquidity
 public fun remove_liquidity(): TypeName { type_name::with_defining_ids<RemoveLiquidity>() }
 public fun swap(): TypeName { type_name::with_defining_ids<Swap>() }
 public fun collect_fees(): TypeName { type_name::with_defining_ids<CollectFees>() }
-public fun set_pool_enabled(): TypeName { type_name::with_defining_ids<SetPoolEnabled>() }
+public fun set_pool_status(): TypeName { type_name::with_defining_ids<SetPoolStatus>() }
 public fun withdraw_fees(): TypeName { type_name::with_defining_ids<WithdrawFees>() }
 
 // Governance actions
@@ -212,7 +211,6 @@ public fun cancel_payment(): TypeName { type_name::with_defining_ids<CancelPayme
 public fun process_payment(): TypeName { type_name::with_defining_ids<ProcessPayment>() }
 
 // Oracle actions
-public fun read_oracle_price(): TypeName { type_name::with_defining_ids<ReadOraclePrice>() }
 public fun conditional_mint(): TypeName { type_name::with_defining_ids<ConditionalMint>() }
 public fun tiered_mint(): TypeName { type_name::with_defining_ids<TieredMint>() }
 

@@ -260,7 +260,6 @@ public fun delete_proposal_reservation(expired: &mut Expired) {
 }
 
 // === Oracle Actions ===
-// Note: ReadOraclePriceAction has drop ability, not stored in expired intents
 // Only mint actions need cleanup
 
 public fun delete_conditional_mint<CoinType>(expired: &mut Expired) {

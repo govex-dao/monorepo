@@ -1,14 +1,18 @@
-# V2
+# V2 Large
+- [ ] Get code building / fix circular dependancies
+- [ ] Add correct cross package security capaility / requirements
+ 
+# V2 economic incenitves etc
 - [ ] commitment actions Cancel able and uncancel able flag
 Mint options for employees (right to buy x amount at a given price!!!)
-- [ ] remove founder rewards module it should now be a preapproved intent spec??
+- [ ] remove founder rewards module from launchapd it should now be a preapproved intent spec??
 - [ ] Make launchpad have small fee for creating dao non refundable 
 - [ ] fix incentives around proposal mutation. if mutators outcomes wins, proposers must still get refunded if they only create two options. other wise incentive for mutators to just sligtly position themselves around the  proposal creators, settigs: (i.e changing a few words or characters in a memo proposal or chaning a number by a small amount and hedging by going either side of the origional) in order to steal the proposal creators fee. or for proposer to create proposals with n_max option to block anyone from mutating their proposal 
 - [ ] List or address and how often they can create a proposal with no fee!!! Admin thingy
 - [ ] DAO successful speedy proposal challenge, refund amount as futarchy config
 - [X] verification request proposal type???
 
-
+# V2 multisig
 - [ ] How UI is aware of multisig / proposal intents
 - [ ] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
 - [ ] Multi sig inherit dao level configs like is paused
@@ -18,6 +22,202 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [ ] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
 - [ ] fully seperate dao and account and futarchy configs
 - [ ] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
+
+
+# Clean up
+  2. Stream/Payment Actions - Overlapping Cancel/Pause ⚠️
+
+  - CancelPayment - Stop payment
+  - CancelStream - Cancel stream
+  - TogglePayment - Pause/resume payment
+  - PauseStream - Pause stream temporarily
+  - ResumeStream - Resume paused stream
+
+  Why have both Cancel and Pause/Resume? And why separate actions for Payment vs Stream?
+
+  3. Optimistic Actions - Too Many Variants ⚠️
+
+  - Optimistic Proposals (Create, Challenge, Execute, Resolve)
+  - Optimistic Intents (Create, Challenge, Execute, Cancel)
+  - Council Optimistic Intents (Create, Execute, Cancel)
+
+  Three different optimistic systems seems excessive.
+
+  4. Protocol Admin Fee Actions - Too Granular ⚠️
+
+  Multiple fee update actions that could be one configurable action:
+  - UpdateDaoCreationFee
+  - UpdateProposalFee
+  - UpdateMonthlyDaoFee
+  - UpdateVerificationFee
+  - UpdateRecoveryFee
+  - UpdateCoinMonthlyFee
+  - UpdateCoinCreationFee
+  - UpdateCoinProposalFee
+  - UpdateCoinRecoveryFee
+
+  Could be: UpdateProtocolFee(fee_type, amount)
+
+  5. Verification Actions - Could Be Simplified ⚠️
+
+  - RequestVerification
+  - ApproveVerification
+  - RejectVerification
+
+  Could be: ProcessVerification(approve: bool)
+
+  6. Memo Actions - EmitMemo vs EmitDecision ⚠️
+
+  - EmitMemo - Post text message on-chain
+  - EmitDecision - Record governance decision
+
+  A decision is just a specific type of memo. Could use EmitMemo(type, content).
+
+  7. Dissolution Actions - Some Overlap ⚠️
+
+  - BatchDistribute - Distribute multiple assets
+  - DistributeAssets - Send assets to holders
+
+  These sound very similar.
+
+  Most Redundant Actions:
+
+  1. SetPoolStatus vs SetPoolEnabled - Definitely redundant
+  2. Payment vs Stream actions - Should be unified
+  3. Protocol fee updates - Should be one parameterized action
+  4. EmitMemo vs EmitDecision - Decision is just a memo type
+
+  Recommendations (without removing code):
+  2. UNIFY: Payment and Stream actions (they're both payment flows)
+  3. PARAMETERIZE: All protocol fee updates into UpdateProtocolFee(type, amount)
+  4. SIMPLIFY: Verification into ProcessVerification(approve/reject)
+  5. MERGE: EmitDecision into EmitMemo with a type field
+
+
+# Macros to use?
+
+2. Action Execution and Deserialization (Strong Candidate)
+Safely deserializing an action from an Executable also follows a highly repetitive pattern.
+The Pattern:
+code
+Move
+// From account_protocol::owned::do_withdraw
+// 1. Get the action specs
+let specs = executable.intent().action_specs();
+let spec = specs.borrow(executable.action_idx());
+
+// 2. CRITICAL: Assert the action type
+action_validation::assert_action_type<framework_action_types::OwnedWithdraw>(spec);
+
+// 3. Get the raw data
+let action_data = intents::action_spec_data(spec);
+
+// 4. Create a BCS reader and deserialize
+let mut reader = bcs::new(*action_data);
+let object_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+
+// 5. CRITICAL: Validate all bytes consumed
+bcs_validation::validate_all_bytes_consumed(reader);
+
+// ... (rest of the function logic) ...
+
+// 6. Increment action index
+executable::increment_action_idx(executable);
+The Problem:
+This is a lot of security-critical boilerplate that must be done correctly every time. It's easy to forget validate_all_bytes_consumed or the assert_action_type check.
+The Macro Solution:
+A macro could handle the entire validation and deserialization process.
+code
+Move
+// In a new macro utility module
+public macro fun take_action<$Outcome: store, $Action: store>(
+    $executable: &mut Executable<$Outcome>,
+    $action_type_marker: drop // Pass the type marker struct as an argument
+): $Action {
+    let specs = $executable.intent().action_specs();
+    let spec = specs.borrow($executable.action_idx());
+
+    // Macro automatically handles type assertion
+    account_protocol::action_validation::assert_action_type<$action_type_marker>(spec);
+
+    let action_data = account_protocol::intents::action_spec_data(spec);
+    let mut reader = sui::bcs::new(*action_data);
+    
+    // The macro returns the deserialized action struct
+    let action: $Action = sui::bcs::peel(&mut reader);
+
+    // Macro automatically handles validation
+    account_protocol::bcs_validation::validate_all_bytes_consumed(reader);
+    
+    // Macro automatically increments the index
+    account_protocol::executable::increment_action_idx($executable);
+
+    action
+}
+Usage Example (Before vs. After):
+Before: (as above, 6+ lines)
+After:
+code
+Move
+// In account_protocol::owned::do_withdraw
+let WithdrawAction { object_id } = utils::take_action!(
+    executable,
+    framework_action_types::owned_withdraw()
+);
+
+// now use object_id in the rest of the function...
+Benefits:
+Drastically Reduces Boilerplate: Condenses ~7 lines of critical checks into one.
+Enhances Security: Ensures that type validation, full byte consumption, and index incrementing are never forgotten.
+Improves Focus: Allows the developer to focus on the business logic of the action, not the deserialization ceremony.
+3. Decoder Registration (Good Candidate)
+The registration of decoders is identical for every single one.
+The Pattern:
+code
+Move
+// From account_actions::vault_decoder
+fun register_spend_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
+    let decoder = SpendActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SpendAction<CoinPlaceholder>>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+The Macro Solution:
+code
+Move
+// In a new macro utility module
+public macro fun register_decoder(
+    $registry: &mut ActionDecoderRegistry,
+    $ctx: &mut TxContext,
+    $DecoderStruct: has key + store,
+    $ActionStruct: drop + store,
+) {
+    let decoder = $DecoderStruct { id: sui::object::new($ctx) };
+    let type_key = std::type_name::with_defining_ids<$ActionStruct>();
+    sui::dynamic_object_field::add(
+        account_protocol::schema::registry_id_mut($registry),
+        type_key,
+        decoder
+    );
+}
+Note: A placeholder type like CoinPlaceholder would need to be handled, possibly by passing the full generic type to the macro.
+Usage Example (Before vs. After):
+Before: 3 lines inside a dedicated function.
+After:
+code
+Move
+// In account_actions::vault_decoder::register_decoders
+utils::register_decoder!(registry, ctx, SpendActionDecoder, SpendAction<CoinPlaceholder>);
+utils::register_decoder!(registry, ctx, DepositActionDecoder, DepositAction<CoinPlaceholder>);
+Benefits:
+Reduces Code Duplication: Eliminates the need for a separate registration function for every single decoder.
+Simplifies Maintenance: Adding a new decoder becomes a single, clear macro call.
+Conclusion
+The codebase is already of very high quality, and its existing use of macros is thoughtful. However, adopting macros for the three patterns above would elevate it further by:
+Reducing Boilerplate: Making the code more concise and focused on its core logic.
+Enforcing Security Patterns: Automatically including critical checks (assert_action_type, validate_all_bytes_consumed, destroy_*_action) in every use, reducing the chance of human error.
+Improving Consistency: Ensuring that actions are created, executed, and registered in a uniform way across the entire project.
+
+
 
 # Consider for v2
 - [ ] Put those blockworks 50 Q Answers in there 

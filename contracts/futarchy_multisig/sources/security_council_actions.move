@@ -32,8 +32,6 @@ const EThresholdExceedsTotalWeight: u64 = 5;
 
 // === Witness Types for Action Validation ===
 public struct CreateSecurityCouncilWitness has drop {}
-public struct ApproveOAChangeWitness has drop {}
-public struct UpdateUpgradeRulesWitness has drop {}
 public struct UpdateCouncilMembershipWitness has drop {}
 public struct UnlockAndReturnUpgradeCapWitness has drop {}
 public struct ApproveGenericWitness has drop {}
@@ -41,13 +39,6 @@ public struct SweepIntentsWitness has drop {}
 public struct CouncilCreateOptimisticIntentWitness has drop {}
 public struct CouncilExecuteOptimisticIntentWitness has drop {}
 public struct CouncilCancelOptimisticIntentWitness has drop {}
-
-/// Council's approval for an Operating Agreement change
-public struct ApproveOAChangeAction has store {
-    dao_id: ID,
-    batch_id: ID,  // ID of the BatchOperatingAgreementAction
-    expires_at: u64,
-}
 
 // --- Constructors, Getters, Cleanup ---
 
@@ -67,23 +58,6 @@ public fun get_create_council_params(
 
 public fun delete_create_council(expired: &mut Expired) {
     let _action: CreateSecurityCouncilAction = expired.remove_action();
-}
-
-public fun new_approve_oa_change_action(dao_id: ID, batch_id: ID, expires_at: u64): ApproveOAChangeAction {
-    ApproveOAChangeAction { dao_id, batch_id, expires_at }
-}
-
-public fun get_approve_oa_change_params(a: &ApproveOAChangeAction): (ID, ID, u64) {
-    (a.dao_id, a.batch_id, a.expires_at)
-}
-
-public fun delete_approve_oa_change(expired: &mut Expired) {
-    let ApproveOAChangeAction { dao_id: _, batch_id: _, expires_at: _ } = expired.remove_action();
-}
-
-/// Action to update the rules for an already-managed UpgradeCap.
-public struct UpdateUpgradeRulesAction has store {
-    package_name: String,
 }
 
 /// Action to update the council's own membership, weights, and threshold.
@@ -197,70 +171,6 @@ public fun do_create_security_council<Outcome: store, IW: drop>(
 
     // Note: Actual security council creation logic would go here
     // This is just the validation and deserialization
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute approve OA change action
-public fun do_approve_oa_change<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    _version_witness: VersionWitness,
-    _witness: IW,
-    _clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get action spec
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    // Assert action type with witness
-    action_validation::assert_action_type<ApproveOAChangeWitness>(spec);
-
-    let action_data = protocol_intents::action_spec_data(spec);
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    // Deserialize with BCS reader
-    let mut reader = bcs::new(*action_data);
-    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let batch_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let expires_at = bcs::peel_u64(&mut reader);
-
-    // Validate all bytes consumed
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute update upgrade rules action
-public fun do_update_upgrade_rules<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    _version_witness: VersionWitness,
-    _witness: IW,
-    _clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get action spec
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    // Assert action type with witness
-    action_validation::assert_action_type<UpdateUpgradeRulesWitness>(spec);
-
-    let action_data = protocol_intents::action_spec_data(spec);
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    // Deserialize with BCS reader
-    let mut reader = bcs::new(*action_data);
-    let package_name = string::utf8(bcs::peel_vec_u8(&mut reader));
-
-    // Validate all bytes consumed
-    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -936,11 +846,6 @@ public fun delete_sweep_intents(expired: &mut Expired) {
 
 // === Destruction Functions ===
 
-/// Destroy an UpdateUpgradeRulesAction
-public fun destroy_update_upgrade_rules(action: UpdateUpgradeRulesAction) {
-    let UpdateUpgradeRulesAction { package_name: _ } = action;
-}
-
 /// Destroy an UpdateCouncilMembershipAction
 public fun destroy_update_council_membership(action: UpdateCouncilMembershipAction) {
     let UpdateCouncilMembershipAction { new_members: _, new_weights: _, new_threshold: _ } = action;
@@ -976,8 +881,4 @@ public fun destroy_council_cancel_optimistic_intent(action: CouncilCancelOptimis
     let CouncilCancelOptimisticIntentAction { dao_id: _, intent_id: _, reason: _ } = action;
 }
 
-/// Destroy an ApproveOAChangeAction
-public fun destroy_approve_oa_change(action: ApproveOAChangeAction) {
-    let ApproveOAChangeAction { dao_id: _, batch_id: _, expires_at: _ } = action;
-}
 
