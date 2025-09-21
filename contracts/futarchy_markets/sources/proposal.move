@@ -5,7 +5,7 @@ use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::liquidity_initialize;
 use futarchy_markets::market_state;
 use std::ascii::String as AsciiString;
-use std::string::String;
+use std::string::{Self, String};
 use std::type_name;
 use std::option;
 use std::type_name::TypeName;
@@ -14,7 +14,7 @@ use sui::balance::{Balance};
 use sui::clock::Clock;
 use sui::coin::{Coin};
 use sui::event;
-use futarchy_actions::action_specs::{Self, InitActionSpecs};
+use futarchy_types::action_specs::{Self, InitActionSpecs};
 
 // === Introduction ===
 // This defines the core proposal logic and details
@@ -222,7 +222,7 @@ public fun initialize_market<AssetType, StableType>(
     proposer: address, // The original proposer from the queue
     uses_dao_liquidity: bool,
     fee_escrow: Balance<StableType>, // DAO fees if any
-    intent_spec_for_yes: Option<InitActionSpecs>, // Intent spec for YES outcome
+    mut intent_spec_for_yes: Option<InitActionSpecs>, // Intent spec for YES outcome
     clock: &Clock,
     ctx: &mut TxContext,
 ): (ID, ID, u8) {

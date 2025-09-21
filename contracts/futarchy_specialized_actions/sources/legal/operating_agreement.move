@@ -22,38 +22,15 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_multisig::policy_registry;
-use futarchy_one_shot_utils::action_data_structs::CreateOperatingAgreementAction;
-use futarchy_specialized_actions::operating_agreement_actions::{Self,
-    UpdateLineAction,
-    InsertLineAfterAction,
-    InsertLineAtBeginningAction,
-    RemoveLineAction,
-    SetLineImmutableAction,
-    SetInsertAllowedAction,
-    SetRemoveAllowedAction,
-    SetGlobalImmutableAction,
-    BatchOperatingAgreementAction,
-    OperatingAgreementAction,
-    get_update_line_params,
-    get_insert_line_after_params,
-    get_insert_line_at_beginning_params,
-    get_remove_line_id,
-    get_set_line_immutable_id,
-    get_set_insert_allowed,
-    get_set_remove_allowed,
-    confirm_set_global_immutable,
-    get_batch_actions,
-    get_operating_agreement_action_params,
-    get_create_operating_agreement_params,
-    action_update,
-    action_insert_after,
-    action_insert_at_beginning,
-    action_remove,
-};
 
 // === Type Keys for Dynamic Fields ===
 /// Type key for storing the operating agreement in the Account
 public struct AgreementKey has copy, drop, store {}
+
+/// Constructor for AgreementKey
+public fun new_agreement_key(): AgreementKey {
+    AgreementKey {}
+}
 
 /// Type key for individual lines in the agreement
 public struct LineKey has copy, drop, store {
@@ -134,6 +111,151 @@ public struct OperatingAgreement has key, store {
     /// Global immutable flag - when true, entire agreement is frozen (one-way lock: false -> true only)
     immutable: bool,
 }
+
+// === Action Structs (moved from operating_agreement_actions to break circular dependency) ===
+
+/// Create a new operating agreement for the DAO
+public struct CreateOperatingAgreementAction has store, drop, copy {
+    allow_insert: bool,
+    allow_remove: bool,
+}
+
+/// Represents a single atomic change to the operating agreement
+/// NOTE: This is used as part of BatchOperatingAgreementAction for batch operations.
+/// Individual actions (UpdateLineAction, InsertLineAfterAction, etc.) are handled
+/// directly by PTB calls. This wrapper is only used within batch operations.
+public struct OperatingAgreementAction has store, drop, copy {
+    action_type: u8, // 0 for Update, 1 for Insert After, 2 for Insert At Beginning, 3 for Remove
+    // Only fields relevant to the action_type will be populated
+    line_id: Option<ID>, // Used for Update, Remove, and as the *previous* line for Insert After
+    text: Option<String>, // Used for Update and Insert operations
+    difficulty: Option<u64>, // Used for Insert operations
+}
+
+/// Action to update a line in the operating agreement
+public struct UpdateLineAction has store, drop, copy {
+    line_id: ID,
+    new_text: String,
+}
+
+/// Action to insert a line after another line
+public struct InsertLineAfterAction has store, drop, copy {
+    prev_line_id: ID,
+    text: String,
+    difficulty: u64,
+}
+
+/// Action to insert a line at the beginning
+public struct InsertLineAtBeginningAction has store, drop, copy {
+    text: String,
+    difficulty: u64,
+}
+
+/// Action to remove a line
+public struct RemoveLineAction has store, drop, copy {
+    line_id: ID,
+}
+
+/// Action to set a line as immutable (one-way lock)
+public struct SetLineImmutableAction has store, drop, copy {
+    line_id: ID,
+}
+
+/// Action to control whether insertions are allowed (one-way lock)
+public struct SetInsertAllowedAction has store, drop, copy {
+    allowed: bool,
+}
+
+/// Action to control whether removals are allowed (one-way lock)
+public struct SetRemoveAllowedAction has store, drop, copy {
+    allowed: bool,
+}
+
+/// Action to set the entire operating agreement as globally immutable (one-way lock)
+/// This is the ultimate lock - once set, NO changes can be made to the agreement
+public struct SetGlobalImmutableAction has store, drop, copy {
+    // No fields needed - this is a one-way operation to true
+}
+
+/// Batch action for multiple operating agreement changes
+public struct BatchOperatingAgreementAction has store, drop, copy {
+    batch_id: ID,  // Unique ID for this batch
+    actions: vector<OperatingAgreementAction>,
+}
+
+// === Action Type Constants (moved from operating_agreement_actions) ===
+const ACTION_UPDATE: u8 = 0;
+const ACTION_INSERT_AFTER: u8 = 1;
+const ACTION_INSERT_AT_BEGINNING: u8 = 2;
+const ACTION_REMOVE: u8 = 3;
+
+// === Getter Functions for Action Structs (moved from operating_agreement_actions) ===
+
+/// Get line ID and new text from UpdateLineAction
+public fun get_update_line_params(action: &UpdateLineAction): (ID, String) {
+    (action.line_id, action.new_text)
+}
+
+/// Get parameters from InsertLineAfterAction
+public fun get_insert_line_after_params(action: &InsertLineAfterAction): (ID, String, u64) {
+    (action.prev_line_id, action.text, action.difficulty)
+}
+
+/// Get parameters from InsertLineAtBeginningAction
+public fun get_insert_line_at_beginning_params(action: &InsertLineAtBeginningAction): (String, u64) {
+    (action.text, action.difficulty)
+}
+
+/// Get line ID from RemoveLineAction
+public fun get_remove_line_id(action: &RemoveLineAction): ID {
+    action.line_id
+}
+
+/// Get line ID from SetLineImmutableAction
+public fun get_set_line_immutable_id(action: &SetLineImmutableAction): ID {
+    action.line_id
+}
+
+/// Get allowed flag from SetInsertAllowedAction
+public fun get_set_insert_allowed(action: &SetInsertAllowedAction): bool {
+    action.allowed
+}
+
+/// Get allowed flag from SetRemoveAllowedAction
+public fun get_set_remove_allowed(action: &SetRemoveAllowedAction): bool {
+    action.allowed
+}
+
+/// Get confirmation that SetGlobalImmutableAction exists (no params to return)
+public fun confirm_set_global_immutable(_action: &SetGlobalImmutableAction): bool {
+    true
+}
+
+/// Get actions from BatchOperatingAgreementAction
+public fun get_batch_actions(action: &BatchOperatingAgreementAction): &vector<OperatingAgreementAction> {
+    &action.actions
+}
+
+/// Get parameters from OperatingAgreementAction
+public fun get_operating_agreement_action_params(action: &OperatingAgreementAction): (
+    u8,
+    &Option<ID>,
+    &Option<String>,
+    &Option<u64>,
+) {
+    (action.action_type, &action.line_id, &action.text, &action.difficulty)
+}
+
+/// Get parameters from CreateOperatingAgreementAction
+public fun get_create_operating_agreement_params(action: &CreateOperatingAgreementAction): (bool, bool) {
+    (action.allow_insert, action.allow_remove)
+}
+
+/// Get action type constants for external use
+public fun action_update(): u8 { ACTION_UPDATE }
+public fun action_insert_after(): u8 { ACTION_INSERT_AFTER }
+public fun action_insert_at_beginning(): u8 { ACTION_INSERT_AT_BEGINNING }
+public fun action_remove(): u8 { ACTION_REMOVE }
 
 // === Creation and Management Functions ===
 

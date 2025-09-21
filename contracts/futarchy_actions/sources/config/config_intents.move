@@ -25,7 +25,7 @@ use account_protocol::{
 use futarchy_core::version;
 use futarchy_actions::config_actions;
 use futarchy_core::action_types;
-use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
+use futarchy_core::futarchy_config::FutarchyConfig;
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
 
@@ -64,9 +64,8 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
         |intent, iw| {
             let action = config_actions::new_set_proposals_enabled_action(enabled);
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::SetProposalsEnabled {},
+            intent.add_typed_action(
+                action_types::set_proposals_enabled(),
                 action_bytes,
                 iw
             );
@@ -99,9 +98,8 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
         |intent, iw| {
             let action = config_actions::new_update_name_action(new_name);
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateName {},
+            intent.add_typed_action(
+                action_types::update_name(),
                 action_bytes,
                 iw
             );
@@ -135,9 +133,8 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
                 option::some(description)
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::SetMetadata {},
+            intent.add_typed_action(
+                action_types::set_metadata(),
                 action_bytes,
                 iw
             );
@@ -172,9 +169,8 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
                 option::none() // amm_total_fee_bps
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateTradingConfig {},
+            intent.add_typed_action(
+                action_types::update_trading_config(),
                 action_bytes,
                 iw
             );
@@ -208,9 +204,8 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
                 option::some(threshold)
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateTwapConfig {},
+            intent.add_typed_action(
+                action_types::update_twap_config(),
                 action_bytes,
                 iw
             );
@@ -248,9 +243,8 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::none()  // optimistic_challenge_period_ms - not specified
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateGovernance {},
+            intent.add_typed_action(
+                action_types::update_governance(),
                 action_bytes,
                 iw
             );
@@ -292,9 +286,8 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
                 optimistic_challenge_period_ms
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateGovernance {},
+            intent.add_typed_action(
+                action_types::update_governance(),
                 action_bytes,
                 iw
             );
@@ -328,9 +321,8 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
                 burn_bps
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateSlashDistribution {},
+            intent.add_typed_action(
+                action_types::update_slash_distribution(),
                 action_bytes,
                 iw
             );
@@ -363,9 +355,8 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
                 option::some(fee_escalation_basis_points)
             );
             let action_bytes = bcs::to_bytes(&action);
-            intents::add_typed_action(
-                intent,
-                action_types::UpdateQueueParams {},
+            intent.add_typed_action(
+                action_types::update_queue_params(),
                 action_bytes,
                 iw
             );

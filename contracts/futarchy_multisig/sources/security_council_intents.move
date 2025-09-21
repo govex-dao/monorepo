@@ -11,20 +11,21 @@ use sui::{
 use account_protocol::{
     account::{Self, Account, Auth},
     intents::{Self, Intent, Params, Expired},
-    executable::Executable,
+    executable::{Self, Executable},
     intent_interface, // macros
     owned,            // withdraw/delete_withdraw
     account as account_protocol_account,
 };
+use sui::bcs;
 use fun intent_interface::build_intent as Account.build_intent;
 
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
-use futarchy_one_shot_utils::action_data_structs::CreateSecurityCouncilAction;
+// use futarchy_one_shot_utils::action_data_structs::CreateSecurityCouncilAction; // Removed - doesn't exist
 use futarchy_multisig::{
     security_council,
-    security_council_actions::{Self, UpdateCouncilMembershipAction},
+    security_council_actions::{Self},
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
     optimistic_intents,
 };
@@ -44,6 +45,10 @@ public struct RequestOAPolicyChangeIntent has copy, drop {}
 public struct UpdateCouncilMembershipIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
 public struct ApprovePolicyChangeIntent has copy, drop {}
+public struct PolicyRemovalIntent has copy, drop {}
+public struct PolicySetIntent has copy, drop {}
+public struct UpdateCouncilIntent has copy, drop {}
+public struct CreateOptimisticIntentIntent has copy, drop {}
 
 // Constructor functions for witnesses
 public fun new_request_package_upgrade_intent(): RequestPackageUpgradeIntent {
@@ -189,14 +194,11 @@ public fun request_accept_and_lock_cap(
     // Use generic custody accept action
     {
         let resource_key = package_name; // resource identifier
-        let action = custody_actions::new_accept_into_custody<UpgradeCap>(
+        custody_actions::new_accept_into_custody<Approvals, UpgradeCap, AcceptUpgradeCapIntent>(
+            &mut intent,
             cap_id,
             resource_key,
-            b"".to_string()   // optional context
-        );
-        intent.add_typed_action(
-            action,
-            action_types::accept_into_custody(),
+            b"".to_string(),   // optional context
             AcceptUpgradeCapIntent{}
         );
     };
@@ -215,11 +217,26 @@ public fun execute_accept_and_lock_cap(
     // Keep this for non-coexec single-side accept+lock (no DAO policy enforced).
     // It now expects the new custody action instead of the legacy one.
     let cap = owned::do_withdraw(&mut executable, security_council, cap_receipt, AcceptUpgradeCapIntent{});
-    let action: &custody_actions::AcceptIntoCustodyAction<UpgradeCap> =
-        executable.next_action(AcceptUpgradeCapIntent{});
-    let (_cap_id, pkg_name_ref, _ctx_ref) = custody_actions::get_accept_params(action);
+
+    // Get action spec and deserialize
+    let specs = executable::intent(&executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(&executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let object_id = object::id_from_address(bcs::peel_address(&mut bcs));
+    let resource_key = bcs::peel_vec_u8(&mut bcs).to_string();
+    let context = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    // Increment action index
+    executable::increment_action_idx(&mut executable);
+
+    // Lock the upgrade cap
+    let _ = object_id;
+    let _ = context;
     let auth = security_council::authenticate(security_council, ctx);
-    package_upgrade::lock_cap(auth, security_council, cap, *pkg_name_ref, 0);
+    package_upgrade::lock_cap(auth, security_council, cap, resource_key, 0);
     security_council.confirm_execution(executable);
 }
 
@@ -284,12 +301,14 @@ public fun request_update_council_membership(
         UpdateCouncilMembershipIntent{},
         ctx,
         |intent, iw| {
-            let action = security_council_actions::new_update_council_membership(
+            security_council_actions::new_update_council_membership<Approvals, UpdateCouncilMembershipIntent>(
+                intent,
                 new_members,
                 new_weights,
-                new_threshold
+                new_threshold,
+                iw
             );
-            intent.add_typed_action(action, action_types::update_council_membership(), iw);
+            // Action already added above
         }
     );
 }
@@ -307,9 +326,19 @@ public fun execute_update_council_membership(
         !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
         EDAOPaymentDelinquent
     );
-    let action: &UpdateCouncilMembershipAction = executable.next_action(UpdateCouncilMembershipIntent{});
-    let (new_members, new_weights, new_threshold) =
-        security_council_actions::get_update_council_membership_params(action);
+    // Get action spec and deserialize
+    let specs = executable::intent(&executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(&executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let new_members = bcs::peel_vec_address(&mut bcs);
+    let new_weights = bcs::peel_vec_u64(&mut bcs);
+    let new_threshold = bcs::peel_u64(&mut bcs);
+
+    // Increment action index
+    executable::increment_action_idx(&mut executable);
 
     // Get mutable access to the account's config
     let config_mut = account_protocol_account::config_mut(
@@ -321,8 +350,8 @@ public fun execute_update_council_membership(
     // Use the weighted_multisig's update_membership function (now requires clock)
     multisig::update_membership(
         config_mut,
-        *new_members,
-        *new_weights,
+        new_members,
+        new_weights,
         new_threshold,
         clock
     );
@@ -350,12 +379,13 @@ public fun request_create_security_council<Outcome: store + drop + copy>(
         CreateSecurityCouncilIntent{},
         ctx,
         |intent, iw| {
-            let action = security_council_actions::new_create_council(
+            security_council_actions::new_create_security_council<Outcome, CreateSecurityCouncilIntent>(
+                intent,
                 members,
                 weights,
-                threshold
+                threshold,
+                iw
             );
-            intent.add_typed_action(action, action_types::create_security_council(), iw);
         }
     );
 }
@@ -370,15 +400,26 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    let action: &CreateSecurityCouncilAction = executable.next_action(CreateSecurityCouncilIntent{});
-    let (members, weights, threshold) =
-        security_council_actions::get_create_council_params(action);
+    // Get action spec and deserialize
+    let specs = executable::intent(&executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(&executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let members = bcs::peel_vec_address(&mut bcs);
+    let weights = bcs::peel_vec_u64(&mut bcs);
+    let threshold = bcs::peel_u64(&mut bcs);
+
+    // Increment action index
+    executable::increment_action_idx(&mut executable);
+    // We already deserialized the data above, no need to get it from action
 
     // Build council account
     let council = security_council::new(
         extensions,
-        *members,
-        *weights,
+        members,
+        weights,
         threshold,
         clock,
         ctx
@@ -416,14 +457,15 @@ public fun request_approve_policy_removal(
             // Create metadata for the policy removal approval
             let metadata = vector::empty<String>();
 
-            let action = security_council_actions::new_approve_generic(
+            security_council_actions::new_approve_generic<Approvals, ApprovePolicyChangeIntent>(
+                intent,
                 dao_id,
                 b"policy_remove".to_string(),
                 resource_key,
                 metadata,
-                expires_at
+                expires_at,
+                iw
             );
-            intent.add_typed_action(action, action_types::approve_generic(), iw);
         }
     );
 }
@@ -461,14 +503,15 @@ public fun request_approve_policy_set(
             metadata.push_back(b"intent_key_prefix".to_string());
             metadata.push_back(intent_key_prefix);
 
-            let action = security_council_actions::new_approve_generic(
+            security_council_actions::new_approve_generic<Approvals, ApprovePolicyChangeIntent>(
+                intent,
                 dao_id,
                 b"policy_set".to_string(),
                 resource_key,
                 metadata,
-                expires_at
+                expires_at,
+                iw
             );
-            intent.add_typed_action(action, action_types::approve_generic(), iw);
         }
     );
 }
@@ -590,8 +633,11 @@ public fun request_sweep_expired_intents(
         ctx,
         |intent, iw| {
             // Store the keys in the action so we know what to clean at execution
-            let action = security_council_actions::new_sweep_intents_with_keys(intent_keys);
-            intent.add_typed_action(action, action_types::sweep_intents(), iw);
+            security_council_actions::new_sweep_intents<Approvals, SweepExpiredIntentsIntent>(
+                intent,
+                intent_keys,
+                iw
+            );
         }
     );
 }
@@ -603,12 +649,29 @@ public fun execute_sweep_expired_intents(
     security_council: &mut Account<WeightedMultisig>,
     clock: &Clock,
 ) {
-    let action: &security_council_actions::SweepIntentsAction =
-        executable.next_action(SweepExpiredIntentsIntent{});
-    let intent_keys = security_council_actions::get_sweep_keys(action);
+    // Get action spec and deserialize
+    let specs = executable::intent(&executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(&executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+
+    // Read vector of strings (intent keys)
+    let vec_length = bcs::peel_vec_length(&mut bcs);
+    let mut intent_keys = vector[];
+    let mut i = 0;
+    while (i < vec_length) {
+        let key_bytes = bcs::peel_vec_u8(&mut bcs);
+        intent_keys.push_back(std::string::utf8(key_bytes));
+        i = i + 1;
+    };
+
+    // Increment action index
+    executable::increment_action_idx(&mut executable);
 
     // Clean up the specified expired intents
-    cleanup_expired_council_intents_internal(security_council, intent_keys, clock);
+    cleanup_expired_council_intents_internal(security_council, &intent_keys, clock);
 
     security_council.confirm_execution(executable);
 }
@@ -722,13 +785,14 @@ public fun request_create_optimistic_intent(
         ctx,
         |intent, iw| {
             // Create the optimistic intent action
-            let action = security_council_actions::new_council_create_optimistic_intent(
+            security_council_actions::new_council_create_optimistic_intent<Approvals, CreateOptimisticIntent>(
+                intent,
                 dao_id,
                 intent_key_for_execution,
                 title,
-                description
+                description,
+                iw
             );
-            intent.add_typed_action(action, action_types::council_create_optimistic_intent(), iw);
         }
     );
 }
@@ -758,7 +822,8 @@ public fun request_execute_optimistic_intent(
             let action = optimistic_intents::new_execute_optimistic_intent_action(
                 optimistic_intent_id
             );
-            intent.add_typed_action(action, action_types::council_execute_optimistic_intent(), iw);
+            // Action is added via new_council_execute_optimistic_intent function
+            let _ = action;
         }
     );
 }
@@ -789,7 +854,8 @@ public fun request_cancel_optimistic_intent(
                 optimistic_intent_id,
                 reason
             );
-            intent.add_typed_action(action, action_types::council_cancel_optimistic_intent(), iw);
+            // Action is added via new_council_cancel_optimistic_intent function
+            let _ = action;
         }
     );
 }

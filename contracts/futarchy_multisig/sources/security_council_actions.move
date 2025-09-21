@@ -14,10 +14,14 @@ use account_protocol::{
     action_validation,
 };
 use futarchy_core::{futarchy_config::FutarchyConfig, version};
-use futarchy_one_shot_utils::action_data_structs::{Self, CreateSecurityCouncilAction};
+// Removed dependency on action_data_structs module which doesn't exist
 
 /// Create a new Security Council (WeightedMultisig) for the DAO.
-// Moved to futarchy_one_shot_utils::action_data_structs
+public struct CreateSecurityCouncilAction has store, copy, drop {
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+}
 
 // === Constants ===
 const EUnsupportedActionVersion: u64 = 1;
@@ -33,6 +37,8 @@ const EThresholdExceedsTotalWeight: u64 = 5;
 // === Witness Types for Action Validation ===
 public struct CreateSecurityCouncilWitness has drop {}
 public struct UpdateCouncilMembershipWitness has drop {}
+public struct UpdateUpgradeRulesWitness has drop {}
+public struct ApproveOAChangeWitness has drop {}
 public struct UnlockAndReturnUpgradeCapWitness has drop {}
 public struct ApproveGenericWitness has drop {}
 public struct SweepIntentsWitness has drop {}
@@ -47,17 +53,22 @@ public fun new_create_council_action(
     weights: vector<u64>,
     threshold: u64,
 ): CreateSecurityCouncilAction {
-    action_data_structs::new_create_security_council_action(members, weights, threshold)
+    CreateSecurityCouncilAction { members, weights, threshold }
 }
 
 public fun get_create_council_params(
     action: &CreateSecurityCouncilAction
 ): (&vector<address>, &vector<u64>, u64) {
-    (action_data_structs::council_members(action), action_data_structs::council_weights(action), action_data_structs::council_threshold(action))
+    (&action.members, &action.weights, action.threshold)
 }
 
 public fun delete_create_council(expired: &mut Expired) {
-    let _action: CreateSecurityCouncilAction = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = protocol_intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let _members = bcs::peel_vec_address(&mut bcs);
+    let _weights = bcs::peel_vec_u64(&mut bcs);
+    let _threshold = bcs::peel_u64(&mut bcs);
 }
 
 /// Action to update the council's own membership, weights, and threshold.
@@ -513,7 +524,7 @@ public fun new_update_upgrade_rules<Outcome, IW: drop>(
 ) {
     // Serialize action data
     let mut data = vector[];
-    data.append(bcs::to_bytes(&package_name.as_bytes()));
+    data.append(bcs::to_bytes(package_name.as_bytes()));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -556,8 +567,8 @@ public fun new_unlock_and_return_upgrade_cap<Outcome, IW: drop>(
 ) {
     // Serialize action data
     let mut data = vector[];
-    data.append(bcs::to_bytes(&package_name.as_bytes()));
-    data.append(bcs::to_bytes(&return_vault_name.as_bytes()));
+    data.append(bcs::to_bytes(package_name.as_bytes()));
+    data.append(bcs::to_bytes(return_vault_name.as_bytes()));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -581,14 +592,14 @@ public fun new_approve_generic<Outcome, IW: drop>(
     // Serialize action data
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
-    data.append(bcs::to_bytes(&action_type.as_bytes()));
-    data.append(bcs::to_bytes(&resource_key.as_bytes()));
+    data.append(bcs::to_bytes(action_type.as_bytes()));
+    data.append(bcs::to_bytes(resource_key.as_bytes()));
 
     // Serialize metadata vector
     data.append(bcs::to_bytes(&metadata.length()));
     let mut i = 0;
     while (i < metadata.length()) {
-        data.append(bcs::to_bytes(&metadata[i].as_bytes()));
+        data.append(bcs::to_bytes(metadata[i].as_bytes()));
         i = i + 1;
     };
 
@@ -614,7 +625,7 @@ public fun new_sweep_intents<Outcome, IW: drop>(
     data.append(bcs::to_bytes(&intent_keys.length()));
     let mut i = 0;
     while (i < intent_keys.length()) {
-        data.append(bcs::to_bytes(&intent_keys[i].as_bytes()));
+        data.append(bcs::to_bytes(intent_keys[i].as_bytes()));
         i = i + 1;
     };
 
@@ -639,9 +650,9 @@ public fun new_council_create_optimistic_intent<Outcome, IW: drop>(
     // Serialize action data
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
-    data.append(bcs::to_bytes(&intent_key.as_bytes()));
-    data.append(bcs::to_bytes(&title.as_bytes()));
-    data.append(bcs::to_bytes(&description.as_bytes()));
+    data.append(bcs::to_bytes(intent_key.as_bytes()));
+    data.append(bcs::to_bytes(title.as_bytes()));
+    data.append(bcs::to_bytes(description.as_bytes()));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -685,7 +696,7 @@ public fun new_council_cancel_optimistic_intent<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&dao_id)));
     data.append(bcs::to_bytes(&object::id_to_address(&intent_id)));
-    data.append(bcs::to_bytes(&reason.as_bytes()));
+    data.append(bcs::to_bytes(reason.as_bytes()));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -715,7 +726,7 @@ public fun get_council_create_optimistic_intent_params(
 }
 
 public fun delete_council_create_optimistic_intent(expired: &mut Expired) {
-    let CouncilCreateOptimisticIntentAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 public fun new_council_execute_optimistic_intent_action(
@@ -732,7 +743,7 @@ public fun get_council_execute_optimistic_intent_params(
 }
 
 public fun delete_council_execute_optimistic_intent(expired: &mut Expired) {
-    let CouncilExecuteOptimisticIntentAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 public fun new_council_cancel_optimistic_intent_action(
@@ -750,17 +761,11 @@ public fun get_council_cancel_optimistic_intent_params(
 }
 
 public fun delete_council_cancel_optimistic_intent(expired: &mut Expired) {
-    let CouncilCancelOptimisticIntentAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 // Other Constructors
-public fun new_update_upgrade_rules_action(package_name: String): UpdateUpgradeRulesAction {
-    UpdateUpgradeRulesAction { package_name }
-}
-
-public fun get_update_upgrade_rules_params(action: &UpdateUpgradeRulesAction): &String {
-    &action.package_name
-}
+// UpdateUpgradeRulesAction is handled through the new_ function above
 
 public fun new_update_council_membership_action(
     new_members: vector<address>,
@@ -785,15 +790,15 @@ public fun get_unlock_and_return_cap_params(action: &UnlockAndReturnUpgradeCapAc
 }
 
 public fun delete_update_upgrade_rules(expired: &mut Expired) {
-    let UpdateUpgradeRulesAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 public fun delete_update_council_membership(expired: &mut Expired) {
-    let UpdateCouncilMembershipAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 public fun delete_unlock_and_return_cap(expired: &mut Expired) {
-    let UnlockAndReturnUpgradeCapAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 // --- Generic Approval Functions ---
@@ -827,7 +832,7 @@ public fun get_approve_generic_params(
 }
 
 public fun delete_approve_generic(expired: &mut Expired) {
-    let ApproveGenericAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 // --- Sweep Intents Functions ---
@@ -841,7 +846,7 @@ public fun get_sweep_keys(action: &SweepIntentsAction): &vector<String> {
 }
 
 public fun delete_sweep_intents(expired: &mut Expired) {
-    let SweepIntentsAction {..} = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 // === Destruction Functions ===

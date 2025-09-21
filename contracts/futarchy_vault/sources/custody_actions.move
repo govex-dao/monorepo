@@ -1,6 +1,6 @@
 module futarchy_vault::custody_actions;
 
-use std::string::String;
+use std::{string::{Self, String}, type_name};
 use sui::{
     object::{Self, ID},
     clock::Clock,
@@ -11,6 +11,7 @@ use account_protocol::{
     executable::{Self, Executable},
     intents::{Self as protocol_intents, Expired, Intent},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use futarchy_core::{
     futarchy_config::FutarchyConfig,
@@ -18,11 +19,15 @@ use futarchy_core::{
     action_validation,
     action_types,
 };
-use account_protocol::{
-    bcs_validation,
-    intents as protocol_intents,
-};
 use sui::bcs::{Self, BCS};
+
+// === Witness Types ===
+
+/// Witness for ApproveCustody action
+public struct ApproveCustodyWitness has drop {}
+
+/// Witness for AcceptIntoCustody action
+public struct AcceptIntoCustodyWitness has drop {}
 
 /// DAO-side approval to accept an object R into council custody.
 public struct ApproveCustodyAction<phantom R> has store, drop, copy {
@@ -60,7 +65,7 @@ public fun new_approve_custody<Outcome, R, IW: drop>(
     // Add to intent with type marker
     protocol_intents::add_typed_action(
         intent,
-        action_types::approve_custody(),
+        type_name::get<ApproveCustodyWitness>(),
         action_data,
         intent_witness
     );
@@ -85,7 +90,7 @@ public fun new_accept_into_custody<Outcome, R, IW: drop>(
     // Add to intent with type marker
     protocol_intents::add_typed_action(
         intent,
-        action_types::accept_into_custody(),
+        type_name::get<AcceptIntoCustodyWitness>(),
         action_data,
         intent_witness
     );
@@ -145,7 +150,7 @@ public fun do_approve_custody<Outcome: store, R: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL: Assert action type before deserialization
-    action_validation::assert_action_type<action_types::ApproveCustody>(spec);
+    action_validation::assert_action_type<ApproveCustodyWitness>(spec);
 
     let action_data = protocol_intents::action_spec_data(spec);
 
@@ -203,7 +208,7 @@ public fun do_accept_into_custody<Outcome: store, R: store, IW: drop>(
     let spec = specs.borrow(executable::action_idx(executable));
 
     // CRITICAL: Assert action type before deserialization
-    action_validation::assert_action_type<action_types::AcceptIntoCustody>(spec);
+    action_validation::assert_action_type<AcceptIntoCustodyWitness>(spec);
 
     let action_data = protocol_intents::action_spec_data(spec);
 
@@ -269,7 +274,7 @@ public struct ResourceRequest<phantom R> {
 }
 
 /// Fulfill a custody resource request
-public fun fulfill_custody_request<R: store>(
+public fun fulfill_custody_request<R: key + store>(
     request: ResourceRequest<R>,
     object: R,
     account: &mut Account<FutarchyConfig>,

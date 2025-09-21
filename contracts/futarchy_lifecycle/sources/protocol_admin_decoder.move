@@ -1,5 +1,5 @@
 /// Decoder for protocol admin actions in futarchy DAOs
-module futarchy_actions::protocol_admin_decoder;
+module futarchy_lifecycle::protocol_admin_decoder;
 
 // === Imports ===
 
@@ -7,7 +7,7 @@ use std::{string::String, type_name::{Self, TypeName}};
 use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use futarchy_actions::protocol_admin_actions::{
+use futarchy_lifecycle::protocol_admin_actions::{
     SetFactoryPausedAction,
     AddStableTypeAction,
     RemoveStableTypeAction,

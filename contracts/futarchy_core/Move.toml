@@ -5,10 +5,12 @@ license = "BSL"
 
 [dependencies]
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+futarchy_types = { local = "../futarchy_types" }
 AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
 futarchy_core = "0x0"
+futarchy_types = "0x0"
 futarchy_one_shot_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"
 account_protocol = "0xcfb7cce2dc7cf56d94e13f79713389753dc69cccfacced1aa33ca49a21899195"
 account_extensions = "0xa01921dfa6ad89fac820afa1150b047b96271ff6c555c656ba00b8cbeab33615"

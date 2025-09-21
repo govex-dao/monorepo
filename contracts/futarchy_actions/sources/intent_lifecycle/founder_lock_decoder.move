@@ -12,7 +12,7 @@ use futarchy_actions::founder_lock_actions::{
     UpdateFounderLockRecipientAction,
     WithdrawUnlockedTokensAction,
 };
-use futarchy_one_shot_utils::action_data_structs::CreateFounderLockProposalAction;
+use futarchy_actions::founder_lock_actions::CreateFounderLockProposalAction;
 
 // === Decoder Objects ===
 

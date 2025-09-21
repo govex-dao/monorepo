@@ -133,9 +133,9 @@ public fun new_transfer_to_sender<Outcome, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with type marker for TransferToSender
+    // Add to intent with type marker for TransferObject (reusing existing type)
     intent.add_typed_action(
-        framework_action_types::transfer_to_sender(),
+        framework_action_types::transfer_object(),
         action_data,
         intent_witness
     );
@@ -155,8 +155,8 @@ public fun do_transfer_to_sender<Outcome: store, T: key + store, IW: drop>(
     let specs = executable.intent().action_specs();
     let spec = specs.borrow(executable.action_idx());
 
-    // CRITICAL: Assert that the action type is what we expect
-    action_validation::assert_action_type<TransferToSender>(spec);
+    // CRITICAL: Assert that the action type is what we expect (using TransferObject)
+    action_validation::assert_action_type<framework_action_types::TransferObject>(spec);
 
     let action_data = intents::action_spec_data(spec);
 

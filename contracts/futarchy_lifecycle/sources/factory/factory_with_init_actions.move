@@ -22,10 +22,8 @@ use futarchy_markets::{
     fee::FeeManager,
     account_spot_pool::{Self, AccountSpotPool},
 };
-use futarchy_actions::{
-    action_specs::InitActionSpecs,
-    init_actions,
-};
+use futarchy_types::action_specs::InitActionSpecs;
+use futarchy_actions::init_actions;
 
 // === Entry Functions ===
 

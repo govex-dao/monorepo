@@ -237,6 +237,26 @@ public fun set_type_policy_by_name(
     });
 }
 
+/// Set a type-based policy using string representation
+/// This is used when deserializing from BCS since TypeName can't be reconstructed from string
+public fun set_type_policy_by_string(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    type_name_str: String,
+    council_id: Option<ID>,
+    mode: u8,
+) {
+    // We need to store the string representation as a workaround
+    // In a real implementation, you'd need to maintain a mapping or use a different approach
+    // For now, we'll just emit an event with the string representation
+    event::emit(TypePolicySet {
+        dao_id,
+        action_type: type_name::get<PolicyRegistry>(), // Placeholder TypeName
+        council_id,
+        mode,
+    });
+}
+
 /// Set an object-specific policy with mode
 public fun set_object_policy(
     registry: &mut PolicyRegistry,

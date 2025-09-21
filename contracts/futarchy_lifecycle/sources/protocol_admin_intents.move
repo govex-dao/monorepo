@@ -1,4 +1,4 @@
-module futarchy_actions::protocol_admin_intents;
+module futarchy_lifecycle::protocol_admin_intents;
 
 // === Imports ===
 use std::{
@@ -24,7 +24,7 @@ use futarchy_core::{
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_lifecycle::factory::{FactoryOwnerCap, ValidatorAdminCap};
 use futarchy_markets::fee::FeeAdminCap;
-use futarchy_actions::protocol_admin_actions;
+use futarchy_lifecycle::protocol_admin_actions;
 
 // === Aliases ===
 use fun intent_interface::process_intent as Account.process_intent;

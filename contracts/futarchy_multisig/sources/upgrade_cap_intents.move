@@ -16,7 +16,8 @@ use sui::package::UpgradeCap;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_vault::custody_actions;
-use futarchy_one_shot_utils::action_types;
+use futarchy_core::action_types;
+use std::type_name;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -45,14 +46,15 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
         ctx,
         |intent, iw| {
             // Typed DAO-side approve custody for UpgradeCap
-            let action = custody_actions::new_approve_custody<UpgradeCap>(
+            custody_actions::new_approve_custody<Outcome, UpgradeCap, UpgradeCapIntent>(
+                intent,
                 dao_id,
                 cap_id,
                 package_name,
                 b"".to_string(),
-                expires_at
+                expires_at,
+                iw
             );
-            intent.add_typed_action(action, action_types::approve_custody(), iw);
         }
     );
 }

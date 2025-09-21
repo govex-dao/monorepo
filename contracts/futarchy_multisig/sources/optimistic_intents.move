@@ -22,12 +22,13 @@ use sui::{
     event,
     object::{Self, ID, UID},
     tx_context::{Self, TxContext},
+    bcs,
 };
 use futarchy_core::version;
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
-    intents::{Intent},
+    intents::{Self, Intent, Expired},
     version_witness::VersionWitness,
 };
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
@@ -120,31 +121,31 @@ public struct OptimisticIntentExpired has copy, drop {
 // === Actions ===
 
 /// Action to create an optimistic intent
-public struct CreateOptimisticIntentAction has store {
+public struct CreateOptimisticIntentAction has store, drop {
     intent_key: String,
     title: String,
     description: String,
 }
 
 /// Action to challenge optimistic intents (cancels them)
-public struct ChallengeOptimisticIntentsAction has store {
+public struct ChallengeOptimisticIntentsAction has store, drop {
     intent_ids: vector<ID>,
     governance_proposal_id: ID,
 }
 
 /// Action to execute a matured optimistic intent
-public struct ExecuteOptimisticIntentAction has store {
+public struct ExecuteOptimisticIntentAction has store, drop, copy {
     intent_id: ID,
 }
 
 /// Action to cancel an optimistic intent (security council only)
-public struct CancelOptimisticIntentAction has store {
+public struct CancelOptimisticIntentAction has store, drop, copy {
     intent_id: ID,
     reason: String,
 }
 
 /// Action to clean up expired intents
-public struct CleanupExpiredIntentsAction has store {
+public struct CleanupExpiredIntentsAction has store, drop, copy {
     intent_ids: vector<ID>,
 }
 
@@ -180,9 +181,21 @@ public fun do_create_optimistic_intent<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, CreateOptimisticIntentAction, IW>(
-        executable, witness
-    );
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let intent_key = bcs::peel_vec_u8(&mut bcs).to_string();
+    let title = bcs::peel_vec_u8(&mut bcs).to_string();
+    let description = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    let action = CreateOptimisticIntentAction { intent_key, title, description };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Initialize storage if needed
     initialize_storage(account, version::current(), ctx);
@@ -249,9 +262,28 @@ public fun do_challenge_optimistic_intents<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, ChallengeOptimisticIntentsAction, IW>(
-        executable, witness
-    );
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+
+    // Read vector of IDs
+    let vec_length = bcs::peel_vec_length(&mut bcs);
+    let mut intent_ids = vector[];
+    let mut i = 0;
+    while (i < vec_length) {
+        intent_ids.push_back(object::id_from_address(bcs::peel_address(&mut bcs)));
+        i = i + 1;
+    };
+    let governance_proposal_id = object::id_from_address(bcs::peel_address(&mut bcs));
+
+    let action = ChallengeOptimisticIntentsAction { intent_ids, governance_proposal_id };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Validate batch size
     let batch_size = vector::length(&action.intent_ids);
@@ -325,9 +357,20 @@ public fun do_cancel_optimistic_intent<Outcome: store, IW: drop>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, CancelOptimisticIntentAction, IW>(
-        executable, witness
-    );
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let intent_id = object::id_from_address(bcs::peel_address(&mut bcs));
+    let reason = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    let action = CancelOptimisticIntentAction { intent_id, reason };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let storage: &mut OptimisticIntentStorage = account::borrow_managed_data_mut(
         account,
@@ -379,9 +422,19 @@ public fun do_execute_optimistic_intent<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ): String {  // Returns intent_key for execution
-    let action = executable::next_action<Outcome, ExecuteOptimisticIntentAction, IW>(
-        executable, witness
-    );
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let intent_id = object::id_from_address(bcs::peel_address(&mut bcs));
+
+    let action = ExecuteOptimisticIntentAction { intent_id };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     let storage: &mut OptimisticIntentStorage = account::borrow_managed_data_mut(
         account,
@@ -453,9 +506,27 @@ public fun do_cleanup_expired_intents<Outcome: store, IW: drop>(
     clock: &Clock,
     _ctx: &mut TxContext,
 ) {
-    let action = executable::next_action<Outcome, CleanupExpiredIntentsAction, IW>(
-        executable, witness
-    );
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+
+    // Read vector of IDs
+    let vec_length = bcs::peel_vec_length(&mut bcs);
+    let mut intent_ids = vector[];
+    let mut i = 0;
+    while (i < vec_length) {
+        intent_ids.push_back(object::id_from_address(bcs::peel_address(&mut bcs)));
+        i = i + 1;
+    };
+
+    let action = CleanupExpiredIntentsAction { intent_ids };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Validate batch size to prevent gas exhaustion
     let batch_size = vector::length(&action.intent_ids);
@@ -622,25 +693,56 @@ public fun new_cleanup_expired_intents_action(
 
 /// Delete an expired ExecuteOptimisticIntentAction
 public fun delete_execute_optimistic_intent_action(expired: &mut account_protocol::intents::Expired) {
-    let ExecuteOptimisticIntentAction { intent_id: _ } = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let _intent_id = bcs::peel_address(&mut bcs);
 }
 
 /// Delete an expired CancelOptimisticIntentAction
 public fun delete_cancel_optimistic_intent_action(expired: &mut account_protocol::intents::Expired) {
-    let CancelOptimisticIntentAction { intent_id: _, reason: _ } = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let _intent_id = bcs::peel_address(&mut bcs);
+    let _reason = bcs::peel_vec_u8(&mut bcs);
 }
 
 /// Delete an expired CreateOptimisticIntentAction
 public fun delete_create_optimistic_intent_action(expired: &mut account_protocol::intents::Expired) {
-    let CreateOptimisticIntentAction { intent_key: _, title: _, description: _ } = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let _intent_key = bcs::peel_vec_u8(&mut bcs);
+    let _title = bcs::peel_vec_u8(&mut bcs);
+    let _description = bcs::peel_vec_u8(&mut bcs);
 }
 
 /// Delete an expired ChallengeOptimisticIntentsAction
 public fun delete_challenge_optimistic_intents_action(expired: &mut account_protocol::intents::Expired) {
-    let ChallengeOptimisticIntentsAction { intent_ids: _, governance_proposal_id: _ } = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    // Read vector of IDs
+    let vec_length = bcs::peel_vec_length(&mut bcs);
+    let mut i = 0;
+    while (i < vec_length) {
+        bcs::peel_address(&mut bcs);
+        i = i + 1;
+    };
+    let _governance_proposal_id = bcs::peel_address(&mut bcs);
 }
 
 /// Delete an expired CleanupExpiredIntentsAction
 public fun delete_cleanup_expired_intents_action(expired: &mut account_protocol::intents::Expired) {
-    let CleanupExpiredIntentsAction { intent_ids: _ } = expired.remove_action();
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    // Read vector of IDs
+    let vec_length = bcs::peel_vec_length(&mut bcs);
+    let mut i = 0;
+    while (i < vec_length) {
+        bcs::peel_address(&mut bcs);
+        i = i + 1;
+    };
 }

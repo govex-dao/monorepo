@@ -196,12 +196,26 @@ public fun destroy_emit_decision(action: EmitDecisionAction) {
 
 /// Delete an emit memo action from an expired intent
 public fun delete_emit_memo(expired: &mut Expired) {
-    let EmitMemoAction { memo: _ } = expired.remove_action();
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    // Just consume the data without parsing
+    let mut reader = bcs::new(action_data);
+    let _memo = reader.peel_vec_u8();
+    let _ = reader.into_remainder_bytes();
 }
 
 /// Delete an emit decision action from an expired intent
 public fun delete_emit_decision(expired: &mut Expired) {
-    let EmitDecisionAction { accept: _, reference_id: _ } = expired.remove_action();
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    // Just consume the data without parsing
+    let mut reader = bcs::new(action_data);
+    let _accept = reader.peel_bool();
+    let _has_ref = reader.peel_bool();
+    if (_has_ref) {
+        let _ref_id = reader.peel_vec_u8();
+    };
+    let _ = reader.into_remainder_bytes();
 }
 
 // === Constructor Functions ===

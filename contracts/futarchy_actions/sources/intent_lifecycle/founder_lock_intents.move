@@ -1,30 +1,27 @@
-module futarchy_actions::incentives_and_options_intents;
+module futarchy_actions::founder_lock_intents;
 
 // === Imports ===
 use std::string::String;
-use sui::{clock::Clock, object::ID};
-use account_protocol::intents::Intent;
-use futarchy_actions::incentives_and_options_actions;
-use futarchy_actions::incentives_and_options_proposal::PriceTier;
+use sui::{clock::Clock, object::ID, bcs};
+use account_protocol::intents::{Intent, add_typed_action};
+use futarchy_actions::founder_lock_actions;
+use futarchy_actions::founder_lock_proposal::PriceTier;
 use futarchy_core::action_types;
-
-// === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Witness ===
 
-/// Witness type for incentives_and_options intents
-public struct IncentivesAndOptionsIntent has drop {}
+/// Witness type for founder lock intents
+public struct FounderLockIntent has drop {}
 
-/// Create a IncentivesAndOptionsIntent witness
-public fun witness(): IncentivesAndOptionsIntent {
-    IncentivesAndOptionsIntent {}
+/// Create a FounderLockIntent witness
+public fun witness(): FounderLockIntent {
+    FounderLockIntent {}
 }
 
 // === Helper Functions ===
 
-/// Add a create incentives_and_options proposal action to an existing intent
-public fun create_incentives_and_options_proposal_in_intent<Outcome: store, AssetType, IW: drop>(
+/// Add a create founder lock proposal action to an existing intent
+public fun create_founder_lock_proposal_in_intent<Outcome: store, AssetType, IW: drop>(
     intent: &mut Intent<Outcome>,
     committed_amount: u64,
     tiers: vector<PriceTier>,
@@ -34,7 +31,7 @@ public fun create_incentives_and_options_proposal_in_intent<Outcome: store, Asse
     description: String,
     intent_witness: IW,
 ) {
-    let action = incentives_and_options_actions::new_create_incentives_and_options_proposal_action<AssetType>(
+    let action = founder_lock_actions::new_create_founder_lock_proposal_action<AssetType>(
         committed_amount,
         tiers,
         proposal_id,
@@ -42,49 +39,53 @@ public fun create_incentives_and_options_proposal_in_intent<Outcome: store, Asse
         trading_end,
         description,
     );
-    intent.add_typed_action(action, action_types::create_incentives_and_options_proposal(), intent_witness);
+    let action_bytes = bcs::to_bytes(&action);
+    add_typed_action(intent, action_types::create_founder_lock_proposal(), action_bytes, intent_witness);
 }
 
-/// Add an execute incentives_and_options action to an existing intent
-public fun execute_incentives_and_options_in_intent<Outcome: store, IW: drop>(
+/// Add an execute founder lock action to an existing intent
+public fun execute_founder_lock_in_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
-    incentives_and_options_id: ID,
+    founder_lock_id: ID,
     intent_witness: IW,
 ) {
-    let action = incentives_and_options_actions::new_execute_incentives_and_options_action(incentives_and_options_id);
-    intent.add_typed_action(action, action_types::execute_incentives_and_options(), intent_witness);
+    let action = founder_lock_actions::new_execute_founder_lock_action(founder_lock_id);
+    let action_bytes = bcs::to_bytes(&action);
+    add_typed_action(intent, action_types::execute_founder_lock(), action_bytes, intent_witness);
 }
 
-/// Add an update incentives_and_options recipient action to an existing intent
-public fun update_incentives_and_options_recipient_in_intent<Outcome: store, IW: drop>(
+/// Add an update founder lock recipient action to an existing intent
+public fun update_founder_lock_recipient_in_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
-    incentives_and_options_id: ID,
+    founder_lock_id: ID,
     new_recipient: address,
     intent_witness: IW,
 ) {
-    let action = incentives_and_options_actions::new_update_incentives_and_options_recipient_action(
-        incentives_and_options_id,
+    let action = founder_lock_actions::new_update_founder_lock_recipient_action(
+        founder_lock_id,
         new_recipient,
     );
-    intent.add_typed_action(action, action_types::update_incentives_and_options_recipient(), intent_witness);
+    let action_bytes = bcs::to_bytes(&action);
+    add_typed_action(intent, action_types::update_founder_lock_recipient(), action_bytes, intent_witness);
 }
 
 /// Add a withdraw unlocked tokens action to an existing intent
 public fun withdraw_unlocked_tokens_in_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
-    incentives_and_options_id: ID,
+    founder_lock_id: ID,
     intent_witness: IW,
 ) {
-    let action = incentives_and_options_actions::new_withdraw_unlocked_tokens_action(incentives_and_options_id);
-    intent.add_typed_action(action, action_types::withdraw_unlocked_tokens(), intent_witness);
+    let action = founder_lock_actions::new_withdraw_unlocked_tokens_action(founder_lock_id);
+    let action_bytes = bcs::to_bytes(&action);
+    add_typed_action(intent, action_types::withdraw_unlocked_tokens(), action_bytes, intent_witness);
 }
 
-/// Create a unique key for a incentives_and_options intent
-public fun create_incentives_and_options_key(
+/// Create a unique key for a founder lock intent
+public fun create_founder_lock_key(
     operation: String,
     clock: &Clock,
 ): String {
-    let mut key = b"incentives_and_options_".to_string();
+    let mut key = b"founder_lock_".to_string();
     key.append(operation);
     key.append(b"_".to_string());
     key.append(clock.timestamp_ms().to_string());

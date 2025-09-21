@@ -7,10 +7,12 @@ published-at = "0x0"
 AccountExtensions = { local = "../move-framework/packages/extensions" }
 AccountActions = { local = "../move-framework/packages/actions" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_vault = { local = "../futarchy_vault" }
 [addresses]
 futarchy_multisig = "0x0"
+futarchy_types = "0x0"
 futarchy_one_shot_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"
 futarchy_core = "0x0"
 futarchy_vault = "0x0"

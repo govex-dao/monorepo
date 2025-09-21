@@ -5,7 +5,7 @@ use std::{string::String, type_name};
 use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use futarchy_actions::memo_actions::MemoAction;
+use futarchy_actions::memo_actions::EmitMemoAction;
 
 public struct MemoActionDecoder has key, store {
     id: UID,
@@ -33,6 +33,6 @@ public fun register_decoders(
     ctx: &mut TxContext,
 ) {
     let decoder = MemoActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<MemoAction>();
+    let type_key = type_name::with_defining_ids<EmitMemoAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

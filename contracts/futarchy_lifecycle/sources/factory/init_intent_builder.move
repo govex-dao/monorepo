@@ -7,8 +7,7 @@ module futarchy_lifecycle::init_intent_builder;
 // === Imports ===
 use std::type_name;
 use sui::bcs;
-use futarchy_actions::action_specs::{ActionSpec};
-use futarchy_actions::intent_spec;
+use futarchy_types::action_specs::{Self, ActionSpec};
 
 // Import all action type markers
 use futarchy_one_shot_utils::action_types;
@@ -50,35 +49,35 @@ public fun build_spec<AssetType, StableType>(
         // 2. Re-serialize to ensure canonical form.
         let action_data = bcs::to_bytes(&params);
         // 3. Create and return the ActionSpec blueprint.
-        intent_spec::new_action_spec(
+        action_specs::new_action_spec(
             type_name::get<action_types::CreateSecurityCouncil>(),
             action_data
         )
     } else if (action_id == ACTION_CREATE_AGREEMENT) {
         let params = create_operating_agreement_action_from_bytes(params_bcs);
         let action_data = bcs::to_bytes(&params);
-        intent_spec::new_action_spec(
+        action_specs::new_action_spec(
             type_name::get<action_types::CreateOperatingAgreement>(),
             action_data
         )
     } else if (action_id == ACTION_ADD_LIQUIDITY) {
         let params = add_liquidity_action_from_bytes<AssetType, StableType>(params_bcs);
         let action_data = bcs::to_bytes(&params);
-        intent_spec::new_action_spec(
+        action_specs::new_action_spec(
             type_name::get<action_types::AddLiquidity>(),
             action_data
         )
     } else if (action_id == ACTION_CREATE_COMMITMENT) {
         let params = create_commitment_proposal_action_from_bytes<AssetType>(params_bcs);
         let action_data = bcs::to_bytes(&params);
-        intent_spec::new_action_spec(
+        action_specs::new_action_spec(
             type_name::get<action_types::CreateCommitmentProposal>(),
             action_data
         )
     } else if (action_id == ACTION_CREATE_STREAM) {
         let params = create_payment_action_from_bytes<StableType>(params_bcs);
         let action_data = bcs::to_bytes(&params);
-        intent_spec::new_action_spec(
+        action_specs::new_action_spec(
             type_name::get<action_types::CreatePayment>(),
             action_data
         )

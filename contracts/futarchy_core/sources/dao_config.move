@@ -3,10 +3,10 @@
 module futarchy_core::dao_config;
 
 use std::{
-    string::String,
+    string::{Self, String},
     ascii::String as AsciiString,
 };
-use sui::url::Url;
+use sui::url::{Self, Url};
 use futarchy_one_shot_utils::constants;
 
 // === Errors ===
@@ -480,6 +480,19 @@ public(package) fun set_recovery_liveness_ms(sec: &mut SecurityConfig, ms: u64) 
 
 public(package) fun set_require_deadman_council(sec: &mut SecurityConfig, val: bool) {
     sec.require_deadman_council = val;
+}
+
+// === String conversion wrapper functions ===
+
+/// Set DAO name from String (converts to AsciiString)
+public(package) fun set_dao_name_string(meta: &mut MetadataConfig, name: String) {
+    meta.dao_name = string::to_ascii(name);
+}
+
+/// Set icon URL from String (creates Url from AsciiString)
+public(package) fun set_icon_url_string(meta: &mut MetadataConfig, url_str: String) {
+    let ascii_url = string::to_ascii(url_str);
+    meta.icon_url = url::new_unsafe(ascii_url);
 }
 
 /// Update trading parameters (returns new config)

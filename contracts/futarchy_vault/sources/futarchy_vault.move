@@ -16,12 +16,15 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account, Auth},
-    executable::Executable,
+    executable::{Self, Executable},
+    intents::{Self, Expired},
     version_witness::VersionWitness,
 };
 use account_actions::vault;
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::{action_types, action_validation};
+use sui::bcs;
 use futarchy_markets::{
 };
 
@@ -170,7 +173,20 @@ public fun do_add_coin_type<Outcome: store, CoinType, IW: drop>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &AddCoinTypeAction<CoinType> = executable.next_action(intent_witness);
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type
+    action_validation::assert_action_type<action_types::AddCoinType>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Add coin type to allowed list
     let allowed: &mut AllowedCoinTypes = account::borrow_managed_data_mut(
@@ -186,7 +202,7 @@ public fun do_add_coin_type<Outcome: store, CoinType, IW: drop>(
     
     // Note: The vault itself will automatically create storage for this type
     // when the first deposit happens
-    let _ = action.vault_name;
+    let _ = vault_name;
 }
 
 /// GOVERNANCE ONLY: Remove a coin type from the allowed list
@@ -197,7 +213,20 @@ public fun do_remove_coin_type<Outcome: store, CoinType, IW: drop>(
     intent_witness: IW,
     _ctx: &mut TxContext,
 ) {
-    let action: &RemoveCoinTypeAction<CoinType> = executable.next_action(intent_witness);
+    // Get action spec and deserialize
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type
+    action_validation::assert_action_type<action_types::RemoveCoinType>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    // Increment action index
+    executable::increment_action_idx(executable);
     
     // Remove coin type from allowed list
     let allowed: &mut AllowedCoinTypes = account::borrow_managed_data_mut(
@@ -213,7 +242,7 @@ public fun do_remove_coin_type<Outcome: store, CoinType, IW: drop>(
     
     // Note: This doesn't remove existing coins of this type from the vault,
     // it just prevents future deposits
-    let _ = action.vault_name;
+    let _ = vault_name;
 }
 
 // === Helper Functions ===
@@ -235,11 +264,19 @@ public fun new_remove_coin_type_action<CoinType>(
 // === Cleanup Functions ===
 
 /// Delete an add coin type action from an expired intent
-public fun delete_add_coin_type<CoinType>(expired: &mut account_protocol::intents::Expired) {
-    let AddCoinTypeAction<CoinType> { vault_name: _ } = expired.remove_action();
+public fun delete_add_coin_type<CoinType>(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs);
+    let _ = vault_name;
 }
 
 /// Delete a remove coin type action from an expired intent
-public fun delete_remove_coin_type<CoinType>(expired: &mut account_protocol::intents::Expired) {
-    let RemoveCoinTypeAction<CoinType> { vault_name: _ } = expired.remove_action();
+public fun delete_remove_coin_type<CoinType>(expired: &mut Expired) {
+    let spec = expired.remove_action_spec();
+    let action_data = intents::action_spec_data(&spec);
+    let mut bcs = bcs::new(*action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs);
+    let _ = vault_name;
 }

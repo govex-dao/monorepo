@@ -12,9 +12,8 @@ use account_protocol::{
 use futarchy_actions::memo_actions;
 use futarchy_core::version;
 use futarchy_core::action_types;
+use sui::bcs;
 
-// === Use Fun Aliases ===
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -41,7 +40,8 @@ public fun create_emit_memo_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let action = memo_actions::new_emit_memo_action(memo);
-            intent.add_typed_action(action, action_types::emit_memo(), iw);
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(action_types::memo(), action_bytes, iw);
         }
     );
 }
@@ -67,7 +67,8 @@ public fun create_emit_decision_intent<Config, Outcome: store>(
                 accept,
                 reference_id
             );
-            intent.add_typed_action(action, action_types::emit_decision(), iw);
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(action_types::memo(), action_bytes, iw);
         }
     );
 }

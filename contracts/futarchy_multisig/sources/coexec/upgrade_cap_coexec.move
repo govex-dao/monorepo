@@ -48,15 +48,38 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    use sui::bcs;
+
     // Extract Council's generic approval for the UpgradeCap
-    let approval: &security_council_actions::ApproveGenericAction =
-        coexec_common::extract_action(&mut council_exec, version::current());
-    let (dao_id, action_type, resource_key, metadata, expires_at) =
-        security_council_actions::get_approve_generic_params(approval);
-    
+    // Get the action data and deserialize it
+    let action_data = coexec_common::get_current_action_data(&council_exec);
+    let mut bcs = bcs::new(*action_data);
+
+    // Deserialize ApproveGenericAction fields
+    let dao_id = bcs::peel_address(&mut bcs).to_id();
+    let action_type_bytes = bcs::peel_vec_u8(&mut bcs);
+    let action_type = string::utf8(action_type_bytes);
+    let resource_key_bytes = bcs::peel_vec_u8(&mut bcs);
+    let resource_key = string::utf8(resource_key_bytes);
+    let _resource_id = bcs::peel_address(&mut bcs).to_id(); // cap_id will be checked later
+    let expires_at = bcs::peel_u64(&mut bcs);
+
+    // Deserialize metadata vector
+    let metadata_count = bcs::peel_vec_length(&mut bcs);
+    let mut metadata = vector::empty<String>();
+    let mut i = 0;
+    while (i < metadata_count) {
+        let meta_bytes = bcs::peel_vec_u8(&mut bcs);
+        metadata.push_back(string::utf8(meta_bytes));
+        i = i + 1;
+    };
+
+    // Advance to next action after extraction
+    coexec_common::advance_action(&mut council_exec);
+
     // Validate action type
-    assert!(*action_type == b"custody_accept".to_string(), coexec_common::error_action_type_mismatch());
-    assert!(resource_key.bytes().length() >= 11 && 
+    assert!(action_type == b"custody_accept".to_string(), coexec_common::error_action_type_mismatch());
+    assert!(resource_key.bytes().length() >= 11 &&
             // Check if resource_key starts with "UpgradeCap:"
             {
                 let key_bytes = resource_key.bytes();
@@ -71,9 +94,9 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
                     i = i + 1;
                 };
                 matches && key_bytes.length() >= 11
-            }, 
+            },
             EPackageNameMismatch);
-    
+
     // Extract package_name from metadata
     // metadata should be: ["package_name", <name>]
     assert!(metadata.length() == 2, coexec_common::error_metadata_missing());
@@ -88,16 +111,22 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::enforce_custodian_policy(dao, council, b"UpgradeCap:Custodian".to_string());
     
     // Extract the accept action to get the cap
-    let accept: &custody_actions::AcceptIntoCustodyAction<UpgradeCap> =
-        coexec_common::extract_action(
-            &mut futarchy_exec,
-            version::current()
-        );
-    let (cap_id_expected, pkg_name_council_ref, _) =
-        custody_actions::get_accept_params(accept);
+    // Get the action data and deserialize it
+    let accept_action_data = coexec_common::get_current_action_data(&futarchy_exec);
+    let mut accept_bcs = bcs::new(*accept_action_data);
+
+    // Deserialize AcceptAndLockUpgradeCapAction fields
+    let cap_id_expected = bcs::peel_address(&mut accept_bcs).to_id();
+    let pkg_name_bytes = bcs::peel_vec_u8(&mut accept_bcs);
+    let pkg_name_from_accept = string::utf8(pkg_name_bytes);
+
+    // Advance to next action after extraction
+    coexec_common::advance_action(&mut futarchy_exec);
+
+    let pkg_name_council_ref = &pkg_name_from_accept;
     
     // Validate package names match
-    assert!(*pkg_name_expected == *pkg_name_council_ref, EPackageNameMismatch);
+    assert!(*pkg_name_expected == pkg_name_from_accept, EPackageNameMismatch);
     
     // Withdraw the cap from the receipt and lock it into the council
     let cap = owned::do_withdraw(
@@ -112,13 +141,13 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     
     // Lock the cap under council management
     let auth = security_council::authenticate(council, ctx);
-    package_upgrade::lock_cap(auth, council, cap, *pkg_name_expected, 0);
+    package_upgrade::lock_cap(auth, council, cap, pkg_name_from_accept, 0);
     
     // Record the council approval for this intent
     let intent_key = executable::intent(&futarchy_exec).key();
     let generic_approval = futarchy_config::new_custody_approval(
         object::id(dao),
-        *resource_key,
+        resource_key,
         cap_id_expected,
         expires_at,
         ctx

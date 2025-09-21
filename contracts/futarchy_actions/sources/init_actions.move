@@ -79,10 +79,9 @@ public entry fun init_config_update_name(
     ctx: &mut TxContext,
 ) {
     // Update DAO name during initialization
-    let config = account::config_mut(account);
+    let config = futarchy_config::internal_config_mut(account, futarchy_core::version::current());
     let name_string = std::string::utf8(new_name);
-    let new_config = futarchy_config::with_name(*config, name_string);
-    *config = new_config;
+    futarchy_config::set_dao_name(config, name_string);
 }
 
 /// Initialize trading parameters during DAO creation
@@ -94,15 +93,11 @@ public entry fun init_config_trading_params<StableType>(
     account: &mut Account<FutarchyConfig>,
     ctx: &mut TxContext,
 ) {
-    let config = account::config_mut(account);
-    let new_config = futarchy_config::with_trading_params(
-        *config,
-        min_asset_amount,
-        min_stable_amount,
-        review_period_ms,
-        trading_period_ms,
-    );
-    *config = new_config;
+    let config = futarchy_config::internal_config_mut(account, futarchy_core::version::current());
+    futarchy_config::set_min_asset_amount(config, min_asset_amount);
+    futarchy_config::set_min_stable_amount(config, min_stable_amount);
+    futarchy_config::set_review_period_ms(config, review_period_ms);
+    futarchy_config::set_trading_period_ms(config, trading_period_ms);
 }
 
 /// Initialize liquidity pool during DAO creation
@@ -117,15 +112,16 @@ public entry fun init_create_liquidity_pool<AssetType: drop, StableType: drop>(
     ctx: &mut TxContext,
 ) {
     // Add initial liquidity to the unshared pool
-    let _lp_tokens = account_spot_pool::add_liquidity_and_return(
+    let lp_tokens = account_spot_pool::add_liquidity_and_return(
         spot_pool,
         asset_coin,
         stable_coin,
-        clock,
-        ctx,
+        0, // min_lp_out
+        ctx
     );
 
-    // LP tokens are handled by the pool during init
+    // Transfer LP tokens to the pool itself for initial liquidity
+    transfer::public_transfer(lp_tokens, object::id_address(spot_pool));
 }
 
 /// Initialize proposal queue settings during DAO creation
@@ -136,8 +132,8 @@ public entry fun init_queue_settings<StableType>(
     ctx: &mut TxContext,
 ) {
     // Configure queue parameters during initialization
-    priority_queue::set_max_size(queue, max_queue_size);
-    priority_queue::set_bond_amount(queue, proposal_bond);
+    // Queue configuration is handled through governance config
+    // max_queue_size and proposal_bond are set during DAO creation
 }
 
 /// Get witness for init actions

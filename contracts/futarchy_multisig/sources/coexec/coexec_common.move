@@ -10,6 +10,7 @@ use sui::{
 use account_protocol::{
     account::Account,
     executable::Executable,
+    version_witness::VersionWitness,
 };
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
@@ -93,6 +94,16 @@ public fun confirm_both_executables<DaoOutcome: store + drop, CouncilOutcome: st
 }
 
 // === Action Extraction Helpers ===
+
+/// Extract and advance to next action in executable
+/// Used when processing actions that don't return data
+public fun extract_action<Outcome: store>(
+    executable: &mut account_protocol::executable::Executable<Outcome>,
+    _version: VersionWitness,
+) {
+    // Simply increment the action index to move to next action
+    account_protocol::executable::increment_action_idx(executable);
+}
 
 /// Check if the current action matches the expected type
 /// This replaces the old contains_action functionality

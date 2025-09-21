@@ -17,7 +17,7 @@ use futarchy_actions::liquidity_actions::{
     WithdrawFeesAction,
     SetPoolStatusAction,
 };
-use futarchy_one_shot_utils::action_data_structs::{AddLiquidityAction};
+use futarchy_actions::liquidity_actions::{AddLiquidityAction};
 
 // === Decoder Objects ===
 
@@ -240,5 +240,14 @@ fun register_withdraw_fees_decoder(
 ) {
     let decoder = WithdrawFeesActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<WithdrawFeesAction<AssetPlaceholder, StablePlaceholder>>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_set_pool_status_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = SetPoolStatusActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SetPoolStatusAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

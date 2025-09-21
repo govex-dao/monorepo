@@ -6,10 +6,52 @@ use std::type_name::{Self, TypeName};
 
 // === Config Action Types ===
 
-public struct SetProposalsEnabled has drop {}
-public struct UpdateName has drop {}
-public struct TradingParamsUpdate has drop {}
-public struct MetadataUpdate has drop {}
+public struct SetProposalsEnabled has drop, copy {}
+public struct UpdateName has drop, copy {}
+public struct TradingParamsUpdate has drop, copy {}
+public struct MetadataUpdate has drop, copy {}
+public struct SetMetadata has drop, copy {
+    phantom: bool,
+}
+
+public fun set_metadata(): SetMetadata {
+    SetMetadata { phantom: false }
+}
+public struct UpdateTradingConfig has drop, copy {
+    phantom: bool,
+}
+
+public fun update_trading_config(): UpdateTradingConfig {
+    UpdateTradingConfig { phantom: false }
+}
+public struct UpdateTwapConfig has drop, copy {
+    phantom: bool,
+}
+
+public fun update_twap_config(): UpdateTwapConfig {
+    UpdateTwapConfig { phantom: false }
+}
+public struct UpdateGovernance has drop, copy {
+    phantom: bool,
+}
+
+public fun update_governance(): UpdateGovernance {
+    UpdateGovernance { phantom: false }
+}
+public struct UpdateSlashDistribution has drop, copy {
+    phantom: bool,
+}
+
+public fun update_slash_distribution(): UpdateSlashDistribution {
+    UpdateSlashDistribution { phantom: false }
+}
+public struct UpdateQueueParams has drop, copy {
+    phantom: bool,
+}
+
+public fun update_queue_params(): UpdateQueueParams {
+    UpdateQueueParams { phantom: false }
+}
 public struct TwapConfigUpdate has drop {}
 public struct GovernanceUpdate has drop {}
 public struct MetadataTableUpdate has drop {}
@@ -78,19 +120,33 @@ public struct LockOperatingAgreement has drop {}
 // === Custody Action Types ===
 
 public struct CreateCustodyAccount has drop {}
+public struct ApproveCustody has drop {}
+public struct AcceptIntoCustody has drop {}
 public struct CustodyDeposit has drop {}
 public struct CustodyWithdraw has drop {}
 public struct CustodyTransfer has drop {}
 
+// === Vault Action Types ===
+
+public struct AddCoinType has drop {}
+public struct RemoveCoinType has drop {}
+
 // === Security Council Action Types ===
 
 public struct CreateCouncil has drop {}
+public struct CreateSecurityCouncil has drop {}
 public struct AddCouncilMember has drop {}
 public struct RemoveCouncilMember has drop {}
+public struct UpdateCouncilMembership has drop {}
 public struct UpdateCouncilThreshold has drop {}
 public struct ProposeCouncilAction has drop {}
 public struct ApproveCouncilAction has drop {}
 public struct ExecuteCouncilAction has drop {}
+public struct ApproveGeneric has drop {}
+public struct SweepIntents has drop {}
+public struct CouncilCreateOptimisticIntent has drop {}
+public struct CouncilExecuteOptimisticIntent has drop {}
+public struct CouncilCancelOptimisticIntent has drop {}
 
 // === Policy Action Types ===
 
@@ -147,7 +203,35 @@ public struct ApplyPendingCoinFees has drop {}
 // === Founder Lock Action Types ===
 
 public struct CreateFounderLock has drop {}
+public struct CreateFounderLockProposal has drop {
+    phantom: bool,
+}
+
+public fun create_founder_lock_proposal(): CreateFounderLockProposal {
+    CreateFounderLockProposal { phantom: false }
+}
 public struct UnlockFounderTokens has drop {}
+public struct UpdateFounderLockRecipient has drop {
+    phantom: bool,
+}
+
+public fun update_founder_lock_recipient(): UpdateFounderLockRecipient {
+    UpdateFounderLockRecipient { phantom: false }
+}
+public struct WithdrawUnlockedTokens has drop {
+    phantom: bool,
+}
+
+public fun withdraw_unlocked_tokens(): WithdrawUnlockedTokens {
+    WithdrawUnlockedTokens { phantom: false }
+}
+public struct ExecuteFounderLock has drop {
+    phantom: bool,
+}
+
+public fun execute_founder_lock(): ExecuteFounderLock {
+    ExecuteFounderLock { phantom: false }
+}
 
 // === Package Upgrade Action Types ===
 
@@ -234,9 +318,14 @@ public fun create_council(): TypeName { type_name::with_defining_ids<CreateCounc
 public fun add_council_member(): TypeName { type_name::with_defining_ids<AddCouncilMember>() }
 public fun remove_council_member(): TypeName { type_name::with_defining_ids<RemoveCouncilMember>() }
 public fun update_council_threshold(): TypeName { type_name::with_defining_ids<UpdateCouncilThreshold>() }
+public fun update_council_membership(): TypeName { type_name::with_defining_ids<UpdateCouncilMembership>() }
 public fun propose_council_action(): TypeName { type_name::with_defining_ids<ProposeCouncilAction>() }
 public fun approve_council_action(): TypeName { type_name::with_defining_ids<ApproveCouncilAction>() }
 public fun execute_council_action(): TypeName { type_name::with_defining_ids<ExecuteCouncilAction>() }
+public fun approve_generic(): TypeName { type_name::with_defining_ids<ApproveGeneric>() }
+public fun council_create_optimistic_intent(): TypeName { type_name::with_defining_ids<CouncilCreateOptimisticIntent>() }
+public fun council_execute_optimistic_intent(): TypeName { type_name::with_defining_ids<CouncilExecuteOptimisticIntent>() }
+public fun council_cancel_optimistic_intent(): TypeName { type_name::with_defining_ids<CouncilCancelOptimisticIntent>() }
 
 // Policy actions
 public fun create_policy(): TypeName { type_name::with_defining_ids<CreatePolicy>() }
@@ -248,6 +337,8 @@ public fun register_council(): TypeName { type_name::with_defining_ids<RegisterC
 
 // Memo actions
 public fun memo(): TypeName { type_name::with_defining_ids<Memo>() }
+public fun emit_memo(): TypeName { type_name::with_defining_ids<Memo>() }
+public fun emit_decision(): TypeName { type_name::with_defining_ids<Memo>() }
 
 // Protocol admin actions
 public fun set_factory_paused(): TypeName { type_name::with_defining_ids<SetFactoryPaused>() }

@@ -19,7 +19,7 @@ use sui::transfer;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use account_protocol::account::{Self, Account};
-use futarchy_actions::action_specs::{Self, InitActionSpecs};
+use futarchy_types::action_specs::{Self, InitActionSpecs};
 
 // === Events ===
 
@@ -639,7 +639,7 @@ public fun new_queued_proposal<StableCoin>(
         fee,
         timestamp,
         priority_score,
-        intent_key,
+        intent_spec,
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
@@ -669,7 +669,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
         fee,
         timestamp,
         priority_score,
-        intent_key,
+        intent_spec,
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert

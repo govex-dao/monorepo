@@ -14,7 +14,7 @@
 ///
 /// Why not VecMap: VecMap's get() method has borrow checker issues - the key
 /// must remain borrowed while the reference is in use, incompatible with our API
-// Why not Table: Tables don't support `copy` or `drop` abilities which Deps requires
+/// Why not Table: Tables don't support `copy` or `drop` abilities which Deps requires
 //
 // Performance impact:
 // - Before: N=20 required 190 comparisons during construction

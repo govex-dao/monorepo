@@ -33,6 +33,7 @@ public struct ResourceFulfilled has copy, drop {
 /// Generic hot potato for requesting resources - MUST be fulfilled in same transaction
 /// The phantom type T represents the action type requesting resources
 /// Has no abilities, forcing immediate consumption
+#[allow(lint(missing_key))]
 public struct ResourceRequest<phantom T> {
     id: UID,
     /// Store any action-specific data needed for fulfillment

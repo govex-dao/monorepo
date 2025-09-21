@@ -1,7 +1,7 @@
 /// Global decoder registry for all Futarchy protocol actions
 /// This module initializes and manages the single ActionDecoderRegistry
 /// that all futarchy actions register with
-module futarchy_core::futarchy_decoder_registry;
+module futarchy_decoders::futarchy_decoder_registry;
 
 // === Imports ===
 
@@ -15,6 +15,7 @@ use futarchy_lifecycle::payment_decoder;
 use futarchy_lifecycle::stream_decoder;
 use futarchy_lifecycle::oracle_decoder;
 use futarchy_lifecycle::dissolution_decoder;
+use futarchy_lifecycle::protocol_admin_decoder;
 use futarchy_actions::config_decoder;
 use futarchy_actions::liquidity_decoder;
 use futarchy_actions::governance_decoder;
@@ -97,6 +98,9 @@ fun register_futarchy_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut T
     // Oracle and dissolution decoders
     oracle_decoder::register_decoders(registry, ctx);
     dissolution_decoder::register_decoders(registry, ctx);
+
+    // Protocol admin decoders
+    protocol_admin_decoder::register_decoders(registry, ctx);
 
     // Config and governance decoders
     config_decoder::register_decoders(registry, ctx);

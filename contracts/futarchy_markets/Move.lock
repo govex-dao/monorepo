@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "55E16F47A7AEAA992B69DF15708FBA3B7AF8AFB4AE4A747CC1E2FEBEB23D0DD8"
-deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+manifest_digest = "F9E77039A0F70537292778B9A4B985F2F2C617ECCC68A24B855221EDD55C2ED9"
+deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
@@ -11,6 +11,7 @@ dependencies = [
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [[move.package]]
@@ -79,6 +80,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [[move.package]]
@@ -90,6 +92,14 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "futarchy_types"
+source = { local = "../futarchy_types" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [move.toolchain-version]

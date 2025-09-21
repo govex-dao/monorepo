@@ -49,7 +49,7 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
         action_data,
         intent_witness
     );
-    liquidity_actions::destroy_add_liquidity(action);
+    // Action struct has drop ability, will be automatically dropped
 }
 
 /// Add a remove liquidity action to an existing intent
@@ -73,7 +73,7 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
         action_data,
         intent_witness
     );
-    liquidity_actions::destroy_remove_liquidity(action);
+    // Action struct has drop ability, will be automatically dropped
 }
 
 /// Add a create pool action to an existing intent
@@ -97,7 +97,7 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
         action_data,
         intent_witness
     );
-    liquidity_actions::destroy_create_pool(action);
+    // Action struct has drop ability, will be automatically dropped
 }
 
 /// Add an update pool params action
@@ -119,7 +119,7 @@ public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
         action_data,
         intent_witness
     );
-    liquidity_actions::destroy_update_pool_params(action);
+    // Action struct has drop ability, will be automatically dropped
 }
 
 /// Add a set pool status action
@@ -139,7 +139,7 @@ public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
         action_data,
         intent_witness
     );
-    liquidity_actions::destroy_set_pool_status(action);
+    // Action struct has drop ability, will be automatically dropped
 }
 
 /// Helper to create pool in an intent

@@ -19,17 +19,18 @@ module futarchy_multisig::descriptor_analyzer {
         intent: &Intent<Outcome>,
         registry: &PolicyRegistry,
     ): ApprovalRequirement {
-        let action_types = intents::action_types(intent);
-        
+        let action_specs = intents::action_specs(intent);
+
         let mut needs_dao = false;
         let mut needs_council = false;
         let mut council_id: Option<ID> = option::none();
         let mut mode = 0u8; // Default DAO_ONLY
-        
+
         // Check each action type
         let mut i = 0;
-        while (i < vector::length(action_types)) {
-            let action_type = *vector::borrow(action_types, i);
+        while (i < vector::length(action_specs)) {
+            let spec = vector::borrow(action_specs, i);
+            let action_type = intents::action_spec_type(spec);
             
             // Check if this type has a policy
             if (policy_registry::type_needs_council(registry, action_type)) {

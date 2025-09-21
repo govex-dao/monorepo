@@ -91,3 +91,8 @@ git diff HEAD | pbcopy
 ```
 git diff | pbcopy
 ```
+
+
+```
+for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move build --silence-warnings 2>&1 || true) && error_count=$(echo "$output" | grep -c -i "error") && echo "Errors in $pkg: $error_count"); done
+```

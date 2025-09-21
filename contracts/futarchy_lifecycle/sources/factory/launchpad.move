@@ -14,7 +14,7 @@ use sui::object::{Self, UID, ID};
 use sui::tx_context::TxContext;
 use sui::table;
 use futarchy_lifecycle::factory;
-use futarchy_actions::action_specs;
+use futarchy_types::action_specs;
 use futarchy_actions::init_actions;
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::FutarchyConfig;

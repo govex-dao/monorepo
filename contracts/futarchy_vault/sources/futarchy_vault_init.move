@@ -11,6 +11,11 @@ use account_actions::vault;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_vault::futarchy_vault;
 
+// === Structs ===
+
+/// Witness for authenticating vault operations during init
+public struct FutarchyConfigWitness has drop {}
+
 // === Public Functions ===
 
 /// Initialize vault during DAO creation
@@ -24,6 +29,6 @@ public fun initialize(
     
     // Open the default treasury vault using account_actions::vault
     // We need to create an Auth for this
-    let auth = futarchy_config::authenticate(account, ctx);
+    let auth = account::new_auth(account, version, FutarchyConfigWitness {});
     vault::open(auth, account, string::utf8(futarchy_vault::default_vault_name()), ctx);
 }

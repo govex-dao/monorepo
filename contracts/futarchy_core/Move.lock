@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "E194DBEA7DBF8250863B7C0FCFBD32BC180EFBBA05CA0435025B22E4565624D7"
-deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
+manifest_digest = "4EB9BC819C48F53E6D1EB1F4041E951C7BB4705C0973D1633641D7B53DADB27A"
+deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
 dependencies = [
   { id = "AccountExtensions", name = "AccountExtensions" },
   { id = "AccountProtocol", name = "AccountProtocol" },
@@ -12,6 +12,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [[move.package]]
@@ -77,6 +78,14 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "futarchy_types"
+source = { local = "../futarchy_types" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [move.toolchain-version]

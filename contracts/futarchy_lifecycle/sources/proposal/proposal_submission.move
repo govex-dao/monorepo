@@ -25,7 +25,7 @@ use futarchy_core::{
     priority_queue::{Self, ProposalQueue, QueuedProposal},
     proposal_fee_manager::{Self, ProposalFeeManager},
 };
-use futarchy_actions::action_specs::{Self, InitActionSpecs};
+use futarchy_types::action_specs::{Self, InitActionSpecs};
 
 // === Errors ===
 const EProposalsDisabled: u64 = 1;

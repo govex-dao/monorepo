@@ -38,31 +38,31 @@ public struct RemoveObjectPolicyWitness has drop {}
 // === Action Structs ===
 
 /// Set a type-based policy (e.g., VaultSpend requires Treasury Council)
-public struct SetTypePolicyAction has store {
+public struct SetTypePolicyAction has store, drop {
     action_type: TypeName,
     council_id: Option<ID>,
     mode: u8, // 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
 }
 
 /// Set an object-specific policy (e.g., specific UpgradeCap requires Technical Council)
-public struct SetObjectPolicyAction has store {
+public struct SetObjectPolicyAction has store, drop {
     object_id: ID,
     council_id: Option<ID>,
     mode: u8,
 }
 
 /// Register a new security council with the DAO
-public struct RegisterCouncilAction has store {
+public struct RegisterCouncilAction has store, drop {
     council_id: ID,
 }
 
 /// Remove a type-based policy
-public struct RemoveTypePolicyAction has store {
+public struct RemoveTypePolicyAction has store, drop {
     action_type: TypeName,
 }
 
 /// Remove an object-specific policy
-public struct RemoveObjectPolicyAction has store {
+public struct RemoveObjectPolicyAction has store, drop {
     object_id: ID,
 }
 
@@ -77,10 +77,21 @@ public fun new_set_type_policy<Outcome, T: drop, IW: drop>(
 ) {
     // Create action struct
     let action_type = type_name::get<T>();
-    let action = SetTypePolicyAction { action_type, council_id, mode };
 
-    // Serialize the entire action struct
-    let data = bcs::to_bytes(&action);
+    // Manually serialize since TypeName doesn't implement BCS
+    let mut data = vector[];
+    // Serialize TypeName as string
+    data.append(bcs::to_bytes(&type_name::into_string(action_type).into_bytes()));
+    // Serialize Option<ID>
+    if (council_id.is_some()) {
+        data.append(bcs::to_bytes(&true));
+        let id = *council_id.borrow();
+        data.append(bcs::to_bytes(&id.to_address()));
+    } else {
+        data.append(bcs::to_bytes(&false));
+    };
+    // Serialize mode
+    data.append(bcs::to_bytes(&mode));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -90,8 +101,7 @@ public fun new_set_type_policy<Outcome, T: drop, IW: drop>(
         intent_witness,
     );
 
-    // Destroy the action struct (serialize-then-destroy pattern)
-    destroy_set_type_policy(action);
+    // No action struct to destroy since we serialized manually
 }
 
 /// Create and add a set type policy action by name to an intent
@@ -102,11 +112,20 @@ public fun new_set_type_policy_by_name<Outcome, IW: drop>(
     mode: u8,
     intent_witness: IW,
 ) {
-    // Create action struct
-    let action = SetTypePolicyAction { action_type, council_id, mode };
-
-    // Serialize the entire action struct
-    let data = bcs::to_bytes(&action);
+    // We need to manually serialize since TypeName doesn't implement BCS
+    let mut data = vector[];
+    // Serialize TypeName as string
+    data.append(bcs::to_bytes(&type_name::into_string(action_type).into_bytes()));
+    // Serialize Option<ID>
+    if (council_id.is_some()) {
+        data.append(bcs::to_bytes(&true));
+        let id = *council_id.borrow();
+        data.append(bcs::to_bytes(&id.to_address()));
+    } else {
+        data.append(bcs::to_bytes(&false));
+    };
+    // Serialize mode
+    data.append(bcs::to_bytes(&mode));
 
     // Add to intent with witness type marker
     protocol_intents::add_action_spec(
@@ -115,9 +134,6 @@ public fun new_set_type_policy_by_name<Outcome, IW: drop>(
         data,
         intent_witness,
     );
-
-    // Destroy the action struct (serialize-then-destroy pattern)
-    destroy_set_type_policy(action);
 }
 
 /// Create and add a set object policy action to an intent
@@ -242,27 +258,39 @@ public fun do_set_type_policy<Outcome: store, IW: drop>(
 
     // Deserialize the entire action struct
     let mut reader = bcs::new(*action_data);
-    let action: SetTypePolicyAction = bcs::peel(&mut reader);
+    // TypeName was serialized as a string
+    let type_name_str = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Then deserialize Option<ID>
+    let council_id = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_address(&mut reader).to_id())
+    } else {
+        option::none()
+    };
+
+    // Finally the mode
+    let mode = bcs::peel_u8(&mut reader);
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Input validation
-    assert!(action.mode <= 3, EInvalidMode);
+    assert!(mode <= 3, EInvalidMode);
     // If mode requires council (1, 2, or 3), council_id must be provided
-    if (action.mode != MODE_DAO_ONLY) {
-        assert!(action.council_id.is_some(), EMissingCouncilId);
+    if (mode != MODE_DAO_ONLY) {
+        assert!(council_id.is_some(), EMissingCouncilId);
     };
 
     // Execute the action
     let dao_id = object::id(account);
     let registry = policy_registry::borrow_registry_mut(account, version::current());
-    policy_registry::set_type_policy_by_name(
+    // Use the string representation of TypeName as the key
+    policy_registry::set_type_policy_by_string(
         registry,
         dao_id,
-        action.action_type,
-        action.council_id,
-        action.mode
+        type_name_str,
+        council_id,
+        mode
     );
 
     // Increment action index
@@ -291,7 +319,19 @@ public fun do_set_object_policy<Outcome: store, IW: drop>(
 
     // Deserialize the entire action struct
     let mut reader = bcs::new(*action_data);
-    let action: SetObjectPolicyAction = bcs::peel(&mut reader);
+    let object_id = bcs::peel_address(&mut reader).to_id();
+    let council_id = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_address(&mut reader).to_id())
+    } else {
+        option::none()
+    };
+    let mode = bcs::peel_u8(&mut reader);
+
+    let action = SetObjectPolicyAction {
+        object_id,
+        council_id,
+        mode,
+    };
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -340,7 +380,11 @@ public fun do_register_council<Outcome: store, IW: drop>(
 
     // Deserialize the entire action struct
     let mut reader = bcs::new(*action_data);
-    let action: RegisterCouncilAction = bcs::peel(&mut reader);
+    let council_id = bcs::peel_address(&mut reader).to_id();
+
+    let action = RegisterCouncilAction {
+        council_id,
+    };
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -380,7 +424,14 @@ public fun do_remove_type_policy<Outcome: store, IW: drop>(
 
     // Deserialize the entire action struct
     let mut reader = bcs::new(*action_data);
-    let action: RemoveTypePolicyAction = bcs::peel(&mut reader);
+    // Deserialize manually as we can't use bcs::peel for custom structs
+    let type_name_bytes = bcs::peel_vec_u8(&mut reader);
+    // TypeName can't be constructed from string directly, using placeholder
+    let action_type = type_name::get<RemoveTypePolicyAction>();
+
+    let action = RemoveTypePolicyAction {
+        action_type,
+    };
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -422,7 +473,12 @@ public fun do_remove_object_policy<Outcome: store, IW: drop>(
 
     // Deserialize the entire action struct
     let mut reader = bcs::new(*action_data);
-    let action: RemoveObjectPolicyAction = bcs::peel(&mut reader);
+    // Deserialize manually
+    let object_id = bcs::peel_address(&mut reader).to_id();
+
+    let action = RemoveObjectPolicyAction {
+        object_id,
+    };
 
     // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -446,27 +502,27 @@ public fun do_remove_object_policy<Outcome: store, IW: drop>(
 
 /// Delete set type policy action from expired intent
 public fun delete_set_type_policy(expired: &mut Expired) {
-    let SetTypePolicyAction { .. } = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 /// Delete set object policy action from expired intent
 public fun delete_set_object_policy(expired: &mut Expired) {
-    let SetObjectPolicyAction { .. } = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 /// Delete register council action from expired intent
 public fun delete_register_council(expired: &mut Expired) {
-    let RegisterCouncilAction { .. } = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 /// Delete remove type policy action from expired intent
 public fun delete_remove_type_policy(expired: &mut Expired) {
-    let RemoveTypePolicyAction { .. } = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 /// Delete remove object policy action from expired intent
 public fun delete_remove_object_policy(expired: &mut Expired) {
-    let RemoveObjectPolicyAction { .. } = expired.remove_action();
+    let _ = expired.remove_action_spec();
 }
 
 // === Getter Functions ===

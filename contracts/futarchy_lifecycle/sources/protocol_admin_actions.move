@@ -3,7 +3,7 @@
 /// - Factory admin functions (FactoryOwnerCap)
 /// - Fee management (FeeAdminCap) 
 /// - Validator functions (ValidatorAdminCap)
-module futarchy_actions::protocol_admin_actions;
+module futarchy_lifecycle::protocol_admin_actions;
 
 // === Imports ===
 use std::{
