@@ -1,6 +1,15 @@
 # V2 Large
 - [ ] Get code building / fix circular dependancies
 - [ ] Add correct cross package security capaility / requirements
+- [ ] Get specs for https://github.com/MetaLex-Tech/RicardianTriplerDoubleTokenLeXscroW and add any missing things to this protocol
+- [ ] Clean up dao configuration / bootstrapping / creation to redice bioler plate and be readable
+- [ ] Fix current build errors 
+(base) admin@Admins-iMac contracts % for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move build --silence-warnings 2>&1 || true) && error_count=$(echo "$output" | grep -c -i "error") && echo "Errors in $pkg: $error_count"); done
+Errors in futarchy_dao/: 530
+Errors in futarchy_decoders/: 233
+Errors in futarchy_lifecycle/: 236
+Errors in futarchy_specialized_actions/: 448
+
  
 # V2 economic incenitves etc
 - [ ] commitment actions Cancel able and uncancel able flag
@@ -11,6 +20,7 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [ ] List or address and how often they can create a proposal with no fee!!! Admin thingy
 - [ ] DAO successful speedy proposal challenge, refund amount as futarchy config
 - [X] verification request proposal type???
+- [ ] check new account tech message about new locking implmentation
 
 # V2 multisig
 - [ ] How UI is aware of multisig / proposal intents
