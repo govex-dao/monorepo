@@ -71,7 +71,7 @@ function buildDaoOgData(dao, apiUrl) {
     title,
     description: `${dao.description || `${dao.dao_name} on Govex • Futarchy governance on Sui`} • ${dao.proposal_count} proposal${dao.proposal_count !== 1 ? "s" : ""}`,
     keywords: `${dao.dao_name}, ${dao.asset_symbol || ""}, ${dao.stable_symbol || ""}, futarchy, DAO, Sui, governance, decentralized organization`,
-    image: `${apiUrl}og/dao-image/${dao.dao_id}`,
+    image: `${apiUrl}og/dao/${dao.dao_id}`,
   };
 }
 
