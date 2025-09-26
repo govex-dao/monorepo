@@ -36,11 +36,9 @@ Object.keys(env).forEach((key) => {
   process.env[key] = env[key];
 });
 
-const fetchHeader = { headers: { Accept: "application/json" } };
-
 async function fetchDaoData(daoId) {
   try {
-    const response = await fetch(`${API_URL}og/dao/${daoId}`, fetchHeader);
+    const response = await fetch(`${API_URL}og/dao/${daoId}?format=json`);
     if (response.ok) return await response.json();
     else throw new Error("Failed to fetch DAO data");
   } catch (error) {
@@ -51,11 +49,8 @@ async function fetchDaoData(daoId) {
 
 async function fetchProposalData(proposalId) {
   try {
-    const response = await fetch(
-      `${API_URL}og/proposal/${proposalId}`,
-      fetchHeader,
-    );
-    if (response.ok) return await response.json();
+    const response = await fetch(`${API_URL}og/proposal/${proposalId}?format=json`);
+    if (response.ok) return await response.json()
     else throw new Error("Failed to fetch proposal data");
   } catch (error) {
     console.error("Error fetching proposal data:", error);
@@ -63,15 +58,74 @@ async function fetchProposalData(proposalId) {
   }
 }
 
-function buildDaoOgData(dao, apiUrl) {
-
-  const title = dao.dao_name !== "Govex" ? `${dao.dao_name} - Powered by Govex` : dao.dao_name;
+function buildDaoOgData(dao) {
+  const title =
+    dao.dao_name !== "Govex"
+      ? `${dao.dao_name} - Powered by Govex`
+      : dao.dao_name;
 
   return {
     title,
     description: `${dao.description || `${dao.dao_name} on Govex • Futarchy governance on Sui`} • ${dao.proposal_count} proposal${dao.proposal_count !== 1 ? "s" : ""}`,
     keywords: `${dao.dao_name}, ${dao.asset_symbol || ""}, ${dao.stable_symbol || ""}, futarchy, DAO, Sui, governance, decentralized organization`,
-    image: `${apiUrl}og/dao/${dao.dao_id}`,
+    image: `${API_URL}og/dao/${dao.dao_id}`,
+  };
+}
+
+
+function buildProposalOgData(proposal) {
+  const proposalId = proposal.id || proposal.proposal_id || proposal.market_state_id;
+
+  // Calculate trading status
+  let tradingStatus = "";
+  if (proposal.created_at && proposal.trading_period_ms) {
+    const now = Date.now();
+    const startTime = parseInt(proposal.created_at);
+    const endTime = startTime + parseInt(proposal.trading_period_ms);
+
+    if (now < startTime) {
+      tradingStatus =
+        "Trading starts: " + new Date(startTime).toLocaleDateString();
+    } else if (now < endTime) {
+      tradingStatus = "Trading ends: " + new Date(endTime).toLocaleDateString();
+    } else {
+      tradingStatus = "Trading ended";
+    }
+  }
+
+  // Add winning outcome information
+  let outcomeInfo = "";
+  if (proposal.winning_outcome !== undefined && proposal.outcome_messages) {
+    const winningMessage = proposal.outcome_messages[proposal.winning_outcome];
+    if (winningMessage && winningMessage !== "") {
+      const now = Date.now();
+      const startTime = parseInt(proposal.created_at);
+      const endTime = startTime + parseInt(proposal.trading_period_ms);
+      const hasEnded = now >= endTime;
+
+      outcomeInfo = hasEnded
+        ? ` • Won: ${winningMessage}`
+        : ` • Currently winning: ${winningMessage}`;
+    }
+  }
+
+  // Add current trades and trader information
+  let priceInfo = "";
+  if (proposal.trades !== undefined && proposal.traders !== undefined) {
+    priceInfo = ` • ${proposal.trades} trades by ${proposal.traders} traders`;
+  }
+
+  // Add volume information if available
+  if (proposal.volume !== undefined && proposal.volume > 0) {
+    priceInfo += ` • Volume: $${proposal.volume.toFixed(2)}`;
+  }
+
+  return {
+    title: `${proposal.title} - ${proposal.dao_name}`,
+    description: tradingStatus + outcomeInfo + priceInfo,
+    keywords: `${proposal.dao_name}, ${proposal.outcome_messages?.slice(0, 2).join(", ")}, ${proposal.title}, futarchy, prediction market, trade, vote, AMM`,
+    image: `${API_URL}og/proposal/${proposalId}`,
+    type: "article",
   };
 }
 
@@ -133,69 +187,14 @@ function generateOgMetaTags(ogData, canonicalUrl) {
   ].join("\n");
 }
 
-function buildProposalOgData(proposal, apiUrl) {
-  const proposalId = proposal.proposal_id || proposal.market_state_id;
-
-  // Calculate trading status
-  let tradingStatus = "";
-  if (proposal.created_at && proposal.trading_period_ms) {
-    const now = Date.now();
-    const startTime = parseInt(proposal.created_at);
-    const endTime = startTime + parseInt(proposal.trading_period_ms);
-
-    if (now < startTime) {
-      tradingStatus =
-        "Trading starts: " + new Date(startTime).toLocaleDateString();
-    } else if (now < endTime) {
-      tradingStatus = "Trading ends: " + new Date(endTime).toLocaleDateString();
-    } else {
-      tradingStatus = "Trading ended";
-    }
-  }
-
-  // Add winning outcome information
-  let outcomeInfo = "";
-  if (proposal.winning_outcome !== undefined && proposal.outcome_messages) {
-    const winningMessage = proposal.outcome_messages[proposal.winning_outcome];
-    if (winningMessage && winningMessage !== "") {
-      const now = Date.now();
-      const startTime = parseInt(proposal.created_at);
-      const endTime = startTime + parseInt(proposal.trading_period_ms);
-      const hasEnded = now >= endTime;
-
-      outcomeInfo = hasEnded
-        ? ` • Won: ${winningMessage}`
-        : ` • Currently winning: ${winningMessage}`;
-    }
-  }
-
-  // Add current trades and trader information
-  let priceInfo = "";
-  if (proposal.trades !== undefined && proposal.traders !== undefined) {
-    priceInfo = ` • ${proposal.trades} trades by ${proposal.traders} traders`;
-  }
-
-  // Add volume information if available
-  if (proposal.volume !== undefined && proposal.volume > 0) {
-    priceInfo += ` • Volume: $${proposal.volume.toFixed(2)}`;
-  }
-
-  return {
-    title: `${proposal.title} - ${proposal.dao_name}`,
-    description: tradingStatus + outcomeInfo + priceInfo,
-    keywords: `${proposal.dao_name}, ${proposal.outcome_messages?.slice(0, 2).join(", ")}, ${proposal.title}, futarchy, prediction market, trade, vote, AMM`,
-    image: `${apiUrl}og/proposal/${proposalId}`,
-    type: "article",
-  };
-}
-
 // Constants
 const OG_DATA = {
   "/": {
     title: "Govex - Futarchy on Sui",
     description:
       "Discover and trade on futarchy proposals. Explore DAOs, prediction markets, and governance on Govex, the leading futarchy platform on Sui.",
-    keywords: "futarchy, prediction markets, trade, DAOs, governance, Sui, Govex",
+    keywords:
+      "futarchy, prediction markets, trade, DAOs, governance, Sui, Govex",
     author: "Govex",
     type: "website",
   },
@@ -225,12 +224,12 @@ async function createServer() {
       server: { middlewareMode: true },
       appType: "custom",
     });
-    
+
     // Handle Chrome DevTools specific route
-    app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
-      res.type('application/json').send('{}');
+    app.get("/.well-known/appspecific/com.chrome.devtools.json", (req, res) => {
+      res.type("application/json").send("{}");
     });
-    
+
     app.use(vite.middlewares);
   } else {
     app.use(
@@ -285,12 +284,12 @@ async function createServer() {
       if (daoMatch) {
         const dao = await fetchDaoData(daoMatch[1]);
         if (dao) {
-          ogData = { ...ogData, ...buildDaoOgData(dao, API_URL) };
+          ogData = { ...ogData, ...buildDaoOgData(dao) };
         }
       } else if (proposalMatch) {
         const proposal = await fetchProposalData(proposalMatch[1]);
         if (proposal) {
-          ogData = { ...ogData, ...buildProposalOgData(proposal, API_URL) };
+          ogData = { ...ogData, ...buildProposalOgData(proposal) };
         }
       }
 
@@ -323,7 +322,7 @@ async function createServer() {
       // Extract style tags from SSR
       const styleTagsRegex = /<style[^>]*>[\s\S]*?<\/style>/g;
       const styleTags = html.match(styleTagsRegex) || [];
-      const htmlWithoutStyles = html.replace(styleTagsRegex, '');
+      const htmlWithoutStyles = html.replace(styleTagsRegex, "");
 
       // Replace placeholders in template
       const finalHtml = template
