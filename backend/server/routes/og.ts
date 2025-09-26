@@ -11,7 +11,7 @@ const router = Router();
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
     const { daoId } = req.params;
-    const returnJson = req.query.format === 'json' || req.headers.accept?.includes('application/json');
+    const returnJson = req.query.format === 'json';
 
     // Validate input
     if (!validateId(daoId)) {
@@ -87,10 +87,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
 router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Response) => {
   try {
     const { propId } = req.params;
-    // Only return JSON if explicitly requested via query param
-    // Don't check Accept header as OG crawlers may send various headers
     const returnJson = req.query.format === 'json';
-
 
     // Validate input
     if (!validateId(propId)) {
