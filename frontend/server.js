@@ -64,6 +64,7 @@ function buildDaoOgData(dao) {
       ? `${dao.dao_name} - Powered by Govex`
       : dao.dao_name;
 
+      console.log(dao);
   return {
     title,
     description: `${dao.description || `${dao.dao_name} on Govex • Futarchy governance on Sui`} • ${dao.proposal_count} proposal${dao.proposal_count !== 1 ? "s" : ""}`,
@@ -71,7 +72,6 @@ function buildDaoOgData(dao) {
     image: `${API_URL}og/dao/${dao.dao_id}`,
   };
 }
-
 
 function buildProposalOgData(proposal) {
   const proposalId = proposal.id || proposal.proposal_id || proposal.market_state_id;
