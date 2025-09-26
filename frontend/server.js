@@ -8,8 +8,22 @@ import { loadEnv } from "vite";
 // Configuration
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isProduction = process.env.NODE_ENV === "production";
-const PORT = process.env.PORT || 5173;
+const PORT = parseInt(process.env.PORT || "5173", 10);
 const HOST = "0.0.0.0";
+
+let API_URL = "";
+if (process.env.VITE_API_URL) {
+  // If VITE_API_URL is set to "http://localhost:3000/", use it as-is (for local dev)
+  if (process.env.VITE_API_URL === "http://localhost:3000/") {
+    API_URL = "http://localhost:3000/";
+  } else {
+    // Otherwise, use https and append trailing slash
+    API_URL = `https://${process.env.VITE_API_URL}/`;
+  }
+} else {
+  // Default to production API endpoint if not set
+  API_URL = "https://www.govex.ai/api/";
+}
 
 // Load environment variables
 const env = loadEnv(
@@ -17,67 +31,53 @@ const env = loadEnv(
   process.cwd(),
   "",
 );
+
 Object.keys(env).forEach((key) => {
   process.env[key] = env[key];
 });
 
-const API_URL = process.env.VITE_API_URL ? `https://${process.env.VITE_API_URL}/` : "http://localhost:3000/";
-console.log('Environment API URL:', process.env.VITE_API_URL);
-console.log('Constructed API URL:', API_URL);
+const fetchHeader = { headers: { Accept: "application/json" } };
 
-// Helper Functions
 async function fetchDaoData(daoId) {
   try {
-    const response = await fetch(`${API_URL}og/dao/${daoId}`, {
-      headers: { Accept: "application/json" },
-    });
-    if (response.ok) {
-      return await response.json();
-    }
+    const response = await fetch(`${API_URL}og/dao/${daoId}`, fetchHeader);
+    if (response.ok) return await response.json();
+    else throw new Error("Failed to fetch DAO data");
   } catch (error) {
     console.error("Error fetching DAO data:", error);
+    return null;
   }
-  return null;
 }
 
 async function fetchProposalData(proposalId) {
   try {
-    const response = await fetch(`${API_URL}og/proposal/${proposalId}`, {
-      headers: { Accept: "application/json" },
-    });
-    if (response.ok) {
-      return await response.json();
-    }
+    const response = await fetch(
+      `${API_URL}og/proposal/${proposalId}`,
+      fetchHeader,
+    );
+    if (response.ok) return await response.json();
+    else throw new Error("Failed to fetch proposal data");
   } catch (error) {
     console.error("Error fetching proposal data:", error);
+    return null;
   }
-  return null;
 }
 
 function buildDaoOgData(dao, apiUrl) {
-  const ogImageParams = new URLSearchParams({
-    name: dao.dao_name,
-    description: dao.description || "",
-    proposalCount: dao.proposal_count.toString(),
-    hasLiveProposal: dao.has_live_proposal.toString(),
-    isVerified: dao.verified.toString(),
-    logoUrl: dao.icon_url || "",
-  });
+
+  const title = dao.dao_name !== "Govex" ? `${dao.dao_name} - Powered by Govex` : dao.dao_name;
 
   return {
-    title:
-      dao.dao_name !== "Govex"
-        ? `${dao.dao_name} - Powered by Govex`
-        : dao.dao_name,
+    title,
     description: `${dao.description || `${dao.dao_name} on Govex • Futarchy governance on Sui`} • ${dao.proposal_count} proposal${dao.proposal_count !== 1 ? "s" : ""}`,
     keywords: `${dao.dao_name}, ${dao.asset_symbol || ""}, ${dao.stable_symbol || ""}, futarchy, DAO, Sui, governance, decentralized organization`,
-    image: `${apiUrl}og/dao-image?${ogImageParams.toString()}`,
+    image: `${apiUrl}og/dao-image/${dao.dao_id}`,
   };
 }
 
 function generateOgMetaTags(ogData, canonicalUrl) {
   if (!ogData.title) return "";
-  
+
   return [
     // Basic SEO
     `<title>${ogData.title}</title>`,
@@ -144,7 +144,8 @@ function buildProposalOgData(proposal, apiUrl) {
     const endTime = startTime + parseInt(proposal.trading_period_ms);
 
     if (now < startTime) {
-      tradingStatus = "Trading starts: " + new Date(startTime).toLocaleDateString();
+      tradingStatus =
+        "Trading starts: " + new Date(startTime).toLocaleDateString();
     } else if (now < endTime) {
       tradingStatus = "Trading ends: " + new Date(endTime).toLocaleDateString();
     } else {
@@ -189,23 +190,20 @@ function buildProposalOgData(proposal, apiUrl) {
 }
 
 // Constants
-const DEFAULT_OG_DATA = {
-  title: "Govex - Futarchy on Sui",
-  description:
-    "Discover and trade on futarchy proposals. Explore DAOs, prediction markets, and governance on Govex, the leading futarchy platform on Sui.",
-  keywords:
-    "futarchy, prediction markets, trade, DAOs, governance, Sui, Govex",
-  author: "Govex",
-  type: "website",
-};
-
-const PAGE_OG_DATA = {
+const OG_DATA = {
+  "/": {
+    title: "Govex - Futarchy on Sui",
+    description:
+      "Discover and trade on futarchy proposals. Explore DAOs, prediction markets, and governance on Govex, the leading futarchy platform on Sui.",
+    keywords: "futarchy, prediction markets, trade, DAOs, governance, Sui, Govex",
+    author: "Govex",
+    type: "website",
+  },
   "/create": {
     title: "Create - Govex",
     description:
       "Create new proposals or DAOs on Govex. Launch your own futarchy markets and participate in decentralized governance on Sui.",
-    keywords:
-      "create DAO, create proposal, futarchy, governance, Sui, Govex",
+    keywords: "create DAO, create proposal, futarchy, governance, Sui, Govex",
   },
   "/learn": {
     title: "Learn - Govex",
@@ -227,6 +225,12 @@ async function createServer() {
       server: { middlewareMode: true },
       appType: "custom",
     });
+    
+    // Handle Chrome DevTools specific route
+    app.get('/.well-known/appspecific/com.chrome.devtools.json', (req, res) => {
+      res.type('application/json').send('{}');
+    });
+    
     app.use(vite.middlewares);
   } else {
     app.use(
@@ -239,9 +243,6 @@ async function createServer() {
   // Main route handler
   app.get("*", async (req, res) => {
     const url = req.originalUrl;
-    
-    console.log(req.get("host"))
-    console.log(API_URL)
     try {
       let template, render;
 
@@ -266,23 +267,21 @@ async function createServer() {
         }
       }
 
-
       // Initialize OG data
       let ogData = {
-        ...DEFAULT_OG_DATA,
+        ...OG_DATA["/"],
         image: `https://${req.get("host")}/images/og.png`,
       };
 
       // Override with page-specific data if available
-      if (PAGE_OG_DATA[url]) {
-        ogData = { ...ogData, ...PAGE_OG_DATA[url] };
+      if (url in OG_DATA) {
+        ogData = { ...ogData, ...OG_DATA[url] };
       }
 
       // Handle dynamic routes
       const daoMatch = url.match(/^\/dao\/(.+)$/);
       const proposalMatch = url.match(/^\/trade\/(.+)$/);
 
-      console.log("PROPOSAL MATCH", proposalMatch)
       if (daoMatch) {
         const dao = await fetchDaoData(daoMatch[1]);
         if (dao) {
@@ -290,10 +289,7 @@ async function createServer() {
         }
       } else if (proposalMatch) {
         const proposal = await fetchProposalData(proposalMatch[1]);
-        console.log(proposal)
         if (proposal) {
-          console.error("Proposal data:", JSON.stringify(proposal, null, 2));
-          console.error("Trades and traders:", proposal.trades, proposal.traders);
           ogData = { ...ogData, ...buildProposalOgData(proposal, API_URL) };
         }
       }
@@ -301,7 +297,7 @@ async function createServer() {
       // Handle SSR (development only for now)
       let html = "";
       let helmetTags = "";
-      
+
       if (!isProduction) {
         try {
           const helmetContext = {};
@@ -311,7 +307,9 @@ async function createServer() {
             helmet?.title?.toString() || "",
             helmet?.meta?.toString() || "",
             helmet?.link?.toString() || "",
-          ].filter(Boolean).join("\n");
+          ]
+            .filter(Boolean)
+            .join("\n");
         } catch (error) {
           console.error("SSR failed:", error.message);
           // Continue with client-side rendering
@@ -322,10 +320,18 @@ async function createServer() {
       const canonicalUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
       const ogMetaTags = generateOgMetaTags(ogData, canonicalUrl);
 
+      // Extract style tags from SSR
+      const styleTagsRegex = /<style[^>]*>[\s\S]*?<\/style>/g;
+      const styleTags = html.match(styleTagsRegex) || [];
+      const htmlWithoutStyles = html.replace(styleTagsRegex, '');
+
       // Replace placeholders in template
       const finalHtml = template
-        .replace(`<!--app-html-->`, html)
-        .replace(`<!--app-head-->`, [ogMetaTags, helmetTags].filter(Boolean).join("\n"));
+        .replace(`<!--app-html-->`, htmlWithoutStyles)
+        .replace(
+          `<!--app-head-->`,
+          [ogMetaTags, helmetTags, ...styleTags].filter(Boolean).join("\n"),
+        );
 
       res.status(200).set({ "Content-Type": "text/html" }).send(finalHtml);
     } catch (error) {

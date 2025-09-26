@@ -7,6 +7,7 @@ import fs from 'fs/promises';
 
 const router = Router();
 
+// Get dao data or image by ID
 router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response): Promise<void> => {
   try {
     const { daoId } = req.params;
@@ -79,46 +80,6 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
   } catch (error) {
     logSecurityError('generateDaoOG', error);
     res.status(500).json({ error: 'Failed to generate image' });
-  }
-});
-
-// Generate proposal image from query parameters
-router.get('/proposal-image', async (req: Request, res: Response) => {
-  try {
-    const {
-      title, description, daoName, daoLogo, currentState,
-      winningOutcome, outcomeMessages, traders, trades, volume,
-      tradingStartDate, tradingPeriodMs
-    } = req.query;
-
-    console.log('DEBUG volume:', volume);
-    console.log('DEBUG Number(volume):', Number(volume));
-    console.log('DEBUG typeof volume:', typeof volume);
-
-    const svg = await generateProposalOG({
-      title: title as string,
-      description: description as string || "",
-      daoName: daoName as string,
-      daoLogo: daoLogo as string || "placeholder",
-      currentState: Number(currentState) || 0,
-      winningOutcome: Number(winningOutcome) || 0,
-      outcomeMessages: outcomeMessages ? JSON.parse(outcomeMessages as string) : undefined,
-      traders: Number(traders) || 0,
-      trades: Number(trades) || 0,
-      volume: Number(volume) || 0,
-      tradingStartDate: new Date(tradingStartDate as string),
-      tradingPeriodMs: Number(tradingPeriodMs) || 0
-    });
-
-    const png = renderSvgToPng(svg, {
-      dpi: 300,
-      shapeRendering: 1,
-      textRendering: 1,
-      imageRendering: 1,
-    });
-    sendPngResponse(res, png);
-  } catch (error) {
-    sendErrorResponse(res, error, 'Error generating proposal OG image');
   }
 });
 

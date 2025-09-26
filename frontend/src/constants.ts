@@ -17,10 +17,16 @@ export enum QueryKey {
   VerificationHistory = "verification-history",
 }
 
+let apiEndpoint = import.meta.env.VITE_API_URL
+  ? `https://${import.meta.env.VITE_API_URL}/`
+  : "https://www.govex.ai/api/";
+if(import.meta.env.VITE_API_URL == "http://localhost:3000/") {
+  apiEndpoint = "http://localhost:3000/";
+}
+
+
 export const CONSTANTS = {
-  apiEndpoint: import.meta.env.VITE_API_URL
-    ? `https://${import.meta.env.VITE_API_URL}/`
-    : "https://www.govex.ai/api/",
+  apiEndpoint,
   futarchyPackage:
     network === "mainnet"
       ? mainnetfutarchy.packageId
