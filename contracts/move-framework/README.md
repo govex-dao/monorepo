@@ -12,14 +12,15 @@
 
 This fork introduces major architectural changes to make the framework suitable for DAO governance:
 
-1. **Serialize-Then-Destroy Pattern**: Novel resource safety pattern maintaining BCS compatibility while enforcing explicit lifecycle management
-2. **Type-Based Action System with BCS Validation**: Replaced string-based action descriptors with compile-time type safety using TypeName
-3. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
-4. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
-5. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
-6. **On-Chain Schema System**: Self-describing actions via decoupled schema registry, eliminating decoder maintenance burden
-7. **Vesting Composability**: Full PTB integration for vesting claims with flexible destinations
-8. **Simplified Architecture**: Removed ExecutionContext - PTBs handle object flow naturally
+1. **Init Actions for Atomic DAO Bootstrapping**: Enable intents during unshared Account initialization for atomic DAO setup
+2. **Serialize-Then-Destroy Pattern**: Novel resource safety pattern maintaining BCS compatibility while enforcing explicit lifecycle management
+3. **Type-Based Action System with BCS Validation**: Replaced string-based action descriptors with compile-time type safety using TypeName
+4. **Complete Lock Removal**: Eliminated all pessimistic locking to prevent permanent lock footguns
+5. **Performance Optimizations**: O(N log N) algorithms for operations that were O(N²)
+6. **Enhanced Streaming/Vesting**: Comprehensive payment systems with pause/resume and multi-beneficiary support
+7. **On-Chain Schema System**: Self-describing actions via decoupled schema registry, eliminating decoder maintenance burden
+8. **Vesting Composability**: Full PTB integration for vesting claims with flexible destinations
+9. **Simplified Architecture**: Removed ExecutionContext - PTBs handle object flow naturally
 
 These changes result in:
 - **Atomic DAO initialization** through natural PTB object flow
@@ -515,7 +516,102 @@ public fun claim_vesting(...): Coin<CoinType> {
 - Used proper ID to address conversion: `id.id_to_address().to_string()`
 - Clean architecture: Protocol layer unaware of decoders, validation at application boundary
 
-### Major Change #10: Removed ExecutionContext (2025-09-16)
+### Major Change #10: Init Actions for Atomic DAO Bootstrapping (2025-09-29)
+
+**Purpose**: Enable intents to be called during the initialization process of unshared Accounts, allowing atomic DAO creation with complex setup operations.
+
+#### The Challenge
+
+DAOs need to perform complex initialization atomically:
+- Lock TreasuryCap and mint initial supply
+- Deposit funds to treasury vaults
+- Create vesting schedules for founders/team
+- Set up payment streams for operations
+- Configure NFT kiosks and package upgrade controls
+
+Previously, these operations required Auth checks and shared Accounts, preventing atomic initialization.
+
+#### The Solution: Init Actions Pattern
+
+**Architecture**:
+```move
+// 1. Create unshared Account (hot potato)
+let account = factory::create_dao_unshared(...);
+
+// 2. Call init actions without Auth checks
+init_actions::init_lock_treasury_cap(account, treasury_cap);
+init_actions::init_mint_and_deposit(account, 1_000_000, b"Main Vault", ctx);
+init_actions::init_create_founder_vesting(account, coin, founder, cliff_ms, clock, ctx);
+init_actions::init_create_salary_stream(account, employee, monthly_amount, 12, clock, ctx);
+
+// 3. Share Account publicly
+account_protocol::share_account(account);
+```
+
+**Key Functions Added**:
+
+**New Module**: `init_actions.move` - Entry point for all init operations
+- Vault: `init_vault_deposit()`, `init_vault_deposit_default()`
+- Currency: `init_lock_treasury_cap()`, `init_mint()`, `init_mint_and_deposit()`
+- Vesting: `init_create_vesting()`, `init_create_founder_vesting()`, `init_create_team_vesting()`
+- Streams: `init_create_vault_stream()`, `init_create_salary_stream()`
+- Package: `init_lock_upgrade_cap()`
+- Kiosk: `init_open_kiosk()`
+- Access: `init_lock_capability()`
+- Owned: `init_store_object()`
+- Transfer: `init_transfer_object()`, `init_transfer_objects()`
+
+**Core `do_*_unshared()` Functions** (9 files modified):
+- `access_control.move`: `do_lock_cap_unshared()` - Lock capabilities
+- `currency.move`: `do_lock_cap_unshared()`, `do_mint_unshared()`, `do_mint_to_coin_unshared()` - Currency operations
+- `kiosk.move`: `do_open_unshared()` - NFT kiosk creation
+- `package_upgrade.move`: `do_lock_cap_unshared()` - Package upgrade control
+- `transfer.move`: `do_transfer_unshared()` - Object transfers
+- `vault.move`: `do_deposit_unshared()`, `create_stream_unshared()`, `default_vault_name()` - Treasury and streams
+- `vesting.move`: `do_create_vesting_unshared()` - Token vesting (pre-existing)
+- `account.move` (protocol): `share_account()` - Required for hot potato completion
+
+#### Safety Model
+
+**Visibility Enforcement**:
+- All `do_*_unshared()` functions use `public(package)` visibility
+- Only callable from `init_actions` module in same package
+- Naming convention (`_unshared` suffix) documents intent
+- Sui's ownership model prevents calling on shared objects
+
+**Why No Runtime Checks**:
+Move doesn't provide `is_shared()` checks, so safety is enforced through:
+1. **Package visibility** - Compiler prevents external calls
+2. **Hot potato pattern** - Account must be consumed by sharing
+3. **Documentation** - Clear SAFETY comments in all functions
+
+#### Benefits
+
+- **Atomic Initialization**: All setup happens in one transaction
+- **No Auth Required**: Bypasses checks safely before sharing
+- **PTB Composable**: Natural object flow between init functions
+- **Type Safe**: Compile-time guarantees from Sui ownership
+- **Gas Efficient**: No proposal overhead for initial setup
+- **Production Ready**: Mirrors pattern already in `vesting.move`
+
+#### Files Modified
+
+**New Files**:
+- `actions/sources/init/init_actions.move` - Complete init API
+
+**Modified Files** (9 total):
+- `actions/sources/lib/access_control.move`
+- `actions/sources/lib/currency.move`
+- `actions/sources/lib/kiosk.move`
+- `actions/sources/lib/package_upgrade.move`
+- `actions/sources/lib/transfer.move`
+- `actions/sources/lib/vault.move`
+- `actions/sources/lib/vesting.move`
+- `protocol/sources/account.move`
+
+**Pattern Origin**: This is a completely new pattern not present in the original framework. The original Account Protocol only supported creating shared Accounts immediately via `account::new()`, requiring all initialization to go through the Auth + intent flow. This innovation enables atomic DAO bootstrapping without proposal overhead.
+
+### Major Change #11: Removed ExecutionContext (2025-09-16)
 
 **Purpose**: Simplify architecture by removing unnecessary ExecutionContext
 

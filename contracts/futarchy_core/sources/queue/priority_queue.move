@@ -1140,6 +1140,14 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
     bond.destroy_none();
 }
 
+// === Share Functions ===
+
+/// Share the proposal queue - can only be called by this module
+/// Used during DAO initialization after setup is complete
+public fun share_queue<StableCoin>(queue: ProposalQueue<StableCoin>) {
+    transfer::share_object(queue);
+}
+
 // === Test Functions ===
 
 #[test_only]

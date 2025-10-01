@@ -94,6 +94,55 @@ CREATION → OPERATION → EVALUATION → [DISSOLUTION if price < NAV]
          └── Continue if price > NAV
 ```
 
+## DAO Creation & Init Actions
+
+### How DAO Bootstrapping Works
+
+DAOs are created and initialized using PTB composition with hot potato pattern for atomicity:
+
+```typescript
+// PTB composes init actions directly - no central dispatcher
+const [account, queue, pool] = tx.moveCall({
+  target: 'factory::create_dao_unshared',  // Returns unshared hot potatoes
+  ...
+});
+
+// Each module exposes its own init functions
+tx.moveCall({
+  target: 'operating_agreement::init_create_operating_agreement',
+  arguments: [account, lines, difficulties, ...]
+});
+
+tx.moveCall({
+  target: 'stream_actions::init_create_stream',
+  arguments: [account, recipient, amount, ...]
+});
+
+tx.moveCall({
+  target: 'account_spot_pool::init_add_liquidity',
+  arguments: [assetCoin, stableCoin, pool]
+});
+
+// Must finalize to share objects (hot potato consumed)
+tx.moveCall({
+  target: 'factory::finalize_and_share_dao',
+  arguments: [account, queue, pool]
+});
+```
+
+**Key Points:**
+- **No Serialization**: PTBs call entry functions directly (no ActionSpec needed for init)
+- **Module Ownership**: Each module (operating_agreement, stream_actions, etc.) owns its init functions
+- **Atomic Guarantee**: Hot potatoes ensure all-or-nothing execution
+- **Extensible**: Any module can add `init_*` entry functions without modifying core
+
+**Share Functions Added:**
+- `account::share_account()`
+- `priority_queue::share_queue()`
+- `account_spot_pool::share_pool()`
+
+These are required because Sui only allows `share_object` in the module that defines the type.
+
 ## PTB-Driven Intent Architecture
 
 ### Core Components & Their Roles

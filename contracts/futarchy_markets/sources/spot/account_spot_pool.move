@@ -541,3 +541,13 @@ public fun lp_token_info<AssetType, StableType>(
 ): (ID, u64) {
     (object::id(token), token.amount)
 }
+
+// === Share Functions ===
+
+/// Share the account spot pool - can only be called by this module
+/// Used during DAO initialization after setup is complete
+public fun share_pool<AssetType, StableType>(
+    pool: AccountSpotPool<AssetType, StableType>
+) {
+    transfer::share_object(pool);
+}

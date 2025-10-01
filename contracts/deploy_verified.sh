@@ -23,39 +23,107 @@ log() {
     echo "$1" | tee -a "$DEPLOYMENT_LOG"
 }
 
+# Function to resolve address conflicts by updating all Move.toml files with deployed addresses
+resolve_address_conflicts() {
+    echo -e "${BLUE}Resolving any remaining address conflicts...${NC}"
+
+    # Update all deployed package addresses to ensure consistency
+    for deployed_pkg in "${DEPLOYED_PACKAGES[@]}"; do
+        local pkg_name=$(echo "$deployed_pkg" | cut -d: -f1)
+        local pkg_addr=$(echo "$deployed_pkg" | cut -d: -f2)
+        local pkg_var=""
+
+        # Convert package name to variable name
+        case "$pkg_name" in
+            "Kiosk") pkg_var="kiosk" ;;
+            "AccountExtensions") pkg_var="account_extensions" ;;
+            "AccountProtocol") pkg_var="account_protocol" ;;
+            "AccountActions") pkg_var="account_actions" ;;
+            *) pkg_var="$pkg_name" ;;
+        esac
+
+        # Update all Move.toml files with this package's address
+        find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
+            sed -i '' "/^${pkg_var} = /c\\
+${pkg_var} = \"${pkg_addr}\"" {} \; 2>/dev/null || true
+    done
+}
+
 # Function to deploy and verify a package
 deploy_and_verify() {
     local pkg_path=$1
     local pkg_name=$2
     local pkg_var_name=$3
-    
+
     echo -e "${YELLOW}Deploying $pkg_name...${NC}"
     cd "$pkg_path"
+
+    # Set package address to 0x0 for deployment in the current package
+    # Use a more robust sed pattern to avoid escaping issues
+    sed -i '' "/^${pkg_var_name} = /c\\
+${pkg_var_name} = \"0x0\"" Move.toml 2>/dev/null || true
+
+    # Also reset this package's address in ALL other Move.toml files to ensure consistency
+    find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
+        sed -i '' "/^${pkg_var_name} = /c\\
+${pkg_var_name} = \"0x0\"" {} \; 2>/dev/null || true
     
-    # Set package address to 0x0 for deployment
-    sed -i '' "s/^$pkg_var_name = \"0x[a-f0-9]*\"/$pkg_var_name = \"0x0\"/" Move.toml 2>/dev/null || true
-    
-    # Build first
+    # Build first and check for success
     echo "Building $pkg_name..."
-    sui move build --skip-fetch-latest-git-deps 2>&1 | tee -a "$DEPLOYMENT_LOG"
-    
+    local build_log="/tmp/build_${pkg_name}_$$.log"
+    if ! sui move build --skip-fetch-latest-git-deps 2>&1 | tee "$build_log" | tee -a "$DEPLOYMENT_LOG"; then
+        # Build failed, check if it's due to address conflicts
+        if grep -q "Conflicting assignments for address" "$build_log"; then
+            echo -e "${YELLOW}Address conflict detected, attempting to resolve...${NC}"
+            resolve_address_conflicts
+
+            # Retry build after resolving conflicts
+            echo "Retrying build for $pkg_name..."
+            if ! sui move build --skip-fetch-latest-git-deps 2>&1 | tee -a "$DEPLOYMENT_LOG"; then
+                echo -e "${RED}Build failed for $pkg_name even after conflict resolution${NC}"
+                rm -f "$build_log"
+                return 1
+            fi
+        else
+            echo -e "${RED}Build failed for $pkg_name${NC}"
+            rm -f "$build_log"
+            return 1
+        fi
+    fi
+    rm -f "$build_log"
+
     # Deploy and capture full output
     echo "Publishing $pkg_name..."
     local temp_file="/tmp/deploy_${pkg_name}_$$.txt"
     sui client publish --gas-budget 5000000000 --skip-dependency-verification 2>&1 | tee "$temp_file"
     
-    # Extract package ID
+    # Extract package ID with better error handling
     local pkg_id=$(grep "PackageID:" "$temp_file" | sed 's/.*PackageID: //' | awk '{print $1}')
+
+    # Check if deployment failed due to address conflicts
+    if grep -q "Conflicting assignments for address" "$temp_file"; then
+        echo -e "${YELLOW}Deployment failed due to address conflict, resolving and retrying...${NC}"
+        rm -f "$temp_file"
+
+        # Resolve conflicts and retry once
+        resolve_address_conflicts
+
+        echo "Retrying deployment for $pkg_name..."
+        sui client publish --gas-budget 5000000000 --skip-dependency-verification 2>&1 | tee "$temp_file"
+        pkg_id=$(grep "PackageID:" "$temp_file" | sed 's/.*PackageID: //' | awk '{print $1}')
+    fi
+
     rm -f "$temp_file"
-    
+
     if [ -n "$pkg_id" ] && [ "$pkg_id" != "null" ] && [ "$pkg_id" != "" ]; then
         echo -e "${GREEN}✓ $pkg_name deployed at: $pkg_id${NC}"
         log "✓ $pkg_name: $pkg_id"
-        
-        # Update all Move.toml files with new address
+
+        # Update all Move.toml files with new address using robust sed pattern
         find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
-            sed -i '' "s/$pkg_var_name = \"0x[a-f0-9]*\"/$pkg_var_name = \"$pkg_id\"/" {} \;
-        
+            sed -i '' "/^${pkg_var_name} = /c\\
+${pkg_var_name} = \"${pkg_id}\"" {} \;
+
         DEPLOYED_PACKAGES+=("$pkg_name:$pkg_id")
         return 0
     else
@@ -64,20 +132,30 @@ deploy_and_verify() {
     fi
 }
 
-# Package list in deployment order
+# Package list in deployment order (22 packages total)
 declare -a PACKAGES=(
+    # Move Framework packages (4)
     "Kiosk:/Users/admin/monorepo/contracts/move-framework/deps/kiosk:kiosk"
     "AccountExtensions:/Users/admin/monorepo/contracts/move-framework/packages/extensions:account_extensions"
     "AccountProtocol:/Users/admin/monorepo/contracts/move-framework/packages/protocol:account_protocol"
     "AccountActions:/Users/admin/monorepo/contracts/move-framework/packages/actions:account_actions"
+
+    # Futarchy packages (18)
     "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
+    "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
     "futarchy_markets:/Users/admin/monorepo/contracts/futarchy_markets:futarchy_markets"
     "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"
     "futarchy_multisig:/Users/admin/monorepo/contracts/futarchy_multisig:futarchy_multisig"
+    "futarchy_payments:/Users/admin/monorepo/contracts/futarchy_payments:futarchy_payments"
+    "futarchy_streams:/Users/admin/monorepo/contracts/futarchy_streams:futarchy_streams"
+    "futarchy_oracle:/Users/admin/monorepo/contracts/futarchy_oracle:futarchy_oracle"
+    "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
-    "futarchy_specialized_actions:/Users/admin/monorepo/contracts/futarchy_specialized_actions:futarchy_specialized_actions"
+    "futarchy_legal_actions:/Users/admin/monorepo/contracts/futarchy_legal_actions:futarchy_legal_actions"
+    "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
     "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
+    "futarchy_decoders:/Users/admin/monorepo/contracts/futarchy_decoders:futarchy_decoders"
     "futarchy_dao:/Users/admin/monorepo/contracts/futarchy_dao:futarchy_dao"
 )
 
@@ -85,10 +163,33 @@ declare -a PACKAGES=(
 main() {
     local start_from="${1:-}"
     local start_index=0
-    
+
+    # Clean up any leftover futarchy_utils references before deployment
+    echo -e "${BLUE}Cleaning up futarchy_utils references...${NC}"
+    find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
+        sed -i '' '/^futarchy_utils = /d' {} \; 2>/dev/null || true
+
+    # Reset all package addresses to 0x0 for fresh deployment if starting from beginning
+    if [ -z "$start_from" ] || [ "$start_from" = "Kiosk" ]; then
+        echo -e "${BLUE}Resetting all package addresses to 0x0 for fresh deployment...${NC}"
+        find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
+            sed -i '' 's/= "0x[a-f0-9][a-f0-9]*"/= "0x0"/g' {} \; 2>/dev/null || true
+    fi
+
     echo -e "${BLUE}Checking gas balance...${NC}"
     sui client gas | head -10
     echo ""
+
+    # Request gas from faucet if on devnet/testnet
+    local env=$(sui client active-env)
+    if [[ "$env" == "devnet" || "$env" == "testnet" ]]; then
+        echo -e "${YELLOW}Requesting gas from faucet...${NC}"
+        sui client faucet
+        echo ""
+        echo "Updated gas balance:"
+        sui client gas | head -10
+        echo ""
+    fi
     
     # Find start index if package name provided
     if [ -n "$start_from" ]; then
@@ -131,15 +232,51 @@ main() {
     echo ""
     echo -e "${BLUE}=== Final Verification ===${NC}"
     echo ""
-    
-    # Verify all packages
+
+    # Final address conflict resolution
+    resolve_address_conflicts
+
+    # Verify all packages build correctly
+    echo -e "${BLUE}Verifying all packages build successfully...${NC}"
+    local build_failed=false
+    for pkg in "${DEPLOYED_PACKAGES[@]}"; do
+        local name=$(echo "$pkg" | cut -d: -f1)
+        local addr=$(echo "$pkg" | cut -d: -f2)
+
+        # Find package path
+        local pkg_path=""
+        for package_entry in "${PACKAGES[@]}"; do
+            IFS=':' read -r pkg_name pkg_path_temp pkg_var <<< "$package_entry"
+            if [ "$pkg_name" = "$name" ]; then
+                pkg_path="$pkg_path_temp"
+                break
+            fi
+        done
+
+        if [ -n "$pkg_path" ]; then
+            echo -n "Building $name... "
+            cd "$pkg_path"
+            if sui move build --skip-fetch-latest-git-deps >/dev/null 2>&1; then
+                echo -e "${GREEN}✓${NC}"
+            else
+                echo -e "${RED}✗${NC}"
+                build_failed=true
+            fi
+        fi
+    done
+
+    if [ "$build_failed" = true ]; then
+        echo -e "${YELLOW}Some packages failed to build. This may indicate configuration issues.${NC}"
+    fi
+
+    # Display deployment results
     local verified=0
     local total=0
     for pkg in "${DEPLOYED_PACKAGES[@]}"; do
         total=$((total + 1))
         local name=$(echo "$pkg" | cut -d: -f1)
         local addr=$(echo "$pkg" | cut -d: -f2)
-        
+
         printf "%-30s: %s\n" "$name" "$addr"
         verified=$((verified + 1))
     done

@@ -6,4 +6,4 @@ version = "0.0.1"
 [dependencies]
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b5633abb4177" }
 [addresses]
-kiosk = "0x0a54d8e6d953f02f20b9e71b17fbdec2e4974649e86bd0135319b536f65b53a7"
+kiosk = "0xb6be662848f2a49f0741ff1134e99bb34de6acbdd315cc4101386b705af2115b"

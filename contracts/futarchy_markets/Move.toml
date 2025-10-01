@@ -8,7 +8,7 @@ futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 [addresses]
-futarchy_markets = "0x0"
-futarchy_types = "0x0"
-futarchy_one_shot_utils = "0xb84a63996ea75cf99dd08807dcc1fc796a05b4ba4876f4fcd1c227ee869704a7"
-futarchy_core = "0x0"
+futarchy_markets = "0xeda4b72530161726a84127dfde5db101efca03ed3b57ee6571aa7ffb2eb413fb"
+futarchy_types = "0x09a59bd38721991778a28118a3dfe6f2a34abc8ebc4598a26507f2e75dae89b4"
+futarchy_one_shot_utils = "0xc1bd7bc7b41a0338303273ea5d1903e789b82280b7ffd8532b20c65e73a95c6d"
+futarchy_core = "0xd416a36b7edc649f9f4e26931ce2167fb99bbf064763888898fd4aa8c7336923"

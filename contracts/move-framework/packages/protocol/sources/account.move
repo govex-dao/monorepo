@@ -1187,6 +1187,22 @@ public fun set_max_objects_for_testing<Config>(account: &mut Account<Config>, ma
     tracker.max_objects = max;
 }
 
+// === Share Functions ===
+
+/// Share an account - can only be called by this module
+/// Used during DAO/account initialization after setup is complete
+///
+/// ## FORK NOTE
+/// **Added**: `share_account()` function for atomic DAO initialization
+/// **Reason**: Sui requires that `share_object()` be called from the module that defines
+/// the type. This function enables the hot potato pattern: factory creates unshared Account,
+/// PTB performs initialization actions, then factory calls this to share Account publicly.
+/// **Pattern**: Part of create_unshared → init → share_account flow
+/// **Safety**: Public visibility is safe - only works on unshared Accounts owned by caller
+public fun share_account<Config: store>(account: Account<Config>) {
+    transfer::share_object(account);
+}
+
 #[test_only]
 public fun enable_deposits_for_testing<Config>(account: &mut Account<Config>) {
     let tracker = ensure_object_tracker(account);

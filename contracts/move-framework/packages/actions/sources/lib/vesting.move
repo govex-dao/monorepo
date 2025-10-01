@@ -67,7 +67,7 @@ use sui::{
     coin::{Self, Coin},
     clock::Clock,
     event,
-    object::{Self, ID},
+    object::{Self, ID, UID},
     transfer,
     tx_context,
     bcs::{Self, BCS},
@@ -387,6 +387,94 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
 
     // Increment action index
     executable::increment_action_idx(executable);
+}
+
+/// Create vesting during initialization - works on unshared Accounts
+/// This simplified version creates a vesting directly during DAO initialization.
+/// The vesting is shared immediately, and ClaimCap is transferred to recipient.
+/// Returns the vesting ID for reference.
+///
+/// ## FORK NOTE
+/// **Added**: `do_create_vesting_unshared()` for init-time vesting creation (NEW pattern)
+/// **Reason**: Enable DAOs to create token vesting schedules during initialization
+/// (for founders, team, advisors) without requiring Account context or Auth.
+/// Shares Vesting object and transfers ClaimCap to recipient. This is part of the
+/// complete init actions pattern - original framework had no bootstrapping mechanism.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+public(package) fun do_create_vesting_unshared<CoinType>(
+    coin: Coin<CoinType>,
+    recipient: address,
+    start_timestamp: u64,
+    duration_ms: u64,
+    cliff_ms: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    // Calculate end timestamp
+    let end_timestamp = start_timestamp + duration_ms;
+
+    // Calculate cliff time if cliff period specified
+    let cliff_time = if (cliff_ms > 0) {
+        option::some(start_timestamp + cliff_ms)
+    } else {
+        option::none()
+    };
+
+    // Validate parameters
+    let amount = coin.value();
+    assert!(amount > 0, EInvalidVestingParameters);
+    assert!(end_timestamp > start_timestamp, EInvalidVestingParameters);
+    assert!(start_timestamp >= clock.timestamp_ms(), EInvalidVestingParameters);
+    if (cliff_time.is_some()) {
+        let cliff = *cliff_time.borrow();
+        assert!(cliff >= start_timestamp && cliff <= end_timestamp, EInvalidVestingParameters);
+    };
+
+    let id = object::new(ctx);
+    let vesting_id = id.to_inner();
+
+    // Create vesting with default parameters suitable for initialization
+    let vesting = Vesting<CoinType> {
+        id,
+        balance: coin.into_balance(),
+        claimed_amount: 0,
+        start_timestamp,
+        end_timestamp,
+        cliff_time,
+        primary_beneficiary: recipient,
+        additional_beneficiaries: vector::empty(),
+        max_beneficiaries: 10,  // Reasonable default
+        max_per_withdrawal: 0,  // No limit
+        min_interval_ms: 0,     // No minimum interval
+        last_withdrawal_time: 0,
+        is_paused: false,
+        paused_at: option::none(),
+        paused_duration: 0,
+        is_transferable: false,  // Not transferable by default
+        is_cancelable: false,    // Not cancelable for security
+        metadata: option::none(),
+    };
+
+    let claim_cap = ClaimCap {
+        id: object::new(ctx),
+        vesting_id,
+    };
+
+    // Emit creation event
+    event::emit(VestingCreated {
+        vesting_id,
+        beneficiary: recipient,
+        amount,
+        start_time: start_timestamp,
+        end_time: end_timestamp,
+    });
+
+    // Transfer cap and share vesting
+    transfer::transfer(claim_cap, recipient);
+    transfer::share_object(vesting);
+
+    // Return the vesting ID for reference
+    vesting_id
 }
 
 /// Claims vested funds and returns the coin for composability

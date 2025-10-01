@@ -48,12 +48,13 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         final_operations_deadline,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
+    intents::add_typed_action(
+        intent,
         action_types::initiate_dissolution(),
         action_data,
         intent_witness
     );
-    dissolution_actions::destroy_initiate_dissolution(action);
+    // dissolution_actions::destroy_initiate_dissolution(action);
 }
 
 /// Add a batch distribute action to an existing intent
@@ -64,12 +65,13 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = dissolution_actions::new_batch_distribute_action(asset_types);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
-        action_types::batch_distribute(),
+    intents::add_typed_action(
+        intent,
+        action_types::distribute_asset(),
         action_data,
         intent_witness
     );
-    dissolution_actions::destroy_batch_distribute(action);
+    // dissolution_actions::destroy_batch_distribute(action);
 }
 
 /// Add a finalize dissolution action to an existing intent
@@ -84,12 +86,13 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         destroy_account,
     );
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
+    intents::add_typed_action(
+        intent,
         action_types::finalize_dissolution(),
         action_data,
         intent_witness
     );
-    dissolution_actions::destroy_finalize_dissolution(action);
+    // dissolution_actions::destroy_finalize_dissolution(action);
 }
 
 /// Add a cancel dissolution action to an existing intent
@@ -100,12 +103,13 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = dissolution_actions::new_cancel_dissolution_action(reason);
     let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(
+    intents::add_typed_action(
+        intent,
         action_types::cancel_dissolution(),
         action_data,
         intent_witness
     );
-    dissolution_actions::destroy_cancel_dissolution(action);
+    // dissolution_actions::destroy_cancel_dissolution(action);
 }
 
 /// Create a unique key for a dissolution intent

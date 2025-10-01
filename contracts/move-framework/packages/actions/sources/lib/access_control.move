@@ -73,6 +73,22 @@ public fun lock_cap<Config, Cap: key + store>(
     account.add_managed_asset(CapKey<Cap>(), cap, version::current());
 }
 
+/// Lock capability during initialization - works on unshared Accounts
+/// Store any capability in the Account during creation
+///
+/// ## FORK NOTE
+/// **Added**: `do_lock_cap_unshared()` function for init-time capability storage
+/// **Reason**: Allow capabilities to be locked in unshared Accounts during initialization
+/// without requiring Auth, enabling atomic DAO setup with PTBs. Bypasses Auth checks
+/// which are unnecessary before Account is shared.
+/// **Safety**: `public(package)` visibility ensures only init_actions can call
+public(package) fun do_lock_cap_unshared<Config, Cap: key + store>(
+    account: &mut Account<Config>,
+    cap: Cap,
+) {
+    account.add_managed_asset(CapKey<Cap>(), cap, version::current());
+}
+
 /// Checks if there is a Cap locked for a given type.
 public fun has_lock<Config, Cap>(
     account: &Account<Config>

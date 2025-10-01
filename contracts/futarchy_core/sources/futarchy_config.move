@@ -7,6 +7,7 @@ module futarchy_core::futarchy_config;
 use std::{
     string::{Self, String},
     type_name,
+    option::{Self, Option},
 };
 use sui::{
     object::ID,
@@ -14,7 +15,12 @@ use sui::{
     dynamic_field as df,
     tx_context::TxContext,
 };
-use account_protocol::account::{Self, Account};
+use account_protocol::{
+    account::{Self, Account},
+    deps::{Self, Deps},
+    version_witness::VersionWitness,
+};
+use account_extensions::extensions::Extensions;
 use futarchy_core::{
     dao_config::{Self, DaoConfig},
     version,
@@ -398,6 +404,120 @@ public fun record_council_approval_generic<Config: store>(
     let _ = approval;
 }
 
+// === FutarchyOutcome Type ===
+
+/// Outcome for futarchy proposals - represents the intent execution metadata
+public struct FutarchyOutcome has store, drop, copy {
+    // Intent key is the primary identifier - links to the intent in account storage
+    intent_key: String,
+    // These fields are set when proposal is created/approved
+    proposal_id: Option<ID>,
+    market_id: Option<ID>,
+    approved: bool,
+    min_execution_time: u64,
+}
+
+/// Creates a new FutarchyOutcome for intent creation (before proposal exists)
+public fun new_futarchy_outcome(
+    intent_key: String,
+    min_execution_time: u64,
+): FutarchyOutcome {
+    FutarchyOutcome {
+        intent_key,
+        proposal_id: option::none(),
+        market_id: option::none(),
+        approved: false,
+        min_execution_time,
+    }
+}
+
+/// Public constructor for FutarchyOutcome with all fields
+public fun new_futarchy_outcome_full(
+    intent_key: String,
+    proposal_id: Option<ID>,
+    market_id: Option<ID>,
+    approved: bool,
+    min_execution_time: u64,
+): FutarchyOutcome {
+    FutarchyOutcome {
+        intent_key,
+        proposal_id,
+        market_id,
+        approved,
+        min_execution_time,
+    }
+}
+
+/// Updates proposal and market IDs after proposal creation
+public fun set_outcome_proposal_and_market(
+    outcome: &mut FutarchyOutcome,
+    proposal_id: ID,
+    market_id: ID,
+) {
+    outcome.proposal_id = option::some(proposal_id);
+    outcome.market_id = option::some(market_id);
+}
+
+/// Marks outcome as approved after proposal passes
+public fun set_outcome_approved(
+    outcome: &mut FutarchyOutcome,
+    approved: bool,
+) {
+    outcome.approved = approved;
+}
+
+/// Sets the intent key for an outcome
+public fun set_outcome_intent_key(outcome: &mut FutarchyOutcome, intent_key: String) {
+    outcome.intent_key = intent_key;
+}
+
+/// Gets the minimum execution time
+public fun outcome_min_execution_time(outcome: &FutarchyOutcome): u64 {
+    outcome.min_execution_time
+}
+
+// === Delegated Getters from dao_config ===
+
+public fun review_period_ms(config: &FutarchyConfig): u64 {
+    dao_config::review_period_ms(dao_config::trading_params(&config.config))
+}
+
+public fun trading_period_ms(config: &FutarchyConfig): u64 {
+    dao_config::trading_period_ms(dao_config::trading_params(&config.config))
+}
+
+public fun min_asset_amount(config: &FutarchyConfig): u64 {
+    dao_config::min_asset_amount(dao_config::trading_params(&config.config))
+}
+
+public fun min_stable_amount(config: &FutarchyConfig): u64 {
+    dao_config::min_stable_amount(dao_config::trading_params(&config.config))
+}
+
+public fun amm_twap_start_delay(config: &FutarchyConfig): u64 {
+    dao_config::start_delay(dao_config::twap_config(&config.config))
+}
+
+public fun amm_twap_initial_observation(config: &FutarchyConfig): u128 {
+    dao_config::initial_observation(dao_config::twap_config(&config.config))
+}
+
+public fun amm_twap_step_max(config: &FutarchyConfig): u64 {
+    dao_config::step_max(dao_config::twap_config(&config.config))
+}
+
+public fun twap_threshold(config: &FutarchyConfig): u64 {
+    dao_config::threshold(dao_config::twap_config(&config.config))
+}
+
+public fun amm_total_fee_bps(config: &FutarchyConfig): u64 {
+    dao_config::amm_total_fee_bps(dao_config::trading_params(&config.config))
+}
+
+public fun max_outcomes(config: &FutarchyConfig): u64 {
+    dao_config::max_outcomes(dao_config::governance_config(&config.config))
+}
+
 // === Missing Functions Added for Build Fixes ===
 
 public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
@@ -408,6 +528,11 @@ public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
 public fun optimistic_challenge_fee(config: &FutarchyConfig): u64 {
     // Use proposal pass reward as challenge fee
     config.proposal_pass_reward
+}
+
+/// Create witness for authorized operations
+public fun witness(): ConfigWitness {
+    ConfigWitness {}
 }
 
 public fun state_active(): u8 {
@@ -557,6 +682,92 @@ public fun set_proposals_enabled(state: &mut DaoState, enabled: bool) {
     } else if (enabled && state.operational_state == DAO_STATE_PAUSED) {
         state.operational_state = DAO_STATE_ACTIVE;
     }
+}
+
+// === Account Creation Functions ===
+
+/// Creates a new account with Extensions validation for use with the Futarchy config
+public fun new_with_extensions(
+    extensions: &Extensions,
+    config: FutarchyConfig,
+    ctx: &mut TxContext
+): Account<FutarchyConfig> {
+    // Create dependencies using Extensions for validation
+    let deps = deps::new_latest_extensions(
+        extensions,
+        vector[
+            b"AccountProtocol".to_string(),
+            b"FutarchyCore".to_string()
+        ]
+    );
+
+    // Create account with FutarchyConfig using the config witness
+    account::new(
+        config,
+        deps,
+        version::current(),
+        ConfigWitness {},
+        ctx
+    )
+}
+
+/// Test version that creates account without Extensions validation
+#[test_only]
+public fun new_account_test(
+    config: FutarchyConfig,
+    ctx: &mut TxContext
+): Account<FutarchyConfig> {
+    // Create dependencies for testing without Extensions
+    let deps = deps::new_for_testing();
+
+    // Create account with FutarchyConfig using the config witness
+    account::new(
+        config,
+        deps,
+        version::current(),
+        ConfigWitness {},
+        ctx
+    )
+}
+
+/// Get mutable access to internal config for test scenarios
+#[test_only]
+public fun internal_config_mut_test(
+    account: &mut Account<FutarchyConfig>
+): &mut FutarchyConfig {
+    account::config_mut<FutarchyConfig, ConfigWitness>(
+        account,
+        version::current(),
+        ConfigWitness {}
+    )
+}
+
+/// Set the proposal queue ID as a dynamic field on the account
+public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id: Option<ID>) {
+    if (queue_id.is_some()) {
+        account::add_managed_data(account, ProposalQueueKey {}, queue_id.destroy_some(), version::current());
+    } else {
+        // Remove the field if setting to none
+        if (account::has_managed_data<FutarchyConfig, ProposalQueueKey>(account, ProposalQueueKey {})) {
+            let _: ID = account::remove_managed_data(account, ProposalQueueKey {}, version::current());
+        }
+    }
+}
+
+/// Get the proposal queue ID from dynamic field
+public fun get_proposal_queue_id(account: &Account<FutarchyConfig>): Option<ID> {
+    if (account::has_managed_data<FutarchyConfig, ProposalQueueKey>(account, ProposalQueueKey {})) {
+        option::some(*account::borrow_managed_data(account, ProposalQueueKey {}, version::current()))
+    } else {
+        option::none()
+    }
+}
+
+/// Create auth witness for this account config
+public fun authenticate(account: &Account<FutarchyConfig>, ctx: &TxContext): ConfigWitness {
+    let _ = account;
+    let _ = ctx;
+    ConfigWitness {}
 }
 
 }

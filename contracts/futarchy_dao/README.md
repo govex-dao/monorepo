@@ -63,24 +63,35 @@ find \
   -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_9_packages.txt
 ```
 
-**Alternative: Run from contracts/futarchy_dao directory:**
+## Concatenating all .Move files for use with LLMs
+
+Run these commands from the project root directory (`/Users/admin/monorepo/`):
+
+**All 20 packages (Move Framework + Futarchy):**
 ```bash
-# If running from contracts/futarchy_dao/
 find \
-  ../move-framework/packages/extensions/sources \
-  ../move-framework/packages/protocol/sources \
-  ../move-framework/packages/actions/sources \
-  ../futarchy_one_shot_utils/sources \
-  ../futarchy_core/sources \
-  ../futarchy_markets/sources \
-  ../futarchy_vault/sources \
-  ../futarchy_multisig/sources \
-  ../futarchy_specialized_actions/sources \
-  ../futarchy_lifecycle/sources \
-  ../futarchy_actions/sources \
-  ../futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > ../../all_12_packages.txt
+  contracts/move-framework/packages/extensions/sources \
+  contracts/move-framework/packages/protocol/sources \
+  contracts/move-framework/packages/actions/sources \
+  contracts/futarchy_one_shot_utils/sources \
+  contracts/futarchy_types/sources \
+  contracts/futarchy_core/sources \
+  contracts/futarchy_markets/sources \
+  contracts/futarchy_vault/sources \
+  contracts/futarchy_multisig/sources \
+  contracts/futarchy_payments/sources \
+  contracts/futarchy_streams/sources \
+  contracts/futarchy_oracle/sources \
+  contracts/futarchy_factory/sources \
+  contracts/futarchy_lifecycle/sources \
+  contracts/futarchy_legal_actions/sources \
+  contracts/futarchy_governance_actions/sources \
+  contracts/futarchy_actions/sources \
+  contracts/futarchy_decoders/sources \
+  contracts/futarchy_dao/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
 ```
+
 
 ```
 git add -N .

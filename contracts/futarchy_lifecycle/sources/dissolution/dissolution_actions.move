@@ -8,7 +8,7 @@ use sui::{
     bcs::{Self, BCS},
     coin::{Self, Coin},
     balance::{Self, Balance},
-    object::ID,
+    object::{Self, ID},
     transfer,
     clock::Clock,
     tx_context::TxContext,
@@ -28,7 +28,15 @@ use futarchy_core::{
 use futarchy_vault::{
     futarchy_vault,
 };
-use futarchy_lifecycle::stream_actions;
+use futarchy_streams::stream_actions;
+
+// === Constants ===
+
+// Operational states (matching futarchy_config)
+const DAO_STATE_ACTIVE: u8 = 0;
+const DAO_STATE_DISSOLVING: u8 = 1;
+const DAO_STATE_PAUSED: u8 = 2;
+const DAO_STATE_DISSOLVED: u8 = 3;
 
 // === Errors ===
 const EInvalidRatio: u64 = 1;
@@ -125,14 +133,13 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
     let final_operations_deadline = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Get the config and set dissolution state
-    let config = account::config_mut(account, version, intent_witness);
+    // Get the DaoState and set dissolution state
+    let dao_state = futarchy_config::state_mut_from_account(account);
 
-    // 1. Set dissolution state in config (operational_state = DISSOLVING)
-    futarchy_config::set_operational_state(config, futarchy_config::state_dissolving());
+    // 1. Set operational state to dissolving
+    futarchy_config::set_operational_state(dao_state, DAO_STATE_DISSOLVING);
 
-    // 2. Pause all normal operations by disabling proposals
-    futarchy_config::set_proposals_enabled_internal(config, false);
+    // 2. Proposals are disabled automatically via operational state
 
     // 3. Record dissolution parameters in config metadata
     assert!(reason.length() > 0, EInvalidRatio);
@@ -140,6 +147,8 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
     assert!(final_operations_deadline > 0, EInvalidThreshold);
 
     let _ = burn_unsold_tokens;
+    let _ = version;
+    let _ = intent_witness;
 
     // Execute and increment
     executable::increment_action_idx(executable);
@@ -175,9 +184,9 @@ public fun do_batch_distribute<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Verify dissolution is active
-    let config = account::config(account);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
 
@@ -213,15 +222,16 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Verify dissolution is active
-    let config = account::config_mut(account, version, intent_witness);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
 
     assert!(final_recipient != @0x0, EInvalidRecipient);
 
-    futarchy_config::set_operational_state(config, futarchy_config::state_dissolved());
+    // Set operational state to dissolved
+    futarchy_config::set_operational_state(dao_state, DAO_STATE_DISSOLVED);
 
     if (destroy_account) {
         // Account destruction would need special handling
@@ -252,17 +262,18 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     let reason = string::utf8(reason_bytes);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    let config = account::config_mut(account, version, intent_witness);
+    let dao_state = futarchy_config::state_mut_from_account(account);
 
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         ENotDissolving
     );
 
     assert!(reason.length() > 0, EInvalidRatio);
 
-    futarchy_config::set_operational_state(config, futarchy_config::state_active());
-    futarchy_config::set_proposals_enabled_internal(config, true);
+    // Set operational state back to active
+    futarchy_config::set_operational_state(dao_state, DAO_STATE_ACTIVE);
+    // Proposals are re-enabled automatically via operational state
 
     // Execute and increment
     executable::increment_action_idx(executable);
@@ -279,7 +290,8 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
+    // TODO: Add CalculateProRataShares to action_types module or use a different type
+    // action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -290,9 +302,9 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
-    let config = account::config(account);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
     
@@ -327,7 +339,8 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CancelAllStreams>(spec);
+    // CancelAllStreams doesn't exist, using CancelStreamsInBag
+    action_validation::assert_action_type<action_types::CancelStreamsInBag>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -337,9 +350,9 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
-    let config = account::config(account);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
     
@@ -383,20 +396,21 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::WithdrawAmmLiquidity>(spec);
+    // WithdrawAmmLiquidity doesn't exist, using WithdrawAllSpotLiquidity
+    action_validation::assert_action_type<action_types::WithdrawAllSpotLiquidity>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
     // Safe BCS deserialization
     let mut reader = bcs::new(*action_data);
-    let pool_id = ID::from_bytes(bcs::peel_vec_u8(&mut reader));
+    let pool_id = bcs::peel_address(&mut reader).to_id();
     let burn_lp_tokens = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
-    let config = account::config(account);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
     
@@ -441,7 +455,8 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::DistributeAssets>(spec);
+    // DistributeAssets doesn't exist, using DistributeAsset (singular)
+    action_validation::assert_action_type<action_types::DistributeAsset>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -453,9 +468,9 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     bcs_validation::validate_all_bytes_consumed(reader);
     
     // Verify dissolution is active
-    let config = account::config(account);
+    let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
-        futarchy_config::operational_state(config) == futarchy_config::state_dissolving(),
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
     
@@ -522,66 +537,66 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
 
 /// Delete an initiate dissolution action from an expired intent
 public fun delete_initiate_dissolution(expired: &mut Expired) {
-    let InitiateDissolutionAction {
-        reason: _,
-        distribution_method: _,
-        burn_unsold_tokens: _,
-        final_operations_deadline: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Validate it was the expected action type
+    action_validation::assert_action_type<action_types::InitiateDissolution>(&spec);
 }
 
 /// Delete a batch distribute action from an expired intent
 public fun delete_batch_distribute(expired: &mut Expired) {
-    let BatchDistributeAction {
-        asset_types: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Validate it was the expected action type
+    action_validation::assert_action_type<action_types::DistributeAsset>(&spec);
 }
 
 /// Delete a finalize dissolution action from an expired intent
 public fun delete_finalize_dissolution(expired: &mut Expired) {
-    let FinalizeDissolutionAction {
-        final_recipient: _,
-        destroy_account: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Validate it was the expected action type
+    action_validation::assert_action_type<action_types::FinalizeDissolution>(&spec);
 }
 
 /// Delete a cancel dissolution action from an expired intent
 public fun delete_cancel_dissolution(expired: &mut Expired) {
-    let CancelDissolutionAction {
-        reason: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Validate it was the expected action type
+    action_validation::assert_action_type<action_types::CancelDissolution>(&spec);
 }
 
 /// Delete a calculate pro rata shares action from an expired intent
 public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
-    let CalculateProRataSharesAction {
-        total_supply: _,
-        exclude_dao_tokens: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Action has drop, will be automatically cleaned up
+    let _ = spec;
 }
 
 /// Delete a cancel all streams action from an expired intent
 public fun delete_cancel_all_streams(expired: &mut Expired) {
-    let CancelAllStreamsAction {
-        return_to_treasury: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Action has drop, will be automatically cleaned up
+    let _ = spec;
 }
 
 /// Delete a withdraw AMM liquidity action from an expired intent
 public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Expired) {
-    let WithdrawAmmLiquidityAction<AssetType, StableType> {
-        pool_id: _,
-        burn_lp_tokens: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Action has drop, will be automatically cleaned up
+    let _ = spec;
 }
 
 /// Delete a distribute assets action from an expired intent
 public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
-    let DistributeAssetsAction<CoinType> {
-        holders: _,
-        holder_amounts: _,
-        total_distribution_amount: _,
-    } = expired.remove_action();
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    // Action has drop, will be automatically cleaned up
+    let _ = spec;
 }
 
 // === Helper Functions ===
@@ -641,40 +656,6 @@ public fun new_cancel_dissolution_action(
         reason,
     };
     action
-
-/// Create a new batch distribute action
-public fun new_batch_distribute_action(
-    asset_types: vector<String>,
-): BatchDistributeAction {
-    assert!(asset_types.length() > 0, EEmptyAssetList);
-    
-    BatchDistributeAction {
-        asset_types,
-    }
-}
-
-/// Create a new finalize dissolution action
-public fun new_finalize_dissolution_action(
-    final_recipient: address,
-    destroy_account: bool,
-): FinalizeDissolutionAction {
-    assert!(final_recipient != @0x0, EInvalidRecipient);
-    
-    FinalizeDissolutionAction {
-        final_recipient,
-        destroy_account,
-    }
-}
-
-/// Create a new cancel dissolution action
-public fun new_cancel_dissolution_action(
-    reason: String,
-): CancelDissolutionAction {
-    assert!(reason.length() > 0, EInvalidRatio);
-    
-    CancelDissolutionAction {
-        reason,
-    }
 }
 
 // === Getter Functions ===

@@ -11,18 +11,18 @@ use sui::event;
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 
 // Registry modules for registration
-use futarchy_lifecycle::payment_decoder;
-use futarchy_lifecycle::stream_decoder;
-use futarchy_lifecycle::oracle_decoder;
+use futarchy_payments::payment_decoder;
+use futarchy_streams::stream_decoder;
+use futarchy_oracle::oracle_decoder;
 use futarchy_lifecycle::dissolution_decoder;
-use futarchy_lifecycle::protocol_admin_decoder;
+use futarchy_governance_actions::protocol_admin_decoder;
 use futarchy_actions::config_decoder;
 use futarchy_actions::liquidity_decoder;
 use futarchy_actions::governance_decoder;
 use futarchy_actions::memo_decoder;
 use futarchy_multisig::security_council_decoder;
 use futarchy_multisig::policy_decoder;
-use futarchy_specialized_actions::operating_agreement_decoder;
+use futarchy_legal_actions::operating_agreement_decoder;
 use futarchy_vault::custody_decoder;
 
 // Move framework decoders

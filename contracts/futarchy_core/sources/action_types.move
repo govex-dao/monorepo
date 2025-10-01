@@ -101,9 +101,19 @@ public struct ResumeStream has drop {}
 public struct CreatePayment has drop {}
 public struct CancelPayment has drop {}
 public struct ProcessPayment has drop {}
+public struct ExecutePayment has drop {}
+public struct RequestWithdrawal has drop {}
+public struct ProcessPendingWithdrawal has drop {}
+public struct UpdatePaymentRecipient has drop {}
+public struct AddWithdrawer has drop {}
+public struct RemoveWithdrawers has drop {}
+public struct TogglePayment has drop {}
+public struct ChallengeWithdrawals has drop {}
+public struct CancelChallengedWithdrawals has drop {}
 
 // === Oracle Action Types ===
 
+public struct ReadOraclePrice has drop {}
 public struct ConditionalMint has drop {}
 public struct TieredMint has drop {}
 
@@ -113,6 +123,9 @@ public struct CreateOperatingAgreement has drop {}
 public struct AddLine has drop {}
 public struct RemoveLine has drop {}
 public struct UpdateLine has drop {}
+public struct InsertLineAfter has drop {}
+public struct InsertLineAtBeginning has drop {}
+public struct BatchOperatingAgreement has drop {}
 public struct BatchAddLines has drop {}
 public struct BatchRemoveLines has drop {}
 public struct LockOperatingAgreement has drop {}
@@ -293,6 +306,15 @@ public fun resume_stream(): TypeName { type_name::with_defining_ids<ResumeStream
 public fun create_payment(): TypeName { type_name::with_defining_ids<CreatePayment>() }
 public fun cancel_payment(): TypeName { type_name::with_defining_ids<CancelPayment>() }
 public fun process_payment(): TypeName { type_name::with_defining_ids<ProcessPayment>() }
+public fun execute_payment(): TypeName { type_name::with_defining_ids<ExecutePayment>() }
+public fun request_withdrawal(): TypeName { type_name::with_defining_ids<RequestWithdrawal>() }
+public fun process_pending_withdrawal(): TypeName { type_name::with_defining_ids<ProcessPendingWithdrawal>() }
+public fun update_payment_recipient(): TypeName { type_name::with_defining_ids<UpdatePaymentRecipient>() }
+public fun add_withdrawer(): TypeName { type_name::with_defining_ids<AddWithdrawer>() }
+public fun remove_withdrawers(): TypeName { type_name::with_defining_ids<RemoveWithdrawers>() }
+public fun toggle_payment(): TypeName { type_name::with_defining_ids<TogglePayment>() }
+public fun challenge_withdrawals(): TypeName { type_name::with_defining_ids<ChallengeWithdrawals>() }
+public fun cancel_challenged_withdrawals(): TypeName { type_name::with_defining_ids<CancelChallengedWithdrawals>() }
 
 // Oracle actions
 public fun conditional_mint(): TypeName { type_name::with_defining_ids<ConditionalMint>() }
@@ -303,6 +325,9 @@ public fun create_operating_agreement(): TypeName { type_name::with_defining_ids
 public fun add_line(): TypeName { type_name::with_defining_ids<AddLine>() }
 public fun remove_line(): TypeName { type_name::with_defining_ids<RemoveLine>() }
 public fun update_line(): TypeName { type_name::with_defining_ids<UpdateLine>() }
+public fun insert_line_after(): TypeName { type_name::with_defining_ids<InsertLineAfter>() }
+public fun insert_line_at_beginning(): TypeName { type_name::with_defining_ids<InsertLineAtBeginning>() }
+public fun batch_operating_agreement(): TypeName { type_name::with_defining_ids<BatchOperatingAgreement>() }
 public fun batch_add_lines(): TypeName { type_name::with_defining_ids<BatchAddLines>() }
 public fun batch_remove_lines(): TypeName { type_name::with_defining_ids<BatchRemoveLines>() }
 public fun lock_operating_agreement(): TypeName { type_name::with_defining_ids<LockOperatingAgreement>() }
@@ -383,3 +408,6 @@ public fun update_coin_creation_fee(): TypeName { type_name::with_defining_ids<U
 public fun update_coin_proposal_fee(): TypeName { type_name::with_defining_ids<UpdateCoinProposalFee>() }
 public fun update_coin_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateCoinRecoveryFee>() }
 public fun apply_pending_coin_fees(): TypeName { type_name::with_defining_ids<ApplyPendingCoinFees>() }
+
+// Oracle actions
+public fun read_oracle_price(): TypeName { type_name::with_defining_ids<ReadOraclePrice>() }

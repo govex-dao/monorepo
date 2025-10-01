@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "410B13A2081B4426C488911EEE1F10647E285E62C84585EBF89E09727C5E81ED"
-deps_digest = "8D8E72BAA06E63572166CA7E7F6E159CA2D11E27ADE3961B15E29922A04B0D32"
+manifest_digest = "F04C9DD40279BDB14C3A46BF22BBDD9FEFB311A3C43AB396659FDD8089D98357"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -12,6 +12,9 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
+  { id = "futarchy_legal_actions", name = "futarchy_legal_actions" },
+  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
@@ -110,6 +113,89 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "futarchy_factory"
+source = { local = "../futarchy_factory" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_oracle", name = "futarchy_oracle" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
+id = "futarchy_governance_actions"
+source = { local = "../futarchy_governance_actions" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_factory", name = "futarchy_factory" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
+id = "futarchy_legal_actions"
+source = { local = "../futarchy_legal_actions" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
+id = "futarchy_lifecycle"
+source = { local = "../futarchy_lifecycle" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_streams", name = "futarchy_streams" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
 id = "futarchy_markets"
 source = { local = "../futarchy_markets" }
 
@@ -152,6 +238,46 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "futarchy_oracle"
+source = { local = "../futarchy_oracle" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
+id = "futarchy_streams"
+source = { local = "../futarchy_streams" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
 id = "futarchy_types"
 source = { local = "../futarchy_types" }
 
@@ -184,7 +310,7 @@ flavor = "sui"
 [env]
 
 [env.devnet]
-chain-id = "ae43edc0"
-original-published-id = "0xe59ca243d1f90d3183875d5fc67f959027a12f921357b7ee418e5ed700419b21"
-latest-published-id = "0xe59ca243d1f90d3183875d5fc67f959027a12f921357b7ee418e5ed700419b21"
+chain-id = "a5e2ba5d"
+original-published-id = "0x63525a5300d126417423741a1cd2aa061a0ddcc96d09b8f22d13f6b1d0a593b2"
+latest-published-id = "0x63525a5300d126417423741a1cd2aa061a0ddcc96d09b8f22d13f6b1d0a593b2"
 published-version = "1"

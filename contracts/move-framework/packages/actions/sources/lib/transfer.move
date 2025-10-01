@@ -116,6 +116,24 @@ public fun do_transfer<Outcome: store, T: key + store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Transfer object during initialization - works on unshared Accounts
+/// Directly transfers an object to a recipient during DAO creation.
+///
+/// ## FORK NOTE
+/// **Added**: `do_transfer_unshared()` for init-time object transfers
+/// **Reason**: Allow transferring objects created during DAO setup (e.g., ClaimCaps
+/// from vesting, or other initialization artifacts) to intended recipients atomically.
+/// **Safety**: Public visibility is safe - function doesn't access Account state
+///
+/// SAFETY: This function can be called during initialization to transfer
+/// objects that were created as part of the DAO setup.
+public fun do_transfer_unshared<T: key + store>(
+    object: T,
+    recipient: address,
+) {
+    transfer::public_transfer(object, recipient);
+}
+
 /// Deletes a TransferAction from an expired intent.
 public fun delete_transfer(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);

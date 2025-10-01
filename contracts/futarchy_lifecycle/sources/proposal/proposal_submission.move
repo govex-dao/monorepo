@@ -8,13 +8,16 @@ use std::{
     vector,
     string::String,
     option::{Self, Option},
+    ascii,
 };
 use sui::{
     object,
     coin::{Self, Coin},
+    balance::{Self, Balance},
     clock::Clock,
     sui::SUI,
     tx_context::TxContext,
+    bcs,
 };
 use account_protocol::{
     account::{Self, Account},
@@ -34,38 +37,41 @@ const ETooManyOutcomes: u64 = 3;
 const ENoOutcomes: u64 = 4;
 const EIntentSpecRequired: u64 = 5;
 const EQueueFull: u64 = 6;
+const EInvalidActionData: u64 = 7;
 
 // === Entry Functions ===
 
-/// Submit a proposal with IntentSpecs for the YES outcome
-/// The IntentSpecs define what actions will execute if the proposal passes
-public entry fun submit_proposal_with_intent<StableCoin>(
-    registry: &ActionDecoderRegistry,  // NEW: Required for schema validation
-    account: &Account<FutarchyConfig>,
+
+/// Submit a proposal with action IDs for multiple outcomes
+/// Note: Use submit_proposal_with_multiple_intents_v2 with pre-built IntentSpecs instead
+public entry fun submit_proposal_with_action_ids<StableCoin>(
+    registry: &ActionDecoderRegistry,
+    account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableCoin>,
     fee_manager: &mut ProposalFeeManager,
     fee_payment: Coin<SUI>,
-    // Proposal metadata
     title: String,
     description: String,
     outcome_messages: vector<String>,
     outcome_details: vector<String>,
-    // Liquidity amounts for each outcome
     initial_asset_amounts: vector<u64>,
     initial_stable_amounts: vector<u64>,
-    // IntentSpec for YES outcome
-    intent_spec: InitActionSpecs,
+    // For each outcome: action IDs and data
+    outcome_action_ids: vector<vector<u64>>,
+    outcome_action_data: vector<vector<vector<u8>>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Validate all actions in the IntentSpec have registered decoders
-    validate_intent_spec_decoders(registry, &intent_spec);
-
-    // Create proposal with IntentSpec
+    // Build empty IntentSpecs - actual action building should happen via PTB
     let mut intent_specs = vector::empty<Option<InitActionSpecs>>();
-    vector::push_back(&mut intent_specs, option::some(intent_spec));
 
-    // Continue with proposal creation...
+    let num_outcomes = vector::length(&outcome_messages);
+    let mut outcome_idx = 0;
+    while (outcome_idx < num_outcomes) {
+        vector::push_back(&mut intent_specs, option::none());
+        outcome_idx = outcome_idx + 1;
+    };
+
     submit_proposal_internal(
         account,
         queue,
@@ -83,22 +89,21 @@ public entry fun submit_proposal_with_intent<StableCoin>(
     );
 }
 
-/// Submit a proposal with IntentSpecs for multiple outcomes
-public entry fun submit_proposal_with_multiple_intents<StableCoin>(
-    registry: &ActionDecoderRegistry,  // NEW: Required for schema validation
+/// Submit a proposal with pre-built IntentSpecs for multiple outcomes
+/// Note: Cannot be an entry function due to InitActionSpecs not having 'key' ability
+/// This function should be called from a PTB that builds the IntentSpecs
+public fun submit_proposal_with_multiple_intents<StableCoin>(
+    registry: &ActionDecoderRegistry,
     account: &Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableCoin>,
     fee_manager: &mut ProposalFeeManager,
     fee_payment: Coin<SUI>,
-    // Proposal metadata
     title: String,
     description: String,
     outcome_messages: vector<String>,
     outcome_details: vector<String>,
-    // Liquidity amounts for each outcome
     initial_asset_amounts: vector<u64>,
     initial_stable_amounts: vector<u64>,
-    // IntentSpecs for each outcome
     intent_specs: vector<Option<InitActionSpecs>>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -177,11 +182,11 @@ fun validate_intent_spec_decoders(
     registry: &ActionDecoderRegistry,
     intent_spec: &InitActionSpecs,
 ) {
-    let actions = action_specs::get_action_specs(intent_spec);
+    let actions = action_specs::actions(intent_spec);
     let mut i = 0;
     while (i < vector::length(actions)) {
         let action_spec = vector::borrow(actions, i);
-        let action_type = action_specs::get_action_type(action_spec);
+        let action_type = action_specs::action_type(action_spec);
 
         // Enforce mandatory schema rule: decoder must exist
         schema::assert_decoder_exists(registry, action_type);
@@ -208,6 +213,6 @@ fun submit_proposal_internal<StableCoin>(
 ) {
     // Implementation continues with existing logic...
     // This would contain the actual proposal creation logic
-    // For now, just absorb the fee to avoid compiler errors
-    coin::burn_for_testing(fee_payment);
+    // For now, just abort to avoid compiler errors since this is incomplete
+    abort 0
 }

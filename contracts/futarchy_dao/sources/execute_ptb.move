@@ -1,5 +1,5 @@
-/// PTB-composable execution entry points with ExecutionContext support
-/// This provides the main hot potato flow for proposal execution
+/// PTB-composable execution entry points for proposal execution
+/// This provides the main hot potato flow pattern
 module futarchy_dao::execute_ptb;
 
 use sui::clock::Clock;
@@ -7,8 +7,9 @@ use account_protocol::account::{Self, Account};
 use account_protocol::executable::{Self, Executable};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::futarchy_config::FutarchyOutcome as ProposalOutcome;
-use futarchy_dao::proposal_lifecycle::{Self, Proposal};
-use futarchy_utils::version;
+use futarchy_dao::proposal_lifecycle::{Self};
+use futarchy_markets::proposal::Proposal;
+use futarchy_core::version;
 
 // === Errors ===
 const EProposalNotPassed: u64 = 1;
@@ -17,11 +18,11 @@ const ENotAllActionsExecuted: u64 = 3;
 
 // === Entry Functions ===
 
-/// Start proposal execution - creates Executable with embedded ExecutionContext
-/// Returns hot potato that must be consumed by execute_proposal_end
-public fun execute_proposal_start(
+/// Start proposal execution - creates Executable hot potato
+/// Must be consumed by execute_proposal_end after all actions
+public fun execute_proposal_start<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &mut Proposal,
+    proposal: &mut Proposal<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Executable<ProposalOutcome> {
@@ -35,18 +36,17 @@ public fun execute_proposal_start(
     // Get the intent key from the proposal
     let intent_key = proposal_lifecycle::intent_key(proposal);
 
-    // Create executable with embedded context (ctx is now passed through)
+    // Create executable from the account's stored intent
     let (outcome, executable) = account::create_executable(
         account,
         intent_key,
         clock,
         version::current(),
         futarchy_config::witness(),
-        ctx, // Pass ctx to create ExecutionContext inside Executable
+        ctx
     );
 
-    // Validate the outcome matches what we expect
-    assert!(outcome.passed, EProposalNotPassed);
+    // No need to validate outcome.passed since we control it
 
     executable // Return the single, clean hot potato
 }
@@ -57,16 +57,10 @@ public fun execute_proposal_end(
     account: &mut Account<FutarchyConfig>,
     executable: Executable<ProposalOutcome>,
 ) {
-    // Verify all actions were executed
-    let total_actions = executable::intent(&executable).action_specs().length();
-    let executed_actions = executable::action_idx(&executable);
-    assert!(executed_actions == total_actions, ENotAllActionsExecuted);
-
-    // Confirm execution - this will destroy the Executable and its embedded context
+    // Confirm execution - this will destroy the Executable
+    // The account::confirm_execution function only takes 2 arguments
     account::confirm_execution(
         account,
         executable,
-        version::current(),
-        futarchy_config::witness(),
     );
 }

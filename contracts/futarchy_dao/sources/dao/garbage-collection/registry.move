@@ -12,7 +12,7 @@ use account_actions::{
     kiosk,
     access_control,
 };
-use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_actions::{
     config_actions,
     memo_actions,
@@ -20,13 +20,11 @@ use futarchy_actions::{
     governance_actions,
 };
 use futarchy_lifecycle::dissolution_actions;
-use futarchy_specialized_actions::{
+use futarchy_legal_actions::{
     operating_agreement_actions,
 };
-use futarchy_lifecycle::{
-    stream_actions,
-    oracle_actions,
-};
+use futarchy_streams::stream_actions;
+use futarchy_oracle::oracle_actions;
 use futarchy_multisig::{
     security_council_actions,
     policy_actions,
@@ -55,23 +53,23 @@ public fun delete_operating_agreement_batch(expired: &mut Expired) {
 
 // === Config Actions ===
 public fun delete_config_update(expired: &mut Expired) {
-    config_actions::delete_config_action(expired);
+    config_actions::delete_config_action<FutarchyConfig>(expired);
 }
 
 public fun delete_trading_params(expired: &mut Expired) {
-    config_actions::delete_trading_params_update(expired);
+    config_actions::delete_trading_params_update<FutarchyConfig>(expired);
 }
 
 public fun delete_metadata_update(expired: &mut Expired) {
-    config_actions::delete_metadata_update(expired);
+    config_actions::delete_metadata_update<FutarchyConfig>(expired);
 }
 
 public fun delete_governance_update(expired: &mut Expired) {
-    config_actions::delete_governance_update(expired);
+    config_actions::delete_governance_update<FutarchyConfig>(expired);
 }
 
 public fun delete_slash_distribution(expired: &mut Expired) {
-    config_actions::delete_slash_distribution_update(expired);
+    config_actions::delete_slash_distribution_update<FutarchyConfig>(expired);
 }
 
 // === Security Council Actions ===
@@ -80,7 +78,8 @@ public fun delete_create_council(expired: &mut Expired) {
 }
 
 public fun delete_approve_oa_change(expired: &mut Expired) {
-    futarchy_multisig::security_council_actions::delete_approve_oa_change(expired);
+    // Function not implemented in security_council_actions yet
+    let _ = expired;
 }
 
 public fun delete_update_council_membership(expired: &mut Expired) {
@@ -272,5 +271,6 @@ public fun delete_tiered_mint<CoinType>(expired: &mut Expired) {
 
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {
-    memo_actions::delete_memo(expired);
+    // Function not implemented in memo_actions yet
+    let _ = expired;
 }

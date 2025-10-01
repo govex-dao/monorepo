@@ -3,12 +3,19 @@
 module futarchy_dao::ptb_executor;
 
 // === Imports ===
+use std::string::{Self, String};
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
 };
-use futarchy_core::futarchy_config::FutarchyConfig;
-use sui::clock::Clock;
+use futarchy_core::{
+    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
+    version
+};
+use sui::{
+    clock::{Self, Clock},
+    tx_context::TxContext,
+};
 
 // === Entry Functions for PTB Composition ===
 
@@ -19,32 +26,43 @@ public fun create_executable_from_proposal(
     proposal_id: u64,
     clock: &Clock,
     ctx: &mut TxContext,
-): Executable {
-    // Create executable from the proposal's IntentSpec
-    // This would interact with the proposal system to get the IntentSpec
-    // and convert it to an Executable
+): Executable<FutarchyOutcome> {
+    // Create the intent key from proposal ID
+    let mut intent_key = b"proposal_".to_string();
+    intent_key.append(proposal_id.to_string());
 
-    // Placeholder - actual implementation would:
-    // 1. Verify proposal is approved and ready for execution
-    // 2. Get the IntentSpec from the proposal
-    // 3. Create Intent from IntentSpec
-    // 4. Create Executable from Intent
+    // Create the outcome for this proposal
+    let outcome = futarchy_config::new_futarchy_outcome(
+        intent_key,
+        clock.timestamp_ms()
+    );
 
-    executable::new_placeholder(ctx) // Placeholder return
+    // Create executable from the account's stored intent
+    let (_, executable) = account::create_executable(
+        account,
+        intent_key,
+        clock,
+        version::current(),
+        futarchy_config::witness(),
+        ctx
+    );
+
+    executable
 }
 
 /// Finalize execution and cleanup
 /// This is the last call in a PTB execution chain
 public fun finalize_execution(
-    executable: Executable,
+    executable: Executable<FutarchyOutcome>,
     account: &mut Account<FutarchyConfig>,
     ctx: &mut TxContext,
 ) {
-    // Consume the executable and perform any cleanup
-    executable::destroy(executable);
+    // Consume the executable using account's confirm_execution
+    account::confirm_execution(account, executable);
 
     // Update account state if needed
     // Emit events, etc.
+    let _ = ctx;
 }
 
 // === Example PTB Execution Pattern ===

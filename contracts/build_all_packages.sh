@@ -15,7 +15,8 @@ packages=(
     "futarchy_multisig"
     "futarchy_lifecycle"
     "futarchy_actions"
-    "futarchy_specialized_actions"
+    "futarchy_legal_actions"
+    "futarchy_governance_actions"
     "futarchy_dao"
 )
 

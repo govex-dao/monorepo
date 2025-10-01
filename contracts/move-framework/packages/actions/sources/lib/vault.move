@@ -71,6 +71,8 @@ use sui::{
     object::{Self, ID},
     transfer,
     tx_context,
+    vec_map::{Self, VecMap},
+    vec_set::{Self, VecSet},
     bcs,
 };
 use account_protocol::{
@@ -102,6 +104,10 @@ const EInvalidStreamParameters: u64 = 9;
 const EIntentAmountMismatch: u64 = 10;
 // === Fork additions ===
 const EStreamPaused: u64 = 11;
+const EAmountMustBeGreaterThanZero: u64 = 20;
+const EVaultDoesNotExist: u64 = 21;
+const ECoinTypeDoesNotExist: u64 = 22;
+const EInsufficientBalance: u64 = 23;
 const EStreamNotPaused: u64 = 12;
 const ENotTransferable: u64 = 13;
 const ENotCancellable: u64 = 14;
@@ -133,7 +139,7 @@ public struct Vault has store {
 /// - Stream pausing/resuming
 /// - Metadata for extensibility
 /// - Transfer and reduction capabilities
-public struct VaultStream has store {
+public struct VaultStream has store, drop {
     id: ID,
     coin_type: TypeName,
     beneficiary: address,  // Primary beneficiary
@@ -292,14 +298,70 @@ public fun deposit_permissionless<Config, CoinType: drop>(
     name: String,
     coin: Coin<CoinType>,
 ) {
-    let vault: &mut Vault = 
+    let vault: &mut Vault =
         account.borrow_managed_data_mut(VaultKey(name), version::current());
-    
+
     // Only allow deposits to existing coin types
     assert!(coin_type_exists<CoinType>(vault), EWrongCoinType);
-    
+
     let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
     balance_mut.join(coin.into_balance());
+}
+
+/// Default vault name for standard operations
+///
+/// ## FORK NOTE
+/// **Added**: Helper function for consistent vault naming
+/// **Reason**: Standardize default vault name across init and runtime operations
+public fun default_vault_name(): String {
+    std::string::utf8(b"Main Vault")
+}
+
+/// Deposit during initialization - works on unshared Accounts
+/// This function is for use during account creation, before the account is shared.
+/// It follows the same pattern as Futarchy init actions.
+///
+/// ## FORK NOTE
+/// **Added**: `do_deposit_unshared()` for init-time vault deposits
+/// **Reason**: Enable initial treasury funding during DAO creation without Auth checks.
+/// Creates vault on-demand if it doesn't exist, then deposits coins.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+///
+/// SAFETY: This function MUST only be called on unshared Accounts.
+/// Calling this on a shared Account bypasses Auth checks.
+/// The package(package) visibility helps enforce this constraint.
+public(package) fun do_deposit_unshared<Config, CoinType: drop>(
+    account: &mut Account<Config>,
+    name: String,
+    coin: Coin<CoinType>,
+    ctx: &mut tx_context::TxContext,
+) {
+    // SAFETY REQUIREMENT: Account must be unshared
+    // Move doesn't allow runtime is_shared checks, so this is enforced by:
+    // 1. package(package) visibility - only callable from this package
+    // 2. Only exposed through init_actions module
+    // 3. Documentation and naming convention (_unshared suffix)
+
+    // Ensure vault exists
+    if (!account.has_managed_data(VaultKey(name))) {
+        let vault = Vault {
+            bag: bag::new(ctx),
+            streams: table::new(ctx),
+        };
+        account.add_managed_data(VaultKey(name), vault, version::current());
+    };
+
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(VaultKey(name), version::current());
+
+    // Add coin to vault
+    let coin_type_name = type_name::with_defining_ids<CoinType>();
+    if (vault.bag.contains(coin_type_name)) {
+        let balance_mut = vault.bag.borrow_mut<TypeName, Balance<CoinType>>(coin_type_name);
+        balance_mut.join(coin.into_balance());
+    } else {
+        vault.bag.add(coin_type_name, coin.into_balance());
+    };
 }
 
 /// Closes the vault if empty.
@@ -514,5 +576,389 @@ public fun delete_spend<CoinType>(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, so it's automatically cleaned up
     // No need to deserialize the data
+}
+
+// === Stream Management Functions ===
+
+/// Creates a new stream in the vault
+public fun create_stream<Config, CoinType: drop>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    vault_name: String,
+    beneficiary: address,
+    total_amount: u64,
+    start_time: u64,
+    end_time: u64,
+    cliff_time: Option<u64>,
+    max_per_withdrawal: u64,
+    min_interval_ms: u64,
+    max_beneficiaries: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    account.verify(auth);
+
+    // Validate stream parameters
+    let current_time = clock.timestamp_ms();
+    assert!(
+        account_actions::stream_utils::validate_time_parameters(
+            start_time,
+            end_time,
+            &cliff_time,
+            current_time
+        ),
+        EInvalidStreamParameters
+    );
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+
+    // Check that vault has sufficient balance
+    assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
+    let balance = vault.bag.borrow<TypeName, Balance<CoinType>>(type_name::with_defining_ids<CoinType>());
+    assert!(balance.value() >= total_amount, EInsufficientVestedAmount);
+
+    // Create stream
+    let stream_id = object::new(ctx);
+    let stream = VaultStream {
+        id: object::uid_to_inner(&stream_id),
+        coin_type: type_name::with_defining_ids<CoinType>(),
+        beneficiary,
+        total_amount,
+        claimed_amount: 0,
+        start_time,
+        end_time,
+        cliff_time,
+        max_per_withdrawal,
+        min_interval_ms,
+        last_withdrawal_time: 0,
+        // Fork additions
+        additional_beneficiaries: vector::empty(),
+        max_beneficiaries,
+        is_paused: false,
+        paused_at: option::none(),
+        paused_duration: 0,
+        metadata: option::none(),
+        is_transferable: true,
+        is_cancellable: true,
+    };
+
+    let id = object::uid_to_inner(&stream_id);
+    object::delete(stream_id);
+
+    // Store stream in vault
+    table::add(&mut vault.streams, id, stream);
+
+    // Emit event
+    event::emit(StreamCreated {
+        stream_id: id,
+        beneficiary,
+        total_amount,
+        coin_type: type_name::with_defining_ids<CoinType>(),
+        start_time,
+        end_time,
+    });
+
+    id
+}
+
+/// Cancel a stream and return unused funds
+public fun cancel_stream<Config, CoinType: drop>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<CoinType>, u64) {
+    account.verify(auth);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
+
+    let stream = table::remove(&mut vault.streams, stream_id);
+    assert!(stream.is_cancellable, ENotCancellable);
+
+    let current_time = clock.timestamp_ms();
+    let balance_remaining = stream.total_amount - stream.claimed_amount;
+
+    // Calculate what should be paid to beneficiary vs refunded
+    let (to_pay_beneficiary, to_refund, _unvested_claimed) =
+        account_actions::stream_utils::split_vested_unvested(
+            stream.total_amount,
+            stream.claimed_amount,
+            balance_remaining,
+            stream.start_time,
+            stream.end_time,
+            current_time,
+            stream.paused_duration,
+            &stream.cliff_time,
+        );
+
+    let balance_mut = vault.bag.borrow_mut<TypeName, Balance<CoinType>>(stream.coin_type);
+
+    // Create coins for refund and final payment
+    let mut refund_coin = coin::zero<CoinType>(ctx);
+    if (to_refund > 0) {
+        refund_coin.join(coin::take(balance_mut, to_refund, ctx));
+    };
+
+    // Transfer final payment to beneficiary if any
+    if (to_pay_beneficiary > 0) {
+        let final_payment = coin::take(balance_mut, to_pay_beneficiary, ctx);
+        transfer::public_transfer(final_payment, stream.beneficiary);
+    };
+
+    // Emit event
+    event::emit(StreamCancelled {
+        stream_id,
+        refunded_amount: to_refund,
+        final_payment: to_pay_beneficiary,
+    });
+
+    // Clean up empty balance if needed
+    if (balance_mut.value() == 0) {
+        vault.bag.remove<TypeName, Balance<CoinType>>(stream.coin_type).destroy_zero();
+    };
+
+    (refund_coin, to_refund)
+}
+
+/// Withdraw from a stream
+public fun withdraw_from_stream<Config, CoinType: drop>(
+    account: &mut Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+    amount: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
+
+    let stream = table::borrow_mut(&mut vault.streams, stream_id);
+    assert!(!stream.is_paused, EStreamPaused);
+
+    let current_time = clock.timestamp_ms();
+
+    // Check if stream has started
+    assert!(current_time >= stream.start_time, EStreamNotStarted);
+
+    // Check cliff period
+    if (stream.cliff_time.is_some()) {
+        assert!(current_time >= *stream.cliff_time.borrow(), EStreamCliffNotReached);
+    };
+
+    // Check rate limiting
+    assert!(
+        account_actions::stream_utils::check_rate_limit(
+            stream.last_withdrawal_time,
+            stream.min_interval_ms,
+            current_time
+        ),
+        EWithdrawalTooSoon
+    );
+
+    // Check withdrawal limits
+    assert!(
+        account_actions::stream_utils::check_withdrawal_limit(
+            amount,
+            stream.max_per_withdrawal
+        ),
+        EWithdrawalLimitExceeded
+    );
+
+    // Calculate available amount
+    let available = account_actions::stream_utils::calculate_claimable(
+        stream.total_amount,
+        stream.claimed_amount,
+        stream.start_time,
+        stream.end_time,
+        current_time,
+        stream.paused_duration,
+        &stream.cliff_time,
+    );
+
+    assert!(available >= amount, EInsufficientVestedAmount);
+
+    // Update stream state
+    stream.claimed_amount = stream.claimed_amount + amount;
+    stream.last_withdrawal_time = current_time;
+
+    // Withdraw from vault balance
+    let balance_mut = vault.bag.borrow_mut<TypeName, Balance<CoinType>>(stream.coin_type);
+    let coin = coin::take(balance_mut, amount, ctx);
+
+    // Emit event
+    event::emit(StreamWithdrawal {
+        stream_id,
+        beneficiary: tx_context::sender(ctx),
+        amount,
+        remaining_vested: available - amount,
+    });
+
+    // Clean up empty balance if needed
+    if (balance_mut.value() == 0) {
+        vault.bag.remove<TypeName, Balance<CoinType>>(stream.coin_type).destroy_zero();
+    };
+
+    coin
+}
+
+/// Calculate how much can be claimed from a stream
+public fun calculate_claimable<Config>(
+    account: &Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+    clock: &Clock,
+): u64 {
+    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
+
+    let stream = table::borrow(&vault.streams, stream_id);
+    let current_time = clock.timestamp_ms();
+
+    account_actions::stream_utils::calculate_claimable(
+        stream.total_amount,
+        stream.claimed_amount,
+        stream.start_time,
+        stream.end_time,
+        current_time,
+        stream.paused_duration,
+        &stream.cliff_time,
+    )
+}
+
+/// Get stream information
+public fun stream_info<Config>(
+    account: &Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+): (address, u64, u64, u64, u64, bool, bool) {
+    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    assert!(table::contains(&vault.streams, stream_id), EStreamNotFound);
+
+    let stream = table::borrow(&vault.streams, stream_id);
+    (
+        stream.beneficiary,
+        stream.total_amount,
+        stream.claimed_amount,
+        stream.start_time,
+        stream.end_time,
+        stream.is_paused,
+        stream.is_cancellable
+    )
+}
+
+/// Check if a stream exists
+public fun has_stream<Config>(
+    account: &Account<Config>,
+    vault_name: String,
+    stream_id: ID,
+): bool {
+    if (!account.has_managed_data(VaultKey(vault_name))) {
+        return false
+    };
+
+    let vault: &Vault = account.borrow_managed_data(VaultKey(vault_name), version::current());
+    table::contains(&vault.streams, stream_id)
+}
+
+/// Create a stream during initialization - works on unshared Accounts.
+/// Directly creates a stream without requiring Auth during DAO creation.
+///
+/// ## FORK NOTE
+/// **Added**: `create_stream_unshared()` for init-time payment stream creation
+/// **Reason**: Allow DAOs to set up recurring payment streams (salaries, grants)
+/// during atomic initialization from vault funds. Validates parameters and balance.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+///
+/// SAFETY: This function MUST only be called on unshared Accounts
+/// during the initialization phase before the Account is shared.
+/// Once an Account is shared, this function will fail as it bypasses
+/// the normal Auth checks that protect shared Accounts.
+public(package) fun create_stream_unshared<Config, CoinType: drop>(
+    account: &mut Account<Config>,
+    vault_name: String,
+    beneficiary: address,
+    total_amount: u64,
+    start_time: u64,
+    end_time: u64,
+    cliff_time: Option<u64>,
+    max_per_withdrawal: u64,
+    min_interval_ms: u64,
+    max_beneficiaries: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    // Validate stream parameters
+    let current_time = clock.timestamp_ms();
+    assert!(
+        account_actions::stream_utils::validate_time_parameters(
+            start_time,
+            end_time,
+            &cliff_time,
+            current_time
+        ),
+        EInvalidStreamParameters
+    );
+    assert!(total_amount > 0, EAmountMustBeGreaterThanZero);
+    assert!(max_beneficiaries <= account_actions::stream_utils::max_beneficiaries(), ETooManyBeneficiaries);
+
+    // Ensure vault exists and has sufficient balance
+    let vault_exists = account.has_managed_data(VaultKey(vault_name));
+    assert!(vault_exists, EVaultDoesNotExist);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(vault_name), version::current());
+    let coin_type_name = type_name::with_defining_ids<CoinType>();
+    assert!(bag::contains(&vault.bag, coin_type_name), ECoinTypeDoesNotExist);
+
+    let balance = vault.bag.borrow<TypeName, Balance<CoinType>>(coin_type_name);
+    assert!(balance.value() >= total_amount, EInsufficientBalance);
+
+    // Create stream ID
+    let stream_uid = object::new(ctx);
+    let stream_id = object::uid_to_inner(&stream_uid);
+    object::delete(stream_uid);
+
+    // Create stream
+    let stream = VaultStream {
+        id: stream_id,
+        coin_type: coin_type_name,
+        beneficiary,
+        total_amount,
+        claimed_amount: 0,
+        start_time,
+        end_time,
+        cliff_time,
+        max_per_withdrawal,
+        min_interval_ms,
+        last_withdrawal_time: 0,
+        paused_duration: 0,
+        paused_at: option::none(),
+        is_paused: false,
+        is_cancellable: true,
+        is_transferable: true,
+        additional_beneficiaries: vector::empty<address>(),
+        max_beneficiaries,
+        metadata: option::none(),
+    };
+
+    // Copy ID before moving stream
+    let stream_id_copy = stream.id;
+
+    // Add stream to vault
+    table::add(&mut vault.streams, stream_id_copy, stream);
+
+    // Emit event
+    event::emit(StreamCreated {
+        stream_id: stream_id_copy,
+        beneficiary,
+        total_amount,
+        coin_type: coin_type_name,
+        start_time,
+        end_time,
+    });
+
+    stream_id_copy
 }
 

@@ -134,6 +134,104 @@ public fun lock_cap<Config, CoinType>(
     account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
+/// Lock treasury cap during initialization - works on unshared Accounts
+/// This function is for use during account creation, before the account is shared.
+///
+/// ## FORK NOTE
+/// **Added**: `do_lock_cap_unshared()` for init-time TreasuryCap locking
+/// **Reason**: Enable DAOs to lock their TreasuryCap during atomic initialization
+/// without Auth checks. Sets default CurrencyRules permissively to allow minting.
+/// **Safety**: `public(package)` visibility + naming convention enforces unshared-only usage
+///
+/// SAFETY: This function MUST only be called on unshared Accounts.
+/// Calling this on a shared Account bypasses Auth checks.
+public(package) fun do_lock_cap_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    treasury_cap: TreasuryCap<CoinType>,
+) {
+    // SAFETY REQUIREMENT: Account must be unshared
+    // Default rules with no max supply
+    let rules = CurrencyRules<CoinType> {
+        max_supply: option::none(),
+        total_minted: 0,
+        total_burned: 0,
+        can_mint: true,
+        can_burn: true,
+        can_update_symbol: true,
+        can_update_name: true,
+        can_update_description: true,
+        can_update_icon: true,
+    };
+    account.add_managed_data(CurrencyRulesKey<CoinType>(), rules, version::current());
+    account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+}
+
+/// Mint coins during initialization - works on unshared Accounts
+/// Transfers minted coins directly to recipient
+///
+/// ## FORK NOTE
+/// **Added**: `do_mint_unshared()` for init-time minting
+/// **Reason**: Allow initial token distribution during DAO creation (founders, team, treasury)
+/// without requiring Auth or proposal approval. Validates against CurrencyRules.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+///
+/// SAFETY: This function MUST only be called on unshared Accounts.
+/// Calling this on a shared Account bypasses Auth checks.
+public(package) fun do_mint_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    // SAFETY REQUIREMENT: Account must be unshared
+    let rules: &mut CurrencyRules<CoinType> =
+        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+
+    assert!(rules.can_mint, EMintDisabled);
+    if (rules.max_supply.is_some()) {
+        let total_supply = rules.total_minted - rules.total_burned;
+        assert!(amount + total_supply <= *rules.max_supply.borrow(), EMaxSupply);
+    };
+
+    rules.total_minted = rules.total_minted + amount;
+
+    let cap: &mut TreasuryCap<CoinType> =
+        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+
+    let coin = cap.mint(amount, ctx);
+    transfer::public_transfer(coin, recipient);
+}
+
+/// Mint coins to Coin object during initialization - works on unshared Accounts
+/// Returns Coin for further use in the same transaction
+///
+/// ## FORK NOTE
+/// **Added**: `do_mint_to_coin_unshared()` for composable init-time minting
+/// **Reason**: Mint coins and return Coin object for immediate use in same PTB
+/// (e.g., mint then deposit to vault, or mint then add to liquidity pool)
+/// **Safety**: `public(package)` visibility ensures only callable during init
+public(package) fun do_mint_to_coin_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    let rules: &mut CurrencyRules<CoinType> =
+        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+
+    assert!(rules.can_mint, EMintDisabled);
+    if (rules.max_supply.is_some()) {
+        let total_supply = rules.total_minted - rules.total_burned;
+        assert!(amount + total_supply <= *rules.max_supply.borrow(), EMaxSupply);
+    };
+
+    rules.total_minted = rules.total_minted + amount;
+
+    let cap: &mut TreasuryCap<CoinType> =
+        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+
+    cap.mint(amount, ctx)
+}
+
 /// Checks if a TreasuryCap exists for a given coin type.
 public fun has_cap<Config, CoinType>(
     account: &Account<Config>

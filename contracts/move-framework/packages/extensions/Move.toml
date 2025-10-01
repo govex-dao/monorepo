@@ -6,4 +6,4 @@ authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
 [addresses]
-account_extensions = "0xa01921dfa6ad89fac820afa1150b047b96271ff6c555c656ba00b8cbeab33615"
+account_extensions = "0x2eeb1761ecc96ab59bc3e352b180495720ed66fa4e86acdb977bde54d88aaa11"

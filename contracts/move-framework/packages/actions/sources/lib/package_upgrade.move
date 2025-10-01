@@ -114,6 +114,32 @@ public fun lock_cap<Config>(
     account.add_managed_data(UpgradeRulesKey(name), UpgradeRules { delay_ms }, version::current());
 }
 
+/// Lock upgrade cap during initialization - works on unshared Accounts
+/// This function is for use during account creation, before the account is shared.
+///
+/// ## FORK NOTE
+/// **Added**: `do_lock_cap_unshared()` for init-time UpgradeCap management
+/// **Reason**: Allow DAOs to lock package UpgradeCaps during atomic initialization,
+/// establishing controlled upgrade governance from creation. Sets upgrade delay rules.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+public(package) fun do_lock_cap_unshared<Config>(
+    account: &mut Account<Config>,
+    cap: UpgradeCap,
+    name: String,
+    delay_ms: u64,
+) {
+    assert!(!has_cap(account, name), ELockAlreadyExists);
+
+    if (!account.has_managed_data(UpgradeIndexKey()))
+        account.add_managed_data(UpgradeIndexKey(), UpgradeIndex { packages_info: vec_map::empty() }, version::current());
+
+    let upgrade_index_mut: &mut UpgradeIndex = account.borrow_managed_data_mut(UpgradeIndexKey(), version::current());
+    upgrade_index_mut.packages_info.insert(name, cap.package().to_address());
+
+    account.add_managed_asset(UpgradeCapKey(name), cap, version::current());
+    account.add_managed_data(UpgradeRulesKey(name), UpgradeRules { delay_ms }, version::current());
+}
+
 /// Returns true if the account has an UpgradeCap for a given package name.
 public fun has_cap<Config>(
     account: &Account<Config>, 

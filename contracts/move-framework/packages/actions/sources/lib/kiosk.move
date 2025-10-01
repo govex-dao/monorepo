@@ -21,7 +21,7 @@ module account_actions::kiosk;
 
 // === Imports ===
 
-use std::string::String;
+use std::string::{Self, String};
 use sui::{
     coin,
     sui::SUI,
@@ -88,6 +88,33 @@ public fun open<Config>(
 
     account.add_managed_asset(KioskOwnerKey(name), kiosk_owner_cap, version::current());
     transfer::public_share_object(kiosk);
+}
+
+/// Open kiosk during initialization - works on unshared Accounts
+/// Creates a kiosk for NFT management during DAO creation
+/// Returns the kiosk ID for subsequent operations
+///
+/// ## FORK NOTE
+/// **Added**: `do_open_unshared()` for init-time kiosk creation
+/// **Reason**: Allow DAOs to create NFT kiosks during atomic initialization.
+/// Shares the Kiosk publicly while storing KioskOwnerCap in Account.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+#[allow(lint(share_owned))]
+public(package) fun do_open_unshared<Config>(
+    account: &mut Account<Config>,
+    ctx: &mut TxContext
+): ID {
+    let (mut kiosk, kiosk_owner_cap) = kiosk::new(ctx);
+    kiosk.set_owner_custom(&kiosk_owner_cap, account.addr());
+
+    let kiosk_id = object::id(&kiosk);
+
+    // Use default name for init kiosk
+    let name = string::utf8(b"Main Kiosk");
+    account.add_managed_asset(KioskOwnerKey(name), kiosk_owner_cap, version::current());
+    transfer::public_share_object(kiosk);
+
+    kiosk_id
 }
 
 /// Checks if a Kiosk exists for a given name.

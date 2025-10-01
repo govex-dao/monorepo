@@ -1,0 +1,568 @@
+/// Decoder for protocol admin actions in futarchy DAOs
+module futarchy_governance_actions::protocol_admin_decoder;
+
+// === Imports ===
+
+use std::{string::String, type_name::{Self, TypeName}};
+use sui::{object::{Self, UID}, dynamic_object_field, bcs};
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use futarchy_governance_actions::protocol_admin_actions::{
+    SetFactoryPausedAction,
+    AddStableTypeAction,
+    RemoveStableTypeAction,
+    UpdateDaoCreationFeeAction,
+    UpdateProposalFeeAction,
+    UpdateMonthlyDaoFeeAction,
+    UpdateVerificationFeeAction,
+    AddVerificationLevelAction,
+    RemoveVerificationLevelAction,
+    RequestVerificationAction,
+    ApproveVerificationAction,
+    RejectVerificationAction,
+    UpdateRecoveryFeeAction,
+    WithdrawFeesToTreasuryAction,
+};
+
+// === Decoder Objects ===
+
+/// Decoder for SetFactoryPausedAction
+public struct SetFactoryPausedActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for AddStableTypeAction
+public struct AddStableTypeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for RemoveStableTypeAction
+public struct RemoveStableTypeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for UpdateDaoCreationFeeAction
+public struct UpdateDaoCreationFeeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for UpdateProposalFeeAction
+public struct UpdateProposalFeeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for UpdateMonthlyDaoFeeAction
+public struct UpdateMonthlyDaoFeeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for UpdateVerificationFeeAction
+public struct UpdateVerificationFeeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for AddVerificationLevelAction
+public struct AddVerificationLevelActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for RemoveVerificationLevelAction
+public struct RemoveVerificationLevelActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for RequestVerificationAction
+public struct RequestVerificationActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for ApproveVerificationAction
+public struct ApproveVerificationActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for RejectVerificationAction
+public struct RejectVerificationActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for UpdateRecoveryFeeAction
+public struct UpdateRecoveryFeeActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for WithdrawFeesToTreasuryAction
+public struct WithdrawFeesToTreasuryActionDecoder has key, store {
+    id: UID,
+}
+
+// === Decoder Functions ===
+
+/// Decode a SetFactoryPausedAction
+public fun decode_set_factory_paused_action(
+    _decoder: &SetFactoryPausedActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let paused = bcs::peel_bool(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"paused".to_string(),
+            if (paused) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+    ]
+}
+
+/// Decode an AddStableTypeAction
+public fun decode_add_stable_type_action(
+    _decoder: &AddStableTypeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    // TypeName is a struct with a name field (ASCII string)
+    let type_name_bytes = bcs::peel_vec_u8(&mut bcs_data);
+    let type_name_str = type_name_bytes.to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"stable_type".to_string(),
+            type_name_str,
+            b"TypeName".to_string(),
+        ),
+    ]
+}
+
+/// Decode a RemoveStableTypeAction
+public fun decode_remove_stable_type_action(
+    _decoder: &RemoveStableTypeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    // TypeName is a struct with a name field (ASCII string)
+    let type_name_bytes = bcs::peel_vec_u8(&mut bcs_data);
+    let type_name_str = type_name_bytes.to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"stable_type".to_string(),
+            type_name_str,
+            b"TypeName".to_string(),
+        ),
+    ]
+}
+
+/// Decode an UpdateDaoCreationFeeAction
+public fun decode_update_dao_creation_fee_action(
+    _decoder: &UpdateDaoCreationFeeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let new_fee = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"new_fee".to_string(),
+            new_fee.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode an UpdateProposalFeeAction
+public fun decode_update_proposal_fee_action(
+    _decoder: &UpdateProposalFeeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let new_fee_per_outcome = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"new_fee_per_outcome".to_string(),
+            new_fee_per_outcome.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode an UpdateMonthlyDaoFeeAction
+public fun decode_update_monthly_dao_fee_action(
+    _decoder: &UpdateMonthlyDaoFeeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let new_fee = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"new_fee".to_string(),
+            new_fee.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode an UpdateVerificationFeeAction
+public fun decode_update_verification_fee_action(
+    _decoder: &UpdateVerificationFeeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let level = bcs::peel_u8(&mut bcs_data);
+    let new_fee = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"level".to_string(),
+            level.to_string(),
+            b"u8".to_string(),
+        ),
+        schema::new_field(
+            b"new_fee".to_string(),
+            new_fee.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode an AddVerificationLevelAction
+public fun decode_add_verification_level_action(
+    _decoder: &AddVerificationLevelActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let level = bcs::peel_u8(&mut bcs_data);
+    let fee = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"level".to_string(),
+            level.to_string(),
+            b"u8".to_string(),
+        ),
+        schema::new_field(
+            b"fee".to_string(),
+            fee.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode a RemoveVerificationLevelAction
+public fun decode_remove_verification_level_action(
+    _decoder: &RemoveVerificationLevelActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let level = bcs::peel_u8(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"level".to_string(),
+            level.to_string(),
+            b"u8".to_string(),
+        ),
+    ]
+}
+
+/// Decode a RequestVerificationAction
+public fun decode_request_verification_action(
+    _decoder: &RequestVerificationActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let level = bcs::peel_u8(&mut bcs_data);
+    let attestation_url = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"level".to_string(),
+            level.to_string(),
+            b"u8".to_string(),
+        ),
+        schema::new_field(
+            b"attestation_url".to_string(),
+            attestation_url,
+            b"String".to_string(),
+        ),
+    ]
+}
+
+/// Decode an ApproveVerificationAction
+public fun decode_approve_verification_action(
+    _decoder: &ApproveVerificationActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let dao_id = bcs::peel_address(&mut bcs_data);
+    let verification_id = bcs::peel_address(&mut bcs_data);
+    let level = bcs::peel_u8(&mut bcs_data);
+    let attestation_url = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"dao_id".to_string(),
+            dao_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"verification_id".to_string(),
+            verification_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"level".to_string(),
+            level.to_string(),
+            b"u8".to_string(),
+        ),
+        schema::new_field(
+            b"attestation_url".to_string(),
+            attestation_url,
+            b"String".to_string(),
+        ),
+    ]
+}
+
+/// Decode a RejectVerificationAction
+public fun decode_reject_verification_action(
+    _decoder: &RejectVerificationActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let dao_id = bcs::peel_address(&mut bcs_data);
+    let verification_id = bcs::peel_address(&mut bcs_data);
+    let reason = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"dao_id".to_string(),
+            dao_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"verification_id".to_string(),
+            verification_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"reason".to_string(),
+            reason,
+            b"String".to_string(),
+        ),
+    ]
+}
+
+/// Decode an UpdateRecoveryFeeAction
+public fun decode_update_recovery_fee_action(
+    _decoder: &UpdateRecoveryFeeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let new_fee = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"new_fee".to_string(),
+            new_fee.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+/// Decode a WithdrawFeesToTreasuryAction
+public fun decode_withdraw_fees_to_treasury_action(
+    _decoder: &WithdrawFeesToTreasuryActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let amount = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"amount".to_string(),
+            amount.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
+// === Registration Functions ===
+
+/// Register all protocol admin decoders
+public fun register_decoders(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    register_set_factory_paused_decoder(registry, ctx);
+    register_add_stable_type_decoder(registry, ctx);
+    register_remove_stable_type_decoder(registry, ctx);
+    register_update_dao_creation_fee_decoder(registry, ctx);
+    register_update_proposal_fee_decoder(registry, ctx);
+    register_update_monthly_dao_fee_decoder(registry, ctx);
+    register_update_verification_fee_decoder(registry, ctx);
+    register_add_verification_level_decoder(registry, ctx);
+    register_remove_verification_level_decoder(registry, ctx);
+    register_request_verification_decoder(registry, ctx);
+    register_approve_verification_decoder(registry, ctx);
+    register_reject_verification_decoder(registry, ctx);
+    register_update_recovery_fee_decoder(registry, ctx);
+    register_withdraw_fees_to_treasury_decoder(registry, ctx);
+}
+
+fun register_set_factory_paused_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = SetFactoryPausedActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SetFactoryPausedAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_add_stable_type_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = AddStableTypeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<AddStableTypeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_remove_stable_type_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = RemoveStableTypeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<RemoveStableTypeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_update_dao_creation_fee_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = UpdateDaoCreationFeeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<UpdateDaoCreationFeeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_update_proposal_fee_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = UpdateProposalFeeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<UpdateProposalFeeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_update_monthly_dao_fee_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = UpdateMonthlyDaoFeeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<UpdateMonthlyDaoFeeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_update_verification_fee_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = UpdateVerificationFeeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<UpdateVerificationFeeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_add_verification_level_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = AddVerificationLevelActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<AddVerificationLevelAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_remove_verification_level_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = RemoveVerificationLevelActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<RemoveVerificationLevelAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_request_verification_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = RequestVerificationActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<RequestVerificationAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_approve_verification_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ApproveVerificationActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<ApproveVerificationAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_reject_verification_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = RejectVerificationActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<RejectVerificationAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_update_recovery_fee_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = UpdateRecoveryFeeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<UpdateRecoveryFeeAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_withdraw_fees_to_treasury_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = WithdrawFeesToTreasuryActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<WithdrawFeesToTreasuryAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}

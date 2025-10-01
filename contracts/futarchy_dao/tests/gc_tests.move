@@ -24,10 +24,8 @@ use futarchy_actions::{
     config_actions,
     memo_actions,
 };
-use futarchy_specialized_actions::{
-    stream_actions,
-    operating_agreement_actions,
-};
+use futarchy_lifecycle::stream_actions;
+use futarchy_legal_actions::operating_agreement_actions;
 use futarchy_dao::{
     gc_janitor,
     gc_registry,

@@ -64,27 +64,31 @@ public fun drain_expired_efficient(
     expired: &mut Expired,
     registry: &DeleteHookRegistry,
 ) {
-    // Get the action specs from the expired struct
-    let action_specs = intents::expired_action_specs(expired);
-
-    // Get unique action types (to avoid duplicate delete attempts)
+    // First, collect all unique action types from the expired specs
     let mut processed_types = vector::empty<TypeName>();
+    {
+        let action_specs = intents::expired_action_specs(expired);
+        let mut i = 0;
+        let len = vector::length(action_specs);
+        while (i < len) {
+            let spec = vector::borrow(action_specs, i);
+            let action_type = intents::action_spec_type(spec);
 
-    let mut i = 0;
-    let len = vector::length(action_specs);
-    while (i < len) {
-        let spec = vector::borrow(action_specs, i);
-        let action_type = intents::action_spec_type(spec);
-
-        // Skip if we've already processed this type
-        if (!vector::contains(&processed_types, &action_type)) {
-            vector::push_back(&mut processed_types, action_type);
-
-            // Attempt to delete this action type
-            delete_action_by_type(expired, action_type, registry);
+            // Collect unique types to process
+            if (!vector::contains(&processed_types, &action_type)) {
+                vector::push_back(&mut processed_types, action_type);
+            };
+            i = i + 1;
         };
+    }; // action_specs reference is dropped here
 
-        i = i + 1;
+    // Now process each unique type
+    let mut j = 0;
+    let types_len = vector::length(&processed_types);
+    while (j < types_len) {
+        let action_type = *vector::borrow(&processed_types, j);
+        delete_action_by_type(expired, action_type, registry);
+        j = j + 1;
     };
 }
 
