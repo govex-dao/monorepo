@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "8488F6E0BED6F843F489211EC952873F1FA17E84D0BBA9D72EB9C69B9BAD6C60"
-deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
+manifest_digest = "7B01C7EB3758DCAA84EB7ABE3F4C06ECB513D064EFCD2A253622D97342001013"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -11,6 +11,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "WAL", name = "WAL" },
   { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
@@ -28,7 +29,6 @@ source = { local = "../move-framework/packages/actions" }
 dependencies = [
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
-  { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -68,14 +68,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "Kiosk"
-source = { local = "../move-framework/deps/kiosk" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
 id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/move-stdlib" }
 
@@ -98,7 +90,7 @@ dependencies = [
 
 [[move.package]]
 id = "WAL"
-source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/wal" }
+source = { local = "../walrus_wal" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -106,7 +98,7 @@ dependencies = [
 
 [[move.package]]
 id = "Walrus"
-source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/walrus" }
+source = { local = "../walrus_walrus" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -244,7 +236,7 @@ flavor = "sui"
 [env]
 
 [env.devnet]
-chain-id = "a5e2ba5d"
-original-published-id = "0x41be76ea99a5c54bfc59dc00715636dd64d116d2ca8a3de6d36036ee9a7e90d6"
-latest-published-id = "0x41be76ea99a5c54bfc59dc00715636dd64d116d2ca8a3de6d36036ee9a7e90d6"
+chain-id = "bc718b80"
+original-published-id = "0xd698e3a6060133ff49611c33f31e65651c852d7c17e626a31d13dbd20e9d3e18"
+latest-published-id = "0xd698e3a6060133ff49611c33f31e65651c852d7c17e626a31d13dbd20e9d3e18"
 published-version = "1"

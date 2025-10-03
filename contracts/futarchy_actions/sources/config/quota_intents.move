@@ -1,0 +1,113 @@
+/// Quota intent creation module - for managing proposal quotas
+module futarchy_actions::quota_intents;
+
+use std::{type_name, bcs};
+use sui::{clock::Clock, tx_context::TxContext};
+use account_protocol::{
+    account::Account,
+    executable::Executable,
+    intents::{Self, Intent, Params},
+    intent_interface,
+    schema::{Self, ActionDecoderRegistry},
+};
+use futarchy_core::{version, action_types, futarchy_config::FutarchyConfig};
+use futarchy_actions::quota_actions;
+
+// === Aliases ===
+use fun intent_interface::build_intent as Account.build_intent;
+use fun intent_interface::process_intent as Account.process_intent;
+
+// === Witness ===
+public struct QuotaIntent has copy, drop {}
+
+// === Intent Creation Functions ===
+
+/// Create intent to set quotas for multiple addresses
+/// quota_amount = 0 removes quotas
+public fun create_set_quotas_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    users: vector<address>,
+    quota_amount: u64,
+    quota_period_ms: u64,
+    reduced_fee: u64,
+    ctx: &mut TxContext
+) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<quota_actions::SetQuotasAction>()
+    );
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"quota_set_quotas".to_string(),
+        version::current(),
+        QuotaIntent {},
+        ctx,
+        |intent, iw| {
+            let action = quota_actions::new_set_quotas(
+                users,
+                quota_amount,
+                quota_period_ms,
+                reduced_fee,
+            );
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::set_quotas(),
+                action_bytes,
+                iw
+            );
+        }
+    );
+}
+
+/// Create intent to grant quotas (convenience wrapper)
+public fun create_grant_quotas_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    users: vector<address>,
+    quota_amount: u64,
+    quota_period_ms: u64,
+    reduced_fee: u64,
+    ctx: &mut TxContext
+) {
+    create_set_quotas_intent(
+        account,
+        registry,
+        params,
+        outcome,
+        users,
+        quota_amount,
+        quota_period_ms,
+        reduced_fee,
+        ctx
+    )
+}
+
+/// Create intent to remove quotas (convenience wrapper)
+public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    users: vector<address>,
+    ctx: &mut TxContext
+) {
+    create_set_quotas_intent(
+        account,
+        registry,
+        params,
+        outcome,
+        users,
+        0,  // 0 quota_amount = remove
+        0,  // ignored
+        0,  // ignored
+        ctx
+    )
+}

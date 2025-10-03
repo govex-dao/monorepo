@@ -118,6 +118,14 @@ public struct OptimisticIntentExpired has copy, drop {
     timestamp: u64,
 }
 
+public struct ChallengeBountyPaid has copy, drop {
+    dao_id: ID,
+    intent_id: ID,
+    challenger: address,
+    bounty_amount: u64,
+    timestamp: u64,
+}
+
 // === Actions ===
 
 /// Action to create an optimistic intent
@@ -128,6 +136,8 @@ public struct CreateOptimisticIntentAction has store, drop {
 }
 
 /// Action to challenge optimistic intents (cancels them)
+/// Note: Challenge bounty is paid via a separate SpendAndTransfer action in the same proposal
+/// The bounty amount is configured in GovernanceConfig.challenge_bounty
 public struct ChallengeOptimisticIntentsAction has store, drop {
     intent_ids: vector<ID>,
     governance_proposal_id: ID,

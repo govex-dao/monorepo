@@ -11,6 +11,9 @@ use sui::{
 };
 use futarchy_core::futarchy_config::{Self, SlashDistribution};
 use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
+use futarchy_core::proposal_quota_registry;
+use futarchy_one_shot_utils::constants;
+use futarchy_one_shot_utils::math;
 
 // === Errors ===
 const EInvalidFeeAmount: u64 = 0;
@@ -72,6 +75,7 @@ public fun deposit_proposal_fee(
 }
 
 /// Called when a proposal is submitted to the queue to pay the queue fee
+/// Splits fee 80/20 between queue maintenance and protocol revenue
 public fun deposit_queue_fee(
     manager: &mut ProposalFeeManager,
     fee_coin: Coin<SUI>,
@@ -80,8 +84,21 @@ public fun deposit_queue_fee(
 ) {
     let amount = fee_coin.value();
     if (amount > 0) {
-        manager.queue_fees.join(fee_coin.into_balance());
-        
+        // Split fee: 80% to queue, 20% to protocol (same as AMM fees)
+        // Use mul_div pattern for precision and overflow safety
+        let protocol_share = math::mul_div_to_64(amount, constants::protocol_fee_share_bps(), constants::total_fee_bps());
+        let queue_share = amount - protocol_share;
+
+        let mut fee_balance = fee_coin.into_balance();
+
+        // Add protocol's share to protocol revenue
+        if (protocol_share > 0) {
+            manager.protocol_revenue.join(fee_balance.split(protocol_share));
+        };
+
+        // Add queue's share to queue fees
+        manager.queue_fees.join(fee_balance);
+
         event::emit(QueueFeeDeposited {
             amount,
             depositor: ctx.sender(),
@@ -346,4 +363,75 @@ public fun collect_advancement_fee(
     fee_coin: Coin<SUI>
 ) {
     manager.protocol_revenue.join(fee_coin.into_balance());
+}
+
+// === Quota Integration Functions ===
+
+/// Calculate the actual fee a proposer should pay, considering quotas
+/// Returns (actual_fee_amount, used_quota)
+public fun calculate_fee_with_quota(
+    quota_registry: &proposal_quota_registry::ProposalQuotaRegistry,
+    dao_id: ID,
+    proposer: address,
+    base_fee: u64,
+    clock: &Clock,
+): (u64, bool) {
+    // Check if proposer has an available quota
+    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(
+        quota_registry,
+        dao_id,
+        proposer,
+        clock
+    );
+
+    if (has_quota) {
+        // Proposer has quota - use reduced fee
+        (reduced_fee, true)
+    } else {
+        // No quota - pay full fee
+        (base_fee, false)
+    }
+}
+
+/// Commit quota usage after successful proposal creation
+/// Should only be called if used_quota = true from calculate_fee_with_quota
+public fun use_quota_for_proposal(
+    quota_registry: &mut proposal_quota_registry::ProposalQuotaRegistry,
+    dao_id: ID,
+    proposer: address,
+    clock: &Clock,
+) {
+    proposal_quota_registry::use_quota(quota_registry, dao_id, proposer, clock);
+}
+
+/// Deposit revenue into protocol revenue (e.g., from proposal fee escrow)
+/// Used when proposal fees are not fully refunded and should go to protocol
+public fun deposit_revenue(
+    manager: &mut ProposalFeeManager,
+    revenue_coin: Coin<SUI>
+) {
+    manager.protocol_revenue.join(revenue_coin.into_balance());
+}
+
+/// Refund fees to outcome creators whose outcome won
+/// This is called after a proposal is finalized and the winning outcome is determined
+/// Refunds are paid from protocol revenue
+/// DEPRECATED: Use proposal fee escrow instead for per-proposal tracking
+public fun refund_outcome_creator_fees(
+    manager: &mut ProposalFeeManager,
+    outcome_creator: address,
+    refund_amount: u64,
+    ctx: &mut TxContext
+): Coin<SUI> {
+    if (manager.protocol_revenue.value() >= refund_amount) {
+        coin::from_balance(manager.protocol_revenue.split(refund_amount), ctx)
+    } else {
+        // If not enough in protocol revenue, refund what's available
+        let available = manager.protocol_revenue.value();
+        if (available > 0) {
+            coin::from_balance(manager.protocol_revenue.split(available), ctx)
+        } else {
+            coin::zero(ctx)
+        }
+    }
 }

@@ -35,17 +35,22 @@ resolve_address_conflicts() {
 
         # Convert package name to variable name
         case "$pkg_name" in
-            "Kiosk") pkg_var="kiosk" ;;
             "AccountExtensions") pkg_var="account_extensions" ;;
             "AccountProtocol") pkg_var="account_protocol" ;;
             "AccountActions") pkg_var="account_actions" ;;
             *) pkg_var="$pkg_name" ;;
         esac
 
-        # Update all Move.toml files with this package's address
-        find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
-            sed -i '' "/^${pkg_var} = /c\\
-${pkg_var} = \"${pkg_addr}\"" {} \; 2>/dev/null || true
+        # Update all Move.toml files with this package's address (only in [addresses] section)
+        for toml_file in $(find /Users/admin/monorepo/contracts -name "Move.toml" -type f); do
+            awk -v key="$pkg_var" -v addr="$pkg_addr" '
+                BEGIN { in_addr=0 }
+                /^\[addresses\]/ { in_addr=1; print; next }
+                /^\[/ && !/^\[addresses\]/ { in_addr=0 }
+                in_addr && $0 ~ "^"key" = " { print key " = \"" addr "\""; next }
+                { print }
+            ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
+        done 2>/dev/null || true
     done
 }
 
@@ -60,13 +65,18 @@ deploy_and_verify() {
 
     # Set package address to 0x0 for deployment in the current package
     # Use a more robust sed pattern to avoid escaping issues
-    sed -i '' "/^${pkg_var_name} = /c\\
-${pkg_var_name} = \"0x0\"" Move.toml 2>/dev/null || true
+    sed -i '' "s|^${pkg_var_name} = .*|${pkg_var_name} = \"0x0\"|" Move.toml 2>/dev/null || true
 
-    # Also reset this package's address in ALL other Move.toml files to ensure consistency
-    find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
-        sed -i '' "/^${pkg_var_name} = /c\\
-${pkg_var_name} = \"0x0\"" {} \; 2>/dev/null || true
+    # Also reset this package's address in ALL other Move.toml files (only in [addresses] section)
+    for toml_file in $(find /Users/admin/monorepo/contracts -name "Move.toml" -type f); do
+        awk -v key="$pkg_var_name" '
+            BEGIN { in_addr=0 }
+            /^\[addresses\]/ { in_addr=1; print; next }
+            /^\[/ && !/^\[addresses\]/ { in_addr=0 }
+            in_addr && $0 ~ "^"key" = " { print key " = \"0x0\""; next }
+            { print }
+        ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
+    done 2>/dev/null || true
     
     # Build first and check for success
     echo "Building $pkg_name..."
@@ -119,10 +129,16 @@ ${pkg_var_name} = \"0x0\"" {} \; 2>/dev/null || true
         echo -e "${GREEN}✓ $pkg_name deployed at: $pkg_id${NC}"
         log "✓ $pkg_name: $pkg_id"
 
-        # Update all Move.toml files with new address using robust sed pattern
-        find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
-            sed -i '' "/^${pkg_var_name} = /c\\
-${pkg_var_name} = \"${pkg_id}\"" {} \;
+        # Update all Move.toml files with new address (only in [addresses] section)
+        for toml_file in $(find /Users/admin/monorepo/contracts -name "Move.toml" -type f); do
+            awk -v key="$pkg_var_name" -v addr="$pkg_id" '
+                BEGIN { in_addr=0 }
+                /^\[addresses\]/ { in_addr=1; print; next }
+                /^\[/ && !/^\[addresses\]/ { in_addr=0 }
+                in_addr && $0 ~ "^"key" = " { print key " = \"" addr "\""; next }
+                { print }
+            ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
+        done
 
         DEPLOYED_PACKAGES+=("$pkg_name:$pkg_id")
         return 0
@@ -132,30 +148,28 @@ ${pkg_var_name} = \"${pkg_id}\"" {} \;
     fi
 }
 
-# Package list in deployment order (22 packages total)
+# Package list in deployment order (18 packages total)
 declare -a PACKAGES=(
-    # Move Framework packages (4)
-    "Kiosk:/Users/admin/monorepo/contracts/move-framework/deps/kiosk:kiosk"
+    # Move Framework packages (3)
     "AccountExtensions:/Users/admin/monorepo/contracts/move-framework/packages/extensions:account_extensions"
     "AccountProtocol:/Users/admin/monorepo/contracts/move-framework/packages/protocol:account_protocol"
     "AccountActions:/Users/admin/monorepo/contracts/move-framework/packages/actions:account_actions"
 
-    # Futarchy packages (18)
-    "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
+    # Futarchy packages (15)
     "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
+    "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
     "futarchy_markets:/Users/admin/monorepo/contracts/futarchy_markets:futarchy_markets"
     "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"
     "futarchy_multisig:/Users/admin/monorepo/contracts/futarchy_multisig:futarchy_multisig"
+    "futarchy_oracle:/Users/admin/monorepo/contracts/futarchy_oracle:futarchy_oracle"
     "futarchy_payments:/Users/admin/monorepo/contracts/futarchy_payments:futarchy_payments"
     "futarchy_streams:/Users/admin/monorepo/contracts/futarchy_streams:futarchy_streams"
-    "futarchy_oracle:/Users/admin/monorepo/contracts/futarchy_oracle:futarchy_oracle"
-    "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
-    "futarchy_legal_actions:/Users/admin/monorepo/contracts/futarchy_legal_actions:futarchy_legal_actions"
-    "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
     "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
-    "futarchy_decoders:/Users/admin/monorepo/contracts/futarchy_decoders:futarchy_decoders"
+    "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
+    "futarchy_legal_actions:/Users/admin/monorepo/contracts/futarchy_legal_actions:futarchy_legal_actions"
+    "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_dao:/Users/admin/monorepo/contracts/futarchy_dao:futarchy_dao"
 )
 
@@ -164,13 +178,13 @@ main() {
     local start_from="${1:-}"
     local start_index=0
 
-    # Clean up any leftover futarchy_utils references before deployment
-    echo -e "${BLUE}Cleaning up futarchy_utils references...${NC}"
+    # Clean up any leftover futarchy_utils and kiosk references before deployment
+    echo -e "${BLUE}Cleaning up old package references...${NC}"
     find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
-        sed -i '' '/^futarchy_utils = /d' {} \; 2>/dev/null || true
+        sed -i '' -e '/^futarchy_utils = /d' -e '/^kiosk = /d' {} \; 2>/dev/null || true
 
     # Reset all package addresses to 0x0 for fresh deployment if starting from beginning
-    if [ -z "$start_from" ] || [ "$start_from" = "Kiosk" ]; then
+    if [ -z "$start_from" ] || [ "$start_from" = "AccountExtensions" ]; then
         echo -e "${BLUE}Resetting all package addresses to 0x0 for fresh deployment...${NC}"
         find /Users/admin/monorepo/contracts -name "Move.toml" -type f -exec \
             sed -i '' 's/= "0x[a-f0-9][a-f0-9]*"/= "0x0"/g' {} \; 2>/dev/null || true
@@ -201,8 +215,8 @@ main() {
                 break
             fi
         done
-        
-        if [ $start_index -eq 0 ] && [ "$start_from" != "Kiosk" ]; then
+
+        if [ $start_index -eq 0 ] && [ "$start_from" != "AccountExtensions" ]; then
             echo -e "${RED}Package '$start_from' not found. Available packages:${NC}"
             for pkg in "${PACKAGES[@]}"; do
                 IFS=':' read -r name _ _ <<< "$pkg"

@@ -35,6 +35,7 @@ const EFeeExceedsTenXCap: u64 = 12;
 const DEFAULT_DAO_CREATION_FEE: u64 = 10_000;
 const DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME: u64 = 1000;
 const DEFAULT_VERIFICATION_FEE: u64 = 10_000; // Default fee for level 1
+const DEFAULT_LAUNCHPAD_CREATION_FEE: u64 = 10_000_000_000; // 10 SUI to create a launchpad
 const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
 const FEE_UPDATE_DELAY_MS: u64 = 15_552_000_000; // 6 months (180 days)
 const MAX_FEE_COLLECTION_PERIOD_MS: u64 = 7_776_000_000; // 90 days (3 months) - max retroactive collection
@@ -59,6 +60,7 @@ public struct FeeManager has key, store {
     pending_fee_effective_timestamp: Option<u64>,
     sui_balance: Balance<SUI>,
     recovery_fee: u64,  // Fee for dead-man switch recovery
+    launchpad_creation_fee: u64,  // Fee for creating a launchpad
 }
 
 public struct FeeAdminCap has key, store {
@@ -144,6 +146,12 @@ public struct DAOCreationFeeCollected has copy, drop {
 }
 
 public struct ProposalCreationFeeCollected has copy, drop {
+    amount: u64,
+    payer: address,
+    timestamp: u64,
+}
+
+public struct LaunchpadCreationFeeCollected has copy, drop {
     amount: u64,
     payer: address,
     timestamp: u64,
@@ -238,6 +246,7 @@ fun init(witness: FEE, ctx: &mut TxContext) {
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
         recovery_fee: 5_000_000_000, // 5 SUI default (~$5k equivalent)
+        launchpad_creation_fee: DEFAULT_LAUNCHPAD_CREATION_FEE,
     };
 
     public_share_object(fee_manager);
@@ -274,6 +283,25 @@ public fun deposit_dao_creation_payment(
 
     // Emit event
     event::emit(DAOCreationFeeCollected {
+        amount: payment_amount,
+        payer: ctx.sender(),
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+// Function to collect launchpad creation fee
+public fun deposit_launchpad_creation_payment(
+    fee_manager: &mut FeeManager,
+    payment: Coin<SUI>,
+    clock: &Clock,
+    ctx: &TxContext,
+) {
+    let fee_amount = fee_manager.launchpad_creation_fee;
+
+    let payment_amount = deposit_payment(fee_manager, fee_amount, payment);
+
+    // Emit event
+    event::emit(LaunchpadCreationFeeCollected {
         amount: payment_amount,
         payer: ctx.sender(),
         timestamp: clock.timestamp_ms(),
@@ -892,6 +920,10 @@ public fun get_dao_creation_fee(fee_manager: &FeeManager): u64 {
 
 public fun get_proposal_creation_fee_per_outcome(fee_manager: &FeeManager): u64 {
     fee_manager.proposal_creation_fee_per_outcome
+}
+
+public fun get_launchpad_creation_fee(fee_manager: &FeeManager): u64 {
+    fee_manager.launchpad_creation_fee
 }
 
 public fun get_verification_fee_for_level(fee_manager: &FeeManager, level: u8): u64 {

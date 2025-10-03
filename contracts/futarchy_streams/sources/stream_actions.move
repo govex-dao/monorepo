@@ -374,7 +374,9 @@ public struct RequestWithdrawalAction<phantom CoinType> has store, drop, copy {
     amount: u64,
 }
 
-/// Action to challenge withdrawals
+/// Action to challenge withdrawals (marks them as challenged)
+/// Note: Challenge bounty is paid via a separate SpendAndTransfer action in the same proposal
+/// The bounty amount is configured in GovernanceConfig.challenge_bounty
 public struct ChallengeWithdrawalsAction has store, drop, copy {
     payment_id: String,      // Direct payment ID
 }

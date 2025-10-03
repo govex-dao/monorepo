@@ -168,7 +168,7 @@ public struct SpotTwapUpdate has copy, drop {
 
 /// Create a new pool (simple Uniswap V2 style)
 public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAMM<AssetType, StableType> {
-    assert!(fee_bps <= constants::max_fee_bps(), EInvalidFee);
+    assert!(fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
     SpotAMM<AssetType, StableType> {
         id: object::new(ctx),
         asset_reserve: balance::zero<AssetType>(),
@@ -200,7 +200,7 @@ fun initialize_twap<AssetType, StableType>(
     pool.last_timestamp = now;
     pool.window_start_timestamp = now;
     pool.window_cumulative_price = 0;
-    
+
     // Calculate initial price from reserves
     let price = calculate_spot_price(
         pool.asset_reserve.value(),

@@ -5,11 +5,17 @@ module futarchy_one_shot_utils::constants;
 
 // === AMM Fee Constants ===
 
-/// Maximum fee in basis points (100%)
+/// Maximum fee in basis points (100%) - for calculations only
 public fun max_fee_bps(): u64 { 10000 }
+
+/// Maximum AMM fee in basis points (5%) - hard cap for all AMM fees
+public fun max_amm_fee_bps(): u64 { 500 }
 
 /// LP fee share in basis points (80% of fees go to LPs)
 public fun lp_fee_share_bps(): u64 { 8000 }
+
+/// Protocol fee share in basis points (20% of fees go to protocol)
+public fun protocol_fee_share_bps(): u64 { 2000 }
 
 /// Total fee basis points denominator (100%)
 public fun total_fee_bps(): u64 { 10000 }
@@ -19,9 +25,18 @@ public fun default_amm_total_fee_bps(): u64 { 30 }
 
 // === Price Precision Constants ===
 
+/// Price scale for AMM calculations (10^12)
+/// Used for high-precision reserve ratio calculations
+public fun price_scale(): u128 { 1_000_000_000_000 }
+
 /// Basis points precision for price calculations (10^12)
 /// We use high precision to prevent rounding to 0
 public fun basis_points(): u64 { 1_000_000_000_000 }
+
+/// Price multiplier scale (10^9)
+/// Used for relative price calculations (e.g., 2_000_000_000 = 2.0x)
+/// Matches AMM spot price precision
+public fun price_multiplier_scale(): u64 { 1_000_000_000 }
 
 /// Parts per million denominator for percentage calculations
 public fun ppm_denominator(): u64 { 1_000_000 }

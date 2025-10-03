@@ -1,0 +1,7 @@
+[packages.Walrus]
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", subdir = "contracts/walrus", rev = "main" }
+published-id = "0x261b2e46428a152570f9ac08972d67f7c12d62469ccd381a51774c1df7a829ca"
+
+[packages.WAL]
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", subdir = "contracts/wal", rev = "main" }
+published-id = "0xf9c0cf14820ee1d9c00ddc8f4ffcef0d891bb89cf39c96a31c8c95f29c6bd207"

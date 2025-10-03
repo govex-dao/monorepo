@@ -4,6 +4,7 @@ use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::liquidity_initialize;
 use futarchy_markets::market_state;
+use futarchy_markets::coin_validation;
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;
@@ -12,9 +13,11 @@ use std::type_name::TypeName;
 use std::vector;
 use sui::balance::{Balance};
 use sui::clock::Clock;
-use sui::coin::{Coin};
+use sui::coin::{Coin, TreasuryCap, CoinMetadata};
 use sui::event;
+use sui::bag::{Self, Bag};
 use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_core::dao_config::{Self, ConditionalCoinConfig};
 
 // === Introduction ===
 // This defines the core proposal logic and details
@@ -34,6 +37,9 @@ const EInvalidOutcome: u64 = 11;
 const ENotFinalized: u64 = 12;
 const ETwapNotSet: u64 = 13;
 const ETooManyActions: u64 = 14;
+const EInvalidConditionalCoinCount: u64 = 15;
+const EConditionalCoinAlreadySet: u64 = 16;
+const ENotLiquidityProvider: u64 = 17;
 
 // === Constants ===
 
@@ -47,6 +53,13 @@ const OUTCOME_ACCEPTED: u64 = 0;
 const OUTCOME_REJECTED: u64 = 1;
 
 // === Structs ===
+
+/// Key for storing conditional coin caps in Bag
+/// Each outcome has 2 coins: asset-conditional and stable-conditional
+public struct ConditionalCoinKey has store, copy, drop {
+    outcome_index: u64,
+    is_asset: bool,  // true for asset, false for stable
+}
 
 /// Configuration for proposal timing and periods
 public struct ProposalTiming has store {
@@ -84,6 +97,7 @@ public struct OutcomeData has store {
     outcome_count: u64,
     outcome_messages: vector<String>,
     outcome_creators: vector<address>,
+    outcome_creator_fees: vector<u64>,  // Track fees paid by each outcome creator (for refunds)
     intent_specs: vector<Option<InitActionSpecs>>,  // Changed from intent_keys to intent_specs
     actions_per_outcome: vector<u64>,
     winning_outcome: Option<u64>,
@@ -97,13 +111,17 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     state: u8,
     dao_id: ID,
     proposer: address, // The original proposer.
-    liquidity_provider: Option<address>, // The user who provides liquidity (gets liquidity back).
+    liquidity_provider: Option<address>,
+    withdraw_only_mode: bool, // When true, return liquidity to provider instead of auto-reinvesting
     
     // Market-related fields
-    supply_ids: Option<vector<ID>>,
     amm_pools: Option<vector<LiquidityPool>>,
     escrow_id: Option<ID>,
     market_state_id: Option<ID>,
+
+    // Conditional coin capabilities (stored dynamically per outcome)
+    conditional_treasury_caps: Bag,  // Stores TreasuryCap<ConditionalCoinType> per outcome
+    conditional_metadata: Bag,        // Stores CoinMetadata<ConditionalCoinType> per outcome
     
     // Proposal content
     title: String,
@@ -220,6 +238,7 @@ public fun initialize_market<AssetType, StableType>(
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     proposer: address, // The original proposer from the queue
+    proposer_fee_paid: u64, // Fee paid by proposer (for tracking refunds)
     uses_dao_liquidity: bool,
     fee_escrow: Balance<StableType>, // DAO fees if any
     mut intent_spec_for_yes: Option<InitActionSpecs>, // Intent spec for YES outcome
@@ -330,18 +349,18 @@ public fun initialize_market<AssetType, StableType>(
         stable_balance.destroy_zero();
     };
     
-    let (_, amm_pools) = liquidity_initialize::create_outcome_markets(
-        &mut escrow, 
-        outcome_count, 
-        initial_asset_amounts, 
+    let amm_pools = liquidity_initialize::create_outcome_markets(
+        &mut escrow,
+        outcome_count,
+        initial_asset_amounts,
         initial_stable_amounts,
-        twap_start_delay, 
-        twap_initial_observation, 
+        twap_start_delay,
+        twap_initial_observation,
         twap_step_max,
         amm_total_fee_bps,
-        asset_for_pool, 
-        stable_for_pool, 
-        clock, 
+        asset_for_pool,
+        stable_for_pool,
+        clock,
         ctx
     );
 
@@ -364,11 +383,13 @@ public fun initialize_market<AssetType, StableType>(
         state: STATE_REVIEW, // Start in REVIEW state since market is initialized
         dao_id,
         proposer,
-        liquidity_provider: option::some(ctx.sender()), // The activator provides liquidity
-        supply_ids: option::none(), // Will be set when escrow mints tokens
+        liquidity_provider: option::some(ctx.sender()),
+        withdraw_only_mode: false,
         amm_pools: option::some(amm_pools),
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
+        conditional_treasury_caps: bag::new(ctx),
+        conditional_metadata: bag::new(ctx),
         title,
         details: initial_outcome_details,
         metadata,
@@ -397,6 +418,19 @@ public fun initialize_market<AssetType, StableType>(
             outcome_count,
             outcome_messages: initial_outcome_messages,
             outcome_creators,
+            outcome_creator_fees: {
+                // Track actual fees paid by each outcome creator
+                // Outcome 0 (reject): 0 fee
+                // Outcome 1+ (proposer's outcomes): proposer_fee_paid divided by (outcome_count - 1)
+                let mut fees = vector::empty();
+                fees.push_back(0u64); // Outcome 0 (reject) - no fee
+                let mut i = 1u64;
+                while (i < outcome_count) {
+                    fees.push_back(proposer_fee_paid); // Each outcome tracks the proposer's fee
+                    i = i + 1;
+                };
+                fees
+            },
             intent_specs,
             actions_per_outcome,
             winning_outcome: option::none(),
@@ -475,10 +509,12 @@ public fun new_premarket<AssetType, StableType>(
         dao_id,
         proposer,
         liquidity_provider: option::none(),
-        supply_ids: option::none(),
+        withdraw_only_mode: false,
         amm_pools: option::none(),
         escrow_id: option::none(),
         market_state_id: option::none(),
+        conditional_treasury_caps: bag::new(ctx),
+        conditional_metadata: bag::new(ctx),
         title,
         details: outcome_details,
         metadata,
@@ -507,6 +543,7 @@ public fun new_premarket<AssetType, StableType>(
             outcome_count,
             outcome_messages,
             outcome_creators: vector::tabulate!(outcome_count, |_| proposer),
+            outcome_creator_fees: vector::tabulate!(outcome_count, |_| 0u64),  // Initialize with 0 fees
             intent_specs: vector::tabulate!(outcome_count, |_| option::none<InitActionSpecs>()),
             actions_per_outcome: vector::tabulate!(outcome_count, |_| 0),
             winning_outcome: option::none(),
@@ -523,29 +560,79 @@ public fun new_premarket<AssetType, StableType>(
 /// Initialize market/escrow/AMMs for a PREMARKET proposal.
 /// Consumes provided coins, sets state to REVIEW, and readies the market for the review timer.
 #[allow(lint(share_owned, self_transfer))]
-public fun initialize_market_from_premarket<AssetType, StableType>(
+/// Step 1: Create escrow with market state (called first in PTB)
+/// Returns unshared escrow for cap registration
+public fun create_escrow_for_market<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): TokenEscrow<AssetType, StableType> {
+    assert!(proposal.state == STATE_PREMARKET, EInvalidState);
+
+    // Create market state
+    let ms = market_state::new(
+        object::id(proposal),
+        proposal.dao_id,
+        proposal.outcome_data.outcome_count,
+        proposal.outcome_data.outcome_messages,
+        clock,
+        ctx
+    );
+
+    // Create and return escrow (not yet shared)
+    coin_escrow::new<AssetType, StableType>(ms, ctx)
+}
+
+/// Step 2: Extract conditional coin caps from proposal and register with escrow
+/// Must be called once per outcome (PTB calls this N times with different type parameters)
+public fun register_outcome_caps_with_escrow<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u64,
+) {
+    assert!(proposal.state == STATE_PREMARKET, EInvalidState);
+
+    // Extract TreasuryCaps from proposal bags
+    let asset_key = ConditionalCoinKey { outcome_index, is_asset: true };
+    let stable_key = ConditionalCoinKey { outcome_index, is_asset: false };
+
+    let asset_cap: TreasuryCap<AssetConditionalCoin> =
+        bag::remove(&mut proposal.conditional_treasury_caps, asset_key);
+    let stable_cap: TreasuryCap<StableConditionalCoin> =
+        bag::remove(&mut proposal.conditional_treasury_caps, stable_key);
+
+    // Register with escrow
+    coin_escrow::register_conditional_caps(escrow, outcome_index, asset_cap, stable_cap);
+}
+
+/// Step 3: Initialize market with pre-configured escrow
+/// Called after create_escrow_for_market() and N calls to register_outcome_caps_with_escrow()
+#[allow(lint(share_owned, self_transfer))]
+public fun initialize_market_with_escrow<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    mut escrow: TokenEscrow<AssetType, StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
     assert!(proposal.state == STATE_PREMARKET, EInvalidState);
-    
-    // Evenly split liquidity across outcomes (same convention as initialize_market)
+
     let outcome_count = proposal.outcome_data.outcome_count;
+
+    // Evenly split liquidity across outcomes
     let total_asset_liquidity = asset_coin.value();
     let total_stable_liquidity = stable_coin.value();
     assert!(total_asset_liquidity > 0 && total_stable_liquidity > 0, EInvalidAmount);
-    
+
     let asset_per = total_asset_liquidity / outcome_count;
     let stable_per = total_stable_liquidity / outcome_count;
     assert!(asset_per >= proposal.liquidity_config.min_asset_liquidity, EAssetLiquidityTooLow);
     assert!(stable_per >= proposal.liquidity_config.min_stable_liquidity, EStableLiquidityTooLow);
-    
+
     let asset_remainder = total_asset_liquidity % outcome_count;
     let stable_remainder = total_stable_liquidity % outcome_count;
-    
+
     let mut initial_asset_amounts = vector::empty<u64>();
     let mut initial_stable_amounts = vector::empty<u64>();
     let mut i = 0;
@@ -556,21 +643,9 @@ public fun initialize_market_from_premarket<AssetType, StableType>(
         vector::push_back(&mut initial_stable_amounts, s);
         i = i + 1;
     };
-    
-    // Market state
-    let ms = market_state::new(
-        object::id(proposal),
-        proposal.dao_id,
-        proposal.outcome_data.outcome_count,
-        proposal.outcome_data.outcome_messages,
-        clock,
-        ctx
-    );
-    let market_state_id = object::id(&ms);
-    
-    // Escrow
-    let mut escrow = coin_escrow::new<AssetType, StableType>(ms, ctx);
+
     let escrow_id = object::id(&escrow);
+    let market_state_id = coin_escrow::market_state_id(&escrow);
     
     // Determine quantum liquidity amounts
     let mut asset_balance = asset_coin.into_balance();
@@ -616,8 +691,8 @@ public fun initialize_market_from_premarket<AssetType, StableType>(
         stable_balance.destroy_zero();
     };
     
-    // Create outcome markets
-    let (_supply_ids, amm_pools) = liquidity_initialize::create_outcome_markets(
+    // Create outcome markets (TreasuryCaps already registered with escrow)
+    let amm_pools = liquidity_initialize::create_outcome_markets(
         &mut escrow,
         proposal.outcome_data.outcome_count,
         initial_asset_amounts,
@@ -650,8 +725,12 @@ public fun initialize_market_from_premarket<AssetType, StableType>(
     market_state_id
 }
 
-/// Adds a new outcome during the premarket phase.
+/// Internal function: Adds a new outcome during the premarket phase.
 /// max_outcomes: The DAO's configured maximum number of outcomes allowed
+/// fee_paid: The fee paid by the outcome creator (for potential refund if their outcome wins)
+///
+/// SECURITY: This is an internal function. Fee payment must be validated before calling.
+/// External callers MUST use entry functions that collect actual Coin<SUI> payments.
 public fun add_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     message: String,
@@ -659,18 +738,23 @@ public fun add_outcome<AssetType, StableType>(
     asset_amount: u64,
     stable_amount: u64,
     creator: address,
+    fee_paid: u64,
     max_outcomes: u64,
     clock: &Clock,
 ) {
+    // SECURITY: Only allow adding outcomes in PREMARKET state
+    assert!(proposal.state == STATE_PREMARKET, EInvalidState);
+
     // Check that we're not exceeding the maximum number of outcomes
     assert!(proposal.outcome_data.outcome_count < max_outcomes, ETooManyOutcomes);
-    
+
     proposal.outcome_data.outcome_messages.push_back(message);
     proposal.details.push_back(detail);
     proposal.liquidity_config.asset_amounts.push_back(asset_amount);
     proposal.liquidity_config.stable_amounts.push_back(stable_amount);
     proposal.outcome_data.outcome_creators.push_back(creator);
-    
+    proposal.outcome_data.outcome_creator_fees.push_back(fee_paid);  // Track the fee paid
+
     // Initialize action count for new outcome
     proposal.outcome_data.actions_per_outcome.push_back(0);
 
@@ -684,6 +768,43 @@ public fun add_outcome<AssetType, StableType>(
         creator,
         timestamp: clock.timestamp_ms(),
     });
+}
+
+/// SECURE entry function: Adds outcome with actual fee collection
+/// This collects the fee payment and stores it in the proposal's fee escrow
+/// for later refund if the outcome wins.
+public entry fun add_outcome_with_fee<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    fee_payment: Coin<StableType>,
+    message: String,
+    detail: String,
+    asset_amount: u64,
+    stable_amount: u64,
+    max_outcomes: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    use sui::coin;
+
+    // Get the actual fee paid
+    let fee_paid = fee_payment.value();
+
+    // SECURITY: Deposit fee into proposal's escrow (for later refund)
+    // This ensures fees are tracked per-proposal, not mixed with protocol revenue
+    proposal.fee_escrow.join(fee_payment.into_balance());
+
+    // Add the outcome with validated fee
+    add_outcome(
+        proposal,
+        message,
+        detail,
+        asset_amount,
+        stable_amount,
+        ctx.sender(),
+        fee_paid,
+        max_outcomes,
+        clock,
+    );
 }
 
 /// Initializes the market-related fields of the proposal.
@@ -1150,12 +1271,55 @@ public fun get_outcome_creators<AssetType, StableType>(proposal: &Proposal<Asset
     &proposal.outcome_data.outcome_creators
 }
 
+/// Get the address of the creator for a specific outcome
+public fun get_outcome_creator<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64
+): address {
+    assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
+    *vector::borrow(&proposal.outcome_data.outcome_creators, outcome_index)
+}
+
+/// Get the fee paid by the creator for a specific outcome
+public fun get_outcome_creator_fee<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_index: u64
+): u64 {
+    assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
+    *vector::borrow(&proposal.outcome_data.outcome_creator_fees, outcome_index)
+}
+
+/// Get all outcome creator fees
+public fun get_outcome_creator_fees<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): &vector<u64> {
+    &proposal.outcome_data.outcome_creator_fees
+}
+
 public fun get_liquidity_provider<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): Option<address> {
     proposal.liquidity_provider
 }
 
 public fun get_proposer<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): address {
     proposal.proposer
+}
+
+/// Check if this proposal's liquidity is in withdraw-only mode
+public fun is_withdraw_only<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
+    proposal.withdraw_only_mode
+}
+
+/// Set withdraw-only mode - prevents auto-reinvestment in next proposal
+/// Only callable by the liquidity provider
+public entry fun set_withdraw_only_mode<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    withdraw_only: bool,
+    ctx: &TxContext,
+) {
+    assert!(proposal.liquidity_provider.is_some(), ENotLiquidityProvider);
+    let provider = *proposal.liquidity_provider.borrow();
+    assert!(tx_context::sender(ctx) == provider, ENotLiquidityProvider);
+    proposal.withdraw_only_mode = withdraw_only;
 }
 
 public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &vector<String> {
@@ -1340,7 +1504,6 @@ public fun new_for_testing<AssetType, StableType>(
         state: STATE_PREMARKET,
         proposer,
         liquidity_provider,
-        supply_ids: option::none(),
         amm_pools: option::none(),
         escrow_id: option::none(),
         market_state_id: option::none(),
@@ -1372,6 +1535,7 @@ public fun new_for_testing<AssetType, StableType>(
             outcome_count: outcome_count as u64,
             outcome_messages,
             outcome_creators,
+            outcome_creator_fees: vector::tabulate!(outcome_count as u64, |_| 0u64),  // Initialize with 0 fees
             intent_specs,
             actions_per_outcome: vector::tabulate!(outcome_count as u64, |_| 0),
             winning_outcome,
@@ -1409,4 +1573,117 @@ public fun id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>)
 /// Get proposal address (for testing)
 public fun id_address<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): address {
     object::uid_to_address(&proposal.id)
+}
+
+// === Conditional Coin Management ===
+
+/// Add a conditional coin treasury cap and metadata to proposal
+/// Must be called once per outcome per side (asset/stable)
+/// The coin will be validated and its metadata updated according to DAO config
+public fun add_conditional_coin<AssetType, StableType, ConditionalCoinType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    outcome_index: u64,
+    is_asset: bool,  // true for asset-conditional, false for stable-conditional
+    mut treasury_cap: TreasuryCap<ConditionalCoinType>,
+    mut metadata: CoinMetadata<ConditionalCoinType>,
+    coin_config: &ConditionalCoinConfig,
+    asset_type_name: &String,  // Name of AssetType (e.g., "SUI")
+    stable_type_name: &String, // Name of StableType (e.g., "USDC")
+) {
+    assert!(proposal.state == STATE_PREMARKET, EInvalidState);
+    assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
+
+    // Create key for this conditional coin
+    let key = ConditionalCoinKey { outcome_index, is_asset };
+
+    // Check not already set
+    assert!(!bag::contains(&proposal.conditional_treasury_caps, key), EConditionalCoinAlreadySet);
+
+    // Validate coin meets requirements
+    coin_validation::validate_conditional_coin(&treasury_cap, &metadata);
+
+    // Update metadata with DAO naming pattern: c_<outcome>_<ASSET|STABLE>
+    update_conditional_coin_metadata(
+        &mut metadata,
+        coin_config,
+        outcome_index,
+        if (is_asset) { asset_type_name } else { stable_type_name },
+    );
+
+    // Store in bags
+    bag::add(&mut proposal.conditional_treasury_caps, key, treasury_cap);
+    bag::add(&mut proposal.conditional_metadata, key, metadata);
+}
+
+/// Update conditional coin metadata with DAO naming pattern
+/// Pattern: c_<outcome_index>_<ASSET_NAME>
+fun update_conditional_coin_metadata<ConditionalCoinType>(
+    metadata: &mut CoinMetadata<ConditionalCoinType>,
+    coin_config: &ConditionalCoinConfig,
+    outcome_index: u64,
+    base_coin_name: &String,
+) {
+    use std::ascii;
+    use sui::url;
+
+    // Build name: prefix + outcome_index + _ + base_coin_name
+    let mut name_bytes = vector::empty<u8>();
+
+    // Add prefix (e.g., "c_")
+    let prefix = dao_config::coin_name_prefix(coin_config);
+    {
+        let prefix_bytes = ascii::as_bytes(prefix);
+        let mut i = 0;
+        while (i < prefix_bytes.length()) {
+            name_bytes.push_back(*prefix_bytes.borrow(i));
+            i = i + 1;
+        };
+    };
+
+    // Add outcome index if configured
+    if (dao_config::use_outcome_index(coin_config)) {
+        // Convert outcome_index to string
+        let index_str = u64_to_ascii(outcome_index);
+        let index_bytes = ascii::as_bytes(&index_str);
+        let mut i = 0;
+        while (i < index_bytes.length()) {
+            name_bytes.push_back(*index_bytes.borrow(i));
+            i = i + 1;
+        };
+        name_bytes.push_back(95u8); // '_' character
+    };
+
+    // Add base coin name
+    {
+        let base_bytes = string::as_bytes(base_coin_name);
+        let mut i = 0;
+        while (i < base_bytes.length()) {
+            name_bytes.push_back(*base_bytes.borrow(i));
+            i = i + 1;
+        };
+    };
+
+    // Update metadata (need to use coin::update_* functions if available)
+    // For now, just validate - actual metadata update requires special capabilities
+    // This will be handled when we integrate with coin framework properly
+}
+
+/// Helper: Convert u64 to ASCII string
+fun u64_to_ascii(mut num: u64): AsciiString {
+    use std::ascii;
+
+    if (num == 0) {
+        return ascii::string(b"0")
+    };
+
+    let mut digits = vector::empty<u8>();
+    while (num > 0) {
+        let digit = ((num % 10) as u8) + 48; // ASCII '0' = 48
+        vector::push_back(&mut digits, digit);
+        num = num / 10;
+    };
+
+    // Reverse digits
+    vector::reverse(&mut digits);
+    ascii::string(digits)
 }

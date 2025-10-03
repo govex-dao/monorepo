@@ -242,7 +242,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
-        amm_total_fee_bps,
+        amm_total_fee_bps, // conditional AMM fee
+        amm_total_fee_bps, // spot AMM fee (same as conditional)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -264,8 +265,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         true, // proposal_creation_enabled
         true, // accept_new_proposals
         10, // max_intents_per_outcome
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
     );
@@ -289,6 +288,11 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         metadata_config,
         security_config,
         dao_config::default_storage_config(),
+        dao_config::default_conditional_coin_config(),
+        dao_config::default_quota_config(),
+        10_000_000, // optimistic_challenge_fee
+        864_000_000, // optimistic_challenge_period_ms (10 days)
+        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values
@@ -303,20 +307,21 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
-    
+
     // Create the spot pool but do not share it yet.
+    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
-        amm_total_fee_bps,
+        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
-    
+
     // Create the futarchy configuration
     let config = futarchy_config::new<AssetType, StableType>(
         dao_config,
         slash_distribution,
     );
-    
+
     // Create the account with Extensions registry validation for security
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
     
@@ -448,7 +453,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
-        amm_total_fee_bps,
+        amm_total_fee_bps, // conditional AMM fee
+        amm_total_fee_bps, // spot AMM fee (same as conditional)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -470,8 +476,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         true, // proposal_creation_enabled
         true, // accept_new_proposals
         10, // max_intents_per_outcome
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
     );
@@ -495,6 +499,11 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         metadata_config,
         security_config,
         dao_config::default_storage_config(),
+        dao_config::default_conditional_coin_config(),
+        dao_config::default_quota_config(),
+        10_000_000, // optimistic_challenge_fee
+        864_000_000, // optimistic_challenge_period_ms (10 days)
+        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values
@@ -511,18 +520,19 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
     
     // Create the spot pool but do not share it yet.
+    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
-        amm_total_fee_bps,
+        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
-    
+
     // Create the futarchy configuration
     let config = futarchy_config::new<AssetType, StableType>(
         dao_config,
         slash_distribution,
     );
-    
+
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
     
@@ -669,7 +679,8 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
-        amm_total_fee_bps,
+        amm_total_fee_bps, // conditional AMM fee
+        amm_total_fee_bps, // spot AMM fee (same as conditional)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -691,8 +702,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         true, // proposal_creation_enabled
         true, // accept_new_proposals
         10, // max_intents_per_outcome
-        10_000_000, // optimistic_challenge_fee
-        864_000_000, // optimistic_challenge_period_ms (10 days)
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
     );
@@ -716,6 +725,11 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         metadata_config,
         security_config,
         dao_config::default_storage_config(),
+        dao_config::default_conditional_coin_config(),
+        dao_config::default_quota_config(),
+        10_000_000, // optimistic_challenge_fee
+        864_000_000, // optimistic_challenge_period_ms (10 days)
+        10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
     );
 
     // Create slash distribution with default values
@@ -734,10 +748,11 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     
     // Create account with config
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
-    
+
     // Create spot pool
+    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
-        amm_total_fee_bps,
+        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
         ctx
     );
     

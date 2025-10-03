@@ -23,6 +23,8 @@ const EInvalidMaxConcurrentProposals: u64 = 9; // Max concurrent proposals must 
 const EMaxOutcomesExceedsProtocol: u64 = 10; // Max outcomes exceeds protocol limit
 const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limit
 const EStateInconsistent: u64 = 12; // State would become inconsistent with this change
+const EInvalidChallengeBounty: u64 = 13; // Challenge bounty must be positive and not exceed challenge fee
+const EInvalidQuotaParams: u64 = 14; // Invalid quota parameters
 
 // === Constants ===
 // Most constants are now in futarchy_utils::constants
@@ -36,7 +38,8 @@ public struct TradingParams has store, drop, copy {
     min_stable_amount: u64,
     review_period_ms: u64,
     trading_period_ms: u64,
-    amm_total_fee_bps: u64,
+    conditional_amm_fee_bps: u64,  // Fee for conditional AMMs (prediction markets)
+    spot_amm_fee_bps: u64,          // Fee for spot AMM (base pool)
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
@@ -60,8 +63,6 @@ public struct GovernanceConfig has store, drop, copy {
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
-    optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals
-    optimistic_challenge_period_ms: u64, // Time period to challenge optimistic proposals (e.g., 10 days)
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
 }
@@ -85,6 +86,21 @@ public struct StorageConfig has store, drop, copy {
     allow_walrus_blobs: bool,            // If true, allow Walrus blob storage; if false, string-only
 }
 
+/// Conditional coin metadata configuration for proposals
+public struct ConditionalCoinConfig has store, drop, copy {
+    coin_name_prefix: AsciiString,       // Prefix for coin names (e.g., "MyDAO_")
+    coin_icon_url: Url,                  // Icon URL for conditional coins
+    use_outcome_index: bool,             // If true, append outcome index to name
+}
+
+/// Quota system configuration
+public struct QuotaConfig has store, drop, copy {
+    enabled: bool,                       // If true, quota system is active
+    default_quota_amount: u64,           // Default proposals per period for new allowlist members
+    default_quota_period_ms: u64,        // Default period for quotas (e.g., 30 days)
+    default_reduced_fee: u64,            // Default reduced fee (0 for free)
+}
+
 /// Complete DAO configuration
 public struct DaoConfig has store, drop, copy {
     trading_params: TradingParams,
@@ -93,6 +109,11 @@ public struct DaoConfig has store, drop, copy {
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
     storage_config: StorageConfig,
+    conditional_coin_config: ConditionalCoinConfig,
+    quota_config: QuotaConfig,
+    optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
+    optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
+    challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
 }
 
 // === Constructor Functions ===
@@ -103,21 +124,24 @@ public fun new_trading_params(
     min_stable_amount: u64,
     review_period_ms: u64,
     trading_period_ms: u64,
-    amm_total_fee_bps: u64,
+    conditional_amm_fee_bps: u64,
+    spot_amm_fee_bps: u64,
 ): TradingParams {
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
     assert!(min_stable_amount > 0, EInvalidMinAmount);
     assert!(review_period_ms >= constants::min_review_period_ms(), EInvalidPeriod);
     assert!(trading_period_ms >= constants::min_trading_period_ms(), EInvalidPeriod);
-    assert!(amm_total_fee_bps <= constants::max_fee_bps(), EInvalidFee);
-    
+    assert!(conditional_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
+    assert!(spot_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
+
     TradingParams {
         min_asset_amount,
         min_stable_amount,
         review_period_ms,
         trading_period_ms,
-        amm_total_fee_bps,
+        conditional_amm_fee_bps,
+        spot_amm_fee_bps,
     }
 }
 
@@ -155,8 +179,6 @@ public fun new_governance_config(
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
     max_intents_per_outcome: u64,
-    optimistic_challenge_fee: u64,
-    optimistic_challenge_period_ms: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64,
 ): GovernanceConfig {
@@ -169,10 +191,8 @@ public fun new_governance_config(
     assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
     assert!(fee_escalation_basis_points <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
-    assert!(optimistic_challenge_fee > 0, EInvalidProposalFee);
-    assert!(optimistic_challenge_period_ms > 0, EInvalidPeriod); // Must be non-zero
     assert!(eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(), EInvalidGracePeriod);
-    
+
     GovernanceConfig {
         max_outcomes,
         max_actions_per_outcome,
@@ -185,8 +205,6 @@ public fun new_governance_config(
         proposal_creation_enabled,
         accept_new_proposals,
         max_intents_per_outcome,
-        optimistic_challenge_fee,
-        optimistic_challenge_period_ms,
         eviction_grace_period_ms,
         proposal_intent_expiry_ms,
     }
@@ -227,6 +245,38 @@ public fun new_storage_config(
     }
 }
 
+/// Create a new conditional coin configuration
+public fun new_conditional_coin_config(
+    coin_name_prefix: AsciiString,
+    coin_icon_url: Url,
+    use_outcome_index: bool,
+): ConditionalCoinConfig {
+    ConditionalCoinConfig {
+        coin_name_prefix,
+        coin_icon_url,
+        use_outcome_index,
+    }
+}
+
+/// Create a new quota configuration
+public fun new_quota_config(
+    enabled: bool,
+    default_quota_amount: u64,
+    default_quota_period_ms: u64,
+    default_reduced_fee: u64,
+): QuotaConfig {
+    if (enabled) {
+        assert!(default_quota_amount > 0, EInvalidQuotaParams);
+        assert!(default_quota_period_ms > 0, EInvalidPeriod);
+    };
+    QuotaConfig {
+        enabled,
+        default_quota_amount,
+        default_quota_period_ms,
+        default_reduced_fee,
+    }
+}
+
 /// Create a complete DAO configuration
 public fun new_dao_config(
     trading_params: TradingParams,
@@ -235,7 +285,17 @@ public fun new_dao_config(
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
     storage_config: StorageConfig,
+    conditional_coin_config: ConditionalCoinConfig,
+    quota_config: QuotaConfig,
+    optimistic_challenge_fee: u64,
+    optimistic_challenge_period_ms: u64,
+    challenge_bounty: u64,
 ): DaoConfig {
+    // Validate challenge parameters
+    assert!(optimistic_challenge_fee > 0, EInvalidProposalFee);
+    assert!(optimistic_challenge_period_ms > 0, EInvalidPeriod);
+    assert!(challenge_bounty > 0, EInvalidChallengeBounty);
+
     DaoConfig {
         trading_params,
         twap_config,
@@ -243,6 +303,11 @@ public fun new_dao_config(
         metadata_config,
         security_config,
         storage_config,
+        conditional_coin_config,
+        quota_config,
+        optimistic_challenge_fee,
+        optimistic_challenge_period_ms,
+        challenge_bounty,
     }
 }
 
@@ -255,7 +320,8 @@ public fun min_asset_amount(params: &TradingParams): u64 { params.min_asset_amou
 public fun min_stable_amount(params: &TradingParams): u64 { params.min_stable_amount }
 public fun review_period_ms(params: &TradingParams): u64 { params.review_period_ms }
 public fun trading_period_ms(params: &TradingParams): u64 { params.trading_period_ms }
-public fun amm_total_fee_bps(params: &TradingParams): u64 { params.amm_total_fee_bps }
+public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditional_amm_fee_bps }
+public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
@@ -271,8 +337,6 @@ public(package) fun governance_config_mut(config: &mut DaoConfig): &mut Governan
 public fun max_outcomes(gov: &GovernanceConfig): u64 { gov.max_outcomes }
 public fun max_actions_per_outcome(gov: &GovernanceConfig): u64 { gov.max_actions_per_outcome }
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
-public fun optimistic_challenge_fee(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_fee }
-public fun optimistic_challenge_period_ms(gov: &GovernanceConfig): u64 { gov.optimistic_challenge_period_ms }
 public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
 public fun max_concurrent_proposals(gov: &GovernanceConfig): u64 { gov.max_concurrent_proposals }
 public fun proposal_recreation_window_ms(gov: &GovernanceConfig): u64 { gov.proposal_recreation_window_ms }
@@ -302,6 +366,26 @@ public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_dea
 public fun storage_config(config: &DaoConfig): &StorageConfig { &config.storage_config }
 public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig { &mut config.storage_config }
 public fun allow_walrus_blobs(storage: &StorageConfig): bool { storage.allow_walrus_blobs }
+
+// Conditional coin config getters
+public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig { &config.conditional_coin_config }
+public(package) fun conditional_coin_config_mut(config: &mut DaoConfig): &mut ConditionalCoinConfig { &mut config.conditional_coin_config }
+public fun coin_name_prefix(coin_config: &ConditionalCoinConfig): &AsciiString { &coin_config.coin_name_prefix }
+public fun coin_icon_url(coin_config: &ConditionalCoinConfig): &Url { &coin_config.coin_icon_url }
+public fun use_outcome_index(coin_config: &ConditionalCoinConfig): bool { coin_config.use_outcome_index }
+
+// Quota config getters
+public fun quota_config(config: &DaoConfig): &QuotaConfig { &config.quota_config }
+public(package) fun quota_config_mut(config: &mut DaoConfig): &mut QuotaConfig { &mut config.quota_config }
+public fun quota_enabled(quota: &QuotaConfig): bool { quota.enabled }
+public fun default_quota_amount(quota: &QuotaConfig): u64 { quota.default_quota_amount }
+public fun default_quota_period_ms(quota: &QuotaConfig): u64 { quota.default_quota_period_ms }
+public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced_fee }
+
+// Challenge config getters (DAO-level)
+public fun optimistic_challenge_fee(config: &DaoConfig): u64 { config.optimistic_challenge_fee }
+public fun optimistic_challenge_period_ms(config: &DaoConfig): u64 { config.optimistic_challenge_period_ms }
+public fun challenge_bounty(config: &DaoConfig): u64 { config.challenge_bounty }
 
 // === Update Functions ===
 
@@ -375,9 +459,14 @@ public(package) fun set_trading_period_ms(params: &mut TradingParams, period: u6
     params.trading_period_ms = period;
 }
 
-public(package) fun set_amm_total_fee_bps(params: &mut TradingParams, fee_bps: u64) {
-    assert!(fee_bps <= constants::max_fee_bps(), EInvalidFee);
-    params.amm_total_fee_bps = fee_bps;
+public(package) fun set_conditional_amm_fee_bps(params: &mut TradingParams, fee_bps: u64) {
+    assert!(fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
+    params.conditional_amm_fee_bps = fee_bps;
+}
+
+public(package) fun set_spot_amm_fee_bps(params: &mut TradingParams, fee_bps: u64) {
+    assert!(fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
+    params.spot_amm_fee_bps = fee_bps;
 }
 
 // TWAP config direct setters
@@ -423,16 +512,6 @@ public(package) fun set_proposal_fee_per_outcome(gov: &mut GovernanceConfig, fee
 public(package) fun set_required_bond_amount(gov: &mut GovernanceConfig, amount: u64) {
     assert!(amount > 0, EInvalidBondAmount);
     gov.required_bond_amount = amount;
-}
-
-public(package) fun set_optimistic_challenge_fee(gov: &mut GovernanceConfig, amount: u64) {
-    assert!(amount > 0, EInvalidProposalFee);
-    gov.optimistic_challenge_fee = amount;
-}
-
-public(package) fun set_optimistic_challenge_period_ms(gov: &mut GovernanceConfig, period: u64) {
-    assert!(period > 0, EInvalidPeriod); // Must be non-zero
-    gov.optimistic_challenge_period_ms = period;
 }
 
 public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max: u64) {
@@ -510,6 +589,44 @@ public fun set_allow_walrus_blobs(storage: &mut StorageConfig, val: bool) {
     storage.allow_walrus_blobs = val;
 }
 
+// Conditional coin config direct setters
+
+public(package) fun set_coin_name_prefix(coin_config: &mut ConditionalCoinConfig, prefix: AsciiString) {
+    coin_config.coin_name_prefix = prefix;
+}
+
+public(package) fun set_coin_icon_url(coin_config: &mut ConditionalCoinConfig, url: Url) {
+    coin_config.coin_icon_url = url;
+}
+
+public(package) fun set_use_outcome_index(coin_config: &mut ConditionalCoinConfig, use_index: bool) {
+    coin_config.use_outcome_index = use_index;
+}
+
+// Quota config direct setters
+
+public(package) fun set_quota_enabled(quota: &mut QuotaConfig, enabled: bool) {
+    quota.enabled = enabled;
+}
+
+public(package) fun set_default_quota_amount(quota: &mut QuotaConfig, amount: u64) {
+    if (quota.enabled) {
+        assert!(amount > 0, EInvalidQuotaParams);
+    };
+    quota.default_quota_amount = amount;
+}
+
+public(package) fun set_default_quota_period_ms(quota: &mut QuotaConfig, period: u64) {
+    if (quota.enabled) {
+        assert!(period > 0, EInvalidPeriod);
+    };
+    quota.default_quota_period_ms = period;
+}
+
+public(package) fun set_default_reduced_fee(quota: &mut QuotaConfig, fee: u64) {
+    quota.default_reduced_fee = fee;
+}
+
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -523,6 +640,22 @@ public(package) fun set_icon_url_string(meta: &mut MetadataConfig, url_str: Stri
     meta.icon_url = url::new_unsafe(ascii_url);
 }
 
+// Challenge config setters (DAO-level)
+public(package) fun set_optimistic_challenge_fee(config: &mut DaoConfig, amount: u64) {
+    assert!(amount > 0, EInvalidProposalFee);
+    config.optimistic_challenge_fee = amount;
+}
+
+public(package) fun set_optimistic_challenge_period_ms(config: &mut DaoConfig, period: u64) {
+    assert!(period > 0, EInvalidPeriod);
+    config.optimistic_challenge_period_ms = period;
+}
+
+public(package) fun set_challenge_bounty(config: &mut DaoConfig, bounty: u64) {
+    assert!(bounty > 0, EInvalidChallengeBounty);
+    config.challenge_bounty = bounty;
+}
+
 /// Update trading parameters (returns new config)
 public fun update_trading_params(config: &DaoConfig, new_params: TradingParams): DaoConfig {
     DaoConfig {
@@ -532,6 +665,11 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         metadata_config: config.metadata_config,
         security_config: config.security_config,
         storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -544,6 +682,11 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         metadata_config: config.metadata_config,
         security_config: config.security_config,
         storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -556,6 +699,11 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         metadata_config: config.metadata_config,
         security_config: config.security_config,
         storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -568,6 +716,11 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         metadata_config: new_meta,
         security_config: config.security_config,
         storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -580,6 +733,11 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         metadata_config: config.metadata_config,
         security_config: new_sec,
         storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -592,6 +750,45 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         metadata_config: config.metadata_config,
         security_config: config.security_config,
         storage_config: new_storage,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
+    }
+}
+
+/// Update conditional coin configuration (returns new config)
+public fun update_conditional_coin_config(config: &DaoConfig, new_coin_config: ConditionalCoinConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: config.security_config,
+        storage_config: config.storage_config,
+        conditional_coin_config: new_coin_config,
+        quota_config: config.quota_config,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
+    }
+}
+
+/// Update quota configuration (returns new config)
+public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: config.security_config,
+        storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: new_quota,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
     }
 }
 
@@ -604,7 +801,8 @@ public fun default_trading_params(): TradingParams {
         min_stable_amount: 1000000, // 1 stable with 6 decimals
         review_period_ms: 86400000, // 24 hours
         trading_period_ms: 604800000, // 7 days
-        amm_total_fee_bps: 30, // 0.3%
+        conditional_amm_fee_bps: 30, // 0.3% for conditional markets
+        spot_amm_fee_bps: 30, // 0.3% for spot pool
     }
 }
 
@@ -632,8 +830,6 @@ public fun default_governance_config(): GovernanceConfig {
         proposal_creation_enabled: true,
         accept_new_proposals: true,
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
-        optimistic_challenge_fee: constants::default_optimistic_challenge_fee(),
-        optimistic_challenge_period_ms: constants::default_optimistic_challenge_period_ms(),
         eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
         proposal_intent_expiry_ms: constants::default_proposal_intent_expiry_ms(),
     }
@@ -652,5 +848,25 @@ public fun default_security_config(): SecurityConfig {
 public fun default_storage_config(): StorageConfig {
     StorageConfig {
         allow_walrus_blobs: true,        // Allow Walrus blobs by default
+    }
+}
+
+/// Get default conditional coin configuration
+public fun default_conditional_coin_config(): ConditionalCoinConfig {
+    use std::ascii;
+    ConditionalCoinConfig {
+        coin_name_prefix: ascii::string(b"c_"),  // "c_" for conditional
+        coin_icon_url: url::new_unsafe(ascii::string(b"https://via.placeholder.com/150")), // Default placeholder
+        use_outcome_index: true,  // Include outcome index in name
+    }
+}
+
+/// Get default quota configuration
+public fun default_quota_config(): QuotaConfig {
+    QuotaConfig {
+        enabled: false,                  // Opt-in feature
+        default_quota_amount: 1,         // 1 proposal per period by default
+        default_quota_period_ms: 2_592_000_000, // 30 days
+        default_reduced_fee: 0,          // Free by default
     }
 }

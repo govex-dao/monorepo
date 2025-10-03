@@ -57,8 +57,8 @@ fun assert_walrus_blobs_allowed(account: &Account<FutarchyConfig>) {
 
 public struct CreateRegistryWitness has drop {}
 public struct CreateRootDocumentWitness has drop {}
-public struct CreateChildDocumentWitness has drop {}
-public struct CreateDocumentVersionWitness has drop {}
+// CreateChildDocumentWitness removed - flat structure only
+// CreateDocumentVersionWitness removed - no versions
 public struct DeleteDocumentWitness has drop {}
 public struct AddChunkWitness has drop {}
 public struct AddSunsetChunkWitness has drop {}
@@ -75,12 +75,19 @@ public struct SetRegistryImmutableWitness has drop {}
 
 /// Data for AddChunk hot potato - needs Walrus Blob from caller
 public struct AddChunkRequest has store, drop {
-    doc_id: ID
+    doc_id: ID,
+    expected_sequence: u64,
+    chunk_type: u8,
+    expires_at: Option<u64>,
+    effective_from: Option<u64>,
+    immutable: bool,
+    immutable_from: Option<u64>
 }
 
 /// Data for AddSunsetChunk hot potato
 public struct AddSunsetChunkRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     expires_at_ms: u64,
     immutable: bool
 }
@@ -88,6 +95,7 @@ public struct AddSunsetChunkRequest has store, drop {
 /// Data for AddSunriseChunk hot potato
 public struct AddSunriseChunkRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     effective_from_ms: u64,
     immutable: bool
 }
@@ -95,6 +103,7 @@ public struct AddSunriseChunkRequest has store, drop {
 /// Data for AddTemporaryChunk hot potato
 public struct AddTemporaryChunkRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool
@@ -103,6 +112,7 @@ public struct AddTemporaryChunkRequest has store, drop {
 /// Data for AddChunkWithScheduledImmutability hot potato
 public struct AddChunkWithScheduledImmutabilityRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     immutable_from_ms: u64
 }
 
@@ -115,12 +125,14 @@ public struct CreateDocumentVersionRequest has store, drop {
 /// Data for UpdateChunk hot potato - stores what chunk to update
 public struct UpdateChunkRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     chunk_id: ID
 }
 
 /// Data for RemoveChunk hot potato - stores what chunk to remove
 public struct RemoveChunkRequest has store, drop {
     doc_id: ID,
+    expected_sequence: u64,
     chunk_id: ID
 }
 
@@ -154,7 +166,7 @@ public fun do_create_registry<Outcome: store, IW: drop>(
 
     // Create registry if it doesn't exist
     if (!dao_file_registry::has_registry(account)) {
-        let registry = dao_file_registry::create_registry(object::id(account), ctx);
+        let registry = dao_file_registry::create_registry(object::id(account), clock, ctx);
         dao_file_registry::store_in_account(account, registry, version::current());
     };
 
@@ -211,7 +223,7 @@ public fun do_create_root_document<Outcome: store, IW: drop>(
     assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let mut reader = bcs::new(*action_data);
-    let doc_name = bcs::peel_vec_u8(&mut reader).to_string();
+    let doc_name = bcs::peel_u64(&mut reader).to_string();
     bcs_validation::validate_all_bytes_consumed(reader);
 
     assert!(doc_name.length() > 0, EEmptyDocName);
@@ -223,36 +235,7 @@ public fun do_create_root_document<Outcome: store, IW: drop>(
 }
 
 /// Create child document
-public fun do_create_child_document<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    _version_witness: VersionWitness,
-    _witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    let expected_type = action_types::create_child_file();
-    assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
-
-    let action_data = protocol_intents::action_spec_data(spec);
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let mut reader = bcs::new(*action_data);
-    let parent_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let doc_name = bcs::peel_vec_u8(&mut reader).to_string();
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    assert!(doc_name.length() > 0, EEmptyDocName);
-
-    let registry = dao_file_registry::get_registry_mut(account, version::current());
-    dao_file_registry::create_child_document(registry, parent_id, doc_name, clock, ctx);
-
-    executable::increment_action_idx(executable);
-}
+// create_child_document removed - no longer needed with simplified flat document structure
 
 /// Delete document (NEW - your request)
 public fun do_delete_document<Outcome: store, IW: drop>(
@@ -307,6 +290,12 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
+    let chunk_type = bcs::peel_u8(&mut reader);
+    let expires_at = bcs::peel_option_u64(&mut reader);
+    let effective_from = bcs::peel_option_u64(&mut reader);
+    let immutable = bcs::peel_bool(&mut reader);
+    let immutable_from = bcs::peel_option_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
     // Check if Walrus blobs are allowed
@@ -315,7 +304,8 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     // Return hot potato - caller must provide Walrus Blob
-    resource_requests::new_resource_request( AddChunkRequest { doc_id },
+    resource_requests::new_resource_request(
+        AddChunkRequest { doc_id, expected_sequence, chunk_type, expires_at, effective_from, immutable, immutable_from },
         ctx
     )
 }
@@ -329,9 +319,20 @@ public fun fulfill_add_chunk(
     ctx: &mut TxContext,
 ): ResourceReceipt<AddChunkRequest> {
     let data = resource_requests::extract_action(request);
-    assert!(object::id(doc) == data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_chunk(doc, walrus_blob, clock, ctx);
+    dao_file_registry::add_chunk(
+        doc,
+        data.expected_sequence,
+        walrus_blob,
+        data.chunk_type,
+        data.expires_at,
+        data.effective_from,
+        data.immutable,
+        data.immutable_from,
+        clock,
+        ctx
+    );
 
     resource_requests::create_receipt(data)
 }
@@ -357,6 +358,7 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let expires_at_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -367,7 +369,7 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunsetChunkRequest { doc_id, expires_at_ms, immutable },
+        AddSunsetChunkRequest { doc_id, expected_sequence, expires_at_ms, immutable },
         ctx
     )
 }
@@ -381,9 +383,21 @@ public fun fulfill_add_sunset_chunk(
     ctx: &mut TxContext,
 ): ResourceReceipt<AddSunsetChunkRequest> {
     let data = resource_requests::extract_action(request);
-    assert!(object::id(doc) == data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_sunset_chunk(doc, walrus_blob, data.expires_at_ms, data.immutable, clock, ctx);
+    // Use add_chunk with sunset parameters
+    dao_file_registry::add_chunk(
+        doc,
+        data.expected_sequence,
+        walrus_blob,
+        1, // CHUNK_TYPE_SUNSET
+        option::some(data.expires_at_ms),
+        option::none(),
+        data.immutable,
+        option::none(),
+        clock,
+        ctx
+    );
 
     resource_requests::create_receipt(data)
 }
@@ -409,6 +423,7 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let effective_from_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
@@ -419,7 +434,7 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunriseChunkRequest { doc_id, effective_from_ms, immutable },
+        AddSunriseChunkRequest { doc_id, expected_sequence, effective_from_ms, immutable },
         ctx
     )
 }
@@ -433,9 +448,21 @@ public fun fulfill_add_sunrise_chunk(
     ctx: &mut TxContext,
 ): ResourceReceipt<AddSunriseChunkRequest> {
     let data = resource_requests::extract_action(request);
-    assert!(object::id(doc) == data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_sunrise_chunk(doc, walrus_blob, data.effective_from_ms, data.immutable, clock, ctx);
+    // Use add_chunk with sunrise parameters
+    dao_file_registry::add_chunk(
+        doc,
+        data.expected_sequence,
+        walrus_blob,
+        2, // CHUNK_TYPE_SUNRISE
+        option::none(),
+        option::some(data.effective_from_ms),
+        data.immutable,
+        option::none(),
+        clock,
+        ctx
+    );
 
     resource_requests::create_receipt(data)
 }
@@ -461,6 +488,7 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let effective_from_ms = bcs::peel_u64(&mut reader);
     let expires_at_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
@@ -472,7 +500,7 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddTemporaryChunkRequest { doc_id, effective_from_ms, expires_at_ms, immutable },
+        AddTemporaryChunkRequest { doc_id, expected_sequence, effective_from_ms, expires_at_ms, immutable },
         ctx
     )
 }
@@ -486,9 +514,21 @@ public fun fulfill_add_temporary_chunk(
     ctx: &mut TxContext,
 ): ResourceReceipt<AddTemporaryChunkRequest> {
     let data = resource_requests::extract_action(request);
-    assert!(object::id(doc) == data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_temporary_chunk(doc, walrus_blob, data.effective_from_ms, data.expires_at_ms, data.immutable, clock, ctx);
+    // Use add_chunk with temporary parameters
+    dao_file_registry::add_chunk(
+        doc,
+        data.expected_sequence,
+        walrus_blob,
+        3, // CHUNK_TYPE_TEMPORARY
+        option::some(data.expires_at_ms),
+        option::some(data.effective_from_ms),
+        data.immutable,
+        option::none(),
+        clock,
+        ctx
+    );
 
     resource_requests::create_receipt(data)
 }
@@ -514,6 +554,7 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let immutable_from_ms = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -523,7 +564,7 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddChunkWithScheduledImmutabilityRequest { doc_id, immutable_from_ms },
+        AddChunkWithScheduledImmutabilityRequest { doc_id, expected_sequence, immutable_from_ms },
         ctx
     )
 }
@@ -537,63 +578,26 @@ public fun fulfill_add_chunk_with_scheduled_immutability(
     ctx: &mut TxContext,
 ): ResourceReceipt<AddChunkWithScheduledImmutabilityRequest> {
     let data = resource_requests::extract_action(request);
-    assert!(object::id(doc) == data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_chunk_with_scheduled_immutability(doc, walrus_blob, data.immutable_from_ms, clock, ctx);
-
-    resource_requests::create_receipt(data)
-}
-
-/// Create document version - returns ResourceRequest for previous document
-public fun do_create_document_version<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
-    _version_witness: VersionWitness,
-    _witness: IW,
-    _clock: &Clock,
-    ctx: &mut TxContext,
-): ResourceRequest<CreateDocumentVersionRequest> {
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    let expected_type = action_types::create_file_version();
-    assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
-
-    let action_data = protocol_intents::action_spec_data(spec);
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    let mut reader = bcs::new(*action_data);
-    let previous_doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let new_name = bcs::peel_vec_u8(&mut reader).to_string();
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    assert!(new_name.length() > 0, EEmptyDocName);
-
-    executable::increment_action_idx(executable);
-
-    // Return hot potato - caller must provide previous document
-    resource_requests::new_resource_request(
-        CreateDocumentVersionRequest { previous_doc_id, new_name },
+    // Use add_chunk with scheduled immutability parameters
+    dao_file_registry::add_chunk(
+        doc,
+        data.expected_sequence,
+        walrus_blob,
+        0, // CHUNK_TYPE_PERMANENT
+        option::none(),
+        option::none(),
+        false,
+        option::some(data.immutable_from_ms),
+        clock,
         ctx
-    )
-}
-
-/// Fulfill create_document_version request with previous document
-public fun fulfill_create_document_version(
-    request: ResourceRequest<CreateDocumentVersionRequest>,
-    registry: &mut DaoFileRegistry,
-    previous_doc: &mut File,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): ResourceReceipt<CreateDocumentVersionRequest> {
-    let data = resource_requests::extract_action(request);
-    assert!(object::id(previous_doc) == data.previous_doc_id, EInvalidDocId);
-
-    dao_file_registry::create_document_version(registry, previous_doc, data.new_name, clock, ctx);
+    );
 
     resource_requests::create_receipt(data)
 }
+
+// create_document_version removed - version system not needed
 
 /// Update chunk - returns ResourceRequest requiring caller to provide new Blob
 /// Action data: doc_id (address), chunk_id (address)
@@ -617,6 +621,7 @@ public fun do_update_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -628,6 +633,7 @@ public fun do_update_chunk<Outcome: store, IW: drop>(
     // Create hot potato with request data
     let request_data = UpdateChunkRequest {
         doc_id,
+        expected_sequence,
         chunk_id
     };
 
@@ -642,11 +648,12 @@ public fun fulfill_update_chunk(
     doc: &mut File,
     new_blob: Blob,
     clock: &Clock,
+    ctx: &TxContext,
 ): (Blob, ResourceReceipt<UpdateChunkRequest>) {
     let request_data = resource_requests::extract_action(request);
 
     // Verify doc ID matches
-    assert!(object::id(doc) == request_data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == request_data.doc_id, EInvalidDocId);
 
     // Verify account owns this document
     let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
@@ -655,9 +662,11 @@ public fun fulfill_update_chunk(
     // Update chunk and get old blob
     let old_blob = dao_file_registry::update_chunk(
         doc,
+        request_data.expected_sequence,
         request_data.chunk_id,
         new_blob,
-        clock
+        clock,
+        ctx
     );
 
     let receipt = resource_requests::create_receipt(request_data);
@@ -686,6 +695,7 @@ public fun do_remove_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -694,6 +704,7 @@ public fun do_remove_chunk<Outcome: store, IW: drop>(
     // Create hot potato with request data
     let request_data = RemoveChunkRequest {
         doc_id,
+        expected_sequence,
         chunk_id
     };
 
@@ -711,7 +722,7 @@ public fun fulfill_remove_chunk(
     let request_data = resource_requests::extract_action(request);
 
     // Verify doc ID matches
-    assert!(object::id(doc) == request_data.doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == request_data.doc_id, EInvalidDocId);
 
     // Verify account owns this document
     let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
@@ -720,6 +731,7 @@ public fun fulfill_remove_chunk(
     // Remove chunk and get blob
     let blob = dao_file_registry::remove_chunk(
         doc,
+        request_data.expected_sequence,
         request_data.chunk_id,
         clock
     );
@@ -752,12 +764,13 @@ public fun do_set_chunk_immutable<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    assert!(object::id(doc) == doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == doc_id, EInvalidDocId);
 
-    dao_file_registry::set_chunk_immutable(doc, chunk_id, clock);
+    dao_file_registry::set_chunk_immutable(doc, expected_sequence, chunk_id, clock);
 
     executable::increment_action_idx(executable);
 }
@@ -784,11 +797,12 @@ public fun do_set_document_immutable<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    assert!(object::id(doc) == doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == doc_id, EInvalidDocId);
 
-    dao_file_registry::set_document_immutable(doc, clock);
+    dao_file_registry::set_document_immutable(doc, expected_sequence, clock);
 
     executable::increment_action_idx(executable);
 }
@@ -815,12 +829,13 @@ public fun do_set_document_insert_allowed<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let allowed = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    assert!(object::id(doc) == doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == doc_id, EInvalidDocId);
 
-    dao_file_registry::set_insert_allowed(doc, allowed, clock);
+    dao_file_registry::set_insert_allowed(doc, expected_sequence, allowed, clock);
 
     executable::increment_action_idx(executable);
 }
@@ -847,12 +862,13 @@ public fun do_set_document_remove_allowed<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expected_sequence = bcs::peel_u64(&mut reader);
     let allowed = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    assert!(object::id(doc) == doc_id, EInvalidDocId);
+    assert!(dao_file_registry::get_file_id(doc) == doc_id, EInvalidDocId);
 
-    dao_file_registry::set_remove_allowed(doc, allowed, clock);
+    dao_file_registry::set_remove_allowed(doc, expected_sequence, allowed, clock);
 
     executable::increment_action_idx(executable);
 }
@@ -893,25 +909,7 @@ public fun new_create_root_document<Outcome, IW: drop>(
 }
 
 /// Create child document intent
-public fun new_create_child_document<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    parent_id: ID,
-    doc_name: String,
-    intent_witness: IW,
-) {
-    assert!(doc_name.length() > 0, EEmptyDocName);
-
-    let mut data = vector[];
-    data.append(bcs::to_bytes(&object::id_to_address(&parent_id)));
-    data.append(bcs::to_bytes(&doc_name.into_bytes()));
-
-    protocol_intents::add_action_spec(
-        intent,
-        CreateChildDocumentWitness {},
-        data,
-        intent_witness,
-    );
-}
+// new_create_child_document removed - flat document structure only
 
 /// Delete document intent (NEW)
 public fun new_delete_document<Outcome, IW: drop>(
@@ -1051,25 +1049,7 @@ public fun new_add_chunk_with_scheduled_immutability<Outcome, IW: drop>(
 }
 
 /// Create document version intent
-public fun new_create_document_version<Outcome, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    previous_version_id: ID,
-    doc_name: String,
-    intent_witness: IW,
-) {
-    assert!(doc_name.length() > 0, EEmptyDocName);
-
-    let mut data = vector[];
-    data.append(bcs::to_bytes(&object::id_to_address(&previous_version_id)));
-    data.append(bcs::to_bytes(&doc_name.into_bytes()));
-
-    protocol_intents::add_action_spec(
-        intent,
-        CreateDocumentVersionWitness {},
-        data,
-        intent_witness,
-    );
-}
+// new_create_document_version removed - version system not needed
 
 /// Update chunk intent
 public fun new_update_chunk<Outcome, IW: drop>(
@@ -1211,9 +1191,7 @@ public fun delete_create_root_document(expired: &mut Expired) {
     let _ = expired.remove_action_spec();
 }
 
-public fun delete_create_child_document(expired: &mut Expired) {
-    let _ = expired.remove_action_spec();
-}
+// delete_create_child_document removed - function no longer exists
 
 public fun delete_delete_document(expired: &mut Expired) {
     let _ = expired.remove_action_spec();

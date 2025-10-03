@@ -214,5 +214,33 @@ fun submit_proposal_internal<StableCoin>(
     // Implementation continues with existing logic...
     // This would contain the actual proposal creation logic
     // For now, just abort to avoid compiler errors since this is incomplete
+
+    // TODO: Quota Integration Example (commented out until proposal creation is implemented)
+    //
+    // Step 1: Calculate fee with quota consideration
+    // let proposer = ctx.sender();
+    // let base_fee = calculate_base_fee(...);  // Your existing fee calculation
+    // let (actual_fee, used_quota) = proposal_fee_manager::calculate_fee_with_quota(
+    //     quota_registry,
+    //     proposer,
+    //     base_fee,
+    //     clock
+    // );
+    //
+    // Step 2: Validate payment
+    // assert!(fee_payment.value() >= actual_fee, EInsufficientFee);
+    //
+    // Step 3: Create proposal (existing logic would go here)
+    // let proposal_id = ...;
+    //
+    // Step 4: Commit quota usage after successful creation
+    // if (used_quota) {
+    //     proposal_fee_manager::use_quota_for_proposal(
+    //         quota_registry,
+    //         proposer,
+    //         clock
+    //     );
+    // };
+
     abort 0
 }

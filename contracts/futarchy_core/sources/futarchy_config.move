@@ -38,6 +38,7 @@ const DAO_STATE_DISSOLVED: u8 = 3;
 
 const EInvalidSlashDistribution: u64 = 0;
 const EApprovalExpired: u64 = 100;
+const ELaunchpadPriceAlreadySet: u64 = 101;
 
 // === Structs ===
 
@@ -66,15 +67,21 @@ public struct FutarchyConfig has store, copy, drop {
     // Slash distribution configuration
     slash_distribution: SlashDistribution,
 
-    // Reward configurations
-    proposal_pass_reward: u64,    // Reward for proposal creator when proposal passes (in SUI)
-    outcome_win_reward: u64,       // Reward for outcome creator when their outcome wins (in SUI)
+    // Reward configurations (paid from protocol revenue in SUI)
+    // Set to 0 to disable rewards (default), or configure per DAO
+    proposal_pass_reward: u64,    // Reward for proposal creator when proposal passes (in SUI, default: 0)
+    outcome_win_reward: u64,       // Reward for winning outcome creator (in SUI, default: 0)
     review_to_trading_fee: u64,   // Fee to advance from review to trading (in SUI)
     finalization_fee: u64,         // Fee to finalize proposal after trading (in SUI)
 
     // Verification configuration
     verification_level: u8,        // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
     dao_score: u64,                // DAO quality score (0-unlimited, higher = better, admin-set only)
+
+    // Write-once immutable starting price from launchpad raise
+    // Once set to Some(price), can NEVER be changed
+    // Used to enforce: 1) AMM initialization ratio, 2) founder reward mint minimum price
+    launchpad_initial_price: Option<u128>,
 }
 
 /// Dynamic state stored on Account<FutarchyConfig> via dynamic fields
@@ -124,12 +131,13 @@ public fun new<AssetType: drop, StableType: drop>(
         stable_type: type_name::get<StableType>().into_string().to_string(),
         config: dao_config,
         slash_distribution,
-        proposal_pass_reward: 10_000_000_000,    // 10 SUI default
-        outcome_win_reward: 5_000_000_000,       // 5 SUI default
+        proposal_pass_reward: 0,    // No default reward (DAO must configure)
+        outcome_win_reward: 0,       // No default reward (DAO must configure)
         review_to_trading_fee: 1_000_000_000,    // 1 SUI default
         finalization_fee: 1_000_000_000,         // 1 SUI default
         verification_level: 0,                    // Unverified by default
         dao_score: 0,                              // No score by default
+        launchpad_initial_price: option::none(),   // Not set initially
     }
 }
 
@@ -300,6 +308,7 @@ public fun with_rewards(
         finalization_fee,
         verification_level: config.verification_level,
         dao_score: config.dao_score,
+        launchpad_initial_price: config.launchpad_initial_price,
     }
 }
 
@@ -318,6 +327,7 @@ public fun with_verification_level(
         finalization_fee: config.finalization_fee,
         verification_level,
         dao_score: config.dao_score,
+        launchpad_initial_price: config.launchpad_initial_price,
     }
 }
 
@@ -336,6 +346,7 @@ public fun with_dao_score(
         finalization_fee: config.finalization_fee,
         verification_level: config.verification_level,
         dao_score,
+        launchpad_initial_price: config.launchpad_initial_price,
     }
 }
 
@@ -354,6 +365,7 @@ public fun with_slash_distribution(
         finalization_fee: config.finalization_fee,
         verification_level: config.verification_level,
         dao_score: config.dao_score,
+        launchpad_initial_price: config.launchpad_initial_price,
     }
 }
 
@@ -514,8 +526,17 @@ public fun twap_threshold(config: &FutarchyConfig): u64 {
     dao_config::threshold(dao_config::twap_config(&config.config))
 }
 
+public fun conditional_amm_fee_bps(config: &FutarchyConfig): u64 {
+    dao_config::conditional_amm_fee_bps(dao_config::trading_params(&config.config))
+}
+
+public fun spot_amm_fee_bps(config: &FutarchyConfig): u64 {
+    dao_config::spot_amm_fee_bps(dao_config::trading_params(&config.config))
+}
+
+// Deprecated: use conditional_amm_fee_bps instead
 public fun amm_total_fee_bps(config: &FutarchyConfig): u64 {
-    dao_config::amm_total_fee_bps(dao_config::trading_params(&config.config))
+    dao_config::conditional_amm_fee_bps(dao_config::trading_params(&config.config))
 }
 
 public fun max_outcomes(config: &FutarchyConfig): u64 {
@@ -603,9 +624,14 @@ public fun set_trading_period_ms(config: &mut FutarchyConfig, period: u64) {
     dao_config::set_trading_period_ms(trading_params, period);
 }
 
-public fun set_amm_total_fee_bps(config: &mut FutarchyConfig, fee: u16) {
+public fun set_conditional_amm_fee_bps(config: &mut FutarchyConfig, fee: u16) {
     let trading_params = dao_config::trading_params_mut(&mut config.config);
-    dao_config::set_amm_total_fee_bps(trading_params, (fee as u64));
+    dao_config::set_conditional_amm_fee_bps(trading_params, (fee as u64));
+}
+
+public fun set_spot_amm_fee_bps(config: &mut FutarchyConfig, fee: u16) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_spot_amm_fee_bps(trading_params, (fee as u64));
 }
 
 public fun set_amm_twap_start_delay(config: &mut FutarchyConfig, delay: u64) {
@@ -772,6 +798,25 @@ public fun authenticate(account: &Account<FutarchyConfig>, ctx: &TxContext): Con
     let _ = account;
     let _ = ctx;
     ConfigWitness {}
+}
+
+// === Launchpad Initial Price Functions ===
+
+/// Set the launchpad initial price (write-once, can only be called once)
+/// This is the canonical price from the launchpad raise: tokens_for_sale / final_raise_amount
+/// Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
+public fun set_launchpad_initial_price(
+    config: &mut FutarchyConfig,
+    price: u128,
+) {
+    assert!(config.launchpad_initial_price.is_none(), ELaunchpadPriceAlreadySet);
+    config.launchpad_initial_price = option::some(price);
+}
+
+/// Get the launchpad initial price
+/// Returns None if DAO was not created via launchpad or price hasn't been set
+public fun get_launchpad_initial_price(config: &FutarchyConfig): Option<u128> {
+    config.launchpad_initial_price
 }
 
 }

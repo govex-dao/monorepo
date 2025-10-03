@@ -13,6 +13,7 @@ use sui::{
 };
 use futarchy_one_shot_utils::{
     math,
+    constants,
 };
 
 // === Errors ===
@@ -23,7 +24,6 @@ const EInvalidFee: u64 = 4;
 const EPoolNotInitialized: u64 = 5;
 
 // === Constants ===
-const MAX_FEE_BPS: u64 = 10000; // 100%
 const MINIMUM_LIQUIDITY: u64 = 1000;
 
 // === Structs ===
@@ -94,7 +94,7 @@ public fun new<AssetType, StableType>(
     fee_bps: u64,
     ctx: &mut TxContext,
 ): AccountSpotPool<AssetType, StableType> {
-    assert!(fee_bps <= MAX_FEE_BPS, EInvalidFee);
+    assert!(fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
     
     let id = object::new(ctx);
     let pool_id = object::uid_to_inner(&id);
@@ -412,8 +412,9 @@ public fun get_spot_price<AssetType, StableType>(
     if (pool.asset_reserve.value() == 0) {
         0
     } else {
-        // Price = stable_reserve / asset_reserve * 10^9 for precision
-        ((pool.stable_reserve.value() as u128) * 1_000_000_000) / (pool.asset_reserve.value() as u128)
+        // Price = stable_reserve / asset_reserve * price_multiplier_scale
+        // This scale is used across the system for price calculations and multipliers
+        ((pool.stable_reserve.value() as u128) * (constants::price_multiplier_scale() as u128)) / (pool.asset_reserve.value() as u128)
     }
 }
 

@@ -427,7 +427,9 @@ public fun do_update_trading_params<Outcome: store, IW: drop>(
         futarchy_config::set_trading_period_ms(config, *action.trading_period_ms.borrow());
     };
     if (action.amm_total_fee_bps.is_some()) {
-        futarchy_config::set_amm_total_fee_bps(config, (*action.amm_total_fee_bps.borrow() as u16));
+        let fee_bps = (*action.amm_total_fee_bps.borrow() as u16);
+        futarchy_config::set_conditional_amm_fee_bps(config, fee_bps);
+        futarchy_config::set_spot_amm_fee_bps(config, fee_bps);
     };
 
     // Emit event

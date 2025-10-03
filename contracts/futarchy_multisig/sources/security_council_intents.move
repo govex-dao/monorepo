@@ -189,7 +189,7 @@ public fun request_accept_and_lock_cap(
     );
 
     // now it's safe to borrow security_council (no locking at creation)
-    owned::new_withdraw(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
+    owned::new_withdraw_object(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
 
     // Use generic custody accept action
     {
@@ -216,7 +216,7 @@ public fun execute_accept_and_lock_cap(
 ) {
     // Keep this for non-coexec single-side accept+lock (no DAO policy enforced).
     // It now expects the new custody action instead of the legacy one.
-    let cap = owned::do_withdraw(&mut executable, security_council, cap_receipt, AcceptUpgradeCapIntent{});
+    let cap = owned::do_withdraw_object(&mut executable, security_council, cap_receipt, AcceptUpgradeCapIntent{});
 
     // Get action spec and deserialize
     let specs = executable::intent(&executable).action_specs();
@@ -269,7 +269,7 @@ public fun delete_accept_upgrade_cap(
     expired: &mut Expired,
     security_council: &mut Account<WeightedMultisig>
 ) {
-    owned::delete_withdraw(expired, security_council); // <-- pass account too
+    owned::delete_withdraw_object(expired, security_council); // <-- pass account too
     custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
 }
 
@@ -603,7 +603,7 @@ fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<
     package_upgrade::delete_commit(expired);
 
     // Delete owned withdraw if present
-    owned::delete_withdraw(expired, security_council);
+    owned::delete_withdraw_object(expired, security_council);
 
     // Delete custody actions
     custody_actions::delete_accept_into_custody<UpgradeCap>(expired);

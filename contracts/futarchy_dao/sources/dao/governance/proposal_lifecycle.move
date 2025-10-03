@@ -213,14 +213,17 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     } else {
         balance::zero<StableType>()
     };
-    
+
+    // Track the proposer's fee amount for outcome creator refunds
+    let proposer_fee_paid = fee_escrow.value();
+
     // Intent specs are now stored in proposals, no need to check intent keys
-    
+
     // If this proposal uses DAO liquidity, mark the spot pool
     if (uses_dao_liquidity) {
         spot_amm::mark_liquidity_to_proposal(spot_pool, clock);
     };
-    
+
     // Initialize the market
     let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
         proposal_id,  // Pass the proposal_id from the queue
@@ -233,7 +236,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         futarchy_config::amm_twap_initial_observation(config),
         futarchy_config::amm_twap_step_max(config),
         futarchy_config::twap_threshold(config),
-        futarchy_config::amm_total_fee_bps(config),
+        futarchy_config::conditional_amm_fee_bps(config),
         futarchy_config::max_outcomes(config), // DAO's configured max outcomes
         object::id_address(account), // treasury address
         title,
@@ -243,6 +246,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         asset_liquidity,
         stable_liquidity,
         proposer,
+        proposer_fee_paid, // Track actual fee paid by proposer
         uses_dao_liquidity,
         fee_escrow,
         intent_spec, // Pass the IntentSpec from the queued proposal
@@ -279,6 +283,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut SpotAMM<AssetType, StableType>, // Added: For TWAP integration
+    fee_manager: &mut ProposalFeeManager, // Added: For outcome creator fee refunds
     clock: &Clock,
     ctx: &mut TxContext, // Now needed for auth
 ) {
@@ -353,7 +358,72 @@ public fun finalize_proposal_market<AssetType, StableType>(
     let config = account::config(account);
     governance_actions::prune_oldest_expired_bucket(registry, config, clock, ctx);
     // --- END REGISTRY PRUNING ---
-    
+
+    // --- BEGIN OUTCOME CREATOR FEE REFUNDS & REWARDS ---
+    // Economic model per user requirement:
+    // - Outcome 0 wins: DAO keeps all fees (reject/no action taken)
+    // - Outcomes 1-N win:
+    //   1. Refund ALL creators of outcomes 1-N (collaborative model)
+    //   2. Pay bonus reward to winning outcome creator (configurable)
+    //
+    // Game Theory Rationale:
+    // - Eliminates fee-stealing attacks (both proposer and mutator get refunded)
+    // - No incentive to hedge by creating trivial mutations
+    // - Makes mutations collaborative rather than adversarial
+    // - Original proposer always protected if any action is taken
+    // - Encourages healthy debate without perverse incentives
+    // - Winning creator gets bonus to incentivize quality
+    if (winning_outcome > 0) {
+        let config = account::config(account);
+        let num_outcomes = proposal::get_num_outcomes(proposal);
+
+        // 1. Refund fees to ALL creators of outcomes 1-N from proposal's fee escrow
+        // SECURITY: Use per-proposal escrow instead of global protocol revenue
+        // This ensures each proposal's fees are properly tracked and refunded
+        let fee_escrow_balance = proposal::take_fee_escrow(proposal);
+        let mut fee_escrow_coin = coin::from_balance(fee_escrow_balance, ctx);
+
+        let mut i = 1u64;
+        while (i < num_outcomes) {
+            let creator_fee = proposal::get_outcome_creator_fee(proposal, i);
+            if (creator_fee > 0 && fee_escrow_coin.value() >= creator_fee) {
+                let creator = proposal::get_outcome_creator(proposal, i);
+                let refund_coin = coin::split(&mut fee_escrow_coin, creator_fee, ctx);
+                // Transfer refund to outcome creator
+                transfer::public_transfer(refund_coin, creator);
+            };
+            i = i + 1;
+        };
+
+        // Any remaining escrow gets destroyed (no refund for outcome 0 creator/proposer)
+        // Note: In StableType, not SUI, so cannot deposit to SUI-denominated protocol revenue
+        if (fee_escrow_coin.value() > 0) {
+            transfer::public_transfer(fee_escrow_coin, @0x0); // Burn by sending to null address
+        } else {
+            fee_escrow_coin.destroy_zero();
+        };
+
+        // 2. Pay bonus reward to WINNING outcome creator (if configured)
+        // Note: Reward is paid in SUI from protocol revenue
+        // DAOs can set this to 0 to disable, or any amount to incentivize quality outcomes
+        let win_reward = futarchy_config::outcome_win_reward(config);
+        if (win_reward > 0) {
+            let winner = proposal::get_outcome_creator(proposal, winning_outcome);
+            let reward_coin = proposal_fee_manager::pay_outcome_creator_reward(
+                fee_manager,
+                win_reward,
+                ctx
+            );
+            if (reward_coin.value() > 0) {
+                transfer::public_transfer(reward_coin, winner);
+            } else {
+                reward_coin.destroy_zero();
+            };
+        };
+    };
+    // If outcome 0 wins, DAO keeps all fees - no refunds or rewards
+    // --- END OUTCOME CREATOR FEE REFUNDS & REWARDS ---
+
     // Emit finalization event
     event::emit(ProposalMarketFinalized {
         proposal_id: proposal::get_id(proposal),
@@ -575,34 +645,34 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     });
 }
 
-/// Initialize the reserved PREMARKET proposal into REVIEW by injecting liquidity now.
-public entry fun initialize_reserved_premarket_to_review<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
+/// REMOVED: initialize_reserved_premarket_to_review
+///
+/// With TreasuryCap-based conditional coins, market initialization requires knowing
+/// the specific conditional coin types (which come from the registry).
+///
+/// Users must build a PTB that:
+/// 1. escrow = proposal::create_escrow_for_market(proposal, clock)
+/// 2. proposal::register_outcome_caps_with_escrow(proposal, escrow, 0, <Coin0Asset>, <Coin0Stable>)
+/// 3. proposal::register_outcome_caps_with_escrow(proposal, escrow, 1, <Coin1Asset>, <Coin1Stable>)
+///    ... repeat for N outcomes
+/// 4. proposal::initialize_market_with_escrow(proposal, escrow, asset_liquidity, stable_liquidity, clock)
+/// 5. proposal_lifecycle::finalize_premarket_initialization(queue, proposal)
+///
+/// The frontend/SDK must track which conditional coin types were used for each proposal.
+
+/// Finalize premarket initialization by clearing the reservation
+/// Call this after proposal::initialize_market_with_escrow() in the same PTB
+public entry fun finalize_premarket_initialization<AssetType, StableType>(
     queue: &mut ProposalQueue<StableType>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    asset_liquidity: Coin<AssetType>,
-    stable_liquidity: Coin<StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
+    proposal: &Proposal<AssetType, StableType>,
 ) {
-    use futarchy_markets::proposal as proposal_mod;
-    
-    // Must have a reservation, and it must match this proposal's ID
+    // Verify reservation matches this proposal
     assert!(priority_queue::has_reserved(queue), EProposalNotActive);
     let reserved = priority_queue::reserved_proposal_id(queue);
     assert!(reserved.is_some(), EProposalNotActive);
     let reserved_id = *reserved.borrow();
     assert!(reserved_id == object::id(proposal), EInvalidWinningOutcome);
-    
-    // Initialize market now (PREMARKET -> REVIEW)
-    let _market_state_id = proposal_mod::initialize_market_from_premarket<AssetType, StableType>(
-        proposal,
-        asset_liquidity,
-        stable_liquidity,
-        clock,
-        ctx
-    );
-    
+
     // Clear reservation
     priority_queue::clear_reserved(queue);
 }

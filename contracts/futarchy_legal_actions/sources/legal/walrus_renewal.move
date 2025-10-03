@@ -197,7 +197,8 @@ public fun do_walrus_renewal<Config, Outcome: store, IW: drop>(
 
     // 8. Update chunk metadata
     let new_expiry = blob::end_epoch(blob) as u64;
-    dao_file_registry::update_chunk_walrus_expiry(doc, chunk_id, new_expiry);
+    let expected_sequence = dao_file_registry::get_edit_sequence(doc);
+    dao_file_registry::update_chunk_walrus_expiry(doc, expected_sequence, chunk_id, new_expiry, clock);
 
     // 9. Emit event
     event::emit(WalrusBlobRenewed {

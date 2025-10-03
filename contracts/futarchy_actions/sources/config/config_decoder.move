@@ -20,6 +20,7 @@ use futarchy_actions::config_actions::{
     StorageConfigUpdateAction,
     ConfigAction,
 };
+use futarchy_actions::quota_decoder;
 
 // === Decoder Objects ===
 
@@ -578,6 +579,9 @@ public fun register_decoders(
     register_queue_params_decoder(registry, ctx);
     register_storage_config_decoder(registry, ctx);
     register_config_action_decoder(registry, ctx);
+
+    // Register quota decoders
+    quota_decoder::register_decoders(registry, ctx);
 }
 
 fun register_set_proposals_enabled_decoder(

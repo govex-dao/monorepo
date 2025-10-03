@@ -16,7 +16,6 @@ fun drain_all(expired: &mut Expired) {
     // DAO File Actions
     gc_registry::delete_dao_file_create_registry(expired);
     gc_registry::delete_dao_file_create_root_document(expired);
-    gc_registry::delete_dao_file_create_child_document(expired);
     gc_registry::delete_dao_file_delete_document(expired);
     gc_registry::delete_dao_file_add_chunk(expired);
     gc_registry::delete_dao_file_update(expired);

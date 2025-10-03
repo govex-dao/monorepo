@@ -29,7 +29,8 @@ use sui::{
     transfer_policy::{TransferPolicy, TransferRequest},
     bcs::{Self, BCS},
 };
-use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
+// NOTE: Kiosk rules commented out as the kiosk dependency was removed
+// use kiosk::{kiosk_lock_rule, royalty_rule, personal_kiosk_rule};
 use account_protocol::{
     action_validation,
     account::{Account, Auth},
@@ -146,22 +147,26 @@ public fun place<Config, Nft: key + store>(
     sender_kiosk.list<Nft>(sender_cap, nft_id, 0);
     let (nft, mut request) = sender_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
-    if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
-        account_kiosk.lock(cap, policy, nft);
-        kiosk_lock_rule::prove(&mut request, account_kiosk);
-    } else {
-        account_kiosk.place(cap, nft);
-    };
+    // NOTE: Kiosk rule handling commented out as the kiosk dependency was removed
+    // This just places the NFT in the kiosk without handling specific rules
+    account_kiosk.place(cap, nft);
 
-    if (policy.has_rule<Nft, royalty_rule::Rule>()) {
-        // can't read royalty rule on-chain because transfer_policy::get_rule not implemented
-        // so we can't throw an error if there is a minimum floor price set
-        royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
-    }; 
-
-    if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
-        personal_kiosk_rule::prove(account_kiosk, &mut request);
-    };
+    // if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
+    //     account_kiosk.lock(cap, policy, nft);
+    //     kiosk_lock_rule::prove(&mut request, account_kiosk);
+    // } else {
+    //     account_kiosk.place(cap, nft);
+    // };
+    //
+    // if (policy.has_rule<Nft, royalty_rule::Rule>()) {
+    //     // can't read royalty rule on-chain because transfer_policy::get_rule not implemented
+    //     // so we can't throw an error if there is a minimum floor price set
+    //     royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
+    // };
+    //
+    // if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
+    //     personal_kiosk_rule::prove(account_kiosk, &mut request);
+    // };
     // the request can be filled with arbitrary rules and must be confirmed afterwards
     request
 }
@@ -290,20 +295,24 @@ public fun do_take<Config, Outcome: store, Nft: key + store, IW: drop>(
     account_kiosk.list<Nft>(cap, nft_id, 0);
     let (nft, mut request) = account_kiosk.purchase<Nft>(nft_id, coin::zero<SUI>(ctx));
 
-    if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
-        recipient_kiosk.lock(recipient_cap, policy, nft);
-        kiosk_lock_rule::prove(&mut request, recipient_kiosk);
-    } else {
-        recipient_kiosk.place(recipient_cap, nft);
-    };
+    // NOTE: Kiosk rule handling commented out as the kiosk dependency was removed
+    // This just places the NFT in the recipient kiosk without handling specific rules
+    recipient_kiosk.place(recipient_cap, nft);
 
-    if (policy.has_rule<Nft, royalty_rule::Rule>()) {
-        royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
-    };
-
-    if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
-        personal_kiosk_rule::prove(account_kiosk, &mut request);
-    };
+    // if (policy.has_rule<Nft, kiosk_lock_rule::Rule>()) {
+    //     recipient_kiosk.lock(recipient_cap, policy, nft);
+    //     kiosk_lock_rule::prove(&mut request, recipient_kiosk);
+    // } else {
+    //     recipient_kiosk.place(recipient_cap, nft);
+    // };
+    //
+    // if (policy.has_rule<Nft, royalty_rule::Rule>()) {
+    //     royalty_rule::pay(policy, &mut request, coin::zero<SUI>(ctx));
+    // };
+    //
+    // if (policy.has_rule<Nft, personal_kiosk_rule::Rule>()) {
+    //     personal_kiosk_rule::prove(account_kiosk, &mut request);
+    // };
 
     // Increment action index
     executable::increment_action_idx(executable);

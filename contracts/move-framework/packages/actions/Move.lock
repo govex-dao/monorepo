@@ -2,12 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "D6F37CB8518B45C66C01177DDA7A623A8DBC0E276E8829275F539A858F3E4D36"
-deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+manifest_digest = "C0F75EE298A3CCF18FB615F80ABE1E63BF9F84D13860F957B79E862E4FAD42B6"
+deps_digest = "397E6A9F7A624706DBDFEE056CE88391A15876868FD18A88504DA74EB458D697"
 dependencies = [
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
-  { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -47,14 +46,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "Kiosk"
-source = { local = "../../deps/kiosk" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
 id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/move-stdlib" }
 
@@ -83,7 +74,7 @@ flavor = "sui"
 [env]
 
 [env.devnet]
-chain-id = "a5e2ba5d"
-original-published-id = "0x32a454500dd457ff8a18737c109aad8115a22149fa40f5ce481fd63c69156f16"
-latest-published-id = "0x32a454500dd457ff8a18737c109aad8115a22149fa40f5ce481fd63c69156f16"
+chain-id = "bc718b80"
+original-published-id = "0x59feeec832fb397c7e4fc80eff70da6e675c2e9b31eda830e8a179dfaede9d30"
+latest-published-id = "0x59feeec832fb397c7e4fc80eff70da6e675c2e9b31eda830e8a179dfaede9d30"
 published-version = "1"

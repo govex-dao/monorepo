@@ -63,7 +63,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
         AcceptFactoryOwnerCapIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw(intent, account, cap_id, iw);
+            owned::new_withdraw_object(intent, account, cap_id, iw);
         }
     );
 }
@@ -89,7 +89,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
         AcceptFeeAdminCapIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw(intent, account, cap_id, iw);
+            owned::new_withdraw_object(intent, account, cap_id, iw);
         }
     );
 }
@@ -115,7 +115,7 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
         AcceptValidatorAdminCapIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw(intent, account, cap_id, iw);
+            owned::new_withdraw_object(intent, account, cap_id, iw);
         }
     );
 }
@@ -133,7 +133,7 @@ public fun execute_accept_factory_owner_cap<Outcome: store>(
         version::current(),
         AcceptFactoryOwnerCapIntent(),
         |executable, iw| {
-            let cap = owned::do_withdraw(executable, account, receiving, iw);
+            let cap = owned::do_withdraw_object(executable, account, receiving, iw);
             
             // Store the cap in the account's managed assets
             account::add_managed_asset(
@@ -157,7 +157,7 @@ public fun execute_accept_fee_admin_cap<Outcome: store>(
         version::current(),
         AcceptFeeAdminCapIntent(),
         |executable, iw| {
-            let cap = owned::do_withdraw(executable, account, receiving, iw);
+            let cap = owned::do_withdraw_object(executable, account, receiving, iw);
             
             // Store the cap in the account's managed assets
             account::add_managed_asset(
@@ -181,7 +181,7 @@ public fun execute_accept_validator_admin_cap<Outcome: store>(
         version::current(),
         AcceptValidatorAdminCapIntent(),
         |executable, iw| {
-            let cap = owned::do_withdraw(executable, account, receiving, iw);
+            let cap = owned::do_withdraw_object(executable, account, receiving, iw);
             
             // Store the cap in the account's managed assets
             account::add_managed_asset(

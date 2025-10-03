@@ -11,12 +11,11 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_vault = { local = "../futarchy_vault" }
 [addresses]
-futarchy_multisig = "0x06621b784126aecf37d4c8136bd52c916373d5cf3520e7968e897f4acf43b41a"
-futarchy_types = "0x09a59bd38721991778a28118a3dfe6f2a34abc8ebc4598a26507f2e75dae89b4"
-futarchy_one_shot_utils = "0xc1bd7bc7b41a0338303273ea5d1903e789b82280b7ffd8532b20c65e73a95c6d"
-futarchy_core = "0xd416a36b7edc649f9f4e26931ce2167fb99bbf064763888898fd4aa8c7336923"
-futarchy_vault = "0x5cbee0e8c8fd700271c9ccfe24bb5ff4b9b508c3646b0ad6d7a014a67926a400"
-account_protocol = "0xe93d45748322630002db87a5fab8f703961cd5036db5e54619bd31b6fc076401"
-account_extensions = "0x2eeb1761ecc96ab59bc3e352b180495720ed66fa4e86acdb977bde54d88aaa11"
-account_actions = "0x32a454500dd457ff8a18737c109aad8115a22149fa40f5ce481fd63c69156f16"
-kiosk = "0xb6be662848f2a49f0741ff1134e99bb34de6acbdd315cc4101386b705af2115b"
+futarchy_multisig = "0xaf50964aa3d534640f7ce32c180955c883a657fb6875d4b41687b280b8d52704"
+futarchy_types = "0x9cd90e1b5ee92d9899f6bb22c2f822a9dfab88eca319d3719623156033276ab2"
+futarchy_one_shot_utils = "0xb839ca53f93fb215430bdc1f187cebb7cc1abab7282f695ca6969fc4303808aa"
+futarchy_core = "0x243466b0c2002e092f40b71ac606578df2a958f87765c48d0edf4cecc417cd8c"
+futarchy_vault = "0x4543a8909a024b17338bee7a3468ed0b978811f2df4aba09da96cb18a3ed8682"
+account_protocol = "0xc24e7496e469de4fc9aa52205b0c69195e23d913db19dede6ded8dd77d9e36d0"
+account_extensions = "0x0845277c95d7b28ea5d0b3ee653b679e4d4c8649ec299f4f4f5cec4141aa2dbe"
+account_actions = "0x59feeec832fb397c7e4fc80eff70da6e675c2e9b31eda830e8a179dfaede9d30"

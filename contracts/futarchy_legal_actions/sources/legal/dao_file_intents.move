@@ -110,61 +110,8 @@ public fun create_root_document_intent<Config, Outcome: store>(
     );
 }
 
-/// Create intent to create a child document (amendment, schedule, exhibit)
-public fun create_child_document_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
-    params: Params,
-    outcome: Outcome,
-    parent_id: ID,
-    name: String,
-    ctx: &mut TxContext
-) {
-    account.build_intent!(
-        params,
-        outcome,
-        b"dao_doc_create_child".to_string(),
-        version::current(),
-        DaoDocIntent {},
-        ctx,
-        |intent, iw| {
-            let mut action_data = bcs::to_bytes(&object::id_to_address(&parent_id));
-            action_data.append(bcs::to_bytes(&name.into_bytes()));
-            intent.add_typed_action(
-                action_types::create_child_file(),
-                action_data,
-                iw
-            );
-        }
-    );
-}
-
-/// Create intent to create a new version of a document
-public fun create_document_version_intent<Config, Outcome: store>(
-    account: &mut Account<Config>,
-    params: Params,
-    outcome: Outcome,
-    previous_doc_id: ID,
-    new_name: String,
-    ctx: &mut TxContext
-) {
-    account.build_intent!(
-        params,
-        outcome,
-        b"dao_doc_create_version".to_string(),
-        version::current(),
-        DaoDocIntent {},
-        ctx,
-        |intent, iw| {
-            let mut action_data = bcs::to_bytes(&object::id_to_address(&previous_doc_id));
-            action_data.append(bcs::to_bytes(&new_name.into_bytes()));
-            intent.add_typed_action(
-                action_types::create_file_version(),
-                action_data,
-                iw
-            );
-        }
-    );
-}
+// create_child_document_intent removed - flat structure only
+// create_document_version_intent removed - no versions needed
 
 // === Chunk Management Intents ===
 

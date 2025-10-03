@@ -43,10 +43,6 @@ public fun delete_dao_file_create_root_document(expired: &mut Expired) {
     dao_file_actions::delete_create_root_document(expired);
 }
 
-public fun delete_dao_file_create_child_document(expired: &mut Expired) {
-    dao_file_actions::delete_create_child_document(expired);
-}
-
 public fun delete_dao_file_delete_document(expired: &mut Expired) {
     dao_file_actions::delete_delete_document(expired);
 }
@@ -185,7 +181,7 @@ public fun delete_restrict_policy(expired: &mut Expired) {
 
 // === Owned Object Actions ===
 public fun delete_owned_withdraw(account: &Account<FutarchyConfig>, expired: &mut Expired) {
-    account_protocol::owned::delete_withdraw(expired, account);
+    account_protocol::owned::delete_withdraw_object(expired, account);
 }
 
 // === Vault Actions ===

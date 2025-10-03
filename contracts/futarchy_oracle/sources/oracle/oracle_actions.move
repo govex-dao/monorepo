@@ -22,7 +22,7 @@ use account_actions::currency;
 use futarchy_core::{
     action_validation,
     action_types,
-    futarchy_config::FutarchyConfig,
+    futarchy_config::{Self, FutarchyConfig},
     version,
 };
 use futarchy_markets::{
@@ -34,6 +34,7 @@ use futarchy_markets::{
 use futarchy_multisig::{
     weighted_multisig::{Self, WeightedMultisig},
 };
+use futarchy_one_shot_utils::{math, constants};
 // ResourceRequest removed - using direct execution pattern
 
 // === Errors ===
@@ -56,6 +57,7 @@ const ERecipientNotFound: u64 = 15;
 const EInsufficientPaymentForStrike: u64 = 16;
 const ENotVestedYet: u64 = 17;
 const ENoVestedTokensAvailable: u64 = 18;
+const ELaunchpadPriceRequired: u64 = 19;
 
 // === Constants ===
 const MAX_MINT_PERCENTAGE: u64 = 500; // 5% max mint per execution (in basis points)
@@ -147,7 +149,10 @@ public struct RecipientMint has store, copy, drop {
 
 /// A price tier with multiple recipients
 public struct PriceTier has store, copy, drop {
-    /// Price threshold that must be reached (scaled by 1e12)
+    /// Price multiplier (e.g., 2_000_000_000 = 2.0x, scaled by 1e9)
+    /// If 0, uses absolute price_threshold instead
+    price_multiplier: u64,
+    /// Absolute price threshold (only used if price_multiplier is 0, scaled by 1e12)
     price_threshold: u128,
     /// Whether price must be above (true) or below (false) threshold
     is_above_threshold: bool,
@@ -202,7 +207,7 @@ public fun new_recipient_mint(
     }
 }
 
-/// Create a new PriceTier
+/// Create a new PriceTier with absolute price
 public fun new_price_tier(
     price_threshold: u128,
     is_above_threshold: bool,
@@ -210,7 +215,25 @@ public fun new_price_tier(
     description: String,
 ): PriceTier {
     PriceTier {
+        price_multiplier: 0, // Using absolute price
         price_threshold,
+        is_above_threshold,
+        recipients,
+        description,
+        executed: false,
+    }
+}
+
+/// Create a new PriceTier with price multiplier (for founder rewards)
+public fun new_price_tier_with_multiplier(
+    price_multiplier: u64, // e.g., 2_000_000_000 = 2.0x
+    is_above_threshold: bool,
+    recipients: vector<RecipientMint>,
+    description: String,
+): PriceTier {
+    PriceTier {
+        price_multiplier,
+        price_threshold: 0, // Will be calculated at execution
         is_above_threshold,
         recipients,
         description,
@@ -352,7 +375,7 @@ public fun new_tiered_mint<T>(
 ): TieredMintAction<T> {
     assert!(tiers.length() > 0 && tiers.length() <= MAX_TIERS, ETierOutOfBounds);
     assert!(latest_time > earliest_time, ETimeConditionNotMet);
-    
+
     // Validate each tier
     let mut i = 0;
     while (i < tiers.length()) {
@@ -361,7 +384,7 @@ public fun new_tiered_mint<T>(
         assert!(tier.recipients.length() <= MAX_RECIPIENTS_PER_TIER, ETierOutOfBounds);
         i = i + 1;
     };
-    
+
     TieredMintAction {
         tiers,
         earliest_execution_time: earliest_time,
@@ -408,6 +431,7 @@ public fun new_tiered_founder_rewards<T>(
         
         vector::push_back(&mut tiers, PriceTier {
             price_threshold: *price_thresholds.borrow(i),
+            price_multiplier: 0, // Absolute price threshold, not multiplier-based
             is_above_threshold: true,
             recipients: recipient_mints,
             executed: false,
@@ -501,8 +525,8 @@ public fun do_conditional_mint<AssetType, StableType, Outcome: store, IW: copy +
     
     // Check max supply constraint with overflow protection
     let current_supply = currency::coin_type_supply<FutarchyConfig, AssetType>(account);
-    // Use safe multiplication to prevent overflow
-    let max_mint = safe_mul_div_u64(current_supply, MAX_MINT_PERCENTAGE, 10000);
+    // Use safe math to prevent overflow
+    let max_mint = math::mul_div_to_64(current_supply, MAX_MINT_PERCENTAGE, 10000);
     let actual_mint = if (mint_amount > max_mint) {
         max_mint
     } else {
@@ -581,6 +605,7 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
         let description = string::utf8(desc_bytes);
         vector::push_back(&mut tiers, PriceTier {
             price_threshold,
+            price_multiplier: 0, // Absolute price threshold (legacy format)
             is_above_threshold,
             recipients,
             executed,
@@ -628,11 +653,45 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
         
         // Skip if already executed
         if (!tier.executed) {
-            // Check price threshold
-            let threshold_met = if (tier.is_above_threshold) {
-                current_price >= tier.price_threshold
+            // Get launchpad initial price from DAO config (set during launchpad raise)
+            let launchpad_price_opt = futarchy_config::get_launchpad_initial_price(
+                account::config(account)
+            );
+
+            // Calculate actual threshold based on multiplier or use absolute threshold
+            let actual_threshold = if (tier.price_multiplier > 0) {
+                // Multiplier-based tiers REQUIRE launchpad price
+                assert!(launchpad_price_opt.is_some(), ELaunchpadPriceRequired);
+
+                let launchpad_price = *launchpad_price_opt.borrow();
+                // Calculate threshold as: launchpad_price * multiplier / price_multiplier_scale
+                // Use safe math from futarchy_one_shot_utils
+                math::mul_div_mixed(
+                    launchpad_price,
+                    tier.price_multiplier,
+                    (constants::price_multiplier_scale() as u128)
+                )
             } else {
-                current_price <= tier.price_threshold
+                // Use absolute price threshold
+                tier.price_threshold
+            };
+
+            // CRITICAL: Check price threshold - use strict inequality to prevent minting AT starting price
+            // AND ensure current price is ALWAYS above launchpad price (never mint if price dropped below raise price)
+            let threshold_met = if (launchpad_price_opt.is_some()) {
+                let launchpad_price = *launchpad_price_opt.borrow();
+                if (tier.is_above_threshold) {
+                    current_price > actual_threshold && current_price > launchpad_price
+                } else {
+                    current_price < actual_threshold && current_price > launchpad_price
+                }
+            } else {
+                // No launchpad price (DAO not from launchpad), just check threshold
+                if (tier.is_above_threshold) {
+                    current_price > actual_threshold
+                } else {
+                    current_price < actual_threshold
+                }
             };
             
             if (threshold_met) {
@@ -645,8 +704,8 @@ public fun do_tiered_mint<AssetType, StableType, Outcome: store, IW: copy + drop
                     
                     // Check mint doesn't exceed max supply percentage per mint with overflow protection
                     let current_supply = currency::coin_type_supply<FutarchyConfig, AssetType>(account);
-                    // Use safe multiplication to prevent overflow
-                    let max_mint = safe_mul_div_u64(current_supply, MAX_MINT_PERCENTAGE, 10000);
+                    // Use safe math to prevent overflow
+                    let max_mint = math::mul_div_to_64(current_supply, MAX_MINT_PERCENTAGE, 10000);
                     let actual_mint = if (recipient.mint_amount > max_mint) {
                         max_mint
                     } else {
@@ -739,8 +798,8 @@ fun calculate_vested_amount<T>(
         return action.mint_amount
     };
 
-    // Calculate proportional vesting
-    let vested = safe_mul_div_u64(
+    // Calculate proportional vesting with safe math
+    let vested = math::mul_div_to_64(
         action.mint_amount,
         time_since_cliff,
         action.vesting_duration_ms
@@ -821,8 +880,8 @@ public fun exercise_option<AssetType, StableType, Outcome: store, IW: copy + dro
     let claimable = vested_available - action.vested_amount;
     assert!(claimable > 0, ENoVestedTokensAvailable);
 
-    // Calculate required payment
-    let required_payment = safe_mul_div_u64(claimable, action.strike_price, 1_000_000_000); // Assuming 9 decimals
+    // Calculate required payment with safe math
+    let required_payment = math::mul_div_to_64(claimable, action.strike_price, constants::price_multiplier_scale());
     assert!(coin::value(&payment) >= required_payment, EInsufficientPaymentForStrike);
 
     // Take exact payment amount
@@ -866,30 +925,7 @@ public fun exercise_option<AssetType, StableType, Outcome: store, IW: copy + dro
 }
 
 // === Helper Functions ===
-
-/// Safe multiplication with overflow protection
-fun safe_mul_u128(a: u128, b: u128): u128 {
-    let max_u128 = 340282366920938463463374607431768211455u128;
-    assert!(a == 0 || b <= max_u128 / a, EOverflow);
-    a * b
-}
-
-/// Safe division with zero check
-fun safe_div_u128(a: u128, b: u128): u128 {
-    assert!(b != 0, EDivisionByZero);
-    a / b
-}
-
-/// Safe multiplication then division for u64
-fun safe_mul_div_u64(a: u64, b: u64, c: u64): u64 {
-    let a_u128 = (a as u128);
-    let b_u128 = (b as u128);
-    let c_u128 = (c as u128);
-
-    let result = safe_div_u128(safe_mul_u128(a_u128, b_u128), c_u128);
-    assert!(result <= (std::u64::max_value!() as u128), EOverflow);
-    (result as u64)
-}
+// Note: Safe math functions removed - use futarchy_one_shot_utils::math instead
 
 // === Cleanup Functions ===
 

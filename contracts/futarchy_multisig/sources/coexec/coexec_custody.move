@@ -81,7 +81,7 @@ public fun execute_accept_with_council<FutarchyOutcome: store + drop + copy, R: 
     assert!(*res_key_ref == *res_key_council_ref, EResourceKeyMismatch);
     
     // Withdraw the object (must match the withdraw action witness used when building the intent)
-    let obj = owned::do_withdraw(&mut council_exec, council, receipt, intent_witness);
+    let obj = owned::do_withdraw_object(&mut council_exec, council, receipt, intent_witness);
     assert!(object::id(&obj) == obj_id_expected, EWithdrawnObjectIdMismatch);
     
     // Store under council custody using a standard key

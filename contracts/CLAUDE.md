@@ -1,5 +1,28 @@
 # Futarchy Contracts Deployment Guide
 
+## ⚠️ CRITICAL: NEVER DELETE MODULES WITHOUT EXPLICIT PERMISSION ⚠️
+
+**ABSOLUTELY DO NOT delete, remove, or comment out entire Move modules (.move files) without explicitly asking the user first.**
+
+This includes:
+- ❌ DO NOT delete entire .move files
+- ❌ DO NOT remove module declarations
+- ❌ DO NOT comment out entire modules
+- ❌ DO NOT suggest "deleting deprecated modules" without explicit approval
+
+**What you CAN do:**
+- ✅ Refactor functions within modules
+- ✅ Remove specific functions with user approval
+- ✅ Update function signatures
+- ✅ Add deprecation comments
+- ✅ Ask "Should I delete module X?" and wait for explicit "yes"
+
+**When you encounter deprecated/unused code:**
+1. Document it as deprecated in comments
+2. Ask the user: "Module X appears deprecated. Should I delete it or refactor it?"
+3. Wait for explicit instruction
+4. DO NOT assume deletion is okay
+
 ## Sui Security Model
 
 **Important Note**: Sui's execution model is atomic and does not have reentrancy risks like Ethereum. Race conditions are also unlikely due to Sui's object-centric model and transaction ordering guarantees. When you see defensive programming patterns in this codebase (like atomic check-and-delete patterns), they are primarily for code clarity and best practices rather than addressing actual race condition risks that would exist in other blockchain environments.
@@ -28,6 +51,43 @@ Key directories:
 - `/contracts/move-framework/packages/protocol/` - Core Account Protocol
 - `/contracts/move-framework/packages/actions/` - Account actions (vault, currency, etc.)
 - `/contracts/move-framework/packages/extensions/` - Protocol extensions
+
+## CRITICAL: BCS Serialization Architecture (DO NOT REMOVE!)
+
+**This fork uses BCS serialization for ALL actions - this is INTENTIONAL and REQUIRED.**
+
+### Why BCS Serialization is Necessary:
+
+1. **Pre-DAO Action Storage**: Actions must be staged BEFORE the DAO/Account exists
+   - Fundraising phase stores `InitActionSpecs` (TypeName + BCS bytes) in Raise
+   - Proposals store `ProposalIntentSpec` before execution
+   - Can't use live action structs - no Intent/Account exists yet!
+
+2. **Type-Safe Routing**: Uses `TypeName` for compile-time safety without live objects
+   ```move
+   ActionSpec {
+       action_type: type_name::with_defining_ids<CreateCouncilAction>(),
+       action_data: bcs::to_bytes(&action)  // ← Must serialize for storage
+   }
+   ```
+
+3. **Deferred Execution Pattern**:
+   ```
+   FUNDRAISING → Store ActionSpec (bytes) → DAO CREATION → Deserialize → Build Intent → Execute
+   ```
+
+### Implementation Details:
+
+- **Protocol layer**: `add_typed_action(action_type: TypeName, action_data: vector<u8>)`
+- **All 13+ action types**: Use serialize-then-destroy pattern
+- **Security**: `bcs_validation.move` prevents trailing data attacks
+- **Versioning**: ActionSpec has version field for migrations
+
+### DO NOT switch to "direct storage" approach:
+- ❌ Direct storage requires live Intent (can't store actions before DAO exists)
+- ❌ Would break futarchy factory init action staging
+- ❌ Would break proposal intent spec storage
+- ✅ BCS serialization enables pre-DAO action specifications
 
 ## CRITICAL: Hanson-Style Futarchy with Quantum Liquidity
 

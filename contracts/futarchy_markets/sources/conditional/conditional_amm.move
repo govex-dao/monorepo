@@ -1,7 +1,6 @@
 module futarchy_markets::conditional_amm;
 
 use futarchy_markets::market_state::MarketState;
-use futarchy_markets::conditional_token::ConditionalToken;
 use futarchy_one_shot_utils::math;
 use futarchy_markets::oracle::{Self, Oracle};
 use futarchy_markets::ring_buffer_oracle::{Self, RingBufferOracle};
@@ -118,7 +117,7 @@ public fun new_pool(
     assert!(initial_asset > 0 && initial_stable > 0, EZeroAmount);
     let k = math::mul_div_to_128(initial_asset, initial_stable, 1);
     assert!(k >= MINIMUM_LIQUIDITY, ELowLiquidity);
-    assert!(fee_percent < FEE_SCALE, EInvalidFeeRate); // Fee cannot be 100% or more
+    assert!(fee_percent <= constants::max_amm_fee_bps(), EInvalidFeeRate);
 
     let twap_initialization_price = twap_initial_observation;
     let initial_price = math::mul_div_to_128(initial_stable, constants::basis_points(), initial_asset);

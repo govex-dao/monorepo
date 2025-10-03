@@ -112,9 +112,12 @@ module account_extensions::framework_action_types {
     public struct ConfigManageWhitelist has drop {}
     
     // ======== Owned Actions ========
-    
-    /// Withdraw owned object
-    public struct OwnedWithdraw has drop {}
+
+    /// Withdraw owned object by ID
+    public struct OwnedWithdrawObject has drop {}
+
+    /// Withdraw owned coin by type and amount
+    public struct OwnedWithdrawCoin has drop {}
     
     // ======== Minimal Constructors for Cross-Module Usage ========
     // These are required because Sui Move doesn't allow instantiating
@@ -143,5 +146,6 @@ module account_extensions::framework_action_types {
     public fun config_update_metadata(): ConfigUpdateMetadata { ConfigUpdateMetadata {} }
     public fun config_update_deposits(): ConfigUpdateDeposits { ConfigUpdateDeposits {} }
     public fun config_manage_whitelist(): ConfigManageWhitelist { ConfigManageWhitelist {} }
-    public fun owned_withdraw(): OwnedWithdraw { OwnedWithdraw {} }
+    public fun owned_withdraw_object(): OwnedWithdrawObject { OwnedWithdrawObject {} }
+    public fun owned_withdraw_coin(): OwnedWithdrawCoin { OwnedWithdrawCoin {} }
 }

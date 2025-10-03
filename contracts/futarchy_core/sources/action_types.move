@@ -58,6 +58,7 @@ public struct MetadataTableUpdate has drop {}
 public struct SlashDistributionUpdate has drop {}
 public struct QueueParamsUpdate has drop {}
 public struct StorageConfigUpdate has drop {}
+public struct SetQuotas has drop {}
 
 // === Liquidity Action Types ===
 
@@ -278,6 +279,14 @@ public fun execute_founder_lock(): ExecuteFounderLock {
     ExecuteFounderLock { phantom: false }
 }
 
+// === Commitment Proposal Action Types ===
+
+public struct CreateCommitmentProposal has drop {}
+public struct ExecuteCommitment has drop {}
+public struct CancelCommitment has drop {}
+public struct UpdateCommitmentRecipient has drop {}
+public struct WithdrawCommitment has drop {}
+
 // === Package Upgrade Action Types ===
 
 public struct PackageUpgrade has drop {}
@@ -455,3 +464,13 @@ public fun read_oracle_price(): TypeName { type_name::with_defining_ids<ReadOrac
 // Walrus renewal actions
 public fun set_walrus_renewal(): TypeName { type_name::with_defining_ids<SetWalrusRenewal>() }
 public fun walrus_renewal(): TypeName { type_name::with_defining_ids<WalrusRenewal>() }
+
+// Quota actions
+public fun set_quotas(): TypeName { type_name::with_defining_ids<SetQuotas>() }
+
+// Commitment proposal actions
+public fun create_commitment_proposal(): TypeName { type_name::with_defining_ids<CreateCommitmentProposal>() }
+public fun execute_commitment(): TypeName { type_name::with_defining_ids<ExecuteCommitment>() }
+public fun cancel_commitment(): TypeName { type_name::with_defining_ids<CancelCommitment>() }
+public fun update_commitment_recipient(): TypeName { type_name::with_defining_ids<UpdateCommitmentRecipient>() }
+public fun withdraw_commitment(): TypeName { type_name::with_defining_ids<WithdrawCommitment>() }

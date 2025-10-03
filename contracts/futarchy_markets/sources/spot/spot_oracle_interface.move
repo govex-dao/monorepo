@@ -191,28 +191,3 @@ public fun is_twap_available<AssetType, StableType>(
         ring_buffer_oracle::has_sufficient_history(spot_pool.get_ring_buffer_oracle(), seconds, clock)
     }
 }
-
-// ============================================================================
-// Integration Examples for Lending Protocols
-// ============================================================================
-
-/// Example: How a lending protocol would use this
-/// 
-/// ```move
-/// // In lending protocol
-/// let price = spot_oracle_interface::get_lending_twap(
-///     &spot_pool,
-///     &conditional_pools,
-///     clock
-/// );
-/// 
-/// // Use price for collateral valuation, liquidations, etc.
-/// ```
-/// 
-/// The lending protocol doesn't need to know about:
-/// - Futarchy proposals
-/// - Conditional AMMs
-/// - Quantum liquidity
-/// - Lock states
-/// 
-/// It just gets a continuous price feed that never stops.

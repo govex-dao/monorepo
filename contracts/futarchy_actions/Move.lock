@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "899D02D3755845210AAE74BE7C4983F799069516579F7770C575A399FE1CF5D8"
-deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
+manifest_digest = "0CFAAB22E68618CFB812C88E052E4A77B63B4AF78FCFC33B0768883CEAB50A9D"
+deps_digest = "728267E8256D0E29B69A46E3C10EDFC9D0C5CC809D31E9018A81E44F5ED42912"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -11,6 +11,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "WAL", name = "WAL" },
   { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
@@ -30,7 +31,6 @@ source = { local = "../move-framework/packages/actions" }
 dependencies = [
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
-  { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -70,14 +70,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "Kiosk"
-source = { local = "../move-framework/deps/kiosk" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
 id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "2cde80b5766b0bc2073908e10f6e3c81c93fd691", subdir = "crates/sui-framework/packages/move-stdlib" }
 
@@ -100,7 +92,7 @@ dependencies = [
 
 [[move.package]]
 id = "WAL"
-source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/wal" }
+source = { local = "../walrus_wal" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -108,7 +100,7 @@ dependencies = [
 
 [[move.package]]
 id = "Walrus"
-source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/walrus" }
+source = { local = "../walrus_walrus" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
@@ -183,6 +175,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "WAL", name = "WAL" },
   { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
@@ -329,7 +322,7 @@ flavor = "sui"
 [env]
 
 [env.devnet]
-chain-id = "a5e2ba5d"
-original-published-id = "0x63525a5300d126417423741a1cd2aa061a0ddcc96d09b8f22d13f6b1d0a593b2"
-latest-published-id = "0x63525a5300d126417423741a1cd2aa061a0ddcc96d09b8f22d13f6b1d0a593b2"
+chain-id = "bc718b80"
+original-published-id = "0x9b92d588456a3e9344734621f4008097db3331ed9fe64f495190c5b336db05d9"
+latest-published-id = "0x9b92d588456a3e9344734621f4008097db3331ed9fe64f495190c5b336db05d9"
 published-version = "1"

@@ -129,7 +129,7 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     assert!(*pkg_name_expected == pkg_name_from_accept, EPackageNameMismatch);
     
     // Withdraw the cap from the receipt and lock it into the council
-    let cap = owned::do_withdraw(
+    let cap = owned::do_withdraw_object(
         &mut futarchy_exec,
         dao,
         cap_receipt,

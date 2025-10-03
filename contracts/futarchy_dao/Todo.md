@@ -22,28 +22,26 @@ also befroe mergin get ai to review patern used in new changee to move framework
     should make time delay configurable per policy!
     futarchy being able to instantly change policy is dangerous
     allow for proposal to cancel policy change
-- [ ]  instead of my conditinoal tokens could have existing registry of empty coins and allow proposal 
+- [X]  instead of my conditinoal tokens could have existing registry of empty coins and allow proposal 
 creators to pay to take some from there and I can keep it stocked up so only takes one transaction
 store coin meta data cap and trasury cap and assert no supply and name is short and entirely numerical and 
 no metadata and then rename and go on my way??? 
-- [ ] look at mf changes from my fork
+- [X] look at mf changes from my fork
 
 
 # V2 economic incenitves etc
-- [ ] commitment actions Cancel able and uncancel able flag
+ - [X] get doc fiels reg to proffesional standard
+- [X] commitment actions Cancel able and uncancel able flag
 Mint options for employees (right to buy x amount at a given price!!!)
-- [ ] remove founder rewards module from launchapd it should now be a preapproved intent spec??
-- [ ] Make launchpad have small fee for creating dao non refundable 
-- [ ] fix incentives around proposal mutation. if mutators outcomes wins, proposers must still get refunded if they only create two options. other wise incentive for mutators to just sligtly position themselves around the  proposal creators, settigs: (i.e changing a few words or characters in a memo proposal or chaning a number by a small amount and hedging by going either side of the origional) in order to steal the proposal creators fee. or for proposer to create proposals with n_max option to block anyone from mutating their proposal 
-- [ ] List or address and how often they can create a proposal with no fee!!! Admin thingy
-- [ ] DAO successful speedy proposal challenge, refund amount as futarchy config
+- [x] remove founder rewards module from launchapd it should now be a preapproved intent spec??
+- [X] Make launchpad have small fee 
+- [X] fix incentives around proposal mutation. if mutators outcomes wins, proposers must still get refunded if they only create two options. other wise incentive for mutators to just sligtly position themselves around the  proposal creators, settigs: (i.e changing a few words or characters in a memo proposal or chaning a number by a small amount and hedging by going either side of the origional) in order to steal the proposal creators fee. or for proposer to create proposals with n_max option to block anyone from mutating their proposal.
+- [X] List or address and how often they can create a proposal with no fee!!! Admin thingy
+- [X] DAO successful speedy proposal challenge, refund amount as futarchy config
 - [X] verification request proposal type???
-- [ ] check new account tech message about new locking implmentation and all their other changes
-- [ ]  dont charge dao fee for frist X proposal / multsig votes
-- [ ] make sure conditional token holder can set their liqudiity to with draw only and dont auto put it in the next proposal
-- [ ] make oracle cusotmizable for vesting contracts?
-- [ ] Allow dao to ave seperate consitional amm fee and slot amm fee
-- [ ] Make protocol take 20% of prioirty quue fees
+- [X] make sure conditional token holder can set their liqudiity to with draw only and dont auto put it in the next proposal
+- [X] Allow dao to ave seperate consitional amm fee and spot amm fee
+- [X] Make protocol take 20% of prioirty quue fees
 
 
 # V2 multisig
@@ -53,7 +51,6 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [ ] Multi sig inherit dao level configs like is paused
 - [ ] Multisig must check that dead man switch is the daos futacrhy or another multisig with same dao id
 - [ ] Can create futarchy first dao defaults to futarchy only policy or multisig first dao Or    Both.   Or either poliicy 
-- [ ] seperate out just multsig???? as have leading multisig implementation???
 - [ ] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
 - [ ] fully seperate dao and account and futarchy configs
 - [ ] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
@@ -62,6 +59,8 @@ do I need a dead man switch can my multisigs actually hold objects?
 I am not sure they should hmmm
 or should have a type that doesnt and type that does?
 !!!!! maybe I want both types of multisigs
+
+
 
 # Clean up
   2. Stream/Payment Actions - Overlapping Cancel/Pause ⚠️
@@ -278,6 +277,8 @@ like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
 # Consider for V3
+- [ ] seperate out just multsig???? as have leading multisig implementation???
+- [ ] dont charge dao fee for frist X proposal / multsig votes
 - [ ] Should operating agreements or another object e.g registry be able to make policy rules regarding actions types e.g. preventing them or setting what authority they need
 - [ ] Draft State: Squads allows proposals to be created as a Draft. This is crucial for complex batches, allowing the proposer to add, remove, and review transactions before officially opening the proposal to a vote. Your Intent is effectively "active" as soon as it's created.
 - [ ] Employee as onchain resource???

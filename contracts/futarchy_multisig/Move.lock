@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "7DCC942AF437DFED10AF24DC41F6EA91AF2A89FCAA14B61BF826A28597AD845F"
+manifest_digest = "337A580785E6F89930EE8F8D32CF6629AEB44E64A060E755213D8371DFB9B127"
 deps_digest = "CB99E3BEE139471F3765AE330F855F3B376156AA54F37DEDE11BBE5BB0D3BB74"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -24,7 +24,6 @@ source = { local = "../move-framework/packages/actions" }
 dependencies = [
   { id = "AccountProtocol", name = "AccountProtocol" },
   { id = "Bridge", name = "Bridge" },
-  { id = "Kiosk", name = "Kiosk" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -61,14 +60,6 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
-id = "Kiosk"
-source = { local = "../move-framework/deps/kiosk" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]
@@ -165,7 +156,7 @@ flavor = "sui"
 [env]
 
 [env.devnet]
-chain-id = "a5e2ba5d"
-original-published-id = "0x06621b784126aecf37d4c8136bd52c916373d5cf3520e7968e897f4acf43b41a"
-latest-published-id = "0x06621b784126aecf37d4c8136bd52c916373d5cf3520e7968e897f4acf43b41a"
+chain-id = "bc718b80"
+original-published-id = "0xaf50964aa3d534640f7ce32c180955c883a657fb6875d4b41687b280b8d52704"
+latest-published-id = "0xaf50964aa3d534640f7ce32c180955c883a657fb6875d4b41687b280b8d52704"
 published-version = "1"

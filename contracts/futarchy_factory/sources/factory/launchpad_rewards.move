@@ -10,6 +10,7 @@ use sui::tx_context::TxContext;
 use futarchy_oracle::{
     oracle_actions::{Self, TieredMintAction, PriceTier, RecipientMint},
 };
+use futarchy_one_shot_utils::constants;
 
 // === Errors ===
 const EInvalidFounderAllocation: u64 = 1;
@@ -36,7 +37,8 @@ public fun setup_founder_rewards<AssetType>(
     assert!(min_price_ratio > 0, EInvalidPriceRatio);
     assert!(max_price_ratio >= min_price_ratio, EInvalidPriceRatio);
     // Additional check to prevent arithmetic overflow in price calculations
-    assert!(max_price_ratio <= 1_000_000_000_000, EInvalidPriceRatio); // Max 1000x
+    // Max 1000x multiplier
+    assert!(max_price_ratio <= (constants::price_multiplier_scale() * 1000), EInvalidPriceRatio);
     
     let total_supply = treasury_cap.total_supply();
     let founder_allocation = (total_supply * founder_allocation_bps) / 10000;
@@ -67,53 +69,48 @@ fun setup_tiered_founder_rewards<AssetType>(
 ): TieredMintAction<AssetType> {
     // Create either multiple tiers (linear) or single tier (cliff)
     let num_tiers = if (linear_vesting) { 5u64 } else { 1u64 };
-    let mut price_thresholds = vector::empty<u128>();
+    let mut price_multipliers = vector::empty<u64>();
     let mut recipients_per_tier = vector::empty<vector<address>>();
     let mut amounts_per_tier = vector::empty<vector<u64>>();
     let mut descriptions = vector::empty<String>();
-    let mut is_above_thresholds = vector::empty<bool>();
-    
-    // Calculate price step, handling single tier case to avoid division by zero
-    let price_step = if (num_tiers > 1) {
+
+    // Calculate price multiplier step, handling single tier case
+    let multiplier_step = if (num_tiers > 1) {
         // Safe subtraction since we already validated max >= min
-        let price_range = max_price_ratio - min_price_ratio;
-        price_range / (num_tiers - 1)
+        let multiplier_range = max_price_ratio - min_price_ratio;
+        multiplier_range / (num_tiers - 1)
     } else {
         0 // Single tier uses min_price_ratio only
     };
     let amount_per_tier = total_allocation / num_tiers;
-    
+
     let mut i = 0;
     while (i < num_tiers) {
-        // Calculate price threshold for this tier
-        let price_ratio = min_price_ratio + (price_step * i);
-        // Convert from 1e9 to 1e12 scale for oracle
-        let threshold = (price_ratio as u128) * 1000;
-        price_thresholds.push_back(threshold);
-        
+        // Calculate price multiplier for this tier (scaled by price_multiplier_scale)
+        // e.g., 2 * price_multiplier_scale = 2.0x, 5 * price_multiplier_scale = 5.0x
+        let multiplier = min_price_ratio + (multiplier_step * i);
+        price_multipliers.push_back(multiplier);
+
         // Single recipient per tier
         let mut recipients = vector::empty<address>();
         recipients.push_back(founder_address);
         recipients_per_tier.push_back(recipients);
-        
+
         // Equal amount per tier
         let mut amounts = vector::empty<u64>();
         amounts.push_back(amount_per_tier);
         amounts_per_tier.push_back(amounts);
-        
-        // Description
+
+        // Description with actual multiplier value
         let tier_name = if (i == 0) {
             string::utf8(b"Initial milestone")
         } else if (i == num_tiers - 1) {
-            string::utf8(b"Final milestone")  
+            string::utf8(b"Final milestone")
         } else {
             string::utf8(b"Progress milestone")
         };
         descriptions.push_back(tier_name);
-        
-        // All tiers are "above" thresholds
-        is_above_thresholds.push_back(true);
-        
+
         i = i + 1;
     };
     
@@ -121,14 +118,14 @@ fun setup_tiered_founder_rewards<AssetType>(
     let earliest_time = current_time + unlock_delay_ms;
     let latest_time = earliest_time + (5 * 365 * 24 * 60 * 60 * 1000); // 5 years
     
-    // Build PriceTier objects
+    // Build PriceTier objects with multipliers
     let mut tiers = vector::empty<PriceTier>();
     let mut i = 0;
-    while (i < vector::length(&price_thresholds)) {
+    while (i < vector::length(&price_multipliers)) {
         let mut recipients = vector::empty<RecipientMint>();
         let tier_recipients = vector::borrow(&recipients_per_tier, i);
         let tier_amounts = vector::borrow(&amounts_per_tier, i);
-        
+
         let mut j = 0;
         while (j < vector::length(tier_recipients)) {
             vector::push_back(&mut recipients, oracle_actions::new_recipient_mint(
@@ -137,16 +134,21 @@ fun setup_tiered_founder_rewards<AssetType>(
             ));
             j = j + 1;
         };
-        
-        vector::push_back(&mut tiers, oracle_actions::new_price_tier(
-            *vector::borrow(&price_thresholds, i),
-            *vector::borrow(&is_above_thresholds, i),
+
+        // Use new_price_tier_with_multiplier for relative pricing
+        vector::push_back(&mut tiers, oracle_actions::new_price_tier_with_multiplier(
+            *vector::borrow(&price_multipliers, i),
+            true, // is_above_threshold
             recipients,
             *vector::borrow(&descriptions, i)
         ));
         i = i + 1;
     };
-    
+
+    // Note: initial_price will be read from SpotAMM at execution time
+    // It's set when the DAO's first liquidity is added: tokens_for_sale / final_raise_amount
+    // This ensures founder rewards are always based on the actual raise outcome
+
     // Create the tiered mint action
     let tiered_action = oracle_actions::new_tiered_mint<AssetType>(
         tiers,
