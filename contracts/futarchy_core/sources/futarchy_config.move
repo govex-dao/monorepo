@@ -180,6 +180,10 @@ public fun dao_config(config: &FutarchyConfig): &DaoConfig {
     &config.config
 }
 
+public fun dao_config_mut(config: &mut FutarchyConfig): &mut DaoConfig {
+    &mut config.config
+}
+
 public fun slash_distribution(config: &FutarchyConfig): &SlashDistribution {
     &config.slash_distribution
 }

@@ -5,28 +5,29 @@ module futarchy_legal_actions::dao_file_actions;
 // === Imports ===
 use std::{
     string::String,
-    option::{Self, Option},
+    option::{Self, Option}
 };
 use sui::{
     object::{Self, ID},
     clock::Clock,
     tx_context::TxContext,
-    bcs::{Self, BCS},
+    bcs::{Self, BCS}
 };
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
     intents::{Self as protocol_intents, Intent, Expired},
     version_witness::VersionWitness,
-    bcs_validation,
+    bcs_validation
 };
 use futarchy_core::{
-    futarchy_config::FutarchyConfig,
+    futarchy_config::{Self, FutarchyConfig},
     version,
     action_types,
+    dao_config
 };
 use futarchy_legal_actions::{
-    dao_file_registry::{Self, DaoFileRegistry, File, RegistryKey},
+    dao_file_registry::{Self, DaoFileRegistry, File, RegistryKey}
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use walrus::blob::{Self, Blob};
@@ -40,6 +41,17 @@ const EUnsupportedActionVersion: u64 = 5;
 const EEmptyDocName: u64 = 6;
 const EInvalidChunkIndex: u64 = 7;
 const EUnauthorizedDocument: u64 = 8;
+const EWalrusBlobsNotAllowed: u64 = 9;
+
+// === Helper Functions ===
+
+/// Check if Walrus blobs are allowed for this DAO
+fun assert_walrus_blobs_allowed(account: &Account<FutarchyConfig>) {
+    let config = account::config<FutarchyConfig>(account);
+    let dao_cfg = futarchy_config::dao_config(config);
+    let storage_cfg = dao_config::storage_config(dao_cfg);
+    assert!(dao_config::allow_walrus_blobs(storage_cfg), EWalrusBlobsNotAllowed);
+}
 
 // === Witness Types ===
 
@@ -63,58 +75,53 @@ public struct SetRegistryImmutableWitness has drop {}
 
 /// Data for AddChunk hot potato - needs Walrus Blob from caller
 public struct AddChunkRequest has store, drop {
-    doc_id: ID,
-    difficulty: u64,
+    doc_id: ID
 }
 
 /// Data for AddSunsetChunk hot potato
 public struct AddSunsetChunkRequest has store, drop {
     doc_id: ID,
-    difficulty: u64,
     expires_at_ms: u64,
-    immutable: bool,
+    immutable: bool
 }
 
 /// Data for AddSunriseChunk hot potato
 public struct AddSunriseChunkRequest has store, drop {
     doc_id: ID,
-    difficulty: u64,
     effective_from_ms: u64,
-    immutable: bool,
+    immutable: bool
 }
 
 /// Data for AddTemporaryChunk hot potato
 public struct AddTemporaryChunkRequest has store, drop {
     doc_id: ID,
-    difficulty: u64,
     effective_from_ms: u64,
     expires_at_ms: u64,
-    immutable: bool,
+    immutable: bool
 }
 
 /// Data for AddChunkWithScheduledImmutability hot potato
 public struct AddChunkWithScheduledImmutabilityRequest has store, drop {
     doc_id: ID,
-    difficulty: u64,
-    immutable_from_ms: u64,
+    immutable_from_ms: u64
 }
 
 /// Data for CreateDocumentVersion hot potato
 public struct CreateDocumentVersionRequest has store, drop {
     previous_doc_id: ID,
-    new_name: String,
+    new_name: String
 }
 
 /// Data for UpdateChunk hot potato - stores what chunk to update
 public struct UpdateChunkRequest has store, drop {
     doc_id: ID,
-    chunk_id: ID,
+    chunk_id: ID
 }
 
 /// Data for RemoveChunk hot potato - stores what chunk to remove
 public struct RemoveChunkRequest has store, drop {
     doc_id: ID,
-    chunk_id: ID,
+    chunk_id: ID
 }
 
 public struct SetDocumentInsertAllowedWitness has drop {}
@@ -134,7 +141,7 @@ public fun do_create_registry<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::create_dao_doc_registry();
+    let expected_type = action_types::create_dao_file_registry();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -196,7 +203,7 @@ public fun do_create_root_document<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::create_root_document();
+    let expected_type = action_types::create_root_file();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -227,7 +234,7 @@ public fun do_create_child_document<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::create_child_document();
+    let expected_type = action_types::create_child_file();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -259,7 +266,7 @@ public fun do_delete_document<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::delete_document();
+    let expected_type = action_types::delete_file();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -282,7 +289,7 @@ public fun do_delete_document<Outcome: store, IW: drop>(
 /// Add permanent chunk - returns ResourceRequest for Walrus Blob
 public fun do_add_chunk<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
     _clock: &Clock,
@@ -300,14 +307,15 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let difficulty = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
 
     executable::increment_action_idx(executable);
 
     // Return hot potato - caller must provide Walrus Blob
-    resource_requests::new_resource_request(
-        AddChunkRequest { doc_id, difficulty },
+    resource_requests::new_resource_request( AddChunkRequest { doc_id },
         ctx
     )
 }
@@ -323,7 +331,7 @@ public fun fulfill_add_chunk(
     let data = resource_requests::extract_action(request);
     assert!(object::id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_chunk(doc, walrus_blob, data.difficulty, clock, ctx);
+    dao_file_registry::add_chunk(doc, walrus_blob, clock, ctx);
 
     resource_requests::create_receipt(data)
 }
@@ -331,7 +339,7 @@ public fun fulfill_add_chunk(
 /// Add sunset chunk - returns ResourceRequest for Walrus Blob
 public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
     _clock: &Clock,
@@ -349,15 +357,17 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let difficulty = bcs::peel_u64(&mut reader);
     let expires_at_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
+
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunsetChunkRequest { doc_id, difficulty, expires_at_ms, immutable },
+        AddSunsetChunkRequest { doc_id, expires_at_ms, immutable },
         ctx
     )
 }
@@ -373,7 +383,7 @@ public fun fulfill_add_sunset_chunk(
     let data = resource_requests::extract_action(request);
     assert!(object::id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_sunset_chunk(doc, walrus_blob, data.difficulty, data.expires_at_ms, data.immutable, clock, ctx);
+    dao_file_registry::add_sunset_chunk(doc, walrus_blob, data.expires_at_ms, data.immutable, clock, ctx);
 
     resource_requests::create_receipt(data)
 }
@@ -381,7 +391,7 @@ public fun fulfill_add_sunset_chunk(
 /// Add sunrise chunk - returns ResourceRequest for Walrus Blob
 public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
     _clock: &Clock,
@@ -399,15 +409,17 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let difficulty = bcs::peel_u64(&mut reader);
     let effective_from_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
+
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunriseChunkRequest { doc_id, difficulty, effective_from_ms, immutable },
+        AddSunriseChunkRequest { doc_id, effective_from_ms, immutable },
         ctx
     )
 }
@@ -423,7 +435,7 @@ public fun fulfill_add_sunrise_chunk(
     let data = resource_requests::extract_action(request);
     assert!(object::id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_sunrise_chunk(doc, walrus_blob, data.difficulty, data.effective_from_ms, data.immutable, clock, ctx);
+    dao_file_registry::add_sunrise_chunk(doc, walrus_blob, data.effective_from_ms, data.immutable, clock, ctx);
 
     resource_requests::create_receipt(data)
 }
@@ -431,7 +443,7 @@ public fun fulfill_add_sunrise_chunk(
 /// Add temporary chunk - returns ResourceRequest for Walrus Blob
 public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
     _clock: &Clock,
@@ -449,16 +461,18 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let difficulty = bcs::peel_u64(&mut reader);
     let effective_from_ms = bcs::peel_u64(&mut reader);
     let expires_at_ms = bcs::peel_u64(&mut reader);
     let immutable = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
+
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddTemporaryChunkRequest { doc_id, difficulty, effective_from_ms, expires_at_ms, immutable },
+        AddTemporaryChunkRequest { doc_id, effective_from_ms, expires_at_ms, immutable },
         ctx
     )
 }
@@ -474,7 +488,7 @@ public fun fulfill_add_temporary_chunk(
     let data = resource_requests::extract_action(request);
     assert!(object::id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_temporary_chunk(doc, walrus_blob, data.difficulty, data.effective_from_ms, data.expires_at_ms, data.immutable, clock, ctx);
+    dao_file_registry::add_temporary_chunk(doc, walrus_blob, data.effective_from_ms, data.expires_at_ms, data.immutable, clock, ctx);
 
     resource_requests::create_receipt(data)
 }
@@ -482,7 +496,7 @@ public fun fulfill_add_temporary_chunk(
 /// Add chunk with scheduled immutability - returns ResourceRequest for Walrus Blob
 public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version_witness: VersionWitness,
     _witness: IW,
     _clock: &Clock,
@@ -500,14 +514,16 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
 
     let mut reader = bcs::new(*action_data);
     let doc_id = object::id_from_address(bcs::peel_address(&mut reader));
-    let difficulty = bcs::peel_u64(&mut reader);
     let immutable_from_ms = bcs::peel_u64(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
 
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddChunkWithScheduledImmutabilityRequest { doc_id, difficulty, immutable_from_ms },
+        AddChunkWithScheduledImmutabilityRequest { doc_id, immutable_from_ms },
         ctx
     )
 }
@@ -523,7 +539,7 @@ public fun fulfill_add_chunk_with_scheduled_immutability(
     let data = resource_requests::extract_action(request);
     assert!(object::id(doc) == data.doc_id, EInvalidDocId);
 
-    dao_file_registry::add_chunk_with_scheduled_immutability(doc, walrus_blob, data.difficulty, data.immutable_from_ms, clock, ctx);
+    dao_file_registry::add_chunk_with_scheduled_immutability(doc, walrus_blob, data.immutable_from_ms, clock, ctx);
 
     resource_requests::create_receipt(data)
 }
@@ -540,7 +556,7 @@ public fun do_create_document_version<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::create_document_version();
+    let expected_type = action_types::create_file_version();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -604,12 +620,15 @@ public fun do_update_chunk<Outcome: store, IW: drop>(
     let chunk_id = object::id_from_address(bcs::peel_address(&mut reader));
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Check if Walrus blobs are allowed
+    assert_walrus_blobs_allowed(account);
+
     executable::increment_action_idx(executable);
 
     // Create hot potato with request data
     let request_data = UpdateChunkRequest {
         doc_id,
-        chunk_id,
+        chunk_id
     };
 
     resource_requests::new_resource_request(request_data, ctx)
@@ -675,7 +694,7 @@ public fun do_remove_chunk<Outcome: store, IW: drop>(
     // Create hot potato with request data
     let request_data = RemoveChunkRequest {
         doc_id,
-        chunk_id,
+        chunk_id
     };
 
     resource_requests::new_resource_request(request_data, ctx)
@@ -756,7 +775,7 @@ public fun do_set_document_immutable<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::set_document_immutable();
+    let expected_type = action_types::set_file_immutable();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -787,7 +806,7 @@ public fun do_set_document_insert_allowed<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::set_document_insert_allowed();
+    let expected_type = action_types::set_file_insert_allowed();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -819,7 +838,7 @@ public fun do_set_document_remove_allowed<Outcome: store, IW: drop>(
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
 
-    let expected_type = action_types::set_document_remove_allowed();
+    let expected_type = action_types::set_file_remove_allowed();
     assert!(protocol_intents::action_spec_type(spec) == expected_type, EInvalidActionType);
 
     let action_data = protocol_intents::action_spec_data(spec);
@@ -915,7 +934,6 @@ public fun new_add_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
     walrus_blob_id: vector<u8>,
-    difficulty: u64,
     intent_witness: IW,
 ) {
     assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
@@ -923,7 +941,6 @@ public fun new_add_chunk<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
     data.append(bcs::to_bytes(&walrus_blob_id));
-    data.append(bcs::to_bytes(&difficulty));
 
     protocol_intents::add_action_spec(
         intent,
@@ -938,7 +955,6 @@ public fun new_add_sunset_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
     walrus_blob_id: vector<u8>,
-    difficulty: u64,
     expires_at_ms: u64,
     immutable: bool,
     intent_witness: IW,
@@ -948,7 +964,6 @@ public fun new_add_sunset_chunk<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
     data.append(bcs::to_bytes(&walrus_blob_id));
-    data.append(bcs::to_bytes(&difficulty));
     data.append(bcs::to_bytes(&expires_at_ms));
     data.append(bcs::to_bytes(&immutable));
 
@@ -965,7 +980,6 @@ public fun new_add_sunrise_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
     walrus_blob_id: vector<u8>,
-    difficulty: u64,
     effective_from_ms: u64,
     immutable: bool,
     intent_witness: IW,
@@ -975,7 +989,6 @@ public fun new_add_sunrise_chunk<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
     data.append(bcs::to_bytes(&walrus_blob_id));
-    data.append(bcs::to_bytes(&difficulty));
     data.append(bcs::to_bytes(&effective_from_ms));
     data.append(bcs::to_bytes(&immutable));
 
@@ -992,7 +1005,6 @@ public fun new_add_temporary_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
     walrus_blob_id: vector<u8>,
-    difficulty: u64,
     effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool,
@@ -1003,7 +1015,6 @@ public fun new_add_temporary_chunk<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
     data.append(bcs::to_bytes(&walrus_blob_id));
-    data.append(bcs::to_bytes(&difficulty));
     data.append(bcs::to_bytes(&effective_from_ms));
     data.append(bcs::to_bytes(&expires_at_ms));
     data.append(bcs::to_bytes(&immutable));
@@ -1021,7 +1032,6 @@ public fun new_add_chunk_with_scheduled_immutability<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
     walrus_blob_id: vector<u8>,
-    difficulty: u64,
     immutable_from_ms: u64,
     intent_witness: IW,
 ) {
@@ -1030,7 +1040,6 @@ public fun new_add_chunk_with_scheduled_immutability<Outcome, IW: drop>(
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
     data.append(bcs::to_bytes(&walrus_blob_id));
-    data.append(bcs::to_bytes(&difficulty));
     data.append(bcs::to_bytes(&immutable_from_ms));
 
     protocol_intents::add_action_spec(

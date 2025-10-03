@@ -3,8 +3,8 @@ module futarchy_multisig::policy_decoder;
 
 // === Imports ===
 
-use std::{string::String, type_name::{Self, TypeName}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
+use std::{string::String, type_name::{Self, TypeName}, option::{Self, Option}};
+use sui::{object::{Self, UID}, dynamic_object_field, bcs, tx_context::TxContext};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_multisig::policy_actions::{
@@ -14,6 +14,23 @@ use futarchy_multisig::policy_actions::{
     RemoveTypePolicyAction,
     RemoveObjectPolicyAction,
 };
+
+// === Helper Functions ===
+
+/// Convert mode constant to human-readable string
+fun mode_to_string(mode: u8): vector<u8> {
+    if (mode == 0) {
+        b"DaoOnly"
+    } else if (mode == 1) {
+        b"CouncilOnly"
+    } else if (mode == 2) {
+        b"DaoOrCouncil"
+    } else if (mode == 3) {
+        b"DaoAndCouncil"
+    } else {
+        b"Unknown"
+    }
+}
 
 // === Decoder Objects ===
 
@@ -51,40 +68,71 @@ public fun decode_set_type_policy_action(
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
 
-    // TypeName is a struct with a name field (ASCII string)
+    // TypeName was serialized as string bytes
     let type_name_bytes = bcs::peel_vec_u8(&mut bcs_data);
-    let approval_type = bcs::peel_u8(&mut bcs_data);
-    let council_index = bcs::peel_u64(&mut bcs_data);
+
+    // Execution Option<ID>
+    let execution_council_id = if (bcs::peel_bool(&mut bcs_data)) {
+        option::some(bcs::peel_address(&mut bcs_data))
+    } else {
+        option::none()
+    };
+    let execution_mode = bcs::peel_u8(&mut bcs_data);
+
+    // Change Option<ID>
+    let change_council_id = if (bcs::peel_bool(&mut bcs_data)) {
+        option::some(bcs::peel_address(&mut bcs_data))
+    } else {
+        option::none()
+    };
+    let change_mode = bcs::peel_u8(&mut bcs_data);
+    let change_delay_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
-    let approval_type_str = if (approval_type == 0) {
-        b"DaoOnly"
-    } else if (approval_type == 1) {
-        b"CouncilOnly"
-    } else if (approval_type == 2) {
-        b"DaoOrCouncil"
-    } else {
-        b"DaoAndCouncil"
-    };
+    let execution_mode_str = mode_to_string(execution_mode);
+    let change_mode_str = mode_to_string(change_mode);
 
-    vector[
+    let mut fields = vector[
         schema::new_field(
             b"type_name".to_string(),
             type_name_bytes.to_string(),
             b"TypeName".to_string(),
         ),
         schema::new_field(
-            b"approval_type".to_string(),
-            approval_type_str.to_string(),
+            b"execution_mode".to_string(),
+            execution_mode_str.to_string(),
             b"String".to_string(),
         ),
         schema::new_field(
-            b"council_index".to_string(),
-            council_index.to_string(),
+            b"change_mode".to_string(),
+            change_mode_str.to_string(),
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"change_delay_ms".to_string(),
+            change_delay_ms.to_string(),
             b"u64".to_string(),
         ),
-    ]
+    ];
+
+    if (execution_council_id.is_some()) {
+        fields.push_back(schema::new_field(
+            b"execution_council_id".to_string(),
+            (*execution_council_id.borrow()).to_string(),
+            b"ID".to_string(),
+        ));
+    };
+
+    if (change_council_id.is_some()) {
+        fields.push_back(schema::new_field(
+            b"change_council_id".to_string(),
+            (*change_council_id.borrow()).to_string(),
+            b"ID".to_string(),
+        ));
+    };
+
+    fields
 }
 
 /// Decode a SetObjectPolicyAction
@@ -95,38 +143,69 @@ public fun decode_set_object_policy_action(
     let mut bcs_data = bcs::new(action_data);
 
     let object_id = bcs::peel_address(&mut bcs_data);
-    let approval_type = bcs::peel_u8(&mut bcs_data);
-    let council_index = bcs::peel_u64(&mut bcs_data);
+
+    // Execution Option<ID>
+    let execution_council_id = if (bcs::peel_bool(&mut bcs_data)) {
+        option::some(bcs::peel_address(&mut bcs_data))
+    } else {
+        option::none()
+    };
+    let execution_mode = bcs::peel_u8(&mut bcs_data);
+
+    // Change Option<ID>
+    let change_council_id = if (bcs::peel_bool(&mut bcs_data)) {
+        option::some(bcs::peel_address(&mut bcs_data))
+    } else {
+        option::none()
+    };
+    let change_mode = bcs::peel_u8(&mut bcs_data);
+    let change_delay_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
-    let approval_type_str = if (approval_type == 0) {
-        b"DaoOnly"
-    } else if (approval_type == 1) {
-        b"CouncilOnly"
-    } else if (approval_type == 2) {
-        b"DaoOrCouncil"
-    } else {
-        b"DaoAndCouncil"
-    };
+    let execution_mode_str = mode_to_string(execution_mode);
+    let change_mode_str = mode_to_string(change_mode);
 
-    vector[
+    let mut fields = vector[
         schema::new_field(
             b"object_id".to_string(),
             object_id.to_string(),
             b"ID".to_string(),
         ),
         schema::new_field(
-            b"approval_type".to_string(),
-            approval_type_str.to_string(),
+            b"execution_mode".to_string(),
+            execution_mode_str.to_string(),
             b"String".to_string(),
         ),
         schema::new_field(
-            b"council_index".to_string(),
-            council_index.to_string(),
+            b"change_mode".to_string(),
+            change_mode_str.to_string(),
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"change_delay_ms".to_string(),
+            change_delay_ms.to_string(),
             b"u64".to_string(),
         ),
-    ]
+    ];
+
+    if (execution_council_id.is_some()) {
+        fields.push_back(schema::new_field(
+            b"execution_council_id".to_string(),
+            (*execution_council_id.borrow()).to_string(),
+            b"ID".to_string(),
+        ));
+    };
+
+    if (change_council_id.is_some()) {
+        fields.push_back(schema::new_field(
+            b"change_council_id".to_string(),
+            (*change_council_id.borrow()).to_string(),
+            b"ID".to_string(),
+        ));
+    };
+
+    fields
 }
 
 /// Decode a RegisterCouncilAction
@@ -137,7 +216,6 @@ public fun decode_register_council_action(
     let mut bcs_data = bcs::new(action_data);
 
     let council_id = bcs::peel_address(&mut bcs_data);
-    let name = bcs::peel_vec_u8(&mut bcs_data).to_string();
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
@@ -146,11 +224,6 @@ public fun decode_register_council_action(
             b"council_id".to_string(),
             council_id.to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"name".to_string(),
-            name,
-            b"String".to_string(),
         ),
     ]
 }

@@ -150,7 +150,7 @@ public fun delete_update_pool_params(expired: &mut Expired) {
 
 // === Policy Actions ===
 public fun delete_set_policy(expired: &mut Expired) {
-    futarchy_multisig::policy_actions::delete_set_policy(expired);
+    futarchy_multisig::policy_actions::delete_set_type_policy(expired);
 }
 
 public fun delete_remove_policy(expired: &mut Expired) {

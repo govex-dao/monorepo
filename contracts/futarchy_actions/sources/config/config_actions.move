@@ -26,6 +26,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     action_validation,
     action_types,
+    dao_config,
 };
 
 // === Friend Modules === (removed - deprecated in 2024 edition)
@@ -106,6 +107,13 @@ public struct SlashDistributionChanged has copy, drop {
     timestamp: u64,
 }
 
+/// Emitted when storage config is updated
+public struct StorageConfigChanged has copy, drop {
+    account_id: ID,
+    allow_walrus_blobs: bool,
+    timestamp: u64,
+}
+
 // === Basic Action Structs ===
 
 /// Action to enable or disable proposals
@@ -180,6 +188,11 @@ public struct QueueParamsUpdateAction has store, drop, copy {
     max_concurrent_proposals: Option<u64>,
     max_queue_size: Option<u64>,
     fee_escalation_basis_points: Option<u64>,
+}
+
+/// Storage configuration update action
+public struct StorageConfigUpdateAction has store, drop, copy {
+    allow_walrus_blobs: Option<bool>,
 }
 
 /// Wrapper for different config action types (for batch operations)
@@ -899,6 +912,63 @@ public fun do_update_slash_distribution<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Execute a storage config update action
+public fun do_update_storage_config<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::StorageConfigUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let allow_walrus_blobs_opt = bcs::peel_option!(&mut reader, |r| r.peel_bool());
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get account ID first before taking mutable borrows
+    let account_id = object::id(account);
+
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+    let dao_cfg = futarchy_config::dao_config_mut(config);
+    let storage_cfg = dao_config::storage_config_mut(dao_cfg);
+
+    // Apply updates
+    if (allow_walrus_blobs_opt.is_some()) {
+        dao_config::set_allow_walrus_blobs(storage_cfg, allow_walrus_blobs_opt.destroy_some());
+    };
+
+    // Get the final value after updates
+    let final_value = dao_config::allow_walrus_blobs(storage_cfg);
+
+    // Emit event
+    event::emit(StorageConfigChanged {
+        account_id,
+        allow_walrus_blobs: final_value,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
 /// Execute a batch config action that can contain any type of config update
 /// This delegates to the appropriate handler based on config_type
 public fun do_batch_config<Outcome: store, IW: drop>(
@@ -1316,6 +1386,15 @@ public fun new_queue_params_update_action(
     };
     validate_queue_params_update(&action);
     action
+}
+
+/// Create a storage config update action
+public fun new_storage_config_update_action(
+    allow_walrus_blobs: Option<bool>,
+): StorageConfigUpdateAction {
+    StorageConfigUpdateAction {
+        allow_walrus_blobs,
+    }
 }
 
 // === Intent Creation Functions (with serialize-then-destroy pattern) ===

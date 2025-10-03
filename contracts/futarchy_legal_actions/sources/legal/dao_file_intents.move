@@ -49,7 +49,7 @@ public fun create_registry_intent<Config, Outcome: store>(
         |intent, iw| {
             let action_data = vector::empty<u8>();
             intent.add_typed_action(
-                action_types::create_dao_doc_registry(),
+                action_types::create_dao_file_registry(),
                 action_data,
                 iw
             );
@@ -102,7 +102,7 @@ public fun create_root_document_intent<Config, Outcome: store>(
         |intent, iw| {
             let action_data = bcs::to_bytes(&name.into_bytes());
             intent.add_typed_action(
-                action_types::create_root_document(),
+                action_types::create_root_file(),
                 action_data,
                 iw
             );
@@ -130,7 +130,7 @@ public fun create_child_document_intent<Config, Outcome: store>(
             let mut action_data = bcs::to_bytes(&object::id_to_address(&parent_id));
             action_data.append(bcs::to_bytes(&name.into_bytes()));
             intent.add_typed_action(
-                action_types::create_child_document(),
+                action_types::create_child_file(),
                 action_data,
                 iw
             );
@@ -158,7 +158,7 @@ public fun create_document_version_intent<Config, Outcome: store>(
             let mut action_data = bcs::to_bytes(&object::id_to_address(&previous_doc_id));
             action_data.append(bcs::to_bytes(&new_name.into_bytes()));
             intent.add_typed_action(
-                action_types::create_document_version(),
+                action_types::create_file_version(),
                 action_data,
                 iw
             );
@@ -174,7 +174,7 @@ public fun add_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    difficulty: u64,
+    
     ctx: &mut TxContext
 ) {
     account.build_intent!(
@@ -186,7 +186,6 @@ public fun add_chunk_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
-            action_data.append(bcs::to_bytes(&difficulty));
             intent.add_typed_action(
                 action_types::add_chunk(),
                 action_data,
@@ -203,7 +202,7 @@ public fun add_chunk_with_text_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     text: String,
-    difficulty: u64,
+    
     ctx: &mut TxContext
 ) {
     account.build_intent!(
@@ -216,7 +215,6 @@ public fun add_chunk_with_text_intent<Config, Outcome: store>(
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
             action_data.append(bcs::to_bytes(&text.into_bytes()));
-            action_data.append(bcs::to_bytes(&difficulty));
             intent.add_typed_action(
                 action_types::add_chunk(),
                 action_data,
@@ -232,7 +230,7 @@ public fun add_sunset_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    difficulty: u64,
+    
     expires_at_ms: u64,
     immutable: bool,
     ctx: &mut TxContext
@@ -246,7 +244,6 @@ public fun add_sunset_chunk_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
-            action_data.append(bcs::to_bytes(&difficulty));
             action_data.append(bcs::to_bytes(&expires_at_ms));
             action_data.append(bcs::to_bytes(&immutable));
             intent.add_typed_action(
@@ -264,7 +261,7 @@ public fun add_sunrise_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    difficulty: u64,
+    
     effective_from_ms: u64,
     immutable: bool,
     ctx: &mut TxContext
@@ -278,7 +275,6 @@ public fun add_sunrise_chunk_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
-            action_data.append(bcs::to_bytes(&difficulty));
             action_data.append(bcs::to_bytes(&effective_from_ms));
             action_data.append(bcs::to_bytes(&immutable));
             intent.add_typed_action(
@@ -296,7 +292,7 @@ public fun add_temporary_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    difficulty: u64,
+    
     effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool,
@@ -311,7 +307,6 @@ public fun add_temporary_chunk_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
-            action_data.append(bcs::to_bytes(&difficulty));
             action_data.append(bcs::to_bytes(&effective_from_ms));
             action_data.append(bcs::to_bytes(&expires_at_ms));
             action_data.append(bcs::to_bytes(&immutable));
@@ -330,7 +325,7 @@ public fun add_chunk_with_scheduled_immutability_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    difficulty: u64,
+    
     immutable_from_ms: u64,
     ctx: &mut TxContext
 ) {
@@ -343,7 +338,6 @@ public fun add_chunk_with_scheduled_immutability_intent<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
-            action_data.append(bcs::to_bytes(&difficulty));
             action_data.append(bcs::to_bytes(&immutable_from_ms));
             intent.add_typed_action(
                 action_types::add_chunk_with_scheduled_immutability(),
@@ -458,7 +452,7 @@ public fun set_document_immutable_intent<Config, Outcome: store>(
         |intent, iw| {
             let action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
             intent.add_typed_action(
-                action_types::set_document_immutable(),
+                action_types::set_file_immutable(),
                 action_data,
                 iw
             );
@@ -488,7 +482,7 @@ public fun set_document_insert_allowed_intent<Config, Outcome: store>(
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
             action_data.append(bcs::to_bytes(&allowed));
             intent.add_typed_action(
-                action_types::set_document_insert_allowed(),
+                action_types::set_file_insert_allowed(),
                 action_data,
                 iw
             );
@@ -516,7 +510,7 @@ public fun set_document_remove_allowed_intent<Config, Outcome: store>(
             let mut action_data = bcs::to_bytes(&object::id_to_address(&doc_id));
             action_data.append(bcs::to_bytes(&allowed));
             intent.add_typed_action(
-                action_types::set_document_remove_allowed(),
+                action_types::set_file_remove_allowed(),
                 action_data,
                 iw
             );

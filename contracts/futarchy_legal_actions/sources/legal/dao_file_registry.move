@@ -169,9 +169,6 @@ public struct ChunkPointer has store {
     walrus_storage_object_id: Option<ID>,   // Storage object ID for renewal
     walrus_expiry_epoch: Option<u64>,       // Cached expiry epoch for quick lookup
 
-    // Governance
-    difficulty: u64,                        // Approval threshold to MODIFY (basis points 0-10000)
-
     // Immutability controls
     immutable: bool,                        // Permanent immutability (one-way: false → true)
     immutable_from: Option<u64>,           // Scheduled immutability (timestamp in ms)
@@ -214,7 +211,6 @@ public struct ChunkAction has store, drop, copy {
 
     // For add/insert operations
     text: Option<String>,
-    difficulty: Option<u64>,
     chunk_type: Option<u8>,
     expires_at: Option<u64>,
     effective_from: Option<u64>,
@@ -257,7 +253,6 @@ public struct ChunkAdded has copy, drop {
     doc_id: ID,
     chunk_id: ID,
     walrus_blob_id: vector<u8>,  // For events, emit the ID as bytes
-    difficulty: u64,
     chunk_type: u8,
     expires_at: Option<u64>,
     effective_from: Option<u64>,
@@ -341,7 +336,6 @@ public struct DocumentReadWithStatus has copy, drop {
     chunk_texts: vector<Option<String>>,    // On-chain text (when storage_type == TEXT)
     chunk_blob_ids: vector<vector<u8>>,     // Walrus blob IDs (when storage_type == WALRUS)
     chunk_storage_types: vector<u8>,        // 0 = text, 1 = walrus
-    chunk_difficulties: vector<u64>,        // Approval thresholds per chunk
     chunk_immutables: vector<bool>,         // Permanent immutability flags
     chunk_immutable_froms: vector<Option<u64>>, // Scheduled immutability timestamps
     chunk_types: vector<u8>,                // 0=permanent, 1=sunset, 2=sunrise, 3=temporary
@@ -620,7 +614,6 @@ public fun create_document_version(
 public fun add_chunk(
     doc: &mut File,
     walrus_blob: blob::Blob,
-    difficulty: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
@@ -656,7 +649,6 @@ public fun add_chunk(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable: false,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_PERMANENT,
@@ -673,7 +665,6 @@ public fun add_chunk(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -689,8 +680,7 @@ public fun add_chunk(
 public fun add_chunk_with_text(
     doc: &mut File,
     text: String,
-    difficulty: u64,
-    clock: &Clock,
+        clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
     // Check document not immutable
@@ -721,7 +711,6 @@ public fun add_chunk_with_text(
         walrus_blob: option::none(),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::none(),
-        difficulty,
         immutable: false,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_PERMANENT,
@@ -738,7 +727,6 @@ public fun add_chunk_with_text(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: vector::empty(), // No blob for text storage
-        difficulty,
         chunk_type: CHUNK_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -754,8 +742,7 @@ public fun add_chunk_with_text(
 public fun add_sunset_chunk(
     doc: &mut File,
     walrus_blob: blob::Blob,
-    difficulty: u64,
-    expires_at_ms: u64,
+        expires_at_ms: u64,
     immutable: bool,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -795,7 +782,6 @@ public fun add_sunset_chunk(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_SUNSET,
@@ -812,7 +798,6 @@ public fun add_sunset_chunk(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_SUNSET,
         expires_at: option::some(expires_at_ms),
         effective_from: option::none(),
@@ -828,8 +813,7 @@ public fun add_sunset_chunk(
 public fun add_sunrise_chunk(
     doc: &mut File,
     walrus_blob: blob::Blob,
-    difficulty: u64,
-    effective_from_ms: u64,
+        effective_from_ms: u64,
     immutable: bool,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -863,7 +847,6 @@ public fun add_sunrise_chunk(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_SUNRISE,
@@ -880,7 +863,6 @@ public fun add_sunrise_chunk(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_SUNRISE,
         expires_at: option::none(),
         effective_from: option::some(effective_from_ms),
@@ -896,8 +878,7 @@ public fun add_sunrise_chunk(
 public fun add_temporary_chunk(
     doc: &mut File,
     walrus_blob: blob::Blob,
-    difficulty: u64,
-    effective_from_ms: u64,
+        effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool,
     clock: &Clock,
@@ -938,7 +919,6 @@ public fun add_temporary_chunk(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_TEMPORARY,
@@ -955,7 +935,6 @@ public fun add_temporary_chunk(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_TEMPORARY,
         expires_at: option::some(expires_at_ms),
         effective_from: option::some(effective_from_ms),
@@ -971,8 +950,7 @@ public fun add_temporary_chunk(
 public fun add_chunk_with_scheduled_immutability(
     doc: &mut File,
     walrus_blob: blob::Blob,
-    difficulty: u64,
-    immutable_from_ms: u64,
+        immutable_from_ms: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
@@ -1010,7 +988,6 @@ public fun add_chunk_with_scheduled_immutability(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable: false,  // Starts mutable
         immutable_from: option::some(immutable_from_ms),
         chunk_type: CHUNK_TYPE_PERMANENT,
@@ -1027,7 +1004,6 @@ public fun add_chunk_with_scheduled_immutability(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -1045,8 +1021,7 @@ public fun insert_chunk_after(
     doc: &mut File,
     prev_chunk_id: ID,
     walrus_blob: blob::Blob,
-    difficulty: u64,
-    clock: &Clock,
+        clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
     // Check document not immutable
@@ -1081,7 +1056,6 @@ public fun insert_chunk_after(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
-        difficulty,
         immutable: false,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_PERMANENT,
@@ -1097,7 +1071,6 @@ public fun insert_chunk_after(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id: new_chunk_id,
         walrus_blob_id: bcs::to_bytes(&blob_id),
-        difficulty,
         chunk_type: CHUNK_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -1114,8 +1087,7 @@ public fun insert_chunk_with_text_after(
     doc: &mut File,
     prev_chunk_id: ID,
     text: String,
-    difficulty: u64,
-    clock: &Clock,
+        clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
     assert!(!doc.immutable, EDocumentImmutable);
@@ -1145,7 +1117,6 @@ public fun insert_chunk_with_text_after(
         walrus_blob: option::none(),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::none(),
-        difficulty,
         immutable: false,
         immutable_from: option::none(),
         chunk_type: CHUNK_TYPE_PERMANENT,
@@ -1161,7 +1132,6 @@ public fun insert_chunk_with_text_after(
         doc_id: object::uid_to_inner(&doc.id),
         chunk_id: new_chunk_id,
         walrus_blob_id: vector::empty(),
-        difficulty,
         chunk_type: CHUNK_TYPE_PERMANENT,
         expires_at: option::none(),
         effective_from: option::none(),
@@ -1192,7 +1162,6 @@ public fun update_chunk(
         walrus_blob: old_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
-        difficulty,
         immutable,
         immutable_from,
         chunk_type,
@@ -1222,7 +1191,6 @@ public fun update_chunk(
         walrus_blob: option::some(new_walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(new_expiry_epoch),
-        difficulty,
         immutable,
         immutable_from,
         chunk_type,
@@ -1269,7 +1237,6 @@ public fun remove_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
-        difficulty: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1356,7 +1323,6 @@ public fun remove_expired_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
-        difficulty: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1597,11 +1563,6 @@ public fun is_chunk_immutable_now(chunk: &ChunkPointer, current_time_ms: u64): b
     false
 }
 
-/// Get chunk difficulty
-public fun get_chunk_difficulty(doc: &File, chunk_id: ID): u64 {
-    assert!(table::contains(&doc.chunks, chunk_id), EChunkNotFound);
-    table::borrow(&doc.chunks, chunk_id).difficulty
-}
 
 /// Read and emit full document state
 public fun read_document(doc: &File, clock: &Clock) {
@@ -1791,8 +1752,7 @@ public fun new_batch_action(batch_id: ID, actions: vector<ChunkAction>): BatchDo
 public fun new_add_text_chunk_action(
     doc_id: ID,
     text: String,
-    difficulty: u64,
-    chunk_type: u8,
+        chunk_type: u8,
     expires_at: Option<u64>,
     effective_from: Option<u64>,
     immutable: bool,
@@ -1804,8 +1764,7 @@ public fun new_add_text_chunk_action(
         chunk_id: option::none(),
         prev_chunk_id: option::none(),
         text: option::some(text),
-        difficulty: option::some(difficulty),
-        chunk_type: option::some(chunk_type),
+                chunk_type: option::some(chunk_type),
         expires_at,
         effective_from,
         immutable: option::some(immutable),
@@ -1818,16 +1777,14 @@ public fun new_insert_after_action(
     doc_id: ID,
     prev_chunk_id: ID,
     text: String,
-    difficulty: u64,
-): ChunkAction {
+    ): ChunkAction {
     ChunkAction {
         action_type: ACTION_INSERT_AFTER,
         doc_id,
         chunk_id: option::none(),
         prev_chunk_id: option::some(prev_chunk_id),
         text: option::some(text),
-        difficulty: option::some(difficulty),
-        chunk_type: option::some(CHUNK_TYPE_PERMANENT),
+                chunk_type: option::some(CHUNK_TYPE_PERMANENT),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::some(false),
@@ -1843,8 +1800,7 @@ public fun new_remove_chunk_action(doc_id: ID, chunk_id: ID): ChunkAction {
         chunk_id: option::some(chunk_id),
         prev_chunk_id: option::none(),
         text: option::none(),
-        difficulty: option::none(),
-        chunk_type: option::none(),
+                chunk_type: option::none(),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::none(),
@@ -1860,8 +1816,7 @@ public fun new_set_immutable_action(doc_id: ID, chunk_id: ID): ChunkAction {
         chunk_id: option::some(chunk_id),
         prev_chunk_id: option::none(),
         text: option::none(),
-        difficulty: option::none(),
-        chunk_type: option::none(),
+                chunk_type: option::none(),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::none(),
@@ -1901,14 +1856,12 @@ public fun apply_batch_actions(
                 if (action.action_type == ACTION_ADD_CHUNK) {
                     // Add text chunk
                     let text = *option::borrow(&action.text);
-                    let difficulty = *option::borrow(&action.difficulty);
                     let chunk_type = *option::borrow(&action.chunk_type);
                     let immutable = *option::borrow(&action.immutable);
 
                     add_chunk_with_text(
                         doc_ref,
                         text,
-                        difficulty,
                         clock,
                         ctx,
                     );
@@ -1916,13 +1869,11 @@ public fun apply_batch_actions(
                     // Insert after specific chunk
                     let prev_chunk_id = *option::borrow(&action.prev_chunk_id);
                     let text = *option::borrow(&action.text);
-                    let difficulty = *option::borrow(&action.difficulty);
 
                     insert_chunk_with_text_after(
                         doc_ref,
                         prev_chunk_id,
                         text,
-                        difficulty,
                         clock,
                         ctx,
                     );

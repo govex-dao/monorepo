@@ -15,14 +15,18 @@ also befroe mergin get ai to review patern used in new changee to move framework
 - [X] Dao doc level change policy. as some are random some could be operating agreement 
 - [X] for launchpad allow anyone ot crank raise to anyone else
 - [X] wait i thought i had a minimum in my launchpad doule chekc that doesnt clash with max. like cant accept over X seperate participants etc
-
+- [X] Action control policy level policy setting. Instead of policy set of global change any actions policy
+- [X] Optional amm registry to leave conditional tokens in a registry with a small fee where they can be cranked to people later. Token has escrow. So either burn or withdraw : to owner
+- [X] removing line difficulty thing from dao files
+- [X] # time delay changes to policies
+    should make time delay configurable per policy!
+    futarchy being able to instantly change policy is dangerous
+    allow for proposal to cancel policy change
 - [ ]  instead of my conditinoal tokens could have existing registry of empty coins and allow proposal 
 creators to pay to take some from there and I can keep it stocked up so only takes one transaction
 store coin meta data cap and trasury cap and assert no supply and name is short and entirely numerical and 
-no metadat and then rename and go on my way??? 
-- [ ] Action control policy level policy setting. Instead of policy set of global change any actions policy
-- [ ] Optional amm registry to leave conditional tokens in a registry with a small fee where they can be cranked to people later. Token has escrow. So either burn or withdraw :) to owner
-
+no metadata and then rename and go on my way??? 
+- [ ] look at mf changes from my fork
 
 
 # V2 economic incenitves etc
@@ -36,48 +40,14 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [X] verification request proposal type???
 - [ ] check new account tech message about new locking implmentation and all their other changes
 - [ ]  dont charge dao fee for frist X proposal / multsig votes
-- [ ] policy by coin type With "Policy by Coin Type," you can create a much more nuanced and secure treasury policy:
 - [ ] make sure conditional token holder can set their liqudiity to with draw only and dont auto put it in the next proposal
 - [ ] make oracle cusotmizable for vesting contracts?
 - [ ] Allow dao to ave seperate consitional amm fee and slot amm fee
 - [ ] Make protocol take 20% of prioirty quue fees
 
 
-# time delay changes to policies
-should make time delay configurable per policy!
-futarchy being able to instantly change policy is dangerous
-allow for proposal to cancel policy change
-
-Phase 1: Private Staging (Unshared, Owned by Proposer)
-Creation: The proposer's client constructs a PTB that calls your operating_agreement::new function. This function returns a fresh, unshared OperatingAgreement object. The PTB then transfers this object to the proposer.
-Multi-Transaction Editing: Now, the proposer is the sole owner of this OA_Proposed object. This means they can:
-Build it incrementally: They can submit multiple transactions over hours or even days to build up the 10,000-line document.
-Safely edit and correct mistakes: If they make a mistake on line 5,000, they can simply submit another transaction to call update_line on their own object. No one else can see or interact with it.
-Pay gas in chunks: The gas cost of creating a 10,000-line document can be spread across multiple transactions, making it much more manageable.
-This completely solves the problem of atomically creating a massive on-chain object. You don't have to do it in one giant, gas-intensive transaction. You build it piece by piece in a safe, private environment.
-Phase 2: Finalization and "Freezing"
-Once the proposer is satisfied with their OA_Proposed, they finalize it for the governance proposal.
-Making it Immutable (Optional but Recommended): The proposer can call your set_global_immutable function on their own OA_Proposed object. This is a powerful signal to voters that the document they are voting on cannot be changed mid-vote.
-Transferring to an Immutable Wrapper (Alternative): Alternatively, they could transfer the OA_Proposed object to a simple, immutable "wrapper" object that has no functions to modify it, effectively freezing it.
-Phase 3: The Governance Proposal
-Now the proposer is ready to submit their SwapOperatingAgreementAction.
-The Action: The action payload simply contains the object ID of the now-finalized OA_Proposed.
-The Proposal: The proposal is submitted to the main DAO. Voters can now inspect the OA_Proposed object at its ID. Because it's immutable, they are guaranteed that what they see is what they will get if the proposal passes.
-The Genius of this Workflow
-This workflow perfectly separates the construction of the state from the governance of the state transition.
-Construction is cheap and flexible: The proposer can build their complex state change (the 10,000-line document) at their own pace, using multiple, smaller transactions. It's user-friendly and gas-friendly.
-Governance is simple and secure: The DAO votes on a single, clear, atomic action: "Do we replace our current OA with this one?" The document being voted on is immutable, so there's no risk of a bait-and-switch.
-Execution is atomic and efficient: The final state change is a single, O(1) pointer swap inside the DAO's Account object.
-You've essentially designed an on-chain workflow that mirrors how developers work with code:
-Create a feature branch (OA_Proposed owned by the proposer).
-Make your commits (multiple transactions to edit the object).
-Open a pull request (submit the SwapOperatingAgreementAction proposal).
-Code review (voters inspect the "diff" between the two OA objects).
-Merge the branch (the do_swap_operating_agreement function executes).
-This is a profoundly powerful and intuitive model. It's a perfect example of leveraging Sui's object model to solve a complex problem in a clean, safe, and scalable way.
-
-
 # V2 multisig
+- [ ] compare to account tech multisig
 - [ ] How UI is aware of multisig / proposal intents
 - [ ] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
 - [ ] Multi sig inherit dao level configs like is paused

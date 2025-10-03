@@ -2,6 +2,7 @@ module futarchy_markets::swap;
 
 use futarchy_markets::coin_escrow::TokenEscrow;
 use futarchy_markets::conditional_token::ConditionalToken;
+use futarchy_markets::conditional_token_holder::ConditionalTokenHolder;
 use futarchy_markets::liquidity_interact;
 use futarchy_markets::market_state::MarketState;
 use futarchy_markets::proposal::{Self, Proposal};
@@ -444,4 +445,107 @@ fun swap_stable_to_asset_internal<AssetType, StableType>(
 
     let pool = proposal::get_pool_mut_by_outcome(proposal, (outcome_idx as u8));
     pool.swap_stable_to_asset(state, amount_in, min_amount_out, clock, ctx)
+}
+
+// === Swap with Optional Token Holder ===
+
+/// Swap stable to asset with option to store extra tokens in holder
+/// If holder is provided, extra tokens beyond expected amount go to holder for keeper redemption
+public entry fun swap_stable_to_asset_with_holder<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    holder: &mut ConditionalTokenHolder,
+    outcome_idx: u64,
+    token_to_swap: ConditionalToken,
+    min_amount_out: u64,
+    expected_amount_out: u64,  // User's expected output
+    holder_fee: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Perform the swap
+    let mut result_token = swap_stable_to_asset(
+        proposal,
+        escrow,
+        outcome_idx,
+        token_to_swap,
+        min_amount_out,
+        clock,
+        ctx,
+    );
+
+    let actual_amount = result_token.value();
+    let recipient = ctx.sender();
+
+    // If we got more than expected, split and store extra in holder
+    if (actual_amount > expected_amount_out) {
+        let extra_amount = actual_amount - expected_amount_out;
+        let extra_tokens = result_token.split_and_return(extra_amount, clock, ctx);
+
+        // Store extra tokens in holder with fee
+        holder.store_tokens_with_fee(
+            proposal,
+            extra_tokens,
+            holder_fee,
+            clock,
+            ctx,
+        );
+
+        // Transfer expected amount to user
+        transfer::public_transfer(result_token, recipient);
+    } else {
+        // No extra tokens, return fee and transfer all tokens to user
+        transfer::public_transfer(holder_fee, recipient);
+        transfer::public_transfer(result_token, recipient);
+    };
+}
+
+/// Swap asset to stable with option to store extra tokens in holder
+public entry fun swap_asset_to_stable_with_holder<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    holder: &mut ConditionalTokenHolder,
+    outcome_idx: u64,
+    token_to_swap: ConditionalToken,
+    min_amount_out: u64,
+    expected_amount_out: u64,
+    holder_fee: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Perform the swap
+    let mut result_token = swap_asset_to_stable(
+        proposal,
+        escrow,
+        outcome_idx,
+        token_to_swap,
+        min_amount_out,
+        clock,
+        ctx,
+    );
+
+    let actual_amount = result_token.value();
+    let recipient = ctx.sender();
+
+    // If we got more than expected, split and store extra in holder
+    if (actual_amount > expected_amount_out) {
+        let extra_amount = actual_amount - expected_amount_out;
+        let extra_tokens = result_token.split_and_return(extra_amount, clock, ctx);
+
+        // Store extra tokens in holder with fee
+        holder.store_tokens_with_fee(
+            proposal,
+            extra_tokens,
+            holder_fee,
+            clock,
+            ctx,
+        );
+
+        // Transfer expected amount to user
+        transfer::public_transfer(result_token, recipient);
+    } else {
+        // No extra tokens, return fee and transfer all tokens to user
+        transfer::public_transfer(holder_fee, recipient);
+        transfer::public_transfer(result_token, recipient);
+    };
 }

@@ -80,6 +80,11 @@ public struct SecurityConfig has store, drop, copy {
     require_deadman_council: bool,       // If true, all councils must support dead-man switch
 }
 
+/// Storage configuration for DAO files
+public struct StorageConfig has store, drop, copy {
+    allow_walrus_blobs: bool,            // If true, allow Walrus blob storage; if false, string-only
+}
+
 /// Complete DAO configuration
 public struct DaoConfig has store, drop, copy {
     trading_params: TradingParams,
@@ -87,6 +92,7 @@ public struct DaoConfig has store, drop, copy {
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
+    storage_config: StorageConfig,
 }
 
 // === Constructor Functions ===
@@ -212,6 +218,15 @@ public fun new_security_config(
     }
 }
 
+/// Create a new storage configuration
+public fun new_storage_config(
+    allow_walrus_blobs: bool,
+): StorageConfig {
+    StorageConfig {
+        allow_walrus_blobs,
+    }
+}
+
 /// Create a complete DAO configuration
 public fun new_dao_config(
     trading_params: TradingParams,
@@ -219,6 +234,7 @@ public fun new_dao_config(
     governance_config: GovernanceConfig,
     metadata_config: MetadataConfig,
     security_config: SecurityConfig,
+    storage_config: StorageConfig,
 ): DaoConfig {
     DaoConfig {
         trading_params,
@@ -226,6 +242,7 @@ public fun new_dao_config(
         governance_config,
         metadata_config,
         security_config,
+        storage_config,
     }
 }
 
@@ -280,6 +297,11 @@ public(package) fun security_config_mut(config: &mut DaoConfig): &mut SecurityCo
 public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
 public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
 public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
+
+// Storage config getters
+public fun storage_config(config: &DaoConfig): &StorageConfig { &config.storage_config }
+public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig { &mut config.storage_config }
+public fun allow_walrus_blobs(storage: &StorageConfig): bool { storage.allow_walrus_blobs }
 
 // === Update Functions ===
 
@@ -482,6 +504,12 @@ public(package) fun set_require_deadman_council(sec: &mut SecurityConfig, val: b
     sec.require_deadman_council = val;
 }
 
+// Storage config direct setters
+
+public fun set_allow_walrus_blobs(storage: &mut StorageConfig, val: bool) {
+    storage.allow_walrus_blobs = val;
+}
+
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -503,6 +531,7 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
+        storage_config: config.storage_config,
     }
 }
 
@@ -514,6 +543,7 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
+        storage_config: config.storage_config,
     }
 }
 
@@ -525,6 +555,7 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         governance_config: new_gov,
         metadata_config: config.metadata_config,
         security_config: config.security_config,
+        storage_config: config.storage_config,
     }
 }
 
@@ -536,6 +567,7 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         governance_config: config.governance_config,
         metadata_config: new_meta,
         security_config: config.security_config,
+        storage_config: config.storage_config,
     }
 }
 
@@ -547,6 +579,19 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         governance_config: config.governance_config,
         metadata_config: config.metadata_config,
         security_config: new_sec,
+        storage_config: config.storage_config,
+    }
+}
+
+/// Update storage configuration (returns new config)
+public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: config.security_config,
+        storage_config: new_storage,
     }
 }
 
@@ -600,5 +645,12 @@ public fun default_security_config(): SecurityConfig {
         deadman_enabled: false,          // Opt-in feature
         recovery_liveness_ms: 2_592_000_000, // 30 days default
         require_deadman_council: false,  // Optional
+    }
+}
+
+/// Get default storage configuration
+public fun default_storage_config(): StorageConfig {
+    StorageConfig {
+        allow_walrus_blobs: true,        // Allow Walrus blobs by default
     }
 }

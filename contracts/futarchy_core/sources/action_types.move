@@ -57,6 +57,7 @@ public struct GovernanceUpdate has drop {}
 public struct MetadataTableUpdate has drop {}
 public struct SlashDistributionUpdate has drop {}
 public struct QueueParamsUpdate has drop {}
+public struct StorageConfigUpdate has drop {}
 
 // === Liquidity Action Types ===
 
@@ -117,21 +118,21 @@ public struct ReadOraclePrice has drop {}
 public struct ConditionalMint has drop {}
 public struct TieredMint has drop {}
 
-// === DAO Document Registry Action Types ===
+// === DAO File Registry Action Types ===
 
 // Registry actions
-public struct CreateDaoDocRegistry has drop {}
+public struct CreateDaoFileRegistry has drop {}
 public struct SetRegistryImmutable has drop {}
 
 // Walrus renewal
 public struct SetWalrusRenewal has drop {}  // Deprecated - use intent-based WalrusRenewal
 public struct WalrusRenewal has drop {}     // Intent-based renewal execution
 
-// Document CRUD
-public struct CreateRootDocument has drop {}
-public struct CreateChildDocument has drop {}
-public struct CreateDocumentVersion has drop {}
-public struct DeleteDocument has drop {}
+// File CRUD
+public struct CreateRootFile has drop {}
+public struct CreateChildFile has drop {}
+public struct CreateFileVersion has drop {}
+public struct DeleteFile has drop {}
 
 // Chunk operations
 public struct AddChunk has drop {}
@@ -144,12 +145,12 @@ public struct RemoveChunk has drop {}
 
 // Immutability controls
 public struct SetChunkImmutable has drop {}
-public struct SetDocumentImmutable has drop {}
-public struct SetDocumentInsertAllowed has drop {}
-public struct SetDocumentRemoveAllowed has drop {}
+public struct SetFileImmutable has drop {}
+public struct SetFileInsertAllowed has drop {}
+public struct SetFileRemoveAllowed has drop {}
 
 // Policy actions
-public struct SetDocumentPolicy has drop {}
+public struct SetFilePolicy has drop {}
 
 // === Custody Action Types ===
 
@@ -351,13 +352,13 @@ public fun cancel_challenged_withdrawals(): TypeName { type_name::with_defining_
 public fun conditional_mint(): TypeName { type_name::with_defining_ids<ConditionalMint>() }
 public fun tiered_mint(): TypeName { type_name::with_defining_ids<TieredMint>() }
 
-// DAO Document Registry actions
-public fun create_dao_doc_registry(): TypeName { type_name::with_defining_ids<CreateDaoDocRegistry>() }
+// DAO File Registry actions
+public fun create_dao_file_registry(): TypeName { type_name::with_defining_ids<CreateDaoFileRegistry>() }
 public fun set_registry_immutable(): TypeName { type_name::with_defining_ids<SetRegistryImmutable>() }
-public fun create_root_document(): TypeName { type_name::with_defining_ids<CreateRootDocument>() }
-public fun create_child_document(): TypeName { type_name::with_defining_ids<CreateChildDocument>() }
-public fun create_document_version(): TypeName { type_name::with_defining_ids<CreateDocumentVersion>() }
-public fun delete_document(): TypeName { type_name::with_defining_ids<DeleteDocument>() }
+public fun create_root_file(): TypeName { type_name::with_defining_ids<CreateRootFile>() }
+public fun create_child_file(): TypeName { type_name::with_defining_ids<CreateChildFile>() }
+public fun create_file_version(): TypeName { type_name::with_defining_ids<CreateFileVersion>() }
+public fun delete_file(): TypeName { type_name::with_defining_ids<DeleteFile>() }
 public fun add_chunk(): TypeName { type_name::with_defining_ids<AddChunk>() }
 public fun add_sunset_chunk(): TypeName { type_name::with_defining_ids<AddSunsetChunk>() }
 public fun add_sunrise_chunk(): TypeName { type_name::with_defining_ids<AddSunriseChunk>() }
@@ -366,10 +367,10 @@ public fun add_chunk_with_scheduled_immutability(): TypeName { type_name::with_d
 public fun update_chunk(): TypeName { type_name::with_defining_ids<UpdateChunk>() }
 public fun remove_chunk(): TypeName { type_name::with_defining_ids<RemoveChunk>() }
 public fun set_chunk_immutable(): TypeName { type_name::with_defining_ids<SetChunkImmutable>() }
-public fun set_document_immutable(): TypeName { type_name::with_defining_ids<SetDocumentImmutable>() }
-public fun set_document_insert_allowed(): TypeName { type_name::with_defining_ids<SetDocumentInsertAllowed>() }
-public fun set_document_remove_allowed(): TypeName { type_name::with_defining_ids<SetDocumentRemoveAllowed>() }
-public fun set_document_policy(): TypeName { type_name::with_defining_ids<SetDocumentPolicy>() }
+public fun set_file_immutable(): TypeName { type_name::with_defining_ids<SetFileImmutable>() }
+public fun set_file_insert_allowed(): TypeName { type_name::with_defining_ids<SetFileInsertAllowed>() }
+public fun set_file_remove_allowed(): TypeName { type_name::with_defining_ids<SetFileRemoveAllowed>() }
+public fun set_file_policy(): TypeName { type_name::with_defining_ids<SetFilePolicy>() }
 
 // Custody actions
 public fun create_custody_account(): TypeName { type_name::with_defining_ids<CreateCustodyAccount>() }

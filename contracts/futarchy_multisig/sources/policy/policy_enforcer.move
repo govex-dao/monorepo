@@ -63,10 +63,8 @@ public fun is_typically_critical<T>(): bool {
     use std::type_name;
     use futarchy_core::action_types;
 
-    // These are commonly critical but DAOs can configure as they wish
+    // Common critical actions that typically require extra governance
     let type_name = type_name::get<T>();
-    // TODO: Add actual critical action type checks once policy action types are defined
-    // For now, only check for InitiateDissolution which exists
     type_name == type_name::get<action_types::InitiateDissolution>()
 }
 

@@ -17,6 +17,7 @@ use futarchy_actions::config_actions::{
     MetadataTableUpdateAction,
     SlashDistributionUpdateAction,
     QueueParamsUpdateAction,
+    StorageConfigUpdateAction,
     ConfigAction,
 };
 
@@ -64,6 +65,11 @@ public struct SlashDistributionUpdateActionDecoder has key, store {
 
 /// Decoder for QueueParamsUpdateAction
 public struct QueueParamsUpdateActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for StorageConfigUpdateAction
+public struct StorageConfigUpdateActionDecoder has key, store {
     id: UID,
 }
 
@@ -526,6 +532,34 @@ public fun decode_queue_params_update_action(
     fields
 }
 
+/// Decode storage config update action
+public fun decode_storage_config_update_action(
+    _decoder: &StorageConfigUpdateActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    let allow_walrus_blobs = decode_option_bool(&mut bcs_data);
+
+    // Security: ensure all bytes are consumed
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    let mut fields = vector::empty();
+
+    if (allow_walrus_blobs.is_some()) {
+        let value = if (allow_walrus_blobs.destroy_some()) { b"true".to_string() } else { b"false".to_string() };
+        fields.push_back(schema::new_field(
+            b"allow_walrus_blobs".to_string(),
+            value,
+            b"bool".to_string(),
+        ));
+    } else {
+        allow_walrus_blobs.destroy_none();
+    };
+
+    fields
+}
+
 // === Registration Functions ===
 
 /// Register all config decoders
@@ -542,6 +576,7 @@ public fun register_decoders(
     register_metadata_table_decoder(registry, ctx);
     register_slash_distribution_decoder(registry, ctx);
     register_queue_params_decoder(registry, ctx);
+    register_storage_config_decoder(registry, ctx);
     register_config_action_decoder(registry, ctx);
 }
 
@@ -623,6 +658,15 @@ fun register_queue_params_decoder(
 ) {
     let decoder = QueueParamsUpdateActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<QueueParamsUpdateAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_storage_config_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = StorageConfigUpdateActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<StorageConfigUpdateAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 

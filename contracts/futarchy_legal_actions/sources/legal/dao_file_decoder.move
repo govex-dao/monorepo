@@ -236,7 +236,6 @@ public fun decode_add_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
-    let difficulty = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
@@ -245,11 +244,6 @@ public fun decode_add_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
         ),
     ]
 }
@@ -263,7 +257,6 @@ public fun decode_add_chunk_with_text(
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
     let text = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let difficulty = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
@@ -278,11 +271,6 @@ public fun decode_add_chunk_with_text(
             text,
             b"String".to_string(),
         ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
-        ),
     ]
 }
 
@@ -294,7 +282,6 @@ public fun decode_add_sunset_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
-    let difficulty = bcs::peel_u64(&mut bcs_data);
     let expires_at_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
 
@@ -305,11 +292,6 @@ public fun decode_add_sunset_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
         ),
         schema::new_field(
             b"expires_at_ms".to_string(),
@@ -332,7 +314,6 @@ public fun decode_add_sunrise_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
-    let difficulty = bcs::peel_u64(&mut bcs_data);
     let effective_from_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
 
@@ -343,11 +324,6 @@ public fun decode_add_sunrise_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
         ),
         schema::new_field(
             b"effective_from_ms".to_string(),
@@ -370,7 +346,6 @@ public fun decode_add_temporary_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
-    let difficulty = bcs::peel_u64(&mut bcs_data);
     let effective_from_ms = bcs::peel_u64(&mut bcs_data);
     let expires_at_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
@@ -382,11 +357,6 @@ public fun decode_add_temporary_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
         ),
         schema::new_field(
             b"effective_from_ms".to_string(),
@@ -414,7 +384,6 @@ public fun decode_add_chunk_with_scheduled_immutability(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
-    let difficulty = bcs::peel_u64(&mut bcs_data);
     let immutable_from_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -424,11 +393,6 @@ public fun decode_add_chunk_with_scheduled_immutability(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
-        ),
-        schema::new_field(
-            b"difficulty".to_string(),
-            difficulty.to_string(),
-            b"u64".to_string(),
         ),
         schema::new_field(
             b"immutable_from_ms".to_string(),
