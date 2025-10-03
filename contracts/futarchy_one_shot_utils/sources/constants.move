@@ -34,6 +34,10 @@ public fun twap_price_cap_window(): u64 { 60_000 }
 /// One week in milliseconds
 public fun one_week_ms(): u64 { 604_800_000 }
 
+/// Seal reveal grace period (7 days in milliseconds)
+/// Time after launchpad deadline to decrypt Seal-encrypted max raise
+public fun seal_reveal_grace_period_ms(): u64 { 604_800_000 }
+
 /// Default permit expiry time (5 minutes)
 public fun default_permit_expiry_ms(): u64 { 5 * 60_000 }
 
@@ -119,6 +123,17 @@ public fun binary_outcomes(): u64 { 2 }
 public fun token_type_asset(): u8 { 0 }
 public fun token_type_stable(): u8 { 1 }
 public fun token_type_lp(): u8 { 2 }
+
+// === Document Registry Constants ===
+
+/// Maximum chunks per document (limited by per-tx dynamic field access)
+public fun max_chunks_per_document(): u64 { 1000 }
+
+/// Maximum documents per DAO (soft limit for reasonable DAOs)
+public fun max_documents_per_dao(): u64 { 1000 }
+
+/// Maximum traversal limit for document queries (pagination)
+public fun max_traversal_limit(): u64 { 1000 }
 
 // === Validation Functions ===
 

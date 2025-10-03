@@ -20,7 +20,7 @@ use account_protocol::{
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_actions::founder_lock_proposal::{Self, FounderLockProposal, PriceTier};
-use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
+use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::{
     spot_amm::SpotAMM,
     proposal::Proposal,

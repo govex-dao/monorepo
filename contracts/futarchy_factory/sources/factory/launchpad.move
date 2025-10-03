@@ -21,7 +21,7 @@ use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_markets::{fee, account_spot_pool::{Self, AccountSpotPool}};
-use futarchy_one_shot_utils::math;
+use futarchy_one_shot_utils::{math, constants};
 use account_extensions::extensions::Extensions;
 
 // === Witnesses ===
@@ -46,7 +46,6 @@ const EInvalidActionData: u64 = 16;
 const ESettlementNotStarted: u64 = 101;
 const ESettlementInProgress: u64 = 102;
 const ESettlementAlreadyDone: u64 = 103;
-const ENotEligibleForTokens: u64 = 104;
 const ECapChangeAfterDeadline: u64 = 105;
 const ECapHeapInvariant: u64 = 106;
 const ESettlementAlreadyStarted: u64 = 107;
@@ -58,6 +57,15 @@ const EDaoAlreadyPreCreated: u64 = 112;
 const EIntentsAlreadyLocked: u64 = 113;
 const EResourcesNotFound: u64 = 114;
 const EInitActionsFailed: u64 = 115;
+const EInvalidMaxRaise: u64 = 116;
+const EAlreadyRevealed: u64 = 117;
+const EHashMismatch: u64 = 118;
+const ERevealDeadlineNotReached: u64 = 119;
+const EInvalidCapValue: u64 = 120;
+const EAllowedCapsNotSorted: u64 = 121;
+const EAllowedCapsEmpty: u64 = 122;
+const EFinalRaiseAmountZero: u64 = 123;
+const EInvalidSaltLength: u64 = 124;  // Salt must be exactly 32 bytes
 
 // === Constants ===
 /// The duration for every raise is fixed. 14 days in milliseconds.
@@ -72,6 +80,27 @@ const STATE_FAILED: u8 = 2;
 
 const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
 const MAX_UNIQUE_CAPS: u64 = 1000; // Maximum number of unique cap values to prevent unbounded heap
+
+// === DoS Protection & Crank Incentives ===
+/// Minimum SUI fee per contribution to prevent spam and fund settlement cranking
+/// This makes DoS attacks expensive while incentivizing settlement workers
+///
+/// Fee Distribution Model:
+/// - Each contributor pays: 0.1 SUI
+/// - Crankers get: 0.05 SUI per cap processed (paid during crank_settlement)
+/// - Finalizer gets: All remaining pool (paid during finalize_settlement)
+///
+/// Example with 1000 contributors, 100 unique caps:
+/// - Total pool: 100 SUI
+/// - Crankers earn: 100 caps × 0.05 SUI = 5 SUI
+/// - Finalizer earns: 95 SUI
+///
+/// DoS Protection: Attacker needs 1000 × 0.1 SUI = 100 SUI to create 1000 spam contributions
+const CRANK_FEE_PER_CONTRIBUTION: u64 = 100_000_000; // 0.1 SUI (~$0.10)
+
+/// Reward per cap processed during settlement cranking
+/// 0.05 SUI per cap makes cranking profitable
+const REWARD_PER_CAP_PROCESSED: u64 = 50_000_000; // 0.05 SUI
 
 // === Safety Limits ===
 const MAX_INIT_ACTIONS: u64 = 20; // Maximum number of init actions to prevent gas exhaustion
@@ -118,6 +147,7 @@ public struct DaoPoolKey has copy, drop, store {}
 public struct Contribution has store, drop, copy {
     amount: u64,
     max_total: u64, // cap; u64::MAX means "no cap"
+    allow_cranking: bool, // If true, anyone can claim tokens on behalf of this contributor
 }
 
 /// Key type for storing refunds separately from contributions
@@ -149,6 +179,7 @@ public struct CapSettlement has key, store {
     running_sum: u64,    // C_k as we walk from high cap to low
     final_total: u64,    // T* once found
     done: bool,
+    cranker: address,    // Who called begin_settlement (gets bounty)
 }
 
 /// Main object for a DAO fundraising launchpad.
@@ -168,6 +199,9 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     tokens_for_sale_amount: u64,
     /// Vault for the stable coins contributed by users.
     stable_coin_vault: Balance<StableCoin>,
+    /// Crank pool funded by contributor fees (in SUI)
+    /// Split: 50% to finalizer, 50% to crankers (0.05 SUI per cap processed)
+    crank_pool: Balance<sui::sui::SUI>,
     /// Number of unique contributors (contributions stored as dynamic fields)
     contributor_count: u64,
     description: String,
@@ -178,7 +212,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     /// Reentrancy guard flag
     claiming: bool,
     /// Cap-aware accounting
-    thresholds: vector<u64>,       // unique caps we've seen
+    allowed_caps: vector<u64>,     // Creator-defined allowed cap values (sorted ascending)
+    thresholds: vector<u64>,       // Subset of allowed_caps actually used
     settlement_done: bool,
     settlement_in_progress: bool,  // Track if settlement has started
     final_total_eligible: u64,     // T* after enforcing caps
@@ -187,6 +222,11 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     dao_id: Option<ID>,
     /// Whether init actions can still be added
     intents_locked: bool,
+    /// Seal integration fields for hidden max raise
+    max_raise_sealed_blob_id: Option<vector<u8>>,     // Walrus blob ID (encrypted data)
+    max_raise_commitment_hash: Option<vector<u8>>,    // Hash of plaintext for verification
+    max_raise_revealed: Option<u64>,                  // Set after decryption
+    reveal_deadline_ms: u64,                          // deadline_ms + 7 days grace period
 }
 
 /// Stores all parameters needed for DAO creation to keep the Raise object clean.
@@ -321,6 +361,31 @@ public struct FounderRewardsConfigured has copy, drop {
     tiers: u64,
 }
 
+public struct RaiseCreatedWithSealedCap has copy, drop {
+    raise_id: ID,
+    creator: address,
+    raise_token_type: String,
+    stable_coin_type: String,
+    min_raise_amount: u64,
+    tokens_for_sale: u64,
+    deadline_ms: u64,
+    reveal_deadline_ms: u64,
+    description: String,
+}
+
+public struct MaxRaiseRevealed has copy, drop {
+    raise_id: ID,
+    decrypted_max_raise: u64,
+    timestamp_ms: u64,
+}
+
+public struct RaiseFailedSealTimeout has copy, drop {
+    raise_id: ID,
+    deadline_ms: u64,
+    reveal_deadline_ms: u64,
+    timestamp_ms: u64,
+}
+
 // === Init ===
 
 fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
@@ -413,7 +478,8 @@ public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin:
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
-    max_raise_amount: Option<u64>, // Add the new parameter
+    max_raise_amount: Option<u64>,
+    allowed_caps: vector<u64>, // Creator-defined allowed cap values
     description: String,
     // DAOParameters passed as individual fields for entry function compatibility
     dao_name: ascii::String,
@@ -488,7 +554,7 @@ public entry fun create_raise_with_founder_rewards<RaiseToken: drop, StableCoin:
     };
     
     init_raise_with_founder<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, description, dao_params, clock, ctx
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps, description, dao_params, clock, ctx
     );
 }
 
@@ -498,7 +564,8 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
-    max_raise_amount: Option<u64>, // Add the new parameter
+    max_raise_amount: Option<u64>,
+    allowed_caps: vector<u64>, // Creator-defined allowed cap values
     description: String,
     dao_name: ascii::String,
     dao_description: String,
@@ -536,16 +603,66 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     };
     
     init_raise<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, description, dao_params, clock, ctx
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps, description, dao_params, clock, ctx
+    );
+}
+
+/// Create a raise with Seal-encrypted max_raise_amount
+/// The max cap is hidden during fundraising to prevent oversubscription gaming
+/// Anyone can decrypt and reveal it after the deadline using Seal
+public entry fun create_raise_with_sealed_cap<RaiseToken: drop, StableCoin: drop>(
+    factory: &factory::Factory,
+    treasury_cap: TreasuryCap<RaiseToken>,
+    tokens_for_raise: Coin<RaiseToken>,
+    min_raise_amount: u64,
+    allowed_caps: vector<u64>, // Creator-defined allowed cap values
+    max_raise_sealed_blob_id: vector<u8>,
+    max_raise_commitment_hash: vector<u8>,
+    description: String,
+    dao_name: ascii::String,
+    dao_description: String,
+    icon_url_string: ascii::String,
+    review_period_ms: u64,
+    trading_period_ms: u64,
+    amm_twap_start_delay: u64,
+    amm_twap_step_max: u64,
+    amm_twap_initial_observation: u128,
+    twap_threshold: u64,
+    max_outcomes: u64,
+    agreement_lines: vector<String>,
+    agreement_difficulties: vector<u64>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(tokens_for_raise.value() == treasury_cap.total_supply(), EWrongTotalSupply);
+    assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
+
+    let dao_params = DAOParameters {
+        dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
+        amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
+        twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
+        founder_reward_params: option::none(),
+        init_actions_must_succeed: true,
+        init_action_specs: option::none(),
+    };
+
+    init_raise_with_sealed_cap<RaiseToken, StableCoin>(
+        treasury_cap, tokens_for_raise, min_raise_amount, allowed_caps,
+        max_raise_sealed_blob_id, max_raise_commitment_hash,
+        description, dao_params, clock, ctx
     );
 }
 
 /// Contribute with a cap: max final total raise you accept.
 /// cap = u64::max_value() means "no cap".
+///
+/// DoS Protection: Requires 0.1 SUI crank fee to prevent spam attacks
+/// The fee funds settlement cranking, making the system self-incentivizing
 public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     contribution: Coin<StableCoin>,
     cap: u64,
+    crank_fee: Coin<sui::sui::SUI>,  // NEW: Anti-DoS fee
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -555,9 +672,16 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     let contributor = ctx.sender();
     let amount = contribution.value();
     assert!(amount > 0, EZeroContribution);
-    
+
+    // DoS PROTECTION: Collect crank fee (makes spam expensive + funds crankers)
+    assert!(crank_fee.value() == CRANK_FEE_PER_CONTRIBUTION, EInvalidStateForAction);
+    raise.crank_pool.join(crank_fee.into_balance());
+
     // SECURITY: Cap must be reasonable (at least the contribution amount)
     assert!(cap >= amount, EInvalidStateForAction);
+
+    // SECURITY: Cap must be one of the creator-defined allowed values
+    assert!(is_cap_allowed(cap, &raise.allowed_caps), EInvalidCapValue);
 
     // Deposit coins into vault + naive total accounting
     raise.stable_coin_vault.join(contribution.into_balance());
@@ -573,11 +697,15 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
         assert!(rec.max_total == cap, ECapChangeAfterDeadline);
         assert!(rec.amount <= std::u64::max_value!() - amount, EArithmeticOverflow);
         rec.amount = rec.amount + amount;
-        
+
         // SECURITY: Updated total cap must still be reasonable
         assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
     } else {
-        df::add(&mut raise.id, key, Contribution { amount, max_total: cap });
+        df::add(&mut raise.id, key, Contribution {
+            amount,
+            max_total: cap,
+            allow_cranking: false, // Default: only self can claim
+        });
         raise.contributor_count = raise.contributor_count + 1;
 
         // Ensure a cap-bin exists and index it if first time seen
@@ -607,6 +735,33 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     });
 }
 
+
+/// Enable cranking: allow anyone to claim tokens on your behalf
+/// This is useful if you want helpful bots to process your claim automatically
+public entry fun enable_cranking<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    ctx: &mut TxContext,
+) {
+    let contributor = ctx.sender();
+    let key = ContributorKey { contributor };
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    let rec: &mut Contribution = df::borrow_mut(&mut raise.id, key);
+    rec.allow_cranking = true;
+}
+
+/// Disable cranking: only you can claim your tokens
+public entry fun disable_cranking<RaiseToken, StableCoin>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    ctx: &mut TxContext,
+) {
+    let contributor = ctx.sender();
+    let key = ContributorKey { contributor };
+    assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    let rec: &mut Contribution = df::borrow_mut(&mut raise.id, key);
+    rec.allow_cranking = false;
+}
 
 /// Optional: explicit cap update before deadline (moves contributor's amount across bins)
 public entry fun update_cap<RaiseToken, StableCoin>(
@@ -723,7 +878,7 @@ public fun begin_settlement<RT, SC>(
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(!raise.settlement_done && !raise.settlement_in_progress, ESettlementAlreadyDone);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
-    
+
     // SECURITY: Mark that settlement has started to prevent bin/cap manipulation
     raise.settlement_in_progress = true;
 
@@ -740,6 +895,7 @@ public fun begin_settlement<RT, SC>(
         running_sum: 0,
         final_total: 0,
         done: false,
+        cranker: ctx.sender(), // Record who will finalize (gets 50%)
     };
 
     event::emit(SettlementStarted { raise_id: object::id(raise), caps_count: size });
@@ -747,19 +903,22 @@ public fun begin_settlement<RT, SC>(
 }
 
 /// Crank up to `steps` caps. Once done is true, final_total is T*.
+/// Pays cranker 0.05 SUI per cap processed
 public entry fun crank_settlement<RT, SC>(
     raise: &mut Raise<RT, SC>,
     s: &mut CapSettlement,
     steps: u64,
+    ctx: &mut TxContext,
 ) {
     assert!(object::id(raise) == s.raise_id, EInvalidStateForAction);
     assert!(!s.done, ESettlementInProgress);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(raise.settlement_in_progress, EInvalidSettlementState);
-    
+
     // SECURITY: Limit steps to prevent DOS
     let actual_steps = if (steps > 100) { 100 } else { steps };
 
+    let mut caps_processed = 0;
     let mut i = 0;
     while (i < actual_steps && s.size > 0 && !s.done) {
         // Pop the highest cap
@@ -790,6 +949,7 @@ public entry fun crank_settlement<RT, SC>(
             next_cap,
         });
 
+        caps_processed = caps_processed + 1;
         i = i + 1;
     };
 
@@ -798,19 +958,39 @@ public entry fun crank_settlement<RT, SC>(
         s.final_total = 0;
         s.done = true;
     };
+
+    // CRANK REWARD: Pay 0.05 SUI per cap processed
+    if (caps_processed > 0) {
+        let reward_amount = caps_processed * REWARD_PER_CAP_PROCESSED;
+        let pool_balance = raise.crank_pool.value();
+
+        // Pay up to what's available in pool
+        let actual_reward = if (reward_amount > pool_balance) {
+            pool_balance
+        } else {
+            reward_amount
+        };
+
+        if (actual_reward > 0) {
+            let reward = coin::from_balance(raise.crank_pool.split(actual_reward), ctx);
+            transfer::public_transfer(reward, ctx.sender());
+        };
+    };
 }
 
 /// Finalize: record T* and lock settlement
+/// Pays settlement finalizer 100% of remaining pool (after cranker rewards)
 public fun finalize_settlement<RT, SC>(
     raise: &mut Raise<RT, SC>,
     s: CapSettlement,
+    ctx: &mut TxContext,
 ) {
     assert!(object::id(raise) == s.raise_id, EInvalidStateForAction);
     assert!(s.done, ESettlementNotStarted);
     assert!(!raise.settlement_done, ESettlementAlreadyDone);
     assert!(raise.settlement_in_progress, EInvalidSettlementState);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
-    
+
     // SECURITY: Validate final total is reasonable
     assert!(s.final_total <= raise.total_raised, EInvalidSettlementState);
 
@@ -818,10 +998,21 @@ public fun finalize_settlement<RT, SC>(
     raise.settlement_done = true;
     raise.settlement_in_progress = false; // Settlement completed
 
+    // CRANK REWARD: Pay all remaining pool to finalizer
+    // Crankers already got paid 0.05 SUI per cap
+    let remaining_pool = raise.crank_pool.value();
+    if (remaining_pool > 0) {
+        let finalizer_reward = coin::from_balance(
+            raise.crank_pool.split(remaining_pool),
+            ctx
+        );
+        transfer::public_transfer(finalizer_reward, s.cranker);
+    };
+
     event::emit(SettlementFinalized { raise_id: object::id(raise), final_total: s.final_total });
 
     // Destroy the crank object
-    let CapSettlement { id, raise_id: _, heap: _, size: _, running_sum: _, final_total: _, done: _ } = s;
+    let CapSettlement { id, raise_id: _, heap: _, size: _, running_sum: _, final_total: _, done: _, cranker: _ } = s;
     object::delete(id);
 }
 
@@ -835,12 +1026,100 @@ public entry fun start_settlement<RT, SC>(
     transfer::public_share_object(settlement);
 }
 
+/// Reveal the Seal-encrypted max_raise_amount and begin settlement
+/// Anyone can call this after the deadline with the decrypted values from Seal
+///
+/// SEAL encrypts BOTH max_raise AND salt together. After deadline, anyone can:
+/// 1. Decrypt the SEAL blob to get (max_raise, salt)
+/// 2. Call this function with both values
+/// 3. Chain verifies hash(max_raise || salt) matches stored commitment
+///
+/// This prevents rainbow table attacks on the commitment hash while keeping
+/// founder from needing to remember the salt (it's encrypted in SEAL).
+public entry fun reveal_and_begin_settlement<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    decrypted_max_raise: u64,     // Decrypted from SEAL blob
+    decrypted_salt: vector<u8>,   // Also decrypted from SEAL blob (32 bytes)
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Validation checks
+    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
+    assert!(!raise.settlement_done && !raise.settlement_in_progress, ESettlementAlreadyStarted);
+    assert!(raise.max_raise_revealed.is_none(), EAlreadyRevealed);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+
+    // CRITICAL: Validate decrypted value is reasonable
+    assert!(decrypted_max_raise >= raise.min_raise_amount, EInvalidMaxRaise);
+
+    // CRITICAL: Verify salt length (must be exactly 32 bytes)
+    assert!(vector::length(&decrypted_salt) == 32, EInvalidSaltLength);
+
+    // CRITICAL: Verify commitment hash(max_raise || salt)
+    // This proves the decrypted values are correct and prevents fake reveals
+    if (option::is_some(&raise.max_raise_commitment_hash)) {
+        let mut data = bcs::to_bytes(&decrypted_max_raise);
+        vector::append(&mut data, decrypted_salt);
+        let computed_hash = sui::hash::keccak256(&data);
+        assert!(computed_hash == *option::borrow(&raise.max_raise_commitment_hash), EHashMismatch);
+    };
+
+    // Store revealed value
+    raise.max_raise_revealed = option::some(decrypted_max_raise);
+
+    // Emit event
+    event::emit(MaxRaiseRevealed {
+        raise_id: object::id(raise),
+        decrypted_max_raise,
+        timestamp_ms: clock.timestamp_ms(),
+    });
+
+    // Begin settlement with revealed cap
+    let settlement = begin_settlement(raise, clock, ctx);
+    transfer::public_share_object(settlement);
+}
+
 /// Entry function to finalize settlement
 public entry fun complete_settlement<RT, SC>(
     raise: &mut Raise<RT, SC>,
     s: CapSettlement,
+    ctx: &mut TxContext,
 ) {
-    finalize_settlement(raise, s);
+    finalize_settlement(raise, s, ctx);
+}
+
+/// Fail a raise if Seal decryption times out (7 days after deadline)
+/// This safety mechanism allows contributors to get refunds if Seal is unavailable
+public entry fun fail_raise_seal_timeout<RT: drop, SC>(
+    raise: &mut Raise<RT, SC>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Can only call after reveal deadline (deadline + 7 days)
+    assert!(clock.timestamp_ms() >= raise.reveal_deadline_ms, ERevealDeadlineNotReached);
+
+    // Can only call if max_raise not revealed yet
+    assert!(raise.max_raise_revealed.is_none(), EAlreadyRevealed);
+
+    // Must have sealed cap to timeout
+    assert!(raise.max_raise_sealed_blob_id.is_some(), EInvalidStateForAction);
+
+    // Mark raise as failed
+    if (raise.state == STATE_FUNDING) {
+        raise.state = STATE_FAILED;
+
+        // Cleanup pre-created DAO components if they exist
+        // Note: These objects remain in dynamic fields and cannot be easily cleaned up
+        // without specific delete functions. The raise being marked as FAILED prevents
+        // them from being used, and the objects remain frozen in the Raise.
+
+        event::emit(RaiseFailedSealTimeout {
+            raise_id: object::id(raise),
+            deadline_ms: raise.deadline_ms,
+            reveal_deadline_ms: raise.reveal_deadline_ms,
+            timestamp_ms: clock.timestamp_ms(),
+        });
+    };
 }
 
 /// Activates pre-created DAO and executes pending intents
@@ -869,7 +1148,12 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
 
     // --- THE CRUCIAL HYBRID LOGIC ---
     // The final raise is the lesser of the market consensus and the creator's hard cap.
-    let final_total = if (option::is_some(&raise.max_raise_amount)) {
+    // Check both revealed (from Seal) and public max_raise_amount
+    let final_total = if (option::is_some(&raise.max_raise_revealed)) {
+        // Use revealed value from Seal decryption
+        math::min(consensual_total, *option::borrow(&raise.max_raise_revealed))
+    } else if (option::is_some(&raise.max_raise_amount)) {
+        // Use public max_raise_amount
         math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
     } else {
         consensual_total
@@ -934,138 +1218,12 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
     });
 }
 
-/// Creates DAO atomically with staged init actions (backward compatibility)
-/// Executes all init actions that were staged via stage_init_actions()
-/// If ANY init action fails, entire DAO creation reverts and raise remains refundable
-/// 
-/// ## Two-Phase Process:
-/// 1. Before deadline: Creator calls stage_init_actions() to set up init actions
-/// 2. After deadline: Anyone calls this to create DAO with staged actions
-/// 
-/// Uses hot potato pattern - DAO components exist unshared until init succeeds
-public entry fun claim_success_and_create_dao_with_init<RaiseToken: drop + store, StableCoin: drop + store>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    factory: &mut factory::Factory,
-    extensions: &Extensions,
-    fee_manager: &mut fee::FeeManager,
-    payment: Coin<sui::sui::SUI>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
-    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
-    assert!(raise.settlement_done, ESettlementNotStarted);
-
-    // Use T* from the settlement algorithm
-    let consensual_total = raise.final_total_eligible;
-
-    assert!(consensual_total >= raise.min_raise_amount, EMinRaiseNotMet);
-    assert!(consensual_total > 0, EMinRaiseNotMet);
-
-    // SECURITY: Final total cannot exceed total raised
-    assert!(consensual_total <= raise.total_raised, EInvalidSettlementState);
-
-    // --- THE CRUCIAL HYBRID LOGIC ---
-    // The final raise is the lesser of the market consensus and the creator's hard cap.
-    let final_total = if (option::is_some(&raise.max_raise_amount)) {
-        math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
-    } else {
-        consensual_total
-    };
-
-    // Store this final capped amount for claims and refunds
-    raise.final_raise_amount = final_total;
-
-    // SECURITY: Verify invariants
-    assert!(raise.final_raise_amount <= raise.final_total_eligible, EInvalidSettlementState);
-    assert!(raise.final_raise_amount <= raise.stable_coin_vault.value(), EInvalidSettlementState);
-
-    // Extract the TreasuryCap if available
-    let treasury_cap = if (raise.treasury_cap.is_some()) {
-        option::some(raise.treasury_cap.extract())
-    } else {
-        option::none()
-    };
-
-    let params = &raise.dao_params;
-    
-    // Create DAO WITHOUT sharing it yet - need to execute init actions first
-    let (mut account, mut queue, mut spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
-        factory,
-        extensions,
-        fee_manager,
-        payment,
-        1, // min_asset_amount
-        1, // min_stable_amount
-        params.dao_name,
-        params.icon_url_string,
-        params.review_period_ms,
-        params.trading_period_ms,
-        params.amm_twap_start_delay,
-        params.amm_twap_step_max,
-        params.amm_twap_initial_observation,
-        params.twap_threshold,
-        DEFAULT_AMM_TOTAL_FEE_BPS,
-        params.dao_description,
-        params.max_outcomes,
-        treasury_cap,
-        clock,
-        ctx
-    );
-    
-    // Execute staged init actions if any
-    if (params.init_action_specs.is_some()) {
-        let specs = *params.init_action_specs.borrow();
-        
-        // Execute with hot potato resources - any failure aborts entire transaction
-        init_actions::execute_init_intent_with_resources<RaiseToken, StableCoin>(
-            &mut account,
-            specs,
-            &mut queue,
-            &mut spot_pool,
-            clock,
-            ctx
-        );
-    };
-    
-    // Handle founder rewards as commitment action
-    if (params.founder_reward_params.is_some()) {
-        let founder_params = params.founder_reward_params.borrow();
-        
-        // Founder rewards are handled as commitment actions
-        // These create price-locked tokens that unlock at price targets
-        // Implementation depends on commitment module availability
-        
-        event::emit(FounderRewardsConfigured {
-            raise_id: object::id(raise),
-            founder_address: founder_params.founder_address,
-            allocation_bps: founder_params.founder_allocation_bps,
-            tiers: if (founder_params.linear_vesting) { 5u64 } else { 1u64 },
-        });
-    };
-    
-    // Only mark successful AFTER init actions succeed
-    raise.state = STATE_SUCCESSFUL;
-    
-    // Share all objects now that everything succeeded
-    transfer::public_share_object(account);
-    transfer::public_share_object(queue);
-    account_spot_pool::share(spot_pool);
-
-    // Transfer the final, capped amount to the creator
-    let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
-    transfer::public_transfer(raised_funds, raise.creator);
-
-    event::emit(RaiseSuccessful {
-        raise_id: object::id(raise),
-        total_raised: raise.final_raise_amount,
-    });
-}
-
-
-/// If successful, contributors can call this to claim their share of the governance tokens.
+/// If successful, claim tokens for a contributor.
+/// Only the contributor themselves can claim, unless they've enabled cranking via enable_cranking().
+/// This allows helpful bots to crank token distribution in chunks for opted-in users.
 public entry fun claim_tokens<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    recipient: address,
     ctx: &mut TxContext,
 ) {
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
@@ -1074,9 +1232,16 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     assert!(!raise.claiming, EReentrancy);
     raise.claiming = true;
 
-    let who = ctx.sender();
-    let key = ContributorKey { contributor: who };
+    let caller = ctx.sender();
+    let key = ContributorKey { contributor: recipient };
     assert!(df::exists_(&raise.id, key), ENotAContributor);
+
+    // SECURITY: Check permission - only self or if cranking is enabled
+    let rec_check: &Contribution = df::borrow(&raise.id, key);
+    assert!(
+        caller == recipient || rec_check.allow_cranking,
+        ENotTheCreator // Reusing error for "not authorized"
+    );
 
     // SECURITY: Remove and get contribution record to prevent double-claim
     let rec: Contribution = df::remove(&mut raise.id, key);
@@ -1089,14 +1254,26 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     // This respects the outcome of the settlement phase.
     let consensual_total = raise.final_total_eligible;
     if (!(rec.max_total >= consensual_total)) {
-        // This user was filtered out by the market. They get a 100% refund.
-        // We put their full contribution back so they can claim it.
-        df::add(&mut raise.id, key, rec);
+        // IMPROVED UX: Auto-refund ineligible users instead of aborting
+        // User was filtered out by market - give them 100% refund automatically
+        let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
+        transfer::public_transfer(refund_coin, recipient);
+
+        event::emit(RefundClaimed {
+            raise_id: object::id(raise),
+            contributor: recipient,
+            refund_amount: rec.amount,
+        });
+
         raise.claiming = false;
-        abort ENotEligibleForTokens
+        return // Exit early - refund complete
     };
 
     // Step 2: Pro-rata calculation for ELIGIBLE users
+    // SECURITY: Validate final_raise_amount is not zero (prevent division by zero)
+    assert!(raise.final_raise_amount > 0, EFinalRaiseAmountZero);
+    assert!(consensual_total > 0, EMinRaiseNotMet);
+
     // Calculate the user's share of the consensual total
     let accepted_amount = math::mul_div_to_64(
         rec.amount,
@@ -1111,11 +1288,11 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     );
 
     let tokens = coin::from_balance(raise.raise_token_vault.split(tokens_to_claim), ctx);
-    transfer::public_transfer(tokens, who);
+    transfer::public_transfer(tokens, recipient);
 
     event::emit(TokensClaimed {
         raise_id: object::id(raise),
-        contributor: who,
+        contributor: recipient,
         contribution_amount: accepted_amount,
         tokens_claimed: tokens_to_claim,
     });
@@ -1124,7 +1301,7 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     let refund_due = rec.amount - accepted_amount;
     if (refund_due > 0) {
         // Use a separate RefundKey to prevent double-claiming
-        let refund_key = RefundKey { contributor: who };
+        let refund_key = RefundKey { contributor: recipient };
         // Only add if no existing refund (safety check)
         if (!df::exists_(&raise.id, refund_key)) {
             df::add(&mut raise.id, refund_key, RefundRecord { amount: refund_due });
@@ -1240,55 +1417,20 @@ public entry fun claim_hard_cap_refund<RaiseToken, StableCoin>(
     });
 }
 
-/// Refund for contributors whose cap excluded them (after successful raise).
-public entry fun claim_refund_ineligible<RaiseToken, StableCoin>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    ctx: &mut TxContext,
-) {
-    assert!(raise.settlement_done, ESettlementNotStarted);
-    assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
-
-    let who = ctx.sender();
-    let key = ContributorKey { contributor: who };
-    assert!(df::exists_(&raise.id, key), ENotAContributor);
-
-    let rec: Contribution = df::remove(&mut raise.id, key);
-    
-    // SECURITY: Verify contribution integrity
-    assert!(rec.amount > 0, EInvalidStateForAction);
-    assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
-
-    // Only for contributors who were excluded by their cap
-    if (rec.max_total >= raise.final_total_eligible) {
-        // They should claim tokens, not refund
-        // Reinsert their record to avoid bricking them
-        df::add(&mut raise.id, key, rec);
-        abort EInvalidStateForAction
-    };
-
-    let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
-    transfer::public_transfer(refund_coin, who);
-
-    event::emit(RefundClaimed {
-        raise_id: object::id(raise),
-        contributor: who,
-        refund_amount: rec.amount,
-    });
-}
-
-/// If failed, contributors can call this to get a refund.
+/// Refund for failed raises only
+/// Note: For successful raises, use claim_tokens() which auto-refunds ineligible contributors
 public entry fun claim_refund<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
-    
+
     // For failed raises, check if settlement is done to determine if it failed
     if (raise.settlement_done) {
         // Settlement done, check if final total met minimum
         if (raise.final_total_eligible >= raise.min_raise_amount) {
-            // Successful raise - use claim_refund_ineligible instead
+            // Successful raise - use claim_tokens() instead (it auto-refunds ineligible)
             abort EInvalidStateForAction
         };
     } else {
@@ -1347,18 +1489,26 @@ public entry fun sweep_dust<RaiseToken, StableCoin>(
     };
 }
 
-/// Internal function to initialize a raise with founder rewards.
-fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
+/// Internal function to initialize a raise with optional Seal encryption
+fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
     max_raise_amount: Option<u64>,
+    allowed_caps: vector<u64>,
+    max_raise_sealed_blob_id: Option<vector<u8>>,
+    max_raise_commitment_hash: Option<vector<u8>>,
     description: String,
     dao_params: DAOParameters,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
+    // Validate allowed_caps
+    assert!(!vector::is_empty(&allowed_caps), EAllowedCapsEmpty);
+    assert!(is_sorted_ascending(&allowed_caps), EAllowedCapsNotSorted);
+
     let tokens_for_sale = tokens_for_raise.value();
+    let deadline = clock.timestamp_ms() + LAUNCHPAD_DURATION_MS;
     let raise = Raise<RaiseToken, StableCoin> {
         id: object::new(ctx),
         creator: ctx.sender(),
@@ -1366,15 +1516,17 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
         total_raised: 0,
         min_raise_amount,
         max_raise_amount,
-        deadline_ms: clock.timestamp_ms() + LAUNCHPAD_DURATION_MS,
+        deadline_ms: deadline,
         raise_token_vault: tokens_for_raise.into_balance(),
         tokens_for_sale_amount: tokens_for_sale,
         stable_coin_vault: balance::zero(),
+        crank_pool: balance::zero(),  // Filled by contributor fees
         contributor_count: 0,
         description,
         dao_params,
         treasury_cap: option::some(treasury_cap),
         claiming: false,
+        allowed_caps,
         thresholds: vector::empty<u64>(),
         settlement_done: false,
         settlement_in_progress: false,
@@ -1382,20 +1534,57 @@ fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
         final_raise_amount: 0,
         dao_id: option::none(),
         intents_locked: false,
+        max_raise_sealed_blob_id,
+        max_raise_commitment_hash,
+        max_raise_revealed: option::none(),
+        reveal_deadline_ms: deadline + constants::seal_reveal_grace_period_ms(),
     };
 
-    event::emit(RaiseCreated {
-        raise_id: object::id(&raise),
-        creator: raise.creator,
-        raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
-        stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
-        min_raise_amount,
-        tokens_for_sale,
-        deadline_ms: raise.deadline_ms,
-        description: raise.description,
-    });
+    // Emit appropriate event based on whether Seal is used
+    if (option::is_some(&max_raise_sealed_blob_id)) {
+        event::emit(RaiseCreatedWithSealedCap {
+            raise_id: object::id(&raise),
+            creator: raise.creator,
+            raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
+            stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
+            min_raise_amount,
+            tokens_for_sale,
+            deadline_ms: raise.deadline_ms,
+            reveal_deadline_ms: raise.reveal_deadline_ms,
+            description: raise.description,
+        });
+    } else {
+        event::emit(RaiseCreated {
+            raise_id: object::id(&raise),
+            creator: raise.creator,
+            raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
+            stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
+            min_raise_amount,
+            tokens_for_sale,
+            deadline_ms: raise.deadline_ms,
+            description: raise.description,
+        });
+    };
 
     transfer::public_share_object(raise);
+}
+
+/// Internal function to initialize a raise with founder rewards.
+fun init_raise_with_founder<RaiseToken: drop, StableCoin: drop>(
+    treasury_cap: TreasuryCap<RaiseToken>,
+    tokens_for_raise: Coin<RaiseToken>,
+    min_raise_amount: u64,
+    max_raise_amount: Option<u64>,
+    allowed_caps: vector<u64>,
+    description: String,
+    dao_params: DAOParameters,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    init_raise_internal<RaiseToken, StableCoin>(
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps,
+        option::none<vector<u8>>(), option::none<vector<u8>>(), description, dao_params, clock, ctx
+    );
 }
 
 /// Internal function to initialize a raise (backward compatibility).
@@ -1404,49 +1593,74 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
     tokens_for_raise: Coin<RaiseToken>,
     min_raise_amount: u64,
     max_raise_amount: Option<u64>,
+    allowed_caps: vector<u64>,
     description: String,
     dao_params: DAOParameters,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let tokens_for_sale = tokens_for_raise.value();
-    let raise = Raise<RaiseToken, StableCoin> {
-        id: object::new(ctx),
-        creator: ctx.sender(),
-        state: STATE_FUNDING,
-        total_raised: 0,
-        min_raise_amount,
-        max_raise_amount,
-        deadline_ms: clock.timestamp_ms() + LAUNCHPAD_DURATION_MS,
-        raise_token_vault: tokens_for_raise.into_balance(),
-        tokens_for_sale_amount: tokens_for_sale,
-        stable_coin_vault: balance::zero(),
-        contributor_count: 0,
-        description,
-        dao_params,
-        treasury_cap: option::some(treasury_cap),
-        claiming: false,
-        thresholds: vector::empty<u64>(),
-        settlement_done: false,
-        settlement_in_progress: false,
-        final_total_eligible: 0,
-        final_raise_amount: 0,
-        dao_id: option::none(),
-        intents_locked: false,
+    init_raise_internal<RaiseToken, StableCoin>(
+        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps,
+        option::none<vector<u8>>(), option::none<vector<u8>>(), description, dao_params, clock, ctx
+    );
+}
+
+/// Internal function to initialize a raise with Seal-encrypted cap
+fun init_raise_with_sealed_cap<RaiseToken: drop, StableCoin: drop>(
+    treasury_cap: TreasuryCap<RaiseToken>,
+    tokens_for_raise: Coin<RaiseToken>,
+    min_raise_amount: u64,
+    allowed_caps: vector<u64>,
+    max_raise_sealed_blob_id: vector<u8>,
+    max_raise_commitment_hash: vector<u8>,
+    description: String,
+    dao_params: DAOParameters,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    init_raise_internal<RaiseToken, StableCoin>(
+        treasury_cap, tokens_for_raise, min_raise_amount, option::none<u64>(), allowed_caps,
+        option::some(max_raise_sealed_blob_id), option::some(max_raise_commitment_hash),
+        description, dao_params, clock, ctx
+    );
+}
+
+// === Helper Functions ===
+
+/// Check if a vector of u64 is sorted in ascending order
+fun is_sorted_ascending(v: &vector<u64>): bool {
+    let len = vector::length(v);
+    if (len <= 1) return true;
+
+    let mut i = 0;
+    while (i < len - 1) {
+        if (*vector::borrow(v, i) >= *vector::borrow(v, i + 1)) {
+            return false
+        };
+        i = i + 1;
     };
+    true
+}
 
-    event::emit(RaiseCreated {
-        raise_id: object::id(&raise),
-        creator: raise.creator,
-        raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
-        stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
-        min_raise_amount,
-        tokens_for_sale,
-        deadline_ms: raise.deadline_ms,
-        description: raise.description,
-    });
+/// Check if a cap is in the allowed caps list (binary search since sorted)
+fun is_cap_allowed(cap: u64, allowed_caps: &vector<u64>): bool {
+    let len = vector::length(allowed_caps);
+    let mut left = 0;
+    let mut right = len;
 
-    transfer::public_share_object(raise);
+    while (left < right) {
+        let mid = left + (right - left) / 2;
+        let mid_val = *vector::borrow(allowed_caps, mid);
+
+        if (mid_val == cap) {
+            return true
+        } else if (mid_val < cap) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        };
+    };
+    false
 }
 
 // === View Functions ===
@@ -1469,3 +1683,14 @@ public fun final_total_eligible<RT, SC>(r: &Raise<RT, SC>): u64 { r.final_total_
 public fun settlement_done<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_done }
 public fun settlement_in_progress<RT, SC>(r: &Raise<RT, SC>): bool { r.settlement_in_progress }
 public fun contributor_count<RT, SC>(r: &Raise<RT, SC>): u64 { r.contributor_count }
+
+/// Check if a contributor has enabled cranking (allows others to claim on their behalf)
+public fun is_cranking_enabled<RT, SC>(r: &Raise<RT, SC>, addr: address): bool {
+    let key = ContributorKey { contributor: addr };
+    if (df::exists_(&r.id, key)) {
+        let contribution: &Contribution = df::borrow(&r.id, key);
+        contribution.allow_cranking
+    } else {
+        false
+    }
+}

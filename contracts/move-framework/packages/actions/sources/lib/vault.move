@@ -265,7 +265,7 @@ public fun open<Config>(
 ) {
     account.verify(auth);
 
-    account.add_managed_data(VaultKey(name), Vault { 
+    account.add_managed_data(VaultKey(name), Vault {
         bag: bag::new(ctx),
         streams: table::new(ctx),
     }, version::current());
@@ -372,7 +372,7 @@ public fun close<Config>(
 ) {
     account.verify(auth);
 
-    let Vault { bag, streams } = 
+    let Vault { bag, streams } =
         account.remove_managed_data(VaultKey(name), version::current());
     assert!(bag.is_empty(), EVaultNotEmpty);
     assert!(streams.is_empty(), EVaultNotEmpty);

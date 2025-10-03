@@ -19,6 +19,7 @@ futarchy_lifecycle = { local = "../futarchy_lifecycle" }
 futarchy_actions = { local = "../futarchy_actions" }
 futarchy_legal_actions = { local = "../futarchy_legal_actions" }
 futarchy_governance_actions = { local = "../futarchy_governance_actions" }
+Walrus = { git = "https://github.com/MystenLabs/walrus-docs.git", subdir = "contracts/walrus", rev = "main" }
 [addresses]
 futarchy_dao = "0x1cb98d5de80f162eba833c93cf32e309f3a8da927fa7f7b123612b08df55bea9"
 futarchy_one_shot_utils = "0xc1bd7bc7b41a0338303273ea5d1903e789b82280b7ffd8532b20c65e73a95c6d"

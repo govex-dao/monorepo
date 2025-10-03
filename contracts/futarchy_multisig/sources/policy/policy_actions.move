@@ -31,6 +31,7 @@ const MODE_DAO_AND_COUNCIL: u8 = 3;
 // === Witness Types for Action Validation ===
 public struct SetTypePolicyWitness has drop {}
 public struct SetObjectPolicyWitness has drop {}
+public struct SetDocumentPolicyWitness has drop {}  // NEW
 public struct RegisterCouncilWitness has drop {}
 public struct RemoveTypePolicyWitness has drop {}
 public struct RemoveObjectPolicyWitness has drop {}
@@ -47,6 +48,13 @@ public struct SetTypePolicyAction has store, drop {
 /// Set an object-specific policy (e.g., specific UpgradeCap requires Technical Council)
 public struct SetObjectPolicyAction has store, drop {
     object_id: ID,
+    council_id: Option<ID>,
+    mode: u8,
+}
+
+/// Set a document-level policy (e.g., "bylaws" requires Legal Council) - NEW
+public struct SetDocumentPolicyAction has store, drop {
+    doc_name: String,
     council_id: Option<ID>,
     mode: u8,
 }
@@ -234,6 +242,32 @@ public fun new_remove_object_policy<Outcome, IW: drop>(
     destroy_remove_object_policy(action);
 }
 
+/// Create and add a set document policy action to an intent - NEW
+public fun new_set_document_policy<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    doc_name: String,
+    council_id: Option<ID>,
+    mode: u8,
+    intent_witness: IW,
+) {
+    // Create action struct
+    let action = SetDocumentPolicyAction { doc_name, council_id, mode };
+
+    // Serialize the entire action struct
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        SetDocumentPolicyWitness {},
+        data,
+        intent_witness,
+    );
+
+    // Destroy the action struct (serialize-then-destroy pattern)
+    destroy_set_document_policy(action);
+}
+
 // === Action Execution Functions (do_ pattern) ===
 
 /// Execute set type policy action
@@ -350,6 +384,67 @@ public fun do_set_object_policy<Outcome: store, IW: drop>(
         registry,
         dao_id,
         action.object_id,
+        action.council_id,
+        action.mode
+    );
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute set document policy action - NEW
+public fun do_set_document_policy<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<SetDocumentPolicyWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct
+    let mut reader = bcs::new(*action_data);
+    let doc_name = string::utf8(bcs::peel_vec_u8(&mut reader));
+    let council_id = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_address(&mut reader).to_id())
+    } else {
+        option::none()
+    };
+    let mode = bcs::peel_u8(&mut reader);
+
+    let action = SetDocumentPolicyAction {
+        doc_name,
+        council_id,
+        mode,
+    };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Input validation
+    assert!(action.mode <= 3, EInvalidMode);
+    // If mode requires council (1, 2, or 3), council_id must be provided
+    if (action.mode != MODE_DAO_ONLY) {
+        assert!(action.council_id.is_some(), EMissingCouncilId);
+    };
+
+    // Execute the action
+    let dao_id = object::id(account);
+    let registry = policy_registry::borrow_registry_mut(account, version::current());
+    policy_registry::set_document_policy(
+        registry,
+        dao_id,
+        action.doc_name,
         action.council_id,
         action.mode
     );
@@ -562,6 +657,11 @@ public fun destroy_set_type_policy(action: SetTypePolicyAction) {
 /// Destroy a SetObjectPolicyAction
 public fun destroy_set_object_policy(action: SetObjectPolicyAction) {
     let SetObjectPolicyAction { object_id: _, council_id: _, mode: _ } = action;
+}
+
+/// Destroy a SetDocumentPolicyAction - NEW
+public fun destroy_set_document_policy(action: SetDocumentPolicyAction) {
+    let SetDocumentPolicyAction { doc_name: _, council_id: _, mode: _ } = action;
 }
 
 /// Destroy a RegisterCouncilAction

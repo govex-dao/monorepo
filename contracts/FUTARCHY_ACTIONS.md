@@ -32,6 +32,14 @@ RemoveCoinType               - Remove allowed coin from vault
 ApproveCustody               - Approve asset custody transfer
 AcceptIntoCustody            - Accept asset into custody
 
+## Deposit Escrow Actions (User Deposits with Refund-on-Rejection)
+AcceptDeposit                - Accept user's escrowed deposit into vault
+                              * User deposits coins when creating intent (NOT an action)
+                              * If proposal passes → AcceptDeposit executes → coins to vault
+                              * If proposal fails → Crank function refunds depositor + gas reward to cranker
+                              * Configurable gas reward by depositor
+                              * Module: futarchy_vault::deposit_escrow
+
 ## Memo Actions
 EmitMemo                     - Post text message on-chain
 EmitDecision                 - Record governance decision

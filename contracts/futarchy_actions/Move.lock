@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "F04C9DD40279BDB14C3A46BF22BBDD9FEFB311A3C43AB396659FDD8089D98357"
-deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
+manifest_digest = "899D02D3755845210AAE74BE7C4983F799069516579F7770C575A399FE1CF5D8"
+deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -11,6 +11,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
   { id = "futarchy_legal_actions", name = "futarchy_legal_actions" },
@@ -98,6 +99,23 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "WAL"
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/wal" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "Walrus"
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/walrus" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "WAL", name = "WAL" },
+]
+
+[[move.package]]
 id = "futarchy_core"
 source = { local = "../futarchy_core" }
 
@@ -165,6 +183,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },

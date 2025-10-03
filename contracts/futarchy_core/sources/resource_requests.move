@@ -1,4 +1,4 @@
-module futarchy_actions::resource_requests;
+module futarchy_core::resource_requests;
 
 use std::string::{Self, String};
 use std::type_name::{Self, TypeName};

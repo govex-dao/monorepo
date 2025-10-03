@@ -28,7 +28,7 @@ use futarchy_core::{
     action_validation,
     action_types,
 };
-use futarchy_actions::resource_requests::{Self, ResourceRequest, ResourceReceipt};
+use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets::spot_amm::{Self, SpotAMM};
 use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
 // AddLiquidityAction defined locally since futarchy_one_shot_utils module doesn't exist

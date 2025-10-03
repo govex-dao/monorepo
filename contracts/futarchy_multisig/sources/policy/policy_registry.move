@@ -34,11 +34,15 @@ public struct PolicyRegistry has store {
     /// Type-based policies for actions
     /// Maps TypeName to PolicyRule (council ID + mode)
     type_policies: Table<TypeName, PolicyRule>,
-    
+
     /// Object-specific policies (e.g., specific UpgradeCap)
     /// Maps object ID to PolicyRule (council ID + mode)
     object_policies: Table<ID, PolicyRule>,
-    
+
+    /// Document-level policies (e.g., "bylaws" requires Legal Council)
+    /// Maps document name to PolicyRule (council ID + mode)
+    document_policies: Table<String, PolicyRule>,
+
     /// Registered security councils for this DAO
     registered_councils: vector<ID>,
 }
@@ -77,7 +81,7 @@ public struct CouncilRegistered has copy, drop {
 
 /// Initializes the policy registry for an Account.
 public fun initialize<Config>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     version_witness: VersionWitness,
     ctx: &mut TxContext
 ) {
@@ -85,9 +89,10 @@ public fun initialize<Config>(
         account::add_managed_data(
             account,
             PolicyRegistryKey {},
-            PolicyRegistry { 
+            PolicyRegistry {
                 type_policies: table::new(ctx),
                 object_policies: table::new(ctx),
+                document_policies: table::new(ctx),
                 registered_councils: vector::empty(),
             },
             version_witness
@@ -311,4 +316,74 @@ public fun get_registered_councils(registry: &PolicyRegistry): &vector<ID> {
 public fun has_type_policy<T>(registry: &PolicyRegistry): bool {
     let type_name = type_name::get<T>();
     table::contains(&registry.type_policies, type_name)
+}
+
+// === Document-Level Policy Functions ===
+
+/// Check if a document needs council approval
+public fun document_needs_council(registry: &PolicyRegistry, doc_name: String): bool {
+    if (table::contains(&registry.document_policies, doc_name)) {
+        let rule = table::borrow(&registry.document_policies, doc_name);
+        // Needs council if mode is not DAO_ONLY (0)
+        rule.mode != 0
+    } else {
+        false
+    }
+}
+
+/// Get the council ID for a document
+public fun get_document_council(registry: &PolicyRegistry, doc_name: String): Option<ID> {
+    if (table::contains(&registry.document_policies, doc_name)) {
+        let rule = table::borrow(&registry.document_policies, doc_name);
+        rule.council_id
+    } else {
+        option::none()
+    }
+}
+
+/// Get the approval mode for a document
+public fun get_document_mode(registry: &PolicyRegistry, doc_name: String): u8 {
+    if (table::contains(&registry.document_policies, doc_name)) {
+        let rule = table::borrow(&registry.document_policies, doc_name);
+        rule.mode
+    } else {
+        0 // Default to DAO_ONLY
+    }
+}
+
+/// Set a document-level policy with mode
+public fun set_document_policy(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    doc_name: String,
+    council_id: Option<ID>,
+    mode: u8,
+) {
+    let rule = PolicyRule { council_id, mode };
+    if (table::contains(&registry.document_policies, doc_name)) {
+        let existing = table::borrow_mut(&mut registry.document_policies, doc_name);
+        *existing = rule;
+    } else {
+        table::add(&mut registry.document_policies, doc_name, rule);
+    };
+
+    event::emit(DocumentPolicySet {
+        dao_id,
+        doc_name,
+        council_id,
+        mode,
+    });
+}
+
+/// Check if a document policy exists
+public fun has_document_policy(registry: &PolicyRegistry, doc_name: String): bool {
+    table::contains(&registry.document_policies, doc_name)
+}
+
+// === Document Policy Event ===
+public struct DocumentPolicySet has copy, drop {
+    dao_id: ID,
+    doc_name: String,
+    council_id: Option<ID>,
+    mode: u8,
 }

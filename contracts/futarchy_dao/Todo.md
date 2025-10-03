@@ -1,18 +1,28 @@
 # V2 Large
 - [ ] Add correct cross package security capaility / requirements
 - [ ] Get specs for https://github.com/MetaLex-Tech/RicardianTriplerDoubleTokenLeXscroW and add any missing things to this protocol
-- [ ] Clean up dao configuration / bootstrapping / creation to redice bioler plate and be readable
-read https://metadao.mintlify.app/idea-to-funded/after-ico
-bubble maps to exploe futarchy multisgi policy etc
-- [ ] make cardinality 1 dao to n operating agreements and give each of them a name
-- [ ] Accept deposit type intent type that if rejected retrurns said deposit to depositor?? maybe my futarchy payments or vault module already has this?????????? ooooooof this makes it hard to mutate as other people coudnt reproduce this intent in other outcomes, maybe allow people to mutate a always by adding onto other bundles, nahh dont like this at all too messy and conflicting e.g. two memos or changeing what stuff means or implies
-- [ ] pub base_to_stake: u64 to create a proposal
-Users Stake to the Draft Proposal
-This is where the stake_to_proposal.rs instruction comes in.
-Who: Any holder of the DAO's base token can participate.
-What: They call the stake_to_proposal instruction.
-Action: The instruction transfers their base tokens from their personal wallet into a special token account owned by the proposal PDA (proposal_base_account). This effectively locks their tokens with the proposal.
-Tracking: The system records how much each user has staked in a StakeAccount PDA and updates the amount_staked counter inside the proposal.state.
+- [X] we were in the process of migrationd dao doc registyry and associated files to use ID for chunks instead of indexer. then when done ask chtp5 pro chat for any missing against old OA file
+- [X] Change dao doc registry to dao file registry
+- [X] Change mf new auto withdraw coin pattern to registry use cap owned by that file module and intent to add or removed coin type to approved list for withdraw by that cap
+also befroe mergin get ai to review patern used in new changee to move framework and add to fork notes
+- [X] make cardinality 1 dao to n operating agreements and give each of them a name
+- [X] bascicaly changes you deleted in poperating agreement was\
+- [X]named lines to chunks everywhere\
+- [X]each chunk either had onchain sui string or walrus blob id (never both)\
+- [X]changed dao to doc cardinality from 1 to 1 to 1 to n\
+- [X]had like registr table of docs with name\
+- [X]and new imuntability level at doc level\
+- [X] Dao doc level change policy. as some are random some could be operating agreement 
+- [X] for launchpad allow anyone ot crank raise to anyone else
+- [X] wait i thought i had a minimum in my launchpad doule chekc that doesnt clash with max. like cant accept over X seperate participants etc
+
+- [ ]  instead of my conditinoal tokens could have existing registry of empty coins and allow proposal 
+creators to pay to take some from there and I can keep it stocked up so only takes one transaction
+store coin meta data cap and trasury cap and assert no supply and name is short and entirely numerical and 
+no metadat and then rename and go on my way??? 
+- [ ] Action control policy level policy setting. Instead of policy set of global change any actions policy
+- [ ] Optional amm registry to leave conditional tokens in a registry with a small fee where they can be cranked to people later. Token has escrow. So either burn or withdraw :) to owner
+
 
 
 # V2 economic incenitves etc
@@ -29,39 +39,14 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [ ] policy by coin type With "Policy by Coin Type," you can create a much more nuanced and secure treasury policy:
 - [ ] make sure conditional token holder can set their liqudiity to with draw only and dont auto put it in the next proposal
 - [ ] make oracle cusotmizable for vesting contracts?
+- [ ] Allow dao to ave seperate consitional amm fee and slot amm fee
+- [ ] Make protocol take 20% of prioirty quue fees
 
-# v2 amm
-- [ ] make proportion (but always try at least take min amount) of liquidty that goes from spot pool to proposal when proposal is live, a dao configurable parameter. then add meta dao no cycles style routing!!!, THEN MAKE SPOT ORACLE give liquidity weighted time weighted average price, not time weighted average price, liquidity going in and out must be split between the two pool at the correct ratio. Then that could block people withdrawing LP if they only had LP of one type?
-maybe thats bad??
-??????????? This whole idea sounds so strange tho, why do it like this
-just have seperate spot amm the dao own like a cetus one or any uni v2 amm app
-aggregators can handle the routing
-
-
-
-# V2 multisig
-- [ ] How UI is aware of multisig / proposal intents
-- [ ] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
-- [ ] Multi sig inherit dao level configs like is paused
-- [ ] Multisig must check that dead man switch is the daos futacrhy or another multisig with same dao id
-- [ ] Can create futarchy first dao defaults to futarchy only policy or multisig first dao Or    Both.   Or either poliicy 
-- [ ] seperate out just multsig???? as have leading multisig implementation???
-- [ ] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
-- [ ] fully seperate dao and account and futarchy configs
-- [ ] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
-- [ ] Your Account<WeightedMultisig> has the same capabilities as any other Account. But from a design pattern and security perspective, they should not. wait look at my multisigs
-do I need a dead man switch can my multisigs actually hold objects?
-I am not sure they should hmmm
-or should have a type that doesnt and type that does?
-!!!!! maybe I want both types of multisigs
 
 # time delay changes to policies
 should make time delay configurable per policy!
 futarchy being able to instantly change policy is dangerous
 allow for proposal to cancel policy change
-
-
-# operating agreement large changes pattern ( intent creator constructs unshared OA over multiple transactions if they want)
 
 Phase 1: Private Staging (Unshared, Owned by Proposer)
 Creation: The proposer's client constructs a PTB that calls your operating_agreement::new function. This function returns a fresh, unshared OperatingAgreement object. The PTB then transfers this object to the proposer.
@@ -92,8 +77,21 @@ Merge the branch (the do_swap_operating_agreement function executes).
 This is a profoundly powerful and intuitive model. It's a perfect example of leveraging Sui's object model to solve a complex problem in a clean, safe, and scalable way.
 
 
-
-
+# V2 multisig
+- [ ] How UI is aware of multisig / proposal intents
+- [ ] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
+- [ ] Multi sig inherit dao level configs like is paused
+- [ ] Multisig must check that dead man switch is the daos futacrhy or another multisig with same dao id
+- [ ] Can create futarchy first dao defaults to futarchy only policy or multisig first dao Or    Both.   Or either poliicy 
+- [ ] seperate out just multsig???? as have leading multisig implementation???
+- [ ] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
+- [ ] fully seperate dao and account and futarchy configs
+- [ ] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
+- [ ] Your Account<WeightedMultisig> has the same capabilities as any other Account. But from a design pattern and security perspective, they should not. wait look at my multisigs
+do I need a dead man switch can my multisigs actually hold objects?
+I am not sure they should hmmm
+or should have a type that doesnt and type that does?
+!!!!! maybe I want both types of multisigs
 
 # Clean up
   2. Stream/Payment Actions - Overlapping Cancel/Pause ⚠️

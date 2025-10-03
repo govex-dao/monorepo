@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "C8DC9B614BABD79938DD348FA10E72F59BBF413A754E12646410BDB2CA404616"
-deps_digest = "A37FF78F7B0CA9C18B30361A5DB661FF64D9B8FB6E6FE30E76ECC6F94D8787DB"
+manifest_digest = "7D1A97830E3FB94FA9A6F9B53FC2D467A6470550BB3E6719E1FD05D0BDBE6EFD"
+deps_digest = "4505A4CB9314914B4F7CE1C2E00C9EAB773493F8A0855ADA425A707F8D715710"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -12,6 +12,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_actions", name = "futarchy_actions" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
@@ -102,6 +103,23 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "WAL"
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/wal" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+]
+
+[[move.package]]
+id = "Walrus"
+source = { git = "https://github.com/MystenLabs/walrus-docs.git", rev = "main", subdir = "contracts/walrus" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
+  { id = "WAL", name = "WAL" },
+]
+
+[[move.package]]
 id = "futarchy_actions"
 source = { local = "../futarchy_actions" }
 
@@ -112,6 +130,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
   { id = "futarchy_legal_actions", name = "futarchy_legal_actions" },
@@ -191,6 +210,7 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+  { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets", name = "futarchy_markets" },

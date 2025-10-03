@@ -21,7 +21,7 @@ use futarchy_actions::{
 };
 use futarchy_lifecycle::dissolution_actions;
 use futarchy_legal_actions::{
-    operating_agreement_actions,
+    dao_file_actions,
 };
 use futarchy_streams::stream_actions;
 use futarchy_oracle::oracle_actions;
@@ -34,21 +34,45 @@ use futarchy_multisig::{
 /// This module serves as a central registry for all delete functions.
 /// Each function delegates to the appropriate module's delete function.
 
-// === Operating Agreement Actions ===
-public fun delete_operating_agreement_update(expired: &mut Expired) {
-    operating_agreement_actions::delete_update_line(expired);
+// === DAO File Actions ===
+public fun delete_dao_file_create_registry(expired: &mut Expired) {
+    dao_file_actions::delete_create_registry(expired);
 }
 
-public fun delete_operating_agreement_insert(expired: &mut Expired) {
-    operating_agreement_actions::delete_insert_line_after(expired);
+public fun delete_dao_file_create_root_document(expired: &mut Expired) {
+    dao_file_actions::delete_create_root_document(expired);
 }
 
-public fun delete_operating_agreement_remove(expired: &mut Expired) {
-    operating_agreement_actions::delete_remove_line(expired);
+public fun delete_dao_file_create_child_document(expired: &mut Expired) {
+    dao_file_actions::delete_create_child_document(expired);
 }
 
-public fun delete_operating_agreement_batch(expired: &mut Expired) {
-    operating_agreement_actions::delete_batch_operating_agreement(expired);
+public fun delete_dao_file_delete_document(expired: &mut Expired) {
+    dao_file_actions::delete_delete_document(expired);
+}
+
+public fun delete_dao_file_add_chunk(expired: &mut Expired) {
+    dao_file_actions::delete_add_chunk(expired);
+}
+
+public fun delete_dao_file_update(expired: &mut Expired) {
+    dao_file_actions::delete_update_chunk(expired);
+}
+
+public fun delete_dao_file_remove(expired: &mut Expired) {
+    dao_file_actions::delete_remove_chunk(expired);
+}
+
+public fun delete_dao_file_set_chunk_immutable(expired: &mut Expired) {
+    dao_file_actions::delete_set_chunk_immutable(expired);
+}
+
+public fun delete_dao_file_set_document_immutable(expired: &mut Expired) {
+    dao_file_actions::delete_set_document_immutable(expired);
+}
+
+public fun delete_dao_file_set_registry_immutable(expired: &mut Expired) {
+    dao_file_actions::delete_set_registry_immutable(expired);
 }
 
 // === Config Actions ===

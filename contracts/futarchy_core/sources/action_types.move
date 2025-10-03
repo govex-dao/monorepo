@@ -117,18 +117,39 @@ public struct ReadOraclePrice has drop {}
 public struct ConditionalMint has drop {}
 public struct TieredMint has drop {}
 
-// === Operating Agreement Action Types ===
+// === DAO Document Registry Action Types ===
 
-public struct CreateOperatingAgreement has drop {}
-public struct AddLine has drop {}
-public struct RemoveLine has drop {}
-public struct UpdateLine has drop {}
-public struct InsertLineAfter has drop {}
-public struct InsertLineAtBeginning has drop {}
-public struct BatchOperatingAgreement has drop {}
-public struct BatchAddLines has drop {}
-public struct BatchRemoveLines has drop {}
-public struct LockOperatingAgreement has drop {}
+// Registry actions
+public struct CreateDaoDocRegistry has drop {}
+public struct SetRegistryImmutable has drop {}
+
+// Walrus renewal
+public struct SetWalrusRenewal has drop {}  // Deprecated - use intent-based WalrusRenewal
+public struct WalrusRenewal has drop {}     // Intent-based renewal execution
+
+// Document CRUD
+public struct CreateRootDocument has drop {}
+public struct CreateChildDocument has drop {}
+public struct CreateDocumentVersion has drop {}
+public struct DeleteDocument has drop {}
+
+// Chunk operations
+public struct AddChunk has drop {}
+public struct AddSunsetChunk has drop {}
+public struct AddSunriseChunk has drop {}
+public struct AddTemporaryChunk has drop {}
+public struct AddChunkWithScheduledImmutability has drop {}
+public struct UpdateChunk has drop {}
+public struct RemoveChunk has drop {}
+
+// Immutability controls
+public struct SetChunkImmutable has drop {}
+public struct SetDocumentImmutable has drop {}
+public struct SetDocumentInsertAllowed has drop {}
+public struct SetDocumentRemoveAllowed has drop {}
+
+// Policy actions
+public struct SetDocumentPolicy has drop {}
 
 // === Custody Action Types ===
 
@@ -212,6 +233,16 @@ public struct UpdateCoinCreationFee has drop {}
 public struct UpdateCoinProposalFee has drop {}
 public struct UpdateCoinRecoveryFee has drop {}
 public struct ApplyPendingCoinFees has drop {}
+
+// === Deposit Escrow Action Types ===
+
+public struct AcceptDeposit has drop {
+    phantom: bool,
+}
+
+public fun accept_deposit(): AcceptDeposit {
+    AcceptDeposit { phantom: false }
+}
 
 // === Founder Lock Action Types ===
 
@@ -320,17 +351,25 @@ public fun cancel_challenged_withdrawals(): TypeName { type_name::with_defining_
 public fun conditional_mint(): TypeName { type_name::with_defining_ids<ConditionalMint>() }
 public fun tiered_mint(): TypeName { type_name::with_defining_ids<TieredMint>() }
 
-// Operating agreement actions
-public fun create_operating_agreement(): TypeName { type_name::with_defining_ids<CreateOperatingAgreement>() }
-public fun add_line(): TypeName { type_name::with_defining_ids<AddLine>() }
-public fun remove_line(): TypeName { type_name::with_defining_ids<RemoveLine>() }
-public fun update_line(): TypeName { type_name::with_defining_ids<UpdateLine>() }
-public fun insert_line_after(): TypeName { type_name::with_defining_ids<InsertLineAfter>() }
-public fun insert_line_at_beginning(): TypeName { type_name::with_defining_ids<InsertLineAtBeginning>() }
-public fun batch_operating_agreement(): TypeName { type_name::with_defining_ids<BatchOperatingAgreement>() }
-public fun batch_add_lines(): TypeName { type_name::with_defining_ids<BatchAddLines>() }
-public fun batch_remove_lines(): TypeName { type_name::with_defining_ids<BatchRemoveLines>() }
-public fun lock_operating_agreement(): TypeName { type_name::with_defining_ids<LockOperatingAgreement>() }
+// DAO Document Registry actions
+public fun create_dao_doc_registry(): TypeName { type_name::with_defining_ids<CreateDaoDocRegistry>() }
+public fun set_registry_immutable(): TypeName { type_name::with_defining_ids<SetRegistryImmutable>() }
+public fun create_root_document(): TypeName { type_name::with_defining_ids<CreateRootDocument>() }
+public fun create_child_document(): TypeName { type_name::with_defining_ids<CreateChildDocument>() }
+public fun create_document_version(): TypeName { type_name::with_defining_ids<CreateDocumentVersion>() }
+public fun delete_document(): TypeName { type_name::with_defining_ids<DeleteDocument>() }
+public fun add_chunk(): TypeName { type_name::with_defining_ids<AddChunk>() }
+public fun add_sunset_chunk(): TypeName { type_name::with_defining_ids<AddSunsetChunk>() }
+public fun add_sunrise_chunk(): TypeName { type_name::with_defining_ids<AddSunriseChunk>() }
+public fun add_temporary_chunk(): TypeName { type_name::with_defining_ids<AddTemporaryChunk>() }
+public fun add_chunk_with_scheduled_immutability(): TypeName { type_name::with_defining_ids<AddChunkWithScheduledImmutability>() }
+public fun update_chunk(): TypeName { type_name::with_defining_ids<UpdateChunk>() }
+public fun remove_chunk(): TypeName { type_name::with_defining_ids<RemoveChunk>() }
+public fun set_chunk_immutable(): TypeName { type_name::with_defining_ids<SetChunkImmutable>() }
+public fun set_document_immutable(): TypeName { type_name::with_defining_ids<SetDocumentImmutable>() }
+public fun set_document_insert_allowed(): TypeName { type_name::with_defining_ids<SetDocumentInsertAllowed>() }
+public fun set_document_remove_allowed(): TypeName { type_name::with_defining_ids<SetDocumentRemoveAllowed>() }
+public fun set_document_policy(): TypeName { type_name::with_defining_ids<SetDocumentPolicy>() }
 
 // Custody actions
 public fun create_custody_account(): TypeName { type_name::with_defining_ids<CreateCustodyAccount>() }
@@ -411,3 +450,7 @@ public fun apply_pending_coin_fees(): TypeName { type_name::with_defining_ids<Ap
 
 // Oracle actions
 public fun read_oracle_price(): TypeName { type_name::with_defining_ids<ReadOraclePrice>() }
+
+// Walrus renewal actions
+public fun set_walrus_renewal(): TypeName { type_name::with_defining_ids<SetWalrusRenewal>() }
+public fun walrus_renewal(): TypeName { type_name::with_defining_ids<WalrusRenewal>() }

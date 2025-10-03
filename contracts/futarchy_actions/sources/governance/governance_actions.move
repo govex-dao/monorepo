@@ -31,7 +31,7 @@ use futarchy_core::{
     action_validation,
     action_types,
 };
-use futarchy_actions::{
+use futarchy_core::{
     resource_requests::{Self, ResourceRequest, ResourceReceipt},
 };
 use futarchy_types::action_specs::InitActionSpecs;
@@ -53,6 +53,8 @@ const EBucketOrderingViolation: u64 = 13;
 const EIntegerOverflow: u64 = 14;
 const EInsufficientFeeCoins: u64 = 15;
 const EDAOPaymentDelinquent: u64 = 16; // DAO is blocked due to unpaid fees
+const EWrongQueue: u64 = 17; // Queue doesn't belong to the DAO
+const EDAOMismatch: u64 = 18; // Action's dao_id doesn't match queue's dao_id
 
 // === Constants ===
 // These are now just fallbacks - actual values come from DAO config
@@ -85,13 +87,17 @@ public struct CreateProposalAction has store, copy, drop {
     title: String,
     /// Optional: Override reservation period (if not set, uses DAO config)
     reservation_period_ms_override: Option<u64>,
+    /// The DAO Account ID (not the parent proposal ID!)
+    dao_id: ID,
 }
 
 /// Reservation for an nth-order proposal that was evicted
 /// This allows the proposal to be recreated within a time window
 /// Each recreation requires full fees - no special privileges
 public struct ProposalReservation has store {
-    /// Original parent proposal that created this reservation
+    /// The DAO Account ID this proposal belongs to
+    dao_id: ID,
+    /// Original parent proposal that created this reservation (for tracking)
     parent_proposal_id: ID,
     /// Root proposal ID (the original first-order proposal in the chain)
     root_proposal_id: ID,
@@ -193,6 +199,7 @@ public fun new_create_proposal_action(
         title,
         outcome_messages,
         outcome_details,
+        dao_id: @0x0.to_id(), // Will be set during execution
     }
 }
 
@@ -262,6 +269,13 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
         option::none()
     };
 
+    // Peel dao_id (added for proper DAO tracking)
+    let dao_id = if (bcs::peel_bool(&mut reader)) {
+        bcs::peel_address(&mut reader).to_id()
+    } else {
+        @0x0.to_id() // Will be set from context
+    };
+
     let action = CreateProposalAction {
         key,
         intent_specs,
@@ -273,6 +287,7 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
         use_dao_liquidity,
         proposal_fee,
         reservation_period_ms_override,
+        dao_id,
     };
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -322,12 +337,20 @@ public fun fulfill_create_proposal(
     ctx: &mut TxContext,
 ): ResourceReceipt<CreateProposalAction> {
     // Extract context from the request
-    let action: CreateProposalAction = resource_requests::get_context(&request, string::utf8(b"action"));
+    let mut action: CreateProposalAction = resource_requests::get_context(&request, string::utf8(b"action"));
     let parent_proposal_id: ID = resource_requests::get_context(&request, string::utf8(b"parent_proposal_id"));
     let reservation_period: u64 = resource_requests::get_context(&request, string::utf8(b"reservation_period"));
     let max_depth: u64 = resource_requests::get_context(&request, string::utf8(b"max_depth"));
     let account_id: ID = resource_requests::get_context(&request, string::utf8(b"account_id"));
-    
+
+    // SECURITY: Verify queue belongs to the DAO creating the proposal
+    let queue_dao_id = priority_queue::dao_id(queue);
+    assert!(queue_dao_id == account_id, EWrongQueue);
+
+    // SECURITY: Ensure action's dao_id matches both account and queue
+    assert!(action.dao_id == account_id, EDAOMismatch);
+    assert!(action.dao_id == queue_dao_id, EDAOMismatch);
+
     // Check if DAO is blocked due to unpaid fees
     assert!(
         !dao_payment_tracker::is_dao_blocked(payment_tracker, account_id),
@@ -532,6 +555,7 @@ fun create_reservation(
     let expires_at = current_time + reservation_period;
     
     let reservation = ProposalReservation {
+        dao_id: action.dao_id, // ✅ Store DAO ID separately
         parent_proposal_id,
         root_proposal_id: root_id,
         chain_depth: depth,
@@ -621,7 +645,7 @@ fun should_create_reservation(action: &CreateProposalAction): bool {
 fun create_queued_proposal_with_id(
     action: &CreateProposalAction,
     proposal_id: ID,
-    parent_proposal_id: ID,
+    parent_proposal_id: ID,  // For tracking governance chain only
     _reservation_period: u64,
     clock: &Clock,
     ctx: &TxContext,
@@ -635,11 +659,11 @@ fun create_queued_proposal_with_id(
         vector[action.initial_asset_amount, action.initial_asset_amount],
         vector[action.initial_stable_amount, action.initial_stable_amount]
     );
-    
+
     // Create the queued proposal with the specific ID
     priority_queue::new_queued_proposal_with_id(
         proposal_id,
-        parent_proposal_id, // Using parent as DAO ID for now
+        action.dao_id, // ✅ FIXED: Use actual DAO Account ID, not parent proposal ID
         action.proposal_fee,
         action.use_dao_liquidity,
         tx_context::sender(ctx),
@@ -665,10 +689,10 @@ fun create_queued_proposal_from_reservation(
         vector[reservation.initial_asset_amount, reservation.initial_asset_amount],
         vector[reservation.initial_stable_amount, reservation.initial_stable_amount]
     );
-    
+
     // Create the queued proposal with new fee
     priority_queue::new_queued_proposal(
-        reservation.parent_proposal_id,
+        reservation.dao_id, // ✅ FIXED: Use DAO ID from reservation
         fee_amount,
         reservation.use_dao_liquidity,
         tx_context::sender(ctx), // Current recreator becomes proposer
@@ -695,11 +719,11 @@ fun create_queued_proposal_from_reservation_with_id(
         vector[reservation.initial_asset_amount, reservation.initial_asset_amount],
         vector[reservation.initial_stable_amount, reservation.initial_stable_amount]
     );
-    
+
     // Create the queued proposal with the specific ID
     priority_queue::new_queued_proposal_with_id(
         proposal_id,
-        reservation.parent_proposal_id,
+        reservation.dao_id, // ✅ FIXED: Use DAO ID from reservation
         fee_amount,
         reservation.use_dao_liquidity,
         tx_context::sender(ctx), // Current recreator becomes proposer
@@ -952,6 +976,7 @@ public fun prune_oldest_expired_bucket(
         
         // Destructure the reservation to avoid "value has drop ability" error
         let ProposalReservation {
+            dao_id: _,
             parent_proposal_id: _,
             root_proposal_id: _,
             chain_depth: _,
