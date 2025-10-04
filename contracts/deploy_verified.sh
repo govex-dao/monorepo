@@ -47,7 +47,7 @@ resolve_address_conflicts() {
                 BEGIN { in_addr=0 }
                 /^\[addresses\]/ { in_addr=1; print; next }
                 /^\[/ && !/^\[addresses\]/ { in_addr=0 }
-                in_addr && $0 ~ "^"key" = " { print key " = \"" addr "\""; next }
+                in_addr && $0 ~ "^"key"[ ]*=" { print key " = \"" addr "\""; next }
                 { print }
             ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
         done 2>/dev/null || true
@@ -63,6 +63,9 @@ deploy_and_verify() {
     echo -e "${YELLOW}Deploying $pkg_name...${NC}"
     cd "$pkg_path"
 
+    # Delete Move.lock to clear cached published addresses
+    rm -f Move.lock
+
     # Set package address to 0x0 for deployment in the current package
     # Use a more robust sed pattern to avoid escaping issues
     sed -i '' "s|^${pkg_var_name} = .*|${pkg_var_name} = \"0x0\"|" Move.toml 2>/dev/null || true
@@ -73,7 +76,7 @@ deploy_and_verify() {
             BEGIN { in_addr=0 }
             /^\[addresses\]/ { in_addr=1; print; next }
             /^\[/ && !/^\[addresses\]/ { in_addr=0 }
-            in_addr && $0 ~ "^"key" = " { print key " = \"0x0\""; next }
+            in_addr && $0 ~ "^"key"[ ]*=" { print key " = \"0x0\""; next }
             { print }
         ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
     done 2>/dev/null || true
@@ -81,7 +84,7 @@ deploy_and_verify() {
     # Build first and check for success
     echo "Building $pkg_name..."
     local build_log="/tmp/build_${pkg_name}_$$.log"
-    if ! sui move build --skip-fetch-latest-git-deps 2>&1 | tee "$build_log" | tee -a "$DEPLOYMENT_LOG"; then
+    if ! sui move build --skip-fetch-latest-git-deps --silence-warnings 2>&1 | tee "$build_log" | tee -a "$DEPLOYMENT_LOG"; then
         # Build failed, check if it's due to address conflicts
         if grep -q "Conflicting assignments for address" "$build_log"; then
             echo -e "${YELLOW}Address conflict detected, attempting to resolve...${NC}"
@@ -89,7 +92,7 @@ deploy_and_verify() {
 
             # Retry build after resolving conflicts
             echo "Retrying build for $pkg_name..."
-            if ! sui move build --skip-fetch-latest-git-deps 2>&1 | tee -a "$DEPLOYMENT_LOG"; then
+            if ! sui move build --skip-fetch-latest-git-deps --silence-warnings 2>&1 | tee -a "$DEPLOYMENT_LOG"; then
                 echo -e "${RED}Build failed for $pkg_name even after conflict resolution${NC}"
                 rm -f "$build_log"
                 return 1
@@ -102,28 +105,58 @@ deploy_and_verify() {
     fi
     rm -f "$build_log"
 
-    # Deploy and capture full output
+    # Deploy and capture JSON output
     echo "Publishing $pkg_name..."
-    local temp_file="/tmp/deploy_${pkg_name}_$$.txt"
-    sui client publish --gas-budget 5000000000 --skip-dependency-verification 2>&1 | tee "$temp_file"
-    
-    # Extract package ID with better error handling
-    local pkg_id=$(grep "PackageID:" "$temp_file" | sed 's/.*PackageID: //' | awk '{print $1}')
+    local json_file="/tmp/deploy_${pkg_name}_$$.json"
+    local stderr_file="/tmp/deploy_${pkg_name}_$$.stderr"
+    local combined_file="/tmp/deploy_${pkg_name}_$$.combined"
 
-    # Check if deployment failed due to address conflicts
-    if grep -q "Conflicting assignments for address" "$temp_file"; then
+    # Capture both stdout (JSON) and stderr (warnings/errors) separately, plus combined for conflict checking
+    sui client publish --gas-budget 5000000000 --json > "$json_file" 2> >(tee "$stderr_file" >&2)
+
+    # Combine for conflict detection
+    cat "$json_file" "$stderr_file" > "$combined_file" 2>/dev/null
+
+    # Show warnings/errors to user
+    if [ -s "$stderr_file" ]; then
+        cat "$stderr_file" | tee -a "$DEPLOYMENT_LOG"
+    fi
+
+    # Check if deployment failed due to address conflicts (check both stderr and combined)
+    if grep -q "Conflicting assignments for address" "$combined_file" 2>/dev/null || \
+       grep -q "Conflicting assignments for address" "$stderr_file" 2>/dev/null; then
         echo -e "${YELLOW}Deployment failed due to address conflict, resolving and retrying...${NC}"
-        rm -f "$temp_file"
+        rm -f "$json_file" "$stderr_file" "$combined_file"
 
         # Resolve conflicts and retry once
         resolve_address_conflicts
 
         echo "Retrying deployment for $pkg_name..."
-        sui client publish --gas-budget 5000000000 --skip-dependency-verification 2>&1 | tee "$temp_file"
-        pkg_id=$(grep "PackageID:" "$temp_file" | sed 's/.*PackageID: //' | awk '{print $1}')
+        sui client publish --gas-budget 5000000000 --json > "$json_file" 2> >(tee "$stderr_file" >&2)
+
+        if [ -s "$stderr_file" ]; then
+            cat "$stderr_file" | tee -a "$DEPLOYMENT_LOG"
+        fi
     fi
 
-    rm -f "$temp_file"
+    # Extract package ID from JSON output
+    local pkg_id=""
+    if [ -s "$json_file" ] && [ -f "$json_file" ]; then
+        pkg_id=$(jq -r '.objectChanges[]? | select(.type == "published") | .packageId' "$json_file" 2>/dev/null | head -1)
+    fi
+
+    # Debug: show JSON file content if extraction failed
+    if [ -z "$pkg_id" ] || [ "$pkg_id" = "null" ]; then
+        echo -e "${YELLOW}Debug: Checking output files...${NC}" | tee -a "$DEPLOYMENT_LOG"
+        if [ -s "$json_file" ]; then
+            echo "JSON output:" | tee -a "$DEPLOYMENT_LOG"
+            cat "$json_file" | tee -a "$DEPLOYMENT_LOG"
+        else
+            echo "JSON file is empty or doesn't exist" | tee -a "$DEPLOYMENT_LOG"
+        fi
+    fi
+
+    rm -f "$json_file" "$stderr_file" "$combined_file"
 
     if [ -n "$pkg_id" ] && [ "$pkg_id" != "null" ] && [ "$pkg_id" != "" ]; then
         echo -e "${GREEN}✓ $pkg_name deployed at: $pkg_id${NC}"
@@ -135,7 +168,7 @@ deploy_and_verify() {
                 BEGIN { in_addr=0 }
                 /^\[addresses\]/ { in_addr=1; print; next }
                 /^\[/ && !/^\[addresses\]/ { in_addr=0 }
-                in_addr && $0 ~ "^"key" = " { print key " = \"" addr "\""; next }
+                in_addr && $0 ~ "^"key"[ ]*=" { print key " = \"" addr "\""; next }
                 { print }
             ' "$toml_file" > "$toml_file.tmp" && mv "$toml_file.tmp" "$toml_file"
         done
@@ -148,16 +181,21 @@ deploy_and_verify() {
     fi
 }
 
-# Package list in deployment order (18 packages total)
+# Package list in deployment order (21 packages total)
 declare -a PACKAGES=(
     # Move Framework packages (3)
     "AccountExtensions:/Users/admin/monorepo/contracts/move-framework/packages/extensions:account_extensions"
     "AccountProtocol:/Users/admin/monorepo/contracts/move-framework/packages/protocol:account_protocol"
     "AccountActions:/Users/admin/monorepo/contracts/move-framework/packages/actions:account_actions"
 
-    # Futarchy packages (15)
+    # Walrus packages (2)
+    "WAL:/Users/admin/monorepo/contracts/walrus_wal:wal"
+    "Walrus:/Users/admin/monorepo/contracts/walrus_walrus:walrus"
+
+    # Futarchy packages (16)
     "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
     "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
+    "futarchy_seal_utils:/Users/admin/monorepo/contracts/futarchy_seal_utils:futarchy_seal_utils"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
     "futarchy_markets:/Users/admin/monorepo/contracts/futarchy_markets:futarchy_markets"
     "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"
@@ -166,10 +204,10 @@ declare -a PACKAGES=(
     "futarchy_payments:/Users/admin/monorepo/contracts/futarchy_payments:futarchy_payments"
     "futarchy_streams:/Users/admin/monorepo/contracts/futarchy_streams:futarchy_streams"
     "futarchy_lifecycle:/Users/admin/monorepo/contracts/futarchy_lifecycle:futarchy_lifecycle"
-    "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
+    "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
     "futarchy_governance_actions:/Users/admin/monorepo/contracts/futarchy_governance_actions:futarchy_governance_actions"
     "futarchy_legal_actions:/Users/admin/monorepo/contracts/futarchy_legal_actions:futarchy_legal_actions"
-    "futarchy_factory:/Users/admin/monorepo/contracts/futarchy_factory:futarchy_factory"
+    "futarchy_actions:/Users/admin/monorepo/contracts/futarchy_actions:futarchy_actions"
     "futarchy_dao:/Users/admin/monorepo/contracts/futarchy_dao:futarchy_dao"
 )
 
@@ -270,7 +308,7 @@ main() {
         if [ -n "$pkg_path" ]; then
             echo -n "Building $name... "
             cd "$pkg_path"
-            if sui move build --skip-fetch-latest-git-deps >/dev/null 2>&1; then
+            if sui move build --skip-fetch-latest-git-deps --silence-warnings >/dev/null 2>&1; then
                 echo -e "${GREEN}✓${NC}"
             else
                 echo -e "${RED}✗${NC}"

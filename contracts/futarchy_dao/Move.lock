@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "69843D327B98524CE7DE520A222DD1CDFFF2B1B71AA0960A33C02C071F4CC75C"
+manifest_digest = "3F95C3A3A0F4C2B09AB5EAF14305CEC22E34CB71627D8AD67D2DCF55DC5C2F9C"
 deps_digest = "755DF645C80254D6797CD445DE0C9C348015FB7EB193417BAB50AD2E8E566CCA"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -168,6 +168,7 @@ dependencies = [
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
+  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
   { id = "futarchy_vault", name = "futarchy_vault" },
 ]
@@ -381,6 +382,6 @@ flavor = "sui"
 
 [env.devnet]
 chain-id = "bc718b80"
-original-published-id = "0xb4d82d3269e504594652c41f78bc479c1327a6a94a1cfc6976aee1d2d5e0bb30"
-latest-published-id = "0xb4d82d3269e504594652c41f78bc479c1327a6a94a1cfc6976aee1d2d5e0bb30"
+original-published-id = "0xa3ba8c617ed6abf839080b6c1490e1ca68bb61a242f43800661871aa3a2c6791"
+latest-published-id = "0xa3ba8c617ed6abf839080b6c1490e1ca68bb61a242f43800661871aa3a2c6791"
 published-version = "1"

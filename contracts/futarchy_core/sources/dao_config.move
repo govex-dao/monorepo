@@ -106,6 +106,7 @@ public struct ConditionalCoinConfig has store, drop, copy {
     coin_name_prefix: AsciiString,       // Prefix for coin names (e.g., "MyDAO_")
     coin_icon_url: Url,                  // Icon URL for conditional coins
     use_outcome_index: bool,             // If true, append outcome index to name
+    use_hardcoded_metadata: bool,        // If true, use hardcoded prefix/icon; if false, read from TreasuryCap
 }
 
 /// Quota system configuration
@@ -279,11 +280,13 @@ public fun new_conditional_coin_config(
     coin_name_prefix: AsciiString,
     coin_icon_url: Url,
     use_outcome_index: bool,
+    use_hardcoded_metadata: bool,
 ): ConditionalCoinConfig {
     ConditionalCoinConfig {
         coin_name_prefix,
         coin_icon_url,
         use_outcome_index,
+        use_hardcoded_metadata,
     }
 }
 
@@ -416,6 +419,7 @@ public(package) fun conditional_coin_config_mut(config: &mut DaoConfig): &mut Co
 public fun coin_name_prefix(coin_config: &ConditionalCoinConfig): &AsciiString { &coin_config.coin_name_prefix }
 public fun coin_icon_url(coin_config: &ConditionalCoinConfig): &Url { &coin_config.coin_icon_url }
 public fun use_outcome_index(coin_config: &ConditionalCoinConfig): bool { coin_config.use_outcome_index }
+public fun use_hardcoded_metadata(coin_config: &ConditionalCoinConfig): bool { coin_config.use_hardcoded_metadata }
 
 // Quota config getters
 public fun quota_config(config: &DaoConfig): &QuotaConfig { &config.quota_config }
@@ -951,6 +955,7 @@ public fun default_conditional_coin_config(): ConditionalCoinConfig {
         coin_name_prefix: ascii::string(b"c_"),  // "c_" for conditional
         coin_icon_url: url::new_unsafe(ascii::string(b"https://via.placeholder.com/150")), // Default placeholder
         use_outcome_index: true,  // Include outcome index in name
+        use_hardcoded_metadata: true,  // Default: use hardcoded metadata (backward compatible)
     }
 }
 

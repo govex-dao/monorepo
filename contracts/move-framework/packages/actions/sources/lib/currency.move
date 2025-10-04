@@ -298,17 +298,30 @@ public fun can_update_icon<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_icon
 }
 
+/// Read metadata from a CoinMetadata object
+/// Simple helper to extract all metadata fields in one call
+public fun read_coin_metadata<CoinType>(
+    metadata: &CoinMetadata<CoinType>,
+): (ascii::String, String, String, ascii::String) {
+    (
+        metadata.get_symbol(),
+        metadata.get_name(),
+        metadata.get_description(),
+        metadata.get_icon_url().extract().inner_url()
+    )
+}
+
 /// Anyone can burn coins they own if enabled.
 public fun public_burn<Config, CoinType>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     coin: Coin<CoinType>
 ) {
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
     assert!(rules_mut.can_burn, EBurnDisabled);
     rules_mut.total_burned = rules_mut.total_burned + coin.value();
 
-    let cap_mut: &mut TreasuryCap<CoinType> = 
+    let cap_mut: &mut TreasuryCap<CoinType> =
         account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
     cap_mut.burn(coin);
 }

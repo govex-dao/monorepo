@@ -9,4 +9,4 @@ edition = "2024.beta"
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet-v1.43.0" }
 
 [addresses]
-wal = "0x0"
+wal = "0x751a90cb6d4745539fe9d048a9b7d84520bc1979d3b8fe95a63a9e3be4ae57dd"

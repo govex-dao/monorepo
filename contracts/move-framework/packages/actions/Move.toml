@@ -8,5 +8,5 @@ authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 AccountProtocol = { local = "../protocol" }
 
 [addresses]
-account_actions = "0x59feeec832fb397c7e4fc80eff70da6e675c2e9b31eda830e8a179dfaede9d30"
-account_protocol = "0xc24e7496e469de4fc9aa52205b0c69195e23d913db19dede6ded8dd77d9e36d0"
+account_actions = "0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784"
+account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
