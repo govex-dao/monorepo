@@ -1,6 +1,32 @@
-/// Unified payment system for Futarchy DAOs - REFACTORED
+/// Generic payment system for Account Protocol - REFACTORED
+/// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// This version removes state duplication by using vault streams as the source of truth
 /// while preserving all original features (budget accountability, isolated pools, etc.)
+///
+/// ## Config Requirements
+///
+/// Any Config type using stream actions MUST satisfy:
+///
+/// 1. **Named Vaults**: MUST have vaults accessible by name via:
+///    ```
+///    vault::borrow_vault(account, vault_name)
+///    vault::borrow_vault_mut(account, vault_name)
+///    ```
+///    Common vault names: "treasury", "operations", "reserves"
+///
+/// 2. **Managed Data Support**: MUST support storing stream metadata via:
+///    - `StreamStorageKey` - For stream registry
+///    - `ActiveStreamKey<ID>` - For individual active streams
+///
+/// 3. **Vault Balance Checks**: Vaults MUST support:
+///    ```
+///    vault::coin_type_value<CoinType>(vault)
+///    ```
+///
+/// Example Config implementations:
+/// - `FutarchyConfig` - DAO with "treasury" vault ✅
+/// - `WeightedMultisig` - Can use any named vault ✅
+/// - Custom configs - Must implement vault system
 
 module futarchy_streams::stream_actions;
 
@@ -464,9 +490,9 @@ public fun new_execute_payment_action<CoinType>(
 
 /// REFACTORED: Create payment now properly uses vault streams without duplication
 /// Returns the payment ID for PTB chaining
-public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
@@ -542,7 +568,7 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
         let auth = account::new_auth(account, version::current(), witness);
 
         // Create vault stream with proper parameters
-        let stream_id = vault::create_stream<FutarchyConfig, CoinType>(
+        let stream_id = vault::create_stream<Config, CoinType>(
             auth,
             account,
             string::utf8(b"treasury"),
@@ -631,9 +657,9 @@ public fun do_create_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
 }
 
 /// Execute do_cancel_payment action
-public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -656,7 +682,7 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
         return_unclaimed_to_treasury,
     };
     bcs_validation::validate_all_bytes_consumed(reader);
-    let (refund_coin, _refund_amount) = cancel_payment<CoinType>(
+    let (refund_coin, _refund_amount) = cancel_payment<Config, CoinType>(
         account,
         action.payment_id,
         _clock,
@@ -671,9 +697,9 @@ public fun do_cancel_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
 
 /// Execute do_create_budget_stream action
 /// Returns the payment ID for PTB chaining
-public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_create_budget_stream<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
@@ -759,9 +785,9 @@ public fun do_create_budget_stream<Outcome: store, CoinType: drop, IW: copy + dr
 }
 
 /// Execute do_execute_payment action (for recurring payments)
-public fun do_execute_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_execute_payment<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -787,9 +813,9 @@ public fun do_execute_payment<Outcome: store, CoinType: drop, IW: copy + drop>(
 }
 
 /// Execute do_request_withdrawal action
-public fun do_request_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_request_withdrawal<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
@@ -846,9 +872,9 @@ public fun do_request_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop
 }
 
 /// Execute do_process_pending_withdrawal action
-public fun do_process_pending_withdrawal<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_process_pending_withdrawal<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     clock: &Clock,
@@ -896,9 +922,9 @@ public fun do_process_pending_withdrawal<Outcome: store, CoinType: drop, IW: cop
 }
 
 /// Execute do_update_payment_recipient action
-public fun do_update_payment_recipient<Outcome: store, IW: drop>(
+public fun do_update_payment_recipient<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -943,9 +969,9 @@ public fun do_update_payment_recipient<Outcome: store, IW: drop>(
 }
 
 /// Execute do_add_withdrawer action
-public fun do_add_withdrawer<Outcome: store, IW: drop>(
+public fun do_add_withdrawer<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -986,9 +1012,9 @@ public fun do_add_withdrawer<Outcome: store, IW: drop>(
 }
 
 /// Execute do_remove_withdrawers action
-public fun do_remove_withdrawers<Outcome: store, IW: drop>(
+public fun do_remove_withdrawers<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -1036,9 +1062,9 @@ public fun do_remove_withdrawers<Outcome: store, IW: drop>(
 }
 
 /// Execute do_toggle_payment action
-public fun do_toggle_payment<Outcome: store, IW: drop>(
+public fun do_toggle_payment<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -1077,9 +1103,9 @@ public fun do_toggle_payment<Outcome: store, IW: drop>(
 }
 
 /// Execute do_challenge_withdrawals action
-public fun do_challenge_withdrawals<Outcome: store, IW: drop>(
+public fun do_challenge_withdrawals<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -1105,9 +1131,9 @@ public fun do_challenge_withdrawals<Outcome: store, IW: drop>(
 }
 
 /// Execute do_cancel_challenged_withdrawals action
-public fun do_cancel_challenged_withdrawals<Outcome: store, IW: drop>(
+public fun do_cancel_challenged_withdrawals<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     witness: IW,
     _clock: &Clock,
@@ -1133,8 +1159,8 @@ public fun do_cancel_challenged_withdrawals<Outcome: store, IW: drop>(
 }
 
 /// REFACTORED: Claim now delegates to vault stream for direct treasury and handles weighted distribution
-public fun claim_from_payment<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+public fun claim_from_payment<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     payment_id: String,
     amount: Option<u64>,
     reason_code: Option<String>,
@@ -1204,7 +1230,7 @@ public fun claim_from_payment<CoinType: drop>(
         // No need to track claimed_amounts separately
         
         // Withdraw from vault stream
-        let coin = vault::withdraw_from_stream<FutarchyConfig, CoinType>(
+        let coin = vault::withdraw_from_stream<Config, CoinType>(
             account,
             string::utf8(b"treasury"),
             stream_id,
@@ -1280,8 +1306,8 @@ public fun claim_from_payment<CoinType: drop>(
 }
 
 /// REFACTORED: Cancel payment properly handles vault stream cancellation
-public fun cancel_payment<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+public fun cancel_payment<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1308,7 +1334,7 @@ public fun cancel_payment<CoinType: drop>(
     if (vault_stream_id_opt.is_some()) {
         let stream_id = *vault_stream_id_opt.borrow();
         let auth = account::new_auth(account, version::current(), tx_context::sender(ctx));
-        let (vault_refund, vault_amount) = vault::cancel_stream<FutarchyConfig, CoinType>(
+        let (vault_refund, vault_amount) = vault::cancel_stream<Config, CoinType>(
             auth,
             account,
             string::utf8(b"treasury"),
@@ -1357,8 +1383,8 @@ public fun cancel_payment<CoinType: drop>(
 }
 
 /// REFACTORED: Get payment info now queries vault stream for amounts/timestamps
-public fun get_payment_info(
-    account: &Account<FutarchyConfig>,
+public fun get_payment_info<Config: store>(
+    account: &Account<Config>,
     payment_id: String,
     clock: &Clock,
 ): (u8, u64, u64, u64, u64, bool) {
@@ -1508,8 +1534,8 @@ fun handle_budget_withdrawal(
 }
 
 /// Withdraw from isolated pool (existing logic preserved)
-fun withdraw_from_isolated_pool<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+fun withdraw_from_isolated_pool<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     config: &mut PaymentConfig,
     payment_id: String,
     amount: Option<u64>,
@@ -1618,9 +1644,9 @@ public fun delete_execute_payment<CoinType>(expired: &mut account_protocol::inte
 // Wrapper functions for new vault stream features
 
 /// Pause a payment stream (delegates to vault)
-public fun pause_payment(
+public fun pause_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1651,9 +1677,9 @@ public fun pause_payment(
 }
 
 /// Resume a paused payment stream (delegates to vault)
-public fun resume_payment(
+public fun resume_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     payment_id: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1683,9 +1709,9 @@ public fun resume_payment(
 }
 
 /// Add additional beneficiary to payment stream
-public fun add_payment_beneficiary(
+public fun add_payment_beneficiary<Config: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     payment_id: String,
     new_beneficiary: address,
     ctx: &mut TxContext,
@@ -1712,9 +1738,9 @@ public fun add_payment_beneficiary(
 }
 
 /// Transfer payment stream to new primary beneficiary
-public fun transfer_payment(
+public fun transfer_payment<Config: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     payment_id: String,
     new_beneficiary: address,
     ctx: &mut TxContext,
@@ -1742,9 +1768,9 @@ public fun transfer_payment(
 }
 
 /// Update payment metadata
-public fun update_payment_metadata(
+public fun update_payment_metadata<Config: store>(
     auth: Auth,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     payment_id: String,
     metadata: String,
     ctx: &mut TxContext,
@@ -1769,8 +1795,8 @@ public fun update_payment_metadata(
 // === Dissolution Support Functions ===
 
 /// Get all payment IDs for dissolution
-public fun get_all_payment_ids(
-    account: &Account<FutarchyConfig>,
+public fun get_all_payment_ids<Config: store>(
+    account: &Account<Config>,
 ): vector<String> {
     if (!account::has_managed_data(account, PaymentStorageKey {})) {
         return vector::empty()
@@ -1786,8 +1812,8 @@ public fun get_all_payment_ids(
 }
 
 /// Cancel all payments for dissolution and return funds
-public fun cancel_all_payments_for_dissolution<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+public fun cancel_all_payments_for_dissolution<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1829,7 +1855,7 @@ public fun cancel_all_payments_for_dissolution<CoinType: drop>(
         let pool_key = PaymentPoolKey { payment_id };
         
         if (account::has_managed_data(account, pool_key)) {
-            let mut pool = account::remove_managed_data<FutarchyConfig, PaymentPoolKey, Balance<CoinType>>(
+            let mut pool = account::remove_managed_data<Config, PaymentPoolKey, Balance<CoinType>>(
                 account,
                 pool_key,
                 version::current()
@@ -1856,8 +1882,8 @@ public fun cancel_all_payments_for_dissolution<CoinType: drop>(
 
 /// Create a payment stream during DAO initialization
 /// Called directly by PTB during init phase
-public entry fun init_create_stream<CoinType>(
-    account: &mut Account<FutarchyConfig>,
+public entry fun init_create_stream<Config: store, CoinType>(
+    account: &mut Account<Config>,
     recipient: address,
     amount_per_period: u64,     // Amount to pay per period
     period_duration_ms: u64,    // Duration of each period in milliseconds

@@ -37,6 +37,7 @@ const EThresholdExceedsTotalWeight: u64 = 5;
 // === Witness Types for Action Validation ===
 public struct CreateSecurityCouncilWitness has drop {}
 public struct UpdateCouncilMembershipWitness has drop {}
+public struct UpdateTimeLockWitness has drop {}
 public struct UpdateUpgradeRulesWitness has drop {}
 public struct ApproveOAChangeWitness has drop {}
 public struct UnlockAndReturnUpgradeCapWitness has drop {}
@@ -76,6 +77,12 @@ public struct UpdateCouncilMembershipAction has store {
     new_members: vector<address>,
     new_weights: vector<u64>,
     new_threshold: u64,
+}
+
+/// Action to update the council's time lock delay.
+/// This requires multisig approval to change the time lock security parameter.
+public struct UpdateTimeLockAction has store {
+    new_delay_ms: u64,  // 0 = disabled, >0 = delay in milliseconds
 }
 
 /// Action to unlock an UpgradeCap and return it to the main DAO.
@@ -182,6 +189,40 @@ public fun do_create_security_council<Outcome: store, IW: drop>(
 
     // Note: Actual security council creation logic would go here
     // This is just the validation and deserialization
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Execute update time lock action
+public fun do_update_time_lock<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    _clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<UpdateTimeLockWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let new_delay_ms = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Note: Actual time lock update logic would go here
+    // This would call weighted_multisig::set_time_lock_delay()
 
     // Increment action index
     executable::increment_action_idx(executable);
@@ -558,6 +599,25 @@ public fun new_update_council_membership<Outcome, IW: drop>(
     );
 }
 
+/// Create and add an update time lock action to an intent
+public fun new_update_time_lock<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    new_delay_ms: u64,
+    intent_witness: IW,
+) {
+    // Serialize action data
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&new_delay_ms));
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        UpdateTimeLockWitness {},
+        data,
+        intent_witness,
+    );
+}
+
 /// Create and add an unlock and return upgrade cap action to an intent
 public fun new_unlock_and_return_upgrade_cap<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
@@ -794,6 +854,10 @@ public fun delete_update_upgrade_rules(expired: &mut Expired) {
 }
 
 public fun delete_update_council_membership(expired: &mut Expired) {
+    let _ = expired.remove_action_spec();
+}
+
+public fun delete_update_time_lock(expired: &mut Expired) {
     let _ = expired.remove_action_spec();
 }
 

@@ -54,16 +54,16 @@ So cant be added atomically created
 
 
 # V2 multisig
-- [ ] compare to account tech multisig
-- [ ] How UI is aware of multisig / proposal intents
-- [ ] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
-- [ ] Multi sig inherit dao level configs like is paused
-- [ ] Multisig must check that dead man switch is the daos futacrhy or another multisig with same dao id
+- [X] compare to account tech multisig
+- [X] How UI is aware of multisig / proposal intents
+- [IP] make sure fees can be required to be collected in USDC? dont accept sui??? mybae need to be careful how new coins are added
+- [X] Multi sig inherit dao level configs like is paused
+- [X] Multisig must check that dead man switch is the daos futacrhy or another multisig with same dao id
 - [ ] Can create futarchy first dao defaults to futarchy only policy or multisig first dao Or    Both.   Or either poliicy 
-- [ ] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
-- [ ] fully seperate dao and account and futarchy configs
-- [ ] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
-- [ ] Your Account<WeightedMultisig> has the same capabilities as any other Account. But from a design pattern and security perspective, they should not. wait look at my multisigs
+- [IP] multisig Stale Proposal Invalidation: This is a critical security feature. If the multisig's rules change (e.g., a member is removed, or the threshold is lowered), this feature automatically invalidates all pending proposals created under the old rules. This prevents a malicious actor from pushing through an old, forgotten proposal that wouldn't be valid under the new consensus.
+- [X] fully seperate dao and account and futarchy configs
+- [X] Configure Time Lock: Set a mandatory delay (in seconds) between a proposal's approval and its execution.
+- [X] Your Account<WeightedMultisig> has the same capabilities as any other Account. But from a design pattern and security perspective, they should not. wait look at my multisigs
 do I need a dead man switch can my multisigs actually hold objects?
 I am not sure they should hmmm
 or should have a type that doesnt and type that does?

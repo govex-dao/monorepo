@@ -1,4 +1,6 @@
-/// Deposit Escrow Actions - Accept deposited coins into vault
+/// Generic deposit escrow actions for Account Protocol
+/// Works with any Account<Config> type (DAOs, multisigs, etc.)
+/// Accept deposited coins into vault
 module futarchy_vault::deposit_escrow_actions;
 
 use std::string::String;
@@ -49,9 +51,9 @@ public fun new_accept_deposit_action(
 // === Execution ===
 
 /// Execute accept deposit - move coins from escrow to vault
-public fun do_accept_deposit<CoinType: drop, Outcome: store, IW: drop>(
+public fun do_accept_deposit<Config: store, CoinType: drop, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version: VersionWitness,
     _witness: IW,
     escrow: &mut DepositEscrow<CoinType>,

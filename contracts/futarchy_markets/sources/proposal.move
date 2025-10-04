@@ -140,31 +140,24 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     treasury_address: address,
 }
 
-/// A scoped witness proving that a particular (proposal, outcome) owned the intent key.
+/// A scoped witness proving that a particular (proposal, outcome) had an IntentSpec.
 /// Only mintable by the module that has &mut Proposal and consumes the slot.
 /// This prevents cross-proposal cancellation attacks.
-/// 
-/// TECHNICAL DEBT: This witness structure is outdated after the IntentSpec refactor.
-/// The 'key' field is now meaningless since proposals no longer store live Intents.
-/// Should be updated to have an optional intent_key field that's only used for 
-/// non-proposal intents. For proposal-related cancellations, the key would be None.
+///
+/// After IntentSpec refactor: This witness proves ownership of a proposal outcome slot,
+/// used for cleanup and lifecycle management.
 public struct CancelWitness has drop {
     proposal: address,
     outcome_index: u64,
-    key: String,  // Deprecated - using "deprecated" as placeholder
 }
 
-// Getter functions for CancelWitness (for use in cancel_losing_intent_scoped)
+// Getter functions for CancelWitness
 public fun cancel_witness_proposal(witness: &CancelWitness): address {
     witness.proposal
 }
 
 public fun cancel_witness_outcome_index(witness: &CancelWitness): u64 {
     witness.outcome_index
-}
-
-public fun cancel_witness_key(witness: &CancelWitness): String {
-    witness.key
 }
 
 // === Events ===
@@ -1350,8 +1343,6 @@ public fun take_intent_spec_for_outcome<AssetType, StableType>(
 /// Mint a scoped cancel witness by taking (moving) the spec out of the slot.
 /// Returns None if no spec was set for that outcome.
 /// This witness can only be created once per (proposal, outcome) pair.
-/// NOTE: After IntentSpec refactor, the 'key' field in CancelWitness is deprecated
-/// and we use "deprecated" as a placeholder value.
 public fun make_cancel_witness<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64
@@ -1360,12 +1351,11 @@ public fun make_cancel_witness<AssetType, StableType>(
     let addr = object::uid_to_address(&proposal.id);
     let mut spec_opt = take_intent_spec_for_outcome(proposal, outcome_index);
     if (option::is_some(&spec_opt)) {
-        // Spec exists, create witness with deprecated key field
+        // Spec exists, create witness
         option::destroy_some(spec_opt);
         option::some(CancelWitness {
             proposal: addr,
             outcome_index,
-            key: string::utf8(b"deprecated")  // Placeholder after IntentSpec refactor
         })
     } else {
         option::none<CancelWitness>()
@@ -1504,9 +1494,12 @@ public fun new_for_testing<AssetType, StableType>(
         state: STATE_PREMARKET,
         proposer,
         liquidity_provider,
+        withdraw_only_mode: false,
         amm_pools: option::none(),
         escrow_id: option::none(),
         market_state_id: option::none(),
+        conditional_treasury_caps: bag::new(ctx),
+        conditional_metadata: bag::new(ctx),
         title,
         details: outcome_details,
         metadata,

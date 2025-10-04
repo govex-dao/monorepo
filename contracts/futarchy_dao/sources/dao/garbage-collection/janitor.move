@@ -49,7 +49,16 @@ fun drain_all(expired: &mut Expired) {
     // Package Upgrade
     gc_registry::delete_upgrade_commit(expired);
     gc_registry::delete_restrict_policy(expired);
-    
+    gc_registry::delete_upgrade_commit_action(expired);
+
+    // Transfer Actions
+    gc_registry::delete_transfer(expired);
+    gc_registry::delete_transfer_to_sender(expired);
+
+    // Kiosk Actions
+    gc_registry::delete_kiosk_take(expired);
+    gc_registry::delete_kiosk_list(expired);
+
     // Liquidity (non-generic)
     gc_registry::delete_update_pool_params(expired);
     
@@ -158,6 +167,10 @@ fun drain_common_generics(expired: &mut Expired) {
     gc_registry::delete_distribute_assets<SUI>(expired);
     gc_registry::delete_withdraw_amm_liquidity<SUI, SUI>(expired);
 
+    // Vesting Actions (phantom CoinType)
+    gc_registry::delete_vesting_action<SUI>(expired);
+    gc_registry::delete_cancel_vesting_action(expired);
+
     // Note: For production, add your specific coin types here:
     // - DAO governance tokens
     // - Stablecoins used in your protocol
@@ -179,6 +192,7 @@ fun drain_currency_actions_for_coin<CoinType>(expired: &mut Expired) {
     gc_registry::delete_currency_mint<CoinType>(expired);
     gc_registry::delete_currency_burn<CoinType>(expired);
     gc_registry::delete_currency_update_metadata<CoinType>(expired);
+    gc_registry::delete_currency_disable<CoinType>(expired);
 }
 
 /// Helper to drain stream actions for a specific coin type
@@ -324,4 +338,47 @@ public entry fun cleanup_expired_intents(
 ) {
     // Process up to 10 intents per transaction to avoid gas limits
     sweep_expired_intents(account, keys, 10, clock);
+}
+
+/// Clean up ALL expired intents (called from proposal lifecycle)
+/// This is an unbounded operation - use with caution
+public fun cleanup_all_expired_intents(
+    account: &mut Account<FutarchyConfig>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Keep cleaning until no more expired intents
+    // Note: This could be gas-intensive if many intents are expired
+    loop {
+        // Try to find an expired intent
+        let intents_store = account::intents(account);
+        let mut found_expired = false;
+        let mut expired_key = std::string::utf8(b"");
+
+        // Scan through intents to find an expired one
+        // This is expensive but necessary without an index
+        // TODO: Implement proper indexing for expired intents
+        // For now, this function will not work until intents module provides a keys() method
+        let all_keys: vector<String> = vector::empty(); // Placeholder until keys() is available
+        let mut i = 0;
+        while (i < vector::length(&all_keys)) {
+            let key = *vector::borrow(&all_keys, i);
+            if (is_intent_expired(account, &key, clock)) {
+                found_expired = true;
+                expired_key = key;
+                break
+            };
+            i = i + 1;
+        };
+
+        // Break if no expired intents found
+        if (!found_expired) {
+            break
+        };
+
+        // Delete the expired intent
+        delete_expired_by_key(account, expired_key, clock);
+    };
+
+    let _ = ctx; // Silence unused warning
 }

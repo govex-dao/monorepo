@@ -43,6 +43,7 @@ public struct RequestPackageUpgradeIntent has copy, drop {}
 public struct AcceptUpgradeCapIntent has copy, drop {}
 public struct RequestOAPolicyChangeIntent has copy, drop {}
 public struct UpdateCouncilMembershipIntent has copy, drop {}
+public struct UpdateTimeLockIntent has copy, drop {}
 public struct CreateSecurityCouncilIntent has copy, drop {}
 public struct ApprovePolicyChangeIntent has copy, drop {}
 public struct PolicyRemovalIntent has copy, drop {}
@@ -359,6 +360,82 @@ public fun execute_update_council_membership(
     security_council.confirm_execution(executable);
 }
 
+/// A council member proposes an intent to update the time lock delay.
+/// This is a security-critical parameter that requires multisig approval to change.
+public fun request_update_time_lock(
+    security_council: &mut Account<WeightedMultisig>,
+    auth_from_member: Auth,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
+    params: Params,
+    new_delay_ms: u64,  // 0 = disable time lock, >0 = delay in milliseconds
+    clock: &Clock,
+    ctx: &mut TxContext
+) {
+    // Block if DAO has unpaid fees
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
+    security_council.verify(auth_from_member);
+    let outcome: Approvals = multisig::new_approvals_with_clock(security_council.config(), clock);
+
+    security_council.build_intent!(
+        params,
+        outcome,
+        b"update_time_lock".to_string(),
+        version::current(),
+        UpdateTimeLockIntent{},
+        ctx,
+        |intent, iw| {
+            security_council_actions::new_update_time_lock<Approvals, UpdateTimeLockIntent>(
+                intent,
+                new_delay_ms,
+                iw
+            );
+        }
+    );
+}
+
+/// After council approval, this executes the time lock update.
+public fun execute_update_time_lock(
+    mut executable: Executable<Approvals>,
+    security_council: &mut Account<WeightedMultisig>,
+    payment_tracker: &DaoPaymentTracker,  // Check payment status
+    dao_id: ID,  // ID of the DAO that owns this security council
+    clock: &Clock,
+) {
+    // Double-check DAO isn't blocked at execution time
+    assert!(
+        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
+        EDAOPaymentDelinquent
+    );
+
+    // Get action spec and deserialize
+    let specs = executable::intent(&executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(&executable));
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let new_delay_ms = bcs::peel_u64(&mut bcs);
+
+    // Increment action index
+    executable::increment_action_idx(&mut executable);
+
+    // Get mutable access to the account's config
+    let config_mut = account_protocol_account::config_mut(
+        security_council,
+        version::current(),
+        security_council::witness()
+    );
+
+    // Update the time lock delay
+    multisig::set_time_lock_delay(config_mut, new_delay_ms);
+
+    security_council.confirm_execution(executable);
+}
+
 // === Create Security Council (DAO-side intent) ===
 
 /// DAO proposes creation of a Security Council.
@@ -586,6 +663,7 @@ public fun cleanup_expired_council_intents(
 fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<WeightedMultisig>) {
     // Delete all possible Security Council action types
     security_council_actions::delete_update_council_membership(expired);
+    security_council_actions::delete_update_time_lock(expired);
     security_council_actions::delete_create_council(expired);
     security_council_actions::delete_approve_generic(expired);
     security_council_actions::delete_sweep_intents(expired);
@@ -719,6 +797,9 @@ public fun delete_request_package_upgrade(_expired: &mut Expired) {}
 public fun delete_request_oa_policy_change(_expired: &mut Expired) {}
 public fun delete_update_council_membership(expired: &mut Expired) {
     security_council_actions::delete_update_council_membership(expired);
+}
+public fun delete_update_time_lock(expired: &mut Expired) {
+    security_council_actions::delete_update_time_lock(expired);
 }
 public fun delete_create_council(expired: &mut Expired) {
     security_council_actions::delete_create_council(expired);

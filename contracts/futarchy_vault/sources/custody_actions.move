@@ -1,3 +1,5 @@
+/// Generic custody actions for Account Protocol
+/// Works with any Account<Config> type (DAOs, multisigs, etc.)
 module futarchy_vault::custody_actions;
 
 use std::{string::{Self, String}, type_name};
@@ -137,9 +139,9 @@ public fun get_accept_params<R>(
 
 /// Execute approve custody action
 /// This creates a custody approval that can be used by the council
-public fun do_approve_custody<Outcome: store, R: store, IW: drop>(
+public fun do_approve_custody<Config: store, Outcome: store, R: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     _witness: IW,
     clock: &Clock,
@@ -195,9 +197,9 @@ public fun do_approve_custody<Outcome: store, R: store, IW: drop>(
 
 /// Execute accept into custody action
 /// This accepts an object into council custody after DAO approval
-public fun do_accept_into_custody<Outcome: store, R: store, IW: drop>(
+public fun do_accept_into_custody<Config: store, Outcome: store, R: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     _version_witness: VersionWitness,
     _witness: IW,
     clock: &Clock,
@@ -274,10 +276,10 @@ public struct ResourceRequest<phantom R> {
 }
 
 /// Fulfill a custody resource request
-public fun fulfill_custody_request<R: key + store>(
+public fun fulfill_custody_request<Config: store, R: key + store>(
     request: ResourceRequest<R>,
     object: R,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     ctx: &mut TxContext,
 ) {
     let ResourceRequest { object_id, resource_key, context } = request;

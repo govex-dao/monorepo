@@ -1,6 +1,31 @@
-/// Dividend distribution actions for Futarchy DAOs
+/// Generic dividend distribution actions for Account Protocol
+/// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// Uses pre-built DividendTree for massive scale (100M recipients)
 /// Tree is built off-chain over multiple transactions, then passed to proposal
+///
+/// ## Config Requirements
+///
+/// Any Config type using dividend actions MUST satisfy:
+///
+/// 1. **Managed Data Support**: MUST support storing dividend metadata via:
+///    - `DividendStorageKey` - For dividend ID tracking
+///    - `DividendTreeKey` - For storing DividendTree objects
+///    - `DividendProgressKey` - For cranking progress
+///    - `DividendPoolKey` - For coin pool storage
+///
+/// 2. **No Key Conflicts**: Storage keys MUST NOT conflict with dividend keys
+///
+/// 3. **ResourceRequest Pattern**: Caller must provide coin via:
+///    ```
+///    let request = do_create_dividend(...);
+///    let coin = vault::withdraw(...); // From any vault
+///    fulfill_create_dividend(request, coin, ...);
+///    ```
+///
+/// Example Config implementations:
+/// - `FutarchyConfig` - DAO ✅
+/// - `WeightedMultisig` - Standalone multisig ✅
+/// - Custom configs - Just need managed data support ✅
 module futarchy_payments::dividend_actions;
 
 // === Imports ===
@@ -154,9 +179,9 @@ public fun new_create_dividend_action<CoinType>(
 
 /// Execute create dividend action - Returns ResourceRequest for vault withdrawal
 /// Takes ownership of the pre-built tree and requests coin withdrawal via hot potato
-public fun do_create_dividend<Outcome: store, CoinType: drop, IW: copy + drop>(
+public fun do_create_dividend<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     tree: DividendTree,  // Receive the pre-built tree
     _version_witness: VersionWitness,
     witness: IW,
@@ -187,13 +212,8 @@ public fun do_create_dividend<Outcome: store, CoinType: drop, IW: copy + drop>(
     let total_amount = dividend_tree::total_amount(&tree);
     let num_buckets = dividend_tree::num_buckets(&tree);
 
-    // Assert vault has sufficient funds at creation time
-    // Note: Actual withdrawal happens during cranking to keep pattern simple.
-    // The governance-approved proposal acts as a social reservation.
-    // If funds are spent before cranking, the crank will fail gracefully.
-    let treasury_vault = vault::borrow_vault(account, b"treasury".to_string());
-    let available_balance = vault::coin_type_value<CoinType>(treasury_vault);
-    assert!(available_balance >= total_amount, EInsufficientFunds);
+    // Note: No upfront balance check needed - caller provides coin via ResourceRequest
+    // The fulfill_create_dividend function will verify coin amount matches tree total
 
     // Initialize storage if needed
     if (!account::has_managed_data(account, DividendStorageKey {})) {
@@ -244,10 +264,10 @@ public fun do_create_dividend<Outcome: store, CoinType: drop, IW: copy + drop>(
 
 /// Fulfill the create dividend resource request by providing the coin
 /// Caller must withdraw coin from vault (via PTB) and pass it here
-public fun fulfill_create_dividend<CoinType: drop>(
+public fun fulfill_create_dividend<Config: store, CoinType: drop>(
     request: ResourceRequest<CreateDividendAction<CoinType>>,
     dividend_coin: Coin<CoinType>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ResourceReceipt<CreateDividendAction<CoinType>> {
@@ -301,8 +321,8 @@ public fun fulfill_create_dividend<CoinType: drop>(
 /// Individual claim - user claims their own dividend (out of order, no contention)
 /// User must provide the prefix that their address belongs to (found via off-chain binary search)
 /// Returns true if claimed successfully, false if already claimed
-public fun claim_my_dividend<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+public fun claim_my_dividend<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     dividend_id: String,
     prefix: vector<u8>,  // User provides their bucket prefix (from off-chain lookup)
     ctx: &mut TxContext,
@@ -381,8 +401,8 @@ public fun claim_my_dividend<CoinType: drop>(
 
 /// Anyone can call this to crank out dividends to recipients
 /// Processes up to max_recipients in a single transaction (sequential order)
-public fun crank_dividend<CoinType: drop>(
-    account: &mut Account<FutarchyConfig>,
+public fun crank_dividend<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
     dividend_id: String,
     max_recipients: u64,
     ctx: &mut TxContext,
@@ -560,8 +580,8 @@ public fun delete_create_dividend<CoinType>(expired: &mut account_protocol::inte
 // === Query Functions ===
 
 /// Get dividend info
-public fun get_dividend_info(
-    account: &Account<FutarchyConfig>,
+public fun get_dividend_info<Config: store>(
+    account: &Account<Config>,
     dividend_id: String,
 ): (u64, u64, u64, u64) {
     let progress_key = DividendProgressKey { dividend_id };
@@ -581,8 +601,8 @@ public fun get_dividend_info(
 
 /// Check if recipient has been sent their dividend
 /// User must provide prefix (from off-chain binary search)
-public fun has_been_sent(
-    account: &Account<FutarchyConfig>,
+public fun has_been_sent<Config: store>(
+    account: &Account<Config>,
     dividend_id: String,
     prefix: vector<u8>,
     recipient: address,
@@ -617,8 +637,8 @@ public fun has_been_sent(
 
 /// Get recipient allocation amount (0 if already sent)
 /// User must provide prefix (from off-chain binary search)
-public fun get_allocation_amount(
-    account: &Account<FutarchyConfig>,
+public fun get_allocation_amount<Config: store>(
+    account: &Account<Config>,
     dividend_id: String,
     prefix: vector<u8>,
     recipient: address,

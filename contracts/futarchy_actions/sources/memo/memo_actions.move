@@ -1,4 +1,5 @@
-/// Memo emission actions for futarchy DAOs
+/// Generic memo emission actions for Account Protocol
+/// Works with any Account<Config> type (DAOs, multisigs, etc.)
 /// Provides text memos and accept/reject decision memos
 module futarchy_actions::memo_actions;
 
@@ -22,7 +23,6 @@ use account_protocol::{
     bcs_validation,
 };
 use futarchy_core::{
-    futarchy_config::FutarchyConfig,
     action_validation,
     action_types,
 };
@@ -86,9 +86,9 @@ public struct DecisionEmitted has copy, drop {
 // === Execution Functions ===
 
 /// Execute an emit memo action
-public fun do_emit_memo<Outcome: store, IW: drop>(
+public fun do_emit_memo<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,
@@ -132,9 +132,9 @@ public fun do_emit_memo<Outcome: store, IW: drop>(
 }
 
 /// Execute an emit decision action
-public fun do_emit_decision<Outcome: store, IW: drop>(
+public fun do_emit_decision<Config: store, Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
+    account: &mut Account<Config>,
     version: VersionWitness,
     intent_witness: IW,
     clock: &Clock,

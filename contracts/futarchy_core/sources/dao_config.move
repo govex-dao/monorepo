@@ -90,6 +90,12 @@ public struct SecurityConfig has store, drop, copy {
     require_deadman_council: bool,       // If true, all councils must support dead-man switch
 }
 
+/// DEPRECATED: Multisig tracking moved to fee system (per-multisig model)
+/// Kept for backward compatibility only - will be removed in future version
+public struct MultisigConfig has store, drop, copy {
+    _deprecated: u64,  // Placeholder for struct compatibility
+}
+
 /// Storage configuration for DAO files
 public struct StorageConfig has store, drop, copy {
     allow_walrus_blobs: bool,            // If true, allow Walrus blob storage; if false, string-only
@@ -120,6 +126,7 @@ public struct DaoConfig has store, drop, copy {
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
+    multisig_config: MultisigConfig,
     optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
     optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
     challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
@@ -299,6 +306,15 @@ public fun new_quota_config(
     }
 }
 
+/// Create a new multisig configuration (DEPRECATED - field unused)
+public fun new_multisig_config(
+    _multisig_count: u64,
+): MultisigConfig {
+    MultisigConfig {
+        _deprecated: 0,
+    }
+}
+
 /// Create a complete DAO configuration
 public fun new_dao_config(
     trading_params: TradingParams,
@@ -309,6 +325,7 @@ public fun new_dao_config(
     storage_config: StorageConfig,
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
+    multisig_config: MultisigConfig,
     optimistic_challenge_fee: u64,
     optimistic_challenge_period_ms: u64,
     challenge_bounty: u64,
@@ -327,6 +344,7 @@ public fun new_dao_config(
         storage_config,
         conditional_coin_config,
         quota_config,
+        multisig_config,
         optimistic_challenge_fee,
         optimistic_challenge_period_ms,
         challenge_bounty,
@@ -406,6 +424,12 @@ public fun quota_enabled(quota: &QuotaConfig): bool { quota.enabled }
 public fun default_quota_amount(quota: &QuotaConfig): u64 { quota.default_quota_amount }
 public fun default_quota_period_ms(quota: &QuotaConfig): u64 { quota.default_quota_period_ms }
 public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced_fee }
+
+// Multisig config getters
+public fun multisig_config(config: &DaoConfig): &MultisigConfig { &config.multisig_config }
+public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig { &mut config.multisig_config }
+/// DEPRECATED: multisig_count is no longer tracked. Always returns 0.
+public fun multisig_count(_multisig: &MultisigConfig): u64 { 0 }
 
 // Challenge config getters (DAO-level)
 public fun optimistic_challenge_fee(config: &DaoConfig): u64 { config.optimistic_challenge_fee }
@@ -668,6 +692,23 @@ public(package) fun set_default_reduced_fee(quota: &mut QuotaConfig, fee: u64) {
     quota.default_reduced_fee = fee;
 }
 
+// Multisig config direct setters (DEPRECATED - all no-ops)
+
+/// DEPRECATED: multisig_count no longer tracked
+public(package) fun set_multisig_count(_multisig: &mut MultisigConfig, _count: u64) {
+    // No-op: multisig_count is deprecated
+}
+
+/// DEPRECATED: multisig_count no longer tracked
+public(package) fun increment_multisig_count(_multisig: &mut MultisigConfig) {
+    // No-op: multisig_count is deprecated
+}
+
+/// DEPRECATED: multisig_count no longer tracked
+public(package) fun decrement_multisig_count(_multisig: &mut MultisigConfig) {
+    // No-op: multisig_count is deprecated
+}
+
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -708,6 +749,7 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -725,6 +767,7 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -742,6 +785,7 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -759,6 +803,7 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -776,6 +821,7 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -793,6 +839,7 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         storage_config: new_storage,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -810,6 +857,7 @@ public fun update_conditional_coin_config(config: &DaoConfig, new_coin_config: C
         storage_config: config.storage_config,
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -827,6 +875,7 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         storage_config: config.storage_config,
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
+        multisig_config: config.multisig_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -912,5 +961,12 @@ public fun default_quota_config(): QuotaConfig {
         default_quota_amount: 1,         // 1 proposal per period by default
         default_quota_period_ms: 2_592_000_000, // 30 days
         default_reduced_fee: 0,          // Free by default
+    }
+}
+
+/// Get default multisig configuration (DEPRECATED - field unused)
+public fun default_multisig_config(): MultisigConfig {
+    MultisigConfig {
+        _deprecated: 0,
     }
 }

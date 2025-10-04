@@ -365,7 +365,7 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
         // 1. Cancelling all cancellable streams
         // 2. Returning isolated pool funds to treasury
         // 3. Cancelling pending budget withdrawals
-        stream_actions::cancel_all_payments_for_dissolution<CoinType>(
+        stream_actions::cancel_all_payments_for_dissolution<FutarchyConfig, CoinType>(
             account,
             clock,
             ctx

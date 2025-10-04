@@ -28,6 +28,7 @@ use futarchy_core::{
     action_types,
 };
 use futarchy_markets::fee::{Self, FeeManager};
+use futarchy_types::coin_types::USDC;
 
 // === Aliases ===
 use account_protocol::intents as protocol_intents;
@@ -102,11 +103,15 @@ public fun do_collect_platform_fee<Outcome: store, IW: drop>(
 
     // Collect fee or accumulate debt
     let sui_type = type_name::with_defining_ids<SUI>();
+    let usdc_type = type_name::with_defining_ids<USDC>();
+    // Reset both SUI and USDC debts on successful payment (forgiveness mechanism)
+    let all_coin_types = vector[sui_type, usdc_type];
     let (remaining, _periods_collected) = fee::collect_dao_platform_fee_with_dao_coin(
         fee_manager,
         payment_tracker,
         dao_id,
         sui_type,
+        all_coin_types,
         payment_coin,
         clock,
         ctx
@@ -132,11 +137,14 @@ public entry fun trigger_fee_collection(
     
     // Collect fee or accumulate debt using the provided payment coin
     let sui_type = type_name::with_defining_ids<SUI>();
+    let usdc_type = type_name::with_defining_ids<USDC>();
+    let all_coin_types = vector[sui_type, usdc_type];
     let (remaining, _) = fee::collect_dao_platform_fee_with_dao_coin(
         fee_manager,
         payment_tracker,
         dao_id,
         sui_type,
+        all_coin_types,
         payment_coin,
         clock,
         ctx

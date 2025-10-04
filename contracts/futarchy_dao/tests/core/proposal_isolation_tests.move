@@ -44,10 +44,9 @@ fun test_witness_is_bounded_to_proposal_slot() {
     let mut cw_opt = proposal::make_cancel_witness(&mut proposal, 0);
     assert!(option::is_some(&cw_opt), 0);
     let cw = option::extract(&mut cw_opt);
-    
+
     // Verify witness has correct data
     assert!(proposal::cancel_witness_outcome_index(&cw) == 0, 1);
-    assert!(proposal::cancel_witness_key(&cw) == b"accept_key".to_string(), 2);
 
     // Note: In a real scenario, there would be an intent to cancel.
     // For this test, we're just checking the witness mechanics.
@@ -61,7 +60,7 @@ fun test_witness_is_bounded_to_proposal_slot() {
     let mut cw3_opt = proposal::make_cancel_witness(&mut proposal, 1);
     assert!(option::is_some(&cw3_opt), 4);
     let cw3 = option::extract(&mut cw3_opt);
-    assert!(proposal::cancel_witness_key(&cw3) == b"reject_key".to_string(), 5);
+    assert!(proposal::cancel_witness_outcome_index(&cw3) == 1, 5);
     
     // The second witness was verified above and consumed
 
@@ -113,11 +112,11 @@ fun test_cross_proposal_isolation() {
     let cw1 = option::extract(&mut cw1_opt);
     let cw2 = option::extract(&mut cw2_opt);
     
-    // Verify witnesses are properly scoped
+    // Verify witnesses are properly scoped to their proposals
     assert!(proposal::cancel_witness_proposal(&cw1) == p1_addr, 3);
     assert!(proposal::cancel_witness_proposal(&cw2) == p2_addr, 4);
-    assert!(proposal::cancel_witness_key(&cw1) == b"p1_accept".to_string(), 5);
-    assert!(proposal::cancel_witness_key(&cw2) == b"p2_accept".to_string(), 6);
+    assert!(proposal::cancel_witness_outcome_index(&cw1) == 0, 5);
+    assert!(proposal::cancel_witness_outcome_index(&cw2) == 0, 6);
     
     // Witnesses are verified above - each witness only works for its own proposal
 

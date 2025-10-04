@@ -11,6 +11,8 @@ use account_actions::{
     currency,
     kiosk,
     access_control,
+    vesting,
+    transfer,
 };
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_actions::{
@@ -184,6 +186,10 @@ public fun delete_restrict_policy(expired: &mut Expired) {
     package_upgrade::delete_restrict(expired);
 }
 
+public fun delete_upgrade_commit_action(expired: &mut Expired) {
+    package_upgrade::delete_commit(expired);
+}
+
 // === Owned Object Actions ===
 public fun delete_owned_withdraw(account: &Account<FutarchyConfig>, expired: &mut Expired) {
     account_protocol::owned::delete_withdraw_object(expired, account);
@@ -211,6 +217,28 @@ public fun delete_currency_update_metadata<CoinType>(expired: &mut Expired) {
     currency::delete_update<CoinType>(expired);
 }
 
+public fun delete_currency_disable<CoinType>(expired: &mut Expired) {
+    currency::delete_disable<CoinType>(expired);
+}
+
+// === Vesting Actions ===
+public fun delete_vesting_action<CoinType>(expired: &mut Expired) {
+    vesting::delete_vesting_action<CoinType>(expired);
+}
+
+public fun delete_cancel_vesting_action(expired: &mut Expired) {
+    vesting::delete_cancel_vesting_action(expired);
+}
+
+// === Transfer Actions ===
+public fun delete_transfer(expired: &mut Expired) {
+    transfer::delete_transfer(expired);
+}
+
+public fun delete_transfer_to_sender(expired: &mut Expired) {
+    transfer::delete_transfer_to_sender(expired);
+}
+
 // === Kiosk Actions ===
 public fun delete_kiosk_take(expired: &mut Expired) {
     kiosk::delete_take(expired);
@@ -223,6 +251,10 @@ public fun delete_kiosk_list(expired: &mut Expired) {
 // === Access Control Actions ===
 public fun delete_borrow_cap<Cap>(expired: &mut Expired) {
     access_control::delete_borrow<Cap>(expired);
+}
+
+public fun delete_return_cap<Cap>(expired: &mut Expired) {
+    access_control::delete_return<Cap>(expired);
 }
 
 // === Stream/Payment Actions ===

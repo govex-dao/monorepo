@@ -190,6 +190,8 @@ public struct AddCoinFeeConfigAction has store, drop {
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
+    multisig_creation_fee: u64,
+    multisig_monthly_fee: u64,
 }
 
 /// Update monthly fee for a specific coin type (with 6-month delay)
@@ -299,6 +301,8 @@ public fun new_add_coin_fee_config(
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
+    multisig_creation_fee: u64,
+    multisig_monthly_fee: u64,
 ): AddCoinFeeConfigAction {
     AddCoinFeeConfigAction {
         coin_type,
@@ -307,6 +311,8 @@ public fun new_add_coin_fee_config(
         dao_creation_fee,
         proposal_fee_per_outcome,
         recovery_fee,
+        multisig_creation_fee,
+        multisig_monthly_fee,
     }
 }
 
@@ -970,13 +976,17 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     let dao_creation_fee = bcs::peel_u64(&mut bcs);
     let proposal_fee_per_outcome = bcs::peel_u64(&mut bcs);
     let recovery_fee = bcs::peel_u64(&mut bcs);
+    let multisig_creation_fee = bcs::peel_u64(&mut bcs);
+    let multisig_monthly_fee = bcs::peel_u64(&mut bcs);
     let action = AddCoinFeeConfigAction {
         coin_type: type_name::get<StableType>(),
         decimals,
         dao_monthly_fee,
         dao_creation_fee,
         proposal_fee_per_outcome,
-        recovery_fee
+        recovery_fee,
+        multisig_creation_fee,
+        multisig_monthly_fee,
     };
 
     // Increment action index
@@ -997,6 +1007,8 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
         action.dao_creation_fee,
         action.proposal_fee_per_outcome,
         action.recovery_fee,
+        action.multisig_creation_fee,
+        action.multisig_monthly_fee,
         clock,
         ctx
     );

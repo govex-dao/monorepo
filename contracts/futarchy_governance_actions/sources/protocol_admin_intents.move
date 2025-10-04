@@ -476,6 +476,8 @@ public fun add_coin_fee_config_to_intent<Outcome: store, IW: drop>(
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
+    multisig_creation_fee: u64,
+    multisig_monthly_fee: u64,
     intent_witness: IW,
 ) {
     let action = protocol_admin_actions::new_add_coin_fee_config(
@@ -484,7 +486,9 @@ public fun add_coin_fee_config_to_intent<Outcome: store, IW: drop>(
         dao_monthly_fee,
         dao_creation_fee,
         proposal_fee_per_outcome,
-        recovery_fee
+        recovery_fee,
+        multisig_creation_fee,
+        multisig_monthly_fee,
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::add_coin_fee_config(), action_data, intent_witness);

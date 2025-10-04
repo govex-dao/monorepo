@@ -43,7 +43,7 @@ public fun witness(): GovernanceWitness {
 
 /// Create a simple treasury transfer intent
 /// For actual transfers, use vault_intents::request_spend_and_transfer directly
-public fun create_transfer_intent<CoinType, Outcome: store + drop + copy>(
+public fun create_transfer_intent<Outcome: store + drop + copy>(
     account: &Account<FutarchyConfig>,
     recipient: address,
     amount: u64,
