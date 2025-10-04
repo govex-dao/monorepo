@@ -1622,15 +1622,18 @@ fun update_conditional_coin_metadata<ConditionalCoinType>(
     // Build name: prefix + outcome_index + _ + base_coin_name
     let mut name_bytes = vector::empty<u8>();
 
-    // Add prefix (e.g., "c_")
-    let prefix = dao_config::coin_name_prefix(coin_config);
-    {
-        let prefix_bytes = ascii::as_bytes(prefix);
+    // Add prefix (e.g., "c_") if configured
+    let prefix_opt = dao_config::coin_name_prefix(coin_config);
+    if (prefix_opt.is_some()) {
+        let prefix = prefix_opt.destroy_some();
+        let prefix_bytes = ascii::as_bytes(&prefix);
         let mut i = 0;
         while (i < prefix_bytes.length()) {
             name_bytes.push_back(*prefix_bytes.borrow(i));
             i = i + 1;
         };
+    } else {
+        prefix_opt.destroy_none();
     };
 
     // Add outcome index if configured

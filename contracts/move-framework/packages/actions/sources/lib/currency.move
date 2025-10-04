@@ -300,10 +300,12 @@ public fun can_update_icon<CoinType>(lock: &CurrencyRules<CoinType>): bool {
 
 /// Read metadata from a CoinMetadata object
 /// Simple helper to extract all metadata fields in one call
+/// Returns: (decimals, symbol, name, description, icon_url)
 public fun read_coin_metadata<CoinType>(
     metadata: &CoinMetadata<CoinType>,
-): (ascii::String, String, String, ascii::String) {
+): (u8, ascii::String, String, String, ascii::String) {
     (
+        metadata.get_decimals(),
         metadata.get_symbol(),
         metadata.get_name(),
         metadata.get_description(),

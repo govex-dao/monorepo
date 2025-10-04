@@ -716,6 +716,19 @@ public fun set_max_amm_swap_percent_bps(config: &mut FutarchyConfig, percent_bps
     dao_config::set_max_amm_swap_percent_bps(trading_params, percent_bps);
 }
 
+public fun set_use_outcome_index(config: &mut FutarchyConfig, use_index: bool) {
+    let coin_config = dao_config::conditional_coin_config_mut(&mut config.config);
+    dao_config::set_use_outcome_index(coin_config, use_index);
+}
+
+public fun set_conditional_metadata(
+    config: &mut FutarchyConfig,
+    metadata: Option<dao_config::ConditionalMetadata>
+) {
+    let coin_config = dao_config::conditional_coin_config_mut(&mut config.config);
+    dao_config::set_conditional_metadata(coin_config, metadata);
+}
+
 public fun update_slash_distribution(
     config: &mut FutarchyConfig,
     slasher_reward_bps: u16,

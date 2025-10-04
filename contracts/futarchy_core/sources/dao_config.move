@@ -4,7 +4,7 @@ module futarchy_core::dao_config;
 
 use std::{
     string::{Self, String},
-    ascii::String as AsciiString,
+    ascii::{Self, String as AsciiString},
 };
 use sui::url::{Self, Url};
 use futarchy_one_shot_utils::constants;
@@ -25,6 +25,7 @@ const EMaxActionsExceedsProtocol: u64 = 11; // Max actions exceeds protocol limi
 const EStateInconsistent: u64 = 12; // State would become inconsistent with this change
 const EInvalidChallengeBounty: u64 = 13; // Challenge bounty must be positive and not exceed challenge fee
 const EInvalidQuotaParams: u64 = 14; // Invalid quota parameters
+const ENoConditionalMetadata: u64 = 15; // No conditional metadata available (neither CoinMetadata nor fallback config)
 
 // === Constants ===
 // Most constants are now in futarchy_utils::constants
@@ -103,10 +104,17 @@ public struct StorageConfig has store, drop, copy {
 
 /// Conditional coin metadata configuration for proposals
 public struct ConditionalCoinConfig has store, drop, copy {
+    use_outcome_index: bool,             // If true, append outcome index to name
+    // If Some(), use these hardcoded values for conditional tokens
+    // If None(), derive conditional token names from base DAO token CoinMetadata
+    conditional_metadata: Option<ConditionalMetadata>,
+}
+
+/// Metadata for conditional tokens (fallback if CoinMetadata can't be read)
+public struct ConditionalMetadata has store, drop, copy {
+    decimals: u8,                        // Decimals for conditional coins
     coin_name_prefix: AsciiString,       // Prefix for coin names (e.g., "MyDAO_")
     coin_icon_url: Url,                  // Icon URL for conditional coins
-    use_outcome_index: bool,             // If true, append outcome index to name
-    use_hardcoded_metadata: bool,        // If true, use hardcoded prefix/icon; if false, read from TreasuryCap
 }
 
 /// Quota system configuration
@@ -275,20 +283,34 @@ public fun new_storage_config(
     }
 }
 
-/// Create a new conditional coin configuration
+/// Create conditional coin config
 public fun new_conditional_coin_config(
-    coin_name_prefix: AsciiString,
-    coin_icon_url: Url,
     use_outcome_index: bool,
-    use_hardcoded_metadata: bool,
+    conditional_metadata: Option<ConditionalMetadata>,
 ): ConditionalCoinConfig {
     ConditionalCoinConfig {
-        coin_name_prefix,
-        coin_icon_url,
         use_outcome_index,
-        use_hardcoded_metadata,
+        conditional_metadata,
     }
 }
+
+/// Create new conditional metadata
+public fun new_conditional_metadata(
+    decimals: u8,
+    coin_name_prefix: AsciiString,
+    coin_icon_url: Url,
+): ConditionalMetadata {
+    ConditionalMetadata {
+        decimals,
+        coin_name_prefix,
+        coin_icon_url,
+    }
+}
+
+/// Getters for ConditionalMetadata fields
+public fun conditional_metadata_decimals(meta: &ConditionalMetadata): u8 { meta.decimals }
+public fun conditional_metadata_prefix(meta: &ConditionalMetadata): AsciiString { meta.coin_name_prefix }
+public fun conditional_metadata_icon(meta: &ConditionalMetadata): Url { meta.coin_icon_url }
 
 /// Create a new quota configuration
 public fun new_quota_config(
@@ -416,10 +438,60 @@ public fun allow_walrus_blobs(storage: &StorageConfig): bool { storage.allow_wal
 // Conditional coin config getters
 public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig { &config.conditional_coin_config }
 public(package) fun conditional_coin_config_mut(config: &mut DaoConfig): &mut ConditionalCoinConfig { &mut config.conditional_coin_config }
-public fun coin_name_prefix(coin_config: &ConditionalCoinConfig): &AsciiString { &coin_config.coin_name_prefix }
-public fun coin_icon_url(coin_config: &ConditionalCoinConfig): &Url { &coin_config.coin_icon_url }
 public fun use_outcome_index(coin_config: &ConditionalCoinConfig): bool { coin_config.use_outcome_index }
-public fun use_hardcoded_metadata(coin_config: &ConditionalCoinConfig): bool { coin_config.use_hardcoded_metadata }
+public fun conditional_metadata(coin_config: &ConditionalCoinConfig): &Option<ConditionalMetadata> { &coin_config.conditional_metadata }
+
+/// Get the coin name prefix from conditional metadata (if available)
+/// Returns None if no conditional metadata is set
+public fun coin_name_prefix(coin_config: &ConditionalCoinConfig): Option<AsciiString> {
+    if (coin_config.conditional_metadata.is_some()) {
+        option::some(coin_config.conditional_metadata.borrow().coin_name_prefix)
+    } else {
+        option::none()
+    }
+}
+
+// ConditionalMetadata getters
+public fun conditional_decimals(meta: &ConditionalMetadata): u8 { meta.decimals }
+public fun conditional_coin_name_prefix(meta: &ConditionalMetadata): &AsciiString { &meta.coin_name_prefix }
+public fun conditional_coin_icon_url(meta: &ConditionalMetadata): &Url { &meta.coin_icon_url }
+
+/// Derive conditional token metadata from base token's CoinMetadata (PREFERRED)
+/// Reads decimals, symbol, and icon from the base DAO token and derives conditional token metadata
+/// Returns: (decimals, name_prefix, icon_url)
+///
+/// Example: Base token "MYDAO" → Conditional prefix "c_MYDAO_"
+public fun derive_conditional_metadata_from_coin<CoinType>(
+    metadata: &sui::coin::CoinMetadata<CoinType>,
+): (u8, AsciiString, Url) {
+    let decimals = metadata.get_decimals();
+    let symbol = metadata.get_symbol();
+    let icon = metadata.get_icon_url().extract().inner_url();
+
+    // Derive conditional token prefix: c_SYMBOL_
+    let prefix_bytes = b"c_";
+    let symbol_bytes = symbol.into_bytes();
+    let suffix_bytes = b"_";
+
+    let mut combined = vector::empty<u8>();
+    vector::append(&mut combined, prefix_bytes);
+    vector::append(&mut combined, symbol_bytes);
+    vector::append(&mut combined, suffix_bytes);
+
+    (decimals, combined.to_ascii_string(), url::new_unsafe(icon))
+}
+
+/// Get conditional token metadata from hardcoded fallback config
+/// Use only if CoinMetadata is unavailable/lost to prevent DAO from bricking
+/// Returns: (decimals, name_prefix, icon_url)
+/// Aborts if no fallback metadata is configured
+public fun get_conditional_metadata_from_config(
+    coin_config: &ConditionalCoinConfig,
+): (u8, AsciiString, Url) {
+    assert!(coin_config.conditional_metadata.is_some(), ENoConditionalMetadata);
+    let meta = coin_config.conditional_metadata.borrow();
+    (meta.decimals, *&meta.coin_name_prefix, *&meta.coin_icon_url)
+}
 
 // Quota config getters
 public fun quota_config(config: &DaoConfig): &QuotaConfig { &config.quota_config }
@@ -660,12 +732,11 @@ public fun set_allow_walrus_blobs(storage: &mut StorageConfig, val: bool) {
 
 // Conditional coin config direct setters
 
-public(package) fun set_coin_name_prefix(coin_config: &mut ConditionalCoinConfig, prefix: AsciiString) {
-    coin_config.coin_name_prefix = prefix;
-}
-
-public(package) fun set_coin_icon_url(coin_config: &mut ConditionalCoinConfig, url: Url) {
-    coin_config.coin_icon_url = url;
+public(package) fun set_conditional_metadata(
+    coin_config: &mut ConditionalCoinConfig,
+    metadata: Option<ConditionalMetadata>
+) {
+    coin_config.conditional_metadata = metadata;
 }
 
 public(package) fun set_use_outcome_index(coin_config: &mut ConditionalCoinConfig, use_index: bool) {
@@ -948,14 +1019,11 @@ public fun default_storage_config(): StorageConfig {
     }
 }
 
-/// Get default conditional coin configuration
+/// Get default conditional coin configuration (dynamic mode - derives from base token)
 public fun default_conditional_coin_config(): ConditionalCoinConfig {
-    use std::ascii;
     ConditionalCoinConfig {
-        coin_name_prefix: ascii::string(b"c_"),  // "c_" for conditional
-        coin_icon_url: url::new_unsafe(ascii::string(b"https://via.placeholder.com/150")), // Default placeholder
-        use_outcome_index: true,  // Include outcome index in name
-        use_hardcoded_metadata: true,  // Default: use hardcoded metadata (backward compatible)
+        use_outcome_index: true,
+        conditional_metadata: option::none(),  // Derive from base DAO token
     }
 }
 

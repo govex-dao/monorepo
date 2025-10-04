@@ -114,6 +114,14 @@ public struct StorageConfigChanged has copy, drop {
     timestamp: u64,
 }
 
+/// Emitted when conditional metadata config is updated
+public struct ConditionalMetadataChanged has copy, drop {
+    account_id: ID,
+    has_fallback_metadata: bool,
+    use_outcome_index: bool,
+    timestamp: u64,
+}
+
 // === Basic Action Structs ===
 
 /// Action to enable or disable proposals
@@ -193,6 +201,15 @@ public struct QueueParamsUpdateAction has store, drop, copy {
 /// Storage configuration update action
 public struct StorageConfigUpdateAction has store, drop, copy {
     allow_walrus_blobs: Option<bool>,
+}
+
+/// Conditional metadata configuration update action
+public struct ConditionalMetadataUpdateAction has store, drop, copy {
+    use_outcome_index: Option<bool>,
+    // If Some(Some(metadata)), set fallback metadata to the inner value
+    // If Some(None), remove fallback metadata
+    // If None, don't change fallback metadata
+    conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
 }
 
 /// Wrapper for different config action types (for batch operations)
@@ -971,6 +988,79 @@ public fun do_update_storage_config<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Update conditional metadata configuration
+/// This controls how conditional token metadata is derived during proposal creation
+public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::UpdateConditionalMetadata>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let use_outcome_index_opt = bcs::peel_option!(&mut reader, |r| r.peel_bool());
+    let conditional_metadata_opt = bcs::peel_option!(&mut reader, |r| {
+        bcs::peel_option!(r, |r2| {
+            let decimals = r2.peel_u8();
+            let coin_name_prefix = r2.peel_vec_u8().to_ascii_string();
+            let icon_url_bytes = r2.peel_vec_u8().to_ascii_string();
+            let coin_icon_url = url::new_unsafe(icon_url_bytes);
+            dao_config::new_conditional_metadata(decimals, coin_name_prefix, coin_icon_url)
+        })
+    });
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get account ID first before taking mutable borrows
+    let account_id = object::id(account);
+
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+
+    // Apply updates using futarchy_config setters (standard pattern)
+    if (use_outcome_index_opt.is_some()) {
+        futarchy_config::set_use_outcome_index(config, use_outcome_index_opt.destroy_some());
+    };
+
+    if (conditional_metadata_opt.is_some()) {
+        futarchy_config::set_conditional_metadata(config, conditional_metadata_opt.destroy_some());
+    };
+
+    // Get final values after updates
+    let dao_cfg = futarchy_config::dao_config(config);
+    let coin_cfg = dao_config::conditional_coin_config(dao_cfg);
+    let final_use_outcome_index = dao_config::use_outcome_index(coin_cfg);
+    let final_has_fallback = dao_config::conditional_metadata(coin_cfg).is_some();
+
+    // Emit event
+    event::emit(ConditionalMetadataChanged {
+        account_id,
+        has_fallback_metadata: final_has_fallback,
+        use_outcome_index: final_use_outcome_index,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
 /// Execute a batch config action that can contain any type of config update
 /// This delegates to the appropriate handler based on config_type
 public fun do_batch_config<Outcome: store, IW: drop>(
@@ -1396,6 +1486,17 @@ public fun new_storage_config_update_action(
 ): StorageConfigUpdateAction {
     StorageConfigUpdateAction {
         allow_walrus_blobs,
+    }
+}
+
+/// Create a conditional metadata update action
+public fun new_conditional_metadata_update_action(
+    use_outcome_index: Option<bool>,
+    conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
+): ConditionalMetadataUpdateAction {
+    ConditionalMetadataUpdateAction {
+        use_outcome_index,
+        conditional_metadata,
     }
 }
 

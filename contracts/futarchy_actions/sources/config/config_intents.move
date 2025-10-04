@@ -26,6 +26,7 @@ use futarchy_core::version;
 use futarchy_actions::config_actions;
 use futarchy_core::action_types;
 use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::dao_config;
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
 
@@ -357,6 +358,44 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_queue_params(),
+                action_bytes,
+                iw
+            );
+        }
+    );
+}
+
+/// Create intent to update conditional metadata configuration
+public fun create_update_conditional_metadata_intent<Outcome: store + drop + copy>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &ActionDecoderRegistry,
+    params: Params,
+    outcome: Outcome,
+    use_outcome_index: Option<bool>,
+    conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
+    ctx: &mut TxContext
+) {
+    // Enforce decoder exists for this action type
+    schema::assert_decoder_exists(
+        registry,
+        type_name::with_defining_ids<config_actions::ConditionalMetadataUpdateAction>()
+    );
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"config_update_conditional_metadata".to_string(),
+        version::current(),
+        ConfigIntent {},
+        ctx,
+        |intent, iw| {
+            let action = config_actions::new_conditional_metadata_update_action(
+                use_outcome_index,
+                conditional_metadata
+            );
+            let action_bytes = bcs::to_bytes(&action);
+            intent.add_typed_action(
+                action_types::update_conditional_metadata(),
                 action_bytes,
                 iw
             );

@@ -18,9 +18,11 @@ use futarchy_actions::config_actions::{
     SlashDistributionUpdateAction,
     QueueParamsUpdateAction,
     StorageConfigUpdateAction,
+    ConditionalMetadataUpdateAction,
     ConfigAction,
 };
 use futarchy_actions::quota_decoder;
+use futarchy_core::dao_config;
 
 // === Decoder Objects ===
 
@@ -74,6 +76,11 @@ public struct StorageConfigUpdateActionDecoder has key, store {
     id: UID,
 }
 
+/// Decoder for ConditionalMetadataUpdateAction
+public struct ConditionalMetadataUpdateActionDecoder has key, store {
+    id: UID,
+}
+
 /// Decoder for ConfigAction
 public struct ConfigActionDecoder has key, store {
     id: UID,
@@ -122,6 +129,26 @@ fun decode_option_ascii_string(bcs_data: &mut BCS): Option<ascii::String> {
     if (is_some) {
         let bytes = bcs::peel_vec_u8(bcs_data);
         option::some(ascii::string(bytes))
+    } else {
+        option::none()
+    }
+}
+
+fun decode_option_option_conditional_metadata(bcs_data: &mut BCS): Option<Option<dao_config::ConditionalMetadata>> {
+    let outer_is_some = bcs::peel_bool(bcs_data);
+    if (outer_is_some) {
+        let inner_is_some = bcs::peel_bool(bcs_data);
+        if (inner_is_some) {
+            let decimals = bcs::peel_u8(bcs_data);
+            let prefix_bytes = bcs::peel_vec_u8(bcs_data);
+            let icon_url_bytes = bcs::peel_vec_u8(bcs_data);
+            let coin_name_prefix = ascii::string(prefix_bytes);
+            let coin_icon_url = url::new_unsafe(ascii::string(icon_url_bytes));
+            let metadata = dao_config::new_conditional_metadata(decimals, coin_name_prefix, coin_icon_url);
+            option::some(option::some(metadata))
+        } else {
+            option::some(option::none())
+        }
     } else {
         option::none()
     }
@@ -561,6 +588,71 @@ public fun decode_storage_config_update_action(
     fields
 }
 
+/// Decode ConditionalMetadataUpdateAction to human-readable fields
+public fun decode_conditional_metadata_update_action(
+    _decoder: &ConditionalMetadataUpdateActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    let use_outcome_index = decode_option_bool(&mut bcs_data);
+    let conditional_metadata = decode_option_option_conditional_metadata(&mut bcs_data);
+
+    // Security: ensure all bytes are consumed
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    let mut fields = vector::empty();
+
+    if (use_outcome_index.is_some()) {
+        let value = if (use_outcome_index.destroy_some()) { b"true".to_string() } else { b"false".to_string() };
+        fields.push_back(schema::new_field(
+            b"use_outcome_index".to_string(),
+            value,
+            b"bool".to_string(),
+        ));
+    } else {
+        use_outcome_index.destroy_none();
+    };
+
+    if (conditional_metadata.is_some()) {
+        let meta_opt = conditional_metadata.destroy_some();
+        if (meta_opt.is_some()) {
+            let meta = meta_opt.destroy_some();
+            fields.push_back(schema::new_field(
+                b"fallback_metadata".to_string(),
+                b"Some(ConditionalMetadata)".to_string(),
+                b"Option<ConditionalMetadata>".to_string(),
+            ));
+            fields.push_back(schema::new_field(
+                b"decimals".to_string(),
+                dao_config::conditional_metadata_decimals(&meta).to_string(),
+                b"u8".to_string(),
+            ));
+            fields.push_back(schema::new_field(
+                b"coin_name_prefix".to_string(),
+                dao_config::conditional_metadata_prefix(&meta).to_string(),
+                b"AsciiString".to_string(),
+            ));
+            fields.push_back(schema::new_field(
+                b"coin_icon_url".to_string(),
+                dao_config::conditional_metadata_icon(&meta).inner_url().to_string(),
+                b"Url".to_string(),
+            ));
+        } else {
+            fields.push_back(schema::new_field(
+                b"fallback_metadata".to_string(),
+                b"None".to_string(),
+                b"Option<ConditionalMetadata>".to_string(),
+            ));
+            meta_opt.destroy_none();
+        };
+    } else {
+        conditional_metadata.destroy_none();
+    };
+
+    fields
+}
+
 // === Registration Functions ===
 
 /// Register all config decoders
@@ -578,6 +670,7 @@ public fun register_decoders(
     register_slash_distribution_decoder(registry, ctx);
     register_queue_params_decoder(registry, ctx);
     register_storage_config_decoder(registry, ctx);
+    register_conditional_metadata_decoder(registry, ctx);
     register_config_action_decoder(registry, ctx);
 
     // Register quota decoders
@@ -671,6 +764,15 @@ fun register_storage_config_decoder(
 ) {
     let decoder = StorageConfigUpdateActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<StorageConfigUpdateAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_conditional_metadata_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ConditionalMetadataUpdateActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<ConditionalMetadataUpdateAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
