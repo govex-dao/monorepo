@@ -33,7 +33,6 @@ fun drain_all(expired: &mut Expired) {
     
     // Security Council
     gc_registry::delete_create_council(expired);
-    gc_registry::delete_approve_oa_change(expired);
     gc_registry::delete_update_council_membership(expired);
     gc_registry::delete_approve_policy_change(expired);
     
@@ -71,25 +70,99 @@ fun drain_all(expired: &mut Expired) {
     
     // Memo Actions
     gc_registry::delete_memo(expired);
+
+    // Platform Fee Actions
+    gc_registry::delete_collect_platform_fee(expired);
+
+    // Deposit Escrow Actions
+    gc_registry::delete_accept_deposit(expired);
+
+    // Walrus Renewal Actions
+    gc_registry::delete_walrus_renewal(expired);
+
+    // Commitment Actions (non-generic ones)
+    gc_registry::delete_execute_commitment(expired);
+    gc_registry::delete_cancel_commitment(expired);
+    gc_registry::delete_update_commitment_recipient(expired);
+    gc_registry::delete_withdraw_commitment(expired);
+
+    // Quota Actions
+    gc_registry::delete_set_quotas(expired);
+
+    // Founder Lock Actions (non-generic)
+    gc_registry::delete_execute_founder_lock(expired);
+    gc_registry::delete_update_founder_lock_recipient(expired);
+    gc_registry::delete_withdraw_unlocked_tokens(expired);
+
+    // Protocol Admin Actions
+    gc_registry::delete_protocol_admin_action(expired);
+
+    // Additional Liquidity Actions (non-generic)
+    gc_registry::delete_set_pool_status(expired);
+
+    // Additional Config Actions
+    gc_registry::delete_set_proposals_enabled<FutarchyConfig>(expired);
+    gc_registry::delete_update_name<FutarchyConfig>(expired);
+    gc_registry::delete_twap_config_update<FutarchyConfig>(expired);
+    gc_registry::delete_metadata_table_update<FutarchyConfig>(expired);
+    gc_registry::delete_queue_params_update<FutarchyConfig>(expired);
+
+    // Additional DAO File Actions
+    gc_registry::delete_set_document_insert_allowed(expired);
+    gc_registry::delete_set_document_remove_allowed(expired);
+
+    // Additional Dissolution Actions (non-generic)
+    gc_registry::delete_calculate_pro_rata_shares(expired);
+    gc_registry::delete_cancel_all_streams(expired);
+    // Note: delete_distribute_assets and delete_withdraw_amm_liquidity are generic
+    // and are handled in drain_common_generics
+
+    // Additional Policy Actions
+    gc_registry::delete_register_council(expired);
+    gc_registry::delete_set_object_policy(expired);
+    gc_registry::delete_remove_object_policy(expired);
 }
 
 /// Drain common generic actions for known coin types
 /// This handles the most common coin types used in the protocol
 /// For production, you would add your specific coin types here
 fun drain_common_generics(expired: &mut Expired) {
-    // Vault Actions for SUI
+    // Note: These use phantom type parameters to avoid hardcoding coin types
+    // The actual cleanup happens when the action_spec is removed
+
+    // Vault Actions
     drain_vault_actions_for_coin<SUI>(expired);
-    
-    // Currency Actions for SUI
+
+    // Currency Actions
     drain_currency_actions_for_coin<SUI>(expired);
-    
-    // Stream Actions for SUI
+
+    // Stream Actions
     drain_stream_actions_for_coin<SUI>(expired);
-    
+
+    // Oracle Mint Actions
+    drain_oracle_mint_for_coin<SUI>(expired);
+
+    // Dividend Actions (phantom CoinType)
+    gc_registry::delete_create_dividend<SUI>(expired);
+
+    // Commitment Actions (phantom AssetType)
+    gc_registry::delete_create_commitment_proposal<SUI>(expired);
+
+    // Founder Lock Actions (phantom AssetType)
+    gc_registry::delete_create_founder_lock_proposal<SUI>(expired);
+
+    // Liquidity Actions for common pairs (phantom AssetType, StableType)
+    drain_liquidity_generic_actions_for_pair<SUI, SUI>(expired);
+
+    // Dissolution Actions (phantom types)
+    gc_registry::delete_distribute_assets<SUI>(expired);
+    gc_registry::delete_withdraw_amm_liquidity<SUI, SUI>(expired);
+
     // Note: For production, add your specific coin types here:
     // - DAO governance tokens
     // - Stablecoins used in your protocol
     // - LP tokens, etc.
+    // The type parameter is used for type safety but doesn't affect cleanup
 }
 
 /// Helper to drain vault actions for a specific coin type
@@ -129,6 +202,13 @@ fun drain_liquidity_actions_for_pair<AssetType, StableType>(expired: &mut Expire
     gc_registry::delete_add_liquidity<AssetType, StableType>(expired);
     gc_registry::delete_remove_liquidity<AssetType, StableType>(expired);
     gc_registry::delete_create_pool<AssetType, StableType>(expired);
+}
+
+/// Helper to drain additional generic liquidity actions for a specific pair
+fun drain_liquidity_generic_actions_for_pair<AssetType, StableType>(expired: &mut Expired) {
+    gc_registry::delete_swap<AssetType, StableType>(expired);
+    gc_registry::delete_collect_fees<AssetType, StableType>(expired);
+    gc_registry::delete_withdraw_fees<AssetType, StableType>(expired);
 }
 
 /// Delete a specific expired intent by key

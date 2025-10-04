@@ -18,6 +18,7 @@ futarchy_lifecycle = { local = "../futarchy_lifecycle" }
 futarchy_actions = { local = "../futarchy_actions" }
 futarchy_legal_actions = { local = "../futarchy_legal_actions" }
 futarchy_governance_actions = { local = "../futarchy_governance_actions" }
+futarchy_payments = { local = "../futarchy_payments" }
 Walrus = { local = "../walrus_walrus" }
 WAL = { local = "../walrus_wal" }
 [addresses]
@@ -34,6 +35,7 @@ futarchy_lifecycle  = "0x0"
 futarchy_legal_actions  = "0x0"
 futarchy_governance_actions  = "0x0"
 futarchy_actions  = "0x0"
+futarchy_payments = "0x0"
 account_protocol = "0xc24e7496e469de4fc9aa52205b0c69195e23d913db19dede6ded8dd77d9e36d0"
 account_extensions = "0x0845277c95d7b28ea5d0b3ee653b679e4d4c8649ec299f4f4f5cec4141aa2dbe"
 account_actions = "0x59feeec832fb397c7e4fc80eff70da6e675c2e9b31eda830e8a179dfaede9d30"

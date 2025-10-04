@@ -137,6 +137,15 @@ public fun new_set_quotas(
     }
 }
 
+// === Garbage Collection ===
+
+/// Delete a set quotas action from an expired intent
+public fun delete_set_quotas(expired: &mut account_protocol::intents::Expired) {
+    let action_spec = account_protocol::intents::remove_action_spec(expired);
+    // Action spec has drop, so it's automatically cleaned up
+    let _ = action_spec;
+}
+
 // === Getter Functions ===
 
 public fun users(action: &SetQuotasAction): &vector<address> { &action.users }

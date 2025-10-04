@@ -23,6 +23,7 @@ use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_markets::{fee, account_spot_pool::{Self, AccountSpotPool}};
 use futarchy_one_shot_utils::{math, constants};
 use account_extensions::extensions::Extensions;
+use futarchy_seal_utils::seal_commit_reveal::{Self, SealedParams, SealContainer};
 
 // === Witnesses ===
 public struct LaunchpadWitness has drop {}
@@ -222,10 +223,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     dao_id: Option<ID>,
     /// Whether init actions can still be added
     intents_locked: bool,
-    /// Seal integration fields for hidden max raise
-    max_raise_sealed_blob_id: Option<vector<u8>>,     // Walrus blob ID (encrypted data)
-    max_raise_commitment_hash: Option<vector<u8>>,    // Hash of plaintext for verification
-    max_raise_revealed: Option<u64>,                  // Set after decryption
+    /// Seal integration for hidden max raise - uses shared seal_commit_reveal module
+    max_raise_seal: Option<SealContainer<u64>>,
     reveal_deadline_ms: u64,                          // deadline_ms + 7 days grace period
     /// Admin trust score and review (set by protocol DAO validators)
     admin_trust_score: Option<u64>,
@@ -928,13 +927,14 @@ public entry fun start_settlement<RT, SC>(
 /// Reveal the Seal-encrypted max_raise_amount and begin settlement
 /// Anyone can call this after the deadline with the decrypted values from Seal
 ///
-/// SEAL encrypts BOTH max_raise AND salt together. After deadline, anyone can:
-/// 1. Decrypt the SEAL blob to get (max_raise, salt)
-/// 2. Call this function with both values
-/// 3. Chain verifies hash(max_raise || salt) matches stored commitment
+/// Uses shared seal_commit_reveal module - delegates all verification logic
 ///
-/// This prevents rainbow table attacks on the commitment hash while keeping
-/// founder from needing to remember the salt (it's encrypted in SEAL).
+/// # Error Codes (Breaking Change)
+/// This function now uses error codes from `futarchy_seal_utils::seal_commit_reveal`:
+/// - Hash mismatch: seal_commit_reveal::EHashMismatch (0) instead of launchpad::EHashMismatch (63)
+/// - Invalid salt: seal_commit_reveal::EInvalidSaltLength (1) instead of launchpad::EInvalidSaltLength (69)
+/// - Too early: seal_commit_reveal::ETooEarlyToReveal (4)
+/// - Already revealed: launchpad::EAlreadyRevealed (68) - checked explicitly before delegation
 public entry fun reveal_and_begin_settlement<RT, SC>(
     raise: &mut Raise<RT, SC>,
     decrypted_max_raise: u64,     // Decrypted from SEAL blob
@@ -945,28 +945,32 @@ public entry fun reveal_and_begin_settlement<RT, SC>(
     // Validation checks
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(!raise.settlement_done && !raise.settlement_in_progress, ESettlementAlreadyStarted);
-    assert!(raise.max_raise_revealed.is_none(), EAlreadyRevealed);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
 
     // CRITICAL: Validate decrypted value is reasonable
     assert!(decrypted_max_raise >= raise.min_raise_amount, EInvalidMaxRaise);
 
-    // CRITICAL: Verify salt length (must be exactly 32 bytes)
-    assert!(vector::length(&decrypted_salt) == 32, EInvalidSaltLength);
+    // Use shared seal_commit_reveal module for verification and reveal
+    // This handles: salt length check, hash verification, time-lock enforcement, event emission
+    if (option::is_some(&raise.max_raise_seal)) {
+        let container = option::borrow_mut(&mut raise.max_raise_seal);
 
-    // CRITICAL: Verify commitment hash(max_raise || salt)
-    // This proves the decrypted values are correct and prevents fake reveals
-    if (option::is_some(&raise.max_raise_commitment_hash)) {
-        let mut data = bcs::to_bytes(&decrypted_max_raise);
-        vector::append(&mut data, decrypted_salt);
-        let computed_hash = sui::hash::keccak256(&data);
-        assert!(computed_hash == *option::borrow(&raise.max_raise_commitment_hash), EHashMismatch);
+        // CRITICAL: Explicit check to prevent double-reveal attempts
+        // While seal_commit_reveal::reveal() also checks this, explicit validation
+        // in financial operations is safer than relying on implicit module behavior
+        assert!(!seal_commit_reveal::is_revealed(container), EAlreadyRevealed);
+
+        // Delegate to shared module - handles all verification logic
+        seal_commit_reveal::reveal(
+            container,
+            decrypted_max_raise,
+            decrypted_salt,
+            clock,
+            ctx
+        );
     };
 
-    // Store revealed value
-    raise.max_raise_revealed = option::some(decrypted_max_raise);
-
-    // Emit event
+    // Emit launchpad-specific event
     event::emit(MaxRaiseRevealed {
         raise_id: object::id(raise),
         decrypted_max_raise,
@@ -997,11 +1001,12 @@ public entry fun fail_raise_seal_timeout<RT: drop, SC>(
     // Can only call after reveal deadline (deadline + 7 days)
     assert!(clock.timestamp_ms() >= raise.reveal_deadline_ms, ERevealDeadlineNotReached);
 
-    // Can only call if max_raise not revealed yet
-    assert!(raise.max_raise_revealed.is_none(), EAlreadyRevealed);
-
     // Must have sealed cap to timeout
-    assert!(raise.max_raise_sealed_blob_id.is_some(), EInvalidStateForAction);
+    assert!(option::is_some(&raise.max_raise_seal), EInvalidStateForAction);
+
+    // Check if not already revealed
+    let container = option::borrow(&raise.max_raise_seal);
+    assert!(!seal_commit_reveal::is_revealed(container), EAlreadyRevealed);
 
     // Mark raise as failed
     if (raise.state == STATE_FUNDING) {
@@ -1048,9 +1053,18 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
     // --- THE CRUCIAL HYBRID LOGIC ---
     // The final raise is the lesser of the market consensus and the creator's hard cap.
     // Check both revealed (from Seal) and public max_raise_amount
-    let final_total = if (option::is_some(&raise.max_raise_revealed)) {
-        // Use revealed value from Seal decryption
-        math::min(consensual_total, *option::borrow(&raise.max_raise_revealed))
+    let final_total = if (option::is_some(&raise.max_raise_seal)) {
+        // Check if Seal was revealed
+        let container = option::borrow(&raise.max_raise_seal);
+        if (seal_commit_reveal::is_revealed(container)) {
+            // Use revealed value from Seal decryption
+            // is_revealed() is more explicit than has_params() for MODE_SEALED containers
+            let revealed_max = *seal_commit_reveal::get_params(container);
+            math::min(consensual_total, revealed_max)
+        } else {
+            // Seal not revealed yet, use consensual total
+            consensual_total
+        }
     } else if (option::is_some(&raise.max_raise_amount)) {
         // Use public max_raise_amount
         math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
@@ -1431,6 +1445,14 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
 
     let tokens_for_sale = tokens_for_raise.value();
     let deadline = clock.timestamp_ms() + LAUNCHPAD_DURATION_MS;
+
+    // Create SealContainer if using SEAL - uses helper to avoid Option unwrapping verbosity
+    let max_raise_seal = seal_commit_reveal::new_sealed_container_from_options<u64>(
+        max_raise_sealed_blob_id,
+        max_raise_commitment_hash,
+        deadline
+    );
+
     let raise = Raise<RaiseToken, StableCoin> {
         id: object::new(ctx),
         creator: ctx.sender(),
@@ -1456,16 +1478,14 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         final_raise_amount: 0,
         dao_id: option::none(),
         intents_locked: false,
-        max_raise_sealed_blob_id,
-        max_raise_commitment_hash,
-        max_raise_revealed: option::none(),
+        max_raise_seal,
         reveal_deadline_ms: deadline + constants::seal_reveal_grace_period_ms(),
         admin_trust_score: option::none(),
         admin_review_text: option::none(),
     };
 
     // Emit appropriate event based on whether Seal is used
-    if (option::is_some(&max_raise_sealed_blob_id)) {
+    if (option::is_some(&raise.max_raise_seal)) {
         event::emit(RaiseCreatedWithSealedCap {
             raise_id: object::id(&raise),
             creator: raise.creator,

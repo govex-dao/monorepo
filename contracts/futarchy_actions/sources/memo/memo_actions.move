@@ -218,6 +218,16 @@ public fun delete_emit_decision(expired: &mut Expired) {
     let _ = reader.into_remainder_bytes();
 }
 
+/// Generic delete function for memo actions (tries both types)
+/// This is called by the garbage collection registry
+public fun delete_memo(expired: &mut Expired) {
+    // Try to delete as emit_memo first, fall back to emit_decision
+    // Both use the same action type, so we just need to consume the spec
+    let action_spec = intents::remove_action_spec(expired);
+    // Action spec has drop, so it's automatically cleaned up
+    let _ = action_spec;
+}
+
 // === Constructor Functions ===
 
 /// Create a new emit memo action

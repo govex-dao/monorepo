@@ -69,7 +69,11 @@ I am not sure they should hmmm
 or should have a type that doesnt and type that does?
 !!!!! maybe I want both types of multisigs
 
+# Look at jose seperate packages for each module kinda thing to make upgrades easy
 
+# get all constants and magic number in constants files (accont framework has its own)
+
+# upgrade to move 2024
 
 # Clean up
   2. Stream/Payment Actions - Overlapping Cancel/Pause ⚠️

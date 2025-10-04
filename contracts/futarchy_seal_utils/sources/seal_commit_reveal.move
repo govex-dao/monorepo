@@ -134,6 +134,35 @@ public fun new_sealed_only<T: store + drop>(
     }
 }
 
+/// Create MODE_SEALED container from optional blob_id and commitment
+/// Returns None if either parameter is None
+///
+/// This is a convenience function to avoid verbose Option handling in calling code.
+/// Typical usage:
+/// ```
+/// let container = seal_commit_reveal::new_sealed_container_from_options<u64>(
+///     some_blob_id,
+///     some_commitment,
+///     reveal_time
+/// );
+/// ```
+public fun new_sealed_container_from_options<T: store + drop>(
+    blob_id: Option<vector<u8>>,
+    commitment_hash: Option<vector<u8>>,
+    reveal_time_ms: u64,
+): Option<SealContainer<T>> {
+    if (option::is_some(&blob_id) && option::is_some(&commitment_hash)) {
+        let sealed = new_sealed_params(
+            option::destroy_some(blob_id),
+            option::destroy_some(commitment_hash),
+            reveal_time_ms
+        );
+        option::some(new_sealed_only(sealed))
+    } else {
+        option::none()
+    }
+}
+
 /// Create MODE_SEALED_SAFE container (sealed + public fallback)
 public fun new_sealed_with_fallback<T: store + drop>(
     sealed: SealedParams,

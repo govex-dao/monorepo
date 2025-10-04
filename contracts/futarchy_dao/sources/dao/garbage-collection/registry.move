@@ -18,6 +18,8 @@ use futarchy_actions::{
     memo_actions,
     liquidity_actions,
     governance_actions,
+    quota_actions,
+    founder_lock_actions,
 };
 use futarchy_lifecycle::dissolution_actions;
 use futarchy_legal_actions::{
@@ -29,6 +31,14 @@ use futarchy_multisig::{
     security_council_actions,
     policy_actions,
 };
+use futarchy_payments::dividend_actions;
+use futarchy_vault::deposit_escrow_actions;
+use futarchy_actions::{
+    commitment_actions,
+    platform_fee_actions,
+};
+use futarchy_legal_actions::walrus_renewal;
+use futarchy_governance_actions::protocol_admin_actions;
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
@@ -95,11 +105,6 @@ public fun delete_slash_distribution(expired: &mut Expired) {
 // === Security Council Actions ===
 public fun delete_create_council(expired: &mut Expired) {
     futarchy_multisig::security_council_actions::delete_create_council(expired);
-}
-
-public fun delete_approve_oa_change(expired: &mut Expired) {
-    // Function not implemented in security_council_actions yet
-    let _ = expired;
 }
 
 public fun delete_update_council_membership(expired: &mut Expired) {
@@ -291,6 +296,150 @@ public fun delete_tiered_mint<CoinType>(expired: &mut Expired) {
 
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {
-    // Function not implemented in memo_actions yet
-    let _ = expired;
+    memo_actions::delete_memo(expired);
+}
+
+// === Dividend Actions ===
+public fun delete_create_dividend<CoinType>(expired: &mut Expired) {
+    dividend_actions::delete_create_dividend<CoinType>(expired);
+}
+
+// === Deposit Escrow Actions ===
+public fun delete_accept_deposit(expired: &mut Expired) {
+    deposit_escrow_actions::delete_accept_deposit(expired);
+}
+
+// === Commitment Actions ===
+public fun delete_create_commitment_proposal<AssetType>(expired: &mut Expired) {
+    commitment_actions::delete_create_commitment_proposal<AssetType>(expired);
+}
+
+public fun delete_execute_commitment(expired: &mut Expired) {
+    commitment_actions::delete_execute_commitment(expired);
+}
+
+public fun delete_cancel_commitment(expired: &mut Expired) {
+    commitment_actions::delete_cancel_commitment(expired);
+}
+
+public fun delete_update_commitment_recipient(expired: &mut Expired) {
+    commitment_actions::delete_update_commitment_recipient(expired);
+}
+
+public fun delete_withdraw_commitment(expired: &mut Expired) {
+    commitment_actions::delete_withdraw_commitment(expired);
+}
+
+// === Platform Fee Actions ===
+public fun delete_collect_platform_fee(expired: &mut Expired) {
+    platform_fee_actions::delete_collect_platform_fee(expired);
+}
+
+// === Walrus Renewal Actions ===
+public fun delete_walrus_renewal(expired: &mut Expired) {
+    walrus_renewal::delete_walrus_renewal(expired);
+}
+
+// === Quota Actions ===
+public fun delete_set_quotas(expired: &mut Expired) {
+    quota_actions::delete_set_quotas(expired);
+}
+
+// === Founder Lock Actions ===
+public fun delete_create_founder_lock_proposal<AssetType>(expired: &mut Expired) {
+    founder_lock_actions::delete_create_founder_lock_proposal<AssetType>(expired);
+}
+
+public fun delete_execute_founder_lock(expired: &mut Expired) {
+    founder_lock_actions::delete_execute_founder_lock(expired);
+}
+
+public fun delete_update_founder_lock_recipient(expired: &mut Expired) {
+    founder_lock_actions::delete_update_founder_lock_recipient(expired);
+}
+
+public fun delete_withdraw_unlocked_tokens(expired: &mut Expired) {
+    founder_lock_actions::delete_withdraw_unlocked_tokens(expired);
+}
+
+// === Protocol Admin Actions ===
+public fun delete_protocol_admin_action(expired: &mut Expired) {
+    protocol_admin_actions::delete_protocol_admin_action(expired);
+}
+
+// === Additional Liquidity Actions ===
+public fun delete_set_pool_status(expired: &mut Expired) {
+    liquidity_actions::delete_set_pool_status(expired);
+}
+
+public fun delete_swap<AssetType, StableType>(expired: &mut Expired) {
+    liquidity_actions::delete_swap<AssetType, StableType>(expired);
+}
+
+public fun delete_collect_fees<AssetType, StableType>(expired: &mut Expired) {
+    liquidity_actions::delete_collect_fees<AssetType, StableType>(expired);
+}
+
+public fun delete_withdraw_fees<AssetType, StableType>(expired: &mut Expired) {
+    liquidity_actions::delete_withdraw_fees<AssetType, StableType>(expired);
+}
+
+// === Additional Config Actions ===
+public fun delete_set_proposals_enabled<Config>(expired: &mut Expired) {
+    config_actions::delete_set_proposals_enabled<Config>(expired);
+}
+
+public fun delete_update_name<Config>(expired: &mut Expired) {
+    config_actions::delete_update_name<Config>(expired);
+}
+
+public fun delete_twap_config_update<Config>(expired: &mut Expired) {
+    config_actions::delete_twap_config_update<Config>(expired);
+}
+
+public fun delete_metadata_table_update<Config>(expired: &mut Expired) {
+    config_actions::delete_metadata_table_update<Config>(expired);
+}
+
+public fun delete_queue_params_update<Config>(expired: &mut Expired) {
+    config_actions::delete_queue_params_update<Config>(expired);
+}
+
+// === Additional DAO File Actions ===
+public fun delete_set_document_insert_allowed(expired: &mut Expired) {
+    dao_file_actions::delete_set_document_insert_allowed(expired);
+}
+
+public fun delete_set_document_remove_allowed(expired: &mut Expired) {
+    dao_file_actions::delete_set_document_remove_allowed(expired);
+}
+
+// === Additional Dissolution Actions ===
+public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
+    dissolution_actions::delete_calculate_pro_rata_shares(expired);
+}
+
+public fun delete_cancel_all_streams(expired: &mut Expired) {
+    dissolution_actions::delete_cancel_all_streams(expired);
+}
+
+public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
+    dissolution_actions::delete_distribute_assets<CoinType>(expired);
+}
+
+public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Expired) {
+    dissolution_actions::delete_withdraw_amm_liquidity<AssetType, StableType>(expired);
+}
+
+// === Additional Policy Actions ===
+public fun delete_register_council(expired: &mut Expired) {
+    policy_actions::delete_register_council(expired);
+}
+
+public fun delete_set_object_policy(expired: &mut Expired) {
+    policy_actions::delete_set_object_policy(expired);
+}
+
+public fun delete_remove_object_policy(expired: &mut Expired) {
+    policy_actions::delete_remove_object_policy(expired);
 }

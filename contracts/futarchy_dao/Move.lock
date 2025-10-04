@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "99890C9B75BA57AE2B206AF815928514703AD086A72CB29372A47890F4E51981"
-deps_digest = "4505A4CB9314914B4F7CE1C2E00C9EAB773493F8A0855ADA425A707F8D715710"
+manifest_digest = "69843D327B98524CE7DE520A222DD1CDFFF2B1B71AA0960A33C02C071F4CC75C"
+deps_digest = "755DF645C80254D6797CD445DE0C9C348015FB7EB193417BAB50AD2E8E566CCA"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -22,6 +22,7 @@ dependencies = [
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
+  { id = "futarchy_payments", name = "futarchy_payments" },
   { id = "futarchy_streams", name = "futarchy_streams" },
   { id = "futarchy_types", name = "futarchy_types" },
   { id = "futarchy_vault", name = "futarchy_vault" },
@@ -281,6 +282,26 @@ dependencies = [
 [[move.package]]
 id = "futarchy_oracle"
 source = { local = "../futarchy_oracle" }
+
+dependencies = [
+  { id = "AccountActions", name = "AccountActions" },
+  { id = "AccountExtensions", name = "AccountExtensions" },
+  { id = "AccountProtocol", name = "AccountProtocol" },
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets", name = "futarchy_markets" },
+  { id = "futarchy_multisig", name = "futarchy_multisig" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+  { id = "futarchy_vault", name = "futarchy_vault" },
+]
+
+[[move.package]]
+id = "futarchy_payments"
+source = { local = "../futarchy_payments" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },

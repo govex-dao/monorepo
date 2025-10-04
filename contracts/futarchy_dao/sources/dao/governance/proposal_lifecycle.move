@@ -48,7 +48,6 @@ use futarchy_dao::{
     execute,
     gc_janitor,
 };
-use futarchy_actions::intent_janitor;
 use futarchy_one_shot_utils::strategy;
 
 // === Errors ===

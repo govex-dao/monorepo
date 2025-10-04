@@ -332,3 +332,29 @@ public fun do_withdraw_unlocked_tokens<AssetType, StableType, Outcome: store, IW
         ctx,
     );
 }
+
+// === Garbage Collection ===
+
+/// Delete a create founder lock proposal action from an expired intent
+public fun delete_create_founder_lock_proposal<AssetType>(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let _ = action_spec;
+}
+
+/// Delete an execute founder lock action from an expired intent
+public fun delete_execute_founder_lock(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let _ = action_spec;
+}
+
+/// Delete an update founder lock recipient action from an expired intent
+public fun delete_update_founder_lock_recipient(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let _ = action_spec;
+}
+
+/// Delete a withdraw unlocked tokens action from an expired intent
+public fun delete_withdraw_unlocked_tokens(expired: &mut intents::Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let _ = action_spec;
+}

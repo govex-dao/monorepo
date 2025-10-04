@@ -1311,3 +1311,11 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
 //     let _ = council;
 //     let _ = version;
 // }
+
+// === Garbage Collection ===
+
+/// Delete protocol admin action from expired intent
+public fun delete_protocol_admin_action(expired: &mut account_protocol::intents::Expired) {
+    let action_spec = account_protocol::intents::remove_action_spec(expired);
+    let _ = action_spec;
+}
