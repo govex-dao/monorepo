@@ -131,28 +131,36 @@ public fun validate_metadata_vectors(
 ) {
     let keys_len = keys.length();
     let values_len = values.length();
-    
+
     assert!(keys_len == values_len, EInvalidMetadataLength);
     assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
-    
+
     let mut i = 0;
     let mut seen_keys = bag::new(ctx);
-    
+
     while (i < keys_len) {
         let key = &keys[i];
         let value = &values[i];
-        
+
         // Validate key and value
         assert!(key.length() > 0, EEmptyKey);
         assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
         assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
-        
+
         // Check for duplicates
         assert!(!bag::contains(&seen_keys, *key), EDuplicateKey);
         bag::add(&mut seen_keys, *key, true);
-        
+
         i = i + 1;
     };
+
+    // Clean up: remove all items before destroying
+    i = 0;
+    while (i < keys_len) {
+        let _: bool = bag::remove(&mut seen_keys, keys[i]);
+        i = i + 1;
+    };
+
     bag::destroy_empty(seen_keys);
 }
 
