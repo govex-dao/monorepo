@@ -36,3 +36,23 @@ fun test_all_strategies() {
     assert!(strategy::can_execute(false, true, threshold_1_of_2) == true, 15);
     assert!(strategy::can_execute(false, false, threshold_1_of_2) == false, 16);
 }
+
+#[test]
+fun test_threshold_strategy_all_cases() {
+    // Test 1-of-2 threshold
+    let threshold_1_2 = strategy::threshold(1, 2);
+    assert!(strategy::can_execute(true, true, threshold_1_2) == true, 0);
+    assert!(strategy::can_execute(true, false, threshold_1_2) == true, 1);
+    assert!(strategy::can_execute(false, true, threshold_1_2) == true, 2);
+    assert!(strategy::can_execute(false, false, threshold_1_2) == false, 3);
+
+    // Test 2-of-2 threshold
+    let threshold_2_2 = strategy::threshold(2, 2);
+    assert!(strategy::can_execute(true, true, threshold_2_2) == true, 4);
+    assert!(strategy::can_execute(true, false, threshold_2_2) == false, 5);
+    assert!(strategy::can_execute(false, true, threshold_2_2) == false, 6);
+    assert!(strategy::can_execute(false, false, threshold_2_2) == false, 7);
+}
+
+// Note: Cannot test unknown strategy type from outside the module
+// as Strategy struct is not public for instantiation

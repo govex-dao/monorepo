@@ -1,0 +1,7 @@
+    assert!(result <= (u64::max_value!() as u128), EOverflow);
+    assert!(c != 0, EDivideByZero);
+    assert!(result_256 <= (u128::max_value!() as u256), EOverflow);
+    assert!(c != 0, EDivideByZero);
+    assert!(result <= (u128::max_value!() as u256), EOverflow);
+        assert!(sum >= numerator, EOverflow); // Verify no overflow in addition
+    assert!(result <= (u64::max_value!() as u128), EOverflow);

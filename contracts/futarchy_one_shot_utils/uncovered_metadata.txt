@@ -1,0 +1,12 @@
+    assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
+    assert!(key.length() > 0, EEmptyKey);
+    assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
+    assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+    assert!(table::length(metadata) < MAX_ENTRIES, EInvalidMetadataLength);
+    assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+    assert!(keys_len == values_len, EInvalidMetadataLength);
+    assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
+        assert!(key.length() > 0, EEmptyKey);
+        assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
+        assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
+        assert!(!bag::contains(&seen_keys, *key), EDuplicateKey);

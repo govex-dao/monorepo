@@ -50,6 +50,107 @@ fun test_new_from_vectors_empty() {
 }
 
 #[test]
+#[expected_failure(abort_code = 0)] // EInvalidMetadataLength
+fun test_new_from_vectors_mismatched_length() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    let keys = vector[string::utf8(b"key1"), string::utf8(b"key2")];
+    let values = vector[string::utf8(b"value1")]; // Mismatched
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 0)] // EInvalidMetadataLength
+fun test_new_from_vectors_too_many_entries() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    // Create 51 entries (MAX_ENTRIES is 50)
+    let mut keys = vector<String>[];
+    let mut values = vector<String>[];
+    let mut i = 0;
+    while (i < 51) {
+        keys.push_back(string::utf8(b"key"));
+        values.push_back(string::utf8(b"value"));
+        i = i + 1;
+    };
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 1)] // EEmptyKey
+fun test_new_from_vectors_empty_key() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    let keys = vector[string::utf8(b"")]; // Empty key
+    let values = vector[string::utf8(b"value")];
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 2)] // EKeyTooLong
+fun test_new_from_vectors_key_too_long() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    // Create a key longer than MAX_KEY_LENGTH (64)
+    let long_key = string::utf8(b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"); // 75 chars
+    let keys = vector[long_key];
+    let values = vector[string::utf8(b"value")];
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 3)] // EValueTooLong
+fun test_new_from_vectors_value_too_long() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    let keys = vector[string::utf8(b"key")];
+    // Create a value longer than MAX_VALUE_LENGTH (256)
+    let mut long_value_bytes = vector<u8>[];
+    let mut i = 0;
+    while (i < 300) {
+        long_value_bytes.push_back(97); // 'a'
+        i = i + 1;
+    };
+    let long_value = string::utf8(long_value_bytes);
+    let values = vector[long_value];
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
+#[expected_failure(abort_code = 4)] // EDuplicateKey
+fun test_new_from_vectors_duplicate_key() {
+    let mut scenario = test_scenario::begin(@0x1);
+    let ctx = test_scenario::ctx(&mut scenario);
+
+    let keys = vector[string::utf8(b"key"), string::utf8(b"key")]; // Duplicate
+    let values = vector[string::utf8(b"value1"), string::utf8(b"value2")];
+
+    let table = metadata::new_from_vectors(keys, values, ctx);
+    sui::table::drop(table);
+    test_scenario::end(scenario);
+}
+
+#[test]
 fun test_new_from_vectors_max_entries() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);

@@ -39,6 +39,14 @@ fun test_mul_div_to_64_divide_by_zero() {
     math::mul_div_to_64(100, 50, 0);
 }
 
+#[test]
+#[expected_failure(abort_code = 0)] // EOverflow
+fun test_mul_div_to_64_overflow() {
+    // Result would be > u64::max_value
+    let max = u64::max_value!();
+    math::mul_div_to_64(max, max, 1);
+}
+
 // === mul_div_up Tests ===
 
 #[test]
@@ -64,6 +72,14 @@ fun test_mul_div_up_divide_by_zero() {
     math::mul_div_up(100, 50, 0);
 }
 
+#[test]
+#[expected_failure(abort_code = 0)] // EOverflow
+fun test_mul_div_up_overflow() {
+    // Result would be > u64::max_value
+    let max = u64::max_value!();
+    math::mul_div_up(max, max, 1);
+}
+
 // === mul_div_to_128 Tests ===
 
 #[test]
@@ -73,11 +89,36 @@ fun test_mul_div_to_128() {
 }
 
 #[test]
+#[expected_failure(abort_code = 1)] // EDivideByZero
+fun test_mul_div_to_128_divide_by_zero() {
+    math::mul_div_to_128(100, 50, 0);
+}
+
+// Note: mul_div_to_128 overflow is very hard to trigger since u64*u64 fits in u256
+// and result fits in u128. The overflow check is defensive but practically unreachable.
+
+#[test]
 fun test_mul_div_mixed() {
     let a = 1000000000 as u128;
     let b = 500 as u64;
     let c = 100 as u128;
     assert!(math::mul_div_mixed(a, b, c) == 5000000000, 0);
+}
+
+#[test]
+#[expected_failure(abort_code = 1)] // EDivideByZero
+fun test_mul_div_mixed_divide_by_zero() {
+    math::mul_div_mixed(100, 50, 0);
+}
+
+#[test]
+#[expected_failure(abort_code = 0)] // EOverflow
+fun test_mul_div_mixed_overflow() {
+    // Result would be > u128::max_value
+    let max_u128 = u128::max_value!();
+    let max_u64 = u64::max_value!();
+    // max_u128 * max_u64 will overflow u256 bounds for u128
+    math::mul_div_mixed(max_u128, max_u64, 1);
 }
 
 // === sqrt Tests ===

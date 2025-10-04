@@ -1,0 +1,8 @@
+    } else if (s.kind == STRATEGY_THRESHOLD) {
+        // M-of-N threshold over 2 booleans
+        let satisfied_count = (if (ok_a) 1 else 0) + (if (ok_b) 1 else 0);
+        satisfied_count >= s.m && s.n >= s.m
+    } else {
+        // Unknown strategy type - fail safe by requiring all conditions
+        false
+    }

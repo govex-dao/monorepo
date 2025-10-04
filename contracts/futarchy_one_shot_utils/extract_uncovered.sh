@@ -10,11 +10,11 @@ echo "Extracting coverage for module: $MODULE"
 script -q /dev/null ~/sui-tracing/target/release/sui move coverage source --module "$MODULE" 2>&1 | cat > /tmp/coverage_${MODULE}.txt
 
 # Extract uncovered (red) lines
-python3 << 'PYEOF'
+python3 - "$MODULE" << 'PYEOF'
 import sys
 import re
 
-module = sys.argv[1] if len(sys.argv) > 1 else 'math'
+module = sys.argv[1] if len(sys.argv) > 1 else 'unknown'
 
 with open(f'/tmp/coverage_{module}.txt', 'rb') as f:
     data = f.read().decode('utf-8', errors='ignore')
@@ -46,4 +46,4 @@ if uncovered:
     print(f"\nSaved to: uncovered_{module}.txt")
 else:
     print(f"\n✓ 100% coverage - no uncovered lines!")
-PYEOF "$MODULE"
+PYEOF

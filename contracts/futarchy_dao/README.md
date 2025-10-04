@@ -85,10 +85,11 @@ find \
   contracts/futarchy_factory/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_legal_actions/sources \
+  contracts/futarchy_seal_utils/sources \
   contracts/futarchy_governance_actions/sources \
   contracts/futarchy_actions/sources \
   contracts/futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_19_packages.txt
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
 ```
 
 
