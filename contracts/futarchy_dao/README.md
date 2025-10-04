@@ -110,4 +110,5 @@ for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move bui
 ``` tracing
 /usr/local/bin/sui move test --coverage
 ~/sui-tracing/target/release/sui move coverage summary
+~/sui-tracing/target/release/sui move coverage source --module math 
  ```

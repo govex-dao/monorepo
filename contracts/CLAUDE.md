@@ -804,6 +804,108 @@ sui move test --silence-warnings
 sui move build --silence-warnings
 ```
 
+### Test Coverage Analysis
+
+To analyze test coverage for Move modules, use the custom-built `sui-tracing` binary which provides coverage instrumentation:
+
+**Location**: `~/sui-tracing/target/release/sui`
+
+#### Running Tests with Coverage
+
+```bash
+# Run tests with coverage tracking
+~/sui-tracing/target/release/sui move test --coverage
+
+# This generates:
+# - .coverage_map.mvcov - Binary coverage data
+# - Coverage traces in memory
+```
+
+#### Viewing Coverage Reports
+
+**1. Summary View** - Overall module coverage percentages:
+```bash
+~/sui-tracing/target/release/sui move coverage summary
+```
+
+**2. Source Code View** - See covered/uncovered lines (with colors):
+```bash
+~/sui-tracing/target/release/sui move coverage source --module <module_name>
+```
+
+**3. Bytecode View** - See covered/uncovered instructions:
+```bash
+~/sui-tracing/target/release/sui move coverage bytecode --module <module_name>
+```
+
+#### Extracting Uncovered Lines
+
+The coverage tools output ANSI color codes:
+- **Green (`\x1b[32m`)** = Covered lines
+- **Red (`\x1b[1;31m`)** = Uncovered lines
+
+**Script to Extract Uncovered Lines:**
+
+```bash
+# Save coverage with colors preserved
+script -q /dev/null ~/sui-tracing/target/release/sui move coverage source --module <module_name> 2>&1 | cat > /tmp/coverage.txt
+
+# Extract uncovered (red) lines
+python3 << 'PYEOF'
+import re
+
+with open('/tmp/coverage.txt', 'rb') as f:
+    data = f.read().decode('utf-8', errors='ignore')
+
+print("="*70)
+print("UNCOVERED LINES")
+print("="*70)
+
+for line in data.split('\n'):
+    # Check for red color code (uncovered)
+    if '\x1b[1;31m' in line:
+        # Remove ANSI codes for display
+        clean = re.sub(r'\x1b\[[0-9;]*m', '', line)
+        print(clean)
+PYEOF
+```
+
+**Bytecode Uncovered Instructions:**
+
+```bash
+# Extract uncovered bytecode instructions
+~/sui-tracing/target/release/sui move coverage bytecode --module <module_name> 2>&1 | \
+  sed 's/\x1b\[[0-9;]*m//g' | \
+  awk '/^public|^entry/{print "\n" $0} /^\t[0-9]+:/{print "  UNCOVERED: " $0}'
+```
+
+#### Example: Math Module Coverage
+
+```bash
+# Run tests with coverage
+~/sui-tracing/target/release/sui move test --coverage
+
+# View summary
+~/sui-tracing/target/release/sui move coverage summary
+# Output: math module = 95.51% coverage
+
+# Extract uncovered lines
+script -q /dev/null ~/sui-tracing/target/release/sui move coverage source --module math 2>&1 | cat > /tmp/math_cov.txt
+# Parse /tmp/math_cov.txt for red lines (\x1b[1;31m)
+
+# Result: 7 uncovered lines (all error assertions)
+# - assert!(c != 0, EDivideByZero)
+# - assert!(result <= max_value, EOverflow)
+# etc.
+```
+
+#### Understanding Coverage Gaps
+
+- **Source level**: Uncovered lines are typically error handling code (assertions, aborts)
+- **Bytecode level**: Uncovered instructions are abort paths that tests don't trigger
+- **95%+ coverage**: Usually means all happy paths tested, error paths not tested
+- **100% coverage**: Requires tests that intentionally trigger errors (overflow, divide-by-zero, etc.)
+
 ## Key Implementation Notes
 
 - Write-through oracle is MANDATORY due to quantum liquidity
