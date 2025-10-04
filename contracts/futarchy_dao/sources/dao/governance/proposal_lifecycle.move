@@ -181,12 +181,13 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     ctx: &mut TxContext,
 ): (ID, ID) {
     // Try to activate the next proposal from the queue
-    let mut queued_proposal_opt = priority_queue::try_activate_next(queue);
+    let auth = priority_queue::create_mutation_auth();
+    let mut queued_proposal_opt = priority_queue::try_activate_next(auth, queue);
     assert!(queued_proposal_opt.is_some(), EProposalNotActive);
-    
+
     let mut queued_proposal = queued_proposal_opt.extract();
     queued_proposal_opt.destroy_none();
-    
+
     // Extract fields using getter functions
     let proposal_id = priority_queue::get_proposal_id(&queued_proposal);
     let dao_id = priority_queue::dao_id(queue);
@@ -194,9 +195,10 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let proposer = priority_queue::get_proposer(&queued_proposal);
     let data = *priority_queue::get_proposal_data(&queued_proposal);
     let intent_spec = *priority_queue::get_intent_spec(&queued_proposal);
-    
+
     // Extract bond (mutable borrow needed)
-    let mut bond = priority_queue::extract_bond(&mut queued_proposal);
+    let auth2 = priority_queue::create_mutation_auth();
+    let mut bond = priority_queue::extract_bond(auth2, &mut queued_proposal);
     
     // Get config values from account
     let config = account.config();
@@ -575,20 +577,22 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     assert!(remaining <= premarket_threshold_ms, EInvalidWinningOutcome);
     
     // Pop top of queue
-    let mut qp_opt = priority_queue::try_activate_next(queue);
+    let auth = priority_queue::create_mutation_auth();
+    let mut qp_opt = priority_queue::try_activate_next(auth, queue);
     assert!(qp_opt.is_some(), EProposalNotActive);
     let mut qp = qp_opt.extract();
     qp_opt.destroy_none();
-    
+
     let dao_id = priority_queue::dao_id(queue);
     let queued_id = priority_queue::get_proposal_id(&qp);
     let proposer = priority_queue::get_proposer(&qp);
     let uses_dao_liquidity = priority_queue::uses_dao_liquidity(&qp);
     let data = *priority_queue::get_proposal_data(&qp);
     let intent_spec = *priority_queue::get_intent_spec(&qp);
-    
+
     // Extract optional bond -> becomes fee_escrow in proposal
-    let mut bond = priority_queue::extract_bond(&mut qp);
+    let auth2 = priority_queue::create_mutation_auth();
+    let mut bond = priority_queue::extract_bond(auth2, &mut qp);
     let fee_escrow = if (bond.is_some()) {
         bond.extract().into_balance()
     } else {
@@ -610,7 +614,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let premarket_id = proposal::new_premarket<AssetType, StableType>(
         queued_id,
         dao_id,
-        futarchy_config::review_period_ms(cfg),
+        futarchy_config::market_op_review_period_ms(cfg),  // Use market op period for fast/atomic execution
         futarchy_config::trading_period_ms(cfg),
         futarchy_config::min_asset_amount(cfg),
         futarchy_config::min_stable_amount(cfg),
@@ -632,9 +636,12 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         clock,
         ctx
     );
-    
-    // Mark queue reserved and emit
-    priority_queue::set_reserved(queue, premarket_id);
+
+    // Mark queue reserved only if enabled in config
+    if (futarchy_config::enable_premarket_reservation_lock(cfg)) {
+        let auth3 = priority_queue::create_mutation_auth();
+        priority_queue::set_reserved(auth3, queue, premarket_id);
+    };
     priority_queue::destroy_proposal(qp);
     
     event::emit(ProposalReserved {
@@ -674,7 +681,8 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
     assert!(reserved_id == object::id(proposal), EInvalidWinningOutcome);
 
     // Clear reservation
-    priority_queue::clear_reserved(queue);
+    let auth = priority_queue::create_mutation_auth();
+    priority_queue::clear_reserved(auth, queue);
 }
 
 /// Complete lifecycle: Activate proposal, run market, finalize, and execute if approved

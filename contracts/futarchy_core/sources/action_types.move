@@ -113,6 +113,10 @@ public struct TogglePayment has drop {}
 public struct ChallengeWithdrawals has drop {}
 public struct CancelChallengedWithdrawals has drop {}
 
+// === Dividend Action Types ===
+
+public struct CreateDividend has drop {}
+
 // === Oracle Action Types ===
 
 public struct ReadOraclePrice has drop {}
@@ -220,6 +224,10 @@ public struct RejectVerification has drop {}
 // === DAO Score Action Types ===
 
 public struct SetDaoScore has drop {}
+
+// === Launchpad Admin Action Types ===
+
+public struct SetLaunchpadTrustScore has drop {}
 
 // === Fee Management Action Types ===
 
@@ -445,6 +453,9 @@ public fun reject_verification(): TypeName { type_name::with_defining_ids<Reject
 // DAO Score actions
 public fun set_dao_score(): TypeName { type_name::with_defining_ids<SetDaoScore>() }
 
+// Launchpad Admin actions
+public fun set_launchpad_trust_score(): TypeName { type_name::with_defining_ids<SetLaunchpadTrustScore>() }
+
 // Fee Management actions
 public fun update_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateRecoveryFee>() }
 public fun withdraw_fees_to_treasury(): TypeName { type_name::with_defining_ids<WithdrawFeesToTreasury>() }
@@ -474,3 +485,6 @@ public fun execute_commitment(): TypeName { type_name::with_defining_ids<Execute
 public fun cancel_commitment(): TypeName { type_name::with_defining_ids<CancelCommitment>() }
 public fun update_commitment_recipient(): TypeName { type_name::with_defining_ids<UpdateCommitmentRecipient>() }
 public fun withdraw_commitment(): TypeName { type_name::with_defining_ids<WithdrawCommitment>() }
+
+// Dividend actions
+public fun create_dividend(): TypeName { type_name::with_defining_ids<CreateDividend>() }

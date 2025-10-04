@@ -40,6 +40,12 @@ public struct TradingParams has store, drop, copy {
     trading_period_ms: u64,
     conditional_amm_fee_bps: u64,  // Fee for conditional AMMs (prediction markets)
     spot_amm_fee_bps: u64,          // Fee for spot AMM (base pool)
+    // Market operation review period (for conditional raise/buyback)
+    // Can be 0 to skip review and start trading immediately after market init
+    market_op_review_period_ms: u64,
+    // Max percentage (in basis points) of AMM reserves that can be auto-swapped per proposal
+    // Default: 1000 bps (10%) - prevents market from becoming too illiquid for trading
+    max_amm_swap_percent_bps: u64,
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
@@ -65,6 +71,9 @@ public struct GovernanceConfig has store, drop, copy {
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
+    // If true, premarket proposals lock the queue reservation slot (anti-MEV)
+    // If false, no reservation lock (more market init opportunities, less MEV protection)
+    enable_premarket_reservation_lock: bool,
 }
 
 /// Metadata configuration
@@ -126,6 +135,8 @@ public fun new_trading_params(
     trading_period_ms: u64,
     conditional_amm_fee_bps: u64,
     spot_amm_fee_bps: u64,
+    market_op_review_period_ms: u64,
+    max_amm_swap_percent_bps: u64,
 ): TradingParams {
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
@@ -135,6 +146,13 @@ public fun new_trading_params(
     assert!(conditional_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
     assert!(spot_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
 
+    // Market op review period can be 0 for immediate trading
+    // Should not exceed regular review period (market ops are meant to be faster or equal)
+    assert!(market_op_review_period_ms <= review_period_ms, EInvalidPeriod);
+
+    // Max swap percent must be reasonable (0-100%)
+    assert!(max_amm_swap_percent_bps <= constants::max_fee_bps(), EInvalidFee);
+
     TradingParams {
         min_asset_amount,
         min_stable_amount,
@@ -142,6 +160,8 @@ public fun new_trading_params(
         trading_period_ms,
         conditional_amm_fee_bps,
         spot_amm_fee_bps,
+        market_op_review_period_ms,
+        max_amm_swap_percent_bps,
     }
 }
 
@@ -181,6 +201,7 @@ public fun new_governance_config(
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64,
+    enable_premarket_reservation_lock: bool,
 ): GovernanceConfig {
     // Validate inputs
     assert!(max_outcomes >= constants::min_outcomes(), EInvalidMaxOutcomes);
@@ -207,6 +228,7 @@ public fun new_governance_config(
         max_intents_per_outcome,
         eviction_grace_period_ms,
         proposal_intent_expiry_ms,
+        enable_premarket_reservation_lock,
     }
 }
 
@@ -322,6 +344,8 @@ public fun review_period_ms(params: &TradingParams): u64 { params.review_period_
 public fun trading_period_ms(params: &TradingParams): u64 { params.trading_period_ms }
 public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditional_amm_fee_bps }
 public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
+public fun market_op_review_period_ms(params: &TradingParams): u64 { params.market_op_review_period_ms }
+public fun max_amm_swap_percent_bps(params: &TradingParams): u64 { params.max_amm_swap_percent_bps }
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
@@ -347,6 +371,7 @@ public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_p
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
 public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
 public fun proposal_intent_expiry_ms(gov: &GovernanceConfig): u64 { gov.proposal_intent_expiry_ms }
+public fun enable_premarket_reservation_lock(gov: &GovernanceConfig): bool { gov.enable_premarket_reservation_lock }
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
@@ -469,6 +494,18 @@ public(package) fun set_spot_amm_fee_bps(params: &mut TradingParams, fee_bps: u6
     params.spot_amm_fee_bps = fee_bps;
 }
 
+public(package) fun set_market_op_review_period_ms(params: &mut TradingParams, period: u64) {
+    // Market op review can be 0 for immediate trading
+    // But should not exceed regular review period
+    assert!(period <= params.review_period_ms, EInvalidPeriod);
+    params.market_op_review_period_ms = period;
+}
+
+public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, percent_bps: u64) {
+    assert!(percent_bps <= constants::max_fee_bps(), EInvalidFee);
+    params.max_amm_swap_percent_bps = percent_bps;
+}
+
 // TWAP config direct setters
 public(package) fun set_start_delay(twap: &mut TwapConfig, delay: u64) {
     // Allow 0 for testing
@@ -554,6 +591,10 @@ public(package) fun set_eviction_grace_period_ms(gov: &mut GovernanceConfig, per
 public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, period: u64) {
     assert!(period >= constants::min_proposal_intent_expiry_ms(), EInvalidGracePeriod);
     gov.proposal_intent_expiry_ms = period;
+}
+
+public(package) fun set_enable_premarket_reservation_lock(gov: &mut GovernanceConfig, enabled: bool) {
+    gov.enable_premarket_reservation_lock = enabled;
 }
 
 // Metadata config direct setters
@@ -803,6 +844,8 @@ public fun default_trading_params(): TradingParams {
         trading_period_ms: 604800000, // 7 days
         conditional_amm_fee_bps: 30, // 0.3% for conditional markets
         spot_amm_fee_bps: 30, // 0.3% for spot pool
+        market_op_review_period_ms: 0, // 0 = immediate (allows atomic market init)
+        max_amm_swap_percent_bps: 1000, // 10% max swap per proposal (prevents illiquidity)
     }
 }
 
@@ -832,6 +875,7 @@ public fun default_governance_config(): GovernanceConfig {
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
         eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
         proposal_intent_expiry_ms: constants::default_proposal_intent_expiry_ms(),
+        enable_premarket_reservation_lock: true, // Default: true for MEV protection
     }
 }
 

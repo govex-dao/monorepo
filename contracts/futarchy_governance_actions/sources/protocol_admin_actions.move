@@ -21,6 +21,7 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
+    bcs_validation,
     executable::{Self, Executable},
     intents,
     version_witness::VersionWitness,
@@ -28,6 +29,7 @@ use account_protocol::{
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_factory::{
     factory::{Self, Factory, FactoryOwnerCap, ValidatorAdminCap},
+    launchpad::{Self, Raise},
 };
 use futarchy_markets::{
     fee::{Self, FeeManager, FeeAdminCap},
@@ -65,6 +67,13 @@ public struct VerificationRejected has copy, drop {
     validator: address,
     timestamp: u64,
 }
+
+public struct LaunchpadTrustScoreSet has copy, drop {
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
+}
+
 const EInvalidFeeAmount: u64 = 3;
 
 // === Action Structs ===
@@ -146,6 +155,13 @@ public struct SetDaoScoreAction has store, drop {
     dao_id: ID,
     score: u64,
     reason: String,
+}
+
+/// Set launchpad raise trust score and review (admin-only, uses ValidatorAdminCap)
+public struct SetLaunchpadTrustScoreAction has store, drop {
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
 }
 
 /// Update the recovery fee
@@ -256,6 +272,10 @@ public fun new_reject_verification(dao_id: ID, verification_id: ID, reason: Stri
 
 public fun new_set_dao_score(dao_id: ID, score: u64, reason: String): SetDaoScoreAction {
     SetDaoScoreAction { dao_id, score, reason }
+}
+
+public fun new_set_launchpad_trust_score(raise_id: ID, trust_score: u64, review_text: String): SetLaunchpadTrustScoreAction {
+    SetLaunchpadTrustScoreAction { raise_id, trust_score, review_text }
 }
 
 public fun new_update_recovery_fee(new_fee: u64): UpdateRecoveryFeeAction {
@@ -1180,6 +1200,59 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
         action.coin_type,
         clock
     );
+}
+
+/// Execute set launchpad trust score action
+public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, StableCoin>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    raise: &mut Raise<RaiseToken, StableCoin>,
+) {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::SetLaunchpadTrustScore>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let raise_id = bcs::peel_address(&mut bcs).to_id();
+    let trust_score = bcs::peel_u64(&mut bcs);
+    let review_text = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    // Validate all bytes consumed (security: prevents trailing data attacks)
+    bcs_validation::validate_all_bytes_consumed(bcs);
+
+    let action = SetLaunchpadTrustScoreAction { raise_id, trust_score, review_text };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    // Verify we have the validator capability
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+        account,
+        b"protocol:validator_admin_cap".to_string(),
+        version
+    );
+
+    // Verify the raise ID matches
+    assert!(object::id(raise) == action.raise_id, EInvalidAdminCap);
+
+    // Set the trust score and review
+    launchpad::set_admin_trust_score(
+        raise,
+        action.trust_score,
+        action.review_text
+    );
+
+    // Emit event for transparency (off-chain indexers)
+    event::emit(LaunchpadTrustScoreSet {
+        raise_id: action.raise_id,
+        trust_score: action.trust_score,
+        review_text: action.review_text,
+    });
 }
 
 // === Helper Functions for Security Council ===

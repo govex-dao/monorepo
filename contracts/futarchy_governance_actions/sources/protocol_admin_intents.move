@@ -548,3 +548,18 @@ public fun add_apply_pending_coin_fees_to_intent<Outcome: store, IW: drop>(
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::apply_pending_coin_fees(), action_data, intent_witness);
 }
+
+// === Launchpad Admin Intent Helpers ===
+
+/// Set launchpad raise trust score and review
+public fun add_set_launchpad_trust_score_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_set_launchpad_trust_score(raise_id, trust_score, review_text);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::set_launchpad_trust_score(), action_data, intent_witness);
+}

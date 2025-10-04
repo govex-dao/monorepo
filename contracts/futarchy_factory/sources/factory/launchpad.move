@@ -227,6 +227,9 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     max_raise_commitment_hash: Option<vector<u8>>,    // Hash of plaintext for verification
     max_raise_revealed: Option<u64>,                  // Set after decryption
     reveal_deadline_ms: u64,                          // deadline_ms + 7 days grace period
+    /// Admin trust score and review (set by protocol DAO validators)
+    admin_trust_score: Option<u64>,
+    admin_review_text: Option<String>,
 }
 
 /// Stores all parameters needed for DAO creation to keep the Raise object clean.
@@ -1457,6 +1460,8 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         max_raise_commitment_hash,
         max_raise_revealed: option::none(),
         reveal_deadline_ms: deadline + constants::seal_reveal_grace_period_ms(),
+        admin_trust_score: option::none(),
+        admin_review_text: option::none(),
     };
 
     // Emit appropriate event based on whether Seal is used
@@ -1594,4 +1599,26 @@ public fun is_cranking_enabled<RT, SC>(r: &Raise<RT, SC>, addr: address): bool {
     } else {
         false
     }
+}
+
+/// Get admin trust score if set
+public fun admin_trust_score<RT, SC>(r: &Raise<RT, SC>): &Option<u64> {
+    &r.admin_trust_score
+}
+
+/// Get admin review text if set
+public fun admin_review_text<RT, SC>(r: &Raise<RT, SC>): &Option<String> {
+    &r.admin_review_text
+}
+
+// === Admin Functions ===
+
+/// Set admin trust score and review (called by protocol admin actions)
+public fun set_admin_trust_score<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    trust_score: u64,
+    review_text: String,
+) {
+    raise.admin_trust_score = option::some(trust_score);
+    raise.admin_review_text = option::some(review_text);
 }

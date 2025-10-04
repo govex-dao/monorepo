@@ -327,18 +327,6 @@ public struct DocumentPolicyChanged has copy, drop {
     timestamp_ms: u64,
 }
 
-public struct DocumentRead has copy, drop {
-    dao_id: ID,
-    doc_id: ID,
-    name: String,
-    chunk_count: u64,
-    chunk_blob_ids: vector<vector<u8>>,
-    allow_insert: bool,
-    allow_remove: bool,
-    immutable: bool,
-    timestamp_ms: u64,
-}
-
 /// Complete document snapshot with all chunk details (mirrors OA's AgreementReadWithStatus)
 /// Includes on-chain text for text chunks and blob IDs for Walrus chunks
 /// Provides full reconstruction for indexers and UI clients
@@ -1811,25 +1799,6 @@ public fun get_document_by_name(
     }
 }
 
-/// Check if chunk is active at current time
-public fun is_chunk_active(chunk: &ChunkPointer, current_time_ms: u64): bool {
-    // Check effective_from
-    if (option::is_some(&chunk.effective_from)) {
-        if (current_time_ms < *option::borrow(&chunk.effective_from)) {
-            return false
-        }
-    };
-
-    // Check expires_at
-    if (option::is_some(&chunk.expires_at)) {
-        if (current_time_ms >= *option::borrow(&chunk.expires_at)) {
-            return false
-        }
-    };
-
-    true
-}
-
 /// Check if chunk is immutable at current time
 public fun is_chunk_immutable_now(chunk: &ChunkPointer, current_time_ms: u64): bool {
     // Already permanently immutable
@@ -1986,52 +1955,6 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
     });
 }
 
-/// Read and emit simplified document state (legacy, use read_document_with_status for full details)
-/// Note: File objects are owned by Account. For permissionless reads, use RPC object queries.
-/// This function emits DocumentRead event for indexers to process.
-public fun read_document(doc: &File, clock: &Clock) {
-    let mut blob_ids = vector::empty<vector<u8>>();
-
-    // Traverse linked list starting from head
-    if (option::is_some(&doc.head_chunk)) {
-        let mut current_id = *option::borrow(&doc.head_chunk);
-        let mut steps = 0;
-
-        while (table::contains(&doc.chunks, current_id)) {
-            // Check traversal limit FIRST (early abort on cycles)
-            assert!(steps <= MAX_TRAVERSAL_LIMIT, ETraversalLimitExceeded);
-
-            let chunk = table::borrow(&doc.chunks, current_id);
-
-            // Only get blob ID if chunk uses Walrus storage
-            if (chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)) {
-                let blob_ref = option::borrow(&chunk.walrus_blob);
-                let blob_id = blob::blob_id(blob_ref);
-                vector::push_back(&mut blob_ids, bcs::to_bytes(&blob_id));
-            };
-
-            // Move to next chunk
-            if (option::is_some(&chunk.next_chunk)) {
-                current_id = *option::borrow(&chunk.next_chunk);
-                steps = steps + 1;
-            } else {
-                break
-            };
-        };
-    };
-
-    event::emit(DocumentRead {
-        dao_id: doc.dao_id,
-        doc_id: object::uid_to_inner(&doc.id),
-        name: doc.name,
-        chunk_count: doc.chunk_count,
-        chunk_blob_ids: blob_ids,
-        allow_insert: doc.allow_insert,
-        allow_remove: doc.allow_remove,
-        immutable: doc.immutable,
-        timestamp_ms: clock.timestamp_ms(),
-    });
-}
 
 // === Getters for Document Fields ===
 
@@ -2370,73 +2293,6 @@ public fun apply_batch_to_file(
 
     removed_blobs
 }
-
-// OLD COMMENTED CODE - Kept for reference, will be removed in future
-/*
-public fun apply_batch_actions_OLD_BROKEN(
-    registry: &mut DaoFileRegistry,
-    docs: &mut vector<&mut Document>,  // ← THIS DOESN'T WORK IN MOVE
-    batch: BatchDocAction,
-    clock: &Clock,
-) {
-    let actions = batch.actions;
-    let i = 0;
-    let len = vector::length(&actions);
-
-    while (i < len) {
-        let action = vector::borrow(&actions, i);
-
-        // Find the document for this action
-        let doc_found = false;
-        let j = 0;
-        let docs_len = vector::length(docs);
-
-        while (j < docs_len && !doc_found) {
-            let doc_ref = vector::borrow_mut(docs, j);
-            if (object::uid_to_inner(&doc_ref.id) == action.doc_id) {
-                doc_found = true;
-
-                // Execute the action based on type
-                if (action.action_type == ACTION_ADD_CHUNK) {
-                    // Add text chunk
-                    let text = *option::borrow(&action.text);
-                    let chunk_type = *option::borrow(&action.chunk_type);
-                    let immutable = *option::borrow(&action.immutable);
-
-                    add_chunk_with_text(
-                        doc_ref,
-                        text,
-                        clock,
-                        ctx,
-                    );
-                } else if (action.action_type == ACTION_INSERT_AFTER) {
-                    // Insert after specific chunk
-                    let prev_chunk_id = *option::borrow(&action.prev_chunk_id);
-                    let text = *option::borrow(&action.text);
-
-                    insert_chunk_with_text_after(
-                        doc_ref,
-                        prev_chunk_id,
-                        text,
-                        clock,
-                        ctx,
-                    );
-                } else if (action.action_type == ACTION_SET_CHUNK_IMMUTABLE) {
-                    // Set chunk immutable
-                    let chunk_id = *option::borrow(&action.chunk_id);
-                    set_chunk_immutable(doc_ref, chunk_id, clock);
-                }
-                // Note: We intentionally skip REMOVE_CHUNK and UPDATE_CHUNK in this simplified
-                // batch implementation because they require handling Walrus blobs which is
-                // complex in batch context. For those operations, use individual functions.
-            };
-            j = j + 1;
-        };
-
-        i = i + 1;
-    };
-}
-*/
 
 /// Get batch ID
 public fun get_batch_id(batch: &BatchDocAction): ID {

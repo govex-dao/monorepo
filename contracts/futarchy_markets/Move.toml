@@ -7,8 +7,10 @@ license = "BSL"
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
+futarchy_seal_utils = { local = "../futarchy_seal_utils" }
 [addresses]
-futarchy_markets = "0x7b6c4e2939cf538432320b1b91a2d8119ef1f37ec81281c04002d3d746bfba8f"
-futarchy_types = "0x9cd90e1b5ee92d9899f6bb22c2f822a9dfab88eca319d3719623156033276ab2"
-futarchy_one_shot_utils = "0xb839ca53f93fb215430bdc1f187cebb7cc1abab7282f695ca6969fc4303808aa"
-futarchy_core = "0x243466b0c2002e092f40b71ac606578df2a958f87765c48d0edf4cecc417cd8c"
+futarchy_markets  = "0x0"
+futarchy_types  = "0x0"
+futarchy_one_shot_utils  = "0x0"
+futarchy_core  = "0x0"
+futarchy_seal_utils  = "0x0"

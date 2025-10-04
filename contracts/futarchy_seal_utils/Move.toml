@@ -1,5 +1,5 @@
 [package]
-name = "futarchy_types"
+name = "futarchy_seal_utils"
 edition = "2024.beta"
 published-at  = "0x0"
 
@@ -7,4 +7,5 @@ published-at  = "0x0"
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
 
 [addresses]
-futarchy_types  = "0x0"
+futarchy_seal_utils = "0x0"
+sui = "0x2"

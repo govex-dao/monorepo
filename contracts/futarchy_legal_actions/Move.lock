@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "7B01C7EB3758DCAA84EB7ABE3F4C06ECB513D064EFCD2A253622D97342001013"
+manifest_digest = "479BF77C800729CCF373D7F75895528C1519D5C9C11F97BAEC02D8547C353E13"
 deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -117,6 +117,7 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -152,6 +153,7 @@ dependencies = [
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
+  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -181,6 +183,14 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "futarchy_seal_utils"
+source = { local = "../futarchy_seal_utils" }
+
+dependencies = [
+  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]

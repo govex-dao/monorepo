@@ -20,6 +20,7 @@ use futarchy_governance_actions::protocol_admin_actions::{
     RequestVerificationAction,
     ApproveVerificationAction,
     RejectVerificationAction,
+    SetLaunchpadTrustScoreAction,
     UpdateRecoveryFeeAction,
     WithdrawFeesToTreasuryAction,
 };
@@ -83,6 +84,11 @@ public struct ApproveVerificationActionDecoder has key, store {
 
 /// Decoder for RejectVerificationAction
 public struct RejectVerificationActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for SetLaunchpadTrustScoreAction
+public struct SetLaunchpadTrustScoreActionDecoder has key, store {
     id: UID,
 }
 
@@ -380,6 +386,37 @@ public fun decode_reject_verification_action(
     ]
 }
 
+/// Decode a SetLaunchpadTrustScoreAction
+public fun decode_set_launchpad_trust_score_action(
+    _decoder: &SetLaunchpadTrustScoreActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let raise_id = bcs::peel_address(&mut bcs_data);
+    let trust_score = bcs::peel_u64(&mut bcs_data);
+    let review_text = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"raise_id".to_string(),
+            raise_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"trust_score".to_string(),
+            trust_score.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"review_text".to_string(),
+            review_text,
+            b"String".to_string(),
+        ),
+    ]
+}
+
 /// Decode an UpdateRecoveryFeeAction
 public fun decode_update_recovery_fee_action(
     _decoder: &UpdateRecoveryFeeActionDecoder,
@@ -437,6 +474,7 @@ public fun register_decoders(
     register_request_verification_decoder(registry, ctx);
     register_approve_verification_decoder(registry, ctx);
     register_reject_verification_decoder(registry, ctx);
+    register_set_launchpad_trust_score_decoder(registry, ctx);
     register_update_recovery_fee_decoder(registry, ctx);
     register_withdraw_fees_to_treasury_decoder(registry, ctx);
 }
@@ -546,6 +584,15 @@ fun register_reject_verification_decoder(
 ) {
     let decoder = RejectVerificationActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RejectVerificationAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_set_launchpad_trust_score_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = SetLaunchpadTrustScoreActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SetLaunchpadTrustScoreAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 

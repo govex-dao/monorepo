@@ -14232,6 +14232,12 @@ public struct TradingParams has store, drop, copy {
     trading_period_ms: u64,
     conditional_amm_fee_bps: u64,  // Fee for conditional AMMs (prediction markets)
     spot_amm_fee_bps: u64,          // Fee for spot AMM (base pool)
+    // Market operation review period (for conditional raise/buyback)
+    // Can be 0 to skip review and start trading immediately after market init
+    market_op_review_period_ms: u64,
+    // Max percentage (in basis points) of AMM reserves that can be auto-swapped per proposal
+    // Default: 1000 bps (10%) - prevents market from becoming too illiquid for trading
+    max_amm_swap_percent_bps: u64,
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
@@ -14257,6 +14263,9 @@ public struct GovernanceConfig has store, drop, copy {
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64, // How long proposal intents remain valid
+    // If true, premarket proposals lock the queue reservation slot (anti-MEV)
+    // If false, no reservation lock (more market init opportunities, less MEV protection)
+    enable_premarket_reservation_lock: bool,
 }
 
 /// Metadata configuration
@@ -14318,6 +14327,8 @@ public fun new_trading_params(
     trading_period_ms: u64,
     conditional_amm_fee_bps: u64,
     spot_amm_fee_bps: u64,
+    market_op_review_period_ms: u64,
+    max_amm_swap_percent_bps: u64,
 ): TradingParams {
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
@@ -14327,6 +14338,13 @@ public fun new_trading_params(
     assert!(conditional_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
     assert!(spot_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
 
+    // Market op review period can be 0 for immediate trading
+    // Should not exceed regular review period (market ops are meant to be faster or equal)
+    assert!(market_op_review_period_ms <= review_period_ms, EInvalidPeriod);
+
+    // Max swap percent must be reasonable (0-100%)
+    assert!(max_amm_swap_percent_bps <= constants::max_fee_bps(), EInvalidFee);
+
     TradingParams {
         min_asset_amount,
         min_stable_amount,
@@ -14334,6 +14352,8 @@ public fun new_trading_params(
         trading_period_ms,
         conditional_amm_fee_bps,
         spot_amm_fee_bps,
+        market_op_review_period_ms,
+        max_amm_swap_percent_bps,
     }
 }
 
@@ -14373,6 +14393,7 @@ public fun new_governance_config(
     max_intents_per_outcome: u64,
     eviction_grace_period_ms: u64,
     proposal_intent_expiry_ms: u64,
+    enable_premarket_reservation_lock: bool,
 ): GovernanceConfig {
     // Validate inputs
     assert!(max_outcomes >= constants::min_outcomes(), EInvalidMaxOutcomes);
@@ -14399,6 +14420,7 @@ public fun new_governance_config(
         max_intents_per_outcome,
         eviction_grace_period_ms,
         proposal_intent_expiry_ms,
+        enable_premarket_reservation_lock,
     }
 }
 
@@ -14514,6 +14536,8 @@ public fun review_period_ms(params: &TradingParams): u64 { params.review_period_
 public fun trading_period_ms(params: &TradingParams): u64 { params.trading_period_ms }
 public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditional_amm_fee_bps }
 public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
+public fun market_op_review_period_ms(params: &TradingParams): u64 { params.market_op_review_period_ms }
+public fun max_amm_swap_percent_bps(params: &TradingParams): u64 { params.max_amm_swap_percent_bps }
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
@@ -14539,6 +14563,7 @@ public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_p
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
 public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
 public fun proposal_intent_expiry_ms(gov: &GovernanceConfig): u64 { gov.proposal_intent_expiry_ms }
+public fun enable_premarket_reservation_lock(gov: &GovernanceConfig): bool { gov.enable_premarket_reservation_lock }
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
@@ -14661,6 +14686,18 @@ public(package) fun set_spot_amm_fee_bps(params: &mut TradingParams, fee_bps: u6
     params.spot_amm_fee_bps = fee_bps;
 }
 
+public(package) fun set_market_op_review_period_ms(params: &mut TradingParams, period: u64) {
+    // Market op review can be 0 for immediate trading
+    // But should not exceed regular review period
+    assert!(period <= params.review_period_ms, EInvalidPeriod);
+    params.market_op_review_period_ms = period;
+}
+
+public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, percent_bps: u64) {
+    assert!(percent_bps <= constants::max_fee_bps(), EInvalidFee);
+    params.max_amm_swap_percent_bps = percent_bps;
+}
+
 // TWAP config direct setters
 public(package) fun set_start_delay(twap: &mut TwapConfig, delay: u64) {
     // Allow 0 for testing
@@ -14746,6 +14783,10 @@ public(package) fun set_eviction_grace_period_ms(gov: &mut GovernanceConfig, per
 public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, period: u64) {
     assert!(period >= constants::min_proposal_intent_expiry_ms(), EInvalidGracePeriod);
     gov.proposal_intent_expiry_ms = period;
+}
+
+public(package) fun set_enable_premarket_reservation_lock(gov: &mut GovernanceConfig, enabled: bool) {
+    gov.enable_premarket_reservation_lock = enabled;
 }
 
 // Metadata config direct setters
@@ -14995,6 +15036,8 @@ public fun default_trading_params(): TradingParams {
         trading_period_ms: 604800000, // 7 days
         conditional_amm_fee_bps: 30, // 0.3% for conditional markets
         spot_amm_fee_bps: 30, // 0.3% for spot pool
+        market_op_review_period_ms: 0, // 0 = immediate (allows atomic market init)
+        max_amm_swap_percent_bps: 1000, // 10% max swap per proposal (prevents illiquidity)
     }
 }
 
@@ -15024,6 +15067,7 @@ public fun default_governance_config(): GovernanceConfig {
         max_intents_per_outcome: 10, // Allow up to 10 intents per outcome
         eviction_grace_period_ms: constants::default_eviction_grace_period_ms(),
         proposal_intent_expiry_ms: constants::default_proposal_intent_expiry_ms(),
+        enable_premarket_reservation_lock: true, // Default: true for MEV protection
     }
 }
 
@@ -15606,6 +15650,18 @@ public fun max_outcomes(config: &FutarchyConfig): u64 {
     dao_config::max_outcomes(dao_config::governance_config(&config.config))
 }
 
+public fun enable_premarket_reservation_lock(config: &FutarchyConfig): bool {
+    dao_config::enable_premarket_reservation_lock(dao_config::governance_config(&config.config))
+}
+
+public fun market_op_review_period_ms(config: &FutarchyConfig): u64 {
+    dao_config::market_op_review_period_ms(dao_config::trading_params(&config.config))
+}
+
+public fun max_amm_swap_percent_bps(config: &FutarchyConfig): u64 {
+    dao_config::max_amm_swap_percent_bps(dao_config::trading_params(&config.config))
+}
+
 // === Missing Functions Added for Build Fixes ===
 
 public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
@@ -15750,6 +15806,21 @@ public fun set_max_concurrent_proposals(config: &mut FutarchyConfig, max: u64) {
 public fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
     dao_config::set_fee_escalation_basis_points(gov_cfg, points);
+}
+
+public fun set_enable_premarket_reservation_lock(config: &mut FutarchyConfig, enabled: bool) {
+    let gov_cfg = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_enable_premarket_reservation_lock(gov_cfg, enabled);
+}
+
+public fun set_market_op_review_period_ms(config: &mut FutarchyConfig, period: u64) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_market_op_review_period_ms(trading_params, period);
+}
+
+public fun set_max_amm_swap_percent_bps(config: &mut FutarchyConfig, percent_bps: u64) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_max_amm_swap_percent_bps(trading_params, percent_bps);
 }
 
 public fun update_slash_distribution(
@@ -16144,6 +16215,10 @@ public struct TogglePayment has drop {}
 public struct ChallengeWithdrawals has drop {}
 public struct CancelChallengedWithdrawals has drop {}
 
+// === Dividend Action Types ===
+
+public struct CreateDividend has drop {}
+
 // === Oracle Action Types ===
 
 public struct ReadOraclePrice has drop {}
@@ -16251,6 +16326,10 @@ public struct RejectVerification has drop {}
 // === DAO Score Action Types ===
 
 public struct SetDaoScore has drop {}
+
+// === Launchpad Admin Action Types ===
+
+public struct SetLaunchpadTrustScore has drop {}
 
 // === Fee Management Action Types ===
 
@@ -16476,6 +16555,9 @@ public fun reject_verification(): TypeName { type_name::with_defining_ids<Reject
 // DAO Score actions
 public fun set_dao_score(): TypeName { type_name::with_defining_ids<SetDaoScore>() }
 
+// Launchpad Admin actions
+public fun set_launchpad_trust_score(): TypeName { type_name::with_defining_ids<SetLaunchpadTrustScore>() }
+
 // Fee Management actions
 public fun update_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateRecoveryFee>() }
 public fun withdraw_fees_to_treasury(): TypeName { type_name::with_defining_ids<WithdrawFeesToTreasury>() }
@@ -16504,7 +16586,10 @@ public fun create_commitment_proposal(): TypeName { type_name::with_defining_ids
 public fun execute_commitment(): TypeName { type_name::with_defining_ids<ExecuteCommitment>() }
 public fun cancel_commitment(): TypeName { type_name::with_defining_ids<CancelCommitment>() }
 public fun update_commitment_recipient(): TypeName { type_name::with_defining_ids<UpdateCommitmentRecipient>() }
-public fun withdraw_commitment(): TypeName { type_name::with_defining_ids<WithdrawCommitment>() }/// Version tracking for the futarchy package
+public fun withdraw_commitment(): TypeName { type_name::with_defining_ids<WithdrawCommitment>() }
+
+// Dividend actions
+public fun create_dividend(): TypeName { type_name::with_defining_ids<CreateDividend>() }/// Version tracking for the futarchy package
 module futarchy_core::version;
 
 // === Imports ===
@@ -16870,6 +16955,8 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use account_protocol::account::{Self, Account};
 use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_seal_utils::seal_commit_reveal::{Self, SealContainer};
+use futarchy_seal_utils::market_init_params::MarketInitParams;
 
 // === Events ===
 
@@ -16922,17 +17009,29 @@ const EInvalidBond: u64 = 5;
 const EProposalInGracePeriod: u64 = 6;
 const EHeapInvariantViolated: u64 = 7;
 const EFeeExceedsMaximum: u64 = 8;
+const ESealNotRevealed: u64 = 9;
+const EProposalNotTimedOut: u64 = 10;
+const EMarketInitParamsNotAvailable: u64 = 11;
+const EBondNotExtracted: u64 = 12;
+const ECrankBountyNotExtracted: u64 = 13;
+const ETooEarlyToReveal: u64 = 14;
+const EInsufficientFundsForBuyback: u64 = 15;
 
 // === Constants ===
 
 const MAX_QUEUE_SIZE: u64 = 100;
 const EVICTION_GRACE_PERIOD_MS: u64 = 300000; // 5 minutes
+const MAX_TIME_AT_TOP_OF_QUEUE_MS: u64 = 86400000; // 24 hours
 const COMPARE_GREATER: u8 = 1;
 const COMPARE_EQUAL: u8 = 0;
 const COMPARE_LESS: u8 = 2;
 const MAX_REASONABLE_FEE: u64 = 1_000_000_000_000_000; // 1 million SUI (with 9 decimals)
 
 // === Structs ===
+
+/// Witness for queue mutations
+/// Only authorized modules can create this to mutate proposals
+public struct QueueMutationAuth has drop {}
 
 /// Priority score combining fee and timestamp
 public struct PriorityScore has store, copy, drop {
@@ -16962,6 +17061,19 @@ public struct QueuedProposal<phantom StableCoin> has store {
     uses_dao_liquidity: bool,
     data: ProposalData,
     queue_entry_time: u64,  // Track when proposal entered queue for grace period
+
+    // === SEAL Commit-Reveal Fields ===
+    /// Market initialization parameters (sealed or public)
+    /// Contains SEAL commitment, fallback params, and revealed params
+    market_init_params: Option<SealContainer<MarketInitParams>>,
+
+    /// Timestamp when proposal reached top of queue (for timeout mechanism)
+    /// Set to Some(timestamp) when proposal becomes #1, None otherwise
+    time_reached_top_of_queue: Option<u64>,
+
+    /// Bounty for permissionless cranking (in SUI)
+    /// Anyone can claim this by successfully cranking proposal to PREMARKET state
+    crank_bounty: Option<Coin<SUI>>,
 }
 
 /// Priority queue using binary heap for O(log n) operations
@@ -17355,7 +17467,22 @@ public fun insert<StableCoin>(
             });
             
             // Clean up evicted proposal
-            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_spec, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = evicted;
+            let QueuedProposal {
+                mut bond,
+                proposal_id,
+                dao_id,
+                proposer: evicted_proposer_addr,
+                fee: _,
+                timestamp: _,
+                priority_score: _,
+                mut intent_spec,
+                uses_dao_liquidity: _,
+                data: _,
+                queue_entry_time: _,
+                market_init_params: _,
+                time_reached_top_of_queue: _,
+                mut crank_bounty,
+            } = evicted;
 
             if (intent_spec.is_some()) {
                 let _ = intent_spec.extract();
@@ -17373,6 +17500,12 @@ public fun insert<StableCoin>(
                 transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
             };
             option::destroy_none(bond);
+
+            // Handle crank bounty - return to evicted proposer if it exists
+            if (option::is_some(&crank_bounty)) {
+                transfer::public_transfer(option::extract(&mut crank_bounty), evicted_proposer_addr);
+            };
+            option::destroy_none(crank_bounty);
         };
     };
     
@@ -17400,12 +17533,15 @@ public fun insert<StableCoin>(
 }
 
 /// Extract the highest priority proposal - O(log n) complexity!
-/// Made package-visible to prevent unauthorized extraction
-public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
+/// Requires QueueMutationAuth witness to prevent unauthorized extraction
+public fun extract_max<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+): Option<QueuedProposal<StableCoin>> {
     if (queue.size == 0) {
         return option::none()
     };
-    
+
     // Remove root (max element) - O(log n)!
     let max_proposal = remove_at(&mut queue.heap, &mut queue.proposal_indices, 0, &mut queue.size);
     option::some(max_proposal)
@@ -17493,6 +17629,9 @@ public fun new_queued_proposal<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        market_init_params: option::none(),  // No SEAL by default
+        time_reached_top_of_queue: option::none(),  // Not at top yet
+        crank_bounty: option::none(),  // No bounty by default
     }
 }
 
@@ -17523,6 +17662,9 @@ public fun new_queued_proposal_with_id<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        market_init_params: option::none(),  // No SEAL by default
+        time_reached_top_of_queue: option::none(),  // Not at top yet
+        crank_bounty: option::none(),  // No bounty by default
     }
 }
 
@@ -17583,9 +17725,12 @@ public fun get_outcome_details(data: &ProposalData): &vector<String> { &data.out
 public fun priority_score_value(score: &PriorityScore): u128 { score.computed_value }
 
 /// Tries to activate the next proposal from the queue
-/// Made package-visible to prevent unauthorized activation
-public fun try_activate_next<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
-    extract_max(queue)
+/// Requires QueueMutationAuth witness to prevent unauthorized activation
+public fun try_activate_next<StableCoin>(
+    auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+): Option<QueuedProposal<StableCoin>> {
+    extract_max(auth, queue)
 }
 
 /// Calculate minimum required fee based on queue occupancy
@@ -17841,7 +17986,22 @@ public entry fun cancel_proposal<StableCoin>(
     let proposer_addr = proposal.proposer;
     
     let removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
-    let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_spec: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
+    let QueuedProposal {
+        proposal_id,
+        mut bond,
+        dao_id: _,
+        proposer: _,
+        fee: _,
+        timestamp: _,
+        priority_score: _,
+        intent_spec: _,
+        uses_dao_liquidity: _,
+        data: _,
+        queue_entry_time: _,
+        market_init_params: _,
+        time_reached_top_of_queue: _,
+        mut crank_bounty,
+    } = removed;
     
     // Get the fee refunded as a Coin
     let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -17858,6 +18018,12 @@ public entry fun cancel_proposal<StableCoin>(
         transfer::public_transfer(option::extract(&mut bond), proposer_addr);
     };
     option::destroy_none(bond);
+
+    // Refund crank bounty to proposer if it exists
+    if (option::is_some(&crank_bounty)) {
+        transfer::public_transfer(option::extract(&mut crank_bounty), proposer_addr);
+    };
+    option::destroy_none(crank_bounty);
 }
 
 /// Update a proposal's priority by adding more fee
@@ -17927,14 +18093,23 @@ public fun reserved_proposal_id<StableCoin>(queue: &ProposalQueue<StableCoin>): 
     queue.reserved_next_proposal
 }
 
-/// Set the reserved next proposal (package)
-public fun set_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>, id: ID) {
+/// Set the reserved next proposal
+/// Requires QueueMutationAuth witness to prevent unauthorized reservation
+public fun set_reserved<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+    id: ID,
+) {
     assert!(!has_reserved(queue), EHeapInvariantViolated);
     queue.reserved_next_proposal = option::some(id);
 }
 
-/// Clear the reserved next proposal (package)
-public fun clear_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>) {
+/// Clear the reserved next proposal
+/// Requires QueueMutationAuth witness to prevent unauthorized clearing
+public fun clear_reserved<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+) {
     queue.reserved_next_proposal = option::none();
 }
 
@@ -17962,8 +18137,12 @@ public fun get_all_proposals<StableCoin>(queue: &ProposalQueue<StableCoin>): &ve
 }
 
 /// Extract bond from a queued proposal (mutable)
-/// Made package-visible to prevent unauthorized bond extraction
-public fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
+/// Requires QueueMutationAuth witness to prevent unauthorized bond extraction
+/// CRITICAL: This prevents value theft - only authorized modules can extract bonds
+public fun extract_bond<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+): Option<Coin<StableCoin>> {
     let bond_ref = &mut proposal.bond;
     if (option::is_some(bond_ref)) {
         option::some(option::extract(bond_ref))
@@ -17973,6 +18152,8 @@ public fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): 
 }
 
 /// Destroy a queued proposal
+/// IMPORTANT: Caller must extract bond and crank_bounty BEFORE calling this
+/// This ensures no value is lost - resources must be explicitly handled
 public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
     let QueuedProposal {
         bond,
@@ -17986,8 +18167,203 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         uses_dao_liquidity: _,
         data: _,
         queue_entry_time: _,
+        market_init_params: _,
+        time_reached_top_of_queue: _,
+        crank_bounty,
     } = proposal;
+
+    // SAFETY: Assert no valuable resources remain
+    // Prevents accidental value loss - caller must handle coins explicitly
+    assert!(bond.is_none(), EBondNotExtracted);
+    assert!(crank_bounty.is_none(), ECrankBountyNotExtracted);
+
+    // Safe to destroy now - no resources lost
     bond.destroy_none();
+    crank_bounty.destroy_none();
+}
+
+// === SEAL Commit-Reveal Functions ===
+
+/// Create queue mutation authority witness
+/// Only package modules can create this witness for authorized mutations
+public(package) fun create_mutation_auth(): QueueMutationAuth {
+    QueueMutationAuth {}
+}
+
+/// Set market init params (sealed or public) for a queued proposal
+/// Can only be called before proposal is cranked to PREMARKET
+/// Requires QueueMutationAuth witness for access control
+public fun set_market_init_params<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+    params: SealContainer<MarketInitParams>,
+) {
+    proposal.market_init_params = option::some(params);
+}
+
+/// Reveal sealed market init params using decrypted data
+/// Anyone can call this after SEAL time-lock expires
+/// Clock parameter enforces time-lock - cannot reveal before reveal_time_ms
+public fun reveal_market_init_params<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    proposal_id: ID,
+    decrypted_params: MarketInitParams,
+    decrypted_salt: vector<u8>,
+    clock: &Clock,  // ← Pass to seal_commit_reveal for time-lock validation
+    ctx: &TxContext,
+) {
+    assert!(queue.proposal_indices.contains(proposal_id), EProposalNotFound);
+    let idx = *queue.proposal_indices.borrow(proposal_id);
+    let proposal = vector::borrow_mut(&mut queue.heap, idx);
+
+    assert!(option::is_some(&proposal.market_init_params), EMarketInitParamsNotAvailable);
+    let container = option::borrow_mut(&mut proposal.market_init_params);
+
+    // Time-lock validation happens inside reveal()
+    // Event emission happens inside reveal() for indexer tracking
+    seal_commit_reveal::reveal(container, decrypted_params, decrypted_salt, clock, ctx);
+}
+
+/// Get market init params if available (revealed or fallback)
+/// Returns None if SEAL not revealed and no fallback
+public fun get_market_init_params<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>
+): Option<MarketInitParams> {
+    if (option::is_none(&proposal.market_init_params)) {
+        return option::none()
+    };
+
+    let container = option::borrow(&proposal.market_init_params);
+
+    // Check if params are available before getting them
+    if (!seal_commit_reveal::has_params(container)) {
+        return option::none()
+    };
+
+    // Use get_params_copy to get value by copy
+    option::some(*seal_commit_reveal::get_params(container))
+}
+
+/// Check if market init params are available for execution
+public fun has_market_init_params<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>
+): bool {
+    if (option::is_none(&proposal.market_init_params)) {
+        return true  // No SEAL means params not needed, can execute
+    };
+
+    let container = option::borrow(&proposal.market_init_params);
+    seal_commit_reveal::has_params(container)
+}
+
+/// Set crank bounty for permissionless proposal execution
+/// Bounty is paid to whoever successfully cranks proposal to PREMARKET
+/// Note: Caller must handle any existing bounty before calling this
+/// This function will abort if a bounty already exists
+/// Requires QueueMutationAuth witness for access control
+public fun set_crank_bounty<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+    bounty: Coin<SUI>,
+) {
+    // SAFETY: Cannot overwrite existing bounty
+    // Caller must extract old bounty first to prevent value loss
+    assert!(option::is_none(&proposal.crank_bounty), ECrankBountyNotExtracted);
+
+    // Safe to set new bounty
+    option::fill(&mut proposal.crank_bounty, bounty);
+}
+
+/// Extract and claim crank bounty (called by cranker after successful execution)
+public(package) fun extract_crank_bounty<StableCoin>(
+    proposal: &mut QueuedProposal<StableCoin>,
+    ctx: &mut TxContext,
+) {
+    if (option::is_some(&proposal.crank_bounty)) {
+        let bounty = option::extract(&mut proposal.crank_bounty);
+        transfer::public_transfer(bounty, tx_context::sender(ctx));
+    };
+}
+
+/// Update time_reached_top_of_queue when proposal becomes #1
+/// Called automatically when proposal reaches top of queue
+public(package) fun mark_reached_top_of_queue<StableCoin>(
+    proposal: &mut QueuedProposal<StableCoin>,
+    clock: &Clock,
+) {
+    if (option::is_none(&proposal.time_reached_top_of_queue)) {
+        proposal.time_reached_top_of_queue = option::some(clock::timestamp_ms(clock));
+    };
+}
+
+/// Check if proposal has timed out at top of queue (24 hours)
+/// Returns true if proposal should be evicted due to timeout
+///
+/// SAFETY: Uses saturating subtraction to handle clock adjustments
+/// If clock goes backwards (NTP sync, testnet reset), treats as no time elapsed
+public fun has_timed_out_at_top<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>,
+    clock: &Clock,
+): bool {
+    if (option::is_none(&proposal.time_reached_top_of_queue)) {
+        return false  // Not at top yet
+    };
+
+    let time_at_top = *option::borrow(&proposal.time_reached_top_of_queue);
+    let current_time = clock::timestamp_ms(clock);
+
+    // CRITICAL: Saturating subtraction prevents underflow
+    // If clock went backwards, elapsed = 0 (no timeout)
+    let elapsed = if (current_time >= time_at_top) {
+        current_time - time_at_top
+    } else {
+        0  // Clock went backwards, treat as no time elapsed
+    };
+
+    elapsed >= MAX_TIME_AT_TOP_OF_QUEUE_MS
+}
+
+/// Evict timed-out proposal from top of queue
+/// Anyone can call this to clean up stuck proposals
+public entry fun evict_timed_out_proposal<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    proposal_id: ID,
+    clock: &Clock,
+) {
+    assert!(queue.proposal_indices.contains(proposal_id), EProposalNotFound);
+
+    let idx = *queue.proposal_indices.borrow(proposal_id);
+    assert!(idx == 0, EInvalidProposalId);  // Must be at top of queue (index 0 in max-heap)
+
+    let proposal = vector::borrow(&queue.heap, idx);
+    assert!(has_timed_out_at_top(proposal, clock), EProposalNotTimedOut);
+
+    // Get proposer address before removing
+    let proposer_addr = proposal.proposer;
+
+    // Remove the proposal from queue
+    let mut removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, idx, &mut queue.size);
+
+    // Extract and return valuable resources to proposer
+    if (option::is_some(&removed.bond)) {
+        let bond = option::extract(&mut removed.bond);
+        transfer::public_transfer(bond, proposer_addr);
+    };
+
+    if (option::is_some(&removed.crank_bounty)) {
+        let bounty = option::extract(&mut removed.crank_bounty);
+        transfer::public_transfer(bounty, proposer_addr);
+    };
+
+    // Now safe to destroy (no resources left)
+    destroy_proposal(removed);
+
+    // Clear reserved slot if this was the reserved proposal
+    if (option::is_some(&queue.reserved_next_proposal)) {
+        if (*option::borrow(&queue.reserved_next_proposal) == proposal_id) {
+            queue.reserved_next_proposal = option::none();
+        };
+    };
 }
 
 // === Share Functions ===
@@ -18009,7 +18385,7 @@ public fun test_internals<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, 
     )
 }module futarchy_core::priority_queue_helpers;
 
-use futarchy_core::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue};
+use futarchy_core::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue, QueueMutationAuth};
 use std::string::String;
 use sui::coin::Coin;
 
@@ -18036,8 +18412,12 @@ public fun new_proposal_data(
 }
 
 /// Extracts the maximum priority proposal from the queue without activating it
-public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): QueuedProposal<StableCoin> {
-    let result = priority_queue::try_activate_next(queue);
+/// Requires QueueMutationAuth witness - only package modules can create this
+public fun extract_max<StableCoin>(
+    auth: QueueMutationAuth,
+    queue: &mut ProposalQueue<StableCoin>,
+): QueuedProposal<StableCoin> {
+    let result = priority_queue::try_activate_next(auth, queue);
     assert!(option::is_some(&result), EQueueEmpty);
     option::destroy_some(result)
 }
@@ -18064,8 +18444,11 @@ public fun get_data<StableCoin>(proposal: &QueuedProposal<StableCoin>): &Proposa
     priority_queue::get_proposal_data(proposal)
 }
 
-public fun get_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
-    priority_queue::extract_bond(proposal)
+public fun get_bond<StableCoin>(
+    auth: QueueMutationAuth,
+    proposal: &mut QueuedProposal<StableCoin>,
+): Option<Coin<StableCoin>> {
+    priority_queue::extract_bond(auth, proposal)
 }
 
 public fun get_timestamp<StableCoin>(proposal: &QueuedProposal<StableCoin>): u64 {
@@ -20588,6 +20971,723 @@ public fun call_multi_full_window_accumulation_for_testing(
         timestamp,
     );
 }
+/// Proposal creation with integrated market initialization strategies
+///
+/// This module enables DAOs to atomically seed prediction markets with asymmetric liquidity
+/// during proposal creation. This creates initial price signals (e.g., "we think this will pass")
+/// while maintaining front-run protection via single-transaction PTB execution.
+///
+/// ## Market Initialization Strategies
+///
+/// ### 1. Conditional Raise (Mint → Swap → Deposit)
+/// - **Purpose:** Simulate raising capital by selling DAO tokens in a conditional market
+/// - **Flow:** Mint asset tokens → Sell in YES market → Get stable coins → Deposit to treasury
+/// - **Effect:** Makes YES tokens cheaper (bearish on YES = bullish on proposal passing)
+/// - **Use Case:** DAO wants to signal confidence that proposal will pass and raise funds if it does
+///
+/// ### 2. Conditional Buyback (Withdraw → Swap → Burn/Deposit)
+/// - **Purpose:** Simulate buying back DAO tokens across multiple outcome markets
+/// - **Flow:** Withdraw stable → Buy asset tokens in outcome AMMs → Burn or vault the assets
+/// - **Effect:** Makes asset tokens more expensive in chosen outcomes (bullish on those outcomes)
+/// - **Use Case:** DAO wants to signal which outcomes it prefers with treasury funds
+/// - **Flexibility:** Per-outcome amounts via `vector<u64>` (e.g., [0, 1000, 500] for 3 outcomes)
+///
+/// ## Atomic Execution (Front-Run Protection)
+///
+/// All operations happen in a single PTB transaction:
+/// 1. Create proposal (PREMARKET state)
+/// 2. Create escrow and AMM pools
+/// 3. Execute Intent (mint/withdraw) → get coins
+/// 4. Execute market init strategy → conditional swaps
+/// 5. Return proceeds to vault
+/// 6. Finalize proposal (→ REVIEW state)
+///
+/// No intermediate state is exposed, preventing sandwich attacks or front-running.
+///
+/// ## Constraint: Zero Review Period Only
+///
+/// **Market init proposals ONLY work with `review_period_ms = 0`**
+///
+/// ```move
+/// assert!(review_period_ms == 0, EMarketInitRequiresZeroReview);
+/// ```
+///
+/// **Why this constraint:**
+/// - ✅ Atomic execution (create + init + trading in one PTB)
+/// - ✅ Front-run proof (everything happens in one transaction)
+/// - ✅ No queue blocking issues
+/// - ✅ No commit-reveal complexity
+/// - ✅ No SEAL dependencies
+/// - ✅ No timing edge cases
+///
+/// **Trade-off:**
+/// - No premarket research period
+/// - Traders must analyze quickly or after market starts
+/// - Worth it for simplicity and security
+///
+/// **Note:** DAOs can set high queue fees (e.g., $1k min_fee) to keep the queue clear,
+/// making the reservation slot more often available for market init proposals with premarket.
+///
+/// ## PTB Example: Conditional Raise (Mint + Swap + Deposit)
+///
+/// ```typescript
+/// const tx = new Transaction();
+///
+/// // 0. Get market_op_review_period_ms from DAO config (not regular review period!)
+/// const marketOpReviewPeriod = dao_config.market_op_review_period_ms();
+///
+/// // 1. Create proposal in PREMARKET state
+/// // IMPORTANT: Use market_op_review_period_ms as the review_period parameter!
+/// const proposalId = tx.moveCall({
+///   target: 'futarchy_markets::proposal::new_premarket',
+///   arguments: [
+///     /* ... other params ... */,
+///     marketOpReviewPeriod,  // ← Use market op review period, not regular!
+///     /* ... */
+///   ],
+/// });
+///
+/// // 2. Create escrow for market
+/// const escrow = tx.moveCall({
+///   target: 'futarchy_markets::proposal::create_escrow_for_market',
+///   arguments: [proposalId, clock],
+/// });
+///
+/// // 3. Register treasury caps and create AMM pools
+/// // ... (existing liquidity initialization flow)
+///
+/// // 4. Execute mint Intent to get asset coins
+/// const mintedCoins = tx.moveCall({
+///   target: 'account_actions::currency::execute_mint', // or similar
+///   arguments: [account, mintAmount, /* ... */],
+/// });
+///
+/// // 5. Execute conditional raise strategy
+/// const stableCoins = tx.moveCall({
+///   target: 'futarchy_markets::proposal_with_market_init::execute_raise_on_proposal',
+///   arguments: [proposalId, escrow, mintedCoins, raiseConfig, clock],
+///   typeArguments: [AssetType, StableType, AssetConditionalCoin, StableConditionalCoin],
+/// });
+///
+/// // 6. Deposit stable coins back to DAO vault
+/// tx.moveCall({
+///   target: 'account_actions::vault::do_deposit',
+///   arguments: [account, stableCoins, auth],
+/// });
+///
+/// // 7. Finalize proposal (transitions to REVIEW state)
+/// tx.moveCall({
+///   target: 'futarchy_markets::proposal::finalize_market_setup',
+///   arguments: [proposalId, /* ... */],
+/// });
+/// ```
+///
+/// ## PTB Example: Conditional Buyback (Withdraw + Swap + Burn/Deposit)
+///
+/// ```typescript
+/// const tx = new Transaction();
+///
+/// // Steps 1-3: Same as above (create proposal, escrow, pools)
+///
+/// // 4. Execute withdraw Intent to get stable coins
+/// const withdrawnStable = tx.moveCall({
+///   target: 'account_actions::vault::execute_withdraw',
+///   arguments: [account, withdrawAmount, /* ... */],
+/// });
+///
+/// // 5. Execute conditional buyback strategy
+/// const assetCoins = tx.moveCall({
+///   target: 'futarchy_markets::proposal_with_market_init::execute_buyback_on_proposal',
+///   arguments: [proposalId, escrow, withdrawnStable, buybackConfig, clock],
+///   typeArguments: [AssetType, StableType, AssetConditionalCoin, StableConditionalCoin],
+/// });
+///
+/// // 6. Merge and burn/deposit asset coins
+/// const mergedAsset = tx.moveCall({
+///   target: 'futarchy_markets::proposal_with_market_init::merge_asset_coins',
+///   arguments: [assetCoins],
+/// });
+///
+/// tx.moveCall({
+///   target: 'account_actions::currency::burn', // or deposit back to vault
+///   arguments: [account, mergedAsset, /* ... */],
+/// });
+///
+/// // 7. Finalize proposal
+/// tx.moveCall({
+///   target: 'futarchy_markets::proposal::finalize_market_setup',
+///   arguments: [proposalId, /* ... */],
+/// });
+/// ```
+module futarchy_markets::proposal_with_market_init;
+
+use futarchy_markets::proposal::{Self, Proposal};
+use futarchy_markets::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets::market_init_strategies::{
+    Self,
+    ConditionalRaiseConfig,
+    ConditionalBuybackConfig
+};
+use futarchy_markets::market_init_helpers;
+use sui::coin::{Self, Coin};
+use sui::clock::Clock;
+
+// === Errors ===
+const EInvalidRaiseConfig: u64 = 0;
+const EInvalidBuybackConfig: u64 = 1;
+
+// === Conditional Raise Integration ===
+
+/// Execute conditional raise strategy during proposal creation
+///
+/// This function should be called AFTER the market AMM pools are created but BEFORE
+/// the proposal transitions to REVIEW state.
+///
+/// Flow:
+/// 1. Caller has already built and executed mint Intent → has minted coins
+/// 2. This function takes those coins and executes conditional raise strategy
+/// 3. Strategy returns STABLE coins which caller must deposit back to DAO vault
+///
+/// ## Parameters
+/// - `proposal`: The proposal (must be in PREMARKET state, after AMMs created)
+/// - `escrow`: Token escrow for the proposal
+/// - `minted_coins`: Asset coins obtained from executing mint Intent
+/// - `config`: Conditional raise configuration
+/// - `clock`: For timestamp operations
+/// - `ctx`: Transaction context
+///
+/// ## Returns
+/// - Stable coins to be deposited back to DAO vault (caller's responsibility)
+public fun execute_raise_on_proposal<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    minted_coins: Coin<AssetType>,
+    config: ConditionalRaiseConfig,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    let outcome_count = proposal::outcome_count(proposal);
+
+    // Validate config before execution
+    assert!(
+        market_init_helpers::validate_raise_config(&config, outcome_count),
+        EInvalidRaiseConfig
+    );
+
+    // Execute the strategy
+    market_init_strategies::execute_conditional_raise<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+        proposal,
+        escrow,
+        minted_coins,
+        config,
+        outcome_count,
+        clock,
+        ctx,
+    )
+}
+
+// === Conditional Buyback Integration ===
+
+/// Execute conditional buyback strategy during proposal creation
+///
+/// This function should be called AFTER the market AMM pools are created but BEFORE
+/// the proposal transitions to REVIEW state.
+///
+/// Flow:
+/// 1. Caller has already built and executed withdraw Intent → has withdrawn stable
+/// 2. This function takes those coins and executes conditional buyback strategy
+/// 3. Strategy returns ASSET coins which caller can burn or deposit back to vault
+///
+/// ## Parameters
+/// - `proposal`: The proposal (must be in PREMARKET state, after AMMs created)
+/// - `escrow`: Token escrow for the proposal
+/// - `withdrawn_stable`: Stable coins obtained from executing withdraw Intent
+/// - `config`: Conditional buyback configuration (per-outcome amounts)
+/// - `clock`: For timestamp operations
+/// - `ctx`: Transaction context
+///
+/// ## Returns
+/// - Vector of asset coins (one per outcome, some may be zero-value)
+/// - Caller can burn these or deposit to vault
+public fun execute_buyback_on_proposal<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    withdrawn_stable: Coin<StableType>,
+    config: ConditionalBuybackConfig,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): vector<Coin<AssetType>> {
+    let outcome_count = proposal::outcome_count(proposal);
+
+    // Validate config before execution
+    assert!(
+        market_init_helpers::validate_buyback_config(&config, outcome_count),
+        EInvalidBuybackConfig
+    );
+
+    // Execute the strategy
+    market_init_strategies::execute_conditional_buyback<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+        proposal,
+        escrow,
+        withdrawn_stable,
+        config,
+        outcome_count,
+        clock,
+        ctx,
+    )
+}
+
+// === Helper: Merge Asset Coins ===
+
+/// Helper to merge multiple asset coins into a single coin
+///
+/// Takes the vector of asset coins returned from buyback and merges them
+/// into a single coin for easier handling by caller.
+///
+/// Uses Sui's built-in `join_vec` method for efficient merging.
+public fun merge_asset_coins<AssetType>(
+    mut asset_coins: vector<Coin<AssetType>>,
+    ctx: &mut TxContext,
+): Coin<AssetType> {
+    if (asset_coins.is_empty()) {
+        asset_coins.destroy_empty();
+        return coin::zero<AssetType>(ctx)
+    };
+
+    let mut base = asset_coins.pop_back();
+    base.join_vec(asset_coins);  // Uses Sui's join_vec
+    base
+}
+/// Market initialization strategies for futarchy prediction markets
+/// Provides different ways to seed initial liquidity and create price discovery mechanisms
+///
+/// These strategies execute during proposal creation using coins obtained via Intent execution:
+/// 1. Proposal creation builds Intent for mint/withdraw
+/// 2. Intent executes immediately via Executable
+/// 3. Resulting coins are passed to these strategy functions
+/// 4. Strategy performs conditional swaps to create asymmetric markets
+module futarchy_markets::market_init_strategies;
+
+use futarchy_markets::swap;
+use futarchy_markets::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets::proposal::Proposal;
+use sui::coin::{Self, Coin};
+use sui::balance;
+use sui::clock::Clock;
+use sui::object::ID;
+
+// === Errors ===
+const EInvalidOutcome: u64 = 0;
+const EZeroAmount: u64 = 1;
+const EExcessiveSlippage: u64 = 2;
+const EAmountMismatch: u64 = 3;
+const EInvalidConfig: u64 = 4;
+
+// === Strategy Configuration Structs ===
+
+/// Configuration for conditional raise market initialization
+/// Mints tokens and sells them in one outcome's AMM to simulate raising capital
+public struct ConditionalRaiseConfig has store, drop, copy {
+    target_outcome: u8,        // Which outcome gets the mint+swap (usually 1 for YES)
+    mint_amount: u64,          // How much to mint
+    min_stable_out: u64,       // Minimum STABLE received (slippage protection)
+}
+
+/// Configuration for conditional buyback market initialization
+/// Withdraws treasury and buys tokens across multiple outcome AMMs
+/// Allows customized buyback amounts per outcome to create asymmetric markets
+public struct ConditionalBuybackConfig has store, drop, copy {
+    // Per-outcome buyback amounts (index = outcome, value = STABLE to spend)
+    // Example: [0, 1000, 500] means:
+    //   - Outcome 0: no buyback
+    //   - Outcome 1: buy 1000 STABLE worth of tokens
+    //   - Outcome 2: buy 500 STABLE worth of tokens
+    outcome_amounts: vector<u64>,
+    // Minimum asset tokens received per outcome (slippage protection)
+    // Must have same length as outcome_amounts
+    min_asset_outs: vector<u64>,
+}
+
+// === Constructor Functions ===
+
+/// Create conditional raise configuration
+public fun new_conditional_raise_config(
+    target_outcome: u8,
+    mint_amount: u64,
+    min_stable_out: u64,
+): ConditionalRaiseConfig {
+    assert!(mint_amount > 0, EZeroAmount);
+    assert!(min_stable_out > 0, EZeroAmount);
+
+    ConditionalRaiseConfig {
+        target_outcome,
+        mint_amount,
+        min_stable_out,
+    }
+}
+
+/// Create conditional buyback configuration with per-outcome amounts
+public fun new_conditional_buyback_config(
+    outcome_amounts: vector<u64>,
+    min_asset_outs: vector<u64>,
+): ConditionalBuybackConfig {
+    assert!(outcome_amounts.length() > 0, EZeroAmount);
+    assert!(outcome_amounts.length() == min_asset_outs.length(), EAmountMismatch);
+
+    // Validate at least one outcome has non-zero buyback
+    let mut has_buyback = false;
+    let mut i = 0;
+    while (i < outcome_amounts.length()) {
+        if (*outcome_amounts.borrow(i) > 0) {
+            has_buyback = true;
+        };
+        i = i + 1;
+    };
+    assert!(has_buyback, EZeroAmount);
+
+    ConditionalBuybackConfig {
+        outcome_amounts,
+        min_asset_outs,
+    }
+}
+
+// === Getter Functions ===
+
+// ConditionalRaiseConfig getters
+public fun raise_target_outcome(config: &ConditionalRaiseConfig): u8 {
+    config.target_outcome
+}
+
+public fun raise_mint_amount(config: &ConditionalRaiseConfig): u64 {
+    config.mint_amount
+}
+
+public fun raise_min_stable_out(config: &ConditionalRaiseConfig): u64 {
+    config.min_stable_out
+}
+
+// ConditionalBuybackConfig getters
+public fun buyback_outcome_amounts(config: &ConditionalBuybackConfig): &vector<u64> {
+    &config.outcome_amounts
+}
+
+public fun buyback_min_asset_outs(config: &ConditionalBuybackConfig): &vector<u64> {
+    &config.min_asset_outs
+}
+
+public fun buyback_total_withdraw_amount(config: &ConditionalBuybackConfig): u64 {
+    let mut total = 0;
+    let mut i = 0;
+    while (i < config.outcome_amounts.length()) {
+        total = total + *config.outcome_amounts.borrow(i);
+        i = i + 1;
+    };
+    total
+}
+
+// === Strategy 1: Conditional Raise ===
+
+/// Execute conditional raise strategy
+///
+/// Flow:
+/// 1. Deposit minted asset coins to escrow → get conditional asset
+/// 2. Swap conditional asset → conditional stable in target outcome's AMM
+/// 3. Burn conditional stable and withdraw spot stable
+/// 4. Return spot stable (caller deposits back to DAO vault)
+///
+/// ## Parameters
+/// - `proposal`: The proposal being initialized
+/// - `escrow`: Token escrow for conditional token minting/burning
+/// - `minted_coins`: Asset coins obtained from mint intent execution
+/// - `config`: Strategy configuration (target outcome, amounts, slippage)
+/// - `outcome_count`: Total number of outcomes (for validation)
+/// - `clock`: For timestamp-based operations
+/// - `ctx`: Transaction context
+///
+/// ## Returns
+/// - Spot stable coins (to be deposited to DAO vault by caller)
+public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    minted_coins: Coin<AssetType>,
+    config: ConditionalRaiseConfig,
+    outcome_count: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    // Validate configuration
+    assert!((config.target_outcome as u64) < outcome_count, EInvalidOutcome);
+    assert!(config.target_outcome >= 1, EInvalidOutcome); // Outcome 0 is REJECT
+    assert!(minted_coins.value() == config.mint_amount, EAmountMismatch);
+
+    // Step 1: Deposit spot asset to escrow → mint conditional asset for target outcome
+    let conditional_asset = coin_escrow::deposit_asset_and_mint_conditional<AssetType, StableType, AssetConditionalCoin>(
+        escrow,
+        (config.target_outcome as u64),
+        minted_coins,
+        ctx,
+    );
+
+    // Step 2: Swap conditional asset → conditional stable in AMM
+    // This uses swap.move which:
+    // - Burns conditional asset coins
+    // - Updates AMM reserves (sell asset, making it cheaper)
+    // - Mints conditional stable coins (output)
+    let conditional_stable = swap::swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+        proposal,
+        escrow,
+        (config.target_outcome as u64),
+        conditional_asset,
+        config.min_stable_out,
+        clock,
+        ctx,
+    );
+
+    // Validate slippage protection
+    let conditional_amount = conditional_stable.value();
+    assert!(conditional_amount >= config.min_stable_out, EExcessiveSlippage);
+
+    // Step 3: Burn conditional stable coins
+    coin_escrow::burn_conditional_stable<AssetType, StableType, StableConditionalCoin>(
+        escrow,
+        (config.target_outcome as u64),
+        conditional_stable,
+    );
+
+    // Step 4: Withdraw equivalent spot stable from escrow
+    let spot_stable = coin_escrow::withdraw_stable_balance<AssetType, StableType>(
+        escrow,
+        conditional_amount,
+        ctx,
+    );
+
+    // Return spot stable to caller (will be deposited to DAO vault)
+    spot_stable
+}
+
+// === Strategy 2: Conditional Buyback ===
+
+/// Execute conditional buyback strategy across multiple outcomes
+///
+/// Flow (per outcome with non-zero buyback):
+/// 1. Split withdrawn stable for this outcome
+/// 2. Deposit spot stable → get conditional stable
+/// 3. Swap conditional stable → conditional asset in AMM
+/// 4. Burn conditional asset and withdraw spot asset
+/// 5. Collect all spot assets and return
+///
+/// ## Parameters
+/// - `proposal`: The proposal being initialized
+/// - `escrow`: Token escrow for conditional token minting/burning
+/// - `withdrawn_stable`: Stable coins obtained from vault withdraw intent
+/// - `config`: Strategy configuration (per-outcome amounts and slippage)
+/// - `outcome_count`: Total number of outcomes (for validation)
+/// - `clock`: For timestamp-based operations
+/// - `ctx`: Transaction context
+///
+/// ## Returns
+/// - Vector of spot asset coins (one per outcome, some may be zero-value)
+/// - Caller can burn these or deposit to vault
+public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    withdrawn_stable: Coin<StableType>,
+    config: ConditionalBuybackConfig,
+    outcome_count: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): vector<Coin<AssetType>> {
+    // Validate configuration
+    assert!(config.outcome_amounts.length() == outcome_count, EInvalidConfig);
+
+    let total_amount = buyback_total_withdraw_amount(&config);
+    assert!(withdrawn_stable.value() == total_amount, EAmountMismatch);
+
+    // Convert withdrawn stable to balance for splitting
+    let mut stable_balance = withdrawn_stable.into_balance();
+    let mut asset_coins = vector::empty<Coin<AssetType>>();
+
+    // Process each outcome
+    let mut outcome_idx = 0;
+    while (outcome_idx < config.outcome_amounts.length()) {
+        let outcome_amount = *config.outcome_amounts.borrow(outcome_idx);
+        let min_asset_out = *config.min_asset_outs.borrow(outcome_idx);
+
+        if (outcome_amount > 0) {
+            // Step 1: Split stable for this outcome
+            let outcome_stable_balance = stable_balance.split(outcome_amount);
+            let outcome_stable_coin = coin::from_balance(outcome_stable_balance, ctx);
+
+            // Step 2: Deposit spot stable → mint conditional stable for this outcome
+            let conditional_stable = coin_escrow::deposit_stable_and_mint_conditional<AssetType, StableType, StableConditionalCoin>(
+                escrow,
+                outcome_idx,
+                outcome_stable_coin,
+                ctx,
+            );
+
+            // Step 3: Swap conditional stable → conditional asset in AMM
+            let conditional_asset = swap::swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+                proposal,
+                escrow,
+                outcome_idx,
+                conditional_stable,
+                min_asset_out,
+                clock,
+                ctx,
+            );
+
+            // Validate slippage protection
+            let conditional_amount = conditional_asset.value();
+            assert!(conditional_amount >= min_asset_out, EExcessiveSlippage);
+
+            // Step 4: Burn conditional asset coins
+            coin_escrow::burn_conditional_asset<AssetType, StableType, AssetConditionalCoin>(
+                escrow,
+                outcome_idx,
+                conditional_asset,
+            );
+
+            // Step 5: Withdraw equivalent spot asset from escrow
+            let spot_asset = coin_escrow::withdraw_asset_balance<AssetType, StableType>(
+                escrow,
+                conditional_amount,
+                ctx,
+            );
+
+            asset_coins.push_back(spot_asset);
+        } else {
+            // No buyback for this outcome, push zero coin
+            asset_coins.push_back(coin::zero<AssetType>(ctx));
+        };
+
+        outcome_idx = outcome_idx + 1;
+    };
+
+    // Ensure all stable was used
+    assert!(stable_balance.value() == 0, EAmountMismatch);
+    stable_balance.destroy_zero();
+
+    // Return asset coins per outcome (caller can burn or deposit to vault)
+    asset_coins
+}
+/// Helper functions for building market initialization Intents
+///
+/// These helpers calculate Intent parameters for conditional raise and buyback strategies.
+/// The actual Intent execution is done via PTB composition using Account Protocol functions.
+///
+/// ## Review Period Enforcement
+///
+/// When creating a proposal with market init, use `market_op_review_period_ms` from DaoConfig
+/// as the review_period parameter (NOT the regular review_period_ms). This allows DAOs to set
+/// a shorter (or zero) review period for market initialization operations.
+///
+/// The enforcement happens automatically in the proposal state machine - it uses whatever
+/// review_period was passed during proposal creation.
+module futarchy_markets::market_init_helpers;
+
+use futarchy_markets::market_init_strategies::{
+    ConditionalRaiseConfig,
+    ConditionalBuybackConfig,
+    Self as strategies
+};
+
+// === Helper Functions for Conditional Raise ===
+
+/// Get the mint amount needed for a conditional raise strategy
+///
+/// This is the amount that should be minted via a mint Intent.
+public fun raise_mint_amount(config: &ConditionalRaiseConfig): u64 {
+    strategies::raise_mint_amount(config)
+}
+
+/// Get the target outcome for a conditional raise
+///
+/// This is the outcome index where the mint+swap will execute.
+public fun raise_target_outcome(config: &ConditionalRaiseConfig): u8 {
+    strategies::raise_target_outcome(config)
+}
+
+/// Get the minimum stable output for slippage protection
+public fun raise_min_stable_out(config: &ConditionalRaiseConfig): u64 {
+    strategies::raise_min_stable_out(config)
+}
+
+// === Helper Functions for Conditional Buyback ===
+
+/// Get the total withdraw amount needed for a conditional buyback strategy
+///
+/// This is the amount that should be withdrawn from vault via a withdraw Intent.
+/// It's the sum of all per-outcome buyback amounts.
+public fun buyback_total_withdraw_amount(config: &ConditionalBuybackConfig): u64 {
+    strategies::buyback_total_withdraw_amount(config)
+}
+
+/// Get the per-outcome buyback amounts
+///
+/// Returns a reference to the vector of amounts to spend in each outcome's AMM.
+public fun buyback_outcome_amounts(config: &ConditionalBuybackConfig): &vector<u64> {
+    strategies::buyback_outcome_amounts(config)
+}
+
+/// Get the per-outcome minimum asset outputs for slippage protection
+public fun buyback_min_asset_outs(config: &ConditionalBuybackConfig): &vector<u64> {
+    strategies::buyback_min_asset_outs(config)
+}
+
+// === Config Construction Helpers ===
+
+/// Create a conditional raise config with validation
+///
+/// ## Parameters
+/// - `target_outcome`: Which outcome AMM to trade in (usually 1 for YES)
+/// - `mint_amount`: Amount of asset tokens to mint
+/// - `min_stable_out`: Minimum STABLE to receive (slippage protection)
+public fun new_raise_config(
+    target_outcome: u8,
+    mint_amount: u64,
+    min_stable_out: u64,
+): ConditionalRaiseConfig {
+    strategies::new_conditional_raise_config(
+        target_outcome,
+        mint_amount,
+        min_stable_out,
+    )
+}
+
+/// Create a conditional buyback config with per-outcome amounts
+///
+/// ## Parameters
+/// - `outcome_amounts`: Vector of STABLE amounts to spend per outcome
+///   Example: [0, 1000, 500] for 3 outcomes
+/// - `min_asset_outs`: Vector of minimum asset outputs per outcome (slippage)
+public fun new_buyback_config(
+    outcome_amounts: vector<u64>,
+    min_asset_outs: vector<u64>,
+): ConditionalBuybackConfig {
+    strategies::new_conditional_buyback_config(
+        outcome_amounts,
+        min_asset_outs,
+    )
+}
+
+// === Validation Helpers ===
+
+/// Validate that a raise config is compatible with outcome count
+///
+/// Returns true if the target outcome is valid for the given outcome count.
+public fun validate_raise_config(config: &ConditionalRaiseConfig, outcome_count: u64): bool {
+    let target = (strategies::raise_target_outcome(config) as u64);
+    target < outcome_count && target >= 1  // Outcome 0 is REJECT
+}
+
+/// Validate that a buyback config is compatible with outcome count
+///
+/// Returns true if the config has the correct number of outcomes.
+public fun validate_buyback_config(config: &ConditionalBuybackConfig, outcome_count: u64): bool {
+    let amounts = strategies::buyback_outcome_amounts(config);
+    amounts.length() == outcome_count
+}
 module futarchy_markets::swap;
 
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
@@ -22156,7 +23256,7 @@ public fun add_outcome<AssetType, StableType>(
 /// for later refund if the outcome wins.
 public entry fun add_outcome_with_fee<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
-    fee_payment: Coin<sui::sui::SUI>,
+    fee_payment: Coin<StableType>,
     message: String,
     detail: String,
     asset_amount: u64,
@@ -37256,7 +38356,871 @@ public fun destroy_create_payment_action<CoinType>(action: CreatePaymentAction<C
 
 public fun destroy_cancel_payment_action(action: CancelPaymentAction) {
     let CancelPaymentAction { payment_id: _ } = action;
-}/// Decoder for stream/payment actions in futarchy DAOs
+}/// Dividend distribution actions for Futarchy DAOs
+/// Uses pre-built DividendTree for massive scale (100M recipients)
+/// Tree is built off-chain over multiple transactions, then passed to proposal
+module futarchy_payments::dividend_actions;
+
+// === Imports ===
+use std::string::{Self, String};
+use sui::{
+    clock::{Self, Clock},
+    coin::{Self, Coin},
+    balance::Balance,
+    event,
+    object::{Self, ID},
+    transfer,
+    tx_context::TxContext,
+    bcs::{Self, BCS},
+    table,
+};
+use futarchy_core::{
+    action_validation,
+    action_types,
+    version,
+    futarchy_config::FutarchyConfig,
+};
+use account_protocol::{
+    bcs_validation,
+    account::{Self, Account, Auth},
+    executable::{Self, Executable},
+    version_witness::VersionWitness,
+    intents,
+};
+use account_actions::vault::{Self, Vault};
+use futarchy_payments::dividend_tree::{Self, DividendTree};
+
+// === Errors ===
+const EDividendNotFound: u64 = 1;
+const ETreeNotFinalized: u64 = 2;
+const EAllRecipientsProcessed: u64 = 3;
+
+const MAX_BATCH_SIZE: u64 = 100;
+
+// === Storage Keys ===
+
+/// Key for storing dividend metadata in Account
+public struct DividendStorageKey has copy, drop, store {}
+
+/// Key for storing the dividend tree object
+public struct DividendTreeKey has copy, drop, store {
+    dividend_id: String,
+}
+
+/// Key for storing dividend progress tracker
+public struct DividendProgressKey has copy, drop, store {
+    dividend_id: String,
+}
+
+/// Key for storing dividend coin pool
+public struct DividendPoolKey has copy, drop, store {
+    dividend_id: String,
+}
+
+// === Structs ===
+
+/// Storage for dividend metadata
+public struct DividendStorage has store {
+    next_id: u64,
+}
+
+/// Tracks cranking progress for a dividend
+public struct DividendProgress has store {
+    dividend_id: String,
+    tree_id: ID,
+    total_recipients: u64,
+    total_amount: u64,
+    sent_count: u64,
+    total_sent: u64,
+    next_bucket_to_process: u64,
+    next_index_in_bucket: u64,
+    created_at: u64,
+}
+
+// === Action Structs ===
+
+/// Action to create a dividend using a pre-built tree
+/// The tree must be built off-chain first using dividend_tree module
+public struct CreateDividendAction<phantom CoinType> has store, drop, copy {
+    tree_id: ID,  // Pre-built DividendTree object
+}
+
+// === Events ===
+
+public struct DividendCreated has copy, drop {
+    account_id: ID,
+    dividend_id: String,
+    tree_id: ID,
+    total_amount: u64,
+    total_recipients: u64,
+    num_buckets: u64,
+    created_at: u64,
+}
+
+public struct DividendSent has copy, drop {
+    account_id: ID,
+    dividend_id: String,
+    recipient: address,
+    amount: u64,
+    timestamp: u64,
+}
+
+public struct DividendCranked has copy, drop {
+    account_id: ID,
+    dividend_id: String,
+    recipients_processed: u64,
+    total_distributed: u64,
+    timestamp: u64,
+}
+
+// === Constructor Functions ===
+
+/// Create a new CreateDividendAction with pre-built tree
+public fun new_create_dividend_action<CoinType>(
+    tree_id: ID,
+): CreateDividendAction<CoinType> {
+    CreateDividendAction {
+        tree_id,
+    }
+}
+
+// === Public Functions ===
+
+/// Execute create dividend action
+/// Takes ownership of the pre-built tree and sets up cranking
+public fun do_create_dividend<Outcome: store, CoinType: drop, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    tree: DividendTree,  // Receive the pre-built tree
+    _version_witness: VersionWitness,
+    witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): String {
+    // Get spec and validate type
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreateDividend>(spec);
+
+    // Deserialize action data
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let tree_id = bcs::peel_address(&mut reader).to_id();
+
+    let action = CreateDividendAction<CoinType> { tree_id };
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Validate tree is finalized
+    assert!(dividend_tree::is_finalized(&tree), ETreeNotFinalized);
+
+    // Validate tree ID matches
+    assert!(dividend_tree::tree_id(&tree) == action.tree_id, 0);
+
+    // Get tree info
+    let total_recipients = dividend_tree::total_recipients(&tree);
+    let total_amount = dividend_tree::total_amount(&tree);
+    let num_buckets = dividend_tree::num_buckets(&tree);
+
+    // Initialize storage if needed
+    if (!account::has_managed_data(account, DividendStorageKey {})) {
+        account::add_managed_data(
+            account,
+            DividendStorageKey {},
+            DividendStorage { next_id: 0 },
+            version::current()
+        );
+    };
+
+    // Generate dividend ID
+    let storage: &mut DividendStorage = account::borrow_managed_data_mut(
+        account,
+        DividendStorageKey {},
+        version::current()
+    );
+    let dividend_id = generate_dividend_id(storage.next_id, clock.timestamp_ms());
+    storage.next_id = storage.next_id + 1;
+
+    // Create progress tracker
+    let progress = DividendProgress {
+        dividend_id,
+        tree_id: dividend_tree::tree_id(&tree),
+        total_recipients,
+        total_amount,
+        sent_count: 0,
+        total_sent: 0,
+        next_bucket_to_process: 0,
+        next_index_in_bucket: 0,
+        created_at: clock.timestamp_ms(),
+    };
+
+    // Store progress
+    let progress_key = DividendProgressKey { dividend_id };
+    account::add_managed_data(account, progress_key, progress, version::current());
+
+    // Store tree as managed data
+    account::add_managed_data(
+        account,
+        DividendTreeKey { dividend_id },
+        tree,
+        version::current()
+    );
+
+    // Withdraw funds from treasury
+    let auth = account::new_auth(account, version::current(), witness);
+    let dividend_coin = vault::withdraw<FutarchyConfig, CoinType>(
+        auth,
+        account,
+        string::utf8(b"treasury"),
+        total_amount,
+        ctx
+    );
+
+    // Store in dividend pool
+    let pool_key = DividendPoolKey { dividend_id };
+    account::add_managed_data(
+        account,
+        pool_key,
+        coin::into_balance(dividend_coin),
+        version::current()
+    );
+
+    // Emit event
+    event::emit(DividendCreated {
+        account_id: object::id(account),
+        dividend_id,
+        tree_id: action.tree_id,
+        total_amount,
+        total_recipients,
+        num_buckets,
+        created_at: clock.timestamp_ms(),
+    });
+
+    executable::increment_action_idx(executable);
+
+    dividend_id
+}
+
+/// Anyone can call this to crank out dividends to recipients
+/// Processes up to max_recipients in a single transaction
+public fun crank_dividend<CoinType: drop>(
+    account: &mut Account<FutarchyConfig>,
+    dividend_id: String,
+    max_recipients: u64,
+    ctx: &mut TxContext,
+) {
+    // Step 1: Collect recipients to process (read-only phase)
+    let (current_bucket, start_index, recipients_to_send) = {
+        let progress_key = DividendProgressKey { dividend_id };
+        let progress: &DividendProgress = account::borrow_managed_data(
+            account,
+            progress_key,
+            version::current()
+        );
+
+        // Check if all processed
+        assert!(progress.sent_count < progress.total_recipients, EAllRecipientsProcessed);
+
+        let current_bucket = progress.next_bucket_to_process;
+        let start_index = progress.next_index_in_bucket;
+
+        // Get tree and bucket
+        let tree_key = DividendTreeKey { dividend_id };
+        let tree: &DividendTree = account::borrow_managed_data(
+            account,
+            tree_key,
+            version::current()
+        );
+
+        let bucket = dividend_tree::get_bucket(tree, current_bucket);
+        let addresses = dividend_tree::bucket_addresses(bucket);
+        let recipients_table = dividend_tree::bucket_recipients(bucket);
+
+        // Collect recipients
+        let batch_size = if (max_recipients > MAX_BATCH_SIZE) { MAX_BATCH_SIZE } else { max_recipients };
+        let mut to_send = vector::empty<(address, u64)>();
+        let mut idx = start_index;
+
+        while (idx < addresses.length() && to_send.length() < batch_size) {
+            let addr = *addresses.borrow(idx);
+            let amount_ptr = table::borrow(recipients_table, addr);
+            let amount = *amount_ptr;
+
+            if (amount > 0) {
+                to_send.push_back((addr, amount));
+            };
+
+            idx = idx + 1;
+        };
+
+        (current_bucket, start_index, to_send)
+    }; // Borrow ends here
+
+    // Step 2: Process payments
+    let mut processed = 0u64;
+    let mut total_distributed = 0u64;
+    let timestamp = tx_context::epoch(ctx);
+
+    if (recipients_to_send.length() > 0) {
+        // Get pool for transfers
+        let pool_key = DividendPoolKey { dividend_id };
+        let pool: &mut Balance<CoinType> = account::borrow_managed_data_mut(
+            account,
+            pool_key,
+            version::current()
+        );
+
+        // Send to each recipient
+        let mut i = 0;
+        while (i < recipients_to_send.length()) {
+            let (addr, amount) = *recipients_to_send.borrow(i);
+
+            let payment = pool.split(amount);
+            transfer::public_transfer(coin::from_balance(payment, ctx), addr);
+
+            event::emit(DividendSent {
+                account_id: object::id(account),
+                dividend_id,
+                recipient: addr,
+                amount,
+                timestamp,
+            });
+
+            processed = processed + 1;
+            total_distributed = total_distributed + amount;
+            i = i + 1;
+        };
+    };
+
+    // Step 3: Update tracking
+    if (processed > 0) {
+        // Mark as sent in tree
+        let tree_key = DividendTreeKey { dividend_id };
+        let tree: &mut DividendTree = account::borrow_managed_data_mut(
+            account,
+            tree_key,
+            version::current()
+        );
+
+        let bucket = dividend_tree::get_bucket_mut(tree, current_bucket);
+        let recipients_table = dividend_tree::bucket_recipients_mut(bucket);
+
+        let mut idx = start_index;
+        let mut marked = 0u64;
+        while (marked < processed) {
+            let addr = *dividend_tree::bucket_addresses(bucket).borrow(idx);
+            let amount_ptr = table::borrow_mut(recipients_table, addr);
+            if (*amount_ptr > 0) {
+                *amount_ptr = 0;  // Mark as sent
+                marked = marked + 1;
+            };
+            idx = idx + 1;
+        };
+
+        // Update progress
+        let progress_key = DividendProgressKey { dividend_id };
+        let progress: &mut DividendProgress = account::borrow_managed_data_mut(
+            account,
+            progress_key,
+            version::current()
+        );
+
+        progress.sent_count = progress.sent_count + processed;
+        progress.total_sent = progress.total_sent + total_distributed;
+        progress.next_index_in_bucket = idx;
+
+        // Move to next bucket if current is done
+        let bucket_size = dividend_tree::bucket_addresses(bucket).length();
+        if (idx >= bucket_size) {
+            progress.next_bucket_to_process = progress.next_bucket_to_process + 1;
+            progress.next_index_in_bucket = 0;
+        };
+    };
+
+    // Emit batch event
+    event::emit(DividendCranked {
+        account_id: object::id(account),
+        dividend_id,
+        recipients_processed: processed,
+        total_distributed,
+        timestamp,
+    });
+}
+
+// === Helper Functions ===
+
+/// Generate unique dividend ID
+fun generate_dividend_id(next_id: u64, timestamp: u64): String {
+    let mut id = b"DIV_".to_string();
+    id.append(next_id.to_string());
+    id.append(b"_T".to_string());
+    id.append(timestamp.to_string());
+    id
+}
+
+// === Cleanup Functions ===
+
+public fun delete_create_dividend<CoinType>(expired: &mut account_protocol::intents::Expired) {
+    let spec = account_protocol::intents::remove_action_spec(expired);
+    let _ = spec;
+}
+
+// === Query Functions ===
+
+/// Get dividend info
+public fun get_dividend_info(
+    account: &Account<FutarchyConfig>,
+    dividend_id: String,
+): (u64, u64, u64, u64) {
+    let progress_key = DividendProgressKey { dividend_id };
+    let progress: &DividendProgress = account::borrow_managed_data(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    (
+        progress.total_amount,
+        progress.total_sent,
+        progress.total_recipients,
+        progress.sent_count,
+    )
+}
+
+/// Check if recipient has been sent their dividend
+public fun has_been_sent(
+    account: &Account<FutarchyConfig>,
+    dividend_id: String,
+    recipient: address,
+): bool {
+    let tree_key = DividendTreeKey { dividend_id };
+
+    if (!account::has_managed_data(account, tree_key)) {
+        return false
+    };
+
+    let tree: &DividendTree = account::borrow_managed_data(
+        account,
+        tree_key,
+        version::current()
+    );
+
+    let num_buckets = dividend_tree::num_buckets(tree);
+
+    // Search through buckets
+    let mut bucket_id = 0;
+    while (bucket_id < num_buckets) {
+        if (dividend_tree::has_bucket(tree, bucket_id)) {
+            let bucket = dividend_tree::get_bucket(tree, bucket_id);
+            let amount = dividend_tree::get_recipient_amount(bucket, recipient);
+            if (amount == 0) {
+                return true  // 0 means sent
+            };
+        };
+        bucket_id = bucket_id + 1;
+    };
+
+    false
+}
+
+/// Get recipient allocation amount (0 if already sent)
+public fun get_allocation_amount(
+    account: &Account<FutarchyConfig>,
+    dividend_id: String,
+    recipient: address,
+): u64 {
+    let tree_key = DividendTreeKey { dividend_id };
+    let tree: &DividendTree = account::borrow_managed_data(
+        account,
+        tree_key,
+        version::current()
+    );
+
+    let num_buckets = dividend_tree::num_buckets(tree);
+
+    // Search through buckets
+    let mut bucket_id = 0;
+    while (bucket_id < num_buckets) {
+        if (dividend_tree::has_bucket(tree, bucket_id)) {
+            let bucket = dividend_tree::get_bucket(tree, bucket_id);
+            let amount = dividend_tree::get_recipient_amount(bucket, recipient);
+            if (amount > 0) {
+                return amount
+            };
+        };
+        bucket_id = bucket_id + 1;
+    };
+
+    0
+}
+/// Dividend tree construction module
+/// Allows building dividend distributions over multiple transactions
+/// Supports up to 100M recipients using dynamic field tree structure
+module futarchy_payments::dividend_tree;
+
+use std::{
+    string::String,
+    type_name::{Self, TypeName},
+};
+use sui::{
+    object::{Self, UID, ID},
+    dynamic_field,
+    table::{Self, Table},
+    tx_context::TxContext,
+};
+
+// === Constants ===
+const MAX_RECIPIENTS_PER_BUCKET: u64 = 5000;  // Safe limit for 250KB object size
+
+// === Errors ===
+const EBucketAlreadyExists: u64 = 1;
+const EBucketFull: u64 = 2;
+const ETreeFinalized: u64 = 3;
+const ETooManyRecipients: u64 = 4;
+const EZeroAmount: u64 = 5;
+const ETreeNotFinalized: u64 = 6;
+const EMismatchedLength: u64 = 7;
+
+// === Structs ===
+
+/// Key for accessing buckets stored as dynamic fields
+public struct BucketKey has copy, drop, store {
+    bucket_id: u64,
+}
+
+/// The main dividend tree object
+/// Built progressively over multiple transactions, then finalized
+public struct DividendTree has key, store {
+    id: UID,
+    coin_type: TypeName,
+    total_recipients: u64,
+    total_amount: u64,
+    num_buckets: u64,
+    description: String,
+    finalized: bool,
+    // Buckets stored as dynamic fields on id
+}
+
+/// A bucket containing up to 5000 recipients
+/// Stored as a dynamic field on DividendTree
+public struct RecipientBucket has store {
+    recipients: Table<address, u64>,  // address => amount
+    addresses: vector<address>,        // For iteration (max 5000)
+    count: u64,
+}
+
+// === Public Functions ===
+
+/// Create a new dividend tree
+/// This is step 1 - create the tree object
+public fun create_tree<CoinType>(
+    description: String,
+    ctx: &mut TxContext,
+): DividendTree {
+    DividendTree {
+        id: object::new(ctx),
+        coin_type: type_name::get<CoinType>(),
+        total_recipients: 0,
+        total_amount: 0,
+        num_buckets: 0,
+        description,
+        finalized: false,
+    }
+}
+
+/// Add a bucket of recipients to the tree
+/// Can be called multiple times in separate transactions
+/// Recipients and amounts must have same length
+/// Each amount must be > 0
+public fun add_bucket(
+    tree: &mut DividendTree,
+    bucket_id: u64,
+    recipients: vector<address>,
+    amounts: vector<u64>,
+    ctx: &mut TxContext,
+) {
+    assert!(!tree.finalized, ETreeFinalized);
+    assert!(recipients.length() == amounts.length(), EMismatchedLength);
+    assert!(recipients.length() <= MAX_RECIPIENTS_PER_BUCKET, ETooManyRecipients);
+
+    // Check bucket doesn't already exist
+    let key = BucketKey { bucket_id };
+    assert!(!dynamic_field::exists_(&tree.id, key), EBucketAlreadyExists);
+
+    // Create bucket
+    let mut bucket = RecipientBucket {
+        recipients: table::new(ctx),
+        addresses: vector::empty(),
+        count: 0,
+    };
+
+    // Validate and add recipients
+    let mut i = 0;
+    let mut bucket_total = 0u64;
+    while (i < recipients.length()) {
+        let addr = *recipients.borrow(i);
+        let amount = *amounts.borrow(i);
+
+        assert!(amount > 0, EZeroAmount);
+
+        // Handle duplicates by accumulating
+        if (!table::contains(&bucket.recipients, addr)) {
+            table::add(&mut bucket.recipients, addr, amount);
+            bucket.addresses.push_back(addr);
+            bucket.count = bucket.count + 1;
+        } else {
+            let existing = table::borrow_mut(&mut bucket.recipients, addr);
+            *existing = *existing + amount;
+        };
+
+        bucket_total = bucket_total + amount;
+        i = i + 1;
+    };
+
+    // Update tree totals
+    tree.total_recipients = tree.total_recipients + bucket.count;
+    tree.total_amount = tree.total_amount + bucket_total;
+
+    // Store bucket as dynamic field
+    dynamic_field::add(&mut tree.id, key, bucket);
+    tree.num_buckets = tree.num_buckets + 1;
+}
+
+/// Finalize the tree and make it ready for use in a proposal
+/// After finalization, no more buckets can be added
+/// Returns the tree (now ready to be used)
+public fun finalize_tree(
+    tree: &mut DividendTree,
+) {
+    tree.finalized = true;
+}
+
+/// Transfer ownership of tree to another address (for passing to intent)
+public fun transfer_tree(tree: DividendTree, recipient: address) {
+    transfer::public_transfer(tree, recipient);
+}
+
+/// Share the tree object (alternative to transfer)
+public fun share_tree(tree: DividendTree) {
+    transfer::public_share_object(tree);
+}
+
+// === Query Functions ===
+
+/// Get tree info
+public fun tree_info(tree: &DividendTree): (u64, u64, u64, bool) {
+    (
+        tree.total_recipients,
+        tree.total_amount,
+        tree.num_buckets,
+        tree.finalized,
+    )
+}
+
+/// Check if tree is finalized
+public fun is_finalized(tree: &DividendTree): bool {
+    tree.finalized
+}
+
+/// Get bucket info
+public fun get_bucket(tree: &DividendTree, bucket_id: u64): &RecipientBucket {
+    let key = BucketKey { bucket_id };
+    dynamic_field::borrow(&tree.id, key)
+}
+
+/// Get bucket mutably (for internal use)
+public(package) fun get_bucket_mut(tree: &mut DividendTree, bucket_id: u64): &mut RecipientBucket {
+    let key = BucketKey { bucket_id };
+    dynamic_field::borrow_mut(&mut tree.id, key)
+}
+
+/// Check if bucket exists
+public fun has_bucket(tree: &DividendTree, bucket_id: u64): bool {
+    let key = BucketKey { bucket_id };
+    dynamic_field::exists_(&tree.id, key)
+}
+
+/// Get recipient allocation from a specific bucket
+public fun get_recipient_amount(bucket: &RecipientBucket, recipient: address): u64 {
+    if (table::contains(&bucket.recipients, recipient)) {
+        *table::borrow(&bucket.recipients, recipient)
+    } else {
+        0
+    }
+}
+
+/// Get bucket recipient count
+public fun bucket_count(bucket: &RecipientBucket): u64 {
+    bucket.count
+}
+
+/// Get bucket addresses (for iteration)
+public fun bucket_addresses(bucket: &RecipientBucket): &vector<address> {
+    &bucket.addresses
+}
+
+/// Get bucket recipients table
+public fun bucket_recipients(bucket: &RecipientBucket): &Table<address, u64> {
+    &bucket.recipients
+}
+
+/// Mutable access to bucket recipients (package only)
+public(package) fun bucket_recipients_mut(bucket: &mut RecipientBucket): &mut Table<address, u64> {
+    &mut bucket.recipients
+}
+
+// === Getters for DividendTree fields ===
+
+public fun total_amount(tree: &DividendTree): u64 { tree.total_amount }
+public fun total_recipients(tree: &DividendTree): u64 { tree.total_recipients }
+public fun num_buckets(tree: &DividendTree): u64 { tree.num_buckets }
+public fun coin_type(tree: &DividendTree): TypeName { tree.coin_type }
+public fun description(tree: &DividendTree): String { tree.description }
+public fun tree_id(tree: &DividendTree): ID { object::id(tree) }
+
+// === Helper function for testing ===
+
+#[test_only]
+public fun destroy_tree_for_testing(tree: DividendTree) {
+    let DividendTree {
+        id,
+        coin_type: _,
+        total_recipients: _,
+        total_amount: _,
+        num_buckets,
+        description: _,
+        finalized: _,
+    } = tree;
+
+    // Clean up buckets
+    let mut i = 0;
+    while (i < num_buckets) {
+        let key = BucketKey { bucket_id: i };
+        if (dynamic_field::exists_(&id, key)) {
+            let bucket: RecipientBucket = dynamic_field::remove(&mut id, key);
+            let RecipientBucket { recipients, addresses: _, count: _ } = bucket;
+            table::drop(recipients);
+        };
+        i = i + 1;
+    };
+
+    object::delete(id);
+}
+/// User-facing API for creating dividend-related intents
+module futarchy_payments::dividend_intents;
+
+// === Imports ===
+use std::bcs;
+use sui::{object::ID, clock::Clock};
+use account_protocol::intents::Intent;
+use futarchy_payments::dividend_actions;
+use futarchy_core::action_types;
+
+// === Use Fun Aliases ===
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
+
+// === Witness ===
+
+/// Witness type for dividend intents
+public struct DividendIntent has drop {}
+
+/// Create a DividendIntent witness
+public fun witness(): DividendIntent {
+    DividendIntent {}
+}
+
+// === Helper Functions ===
+
+/// Add a create dividend action to an existing intent
+/// Requires a pre-built DividendTree (built off-chain using dividend_tree module)
+public fun create_dividend_in_intent<Outcome: store, CoinType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    tree_id: ID,
+    intent_witness: IW,
+) {
+    let action = dividend_actions::new_create_dividend_action<CoinType>(tree_id);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::create_dividend(), action_data, intent_witness);
+}
+
+/// Create a unique key for a dividend intent
+public fun create_dividend_key(
+    operation: std::string::String,
+    clock: &Clock,
+): std::string::String {
+    let mut key = b"dividend_".to_string();
+    key.append(operation);
+    key.append(b"_".to_string());
+    key.append(clock.timestamp_ms().to_string());
+    key
+}
+/// Decoder for dividend actions in futarchy DAOs
+module futarchy_payments::dividend_decoder;
+
+// === Imports ===
+use std::type_name;
+use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs};
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+
+// === Decoder Objects ===
+
+/// Decoder for CreateDividendAction
+public struct CreateDividendActionDecoder has key, store {
+    id: UID,
+}
+
+/// Placeholder for generic registration
+public struct CoinPlaceholder has drop, store {}
+
+// === Decoder Functions ===
+
+/// Decode a CreateDividendAction (tree-based)
+public fun decode_create_dividend_action<CoinType>(
+    _decoder: &CreateDividendActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    // New format: just tree_id
+    let tree_id_bytes = bcs::peel_address(&mut bcs_data);
+    let tree_id = tree_id_bytes.to_id();
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"tree_id".to_string(),
+            tree_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"note".to_string(),
+            b"Pre-built DividendTree object. Query tree for recipient details.".to_string(),
+            b"String".to_string(),
+        ),
+    ]
+}
+
+// === Registration Functions ===
+
+/// Register dividend decoder
+public fun register_decoders(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    register_create_dividend_decoder(registry, ctx);
+}
+
+fun register_create_dividend_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = CreateDividendActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<futarchy_payments::dividend_actions::CreateDividendAction<CoinPlaceholder>>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+/// Decoder for stream/payment actions in futarchy DAOs
 module futarchy_streams::stream_decoder;
 
 // === Imports ===
@@ -41698,6 +43662,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -41721,6 +43687,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -41909,6 +43876,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -41932,6 +43901,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -42135,6 +44105,8 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -42158,6 +44130,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -43500,6 +45473,9 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     max_raise_commitment_hash: Option<vector<u8>>,    // Hash of plaintext for verification
     max_raise_revealed: Option<u64>,                  // Set after decryption
     reveal_deadline_ms: u64,                          // deadline_ms + 7 days grace period
+    /// Admin trust score and review (set by protocol DAO validators)
+    admin_trust_score: Option<u64>,
+    admin_review_text: Option<String>,
 }
 
 /// Stores all parameters needed for DAO creation to keep the Raise object clean.
@@ -44730,6 +46706,8 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         max_raise_commitment_hash,
         max_raise_revealed: option::none(),
         reveal_deadline_ms: deadline + constants::seal_reveal_grace_period_ms(),
+        admin_trust_score: option::none(),
+        admin_review_text: option::none(),
     };
 
     // Emit appropriate event based on whether Seal is used
@@ -44867,6 +46845,28 @@ public fun is_cranking_enabled<RT, SC>(r: &Raise<RT, SC>, addr: address): bool {
     } else {
         false
     }
+}
+
+/// Get admin trust score if set
+public fun admin_trust_score<RT, SC>(r: &Raise<RT, SC>): &Option<u64> {
+    &r.admin_trust_score
+}
+
+/// Get admin review text if set
+public fun admin_review_text<RT, SC>(r: &Raise<RT, SC>): &Option<String> {
+    &r.admin_review_text
+}
+
+// === Admin Functions ===
+
+/// Set admin trust score and review (package-only, called by protocol admin actions)
+public(package) fun set_admin_trust_score<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    trust_score: u64,
+    review_text: String,
+) {
+    raise.admin_trust_score = option::some(trust_score);
+    raise.admin_review_text = option::some(review_text);
 }/// Dissolution-related actions for futarchy DAOs
 /// This module defines action structs and execution logic for DAO dissolution
 module futarchy_lifecycle::dissolution_actions;
@@ -47015,18 +49015,6 @@ public struct DocumentPolicyChanged has copy, drop {
     timestamp_ms: u64,
 }
 
-public struct DocumentRead has copy, drop {
-    dao_id: ID,
-    doc_id: ID,
-    name: String,
-    chunk_count: u64,
-    chunk_blob_ids: vector<vector<u8>>,
-    allow_insert: bool,
-    allow_remove: bool,
-    immutable: bool,
-    timestamp_ms: u64,
-}
-
 /// Complete document snapshot with all chunk details (mirrors OA's AgreementReadWithStatus)
 /// Includes on-chain text for text chunks and blob IDs for Walrus chunks
 /// Provides full reconstruction for indexers and UI clients
@@ -48499,25 +50487,6 @@ public fun get_document_by_name(
     }
 }
 
-/// Check if chunk is active at current time
-public fun is_chunk_active(chunk: &ChunkPointer, current_time_ms: u64): bool {
-    // Check effective_from
-    if (option::is_some(&chunk.effective_from)) {
-        if (current_time_ms < *option::borrow(&chunk.effective_from)) {
-            return false
-        }
-    };
-
-    // Check expires_at
-    if (option::is_some(&chunk.expires_at)) {
-        if (current_time_ms >= *option::borrow(&chunk.expires_at)) {
-            return false
-        }
-    };
-
-    true
-}
-
 /// Check if chunk is immutable at current time
 public fun is_chunk_immutable_now(chunk: &ChunkPointer, current_time_ms: u64): bool {
     // Already permanently immutable
@@ -48674,52 +50643,6 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
     });
 }
 
-/// Read and emit simplified document state (legacy, use read_document_with_status for full details)
-/// Note: File objects are owned by Account. For permissionless reads, use RPC object queries.
-/// This function emits DocumentRead event for indexers to process.
-public fun read_document(doc: &File, clock: &Clock) {
-    let mut blob_ids = vector::empty<vector<u8>>();
-
-    // Traverse linked list starting from head
-    if (option::is_some(&doc.head_chunk)) {
-        let mut current_id = *option::borrow(&doc.head_chunk);
-        let mut steps = 0;
-
-        while (table::contains(&doc.chunks, current_id)) {
-            // Check traversal limit FIRST (early abort on cycles)
-            assert!(steps <= MAX_TRAVERSAL_LIMIT, ETraversalLimitExceeded);
-
-            let chunk = table::borrow(&doc.chunks, current_id);
-
-            // Only get blob ID if chunk uses Walrus storage
-            if (chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)) {
-                let blob_ref = option::borrow(&chunk.walrus_blob);
-                let blob_id = blob::blob_id(blob_ref);
-                vector::push_back(&mut blob_ids, bcs::to_bytes(&blob_id));
-            };
-
-            // Move to next chunk
-            if (option::is_some(&chunk.next_chunk)) {
-                current_id = *option::borrow(&chunk.next_chunk);
-                steps = steps + 1;
-            } else {
-                break
-            };
-        };
-    };
-
-    event::emit(DocumentRead {
-        dao_id: doc.dao_id,
-        doc_id: object::uid_to_inner(&doc.id),
-        name: doc.name,
-        chunk_count: doc.chunk_count,
-        chunk_blob_ids: blob_ids,
-        allow_insert: doc.allow_insert,
-        allow_remove: doc.allow_remove,
-        immutable: doc.immutable,
-        timestamp_ms: clock.timestamp_ms(),
-    });
-}
 
 // === Getters for Document Fields ===
 
@@ -49058,73 +50981,6 @@ public fun apply_batch_to_file(
 
     removed_blobs
 }
-
-// OLD COMMENTED CODE - Kept for reference, will be removed in future
-/*
-public fun apply_batch_actions_OLD_BROKEN(
-    registry: &mut DaoFileRegistry,
-    docs: &mut vector<&mut Document>,  // ← THIS DOESN'T WORK IN MOVE
-    batch: BatchDocAction,
-    clock: &Clock,
-) {
-    let actions = batch.actions;
-    let i = 0;
-    let len = vector::length(&actions);
-
-    while (i < len) {
-        let action = vector::borrow(&actions, i);
-
-        // Find the document for this action
-        let doc_found = false;
-        let j = 0;
-        let docs_len = vector::length(docs);
-
-        while (j < docs_len && !doc_found) {
-            let doc_ref = vector::borrow_mut(docs, j);
-            if (object::uid_to_inner(&doc_ref.id) == action.doc_id) {
-                doc_found = true;
-
-                // Execute the action based on type
-                if (action.action_type == ACTION_ADD_CHUNK) {
-                    // Add text chunk
-                    let text = *option::borrow(&action.text);
-                    let chunk_type = *option::borrow(&action.chunk_type);
-                    let immutable = *option::borrow(&action.immutable);
-
-                    add_chunk_with_text(
-                        doc_ref,
-                        text,
-                        clock,
-                        ctx,
-                    );
-                } else if (action.action_type == ACTION_INSERT_AFTER) {
-                    // Insert after specific chunk
-                    let prev_chunk_id = *option::borrow(&action.prev_chunk_id);
-                    let text = *option::borrow(&action.text);
-
-                    insert_chunk_with_text_after(
-                        doc_ref,
-                        prev_chunk_id,
-                        text,
-                        clock,
-                        ctx,
-                    );
-                } else if (action.action_type == ACTION_SET_CHUNK_IMMUTABLE) {
-                    // Set chunk immutable
-                    let chunk_id = *option::borrow(&action.chunk_id);
-                    set_chunk_immutable(doc_ref, chunk_id, clock);
-                }
-                // Note: We intentionally skip REMOVE_CHUNK and UPDATE_CHUNK in this simplified
-                // batch implementation because they require handling Walrus blobs which is
-                // complex in batch context. For those operations, use individual functions.
-            };
-            j = j + 1;
-        };
-
-        i = i + 1;
-    };
-}
-*/
 
 /// Get batch ID
 public fun get_batch_id(batch: &BatchDocAction): ID {
@@ -52189,6 +54045,21 @@ public fun add_apply_pending_coin_fees_to_intent<Outcome: store, IW: drop>(
     let action = protocol_admin_actions::new_apply_pending_coin_fees(coin_type);
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::apply_pending_coin_fees(), action_data, intent_witness);
+}
+
+// === Launchpad Admin Intent Helpers ===
+
+/// Set launchpad raise trust score and review
+public fun add_set_launchpad_trust_score_to_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
+    intent_witness: IW,
+) {
+    let action = protocol_admin_actions::new_set_launchpad_trust_score(raise_id, trust_score, review_text);
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(action_types::set_launchpad_trust_score(), action_data, intent_witness);
 }/// Governance module for creating and executing intents from approved proposals
 /// This module provides a simplified interface for governance operations
 module futarchy_governance_actions::governance_intents;
@@ -52536,6 +54407,7 @@ use sui::{
 };
 use account_protocol::{
     account::{Self, Account},
+    bcs_validation,
     executable::{Self, Executable},
     intents,
     version_witness::VersionWitness,
@@ -52543,6 +54415,7 @@ use account_protocol::{
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_factory::{
     factory::{Self, Factory, FactoryOwnerCap, ValidatorAdminCap},
+    launchpad::{Self, Raise},
 };
 use futarchy_markets::{
     fee::{Self, FeeManager, FeeAdminCap},
@@ -52580,6 +54453,13 @@ public struct VerificationRejected has copy, drop {
     validator: address,
     timestamp: u64,
 }
+
+public struct LaunchpadTrustScoreSet has copy, drop {
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
+}
+
 const EInvalidFeeAmount: u64 = 3;
 
 // === Action Structs ===
@@ -52661,6 +54541,13 @@ public struct SetDaoScoreAction has store, drop {
     dao_id: ID,
     score: u64,
     reason: String,
+}
+
+/// Set launchpad raise trust score and review (admin-only, uses ValidatorAdminCap)
+public struct SetLaunchpadTrustScoreAction has store, drop {
+    raise_id: ID,
+    trust_score: u64,
+    review_text: String,
 }
 
 /// Update the recovery fee
@@ -52771,6 +54658,10 @@ public fun new_reject_verification(dao_id: ID, verification_id: ID, reason: Stri
 
 public fun new_set_dao_score(dao_id: ID, score: u64, reason: String): SetDaoScoreAction {
     SetDaoScoreAction { dao_id, score, reason }
+}
+
+public fun new_set_launchpad_trust_score(raise_id: ID, trust_score: u64, review_text: String): SetLaunchpadTrustScoreAction {
+    SetLaunchpadTrustScoreAction { raise_id, trust_score, review_text }
 }
 
 public fun new_update_recovery_fee(new_fee: u64): UpdateRecoveryFeeAction {
@@ -53697,6 +55588,59 @@ public fun do_apply_pending_coin_fees<Outcome: store, IW: drop, StableType>(
     );
 }
 
+/// Execute set launchpad trust score action
+public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, StableCoin>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    witness: IW,
+    raise: &mut Raise<RaiseToken, StableCoin>,
+) {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::SetLaunchpadTrustScore>(spec);
+
+    // Deserialize the action data
+    let action_data = intents::action_spec_data(spec);
+    let mut bcs = bcs::new(*action_data);
+    let raise_id = bcs::peel_address(&mut bcs).to_id();
+    let trust_score = bcs::peel_u64(&mut bcs);
+    let review_text = bcs::peel_vec_u8(&mut bcs).to_string();
+
+    // Validate all bytes consumed (security: prevents trailing data attacks)
+    bcs_validation::validate_all_bytes_consumed(bcs);
+
+    let action = SetLaunchpadTrustScoreAction { raise_id, trust_score, review_text };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    // Verify we have the validator capability
+    let cap = account::borrow_managed_asset<FutarchyConfig, String, ValidatorAdminCap>(
+        account,
+        b"protocol:validator_admin_cap".to_string(),
+        version
+    );
+
+    // Verify the raise ID matches
+    assert!(object::id(raise) == action.raise_id, EInvalidAdminCap);
+
+    // Set the trust score and review
+    launchpad::set_admin_trust_score(
+        raise,
+        action.trust_score,
+        action.review_text
+    );
+
+    // Emit event for transparency (off-chain indexers)
+    event::emit(LaunchpadTrustScoreSet {
+        raise_id: action.raise_id,
+        trust_score: action.trust_score,
+        review_text: action.review_text,
+    });
+}
+
 // === Helper Functions for Security Council ===
 
 // This function is commented out because it has incorrect assumptions about
@@ -53774,6 +55718,7 @@ use futarchy_governance_actions::protocol_admin_actions::{
     RequestVerificationAction,
     ApproveVerificationAction,
     RejectVerificationAction,
+    SetLaunchpadTrustScoreAction,
     UpdateRecoveryFeeAction,
     WithdrawFeesToTreasuryAction,
 };
@@ -53837,6 +55782,11 @@ public struct ApproveVerificationActionDecoder has key, store {
 
 /// Decoder for RejectVerificationAction
 public struct RejectVerificationActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for SetLaunchpadTrustScoreAction
+public struct SetLaunchpadTrustScoreActionDecoder has key, store {
     id: UID,
 }
 
@@ -54134,6 +56084,37 @@ public fun decode_reject_verification_action(
     ]
 }
 
+/// Decode a SetLaunchpadTrustScoreAction
+public fun decode_set_launchpad_trust_score_action(
+    _decoder: &SetLaunchpadTrustScoreActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let raise_id = bcs::peel_address(&mut bcs_data);
+    let trust_score = bcs::peel_u64(&mut bcs_data);
+    let review_text = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"raise_id".to_string(),
+            raise_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"trust_score".to_string(),
+            trust_score.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"review_text".to_string(),
+            review_text,
+            b"String".to_string(),
+        ),
+    ]
+}
+
 /// Decode an UpdateRecoveryFeeAction
 public fun decode_update_recovery_fee_action(
     _decoder: &UpdateRecoveryFeeActionDecoder,
@@ -54191,6 +56172,7 @@ public fun register_decoders(
     register_request_verification_decoder(registry, ctx);
     register_approve_verification_decoder(registry, ctx);
     register_reject_verification_decoder(registry, ctx);
+    register_set_launchpad_trust_score_decoder(registry, ctx);
     register_update_recovery_fee_decoder(registry, ctx);
     register_withdraw_fees_to_treasury_decoder(registry, ctx);
 }
@@ -54300,6 +56282,15 @@ fun register_reject_verification_decoder(
 ) {
     let decoder = RejectVerificationActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RejectVerificationAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_set_launchpad_trust_score_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = SetLaunchpadTrustScoreActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<SetLaunchpadTrustScoreAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
@@ -60053,7 +62044,6 @@ use sui::{
     transfer,
     tx_context::TxContext,
 };
-use futarchy_core::proposal_state;
 
 // === Errors ===
 const EInvalidTierConfiguration: u64 = 1;
@@ -60071,6 +62061,13 @@ const EAlreadyWithdrawn: u64 = 12;
 
 // === Constants ===
 const MAX_TIERS: u64 = 10;
+
+// Proposal state constants (match futarchy_markets::proposal)
+const STATE_PENDING: u8 = 0;
+const STATE_TRADING: u8 = 2;
+const STATE_PASSED: u8 = 3;
+const STATE_FAILED: u8 = 4;
+const STATE_CANCELLED: u8 = 5;
 
 // Cancelability modes
 const CANCELABLE_ALWAYS: u8 = 0;
@@ -60323,7 +62320,7 @@ public fun create_commitment_proposal<AssetType>(
         withdrawn: false,
         cancelable_before_trading,
         trading_started: false,
-        proposal_state: proposal_state::pending(),
+        proposal_state: STATE_PENDING,
         created_at: current_time,
         trading_start,
         trading_end,
@@ -60347,7 +62344,7 @@ public fun mark_trading_started<AssetType>(
     proposal: &mut CommitmentProposal<AssetType>,
 ) {
     proposal.trading_started = true;
-    proposal.proposal_state = proposal_state::trading();
+    proposal.proposal_state = STATE_TRADING;
 }
 
 /// Executes commitment based on TWAP from ACCEPT market
@@ -60359,8 +62356,8 @@ public fun execute_commitment<AssetType>(
     ctx: &mut TxContext,
 ): Coin<AssetType> {
     assert!(
-        proposal.proposal_state == proposal_state::trading() ||
-        proposal.proposal_state == proposal_state::pending(),
+        proposal.proposal_state == STATE_TRADING ||
+        proposal.proposal_state == STATE_PENDING,
         EInvalidState
     );
 
@@ -60387,7 +62384,7 @@ public fun execute_commitment<AssetType>(
         proposal.tier_reached = option::some(tier_index);
         proposal.locked_amount = tier.lock_amount;
         proposal.unlock_time = option::some(current_time + tier.lock_duration_ms);
-        proposal.proposal_state = proposal_state::passed();
+        proposal.proposal_state = STATE_PASSED;
 
         event::emit(CommitmentExecuted {
             proposal_id: object::id(proposal),
@@ -60407,7 +62404,7 @@ public fun execute_commitment<AssetType>(
         }
     } else {
         // No tier reached - return all tokens
-        proposal.proposal_state = proposal_state::failed();
+        proposal.proposal_state = STATE_FAILED;
         let all_coins = proposal.committed_coins.withdraw_all();
         coin::from_balance(all_coins, ctx)
     }
@@ -60441,7 +62438,7 @@ public fun cancel_commitment<AssetType>(
 
     // Update state to reflect cancellation
     proposal.committed_amount = 0;
-    proposal.proposal_state = proposal_state::cancelled();
+    proposal.proposal_state = STATE_CANCELLED;
 
     event::emit(CommitmentCancelled {
         proposal_id: object::id(proposal),
@@ -64483,9 +66480,10 @@ public fun finalize_proposal_market<AssetType, StableType>(
             i = i + 1;
         };
 
-        // Any remaining escrow goes to protocol revenue (proposer's original fee)
+        // Any remaining escrow gets destroyed (no refund for outcome 0 creator/proposer)
+        // Note: In StableType, not SUI, so cannot deposit to SUI-denominated protocol revenue
         if (fee_escrow_coin.value() > 0) {
-            proposal_fee_manager::deposit_revenue(fee_manager, fee_escrow_coin);
+            transfer::public_transfer(fee_escrow_coin, @0x0); // Burn by sending to null address
         } else {
             fee_escrow_coin.destroy_zero();
         };
@@ -64697,7 +66695,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let premarket_id = proposal::new_premarket<AssetType, StableType>(
         queued_id,
         dao_id,
-        futarchy_config::review_period_ms(cfg),
+        futarchy_config::market_op_review_period_ms(cfg),  // Use market op period for fast/atomic execution
         futarchy_config::trading_period_ms(cfg),
         futarchy_config::min_asset_amount(cfg),
         futarchy_config::min_stable_amount(cfg),
@@ -64719,9 +66717,11 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         clock,
         ctx
     );
-    
-    // Mark queue reserved and emit
-    priority_queue::set_reserved(queue, premarket_id);
+
+    // Mark queue reserved only if enabled in config
+    if (futarchy_config::enable_premarket_reservation_lock(cfg)) {
+        priority_queue::set_reserved(queue, premarket_id);
+    };
     priority_queue::destroy_proposal(qp);
     
     event::emit(ProposalReserved {
@@ -64914,7 +66914,6 @@ fun drain_all(expired: &mut Expired) {
     // DAO File Actions
     gc_registry::delete_dao_file_create_registry(expired);
     gc_registry::delete_dao_file_create_root_document(expired);
-    gc_registry::delete_dao_file_create_child_document(expired);
     gc_registry::delete_dao_file_delete_document(expired);
     gc_registry::delete_dao_file_add_chunk(expired);
     gc_registry::delete_dao_file_update(expired);
@@ -65186,10 +67185,6 @@ public fun delete_dao_file_create_registry(expired: &mut Expired) {
 
 public fun delete_dao_file_create_root_document(expired: &mut Expired) {
     dao_file_actions::delete_create_root_document(expired);
-}
-
-public fun delete_dao_file_create_child_document(expired: &mut Expired) {
-    dao_file_actions::delete_create_child_document(expired);
 }
 
 public fun delete_dao_file_delete_document(expired: &mut Expired) {

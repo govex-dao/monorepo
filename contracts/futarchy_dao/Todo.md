@@ -43,6 +43,15 @@ Mint options for employees (right to buy x amount at a given price!!!)
 - [X] Allow dao to ave seperate consitional amm fee and spot amm fee
 - [X] Make protocol take 20% of prioirty quue fees
 
+- [X] Add note to amm thing that proposal can only be cranked into starting if commit reveal actually passes!!!
+- [X] Need way or time out to delete proposl affer short time e.g 24 hours if dao doesnt have enough funds for buy back say
+So cant be added atomically created
+- [X] Extract out commit reveal logic to own module
+- [X] Dao config max percent amm reserves can be auto swapped per proposal default 10%
+- [X] Make sure read current state skips chunk yet to sunrise in docs or that have sunsetted. And then have view all chunk for full????
+- [X] Each launchpad raise should have an admin trust score int. And a text field. And cap to review it basically. So need new intents for that cap
+- [X] Dividends, use mainly use to create a list. But figure out correct owner through conditional token. Create this action type will need sui and a data structure of all accounts and amount and amount and ability to batch crank. If censored send to object that only they can withdraw from they go get uncensored. I could be on their multisig and their security team and also require their futarchy approval!
+
 
 # V2 multisig
 - [ ] compare to account tech multisig
@@ -315,3 +324,37 @@ Balance Sheet: This is its primary home. It's listed as an Asset, often under a 
 
 Statement of Stockholders' Equity: Explains the changes in the owners' portion of the company during the year (e.g., from profits, paying out dividends, or issuing new stock).
 ```
+
+==== V3=====
+
+Would be nice if also could have to pass govex futarchy but not our main one like a secondary pool but we own the pool
+
+So need concept of owned amm that doesnt policy authorty in its dao
+
+But other daos can use it to approve stuff
+
+But then this is extra token liquidity 
+
+Will want the atomic market buy back feature etc
+
+So will create arbitrage oportunity. But cant interfere with what othee daos are using it for. So wait until sode pool and main pool are free to do cross pool atmic dao buy back or mint and sell raise
+
+
+Dont store stable asset type hard coded at dao level just at dao level
+
+Dont hard code asset meta data etc just hard in dao pit them in vec 
+
+Allow dao to delete an amm( withdraw only for lps)
+
+Policy by amm id not general futarchy
+
+
+
+Consider way to dynamically add more dao configs?????
+
+
+Cross dao proposals, blocking out propsal slots on calander say 3 ahead.
+
+Schronous or a sychrnous
+
+Oohh need new action type that have policy of cross dao. Kinda ruins vode reuse tho oooh or have build that takes intents into mera intent

@@ -543,6 +543,18 @@ public fun max_outcomes(config: &FutarchyConfig): u64 {
     dao_config::max_outcomes(dao_config::governance_config(&config.config))
 }
 
+public fun enable_premarket_reservation_lock(config: &FutarchyConfig): bool {
+    dao_config::enable_premarket_reservation_lock(dao_config::governance_config(&config.config))
+}
+
+public fun market_op_review_period_ms(config: &FutarchyConfig): u64 {
+    dao_config::market_op_review_period_ms(dao_config::trading_params(&config.config))
+}
+
+public fun max_amm_swap_percent_bps(config: &FutarchyConfig): u64 {
+    dao_config::max_amm_swap_percent_bps(dao_config::trading_params(&config.config))
+}
+
 // === Missing Functions Added for Build Fixes ===
 
 public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
@@ -687,6 +699,21 @@ public fun set_max_concurrent_proposals(config: &mut FutarchyConfig, max: u64) {
 public fun set_fee_escalation_basis_points(config: &mut FutarchyConfig, points: u64) {
     let gov_cfg = dao_config::governance_config_mut(&mut config.config);
     dao_config::set_fee_escalation_basis_points(gov_cfg, points);
+}
+
+public fun set_enable_premarket_reservation_lock(config: &mut FutarchyConfig, enabled: bool) {
+    let gov_cfg = dao_config::governance_config_mut(&mut config.config);
+    dao_config::set_enable_premarket_reservation_lock(gov_cfg, enabled);
+}
+
+public fun set_market_op_review_period_ms(config: &mut FutarchyConfig, period: u64) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_market_op_review_period_ms(trading_params, period);
+}
+
+public fun set_max_amm_swap_percent_bps(config: &mut FutarchyConfig, percent_bps: u64) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_max_amm_swap_percent_bps(trading_params, percent_bps);
 }
 
 public fun update_slash_distribution(

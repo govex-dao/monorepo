@@ -1,6 +1,6 @@
 module futarchy_core::priority_queue_helpers;
 
-use futarchy_core::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue};
+use futarchy_core::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue, QueueMutationAuth};
 use std::string::String;
 use sui::coin::Coin;
 
@@ -27,8 +27,12 @@ public fun new_proposal_data(
 }
 
 /// Extracts the maximum priority proposal from the queue without activating it
-public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): QueuedProposal<StableCoin> {
-    let result = priority_queue::try_activate_next(queue);
+/// Requires QueueMutationAuth witness - only package modules can create this
+public fun extract_max<StableCoin>(
+    auth: QueueMutationAuth,
+    queue: &mut ProposalQueue<StableCoin>,
+): QueuedProposal<StableCoin> {
+    let result = priority_queue::try_activate_next(auth, queue);
     assert!(option::is_some(&result), EQueueEmpty);
     option::destroy_some(result)
 }
@@ -55,8 +59,11 @@ public fun get_data<StableCoin>(proposal: &QueuedProposal<StableCoin>): &Proposa
     priority_queue::get_proposal_data(proposal)
 }
 
-public fun get_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
-    priority_queue::extract_bond(proposal)
+public fun get_bond<StableCoin>(
+    auth: QueueMutationAuth,
+    proposal: &mut QueuedProposal<StableCoin>,
+): Option<Coin<StableCoin>> {
+    priority_queue::extract_bond(auth, proposal)
 }
 
 public fun get_timestamp<StableCoin>(proposal: &QueuedProposal<StableCoin>): u64 {

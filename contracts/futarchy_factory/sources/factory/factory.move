@@ -244,6 +244,8 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -267,6 +269,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -455,6 +458,8 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -478,6 +483,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(
@@ -681,6 +687,8 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         trading_period_ms,
         amm_total_fee_bps, // conditional AMM fee
         amm_total_fee_bps, // spot AMM fee (same as conditional)
+        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
+        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -704,6 +712,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         10, // max_intents_per_outcome
         604_800_000, // eviction_grace_period_ms (7 days)
         31_536_000_000, // proposal_intent_expiry_ms (365 days)
+        true, // enable_premarket_reservation_lock (default: true for MEV protection)
     );
 
     let metadata_config = dao_config::new_metadata_config(

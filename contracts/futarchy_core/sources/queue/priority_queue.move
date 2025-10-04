@@ -20,6 +20,8 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use account_protocol::account::{Self, Account};
 use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_seal_utils::seal_commit_reveal::{Self, SealContainer};
+use futarchy_seal_utils::market_init_params::MarketInitParams;
 
 // === Events ===
 
@@ -72,17 +74,29 @@ const EInvalidBond: u64 = 5;
 const EProposalInGracePeriod: u64 = 6;
 const EHeapInvariantViolated: u64 = 7;
 const EFeeExceedsMaximum: u64 = 8;
+const ESealNotRevealed: u64 = 9;
+const EProposalNotTimedOut: u64 = 10;
+const EMarketInitParamsNotAvailable: u64 = 11;
+const EBondNotExtracted: u64 = 12;
+const ECrankBountyNotExtracted: u64 = 13;
+const ETooEarlyToReveal: u64 = 14;
+const EInsufficientFundsForBuyback: u64 = 15;
 
 // === Constants ===
 
 const MAX_QUEUE_SIZE: u64 = 100;
 const EVICTION_GRACE_PERIOD_MS: u64 = 300000; // 5 minutes
+const MAX_TIME_AT_TOP_OF_QUEUE_MS: u64 = 86400000; // 24 hours
 const COMPARE_GREATER: u8 = 1;
 const COMPARE_EQUAL: u8 = 0;
 const COMPARE_LESS: u8 = 2;
 const MAX_REASONABLE_FEE: u64 = 1_000_000_000_000_000; // 1 million SUI (with 9 decimals)
 
 // === Structs ===
+
+/// Witness for queue mutations
+/// Only authorized modules can create this to mutate proposals
+public struct QueueMutationAuth has drop {}
 
 /// Priority score combining fee and timestamp
 public struct PriorityScore has store, copy, drop {
@@ -112,6 +126,19 @@ public struct QueuedProposal<phantom StableCoin> has store {
     uses_dao_liquidity: bool,
     data: ProposalData,
     queue_entry_time: u64,  // Track when proposal entered queue for grace period
+
+    // === SEAL Commit-Reveal Fields ===
+    /// Market initialization parameters (sealed or public)
+    /// Contains SEAL commitment, fallback params, and revealed params
+    market_init_params: Option<SealContainer<MarketInitParams>>,
+
+    /// Timestamp when proposal reached top of queue (for timeout mechanism)
+    /// Set to Some(timestamp) when proposal becomes #1, None otherwise
+    time_reached_top_of_queue: Option<u64>,
+
+    /// Bounty for permissionless cranking (in SUI)
+    /// Anyone can claim this by successfully cranking proposal to PREMARKET state
+    crank_bounty: Option<Coin<SUI>>,
 }
 
 /// Priority queue using binary heap for O(log n) operations
@@ -505,7 +532,22 @@ public fun insert<StableCoin>(
             });
             
             // Clean up evicted proposal
-            let QueuedProposal { mut bond, proposal_id, dao_id, proposer: evicted_proposer_addr, fee: _, timestamp: _, priority_score: _, mut intent_spec, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = evicted;
+            let QueuedProposal {
+                mut bond,
+                proposal_id,
+                dao_id,
+                proposer: evicted_proposer_addr,
+                fee: _,
+                timestamp: _,
+                priority_score: _,
+                mut intent_spec,
+                uses_dao_liquidity: _,
+                data: _,
+                queue_entry_time: _,
+                market_init_params: _,
+                time_reached_top_of_queue: _,
+                mut crank_bounty,
+            } = evicted;
 
             if (intent_spec.is_some()) {
                 let _ = intent_spec.extract();
@@ -523,6 +565,12 @@ public fun insert<StableCoin>(
                 transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
             };
             option::destroy_none(bond);
+
+            // Handle crank bounty - return to evicted proposer if it exists
+            if (option::is_some(&crank_bounty)) {
+                transfer::public_transfer(option::extract(&mut crank_bounty), evicted_proposer_addr);
+            };
+            option::destroy_none(crank_bounty);
         };
     };
     
@@ -550,12 +598,15 @@ public fun insert<StableCoin>(
 }
 
 /// Extract the highest priority proposal - O(log n) complexity!
-/// Made package-visible to prevent unauthorized extraction
-public fun extract_max<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
+/// Requires QueueMutationAuth witness to prevent unauthorized extraction
+public fun extract_max<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+): Option<QueuedProposal<StableCoin>> {
     if (queue.size == 0) {
         return option::none()
     };
-    
+
     // Remove root (max element) - O(log n)!
     let max_proposal = remove_at(&mut queue.heap, &mut queue.proposal_indices, 0, &mut queue.size);
     option::some(max_proposal)
@@ -643,6 +694,9 @@ public fun new_queued_proposal<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        market_init_params: option::none(),  // No SEAL by default
+        time_reached_top_of_queue: option::none(),  // Not at top yet
+        crank_bounty: option::none(),  // No bounty by default
     }
 }
 
@@ -673,6 +727,9 @@ public fun new_queued_proposal_with_id<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        market_init_params: option::none(),  // No SEAL by default
+        time_reached_top_of_queue: option::none(),  // Not at top yet
+        crank_bounty: option::none(),  // No bounty by default
     }
 }
 
@@ -733,9 +790,12 @@ public fun get_outcome_details(data: &ProposalData): &vector<String> { &data.out
 public fun priority_score_value(score: &PriorityScore): u128 { score.computed_value }
 
 /// Tries to activate the next proposal from the queue
-/// Made package-visible to prevent unauthorized activation
-public fun try_activate_next<StableCoin>(queue: &mut ProposalQueue<StableCoin>): Option<QueuedProposal<StableCoin>> {
-    extract_max(queue)
+/// Requires QueueMutationAuth witness to prevent unauthorized activation
+public fun try_activate_next<StableCoin>(
+    auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+): Option<QueuedProposal<StableCoin>> {
+    extract_max(auth, queue)
 }
 
 /// Calculate minimum required fee based on queue occupancy
@@ -991,7 +1051,22 @@ public entry fun cancel_proposal<StableCoin>(
     let proposer_addr = proposal.proposer;
     
     let removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, i, &mut queue.size);
-    let QueuedProposal { proposal_id, mut bond, dao_id: _, proposer: _, fee: _, timestamp: _, priority_score: _, intent_spec: _, uses_dao_liquidity: _, data: _, queue_entry_time: _ } = removed;
+    let QueuedProposal {
+        proposal_id,
+        mut bond,
+        dao_id: _,
+        proposer: _,
+        fee: _,
+        timestamp: _,
+        priority_score: _,
+        intent_spec: _,
+        uses_dao_liquidity: _,
+        data: _,
+        queue_entry_time: _,
+        market_init_params: _,
+        time_reached_top_of_queue: _,
+        mut crank_bounty,
+    } = removed;
     
     // Get the fee refunded as a Coin
     let refunded_fee = proposal_fee_manager::refund_proposal_fee(
@@ -1008,6 +1083,12 @@ public entry fun cancel_proposal<StableCoin>(
         transfer::public_transfer(option::extract(&mut bond), proposer_addr);
     };
     option::destroy_none(bond);
+
+    // Refund crank bounty to proposer if it exists
+    if (option::is_some(&crank_bounty)) {
+        transfer::public_transfer(option::extract(&mut crank_bounty), proposer_addr);
+    };
+    option::destroy_none(crank_bounty);
 }
 
 /// Update a proposal's priority by adding more fee
@@ -1077,14 +1158,23 @@ public fun reserved_proposal_id<StableCoin>(queue: &ProposalQueue<StableCoin>): 
     queue.reserved_next_proposal
 }
 
-/// Set the reserved next proposal (package)
-public fun set_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>, id: ID) {
+/// Set the reserved next proposal
+/// Requires QueueMutationAuth witness to prevent unauthorized reservation
+public fun set_reserved<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+    id: ID,
+) {
     assert!(!has_reserved(queue), EHeapInvariantViolated);
     queue.reserved_next_proposal = option::some(id);
 }
 
-/// Clear the reserved next proposal (package)
-public fun clear_reserved<StableCoin>(queue: &mut ProposalQueue<StableCoin>) {
+/// Clear the reserved next proposal
+/// Requires QueueMutationAuth witness to prevent unauthorized clearing
+public fun clear_reserved<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+) {
     queue.reserved_next_proposal = option::none();
 }
 
@@ -1112,8 +1202,12 @@ public fun get_all_proposals<StableCoin>(queue: &ProposalQueue<StableCoin>): &ve
 }
 
 /// Extract bond from a queued proposal (mutable)
-/// Made package-visible to prevent unauthorized bond extraction
-public fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): Option<Coin<StableCoin>> {
+/// Requires QueueMutationAuth witness to prevent unauthorized bond extraction
+/// CRITICAL: This prevents value theft - only authorized modules can extract bonds
+public fun extract_bond<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+): Option<Coin<StableCoin>> {
     let bond_ref = &mut proposal.bond;
     if (option::is_some(bond_ref)) {
         option::some(option::extract(bond_ref))
@@ -1123,6 +1217,8 @@ public fun extract_bond<StableCoin>(proposal: &mut QueuedProposal<StableCoin>): 
 }
 
 /// Destroy a queued proposal
+/// IMPORTANT: Caller must extract bond and crank_bounty BEFORE calling this
+/// This ensures no value is lost - resources must be explicitly handled
 public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
     let QueuedProposal {
         bond,
@@ -1136,8 +1232,203 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         uses_dao_liquidity: _,
         data: _,
         queue_entry_time: _,
+        market_init_params: _,
+        time_reached_top_of_queue: _,
+        crank_bounty,
     } = proposal;
+
+    // SAFETY: Assert no valuable resources remain
+    // Prevents accidental value loss - caller must handle coins explicitly
+    assert!(bond.is_none(), EBondNotExtracted);
+    assert!(crank_bounty.is_none(), ECrankBountyNotExtracted);
+
+    // Safe to destroy now - no resources lost
     bond.destroy_none();
+    crank_bounty.destroy_none();
+}
+
+// === SEAL Commit-Reveal Functions ===
+
+/// Create queue mutation authority witness
+/// Only package modules can create this witness for authorized mutations
+public fun create_mutation_auth(): QueueMutationAuth {
+    QueueMutationAuth {}
+}
+
+/// Set market init params (sealed or public) for a queued proposal
+/// Can only be called before proposal is cranked to PREMARKET
+/// Requires QueueMutationAuth witness for access control
+public fun set_market_init_params<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+    params: SealContainer<MarketInitParams>,
+) {
+    proposal.market_init_params = option::some(params);
+}
+
+/// Reveal sealed market init params using decrypted data
+/// Anyone can call this after SEAL time-lock expires
+/// Clock parameter enforces time-lock - cannot reveal before reveal_time_ms
+public fun reveal_market_init_params<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    proposal_id: ID,
+    decrypted_params: MarketInitParams,
+    decrypted_salt: vector<u8>,
+    clock: &Clock,  // ← Pass to seal_commit_reveal for time-lock validation
+    ctx: &TxContext,
+) {
+    assert!(queue.proposal_indices.contains(proposal_id), EProposalNotFound);
+    let idx = *queue.proposal_indices.borrow(proposal_id);
+    let proposal = vector::borrow_mut(&mut queue.heap, idx);
+
+    assert!(option::is_some(&proposal.market_init_params), EMarketInitParamsNotAvailable);
+    let container = option::borrow_mut(&mut proposal.market_init_params);
+
+    // Time-lock validation happens inside reveal()
+    // Event emission happens inside reveal() for indexer tracking
+    seal_commit_reveal::reveal(container, decrypted_params, decrypted_salt, clock, ctx);
+}
+
+/// Get market init params if available (revealed or fallback)
+/// Returns None if SEAL not revealed and no fallback
+public fun get_market_init_params<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>
+): Option<MarketInitParams> {
+    if (option::is_none(&proposal.market_init_params)) {
+        return option::none()
+    };
+
+    let container = option::borrow(&proposal.market_init_params);
+
+    // Check if params are available before getting them
+    if (!seal_commit_reveal::has_params(container)) {
+        return option::none()
+    };
+
+    // Use get_params_copy to get value by copy
+    option::some(*seal_commit_reveal::get_params(container))
+}
+
+/// Check if market init params are available for execution
+public fun has_market_init_params<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>
+): bool {
+    if (option::is_none(&proposal.market_init_params)) {
+        return true  // No SEAL means params not needed, can execute
+    };
+
+    let container = option::borrow(&proposal.market_init_params);
+    seal_commit_reveal::has_params(container)
+}
+
+/// Set crank bounty for permissionless proposal execution
+/// Bounty is paid to whoever successfully cranks proposal to PREMARKET
+/// Note: Caller must handle any existing bounty before calling this
+/// This function will abort if a bounty already exists
+/// Requires QueueMutationAuth witness for access control
+public fun set_crank_bounty<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    proposal: &mut QueuedProposal<StableCoin>,
+    bounty: Coin<SUI>,
+) {
+    // SAFETY: Cannot overwrite existing bounty
+    // Caller must extract old bounty first to prevent value loss
+    assert!(option::is_none(&proposal.crank_bounty), ECrankBountyNotExtracted);
+
+    // Safe to set new bounty
+    option::fill(&mut proposal.crank_bounty, bounty);
+}
+
+/// Extract and claim crank bounty (called by cranker after successful execution)
+public(package) fun extract_crank_bounty<StableCoin>(
+    proposal: &mut QueuedProposal<StableCoin>,
+    ctx: &mut TxContext,
+) {
+    if (option::is_some(&proposal.crank_bounty)) {
+        let bounty = option::extract(&mut proposal.crank_bounty);
+        transfer::public_transfer(bounty, tx_context::sender(ctx));
+    };
+}
+
+/// Update time_reached_top_of_queue when proposal becomes #1
+/// Called automatically when proposal reaches top of queue
+public(package) fun mark_reached_top_of_queue<StableCoin>(
+    proposal: &mut QueuedProposal<StableCoin>,
+    clock: &Clock,
+) {
+    if (option::is_none(&proposal.time_reached_top_of_queue)) {
+        proposal.time_reached_top_of_queue = option::some(clock::timestamp_ms(clock));
+    };
+}
+
+/// Check if proposal has timed out at top of queue (24 hours)
+/// Returns true if proposal should be evicted due to timeout
+///
+/// SAFETY: Uses saturating subtraction to handle clock adjustments
+/// If clock goes backwards (NTP sync, testnet reset), treats as no time elapsed
+public fun has_timed_out_at_top<StableCoin>(
+    proposal: &QueuedProposal<StableCoin>,
+    clock: &Clock,
+): bool {
+    if (option::is_none(&proposal.time_reached_top_of_queue)) {
+        return false  // Not at top yet
+    };
+
+    let time_at_top = *option::borrow(&proposal.time_reached_top_of_queue);
+    let current_time = clock::timestamp_ms(clock);
+
+    // CRITICAL: Saturating subtraction prevents underflow
+    // If clock went backwards, elapsed = 0 (no timeout)
+    let elapsed = if (current_time >= time_at_top) {
+        current_time - time_at_top
+    } else {
+        0  // Clock went backwards, treat as no time elapsed
+    };
+
+    elapsed >= MAX_TIME_AT_TOP_OF_QUEUE_MS
+}
+
+/// Evict timed-out proposal from top of queue
+/// Anyone can call this to clean up stuck proposals
+public entry fun evict_timed_out_proposal<StableCoin>(
+    queue: &mut ProposalQueue<StableCoin>,
+    proposal_id: ID,
+    clock: &Clock,
+) {
+    assert!(queue.proposal_indices.contains(proposal_id), EProposalNotFound);
+
+    let idx = *queue.proposal_indices.borrow(proposal_id);
+    assert!(idx == 0, EInvalidProposalId);  // Must be at top of queue (index 0 in max-heap)
+
+    let proposal = vector::borrow(&queue.heap, idx);
+    assert!(has_timed_out_at_top(proposal, clock), EProposalNotTimedOut);
+
+    // Get proposer address before removing
+    let proposer_addr = proposal.proposer;
+
+    // Remove the proposal from queue
+    let mut removed = remove_at(&mut queue.heap, &mut queue.proposal_indices, idx, &mut queue.size);
+
+    // Extract and return valuable resources to proposer
+    if (option::is_some(&removed.bond)) {
+        let bond = option::extract(&mut removed.bond);
+        transfer::public_transfer(bond, proposer_addr);
+    };
+
+    if (option::is_some(&removed.crank_bounty)) {
+        let bounty = option::extract(&mut removed.crank_bounty);
+        transfer::public_transfer(bounty, proposer_addr);
+    };
+
+    // Now safe to destroy (no resources left)
+    destroy_proposal(removed);
+
+    // Clear reserved slot if this was the reserved proposal
+    if (option::is_some(&queue.reserved_next_proposal)) {
+        if (*option::borrow(&queue.reserved_next_proposal) == proposal_id) {
+            queue.reserved_next_proposal = option::none();
+        };
+    };
 }
 
 // === Share Functions ===
