@@ -250,3 +250,32 @@ public fun create_admin_cap(ctx: &mut TxContext): AdminCap {
 
 // === Additional Errors ===
 const EInsufficientRevenue: u64 = 1;
+
+// === Test-Only Functions ===
+
+#[test_only]
+/// Create a DaoPaymentTracker for testing
+public fun new_for_testing(ctx: &mut TxContext): DaoPaymentTracker {
+    DaoPaymentTracker {
+        id: object::new(ctx),
+        debts: table::new(ctx),
+        protocol_revenue: balance::zero(),
+    }
+}
+
+#[test_only]
+/// Get debt for a DAO (test alias for public function)
+public fun get_debt(tracker: &DaoPaymentTracker, dao_id: ID): u64 {
+    get_dao_debt(tracker, dao_id)
+}
+
+#[test_only]
+/// Destroy a DaoPaymentTracker for testing
+public fun destroy_for_testing(tracker: DaoPaymentTracker) {
+    let DaoPaymentTracker { id, debts, protocol_revenue } = tracker;
+    object::delete(id);
+
+    // Drop the table - it's test-only code
+    debts.drop();
+    protocol_revenue.destroy_for_testing();
+}

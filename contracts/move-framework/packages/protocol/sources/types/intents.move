@@ -95,6 +95,15 @@ public struct ActionSpec has store, copy, drop {
     action_data: vector<u8>,    // The BCS-serialized action struct
 }
 
+/// Create a new ActionSpec for testing
+public fun new_action_spec<T>(action_data: vector<u8>, version: u8): ActionSpec {
+    ActionSpec {
+        version,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data,
+    }
+}
+
 /// Parent struct protecting the intents
 public struct Intents has store {
     // map of intents: key -> Intent<Outcome>
@@ -558,7 +567,7 @@ use sui::clock;
 #[test_only]
 public struct TestOutcome has copy, drop, store {}
 #[test_only]
-public struct TestAction has store {}
+public struct TestAction has drop, store {}
 #[test_only]
 public struct TestActionType has drop {}
 #[test_only]
@@ -675,7 +684,7 @@ fun test_new_intent() {
     assert_eq(intent.creation_time(), clock.timestamp_ms());
     assert_eq(intent.execution_times(), vector[1000]);
     assert_eq(intent.expiration_time(), 2000);
-    assert_eq(intent.actions().length(), 0);
+    assert_eq(intent.action_count(), 0);
     
     destroy(intent);
     destroy(clock);
@@ -704,11 +713,13 @@ fun test_add_action() {
         ctx
     );
     
-    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
-    assert_eq(intent.actions().length(), 1);
-    
-    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
-    assert_eq(intent.actions().length(), 2);
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+    assert_eq(intent.action_count(), 1);
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
+    assert_eq(intent.action_count(), 2);
     
     destroy(intent);
     destroy(clock);
@@ -738,23 +749,23 @@ fun test_remove_action() {
         ctx
     );
     
-    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
-    intent.add_typed_action(TestAction {}, TestActionType {}, TestIntentWitness());
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
     add_intent(&mut intents, intent);
     
     let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string());
     
-    let action1: TestAction = remove_action(&mut expired);
-    let action2: TestAction = remove_action(&mut expired);
-    
-    assert_eq(expired.start_index, 2);
-    assert_eq(expired.actions().length(), 0);
-    
+    let _action1 = expired.remove_action_spec();
+    let _action2 = expired.remove_action_spec();
+
+    assert_eq(expired.expired_action_count(), 0);
+
     expired.destroy_empty();
     destroy(intents);
     destroy(clock);
-    destroy(action1);
-    destroy(action2);
 }
 
 #[test]

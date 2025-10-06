@@ -38,7 +38,7 @@ This document catalogs **90+ governance actions** available in Futarchy DAOs, or
 ### Quick Find by Use Case:
 
 **Treasury Management**: Vault Actions, Currency Actions, Dividend Actions
-**Token Operations**: Currency Actions (mint/burn), Vesting Actions, Oracle Actions
+**Token Operations**: Currency Actions (mint/burn), Vesting Actions, PriceBasedMintGrant (oracle-driven minting)
 **Payments**: Stream/Payment Actions, Dividend Distribution
 **Upgrades**: Package Upgrade Actions, Policy Actions
 **NFTs**: Kiosk Actions
@@ -177,9 +177,36 @@ SetRemoveAllowed             - Toggle line removal
 SetGlobalImmutable           - Lock entire agreement
 BatchOperatingAgreement      - Multiple agreement changes
 
-## Oracle Actions (Mint New Tokens)
-ConditionalMint              - Mint new tokens if price condition met (inflationary)
-TieredMint                   - Milestone-based minting for founders/investors (inflationary)
+## Oracle Actions
+ReadOraclePrice              - Read current oracle price and emit event
+
+**NOTE**: ConditionalMint and TieredMint actions have been replaced by the **PriceBasedMintGrant** shared object system.
+See `/contracts/futarchy_oracle/sources/price_based_mint_grant/oracle_mint_intents.move` for the new implementation.
+
+**PriceBasedMintGrant Features** (Shared Object System):
+- **Unified System**: Combines ConditionalMint, TieredMint, and OptionGrant into one flexible grant type
+- **Price Conditions**: Support for launchpad-relative (e.g., 3.5x launch price) or absolute price triggers
+- **Vesting**: Cliff periods and linear vesting schedules
+- **Strike Prices**: Employee stock options with payment required to exercise
+- **Multi-Tier Rewards**: Milestone-based founder rewards (e.g., 2x, 5x, 10x price tiers)
+- **Repeatability**: One-time or recurring mints with cooldown periods
+- **Transferability**: Grants can be sold/transferred via GrantClaimCap
+- **Emergency Controls**: Pause, freeze, and expiry management
+- **Launchpad Protection**: Minimum price multipliers prevent dilution below launch price
+
+**Grant Types**:
+- `create_single_recipient_grant()` - Simple conditional mint for one address
+- `create_tiered_grant()` - Multi-tier milestone rewards for multiple recipients
+- `create_option_grant()` - Employee stock options with strike price + vesting
+- `create_conditional_vesting_grant()` - Price-triggered vesting without strike
+
+**Grant Operations**:
+- `claim_grant()` - Claim vested tokens (checks price, vesting, cliff)
+- `pause_grant()` / `resume_grant()` - Timed or indefinite pause
+- `emergency_freeze_grant()` / `emergency_unfreeze_grant()` - DAO governance controls
+- `cancel_grant()` - Cancel and return unvested tokens
+- `claimable_now()` - Preview claimable amount
+- `next_vest_time()` - When more tokens unlock
 
 ## Stream/Payment Actions
 CreatePayment                - Create one-time/recurring payment

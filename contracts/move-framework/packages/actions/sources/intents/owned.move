@@ -197,14 +197,23 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    coin_amount: u64,
+    recipients: vector<address>,
+    amounts: vector<u64>,
     start_timestamp: u64,
     end_timestamp: u64,
-    recipient: address,
     ctx: &mut TxContext
 ) {
     account.verify(auth);
     params.assert_single_execution();
+
+    // Calculate total amount needed
+    let mut total_amount = 0u64;
+    let mut i = 0;
+    let len = amounts.length();
+    while (i < len) {
+        total_amount = total_amount + *amounts.borrow(i);
+        i = i + 1;
+    };
 
     intent_interface::build_intent!(
         account,
@@ -215,8 +224,8 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
         WithdrawAndVestIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw_coin<_, _, _>(intent, account, type_name_to_string<CoinType>(), coin_amount, iw);
-            vesting::new_vesting<_, _, CoinType, _>(intent, account, coin_amount, start_timestamp, end_timestamp, option::none(), recipient, 1, coin_amount, 0, false, false, option::none(), iw);
+            owned::new_withdraw_coin<_, _, _>(intent, account, type_name_to_string<CoinType>(), total_amount, iw);
+            vesting::new_vesting<_, _, CoinType, _>(intent, account, recipients, amounts, start_timestamp, end_timestamp, option::none(), 1, total_amount, 0, false, false, option::none(), iw);
         }
     );
 }

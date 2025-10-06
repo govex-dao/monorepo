@@ -81,7 +81,8 @@ public struct AddChunkRequest has store, drop {
     expires_at: Option<u64>,
     effective_from: Option<u64>,
     immutable: bool,
-    immutable_from: Option<u64>
+    immutable_from: Option<u64>,
+    max_renewal_advance_epochs: Option<u64>,
 }
 
 /// Data for AddSunsetChunk hot potato
@@ -89,7 +90,8 @@ public struct AddSunsetChunkRequest has store, drop {
     doc_id: ID,
     expected_sequence: u64,
     expires_at_ms: u64,
-    immutable: bool
+    immutable: bool,
+    max_renewal_advance_epochs: Option<u64>,
 }
 
 /// Data for AddSunriseChunk hot potato
@@ -97,7 +99,8 @@ public struct AddSunriseChunkRequest has store, drop {
     doc_id: ID,
     expected_sequence: u64,
     effective_from_ms: u64,
-    immutable: bool
+    immutable: bool,
+    max_renewal_advance_epochs: Option<u64>,
 }
 
 /// Data for AddTemporaryChunk hot potato
@@ -106,14 +109,16 @@ public struct AddTemporaryChunkRequest has store, drop {
     expected_sequence: u64,
     effective_from_ms: u64,
     expires_at_ms: u64,
-    immutable: bool
+    immutable: bool,
+    max_renewal_advance_epochs: Option<u64>,
 }
 
 /// Data for AddChunkWithScheduledImmutability hot potato
 public struct AddChunkWithScheduledImmutabilityRequest has store, drop {
     doc_id: ID,
     expected_sequence: u64,
-    immutable_from_ms: u64
+    immutable_from_ms: u64,
+    max_renewal_advance_epochs: Option<u64>,
 }
 
 /// Data for CreateDocumentVersion hot potato
@@ -305,7 +310,7 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
 
     // Return hot potato - caller must provide Walrus Blob
     resource_requests::new_resource_request(
-        AddChunkRequest { doc_id, expected_sequence, chunk_type, expires_at, effective_from, immutable, immutable_from },
+        AddChunkRequest { doc_id, expected_sequence, chunk_type, expires_at, effective_from, immutable, immutable_from, max_renewal_advance_epochs: option::none() },
         ctx
     )
 }
@@ -330,6 +335,7 @@ public fun fulfill_add_chunk(
         data.effective_from,
         data.immutable,
         data.immutable_from,
+        data.max_renewal_advance_epochs,
         clock,
         ctx
     );
@@ -369,7 +375,7 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunsetChunkRequest { doc_id, expected_sequence, expires_at_ms, immutable },
+        AddSunsetChunkRequest { doc_id, expected_sequence, expires_at_ms, immutable, max_renewal_advance_epochs: option::none() },
         ctx
     )
 }
@@ -395,6 +401,7 @@ public fun fulfill_add_sunset_chunk(
         option::none(),
         data.immutable,
         option::none(),
+        data.max_renewal_advance_epochs,
         clock,
         ctx
     );
@@ -434,7 +441,7 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddSunriseChunkRequest { doc_id, expected_sequence, effective_from_ms, immutable },
+        AddSunriseChunkRequest { doc_id, expected_sequence, effective_from_ms, immutable, max_renewal_advance_epochs: option::none() },
         ctx
     )
 }
@@ -460,6 +467,7 @@ public fun fulfill_add_sunrise_chunk(
         option::some(data.effective_from_ms),
         data.immutable,
         option::none(),
+        data.max_renewal_advance_epochs,
         clock,
         ctx
     );
@@ -500,7 +508,7 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddTemporaryChunkRequest { doc_id, expected_sequence, effective_from_ms, expires_at_ms, immutable },
+        AddTemporaryChunkRequest { doc_id, expected_sequence, effective_from_ms, expires_at_ms, immutable, max_renewal_advance_epochs: option::none() },
         ctx
     )
 }
@@ -526,6 +534,7 @@ public fun fulfill_add_temporary_chunk(
         option::some(data.effective_from_ms),
         data.immutable,
         option::none(),
+        data.max_renewal_advance_epochs,
         clock,
         ctx
     );
@@ -564,7 +573,7 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 
     resource_requests::new_resource_request(
-        AddChunkWithScheduledImmutabilityRequest { doc_id, expected_sequence, immutable_from_ms },
+        AddChunkWithScheduledImmutabilityRequest { doc_id, expected_sequence, immutable_from_ms, max_renewal_advance_epochs: option::none() },
         ctx
     )
 }
@@ -590,6 +599,7 @@ public fun fulfill_add_chunk_with_scheduled_immutability(
         option::none(),
         false,
         option::some(data.immutable_from_ms),
+        data.max_renewal_advance_epochs,
         clock,
         ctx
     );

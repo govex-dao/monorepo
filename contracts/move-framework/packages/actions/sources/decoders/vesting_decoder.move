@@ -23,7 +23,12 @@ module account_actions::vesting_decoder;
 use std::{string::String, type_name};
 use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs};
 use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
-use account_actions::vesting::{CreateVestingAction, CancelVestingAction};
+use account_actions::vesting::{
+    CreateVestingAction,
+    CancelVestingAction,
+    ToggleVestingPauseAction,
+    ToggleVestingFreezeAction,
+};
 
 // === Decoder Objects ===
 
@@ -34,6 +39,16 @@ public struct CreateVestingActionDecoder has key, store {
 
 /// Decoder for CancelVestingAction
 public struct CancelVestingActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for ToggleVestingPauseAction
+public struct ToggleVestingPauseActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for ToggleVestingFreezeAction
+public struct ToggleVestingFreezeActionDecoder has key, store {
     id: UID,
 }
 
@@ -168,6 +183,66 @@ public fun decode_cancel_vesting_action(
     ]
 }
 
+/// Decode a ToggleVestingPauseAction
+public fun decode_toggle_vesting_pause_action(
+    _decoder: &ToggleVestingPauseActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let pause_duration_ms = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"vesting_id".to_string(),
+            vesting_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"pause_duration_ms".to_string(),
+            pause_duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"action".to_string(),
+            if (pause_duration_ms == 0) { b"unpause" } else { b"pause" }.to_string(),
+            b"string".to_string(),
+        ),
+    ]
+}
+
+/// Decode a ToggleVestingFreezeAction
+public fun decode_toggle_vesting_freeze_action(
+    _decoder: &ToggleVestingFreezeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let vesting_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let freeze = bcs::peel_bool(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"vesting_id".to_string(),
+            vesting_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"freeze".to_string(),
+            if (freeze) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+        schema::new_field(
+            b"action".to_string(),
+            if (freeze) { b"emergency_freeze" } else { b"unfreeze" }.to_string(),
+            b"string".to_string(),
+        ),
+    ]
+}
+
 // === Registration Functions ===
 
 /// Register all vesting decoders
@@ -177,6 +252,8 @@ public fun register_decoders(
 ) {
     register_create_vesting_decoder(registry, ctx);
     register_cancel_vesting_decoder(registry, ctx);
+    register_toggle_vesting_pause_decoder(registry, ctx);
+    register_toggle_vesting_freeze_decoder(registry, ctx);
 }
 
 fun register_create_vesting_decoder(
@@ -194,5 +271,23 @@ fun register_cancel_vesting_decoder(
 ) {
     let decoder = CancelVestingActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CancelVestingAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_toggle_vesting_pause_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ToggleVestingPauseActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<ToggleVestingPauseAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_toggle_vesting_freeze_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ToggleVestingFreezeActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<ToggleVestingFreezeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

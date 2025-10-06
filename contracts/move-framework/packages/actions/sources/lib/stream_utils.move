@@ -31,6 +31,7 @@ use std::u128;
 // === Constants ===
 
 public fun max_beneficiaries(): u64 { 100 }
+public fun max_vesting_duration_ms(): u64 { 315_360_000_000 } // 10 years
 
 // === Vesting Calculation Functions ===
 
@@ -239,6 +240,119 @@ public fun split_vested_unvested(
     };
     
     (to_pay_beneficiary, to_refund, unvested_claimed)
+}
+
+// === Pause Control Helpers ===
+
+/// Calculate pause_until timestamp for timed pause
+/// Returns None for indefinite pause (pause_duration_ms == 0)
+public fun calculate_pause_until(
+    current_time: u64,
+    pause_duration_ms: u64,
+): Option<u64> {
+    if (pause_duration_ms == 0) {
+        std::option::none() // Indefinite pause
+    } else {
+        // Safe addition - caller should validate overflow
+        std::option::some(current_time + pause_duration_ms)
+    }
+}
+
+/// Check if timed pause has expired
+public fun is_pause_expired(
+    paused_until_opt: &Option<u64>,
+    current_time: u64,
+): bool {
+    if (paused_until_opt.is_none()) {
+        false // Indefinite pause - never expires
+    } else {
+        current_time >= *paused_until_opt.borrow()
+    }
+}
+
+/// Validate pause duration doesn't overflow
+public fun validate_pause_duration(
+    current_time: u64,
+    pause_duration_ms: u64,
+): bool {
+    if (pause_duration_ms == 0) {
+        true // Indefinite pause is valid
+    } else {
+        let pause_until = current_time + pause_duration_ms;
+        pause_until > current_time // Check for overflow
+    }
+}
+
+// === Expiry Helpers ===
+
+/// Check if stream/vesting has expired
+public fun is_expired(
+    expiry_opt: &Option<u64>,
+    current_time: u64,
+): bool {
+    if (expiry_opt.is_none()) {
+        false // No expiry
+    } else {
+        current_time >= *expiry_opt.borrow()
+    }
+}
+
+/// Validate expiry is in the future and duration is reasonable
+public fun validate_expiry(
+    current_time: u64,
+    expiry_timestamp: u64,
+): bool {
+    if (expiry_timestamp <= current_time) {
+        false // Expiry must be in future
+    } else {
+        let duration = expiry_timestamp - current_time;
+        duration <= max_vesting_duration_ms()
+    }
+}
+
+// === State Check Helpers ===
+
+/// Check if claiming is allowed (not paused, not frozen, not expired)
+public fun can_claim(
+    is_paused: bool,
+    is_frozen: bool,
+    expiry_opt: &Option<u64>,
+    current_time: u64,
+): bool {
+    if (is_paused || is_frozen) {
+        return false
+    };
+    !is_expired(expiry_opt, current_time)
+}
+
+/// Calculate next vesting timestamp
+public fun next_vesting_time(
+    start_time: u64,
+    end_time: u64,
+    cliff_time_opt: &Option<u64>,
+    expiry_opt: &Option<u64>,
+    current_time: u64,
+): Option<u64> {
+    // Check expiry first
+    if (is_expired(expiry_opt, current_time)) {
+        return std::option::none()
+    };
+
+    // If before cliff, next vest is cliff time
+    if (cliff_time_opt.is_some()) {
+        let cliff = *cliff_time_opt.borrow();
+        if (current_time < cliff) {
+            return std::option::some(cliff)
+        };
+    };
+
+    // If after end, no more vesting
+    if (current_time >= end_time) {
+        return std::option::none()
+    };
+
+    // Linear vesting - always vesting now
+    std::option::some(current_time)
 }
 
 // === Test Helpers ===

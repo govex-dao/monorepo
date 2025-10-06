@@ -144,6 +144,13 @@ public fun init_all_default_policies(
     create_pool_delay_ms: u64,
     add_liquidity_delay_ms: u64,
     remove_liquidity_delay_ms: u64,
+    // Vesting and stream delays
+    vesting_create_delay_ms: u64,
+    vesting_cancel_delay_ms: u64,
+    toggle_vesting_pause_delay_ms: u64,
+    toggle_vesting_freeze_delay_ms: u64,
+    toggle_stream_pause_delay_ms: u64,
+    toggle_stream_freeze_delay_ms: u64,
 ) {
     type_policy_initializer::init_all_default_policies(
         registry,
@@ -171,5 +178,11 @@ public fun init_all_default_policies(
         create_pool_delay_ms,
         add_liquidity_delay_ms,
         remove_liquidity_delay_ms,
+        vesting_create_delay_ms,
+        vesting_cancel_delay_ms,
+        toggle_vesting_pause_delay_ms,
+        toggle_vesting_freeze_delay_ms,
+        toggle_stream_pause_delay_ms,
+        toggle_stream_freeze_delay_ms,
     )
 }

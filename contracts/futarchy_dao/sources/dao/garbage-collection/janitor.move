@@ -148,8 +148,7 @@ fun drain_common_generics(expired: &mut Expired) {
     // Stream Actions
     drain_stream_actions_for_coin<SUI>(expired);
 
-    // Oracle Mint Actions
-    drain_oracle_mint_for_coin<SUI>(expired);
+    // NOTE: Oracle Mint Actions removed - ConditionalMint/TieredMint replaced by PriceBasedMintGrant
 
     // Dividend Actions (phantom CoinType)
     gc_registry::delete_create_dividend<SUI>(expired);
@@ -198,18 +197,12 @@ fun drain_currency_actions_for_coin<CoinType>(expired: &mut Expired) {
 /// Helper to drain stream actions for a specific coin type
 fun drain_stream_actions_for_coin<CoinType>(expired: &mut Expired) {
     gc_registry::delete_create_payment<CoinType>(expired);
-    gc_registry::delete_create_budget_stream<CoinType>(expired);
     gc_registry::delete_execute_payment<CoinType>(expired);
     gc_registry::delete_cancel_payment<CoinType>(expired);
     gc_registry::delete_request_withdrawal<CoinType>(expired);
     gc_registry::delete_process_pending_withdrawal<CoinType>(expired);
 }
 
-/// Helper to drain oracle mint actions for a specific coin type
-fun drain_oracle_mint_for_coin<CoinType>(expired: &mut Expired) {
-    gc_registry::delete_conditional_mint<CoinType>(expired);
-    gc_registry::delete_tiered_mint<CoinType>(expired);
-}
 
 /// Helper to drain liquidity actions for a specific pair
 fun drain_liquidity_actions_for_pair<AssetType, StableType>(expired: &mut Expired) {

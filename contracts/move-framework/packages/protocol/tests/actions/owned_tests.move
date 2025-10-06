@@ -117,7 +117,7 @@ fun test_withdraw_flow() {
     owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), ctx);
     let coin = owned::do_withdraw<_, Outcome, Coin<SUI>, _>(
         &mut executable,
         &mut account, 
@@ -225,7 +225,7 @@ fun test_error_do_withdraw_wrong_object() {
     owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), ctx);
     let coin = owned::do_withdraw<_, Outcome, Coin<SUI>, _>(
         &mut executable,
         &mut account, 
@@ -259,7 +259,7 @@ fun test_error_do_withdraw_from_wrong_account() {
     owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account2.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account2.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account2.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), ctx);
     // try to disable from the account that didn't approve the intent
     let coin = owned::do_withdraw<_, Outcome, Coin<SUI>, _>(
         &mut executable, 
@@ -285,7 +285,7 @@ fun test_error_do_withdraw_from_wrong_constructor_witness() {
     owned::new_withdraw(&mut intent, &account, id, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), ctx);
     // try to disable with the wrong witness that didn't approve the intent
     let coin = owned::do_withdraw<_, Outcome, Coin<SUI>, _>(
         &mut executable, 

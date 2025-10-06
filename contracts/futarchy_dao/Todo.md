@@ -69,6 +69,40 @@ I am not sure they should hmmm
 or should have a type that doesnt and type that does?
 !!!!! maybe I want both types of multisigs
 
+
+# today
+- [X] Only allow founder mint or other stuff 4x above launchpad price ( make those configurable)
+- [NAH] Bring this into my code https://x.com/themoveguy/status/1968372304544706598?s=46
+- [X]Dao file walrus chink should have config about how far ahead the can be renuewed or prepaid for 
+- [ ] Post about tokenomics and plan
+- [ ]Fix front end cache bug
+- [ ]Fix front end github bugs
+- [ ]Fix front end snyk integration
+- [ ]set up multisig
+
+
+# later
+- [ ]Write proposal to lock me up
+- [ ]Get all events in db
+- [ ]Correct witness patterns cross package
+- [ ]Correct public function modifier
+- [ ]Correct  instance of type many places
+- [ ]Check for Move 2024 correct everywhere
+- [ ]Unit test coverage improve
+- [ ]Figure out ptb logic in tests??? Or integration tests of scripts for devnet integration tests
+- [ ]Unit Test coverage in pipeline
+- [ ]Linting in pipeline
+- [ ]Merge into develop branch
+- [ ]Make develop branch main one of repo
+- [ ]Do a weekly update
+- [ ]Write up amm paper
+- [ ]Build sdk
+- [ ]Make audit bot
+- [ ]Start using codex and gemini cli tools
+
+
+
+
 # Look at jose seperate packages for each module kinda thing to make upgrades easy
 
 # get all constants and magic number in constants files (accont framework has its own)
@@ -362,3 +396,12 @@ Cross dao proposals, blocking out propsal slots on calander say 3 ahead.
 Schronous or a sychrnous
 
 Oohh need new action type that have policy of cross dao. Kinda ruins vode reuse tho oooh or have build that takes intents into mera intent
+In v3 all dao to change is stable and asset and spin up multiple amm each with own id that approves some stuff maybe multiple to approve a policy
+
+
+have seperate proposal pools with small liquidity. e.g 1 minute for onchain actions
+
+e.g for self protocol management
+
+and then larger pools for main dao mangement
+

@@ -67,7 +67,7 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, cl
 #[test]
 fun test_edit_config_metadata() {
     let (scenario, extensions, mut account, clock) = start();    
-    assert!(account.metadata().length() == 0);
+    assert!(account.metadata().size() == 0);
 
     let auth = account.new_auth(version::current(), Witness());
     config::edit_metadata(
@@ -149,7 +149,7 @@ fun test_request_execute_config_deps() {
     );
     assert!(!account.deps().contains_name(b"External".to_string()));
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
     config::execute_config_deps<Config, Outcome>(&mut executable, &mut account);
     account.confirm_execution(executable);
 
@@ -220,7 +220,7 @@ fun test_request_execute_toggle_unverified_allowed() {
         scenario.ctx()
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
     config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account);
     account.confirm_execution(executable);
 

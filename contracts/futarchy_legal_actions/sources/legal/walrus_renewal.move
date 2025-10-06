@@ -52,6 +52,7 @@ const EUnauthorizedDocument: u64 = 0;
 const EBlobMismatch: u64 = 1;
 const EExceedsApprovedMax: u64 = 2;
 const EInvalidKeeperReward: u64 = 3;
+const ETooEarlyToRenew: u64 = 4;
 
 // === Constants ===
 
@@ -147,7 +148,25 @@ public fun do_walrus_renewal<Config, Outcome: store, IW: drop>(
     let provided_blob_id = blob::blob_id(blob);
     assert!(expected_blob_id == provided_blob_id, EBlobMismatch);
 
-    let old_expiry = blob::end_epoch(blob) as u64;
+    // 2b. Check chunk-level renewal policy (how far ahead renewal is allowed)
+    let current_epoch = ctx.epoch() as u64;
+    let blob_expiry = blob::end_epoch(blob) as u64;
+    let max_renewal_advance = dao_file_registry::get_chunk_max_renewal_advance_epochs(chunk);
+
+    // If chunk has a renewal limit, enforce it
+    if (option::is_some(&max_renewal_advance)) {
+        let max_advance_epochs = *option::borrow(&max_renewal_advance);
+
+        // Only enforce if blob hasn't expired yet
+        if (blob_expiry > current_epoch) {
+            let epochs_until_expiry = blob_expiry - current_epoch;
+            assert!(epochs_until_expiry <= max_advance_epochs, ETooEarlyToRenew);
+        }
+        // If blob already expired, allow renewal immediately
+    };
+    // If max_renewal_advance is None, no limit (can renew anytime)
+
+    let old_expiry = blob_expiry;
     let keeper = tx_context::sender(ctx);
 
     // 3. Deserialize APPROVED limits from intent

@@ -182,6 +182,9 @@ public struct ChunkPointer has store {
     walrus_storage_object_id: Option<ID>,   // Storage object ID for renewal
     walrus_expiry_epoch: Option<u64>,       // Cached expiry epoch for quick lookup
 
+    // Walrus renewal policy (per-chunk)
+    max_renewal_advance_epochs: Option<u64>, // Max epochs ahead this chunk can be renewed (None = no limit)
+
     // Immutability controls
     immutable: bool,                        // Permanent immutability (one-way: false → true)
     immutable_from: Option<u64>,           // Scheduled immutability (timestamp in ms)
@@ -678,6 +681,7 @@ fun validate_chunk_insertion(
 /// Takes ownership of Walrus Blob object (cheap - just metadata, not content)
 /// Supports all chunk types via optional time window parameters
 /// immutable_from: Optional timestamp when chunk becomes immutable (scheduled immutability)
+/// max_renewal_advance_epochs: Max epochs ahead this chunk can be renewed (None = no limit)
 public fun add_chunk(
     doc: &mut File,
     expected_sequence: u64,
@@ -687,6 +691,7 @@ public fun add_chunk(
     effective_from: Option<u64>,
     immutable: bool,
     immutable_from: Option<u64>,
+    max_renewal_advance_epochs: Option<u64>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
@@ -723,6 +728,7 @@ public fun add_chunk(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
+        max_renewal_advance_epochs,
         immutable,
         immutable_from,
         chunk_type,
@@ -792,6 +798,7 @@ public fun add_chunk_with_text(
         walrus_blob: option::none(),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::none(),
+        max_renewal_advance_epochs: option::none(), // N/A for text chunks
         immutable,
         immutable_from,
         chunk_type,
@@ -883,6 +890,7 @@ public fun insert_chunk_after(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
+        max_renewal_advance_epochs: option::none(),
         immutable,
         immutable_from,
         chunk_type,
@@ -967,6 +975,7 @@ public fun insert_chunk_with_text_after(
         walrus_blob: option::none(),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::none(),
+        max_renewal_advance_epochs: option::none(),
         immutable,
         immutable_from,
         chunk_type,
@@ -1056,6 +1065,7 @@ public fun insert_chunk_at_beginning(
         walrus_blob: option::some(walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(expiry_epoch),
+        max_renewal_advance_epochs: option::none(),
         immutable,
         immutable_from,
         chunk_type,
@@ -1138,6 +1148,7 @@ public fun insert_text_chunk_at_beginning(
         walrus_blob: option::none(),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::none(),
+        max_renewal_advance_epochs: option::none(),
         immutable,
         immutable_from,
         chunk_type,
@@ -1193,6 +1204,7 @@ public fun update_text_chunk(
         walrus_blob,
         walrus_storage_object_id,
         walrus_expiry_epoch,
+        max_renewal_advance_epochs,
         immutable,
         immutable_from,
         chunk_type,
@@ -1221,6 +1233,7 @@ public fun update_text_chunk(
         walrus_blob,
         walrus_storage_object_id,
         walrus_expiry_epoch,
+        max_renewal_advance_epochs,
         immutable,
         immutable_from,
         chunk_type,
@@ -1267,6 +1280,7 @@ public fun update_chunk(
         walrus_blob: old_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
+        max_renewal_advance_epochs,
         immutable,
         immutable_from,
         chunk_type,
@@ -1307,6 +1321,7 @@ public fun update_chunk(
         walrus_blob: option::some(new_walrus_blob),
         walrus_storage_object_id: option::none(),
         walrus_expiry_epoch: option::some(new_expiry_epoch),
+        max_renewal_advance_epochs,
         immutable,
         immutable_from,
         chunk_type,
@@ -1362,6 +1377,7 @@ public fun remove_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
+        max_renewal_advance_epochs: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1437,6 +1453,7 @@ public fun remove_text_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
+        max_renewal_advance_epochs: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1518,6 +1535,7 @@ public fun remove_expired_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
+        max_renewal_advance_epochs: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1597,6 +1615,7 @@ public fun remove_expired_text_chunk(
         walrus_blob: walrus_blob_option,
         walrus_storage_object_id: _,
         walrus_expiry_epoch: _,
+        max_renewal_advance_epochs: _,
         immutable: _,
         immutable_from: _,
         chunk_type: _,
@@ -1982,6 +2001,11 @@ public fun get_chunk_blob_id(chunk: &ChunkPointer): u256 {
     // Validate blob ID is non-empty to prevent hash collisions
     assert!(blob_id != 0, EEmptyWalrusBlobId);
     blob_id
+}
+
+/// Get max renewal advance epochs for a chunk (None = no limit)
+public fun get_chunk_max_renewal_advance_epochs(chunk: &ChunkPointer): Option<u64> {
+    chunk.max_renewal_advance_epochs
 }
 
 // === Walrus Renewal Helper Functions ===

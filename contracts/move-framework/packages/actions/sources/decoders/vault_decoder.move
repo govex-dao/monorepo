@@ -25,7 +25,12 @@ use std::{string::String, type_name};
 use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use account_actions::vault::{SpendAction, DepositAction};
+use account_actions::vault::{
+    SpendAction,
+    DepositAction,
+    ToggleStreamPauseAction,
+    ToggleStreamFreezeAction,
+};
 
 // === Decoder Objects ===
 
@@ -36,6 +41,16 @@ public struct SpendActionDecoder has key, store {
 
 /// Decoder that knows how to decode DepositAction<CoinType>
 public struct DepositActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for ToggleStreamPauseAction
+public struct ToggleStreamPauseActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for ToggleStreamFreezeAction
+public struct ToggleStreamFreezeActionDecoder has key, store {
     id: UID,
 }
 
@@ -107,6 +122,78 @@ public fun decode_deposit_action<CoinType>(
     fields
 }
 
+/// Decode a ToggleStreamPauseAction
+public fun decode_toggle_stream_pause_action(
+    _decoder: &ToggleStreamPauseActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
+    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let pause_duration_ms = bcs::peel_u64(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"vault_name".to_string(),
+            vault_name,
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"stream_id".to_string(),
+            stream_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"pause_duration_ms".to_string(),
+            pause_duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"action".to_string(),
+            if (pause_duration_ms == 0) { b"unpause" } else { b"pause" }.to_string(),
+            b"string".to_string(),
+        ),
+    ]
+}
+
+/// Decode a ToggleStreamFreezeAction
+public fun decode_toggle_stream_freeze_action(
+    _decoder: &ToggleStreamFreezeActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let vault_name = bcs::peel_vec_u8(&mut bcs_data).to_string();
+    let stream_id = object::id_from_bytes(bcs::peel_vec_u8(&mut bcs_data));
+    let freeze = bcs::peel_bool(&mut bcs_data);
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"vault_name".to_string(),
+            vault_name,
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"stream_id".to_string(),
+            stream_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"freeze".to_string(),
+            if (freeze) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+        schema::new_field(
+            b"action".to_string(),
+            if (freeze) { b"emergency_freeze" } else { b"unfreeze" }.to_string(),
+            b"string".to_string(),
+        ),
+    ]
+}
+
 // === Registration Functions ===
 
 /// Register all vault decoders in the registry
@@ -117,6 +204,8 @@ public fun register_decoders(
 ) {
     register_spend_decoder(registry, ctx);
     register_deposit_decoder(registry, ctx);
+    register_toggle_stream_pause_decoder(registry, ctx);
+    register_toggle_stream_freeze_decoder(registry, ctx);
 }
 
 /// Register the SpendAction decoder
@@ -149,6 +238,42 @@ fun register_deposit_decoder(
     };
 
     let type_key = type_name::with_defining_ids<DepositAction<CoinPlaceholder>>();
+
+    dynamic_object_field::add(
+        schema::registry_id_mut(registry),
+        type_key,
+        decoder,
+    );
+}
+
+/// Register the ToggleStreamPauseAction decoder
+fun register_toggle_stream_pause_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ToggleStreamPauseActionDecoder {
+        id: object::new(ctx),
+    };
+
+    let type_key = type_name::with_defining_ids<ToggleStreamPauseAction>();
+
+    dynamic_object_field::add(
+        schema::registry_id_mut(registry),
+        type_key,
+        decoder,
+    );
+}
+
+/// Register the ToggleStreamFreezeAction decoder
+fun register_toggle_stream_freeze_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = ToggleStreamFreezeActionDecoder {
+        id: object::new(ctx),
+    };
+
+    let type_key = type_name::with_defining_ids<ToggleStreamFreezeAction>();
 
     dynamic_object_field::add(
         schema::registry_id_mut(registry),

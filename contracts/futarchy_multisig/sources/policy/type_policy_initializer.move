@@ -312,6 +312,12 @@ public fun init_all_default_policies(
     create_pool_delay_ms: u64,
     add_liquidity_delay_ms: u64,
     remove_liquidity_delay_ms: u64,
+    vesting_create_delay_ms: u64,
+    vesting_cancel_delay_ms: u64,
+    toggle_vesting_pause_delay_ms: u64,
+    toggle_vesting_freeze_delay_ms: u64,
+    toggle_stream_pause_delay_ms: u64,
+    toggle_stream_freeze_delay_ms: u64,
 ) {
     init_treasury_policies(
         registry,
@@ -362,5 +368,96 @@ public fun init_all_default_policies(
         create_pool_delay_ms,
         add_liquidity_delay_ms,
         remove_liquidity_delay_ms
+    );
+
+    init_vesting_stream_policies(
+        registry,
+        dao_id,
+        treasury_council,
+        vesting_create_delay_ms,
+        vesting_cancel_delay_ms,
+        toggle_vesting_pause_delay_ms,
+        toggle_vesting_freeze_delay_ms,
+        toggle_stream_pause_delay_ms,
+        toggle_stream_freeze_delay_ms
+    );
+}
+
+/// Initialize vesting and stream control policies
+public fun init_vesting_stream_policies(
+    registry: &mut PolicyRegistry,
+    dao_id: ID,
+    treasury_council: ID,
+    vesting_create_delay_ms: u64,
+    vesting_cancel_delay_ms: u64,
+    toggle_vesting_pause_delay_ms: u64,
+    toggle_vesting_freeze_delay_ms: u64,
+    toggle_stream_pause_delay_ms: u64,
+    toggle_stream_freeze_delay_ms: u64,
+) {
+    // Creating vesting schedules requires treasury council
+    policy_registry::set_type_policy<framework_action_types::VestingCreate>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        vesting_create_delay_ms
+    );
+
+    // Canceling vesting requires treasury council
+    policy_registry::set_type_policy<framework_action_types::VestingCancel>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        vesting_cancel_delay_ms
+    );
+
+    // Pausing/resuming vesting requires treasury council
+    policy_registry::set_type_policy<framework_action_types::ToggleVestingPause>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        toggle_vesting_pause_delay_ms
+    );
+
+    // Emergency freeze/unfreeze requires treasury council
+    policy_registry::set_type_policy<framework_action_types::ToggleVestingFreeze>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        toggle_vesting_freeze_delay_ms
+    );
+
+    // Pausing/resuming streams requires treasury council
+    policy_registry::set_type_policy<framework_action_types::ToggleStreamPause>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        toggle_stream_pause_delay_ms
+    );
+
+    // Emergency freeze/unfreeze streams requires treasury council
+    policy_registry::set_type_policy<framework_action_types::ToggleStreamFreeze>(
+        registry,
+        dao_id,
+        option::some(treasury_council),
+        policy_registry::MODE_COUNCIL_ONLY(),
+        option::none(),
+        policy_registry::MODE_DAO_ONLY(),
+        toggle_stream_freeze_delay_ms
     );
 }

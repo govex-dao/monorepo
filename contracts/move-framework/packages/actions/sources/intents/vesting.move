@@ -1,0 +1,139 @@
+// ============================================================================
+// FORK ADDITION - Vesting Intents
+// ============================================================================
+// Intent helper module for vesting operations.
+//
+// CHANGES IN THIS FORK:
+// - PTBs handle object flow naturally - no ExecutionContext needed
+// - Provides high-level request functions for vesting toggle actions
+// ============================================================================
+
+module account_actions::vesting_intents;
+
+// === Imports ===
+
+use std::string::String;
+use sui::object::ID;
+use account_protocol::{
+    account::{Account, Auth},
+    executable::Executable,
+    intents::Params,
+    intent_interface,
+};
+use account_actions::{
+    vesting,
+    version,
+};
+
+// === Aliases ===
+
+use fun intent_interface::build_intent as Account.build_intent;
+use fun intent_interface::process_intent as Account.process_intent;
+
+// === Structs ===
+
+/// Intent Witness defining the vesting control intent
+public struct VestingControlIntent() has copy, drop;
+
+// === Public Functions ===
+
+/// Request to toggle vesting pause (pause or resume)
+public fun request_toggle_vesting_pause<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    vesting_id: ID,
+    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingControlIntent(),
+        ctx,
+        |intent, iw| {
+            vesting::new_toggle_vesting_pause(intent, vesting_id, pause_duration_ms, iw);
+        }
+    );
+}
+
+/// Request to toggle vesting emergency freeze
+public fun request_toggle_vesting_freeze<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    vesting_id: ID,
+    freeze: bool, // true = freeze, false = unfreeze
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingControlIntent(),
+        ctx,
+        |intent, iw| {
+            vesting::new_toggle_vesting_freeze(intent, vesting_id, freeze, iw);
+        }
+    );
+}
+
+/// Executes toggle vesting pause action
+public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vesting: &mut vesting::Vesting<CoinType>,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        VestingControlIntent(),
+        |executable, iw| {
+            vesting::do_toggle_vesting_pause<_, _, CoinType, _>(
+                executable,
+                account,
+                vesting,
+                clock,
+                version::current(),
+                iw,
+                ctx
+            );
+        }
+    );
+}
+
+/// Executes toggle vesting freeze action
+public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vesting: &mut vesting::Vesting<CoinType>,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        VestingControlIntent(),
+        |executable, iw| {
+            vesting::do_toggle_vesting_freeze<_, _, CoinType, _>(
+                executable,
+                account,
+                vesting,
+                clock,
+                version::current(),
+                iw
+            );
+        }
+    );
+}

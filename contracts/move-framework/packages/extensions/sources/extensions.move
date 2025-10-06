@@ -217,7 +217,7 @@ fun test_init() {
     init(scenario.ctx());
     scenario.next_tx(admin);
 
-    assert!(scenario.has_most_recent_for_address<Extensions>(@account_extensions));
+    assert!(ts::has_most_recent_shared<Extensions>());
     assert!(scenario.has_most_recent_for_sender<AdminCap>());
 
     scenario.end();

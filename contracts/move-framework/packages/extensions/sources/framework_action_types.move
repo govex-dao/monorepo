@@ -93,7 +93,19 @@ module account_extensions::framework_action_types {
     
     /// Cancel vesting schedule
     public struct VestingCancel has drop {}
-    
+
+    /// Toggle vesting pause (pause/resume)
+    public struct ToggleVestingPause has drop {}
+
+    /// Toggle vesting emergency freeze
+    public struct ToggleVestingFreeze has drop {}
+
+    /// Toggle stream pause (pause/resume)
+    public struct ToggleStreamPause has drop {}
+
+    /// Toggle stream emergency freeze
+    public struct ToggleStreamFreeze has drop {}
+
     // ======== Configuration Actions ========
     
     /// Update account dependencies
@@ -141,6 +153,10 @@ module account_extensions::framework_action_types {
     public fun kiosk_list(): KioskList { KioskList {} }
     public fun vesting_create(): VestingCreate { VestingCreate {} }
     public fun vesting_cancel(): VestingCancel { VestingCancel {} }
+    public fun toggle_vesting_pause(): ToggleVestingPause { ToggleVestingPause {} }
+    public fun toggle_vesting_freeze(): ToggleVestingFreeze { ToggleVestingFreeze {} }
+    public fun toggle_stream_pause(): ToggleStreamPause { ToggleStreamPause {} }
+    public fun toggle_stream_freeze(): ToggleStreamFreeze { ToggleStreamFreeze {} }
     public fun config_update_deps(): ConfigUpdateDeps { ConfigUpdateDeps {} }
     public fun config_toggle_unverified(): ConfigToggleUnverified { ConfigToggleUnverified {} }
     public fun config_update_metadata(): ConfigUpdateMetadata { ConfigUpdateMetadata {} }

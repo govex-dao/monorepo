@@ -1,0 +1,19 @@
+- [ ] move-framework/packages/extensions/sources
+- [ ] move-framework/packages/protocol/sources
+- [ ] move-framework/packages/actions/sources
+- [X] futarchy_one_shot_utils/sources
+- [X] futarchy_types/sources (1 - easiest: test constructors/accessors work correctly)
+- [X] futarchy_seal_utils/sources (2 - utility functions, minimal deps)
+- [~] futarchy_core/sources (3 - partial: priority_score tests written, blocked by build errors)
+- [ ] futarchy_oracle/sources (4 - option grants with time logic)
+- [ ] futarchy_streams/sources (5 - payment streams, needs Account setup)
+- [ ] futarchy_legal_actions/sources (6 - document registry with Walrus)
+- [ ] futarchy_payments/sources (7 - dividend trees, pro-rata math)
+- [ ] futarchy_governance_actions/sources (8 - second-order governance)
+- [ ] futarchy_vault/sources (9 - vault ops with coin allowlists)
+- [ ] futarchy_lifecycle/sources (10 - dissolution state machine)
+- [ ] futarchy_multisig/sources (11 - weighted voting, complex flows)
+- [ ] futarchy_factory/sources (12 - full DAO bootstrap)
+- [ ] futarchy_actions/sources (13 - 26+ action types, BCS dispatch)
+- [ ] futarchy_markets/sources (14 - AMM math, quantum liquidity, oracles)
+- [ ] futarchy_dao/sources (15 - hardest: integrates all packages)

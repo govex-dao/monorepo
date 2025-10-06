@@ -105,17 +105,20 @@ public fun get_action_type_name<T: drop>(): TypeName {
 // === Test Functions ===
 
 #[test_only]
-use account_protocol::intents::test_helpers;
+public struct TestAction has drop {}
 
 #[test_only]
-public struct TestAction has drop {}
+fun create_test_action_spec<T>(): ActionSpec {
+    use account_protocol::intents;
+    intents::new_action_spec<T>(vector::empty(), 1)
+}
 
 #[test_only]
 public struct WrongAction has drop {}
 
 #[test]
 fun test_assert_action_type_success() {
-    let spec = test_helpers::create_test_action_spec<TestAction>();
+    let spec = create_test_action_spec<TestAction>();
     assert_action_type<TestAction>(&spec);
     // Should not abort
 }
@@ -123,14 +126,14 @@ fun test_assert_action_type_success() {
 #[test]
 #[expected_failure(abort_code = EWrongActionType)]
 fun test_assert_action_type_failure() {
-    let spec = test_helpers::create_test_action_spec<TestAction>();
+    let spec = create_test_action_spec<TestAction>();
     assert_action_type<WrongAction>(&spec);
     // Should abort with EWrongActionType
 }
 
 #[test]
 fun test_is_action_type() {
-    let spec = test_helpers::create_test_action_spec<TestAction>();
+    let spec = create_test_action_spec<TestAction>();
     assert!(is_action_type<TestAction>(&spec));
     assert!(!is_action_type<WrongAction>(&spec));
 }
@@ -138,7 +141,7 @@ fun test_is_action_type() {
 #[test]
 #[expected_failure(abort_code = 999)]
 fun test_assert_action_type_with_custom_error() {
-    let spec = test_helpers::create_test_action_spec<TestAction>();
+    let spec = create_test_action_spec<TestAction>();
     assert_action_type_with_error<WrongAction>(&spec, 999);
     // Should abort with custom error 999
 }

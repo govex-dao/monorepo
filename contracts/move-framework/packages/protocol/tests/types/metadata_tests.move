@@ -21,7 +21,7 @@ fun test_metadata_empty() {
     let scenario = ts::begin(OWNER);
 
     let metadata = metadata::empty();
-    assert!(metadata.length() == 0);
+    assert!(metadata.size() == 0);
 
     scenario.end();
 }

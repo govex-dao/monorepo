@@ -96,7 +96,6 @@ public struct CreateStream has drop {}
 public struct CancelStream has drop {}
 public struct WithdrawStream has drop {}
 public struct CreateProjectStream has drop {}
-public struct CreateBudgetStream has drop {}
 
 public struct UpdateStream has drop {}
 public struct PauseStream has drop {}
@@ -121,8 +120,18 @@ public struct CreateDividend has drop {}
 // === Oracle Action Types ===
 
 public struct ReadOraclePrice has drop {}
-public struct ConditionalMint has drop {}
-public struct TieredMint has drop {}
+// NOTE: ConditionalMint and TieredMint have been replaced by PriceBasedMintGrant shared object
+
+// === Oracle Mint Grant Action Types (Price-Based Minting) ===
+
+public struct CreateOracleGrant has drop {}
+public struct ClaimGrantTokens has drop {}
+public struct ExecuteMilestoneTier has drop {}
+public struct CancelGrant has drop {}
+public struct PauseGrant has drop {}
+public struct UnpauseGrant has drop {}
+public struct EmergencyFreezeGrant has drop {}
+public struct EmergencyUnfreezeGrant has drop {}
 
 // === DAO File Registry Action Types ===
 
@@ -349,7 +358,6 @@ public fun create_stream(): TypeName { type_name::with_defining_ids<CreateStream
 public fun cancel_stream(): TypeName { type_name::with_defining_ids<CancelStream>() }
 public fun withdraw_stream(): TypeName { type_name::with_defining_ids<WithdrawStream>() }
 public fun create_project_stream(): TypeName { type_name::with_defining_ids<CreateProjectStream>() }
-public fun create_budget_stream(): TypeName { type_name::with_defining_ids<CreateBudgetStream>() }
 
 public fun update_stream(): TypeName { type_name::with_defining_ids<UpdateStream>() }
 public fun pause_stream(): TypeName { type_name::with_defining_ids<PauseStream>() }
@@ -368,8 +376,14 @@ public fun challenge_withdrawals(): TypeName { type_name::with_defining_ids<Chal
 public fun cancel_challenged_withdrawals(): TypeName { type_name::with_defining_ids<CancelChallengedWithdrawals>() }
 
 // Oracle actions
-public fun conditional_mint(): TypeName { type_name::with_defining_ids<ConditionalMint>() }
-public fun tiered_mint(): TypeName { type_name::with_defining_ids<TieredMint>() }
+public fun create_oracle_grant(): TypeName { type_name::with_defining_ids<CreateOracleGrant>() }
+public fun claim_grant_tokens(): TypeName { type_name::with_defining_ids<ClaimGrantTokens>() }
+public fun execute_milestone_tier(): TypeName { type_name::with_defining_ids<ExecuteMilestoneTier>() }
+public fun cancel_grant(): TypeName { type_name::with_defining_ids<CancelGrant>() }
+public fun pause_grant(): TypeName { type_name::with_defining_ids<PauseGrant>() }
+public fun unpause_grant(): TypeName { type_name::with_defining_ids<UnpauseGrant>() }
+public fun emergency_freeze_grant(): TypeName { type_name::with_defining_ids<EmergencyFreezeGrant>() }
+public fun emergency_unfreeze_grant(): TypeName { type_name::with_defining_ids<EmergencyUnfreezeGrant>() }
 
 // DAO File Registry actions
 public fun create_dao_file_registry(): TypeName { type_name::with_defining_ids<CreateDaoFileRegistry>() }

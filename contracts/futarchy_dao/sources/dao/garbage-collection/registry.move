@@ -262,10 +262,6 @@ public fun delete_create_payment<CoinType>(expired: &mut Expired) {
     stream_actions::delete_create_payment<CoinType>(expired);
 }
 
-public fun delete_create_budget_stream<CoinType>(expired: &mut Expired) {
-    stream_actions::delete_create_budget_stream<CoinType>(expired);
-}
-
 public fun delete_execute_payment<CoinType>(expired: &mut Expired) {
     stream_actions::delete_execute_payment<CoinType>(expired);
 }
@@ -316,15 +312,8 @@ public fun delete_proposal_reservation(expired: &mut Expired) {
 }
 
 // === Oracle Actions ===
-// Only mint actions need cleanup
-
-public fun delete_conditional_mint<CoinType>(expired: &mut Expired) {
-    oracle_actions::delete_conditional_mint<CoinType>(expired);
-}
-
-public fun delete_tiered_mint<CoinType>(expired: &mut Expired) {
-    oracle_actions::delete_tiered_mint<CoinType>(expired);
-}
+// NOTE: ConditionalMint and TieredMint have been replaced by PriceBasedMintGrant shared object
+// ReadOraclePrice action has drop, no cleanup needed
 
 // === Memo Actions ===
 public fun delete_memo(expired: &mut Expired) {

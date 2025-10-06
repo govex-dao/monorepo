@@ -133,14 +133,16 @@ const ENotAuthorizedWithdrawer: u64 = 17;
 const EWithdrawerAlreadyExists: u64 = 18;
 const EInvalidBudgetStream: u64 = 19;
 const ETooManyPendingWithdrawals: u64 = 20;
-const EWithdrawalNotReady: u64 = 21;
-const EWithdrawalChallenged: u64 = 22;
-const EMissingReasonCode: u64 = 23;
-const EMissingProjectName: u64 = 24;
-const EChallengeMismatch: u64 = 25;
-const ECannotWithdrawFromVault: u64 = 26;
-const EBudgetExceeded: u64 = 27;
-const EInvalidSourceMode: u64 = 28;
+const EVaultNotFound: u64 = 21;
+const EWithdrawalNotReady: u64 = 22;
+const EWithdrawalChallenged: u64 = 23;
+const EMissingReasonCode: u64 = 24;
+const EMissingProjectName: u64 = 25;
+const EChallengeMismatch: u64 = 26;
+const ECannotWithdrawFromVault: u64 = 27;
+const EBudgetExceeded: u64 = 28;
+const EInvalidSourceMode: u64 = 29;
+const EInvalidStreamType: u64 = 30;
 
 const MAX_WITHDRAWERS: u64 = 100;
 const MAX_PENDING_WITHDRAWALS: u64 = 100;
@@ -333,7 +335,17 @@ public struct PaymentConfig has store {
     budget_config: Option<BudgetStreamConfig>,
 }
 
-/// Action to create a payment (stream or one-time)
+/// Budget stream parameters (optional)
+public struct BudgetParams has store, drop, copy {
+    project_name: String,
+    pending_period_ms: u64,
+    budget_period_ms: Option<u64>,
+    max_per_period: Option<u64>,
+}
+
+/// Unified action to create any type of payment (stream, recurring, or budget stream)
+/// If budget_config is Some, creates a budget stream with accountability features
+/// If budget_config is None, creates a regular payment stream
 public struct CreatePaymentAction<phantom CoinType> has store, drop, copy {
     payment_type: u8,
     source_mode: u8,
@@ -348,20 +360,9 @@ public struct CreatePaymentAction<phantom CoinType> has store, drop, copy {
     max_per_withdrawal: u64,
     min_interval_ms: u64,
     max_beneficiaries: u64,
-}
 
-/// Action to create a budget stream (Keep original structure)
-public struct CreateBudgetStreamAction<phantom CoinType> has store, drop, copy {
-    recipient: address,
-    amount: u64,
-    start_timestamp: u64,
-    end_timestamp: u64,
-    project_name: String,
-    pending_period_ms: u64,
-    cancellable: bool,
-    description: String,
-    budget_period_ms: Option<u64>,
-    max_per_period: Option<u64>,
+    // Optional: If Some, creates a budget stream with accountability
+    budget_config: Option<BudgetParams>,
 }
 
 /// Action to cancel a payment
@@ -455,6 +456,7 @@ public fun new_create_payment_action<CoinType>(
         max_per_withdrawal,
         min_interval_ms,
         max_beneficiaries,
+        budget_config: option::none(),
     }
 }
 
@@ -521,6 +523,22 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     let min_interval_ms = bcs::peel_u64(&mut reader);
     let max_beneficiaries = bcs::peel_u64(&mut reader);
 
+    // Deserialize optional budget config
+    let budget_config = if (bcs::peel_bool(&mut reader)) {
+        let project_name = bcs::peel_vec_u8(&mut reader).to_string();
+        let pending_period_ms = bcs::peel_u64(&mut reader);
+        let budget_period_ms = bcs::peel_option_u64(&mut reader);
+        let max_per_period = bcs::peel_option_u64(&mut reader);
+        option::some(BudgetParams {
+            project_name,
+            pending_period_ms,
+            budget_period_ms,
+            max_per_period,
+        })
+    } else {
+        option::none()
+    };
+
     let action = CreatePaymentAction<CoinType> {
         payment_type,
         source_mode,
@@ -535,6 +553,7 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
         max_per_withdrawal,
         min_interval_ms,
         max_beneficiaries,
+        budget_config,
     };
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -588,8 +607,8 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
         option::none()
     };
     
-    // For isolated pools, just track the amount - funding comes separately
-    let isolated_pool_amount = if (action.source_mode == SOURCE_ISOLATED_POOL) {
+    // For isolated pools, create a separate vault for the pool and create stream there
+    let (vault_stream_id_isolated, isolated_pool_amount) = if (action.source_mode == SOURCE_ISOLATED_POOL) {
         let total_amount = if (action.payment_type == PAYMENT_TYPE_STREAM) {
             action.amount
         } else {
@@ -600,14 +619,64 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
                 action.amount * 12
             }
         };
-        
-        // For isolated pools, the pool must be funded separately
-        // This avoids complexity of withdrawing from vault here
-        option::some(total_amount)
+
+        // Create isolated vault name for this payment
+        let mut isolated_vault_name = b"isolated_".to_string();
+        isolated_vault_name.append(payment_id);
+
+        // Check if isolated vault exists
+        // Note: Vault will be auto-created on first deposit via vault::deposit_coin
+        // For now, we require the vault to already exist with funds before creating stream
+        assert!(vault::has_vault<Config>(account, isolated_vault_name), EVaultNotFound);
+
+        // Create stream in isolated vault (vault must already be funded)
+        let auth = account::new_auth(account, version::current(), witness);
+        let stream_id = vault::create_stream<Config, CoinType>(
+            auth,
+            account,
+            isolated_vault_name,
+            action.recipient,
+            total_amount,
+            action.start_timestamp,
+            action.end_timestamp,
+            if (action.interval_or_cliff > 0) { option::some(action.interval_or_cliff) } else { option::none() },
+            action.max_per_withdrawal,
+            action.min_interval_ms,
+            action.max_beneficiaries,
+            clock,
+            ctx
+        );
+
+        (option::some(stream_id), option::some(total_amount))
     } else {
-        option::none()
+        (option::none(), option::none())
     };
     
+    // Create budget config if specified
+    let (is_budget_stream, budget_stream_config) = if (action.budget_config.is_some()) {
+        let budget_params = action.budget_config.borrow();
+
+        // Budget streams must be PAYMENT_TYPE_STREAM and SOURCE_DIRECT_TREASURY
+        assert!(action.payment_type == PAYMENT_TYPE_STREAM, EInvalidStreamType);
+        assert!(action.source_mode == SOURCE_DIRECT_TREASURY, EInvalidSourceMode);
+
+        let budget_cfg = BudgetStreamConfig {
+            project_name: budget_params.project_name,
+            pending_period_ms: budget_params.pending_period_ms,
+            pending_withdrawals: table::new(ctx),
+            pending_count: 0,
+            total_pending_amount: 0,
+            next_withdrawal_id: 0,
+            budget_period_ms: budget_params.budget_period_ms,
+            current_period_start: clock::timestamp_ms(clock),
+            current_period_claimed: 0,
+            max_per_period: budget_params.max_per_period,
+        };
+        (true, option::some(budget_cfg))
+    } else {
+        (false, option::none())
+    };
+
     // Create config with simplified single recipient
     let config = PaymentConfig {
         payment_type: action.payment_type,
@@ -623,8 +692,8 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
         cancellable: action.cancellable,
         active: true,
         description: action.description,
-        is_budget_stream: false,
-        budget_config: option::none(),
+        is_budget_stream,
+        budget_config: budget_stream_config,
     };
     
     // Store the payment
@@ -688,100 +757,22 @@ public fun do_cancel_payment<Config: store, Outcome: store, CoinType: drop, IW: 
         _clock,
         ctx
     );
-    // Transfer the refunded coin to the sender
-    transfer::public_transfer(refund_coin, tx_context::sender(ctx));
+
+    // Return refund to treasury or sender based on flag
+    if (action.return_unclaimed_to_treasury && refund_coin.value() > 0) {
+        vault::deposit_permissionless(
+            account,
+            string::utf8(b"treasury"),
+            refund_coin
+        );
+    } else if (refund_coin.value() > 0) {
+        transfer::public_transfer(refund_coin, tx_context::sender(ctx));
+    } else {
+        coin::destroy_zero(refund_coin);
+    };
 
     // Execute and increment
     executable::increment_action_idx(executable);
-}
-
-/// Execute do_create_budget_stream action
-/// Returns the payment ID for PTB chaining
-public fun do_create_budget_stream<Config: store, Outcome: store, CoinType: drop, IW: copy + drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,
-    _version_witness: VersionWitness,
-    witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): String {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::CreateBudgetStream>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut reader = bcs::new(*action_data);
-    let recipient = bcs::peel_address(&mut reader);
-    let amount = bcs::peel_u64(&mut reader);
-    let start_timestamp = bcs::peel_u64(&mut reader);
-    let end_timestamp = bcs::peel_u64(&mut reader);
-    let project_name = bcs::peel_vec_u8(&mut reader).to_string();
-    let pending_period_ms = bcs::peel_u64(&mut reader);
-    let cancellable = bcs::peel_bool(&mut reader);
-    let description = bcs::peel_vec_u8(&mut reader).to_string();
-    let budget_period_ms = bcs::peel_option_u64(&mut reader);
-    let max_per_period = bcs::peel_option_u64(&mut reader);
-
-    let action = CreateBudgetStreamAction<CoinType> {
-        recipient,
-        amount,
-        start_timestamp,
-        end_timestamp,
-        project_name,
-        pending_period_ms,
-        cancellable,
-        description,
-        budget_period_ms,
-        max_per_period,
-    };
-    bcs_validation::validate_all_bytes_consumed(reader);
-    
-    let mut config = PaymentConfig {
-        payment_type: PAYMENT_TYPE_STREAM,
-        source_mode: SOURCE_DIRECT_TREASURY,
-        authorized_withdrawers: table::new(ctx),
-        withdrawer_count: 1,
-        vault_stream_id: option::none(),
-        isolated_pool_amount: option::none(),
-        interval_ms: option::none(),
-        total_payments: 0,
-        payments_made: 0,
-        last_payment_timestamp: 0,
-        cancellable: action.cancellable,
-        active: true,
-        description: action.description,
-        is_budget_stream: true,
-        budget_config: option::some(BudgetStreamConfig {
-            project_name: action.project_name,
-            pending_period_ms: action.pending_period_ms,
-            pending_withdrawals: table::new(ctx),
-            pending_count: 0,
-            total_pending_amount: 0,
-            next_withdrawal_id: 0,
-            budget_period_ms: action.budget_period_ms,
-            current_period_start: clock::timestamp_ms(clock),
-            current_period_claimed: 0,
-            max_per_period: action.max_per_period,
-        }),
-    };
-    
-    table::add(&mut config.authorized_withdrawers, action.recipient, true);
-    
-    let payment_id = generate_payment_id(PAYMENT_TYPE_STREAM, clock::timestamp_ms(clock), ctx);
-    let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
-        account,
-        PaymentStorageKey {},
-        version::current()
-    );
-    
-    table::add(&mut storage.payments, payment_id, config);
-    vector::push_back(&mut storage.payment_ids, payment_id);
-    storage.total_payments = storage.total_payments + 1;
-
-    // Return payment ID for PTB chaining
-    payment_id
 }
 
 /// Execute do_execute_payment action (for recurring payments)
@@ -1207,7 +1198,14 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
         };
         
         assert!(available > 0, ENothingToClaim);
-        
+
+        // Get claimed amount BEFORE withdrawal for accurate event data
+        let (_, total_amount, claimed_before, _, _, _, _) = vault::stream_info(
+            account,
+            string::utf8(b"treasury"),
+            stream_id
+        );
+
         // Handle budget stream accountability
         if (is_budget_stream && has_budget_config) {
             let storage: &mut PaymentStorage = account::borrow_managed_data_mut(
@@ -1225,11 +1223,8 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
                 ctx
             );
         };
-        
-        // In simplified model, vault stream tracks claims internally
-        // No need to track claimed_amounts separately
-        
-        // Withdraw from vault stream
+
+        // Withdraw from vault stream (updates claimed_amount internally)
         let coin = vault::withdraw_from_stream<Config, CoinType>(
             account,
             string::utf8(b"treasury"),
@@ -1239,19 +1234,12 @@ public fun claim_from_payment<Config: store, CoinType: drop>(
             ctx
         );
 
-        // Get total claimed from vault for event
-        let (_, total_amount, claimed_amount, _, _, _, _) = vault::stream_info(
-            account,
-            string::utf8(b"treasury"),
-            stream_id
-        );
-        
         event::emit(PaymentClaimed {
             account_id: object::id(account),
             payment_id,
             recipient: sender,
             amount_claimed: available,
-            total_claimed: claimed_amount + available,
+            total_claimed: claimed_before + available,  // Correct: use claimed_before
             timestamp: clock.timestamp_ms(),
         });
         
@@ -1569,12 +1557,6 @@ fun withdraw_from_isolated_pool<Config: store, CoinType: drop>(
 // === Cleanup Functions === (Keep all original)
 
 public fun delete_create_payment<CoinType>(expired: &mut account_protocol::intents::Expired) {
-    // Remove the action spec from expired intent
-    let spec = account_protocol::intents::remove_action_spec(expired);
-    let _ = spec;
-}
-
-public fun delete_create_budget_stream<CoinType>(expired: &mut account_protocol::intents::Expired) {
     // Remove the action spec from expired intent
     let spec = account_protocol::intents::remove_action_spec(expired);
     let _ = spec;

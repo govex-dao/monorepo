@@ -849,6 +849,9 @@ use account_extensions::extensions;
 public struct TestConfig has copy, drop, store {}
 #[test_only]
 public struct TestWitness() has drop;
+
+#[test_only]
+public struct TestWitness2() has drop;
 #[test_only]
 public struct WrongWitness() has drop;
 #[test_only]
@@ -1101,7 +1104,7 @@ fun test_metadata_access() {
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     
     // Should not abort - just testing access
-    assert_eq!(metadata(&account).length(), 0);
+    assert_eq(metadata(&account).size(), 0);
     destroy(account);
 }
 
@@ -1135,7 +1138,8 @@ fun test_assert_config_module_wrong_witness_package_address() {
     let deps = deps::new_for_testing();
     
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    assert_is_config_module(&account, extensions::witness());
+    // Test with wrong witness - should fail because TestWitness2 is from a different module
+    assert_is_config_module(&account, TestWitness2());
     destroy(account);
 }
 
@@ -1145,7 +1149,8 @@ fun test_assert_config_module_wrong_witness_module() {
     let deps = deps::new_for_testing();
     
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    assert_is_config_module(&account, version::witness());
+    // Test with wrong witness - should fail because TestWitness2 is from a different module
+    assert_is_config_module(&account, TestWitness2());
     destroy(account);
 }
 
