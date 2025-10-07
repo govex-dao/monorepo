@@ -3,9 +3,9 @@ import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs/promises';
 
-export async function processAndGetBase64Icon(iconCachePath: string | null, daoId: string): Promise<string | null> {
+export async function processAndGetBase64Icon(iconCachePath: string | null | undefined, iconUrl: string | undefined): Promise<string | null> {
     if (!iconCachePath) {
-        return null;
+        return iconUrl || null;
     }
 
     try {
@@ -24,7 +24,7 @@ export async function processAndGetBase64Icon(iconCachePath: string | null, daoI
 
         return `data:image/png;base64,${processedBuffer.toString('base64')}`;
     } catch (error) {
-        console.error(`Error processing icon for dao ${daoId}:`, error);
-        return null;
+        console.error(`Error processing icon for dao`, error);
+        return iconUrl || null;
     }
 }
