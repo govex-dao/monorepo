@@ -56,5 +56,10 @@
 		"express-rate-limit": "^7.5.1",
 		"sharp": "^0.34.2",
 		"sqlite3": "^5.1.7"
+	},
+	"pnpm": {
+		"overrides": {
+			"tar-fs": ">=2.1.4"
+		}
 	}
 }
