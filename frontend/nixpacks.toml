@@ -8,14 +8,10 @@ cmds = ["cd frontend && pnpm install"]
 
 [phases.build]
 dependsOn = ["install"]
-cmds = ["cd frontend && pnpm run build-frontend"]
-
-[staticAssets]
-enabled = "true"
-dir = "frontend/dist"
+cmds = ["cd frontend && pnpm install && pnpm run build-frontend"]
 
 [start]
-cmd = "npx serve -s frontend/dist -l 3000"
+cmd = "cd frontend && node server.js"
 
 [variables]
 NODE_ENV = "production"
