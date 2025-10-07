@@ -116,10 +116,13 @@ const DaoSearchInput = ({
     setIsOpen(false);
   };
 
+  // Escape regex special characters to prevent ReDoS attacks (CWE-400)
+  const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   const highlightMatch = (text: string, term: string) => {
     if (!term) return text;
 
-    const regex = new RegExp(`(${term})`, "gi");
+    const regex = new RegExp(`(${escapeRegex(term)})`, "gi");
     const parts = text.split(regex);
 
     return (

@@ -22,6 +22,7 @@ setInterval(() => {
 }, 10000); 
 
 const app = express();
+app.disable('x-powered-by'); // Security: Hide Express framework information (CWE-200)
 app.use(cors());
 app.use(express.json());
 
@@ -461,12 +462,11 @@ app.get('/proposals/search', async (req, res) => {
             return;
         }
 
-        res.send(proposal);
+        res.json(proposal);
     } catch (e) {
         console.error('Error searching proposals:', e);
-        res.status(500).send({ 
-            message: 'Internal server error',
-            error: e 
+        res.status(500).json({
+            error: 'Internal server error'
         });
     }
 });
@@ -728,7 +728,7 @@ app.get('/proposals/:proposalId/state-history', async (req, res) => {
             timestamp: history.timestamp.toString()
         }));
 
-        res.send(formatPaginatedResponse(transformedHistory));
+        res.json(formatPaginatedResponse(transformedHistory));
     } catch (e) {
         console.error('Error fetching state history:', e);
         res.status(400).json({
@@ -831,12 +831,11 @@ app.get('/results/:proposalId', async (req, res) => {
             });
         }
 
-        res.send(result);
+        res.json(result);
     } catch (e) {
         console.error('Error fetching result:', e);
-        res.status(500).send({ 
-            message: 'Internal server error',
-            error: e 
+        res.status(500).json({
+            error: 'Internal server error'
         });
     }
 });

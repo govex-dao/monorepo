@@ -216,6 +216,7 @@ const OG_DATA = {
 // Initialize server
 async function createServer() {
   const app = express();
+  app.disable('x-powered-by'); // Security: Hide Express framework information (CWE-200)
 
   // Setup Vite in development or static files in production
   let vite;
@@ -338,7 +339,7 @@ async function createServer() {
         vite.ssrFixStacktrace(error);
       }
       console.error("Server error:", error);
-      res.status(500).send(error.message);
+      res.status(500).send("Internal server error");
     }
   });
 
