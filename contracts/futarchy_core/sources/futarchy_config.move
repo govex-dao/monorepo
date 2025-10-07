@@ -812,6 +812,18 @@ public fun internal_config_mut_test(
     )
 }
 
+#[test_only]
+/// Create Auth for testing
+public fun new_auth_for_testing(
+    account: &Account<FutarchyConfig>
+): account_protocol::account::Auth {
+    account::new_auth<FutarchyConfig, ConfigWitness>(
+        account,
+        version::current(),
+        ConfigWitness {}
+    )
+}
+
 /// Set the proposal queue ID as a dynamic field on the account
 public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id: Option<ID>) {
     if (queue_id.is_some()) {
@@ -857,6 +869,20 @@ public fun set_launchpad_initial_price(
 /// Returns None if DAO was not created via launchpad or price hasn't been set
 public fun get_launchpad_initial_price(config: &FutarchyConfig): Option<u128> {
     config.launchpad_initial_price
+}
+
+// === Test-Only Functions ===
+
+#[test_only]
+/// Destroy a DaoState object (only for testing)
+public fun destroy_dao_state_for_testing(state: DaoState) {
+    let DaoState {
+        operational_state: _,
+        active_proposals: _,
+        total_proposals: _,
+        attestation_url: _,
+        verification_pending: _,
+    } = state;
 }
 
 }

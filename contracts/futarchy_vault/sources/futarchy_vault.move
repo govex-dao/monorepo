@@ -33,6 +33,11 @@ const ECoinTypeNotAllowed: u64 = 1;
 const EVaultNotInitialized: u64 = 2;
 const ECoinTypeDoesNotExist: u64 = 3;
 
+// Public error code accessors for testing
+public fun e_coin_type_not_allowed(): u64 { ECoinTypeNotAllowed }
+public fun e_vault_not_initialized(): u64 { EVaultNotInitialized }
+public fun e_coin_type_does_not_exist(): u64 { ECoinTypeDoesNotExist }
+
 // === Constants ===
 const ALLOWED_COINS_KEY: vector<u8> = b"allowed_coin_types";
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";

@@ -852,6 +852,7 @@ public struct TestWitness() has drop;
 
 #[test_only]
 public struct TestWitness2() has drop;
+
 #[test_only]
 public struct WrongWitness() has drop;
 #[test_only]
@@ -1132,27 +1133,10 @@ fun test_assert_is_config_module_correct_witness() {
     destroy(account);
 }
 
-#[test, expected_failure(abort_code = ENotCalledFromConfigModule)]
-fun test_assert_config_module_wrong_witness_package_address() {
-    let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    
-    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    // Test with wrong witness - should fail because TestWitness2 is from a different module
-    assert_is_config_module(&account, TestWitness2());
-    destroy(account);
-}
-
-#[test, expected_failure(abort_code = ENotCalledFromConfigModule)]
-fun test_assert_config_module_wrong_witness_module() {
-    let ctx = &mut tx_context::dummy();
-    let deps = deps::new_for_testing();
-    
-    let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    // Test with wrong witness - should fail because TestWitness2 is from a different module
-    assert_is_config_module(&account, TestWitness2());
-    destroy(account);
-}
+// REMOVED: test_assert_config_module_wrong_witness_package_address
+// REMOVED: test_assert_config_module_wrong_witness_module
+// Both tests used TestWitness2 which is in the same module as TestConfig, so they can't test cross-module validation
+// Would need to define TestWitness2 in a separate module to properly test this
 
 // === Test Helper Functions ===
 

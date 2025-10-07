@@ -128,7 +128,7 @@ public fun do_withdraw_object<Config, Outcome: store, T: key + store, IW: drop>(
 
     // Create BCS reader and deserialize
     let mut reader = bcs::new(*action_data);
-    let object_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+    let object_id = object::id_from_address(bcs::peel_address(&mut reader));
 
     assert!(receiving.receiving_object_id() == object_id, EWrongObject);
 

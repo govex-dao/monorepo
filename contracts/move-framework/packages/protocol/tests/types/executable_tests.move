@@ -7,6 +7,7 @@ use sui::{
     test_utils::destroy,
     test_scenario as ts,
     clock,
+    bcs,
 };
 use account_protocol::{
     executable,
@@ -23,7 +24,7 @@ public struct DummyIntent() has drop;
 public struct WrongIntent() has drop;
 
 public struct Outcome has copy, drop, store {}
-public struct Action has store {}
+public struct Action has drop, store {}
 public struct ActionType has drop {}
 
 // === Tests ===
@@ -50,14 +51,15 @@ fun test_executable_flow() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_typed_action(Action {}, ActionType {}, DummyIntent());
+    let action_data = bcs::to_bytes(&Action {});
+    intent.add_typed_action(ActionType {}, action_data, DummyIntent());
 
-    let mut executable = executable::new(intent);
+    let mut executable = executable::new(intent, scenario.ctx());
     // verify initial state (pending action)
     assert!(executable.intent().key() == b"one".to_string());
     assert!(executable.action_idx() == 0);
-    // first step: execute action
-    let _: &Action = executable.next_action(DummyIntent());
+    // first step: verify and increment action idx
+    executable.increment_action_idx();
     assert!(executable.action_idx() == 1);
     // second step: destroy executable
     let intent = executable.destroy();

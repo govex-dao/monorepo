@@ -27,6 +27,55 @@ This includes:
 
 **Important Note**: Sui's execution model is atomic and does not have reentrancy risks like Ethereum. Race conditions are also unlikely due to Sui's object-centric model and transaction ordering guarantees. When you see defensive programming patterns in this codebase (like atomic check-and-delete patterns), they are primarily for code clarity and best practices rather than addressing actual race condition risks that would exist in other blockchain environments.
 
+## BCS Serialization: Action Deserialization Patterns
+
+**CRITICAL**: Use the correct pattern based on whether the action struct has fields.
+
+### Empty Struct Actions (NO fields)
+
+Empty structs serialize to **1+ bytes** in BCS (struct metadata), NOT 0 bytes.
+
+**✅ CORRECT Pattern**:
+```move
+// Get action_data but DON'T deserialize or validate
+let _action_data = intents::action_spec_data(spec);
+// Continue processing - nothing to deserialize
+```
+
+**❌ WRONG Pattern**:
+```move
+// DO NOT validate BCS consumption for empty structs!
+let reader = bcs::new(*action_data);
+bcs_validation::validate_all_bytes_consumed(reader); // FAILS with "trailing data"
+```
+
+### Non-Empty Struct Actions (HAS fields)
+
+**✅ CORRECT Pattern**:
+```move
+// Create reader, peel all fields, then validate
+let mut reader = bcs::new(*action_data);
+let field1 = bcs::peel_u64(&mut reader);
+let field2 = bcs::peel_address(&mut reader);
+// ... peel all fields ...
+bcs_validation::validate_all_bytes_consumed(reader); // OK!
+```
+
+**Examples in Codebase**:
+- ✅ `transfer.move::do_transfer()` - Peels `recipient`, then validates
+- ✅ `currency.move::do_mint_and_transfer()` - Peels `amount`, then validates
+- ✅ `vault.move::do_deposit()` - Peels fields, then validates
+
+### Why This Matters
+
+1. **Empty structs**: BCS encoding includes struct metadata (1+ bytes). You cannot peel anything, and validation would fail on the unconsumed metadata byte(s).
+
+2. **Non-empty structs**: MUST validate after peeling to prevent trailing data attacks where malicious actors append extra bytes.
+
+### Rule of Thumb
+- **No fields?** → Get `_action_data`, don't process it
+- **Has fields?** → Peel all fields, then `validate_all_bytes_consumed()`
+
 ## Common Build Issues
 
 ### Package Address Mismatches

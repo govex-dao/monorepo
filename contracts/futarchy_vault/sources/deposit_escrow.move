@@ -22,6 +22,14 @@ const EProposalStillActive: u64 = 3;
 const EInsufficientGasReward: u64 = 4;
 const EAlreadyCranked: u64 = 5;
 
+// Public error code accessors for testing
+public fun e_insufficient_deposit(): u64 { EInsufficientDeposit }
+public fun e_already_executed(): u64 { EAlreadyExecuted }
+public fun e_not_depositor(): u64 { ENotDepositor }
+public fun e_proposal_still_active(): u64 { EProposalStillActive }
+public fun e_insufficient_gas_reward(): u64 { EInsufficientGasReward }
+public fun e_already_cranked(): u64 { EAlreadyCranked }
+
 // === Constants ===
 const MIN_DEPOSIT_AMOUNT: u64 = 1_000_000; // 0.001 token
 const MIN_GAS_REWARD: u64 = 100_000; // 0.0001 token

@@ -199,8 +199,8 @@ public fun new_for_testing_with_addrs(addr1: address, addr2: address, addr3: add
     let mut extensions = new_for_testing(ctx);
 
     extensions.add_for_testing(b"AccountProtocol".to_string(), addr1, 1);
-    extensions.add_for_testing(b"AccountActions".to_string(), addr2, 1);
-    extensions.add_for_testing(b"AccountExtensions".to_string(), addr3, 1);
+    extensions.add_for_testing(b"AccountConfig".to_string(), addr2, 1);
+    extensions.add_for_testing(b"AccountActions".to_string(), addr3, 1);
 
     extensions
 }

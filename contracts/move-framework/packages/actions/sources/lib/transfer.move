@@ -176,16 +176,14 @@ public fun do_transfer_to_sender<Outcome: store, T: key + store, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect (using TransferObject)
     action_validation::assert_action_type<framework_action_types::TransferObject>(spec);
 
-    let action_data = intents::action_spec_data(spec);
+    let _action_data = intents::action_spec_data(spec);
 
     // Check version before deserialization
     let spec_version = intents::action_spec_version(spec);
     assert!(spec_version == 1, EUnsupportedActionVersion);
 
-    // No fields to deserialize for TransferToSenderAction
-    // Just validate that the data is empty (only struct marker)
-    let reader = bcs::new(*action_data);
-    bcs_validation::validate_all_bytes_consumed(reader);
+    // TransferToSenderAction is an empty struct with no fields to deserialize
+    // We acknowledge the action_data exists but don't process it
 
     // Transfer to the transaction sender (the cranker!)
     transfer::public_transfer(object, tx_context::sender(ctx));

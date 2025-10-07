@@ -543,6 +543,20 @@ public fun lp_token_info<AssetType, StableType>(
     (object::id(token), token.amount)
 }
 
+// === Test-Only Functions ===
+
+#[test_only]
+/// Create an LP token for testing purposes
+public fun new_lp_token_for_testing<AssetType, StableType>(
+    amount: u64,
+    ctx: &mut TxContext,
+): LPToken<AssetType, StableType> {
+    LPToken {
+        id: object::new(ctx),
+        amount,
+    }
+}
+
 // === Share Functions ===
 
 /// Share the account spot pool - can only be called by this module

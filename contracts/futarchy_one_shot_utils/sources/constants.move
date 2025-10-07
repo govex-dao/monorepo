@@ -150,6 +150,50 @@ public fun max_documents_per_dao(): u64 { 1000 }
 /// Maximum traversal limit for document queries (pagination)
 public fun max_traversal_limit(): u64 { 1000 }
 
+// === Treasury & Payment Constants ===
+//
+// UPGRADABLE LIMITS PATTERN:
+// These constants are referenced by move-framework modules (vault, vesting, stream_utils)
+// but defined here for centralized upgradability.
+//
+// To change these limits system-wide:
+// 1. Update the values below
+// 2. Deploy new version of futarchy_one_shot_utils
+// 3. Redeploy dependent packages (they'll pick up new limits)
+//
+// This enables DAOs to adjust limits via package upgrade proposals
+// without modifying the core framework code.
+
+/// Maximum beneficiaries per stream/vesting
+/// Used by vault streams and vesting to limit multi-beneficiary coordination
+/// Current: 100 (reasonable for most DAO coordination scenarios)
+/// To increase: Update here and redeploy. Consider gas costs for large beneficiary lists.
+public fun max_beneficiaries(): u64 { 100 }
+
+// === Launchpad Constants ===
+
+/// The duration for every launchpad raise (4 days in milliseconds)
+public fun launchpad_duration_ms(): u64 { 345_600_000 }
+
+/// Claim period after successful raise before creator can sweep dust (14 days)
+public fun launchpad_claim_period_ms(): u64 { 1_209_600_000 }
+
+/// Minimum SUI fee per contribution (0.1 SUI) to prevent spam and fund settlement cranking
+public fun launchpad_crank_fee_per_contribution(): u64 { 100_000_000 }
+
+/// Reward per cap processed during settlement cranking (0.05 SUI)
+public fun launchpad_reward_per_cap_processed(): u64 { 50_000_000 }
+
+/// Maximum number of unique cap values to prevent unbounded heap
+/// Limits settlement gas costs (100 caps × 0.05 SUI = 5 SUI max)
+public fun launchpad_max_unique_caps(): u64 { 100 }
+
+/// Maximum number of init actions during DAO creation
+public fun launchpad_max_init_actions(): u64 { 20 }
+
+/// Estimated max gas per init action
+public fun launchpad_max_gas_per_action(): u64 { 1_000_000 }
+
 // === Validation Functions ===
 
 /// Check if a fee is valid (not exceeding maximum)

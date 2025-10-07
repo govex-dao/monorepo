@@ -148,8 +148,10 @@ public fun do_borrow<Config, Outcome: store, Cap: key + store, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<framework_action_types::AccessControlBorrow>(spec);
 
-
     let _action_data = intents::action_spec_data(spec);
+
+    // BorrowAction is an empty struct with no fields to deserialize
+    // We acknowledge the action_data exists but don't process it
 
     // CRITICAL: Verify that a matching ReturnAction exists in the intent
     // This ensures the borrowed capability will be returned
@@ -222,11 +224,12 @@ public fun do_return<Config, Outcome: store, Cap: key + store, IW: drop>(
     // CRITICAL: Assert that the action type is what we expect
     action_validation::assert_action_type<framework_action_types::AccessControlReturn>(spec);
 
-
     let _action_data = intents::action_spec_data(spec);
 
-    // For ReturnAction<Cap>, there's no data to deserialize (empty struct)
-    // Just increment the action index
+    // ReturnAction is an empty struct with no fields to deserialize
+    // We acknowledge the action_data exists but don't process it
+
+    // Increment the action index
     executable::increment_action_idx(executable);
 
     account.add_managed_asset(CapKey<Cap>(), cap, version_witness);

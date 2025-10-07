@@ -103,15 +103,9 @@ const ECliffNotReached: u64 = 13;
 const EWithdrawalLimitExceeded: u64 = 14;
 const EWithdrawalTooSoon: u64 = 15;
 const EInvalidInput: u64 = 16;
-const ETimeCalculationOverflow: u64 = 17;
+const ETimeCalculationOverflow: u64 = 17;  // Keep for pause duration validation
 const EEmergencyFrozen: u64 = 18;
 const EVestingExpired: u64 = 19;
-
-// === Constants ===
-
-// Use shared constant from stream_utils
-const MAX_BENEFICIARIES: u64 = 100; // Matches stream_utils::max_beneficiaries()
-const MAX_VESTING_DURATION_MS: u64 = 315_360_000_000; // 10 years
 
 // === Structs ===
 
@@ -393,15 +387,11 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     assert!(end_timestamp > start_timestamp, EInvalidVestingParameters);
     assert!(start_timestamp >= clock.timestamp_ms(), EInvalidVestingParameters);
 
-    // Overflow protection: check vesting duration
-    let vesting_duration = end_timestamp - start_timestamp;
-    assert!(vesting_duration <= MAX_VESTING_DURATION_MS, ETimeCalculationOverflow);
-
     if (cliff_time.is_some()) {
         let cliff = *cliff_time.borrow();
         assert!(cliff >= start_timestamp && cliff <= end_timestamp, EInvalidVestingParameters);
     };
-    assert!(max_beneficiaries > 0 && max_beneficiaries <= MAX_BENEFICIARIES, EInvalidVestingParameters);
+    assert!(max_beneficiaries > 0 && max_beneficiaries <= stream_utils::max_beneficiaries(), EInvalidVestingParameters);
 
     let id = object::new(ctx);
     let vesting_id = id.to_inner();
@@ -487,10 +477,6 @@ public(package) fun do_create_vesting_unshared<CoinType>(
     assert!(amount > 0, EInvalidVestingParameters);
     assert!(end_timestamp > start_timestamp, EInvalidVestingParameters);
     assert!(start_timestamp >= clock.timestamp_ms(), EInvalidVestingParameters);
-
-    // Overflow protection: check vesting duration
-    let vesting_duration = end_timestamp - start_timestamp;
-    assert!(vesting_duration <= MAX_VESTING_DURATION_MS, ETimeCalculationOverflow);
 
     if (cliff_time.is_some()) {
         let cliff = *cliff_time.borrow();

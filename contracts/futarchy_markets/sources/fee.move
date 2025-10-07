@@ -614,8 +614,11 @@ public fun collect_dao_platform_fee<StableType: drop>(
     } else {
         current_fee_rate  // Allow DAO to benefit from fee decreases
     };
-    
-    let total_fee = fee_per_period * periods_to_collect;
+
+    // Use u128 arithmetic to prevent overflow
+    let total_fee_u128 = (fee_per_period as u128) * (periods_to_collect as u128);
+    assert!(total_fee_u128 <= (u64::max_value!() as u128), EArithmeticOverflow);
+    let total_fee = (total_fee_u128 as u64);
     
     // Update the record with new timestamp and current rate for future collections
     let record: &mut DaoFeeRecord = dynamic_field::borrow_mut(&mut fee_manager.id, record_key);
@@ -693,8 +696,11 @@ public fun collect_dao_platform_fee_with_dao_coin<StableType>(
         // No fee due, return all funds
         return (available_funds, 0)
     };
-    
-    let total_fee = fee_amount * periods_to_collect;
+
+    // Use u128 arithmetic to prevent overflow
+    let total_fee_u128 = (fee_amount as u128) * (periods_to_collect as u128);
+    assert!(total_fee_u128 <= (u64::max_value!() as u128), EArithmeticOverflow);
+    let total_fee = (total_fee_u128 as u64);
     
     // Update the record
     let record: &mut DaoFeeRecord = dynamic_field::borrow_mut(&mut fee_manager.id, record_key);
@@ -1542,7 +1548,10 @@ public fun collect_multisig_fee<StableType>(
         return (available_funds, 0)
     };
 
-    let total_fee = monthly_fee * periods_to_collect;
+    // Use u128 arithmetic to prevent overflow
+    let total_fee_u128 = (monthly_fee as u128) * (periods_to_collect as u128);
+    assert!(total_fee_u128 <= (u64::max_value!() as u128), EArithmeticOverflow);
+    let total_fee = (total_fee_u128 as u64);
     let available_amount = available_funds.value();
 
     if (available_amount >= total_fee) {
@@ -1687,6 +1696,7 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
         pending_fee_effective_timestamp: option::none(),
         sui_balance: balance::zero<SUI>(),
         recovery_fee: 5_000_000_000, // 5 SUI default
+        launchpad_creation_fee: DEFAULT_LAUNCHPAD_CREATION_FEE,
     };
 
     public_share_object(fee_manager);

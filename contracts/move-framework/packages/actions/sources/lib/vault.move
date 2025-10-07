@@ -121,9 +121,6 @@ const EVestingPaused: u64 = 25;  // Reusing vesting error code for stream pause
 const EEmergencyFrozen: u64 = 26;
 const EVestingNotPaused: u64 = 27;
 
-// === Constants ===
-const MAX_BENEFICIARIES: u64 = 100;
-
 // === Structs ===
 
 /// Dynamic Field key for the Vault.

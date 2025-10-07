@@ -244,12 +244,13 @@ public fun request_config_deps<Config, Outcome: store>(
 /// Executes an intent updating the dependencies of the account
 public fun execute_config_deps<Config, Outcome: store>(
     executable: &mut Executable<Outcome>,
-    account: &mut Account<Config>,  
+    account: &mut Account<Config>,
+    extensions: &Extensions,
 ) {
     account.process_intent!(
-        executable, 
-        version::current(),   
-        ConfigDepsIntent(), 
+        executable,
+        version::current(),
+        ConfigDepsIntent(),
         |executable, _iw| {
             // Get BCS bytes from ActionSpec
             let specs = executable.intent().action_specs();
@@ -258,16 +259,14 @@ public fun execute_config_deps<Config, Outcome: store>(
 
             // Create BCS reader and deserialize
             let mut reader = bcs::new(*action_data);
-            let (_names, _addrs, _versions) = peel_deps_as_vectors(&mut reader);
+            let (names, addrs, versions) = peel_deps_as_vectors(&mut reader);
 
             // Apply the action - reconstruct deps using the public constructor
-            // Note: We need the Extensions object which should be available
-            // For now, comment out as we need to pass Extensions
-            // *account::deps_mut(account, version::current()) =
-            //     deps::new_inner(extensions, account.deps(), names, addrs, versions);
+            *account::deps_mut(account, version::current()) =
+                deps::new_inner(extensions, account.deps(), names, addrs, versions);
             account_protocol::executable::increment_action_idx(executable);
         }
-    ); 
+    );
 } 
 
 /// Deletes the ConfigDepsAction from an expired intent

@@ -11,6 +11,7 @@ use sui::{
     test_utils::destroy,
     test_scenario as ts,
     clock,
+    bcs,
 };
 use account_protocol::{
     intents,
@@ -142,7 +143,7 @@ fun test_getters() {
     assert!(intent1.creation_time() == 1);
     assert!(intent1.execution_times() == vector[0]);
     assert!(intent1.expiration_time() == 1);
-    assert!(intent1.action_count().length() == 0);
+    assert!(intent1.action_count() == 0);
     assert!(intent1.role() == full_role());
     assert!(intent1.outcome() == true);
 

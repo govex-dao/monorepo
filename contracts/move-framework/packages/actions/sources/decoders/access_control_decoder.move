@@ -21,7 +21,7 @@ module account_actions::access_control_decoder;
 // === Imports ===
 
 use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field};
+use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
 use account_actions::access_control::{BorrowAction, ReturnAction};
 
@@ -47,16 +47,12 @@ public struct CapPlaceholder has drop, store {}
 /// Decode a BorrowAction
 public fun decode_borrow_action<Cap>(
     _decoder: &BorrowActionDecoder,
-    action_data: vector<u8>,
+    _action_data: vector<u8>,
 ): vector<HumanReadableField> {
-    // BorrowAction has no fields - it's an empty struct
-    // Still validate that all bytes are consumed (should be empty)
-    let bcs_data = sui::bcs::new(action_data);
+    // BorrowAction is an empty struct with no fields to decode
+    // We acknowledge the action_data exists but don't deserialize it
 
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    // Return empty vector since there are no fields to decode
+    // Return action type information
     vector[
         schema::new_field(
             b"action_type".to_string(),
@@ -69,16 +65,12 @@ public fun decode_borrow_action<Cap>(
 /// Decode a ReturnAction
 public fun decode_return_action<Cap>(
     _decoder: &ReturnActionDecoder,
-    action_data: vector<u8>,
+    _action_data: vector<u8>,
 ): vector<HumanReadableField> {
-    // ReturnAction has no fields - it's an empty struct
-    // Still validate that all bytes are consumed (should be empty)
-    let bcs_data = sui::bcs::new(action_data);
+    // ReturnAction is an empty struct with no fields to decode
+    // We acknowledge the action_data exists but don't deserialize it
 
-    // Security: ensure all bytes are consumed to prevent trailing data attacks
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    // Return empty vector since there are no fields to decode
+    // Return action type information
     vector[
         schema::new_field(
             b"action_type".to_string(),

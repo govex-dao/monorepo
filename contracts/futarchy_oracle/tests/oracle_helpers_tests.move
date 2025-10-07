@@ -2,6 +2,12 @@
 module futarchy_oracle::oracle_helpers_tests;
 
 use futarchy_oracle::oracle_actions;
+use sui::object;
+
+// === Test Coin Types (shared across all tests) ===
+
+public struct ASSET has drop {}
+public struct STABLE has drop {}
 
 // === Helper Function Tests ===
 
@@ -50,9 +56,6 @@ fun test_new_recipient_mint() {
 
 #[test]
 fun test_new_create_employee_option() {
-    public struct ASSET has drop {}
-    public struct STABLE has drop {}
-
     let action = oracle_actions::new_create_employee_option<ASSET, STABLE>(
         @0xB0B,         // recipient
         100_000,        // total_amount
@@ -68,9 +71,6 @@ fun test_new_create_employee_option() {
 
 #[test]
 fun test_new_create_vesting_grant() {
-    public struct ASSET has drop {}
-    public struct STABLE has drop {}
-
     let action = oracle_actions::new_create_vesting_grant<ASSET, STABLE>(
         @0xB0B,   // recipient
         50_000,   // total_amount
@@ -83,9 +83,6 @@ fun test_new_create_vesting_grant() {
 
 #[test]
 fun test_new_create_conditional_mint() {
-    public struct ASSET has drop {}
-    public struct STABLE has drop {}
-
     let action = oracle_actions::new_create_conditional_mint<ASSET, STABLE>(
         @0xB0B,              // recipient
         1_000,               // mint_amount
@@ -100,9 +97,7 @@ fun test_new_create_conditional_mint() {
 
 #[test]
 fun test_new_cancel_grant() {
-    use sui::object;
-
-    let grant_id = object::id_from_address(@0xGRANT);
+    let grant_id = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
     let action = oracle_actions::new_cancel_grant(grant_id);
 
     let _ = action;
@@ -110,9 +105,7 @@ fun test_new_cancel_grant() {
 
 #[test]
 fun test_new_pause_grant() {
-    use sui::object;
-
-    let grant_id = object::id_from_address(@0xGRANT);
+    let grant_id = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
     let action = oracle_actions::new_pause_grant(grant_id, 86_400_000); // 1 day
 
     let _ = action;
@@ -120,9 +113,7 @@ fun test_new_pause_grant() {
 
 #[test]
 fun test_new_unpause_grant() {
-    use sui::object;
-
-    let grant_id = object::id_from_address(@0xGRANT);
+    let grant_id = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
     let action = oracle_actions::new_unpause_grant(grant_id);
 
     let _ = action;
@@ -130,9 +121,7 @@ fun test_new_unpause_grant() {
 
 #[test]
 fun test_new_emergency_freeze_grant() {
-    use sui::object;
-
-    let grant_id = object::id_from_address(@0xGRANT);
+    let grant_id = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
     let action = oracle_actions::new_emergency_freeze_grant(grant_id);
 
     let _ = action;
@@ -140,9 +129,7 @@ fun test_new_emergency_freeze_grant() {
 
 #[test]
 fun test_new_emergency_unfreeze_grant() {
-    use sui::object;
-
-    let grant_id = object::id_from_address(@0xGRANT);
+    let grant_id = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
     let action = oracle_actions::new_emergency_unfreeze_grant(grant_id);
 
     let _ = action;

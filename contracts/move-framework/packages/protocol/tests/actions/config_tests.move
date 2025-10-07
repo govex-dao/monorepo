@@ -150,7 +150,7 @@ fun test_request_execute_config_deps() {
     assert!(!account.deps().contains_name(b"External".to_string()));
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
-    config::execute_config_deps<Config, Outcome>(&mut executable, &mut account);
+    config::execute_config_deps<Config, Outcome>(&mut executable, &mut account, &extensions);
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Config, Outcome>(key);

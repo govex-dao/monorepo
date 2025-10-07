@@ -129,6 +129,11 @@ public struct ResourceReceipt<phantom Action> {
     dividend_id: String,
 }
 
+/// Get dividend_id from ResourceReceipt
+public fun resource_receipt_dividend_id<Action>(receipt: &ResourceReceipt<Action>): &String {
+    &receipt.dividend_id
+}
+
 /// Helper struct for cranking - represents a recipient payment
 /// Replaces tuple type (address, u64) which is not allowed in vectors
 public struct RecipientPayment has drop, store {

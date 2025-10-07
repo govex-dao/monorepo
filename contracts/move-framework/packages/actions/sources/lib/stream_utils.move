@@ -29,9 +29,20 @@ module account_actions::stream_utils;
 use std::u128;
 
 // === Constants ===
+//
+// UPGRADABLE CONSTANT PATTERN:
+// These constants are defined here in the framework for backwards compatibility,
+// but the canonical source is futarchy_one_shot_utils::constants.
+//
+// To upgrade these values:
+// 1. Update futarchy_one_shot_utils::constants::max_beneficiaries()
+// 2. Deploy new version of futarchy_one_shot_utils
+// 3. All dependent packages inherit new limits on next deployment
+//
+// This pattern allows system-wide configuration updates without modifying
+// the framework package, enabling DAOs to adjust limits via governance.
 
 public fun max_beneficiaries(): u64 { 100 }
-public fun max_vesting_duration_ms(): u64 { 315_360_000_000 } // 10 years
 
 // === Vesting Calculation Functions ===
 
@@ -297,17 +308,12 @@ public fun is_expired(
     }
 }
 
-/// Validate expiry is in the future and duration is reasonable
+/// Validate expiry is in the future
 public fun validate_expiry(
     current_time: u64,
     expiry_timestamp: u64,
 ): bool {
-    if (expiry_timestamp <= current_time) {
-        false // Expiry must be in future
-    } else {
-        let duration = expiry_timestamp - current_time;
-        duration <= max_vesting_duration_ms()
-    }
+    expiry_timestamp > current_time
 }
 
 // === State Check Helpers ===

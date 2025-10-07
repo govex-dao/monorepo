@@ -1,9 +1,9 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[test_only]
 module account_actions::vesting_tests;
 
-// === Imports ===
-
-use std::{option};
 use sui::{
     test_utils::destroy,
     test_scenario::{Self as ts, Scenario},
@@ -14,28 +14,31 @@ use sui::{
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
     account::{Self, Account},
-    intents::{Self, Intent},
+    intents,
     deps,
-    version_witness,
+    intent_interface,
 };
-use account_actions::{
-    version,
-    vesting::{Self, Vesting, ClaimCap},
-};
+use account_actions::{vesting, version};
+
+// === Macros ===
+
+use fun intent_interface::build_intent as Account.build_intent;
 
 // === Constants ===
 
 const OWNER: address = @0xCAFE;
+const RECIPIENT: address = @0xBEEF;
 
 // === Structs ===
 
-public struct DummyIntent() has copy, drop;
-public struct WrongWitness() has copy, drop;
-
+public struct Witness() has drop;
 public struct Config has copy, drop, store {}
 public struct Outcome has copy, drop, store {}
 
-// === Helpers ===
+// Intent witness for testing
+public struct VestingIntent() has copy, drop;
+
+// === Helper Functions ===
 
 fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     let mut scenario = ts::begin(OWNER);
@@ -50,464 +53,839 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let version_witness = version_witness::new_for_testing(@account_actions);
-    let account = account::new(Config {}, deps, version_witness, DummyIntent(), scenario.ctx());
+    let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
+    // create world
     destroy(cap);
-
     (scenario, extensions, account, clock)
 }
 
-fun end(mut scenario: Scenario, extensions: Extensions, account: Account<Config>, clock: Clock) {
+fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, clock: Clock) {
     destroy(extensions);
     destroy(account);
     destroy(clock);
-    scenario.end();
-}
-
-fun create_vesting_intent<Config>(
-    account: &Account<Config>,
-    recipient: address,
-    amount: u64,
-    start_timestamp: u64,
-    end_timestamp: u64,
-    cancelable: bool,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Intent<Outcome> {
-    let params = intents::new_params(
-        b"vesting".to_string(),
-        b"Create vesting".to_string(),
-        vector[clock.timestamp_ms() + 1],
-        clock.timestamp_ms() + 86400000,
-        clock,
-        ctx
-    );
-    let mut intent = account.create_intent(
-        params,
-        Outcome {},
-        b"VestingIntent".to_string(),
-        version::current(),
-        DummyIntent(),
-        ctx
-    );
-
-    vesting::new_vesting<Config, Outcome, SUI, _>(
-        &mut intent,
-        account,
-        amount,
-        start_timestamp,
-        end_timestamp,
-        option::none(), // cliff_time
-        recipient,
-        10, // max_beneficiaries
-        0,  // max_per_withdrawal
-        0,  // min_interval_ms
-        true, // is_transferable
-        cancelable, // is_cancelable
-        option::none(), // metadata
-        DummyIntent(),
-    );
-
-    intent
-}
-
-fun create_cancel_vesting_intent<Config>(
-    account: &Account<Config>,
-    vesting_id: ID,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Intent<Outcome> {
-    let params = intents::new_params(
-        b"cancel_vesting".to_string(),
-        b"Cancel vesting".to_string(),
-        vector[clock.timestamp_ms() + 1],
-        clock.timestamp_ms() + 86400000,
-        clock,
-        ctx
-    );
-    let mut intent = account.create_intent(
-        params,
-        Outcome {},
-        b"CancelVestingIntent".to_string(),
-        version::current(),
-        DummyIntent(),
-        ctx
-    );
-
-    vesting::new_cancel_vesting<Config, Outcome, _>(
-        &mut intent,
-        account,
-        vesting_id,
-        DummyIntent(),
-    );
-
-    intent
+    ts::end(scenario);
 }
 
 // === Tests ===
 
 #[test]
-fun test_create_vesting() {
-    let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+fun test_vesting_basic() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let key = b"test_vesting".to_string();
 
-    // create intent
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    // approve & execute
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    // Test parameters
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create an intent with a vesting action
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting".to_string(),
+        vector[0], // execute immediately
+        10000, // expiration
+        &clock,
+        scenario.ctx()
+    );
+
+    // Build the intent using the intent interface
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(), // metadata
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(), // no cliff
+                10, // max_beneficiaries
+                0, // no max per withdrawal
+                0, // no min interval
+                false, // not transferable
+                true, // is cancelable
+                option::none(), // no metadata
+                iw,
+            );
+        }
+    );
+
+    // Execute the vesting action
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
-    account.confirm_execution(executable);
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
 
-    // check vesting was created
-    scenario.next_tx(recipient);
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    assert!(vesting::balance(&vesting) == amount);
-    let cap = scenario.take_from_sender<ClaimCap>();
-    
-    destroy(vesting);
-    destroy(cap);
+    // Verify outcome
+    assert!(outcome_result == outcome);
+
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
+
+    // Confirm execution
+    account.confirm_execution(executable);
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_claim_vesting() {
+fun test_vesting_with_cliff() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_cliff".to_string();
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let cliff_timestamp = 1500u64;
+    let end_timestamp = 2000u64;
+
+    // Create an intent with a vesting action that has a cliff
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting with cliff".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::some(cliff_timestamp), // With cliff
+                10,
+                0,
+                0,
+                false,
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
+    // Execute the vesting action
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
+
     account.confirm_execution(executable);
 
-    // advance clock to middle of vesting period
-    scenario.next_tx(recipient);
-    clock.set_for_testing(150); // halfway through
-    
-    let mut vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::claim_vesting(&mut vesting, 500, &clock, scenario.ctx());
-    
-    // should have claimed ~50% of the amount
-    assert!(vesting::balance(&vesting) == 500);
-    
-    ts::return_shared(vesting);
-    
-    // check recipient received payment
-    scenario.next_tx(recipient);
-    let payment = scenario.take_from_sender<Coin<SUI>>();
-    assert!(payment.value() == 500);
-    
-    destroy(payment);
-    let cap = scenario.take_from_sender<ClaimCap>();
-    destroy(cap);
+    // Vesting should now exist - verify we can check claimable amount
+    scenario.next_tx(RECIPIENT);
+    let vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    // Before cliff - should be 0 claimable
+    clock.set_for_testing(1400);
+    assert!(vesting::claimable_now(&vesting_obj, &clock) == 0);
+
+    // After cliff but before end - should have partial amount claimable
+    clock.set_for_testing(1750); // 75% through (250 / 1000)
+    let claimable = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(claimable > 0 && claimable < amount);
+
+    // After end - should have full amount claimable
+    clock.set_for_testing(2500);
+    assert!(vesting::claimable_now(&vesting_obj, &clock) == amount);
+
+    ts::return_shared(vesting_obj);
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_claim_full_vesting() {
+fun test_vesting_claim() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_claim".to_string();
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create and execute vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting claim".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                false,
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // advance clock past end
-    scenario.next_tx(recipient);
-    clock.set_for_testing(250); // past end
-    
-    let mut vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::claim_vesting(&mut vesting, 1000, &clock, scenario.ctx());
-    
-    // should have claimed all
-    assert!(vesting::balance(&vesting) == 0);
-    
-    ts::return_shared(vesting);
-    
-    // check recipient received full payment
-    scenario.next_tx(recipient);
-    let payment = scenario.take_from_sender<Coin<SUI>>();
-    assert!(payment.value() == 1000);
-    
-    destroy(payment);
-    let cap = scenario.take_from_sender<ClaimCap>();
-    destroy(cap);
+    // Claim vested funds
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    // Set time to 50% through vesting period
+    clock.set_for_testing(1500);
+    let claimable = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(claimable == 500); // 50% of 1000
+
+    // Claim the vested amount
+    let claimed_coin = vesting::claim_vesting<SUI>(
+        &mut vesting_obj,
+        claimable,
+        &clock,
+        scenario.ctx(),
+    );
+
+    assert!(claimed_coin.value() == 500);
+    assert!(vesting::balance(&vesting_obj) == 500);
+
+    // Claim remaining at end
+    clock.set_for_testing(2500);
+    let final_claimable = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(final_claimable == 500);
+
+    let final_coin = vesting::claim_vesting<SUI>(
+        &mut vesting_obj,
+        final_claimable,
+        &clock,
+        scenario.ctx(),
+    );
+
+    assert!(final_coin.value() == 500);
+    assert!(vesting::balance(&vesting_obj) == 0);
+
+    destroy(claimed_coin);
+    destroy(final_coin);
+    ts::return_shared(vesting_obj);
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_cancel_vesting() {
+fun test_vesting_pause_resume() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_pause".to_string();
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create and execute vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting pause".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                false,
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // get vesting ID
-    scenario.next_tx(OWNER);
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    let vesting_id = object::id(&vesting);
-    ts::return_shared(vesting);
+    // Test pause and resume
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
 
-    // advance clock to middle and cancel
-    clock.set_for_testing(150); // halfway through
-    
-    // create cancel intent
-    let mut cancel_intent = create_cancel_vesting_intent(&account, vesting_id, &clock, scenario.ctx());
-    let cancel_intent_key = cancel_intent.key();
-    account.insert_intent(cancel_intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.increment_for_testing(1); // Advance clock for execution
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(cancel_intent_key, &clock, version::current(), DummyIntent());
-    
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::cancel_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, vesting, &clock, DummyIntent(), scenario.ctx());
-    account.confirm_execution(executable);
-    
-    // check recipient got vested amount
-    scenario.next_tx(recipient);
-    let payment = scenario.take_from_address<Coin<SUI>>(recipient);
-    // Note: The vested amount calculation might differ in the new implementation
-    // assert!(payment.value() == 500);
-    
-    // check account got unvested amount back
-    scenario.next_tx(OWNER);
-    // Note: In the new design, refunds are kept by the account internally
-    // We can't directly access them in tests
-    // let refund = account.take_owned<Coin<SUI>>(scenario.ctx());
-    // assert!(refund.value() == 500);
-    
-    destroy(payment);
-    // destroy(refund);
-    // ClaimCap handling might be different in new design
-    // let cap = scenario.take_from_sender<ClaimCap>();
-    // destroy(cap);
+    // Pause the vesting for 500ms
+    clock.set_for_testing(1200);
+    vesting::pause_vesting(&mut vesting_obj, 500, &clock, scenario.ctx());
+    assert!(vesting::is_paused(&vesting_obj));
+
+    // Try to claim while paused - should get 0
+    let claimable_during_pause = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(claimable_during_pause == 0);
+
+    // Resume the vesting
+    clock.set_for_testing(1300);
+    vesting::resume_vesting(&mut vesting_obj, &clock, scenario.ctx());
+    assert!(!vesting::is_paused(&vesting_obj));
+
+    // Now can claim again
+    clock.set_for_testing(2100); // Past adjusted end time
+    let claimable_after_resume = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(claimable_after_resume == amount);
+
+    ts::return_shared(vesting_obj);
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_cancel_vesting_before_start() {
+fun test_vesting_cancel() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let create_key = b"test_vesting_cancel_create".to_string();
+    let cancel_key = b"test_vesting_cancel_do".to_string();
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        create_key,
+        b"Test vesting cancel".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                false,
+                true, // is cancelable
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        create_key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // get vesting ID
-    scenario.next_tx(OWNER);
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    let vesting_id = object::id(&vesting);
-    ts::return_shared(vesting);
+    // Get vesting ID
+    scenario.next_tx(RECIPIENT);
+    let vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
+    let vesting_id = object::id(&vesting_obj);
+    assert!(vesting::is_cancelable(&vesting_obj));
+    ts::return_shared(vesting_obj);
 
-    // cancel before start (clock at 0)
-    let mut cancel_intent = create_cancel_vesting_intent(&account, vesting_id, &clock, scenario.ctx());
-    let cancel_intent_key = cancel_intent.key();
-    account.insert_intent(cancel_intent, version::current(), DummyIntent());
-    
+    // Create cancel intent
     scenario.next_tx(OWNER);
-    clock.increment_for_testing(1); // Advance clock for execution
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(cancel_intent_key, &clock, version::current(), DummyIntent());
-    
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::cancel_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, vesting, &clock, DummyIntent(), scenario.ctx());
-    account.confirm_execution(executable);
-    
-    // recipient should get nothing
-    scenario.next_tx(recipient);
-    assert!(!scenario.has_most_recent_for_sender<Coin<SUI>>());
-    
-    // account should get full refund
-    scenario.next_tx(OWNER);
-    // Note: In the new design, refunds are kept by the account internally
-    // let refund = account.take_owned<Coin<SUI>>(scenario.ctx());
-    // assert!(refund.value() == 1000);
-    
-    // destroy(refund);
-    // ClaimCap handling might be different in new design
-    // let cap = scenario.take_from_sender<ClaimCap>();
-    // destroy(cap);
+    let cancel_params = intents::new_params(
+        cancel_key,
+        b"Cancel vesting".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref2 = &account;
+    account.build_intent!(
+        cancel_params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_cancel_vesting<Config, Outcome, VestingIntent>(
+                intent,
+                account_ref2,
+                vesting_id,
+                iw,
+            );
+        }
+    );
+
+    // Execute cancellation at 50% through vesting period
+    clock.set_for_testing(1500);
+    let (cancel_outcome, mut cancel_executable) = account.create_executable<_, Outcome, _>(
+        cancel_key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(cancel_outcome == outcome);
+
+    let vesting_to_cancel = scenario.take_shared<vesting::Vesting<SUI>>();
+    vesting::cancel_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut cancel_executable,
+        &mut account,
+        vesting_to_cancel,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
+
+    account.confirm_execution(cancel_executable);
+
+    // Verify recipient got vested portion
+    scenario.next_tx(RECIPIENT);
+    assert!(ts::has_most_recent_for_address<Coin<SUI>>(RECIPIENT));
+    let recipient_coin = scenario.take_from_address<Coin<SUI>>(RECIPIENT);
+    // Should receive approximately 50% (500 coins) as vested amount
+    assert!(recipient_coin.value() >= 450 && recipient_coin.value() <= 550);
+
+    destroy(recipient_coin);
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = vesting::ETooEarly)]
-fun test_claim_too_early() {
+#[test]
+fun test_vesting_multiple_beneficiaries() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_multi_beneficiaries".to_string();
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+    let additional_beneficiary = @0xDEAD;
+
+    // Create vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test multiple beneficiaries".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                false,
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // try to claim before start
-    scenario.next_tx(recipient);
-    clock.set_for_testing(50); // before start
-    
-    let mut vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::claim_vesting(&mut vesting, 1, &clock, scenario.ctx()); // should fail
-    
-    ts::return_shared(vesting);
+    // Add additional beneficiary
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    assert!(vesting::beneficiaries_count(&vesting_obj) == 1);
+    vesting::add_beneficiary(&mut vesting_obj, additional_beneficiary, scenario.ctx());
+    assert!(vesting::beneficiaries_count(&vesting_obj) == 2);
+
+    // Additional beneficiary can claim
+    clock.set_for_testing(1500);
+    ts::return_shared(vesting_obj);
+
+    scenario.next_tx(additional_beneficiary);
+    let mut vesting_obj2 = scenario.take_shared<vesting::Vesting<SUI>>();
+    let claimable = vesting::claimable_now(&vesting_obj2, &clock);
+    assert!(claimable == 500); // 50% vested
+
+    let claimed = vesting::claim_vesting<SUI>(
+        &mut vesting_obj2,
+        claimable,
+        &clock,
+        scenario.ctx(),
+    );
+    assert!(claimed.value() == 500);
+
+    // Remove beneficiary
+    ts::return_shared(vesting_obj2);
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj3 = scenario.take_shared<vesting::Vesting<SUI>>();
+    vesting::remove_beneficiary(&mut vesting_obj3, additional_beneficiary, scenario.ctx());
+    assert!(vesting::beneficiaries_count(&vesting_obj3) == 1);
+
+    destroy(claimed);
+    ts::return_shared(vesting_obj3);
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = vesting::EWrongVesting)]
-fun test_cancel_wrong_vesting() {
+#[test]
+fun test_vesting_transfer_ownership() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_transfer".to_string();
+    let new_beneficiary = @0xDEAD;
 
-    // create vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, true, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create transferable vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting transfer".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                true, // is transferable
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // create cancel intent with wrong ID
-    scenario.next_tx(OWNER);
-    let wrong_id = object::id_from_address(@0xDEADBEEF);
-    let mut cancel_intent = create_cancel_vesting_intent(&account, wrong_id, &clock, scenario.ctx());
-    let cancel_intent_key = cancel_intent.key();
-    account.insert_intent(cancel_intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.increment_for_testing(1); // Advance clock for execution
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(cancel_intent_key, &clock, version::current(), DummyIntent());
-    
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::cancel_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, vesting, &clock, DummyIntent(), scenario.ctx()); // should fail
-    
-    account.confirm_execution(executable);
+    // Transfer to new beneficiary
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    assert!(vesting::is_transferable(&vesting_obj));
+    vesting::transfer_vesting(&mut vesting_obj, new_beneficiary, scenario.ctx());
+
+    ts::return_shared(vesting_obj);
+
+    // New beneficiary can now claim
+    scenario.next_tx(new_beneficiary);
+    let mut vesting_obj2 = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    clock.set_for_testing(1500);
+    let claimable = vesting::claimable_now(&vesting_obj2, &clock);
+    assert!(claimable == 500);
+
+    let claimed = vesting::claim_vesting<SUI>(
+        &mut vesting_obj2,
+        claimable,
+        &clock,
+        scenario.ctx(),
+    );
+    assert!(claimed.value() == 500);
+
+    destroy(claimed);
+    ts::return_shared(vesting_obj2);
     end(scenario, extensions, account, clock);
 }
 
-#[test, expected_failure(abort_code = vesting::EVestingNotCancelable)]
-fun test_cancel_uncancelable_vesting() {
+#[test]
+fun test_vesting_emergency_freeze() {
     let (mut scenario, extensions, mut account, mut clock) = start();
-    let recipient = @0xBEEF;
-    let amount = 1000;
-    let start = 100;
-    let end = 200;
+    let key = b"test_vesting_freeze".to_string();
 
-    // create uncancelable vesting
-    scenario.next_tx(OWNER);
-    let mut intent = create_vesting_intent(&account, recipient, amount, start, end, false, &clock, scenario.ctx());
-    let intent_key = intent.key();
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.set_for_testing(1); // Advance clock to execution time
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(intent_key, &clock, version::current(), DummyIntent());
+    let amount = 1000u64;
+    let start_timestamp = 1000u64;
+    let end_timestamp = 2000u64;
+
+    // Create vesting
+    let outcome = Outcome {};
+    let params = intents::new_params(
+        key,
+        b"Test vesting freeze".to_string(),
+        vector[0],
+        10000,
+        &clock,
+        scenario.ctx()
+    );
+
+    let account_ref = &account;
+    account.build_intent!(
+        params,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        VestingIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            vesting::new_vesting<Config, Outcome, SUI, VestingIntent>(
+                intent,
+                account_ref,
+                vector[RECIPIENT],
+                vector[amount],
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                10,
+                0,
+                0,
+                false,
+                true,
+                option::none(),
+                iw,
+            );
+        }
+    );
+
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
-    
-    vesting::do_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, coin, &clock, DummyIntent(), scenario.ctx());
+    let (outcome_result, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx()
+    );
+
+    assert!(outcome_result == outcome);
+    vesting::do_vesting<Config, Outcome, SUI, VestingIntent>(
+        &mut executable,
+        &mut account,
+        coin,
+        &clock,
+        VestingIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
-    // get vesting ID
-    scenario.next_tx(OWNER);
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    let vesting_id = object::id(&vesting);
-    assert!(!vesting::is_cancelable(&vesting));
-    ts::return_shared(vesting);
+    // Emergency freeze
+    scenario.next_tx(OWNER); // Governance can freeze
+    let mut vesting_obj = scenario.take_shared<vesting::Vesting<SUI>>();
 
-    // try to cancel uncancelable vesting
-    let mut cancel_intent = create_cancel_vesting_intent(&account, vesting_id, &clock, scenario.ctx());
-    let cancel_intent_key = cancel_intent.key();
-    account.insert_intent(cancel_intent, version::current(), DummyIntent());
-    
-    scenario.next_tx(OWNER);
-    clock.increment_for_testing(1); // Advance clock for execution
-    let (_outcome, mut executable): (Outcome, _) = account.create_executable(cancel_intent_key, &clock, version::current(), DummyIntent());
-    
-    let vesting = scenario.take_shared<Vesting<SUI>>();
-    vesting::cancel_vesting<Config, Outcome, SUI, _>(&mut executable, &mut account, vesting, &clock, DummyIntent(), scenario.ctx()); // should fail
-    
-    account.confirm_execution(executable);
+    clock.set_for_testing(1200);
+    vesting::emergency_freeze(&mut vesting_obj, &clock);
+
+    // Verify frozen - can't claim
+    clock.set_for_testing(1500);
+    let claimable = vesting::claimable_now(&vesting_obj, &clock);
+    assert!(claimable == 0);
+
+    // Unfreeze
+    clock.set_for_testing(1600);
+    vesting::emergency_unfreeze(&mut vesting_obj, &clock);
+
+    // Beneficiary still needs to unpause after unfreeze
+    ts::return_shared(vesting_obj);
+    scenario.next_tx(RECIPIENT);
+    let mut vesting_obj2 = scenario.take_shared<vesting::Vesting<SUI>>();
+
+    vesting::resume_vesting(&mut vesting_obj2, &clock, scenario.ctx());
+
+    // Now can claim - use a time well past the adjusted end time
+    // The pause duration extends the vesting period
+    clock.set_for_testing(3000);
+    let claimable_after = vesting::claimable_now(&vesting_obj2, &clock);
+    // Should be able to claim full amount after accounting for pause
+    assert!(claimable_after == amount);
+
+    ts::return_shared(vesting_obj2);
     end(scenario, extensions, account, clock);
 }

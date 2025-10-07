@@ -81,7 +81,7 @@ public struct LPTokenWithdrawn has copy, drop {
 // === Public Functions ===
 
 /// Initialize LP token custody for an account
-public(package) fun init_custody(
+public fun init_custody(
     account: &mut Account<FutarchyConfig>,
     ctx: &mut TxContext,
 ) {
@@ -108,7 +108,7 @@ public fun has_custody(account: &Account<FutarchyConfig>): bool {
 }
 
 /// Deposit an LP token into custody
-public(package) fun deposit_lp_token<AssetType, StableType>(
+public fun deposit_lp_token<AssetType, StableType>(
     auth: Auth,
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,
@@ -187,7 +187,7 @@ public(package) fun deposit_lp_token<AssetType, StableType>(
 /// The token_id identifies which LP token to withdraw from managed assets
 /// The LP token is transferred to the account as a child object for safety
 /// Users can then transfer it from the account in a separate transaction
-public(package) fun withdraw_lp_token<AssetType, StableType>(
+public fun withdraw_lp_token<AssetType, StableType>(
     auth: Auth,
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,

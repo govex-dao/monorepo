@@ -67,45 +67,16 @@ const EAllowedCapsNotSorted: u64 = 121;
 const EAllowedCapsEmpty: u64 = 122;
 const EFinalRaiseAmountZero: u64 = 123;
 const EInvalidSaltLength: u64 = 124;  // Salt must be exactly 32 bytes
+const EInvalidMinFillPct: u64 = 126;  // min_fill_pct must be 0-100
 
 // === Constants ===
-/// The duration for every raise is fixed. 14 days in milliseconds.
-const LAUNCHPAD_DURATION_MS: u64 = 1_209_600_000;
-/// A fixed period after a successful raise for contributors to claim tokens
-/// before the creator can sweep any remaining dust. 14 days in milliseconds.
-const CLAIM_PERIOD_DURATION_MS: u64 = 1_209_600_000;
+// Note: Most constants moved to futarchy_one_shot_utils::constants for centralized management
 
 const STATE_FUNDING: u8 = 0;
 const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
 const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
-const MAX_UNIQUE_CAPS: u64 = 1000; // Maximum number of unique cap values to prevent unbounded heap
-
-// === DoS Protection & Crank Incentives ===
-/// Minimum SUI fee per contribution to prevent spam and fund settlement cranking
-/// This makes DoS attacks expensive while incentivizing settlement workers
-///
-/// Fee Distribution Model:
-/// - Each contributor pays: 0.1 SUI
-/// - Crankers get: 0.05 SUI per cap processed (paid during crank_settlement)
-/// - Finalizer gets: All remaining pool (paid during finalize_settlement)
-///
-/// Example with 1000 contributors, 100 unique caps:
-/// - Total pool: 100 SUI
-/// - Crankers earn: 100 caps × 0.05 SUI = 5 SUI
-/// - Finalizer earns: 95 SUI
-///
-/// DoS Protection: Attacker needs 1000 × 0.1 SUI = 100 SUI to create 1000 spam contributions
-const CRANK_FEE_PER_CONTRIBUTION: u64 = 100_000_000; // 0.1 SUI (~$0.10)
-
-/// Reward per cap processed during settlement cranking
-/// 0.05 SUI per cap makes cranking profitable
-const REWARD_PER_CAP_PROCESSED: u64 = 50_000_000; // 0.05 SUI
-
-// === Safety Limits ===
-const MAX_INIT_ACTIONS: u64 = 20; // Maximum number of init actions to prevent gas exhaustion
-const MAX_GAS_PER_ACTION: u64 = 1_000_000; // Estimated max gas per action
 
 // === Structs ===
 
@@ -149,6 +120,7 @@ public struct Contribution has store, drop, copy {
     amount: u64,
     max_total: u64, // cap; u64::MAX means "no cap"
     allow_cranking: bool, // If true, anyone can claim tokens on behalf of this contributor
+    min_fill_pct: u8, // Minimum fill percentage (0-100). If actual fill < this, auto-refund entire amount
 }
 
 /// Key type for storing refunds separately from contributions
@@ -364,6 +336,13 @@ public struct RaiseFailedSealTimeout has copy, drop {
     timestamp_ms: u64,
 }
 
+public struct RaiseEndedEarly has copy, drop {
+    raise_id: ID,
+    total_raised: u64,
+    original_deadline: u64,
+    ended_at: u64,
+}
+
 // === Init ===
 
 fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
@@ -554,6 +533,8 @@ public entry fun create_raise_with_sealed_cap<RaiseToken: drop, StableCoin: drop
 
 /// Contribute with a cap: max final total raise you accept.
 /// cap = u64::max_value() means "no cap".
+/// min_fill_pct: minimum fill percentage (0-100). If actual fill < this, auto-refund entire amount.
+///               Use 0 to accept any fill amount.
 ///
 /// DoS Protection: Requires 0.1 SUI crank fee to prevent spam attacks
 /// The fee funds settlement cranking, making the system self-incentivizing
@@ -561,6 +542,7 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     contribution: Coin<StableCoin>,
     cap: u64,
+    min_fill_pct: u8,
     crank_fee: Coin<sui::sui::SUI>,  // NEW: Anti-DoS fee
     clock: &Clock,
     ctx: &mut TxContext,
@@ -572,8 +554,11 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
     let amount = contribution.value();
     assert!(amount > 0, EZeroContribution);
 
+    // SECURITY: Validate min_fill_pct is 0-100
+    assert!(min_fill_pct <= 100, EInvalidMinFillPct);
+
     // DoS PROTECTION: Collect crank fee (makes spam expensive + funds crankers)
-    assert!(crank_fee.value() == CRANK_FEE_PER_CONTRIBUTION, EInvalidStateForAction);
+    assert!(crank_fee.value() == constants::launchpad_crank_fee_per_contribution(), EInvalidStateForAction);
     raise.crank_pool.join(crank_fee.into_balance());
 
     // SECURITY: Cap must be reasonable (at least the contribution amount)
@@ -597,6 +582,11 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
         assert!(rec.amount <= std::u64::max_value!() - amount, EArithmeticOverflow);
         rec.amount = rec.amount + amount;
 
+        // Update min_fill_pct to the higher value (more conservative)
+        if (min_fill_pct > rec.min_fill_pct) {
+            rec.min_fill_pct = min_fill_pct;
+        };
+
         // SECURITY: Updated total cap must still be reasonable
         assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
     } else {
@@ -604,6 +594,7 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
             amount,
             max_total: cap,
             allow_cranking: false, // Default: only self can claim
+            min_fill_pct,
         });
         raise.contributor_count = raise.contributor_count + 1;
 
@@ -611,7 +602,7 @@ public entry fun contribute_with_cap<RaiseToken, StableCoin>(
         let tkey = ThresholdKey { cap };
         if (!df::exists_(&raise.id, tkey)) {
             // Check we haven't exceeded maximum unique caps
-            assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
+            assert!(vector::length(&raise.thresholds) < constants::launchpad_max_unique_caps(), ETooManyUniqueCaps);
             df::add(&mut raise.id, tkey, ThresholdBin { total: 0, count: 0 });
             vector::push_back(&mut raise.thresholds, cap);
         };
@@ -662,59 +653,6 @@ public entry fun disable_cranking<RaiseToken, StableCoin>(
     rec.allow_cranking = false;
 }
 
-/// Optional: explicit cap update before deadline (moves contributor's amount across bins)
-public entry fun update_cap<RaiseToken, StableCoin>(
-    raise: &mut Raise<RaiseToken, StableCoin>,
-    new_cap: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    assert!(clock.timestamp_ms() < raise.deadline_ms, ECapChangeAfterDeadline);
-    // SECURITY: Cannot update caps after settlement started
-    assert!(!raise.settlement_in_progress && !raise.settlement_done, ESettlementAlreadyStarted);
-    
-    let who = ctx.sender();
-    let key = ContributorKey { contributor: who };
-    assert!(df::exists_(&raise.id, key), ENotAContributor);
-
-    // Get the existing contribution
-    let rec: &Contribution = df::borrow(&raise.id, key);
-    let old_cap = rec.max_total;
-    let amount = rec.amount;
-    
-    if (old_cap == new_cap) return;
-    
-    // SECURITY: New cap must be at least the contribution amount
-    assert!(new_cap >= amount, EInvalidStateForAction);
-
-    // create bin for new cap if needed
-    let new_tk = ThresholdKey { cap: new_cap };
-    if (!df::exists_(&raise.id, new_tk)) {
-        // Check we haven't exceeded maximum unique caps
-        assert!(vector::length(&raise.thresholds) < MAX_UNIQUE_CAPS, ETooManyUniqueCaps);
-        df::add(&mut raise.id, new_tk, ThresholdBin { total: 0, count: 0 });
-        vector::push_back(&mut raise.thresholds, new_cap);
-    };
-
-    // move amount across bins
-    {
-        let old_bin: &mut ThresholdBin = df::borrow_mut(&mut raise.id, ThresholdKey { cap: old_cap });
-        assert!(old_bin.total >= amount, EArithmeticOverflow);
-        old_bin.total = old_bin.total - amount;
-        assert!(old_bin.count > 0, EArithmeticOverflow);
-        old_bin.count = old_bin.count - 1;
-    };
-    {
-        let new_bin: &mut ThresholdBin = df::borrow_mut(&mut raise.id, new_tk);
-        assert!(new_bin.total <= std::u64::max_value!() - amount, EArithmeticOverflow);
-        new_bin.total = new_bin.total + amount;
-        new_bin.count = new_bin.count + 1;
-    };
-
-    // Update the contributor's record
-    let rec_mut: &mut Contribution = df::borrow_mut(&mut raise.id, key);
-    rec_mut.max_total = new_cap;
-}
 
 // === Max-heap helpers over vector<u64> ===
 fun parent(i: u64): u64 { if (i == 0) 0 else (i - 1) / 2 }
@@ -860,7 +798,7 @@ public entry fun crank_settlement<RT, SC>(
 
     // CRANK REWARD: Pay 0.05 SUI per cap processed
     if (caps_processed > 0) {
-        let reward_amount = caps_processed * REWARD_PER_CAP_PROCESSED;
+        let reward_amount = caps_processed * constants::launchpad_reward_per_cap_processed();
         let pool_balance = raise.crank_pool.value();
 
         // Pay up to what's available in pool
@@ -1024,6 +962,43 @@ public entry fun fail_raise_seal_timeout<RT: drop, SC>(
             timestamp_ms: clock.timestamp_ms(),
         });
     };
+}
+
+/// Allow creator to end raise early if minimum raise is met
+/// This unlocks capital faster when success is clear
+///
+/// Requirements:
+/// - Must have met minimum raise amount
+/// - Only creator can call
+public entry fun end_raise_early<RT, SC>(
+    raise: &mut Raise<RT, SC>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Only creator can end early
+    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+
+    // Must still be in funding state
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+
+    // Must not have already passed deadline
+    assert!(clock.timestamp_ms() < raise.deadline_ms, EDeadlineNotReached);
+
+    // Must have met minimum raise amount
+    assert!(raise.total_raised >= raise.min_raise_amount, EMinRaiseNotMet);
+
+    // Save original deadline before modifying
+    let original_deadline = raise.deadline_ms;
+
+    // Set deadline to now, effectively ending the raise
+    raise.deadline_ms = clock.timestamp_ms();
+
+    event::emit(RaiseEndedEarly {
+        raise_id: object::id(raise),
+        total_raised: raise.total_raised,
+        original_deadline,
+        ended_at: clock.timestamp_ms(),
+    });
 }
 
 /// Activates pre-created DAO and executes pending intents
@@ -1216,6 +1191,28 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
         raise.final_raise_amount, // Use the final, possibly capped amount
         consensual_total          // But scale it relative to the larger consensus pool
     );
+
+    // Step 2.5: Check min_fill_pct slippage protection
+    // If user specified minimum fill percentage and actual fill is below that, refund entirely
+    if (rec.min_fill_pct > 0) {
+        // Calculate actual fill percentage: (accepted / contributed) * 100
+        let fill_pct = (accepted_amount * 100) / rec.amount;
+
+        if (fill_pct < (rec.min_fill_pct as u64)) {
+            // Fill below minimum - refund entire contribution
+            let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
+            transfer::public_transfer(refund_coin, recipient);
+
+            event::emit(RefundClaimed {
+                raise_id: object::id(raise),
+                contributor: recipient,
+                refund_amount: rec.amount,
+            });
+
+            raise.claiming = false;
+            return // Exit early - min fill not met
+        };
+    };
 
     let tokens_to_claim = math::mul_div_to_64(
         accepted_amount,
@@ -1414,7 +1411,7 @@ public entry fun sweep_dust<RaiseToken, StableCoin>(
 
     // Ensure the claim period has passed. The claim period starts after the raise deadline.
     assert!(
-        clock.timestamp_ms() >= raise.deadline_ms + CLAIM_PERIOD_DURATION_MS,
+        clock.timestamp_ms() >= raise.deadline_ms + constants::launchpad_claim_period_ms(),
         EDeadlineNotReached // Reusing error, implies "claim deadline not reached"
     );
 
@@ -1444,7 +1441,7 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
     assert!(is_sorted_ascending(&allowed_caps), EAllowedCapsNotSorted);
 
     let tokens_for_sale = tokens_for_raise.value();
-    let deadline = clock.timestamp_ms() + LAUNCHPAD_DURATION_MS;
+    let deadline = clock.timestamp_ms() + constants::launchpad_duration_ms();
 
     // Create SealContainer if using SEAL - uses helper to avoid Option unwrapping verbosity
     let max_raise_seal = seal_commit_reveal::new_sealed_container_from_options<u64>(

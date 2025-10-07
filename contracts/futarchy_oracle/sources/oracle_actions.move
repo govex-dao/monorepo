@@ -470,8 +470,9 @@ public fun create_vesting_grant<AssetType, StableType>(
     // Share the grant
     transfer::share_object(grant);
 
-    // Register grant in DAO registry
-    register_grant(account, grant_id_inner, recipient, true, 0, version);
+    // Ensure grant storage exists and register grant in DAO registry
+    ensure_grant_storage(account, version, ctx);
+    register_grant(account, grant_id_inner, recipient, true, 1, version);
 
     grant_id_inner
 }
