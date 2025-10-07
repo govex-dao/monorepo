@@ -1,8 +1,27 @@
-# Contracts
-contracts/futarchy/build/
+# Contracts - Futarchy packages
+contracts/futarchy_one_shot_utils/build/
+contracts/futarchy_core/build/
+contracts/futarchy_markets/build/
+contracts/futarchy_vault/build/
+contracts/futarchy_multisig/build/
+contracts/futarchy_lifecycle/build/
+contracts/futarchy_actions/build/
+contracts/futarchy_specialized_actions/build/
+contracts/futarchy_dao/build/
+
+# Contracts - Move framework packages
+contracts/move-framework/deps/kiosk/build/
+contracts/move-framework/packages/extensions/build/
+contracts/move-framework/packages/protocol/build/
+contracts/move-framework/packages/actions/build/
+
+# Contracts - Test coins
 contracts/govex-coin/build/
 contracts/test_stable/build/
 contracts/test_asset/build/
+
+# Contracts - Legacy
+contracts/futarchy/build/
 contracts/futarchy/node_modules/
 
 # Backend

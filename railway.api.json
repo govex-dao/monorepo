@@ -11,5 +11,6 @@
     "restartPolicyMaxRetries": 10,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30
-  }
+  },
+  "watch":[ "/backend/**", "/railway.api.json"]
 }
