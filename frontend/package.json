@@ -46,7 +46,7 @@
     "recharts": "^2.15.3",
     "remark-gfm": "^4.0.1",
     "serve": "^14.2.4",
-    "sirv": "^3.0.1",
+    "sirv": "^3.0.2",
     "vite-plugin-pages": "^0.32.5"
   },
   "devDependencies": {
