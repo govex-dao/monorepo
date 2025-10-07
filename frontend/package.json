@@ -33,6 +33,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "compression": "^1.8.1",
     "express": "4",
+    "express-rate-limit": "^8.1.0",
     "lightweight-charts": "^5.0.7",
     "lucide-react": "^0.516.0",
     "markdown-to-jsx": "^7.7.6",

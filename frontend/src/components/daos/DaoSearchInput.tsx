@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
 import { CONSTANTS } from "@/constants";
 import { VerifiedIcon } from "../icons/VerifiedIcon";
+import { getSafeImageSrc } from "@/utils/imageValidation";
 
 interface DaoData {
   dao_id: string;
@@ -188,7 +189,7 @@ const DaoSearchInput = ({
                       <div className="w-8 h-8 flex-shrink-0 rounded-full bg-transparent overflow-hidden">
                         {dao.dao_icon ? (
                           <img
-                            src={dao.dao_icon}
+                            src={getSafeImageSrc(dao.dao_icon)}
                             alt={dao.dao_name}
                             className="w-full h-full object-cover"
                           />

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Theme } from "@radix-ui/themes";
 import { CONSTANTS } from "@/constants";
 import { VerifiedIcon } from "./icons/VerifiedIcon";
+import { getSafeImageSrc } from "@/utils/imageValidation";
 
 interface DaoResult {
   type: "dao";
@@ -158,7 +159,7 @@ const UnifiedSearch = () => {
                             <div className="w-5 h-5 rounded-full bg-transparent flex-shrink-0 overflow-hidden">
                               {dao.dao_icon ? (
                                 <img
-                                  src={dao.dao_icon}
+                                  src={getSafeImageSrc(dao.dao_icon)}
                                   alt=""
                                   className="w-full h-full object-cover"
                                 />
@@ -203,7 +204,7 @@ const UnifiedSearch = () => {
                                 <div className="w-5 h-5 rounded-full bg-transparent flex-shrink-0 overflow-hidden">
                                   {proposal.dao.dao_icon ? (
                                     <img
-                                      src={proposal.dao.dao_icon}
+                                      src={getSafeImageSrc(proposal.dao.dao_icon)}
                                       alt=""
                                       className="w-full h-full object-cover"
                                     />
