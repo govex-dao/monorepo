@@ -12,10 +12,10 @@ cmds = ["cd frontend && pnpm run build-frontend"]
 
 [staticAssets]
 enabled = "true"
-dir = "frontend/dist"
+dir = "frontend/dist/client"
 
 [start]
-cmd = "npx serve -s frontend/dist -l 3000"
+cmd = "npx serve -s frontend/dist/client -l 3000"
 
 [variables]
 NODE_ENV = "production"
