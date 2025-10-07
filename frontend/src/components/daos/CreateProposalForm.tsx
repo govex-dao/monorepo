@@ -11,6 +11,7 @@ import {
 } from "./proposal-transaction";
 import { CONSTANTS } from "../../constants";
 import { VerifiedIcon } from "../icons/VerifiedIcon";
+import { getSafeImageSrc } from "@/utils/imageValidation";
 
 // Import all the new components
 import { FormField } from "./create-proposal/FormField";
@@ -625,7 +626,7 @@ const CreateProposalForm = ({
             <div className="flex items-center space-x-3 mb-2">
               <div className="w-10 h-10 flex-shrink-0">
                 <img
-                  src={daoData?.dao_icon || "/placeholder-dao.png"}
+                  src={getSafeImageSrc(daoData?.dao_icon || "/placeholder-dao.png")}
                   alt={daoData?.dao_name}
                   className="w-full h-full rounded-full object-cover"
                   onError={(e) => {

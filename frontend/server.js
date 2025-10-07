@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { loadEnv } from "vite";
+import rateLimit from "express-rate-limit";
 
 // Configuration
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -129,41 +130,63 @@ function buildProposalOgData(proposal) {
   };
 }
 
+/**
+ * Escapes HTML special characters to prevent XSS (CWE-79)
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
 function generateOgMetaTags(ogData, canonicalUrl) {
   if (!ogData.title) return "";
 
+  // Sanitize all inputs to prevent XSS (CWE-79)
+  const safeTitle = escapeHtml(ogData.title);
+  const safeDescription = escapeHtml(ogData.description);
+  const safeKeywords = escapeHtml(ogData.keywords);
+  const safeAuthor = escapeHtml(ogData.author || 'Govex');
+  const safeImage = escapeHtml(ogData.image);
+  const safeUrl = escapeHtml(canonicalUrl);
+  const safeType = escapeHtml(ogData.type || 'website');
+
   return [
     // Basic SEO
-    `<title>${ogData.title}</title>`,
-    `<meta name="description" content="${ogData.description}" />`,
-    `<meta name="keywords" content="${ogData.keywords}" />`,
-    `<meta name="author" content="${ogData.author}" />`,
+    `<title>${safeTitle}</title>`,
+    `<meta name="description" content="${safeDescription}" />`,
+    `<meta name="keywords" content="${safeKeywords}" />`,
+    `<meta name="author" content="${safeAuthor}" />`,
     `<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />`,
     `<meta name="googlebot" content="index, follow" />`,
-    `<link rel="canonical" href="${canonicalUrl}" />`,
+    `<link rel="canonical" href="${safeUrl}" />`,
 
     // Geo tags
     `<meta name="geo.region" content="Global" />`,
     `<meta name="geo.placename" content="Global" />`,
 
     // Open Graph
-    `<meta property="og:title" content="${ogData.title}" />`,
-    `<meta property="og:description" content="${ogData.description}" />`,
-    `<meta property="og:image" content="${ogData.image}" />`,
+    `<meta property="og:title" content="${safeTitle}" />`,
+    `<meta property="og:description" content="${safeDescription}" />`,
+    `<meta property="og:image" content="${safeImage}" />`,
     `<meta property="og:image:width" content="1200" />`,
     `<meta property="og:image:height" content="630" />`,
-    `<meta property="og:image:alt" content="${ogData.title}" />`,
-    `<meta property="og:url" content="${canonicalUrl}" />`,
-    `<meta property="og:type" content="${ogData.type}" />`,
+    `<meta property="og:image:alt" content="${safeTitle}" />`,
+    `<meta property="og:url" content="${safeUrl}" />`,
+    `<meta property="og:type" content="${safeType}" />`,
     `<meta property="og:site_name" content="Govex" />`,
     `<meta property="og:locale" content="en_US" />`,
 
     // Twitter Card
     `<meta name="twitter:card" content="summary_large_image" />`,
-    `<meta name="twitter:title" content="${ogData.title}" />`,
-    `<meta name="twitter:description" content="${ogData.description}" />`,
-    `<meta name="twitter:image" content="${ogData.image}" />`,
-    `<meta name="twitter:image:alt" content="${ogData.title}" />`,
+    `<meta name="twitter:title" content="${safeTitle}" />`,
+    `<meta name="twitter:description" content="${safeDescription}" />`,
+    `<meta name="twitter:image" content="${safeImage}" />`,
+    `<meta name="twitter:image:alt" content="${safeTitle}" />`,
     `<meta name="twitter:site" content="@govexdotai" />`,
     `<meta name="twitter:creator" content="@govexdotai" />`,
     `<meta name="twitter:domain" content="govex.ai" />`,
@@ -217,6 +240,16 @@ const OG_DATA = {
 async function createServer() {
   const app = express();
   app.disable('x-powered-by'); // Security: Hide Express framework information (CWE-200)
+
+  // Rate limiting to prevent resource exhaustion (CWE-770)
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per window
+    standardHeaders: true, // Return rate limit info in RateLimit-* headers
+    legacyHeaders: false, // Disable X-RateLimit-* headers
+    message: 'Too many requests, please try again later.',
+  });
+  app.use(limiter);
 
   // Setup Vite in development or static files in production
   let vite;
