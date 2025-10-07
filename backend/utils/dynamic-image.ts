@@ -30,8 +30,35 @@ export function sendErrorResponse(res: Response, error: any, message = 'Internal
 }
 
 // Image loading helper
+/**
+ * Validates that a file path is within the allowed directory
+ * Prevents path traversal attacks (CWE-23)
+ */
+function validateImagePath(imagePath: string): boolean {
+  // Define allowed base directory
+  const allowedBase = path.join(process.cwd(), 'public', 'dao-images');
+
+  // Normalize the path
+  let normalizedPath = imagePath;
+  if (!normalizedPath.startsWith('/')) {
+    normalizedPath = '/' + normalizedPath;
+  }
+
+  // Resolve the full path
+  const fullPath = path.resolve(process.cwd(), 'public', normalizedPath.substring(1));
+
+  // Check if resolved path starts with allowed base and doesn't contain traversal sequences
+  return fullPath.startsWith(allowedBase) && !imagePath.includes('..');
+}
+
 export async function loadCachedImage(imagePath: string): Promise<string | null> {
   try {
+    // Validate path to prevent traversal attacks
+    if (!validateImagePath(imagePath)) {
+      logSecurityError('loadCachedImage', new Error(`Invalid image path detected: ${imagePath}`));
+      return null;
+    }
+
     if (!imagePath.startsWith('/')) {
       imagePath = '/' + imagePath;
     }

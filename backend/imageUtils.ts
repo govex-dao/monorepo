@@ -3,6 +3,21 @@ import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs/promises';
 
+/**
+ * Validates that a file path is within the allowed directory
+ * Prevents path traversal attacks (CWE-23)
+ */
+function validateCachePath(cachePath: string): boolean {
+    // Define allowed base directory
+    const allowedBase = path.join(process.cwd(), 'public', 'dao-images');
+
+    // Resolve the full path
+    const fullPath = path.resolve(process.cwd(), 'public', cachePath);
+
+    // Check if resolved path starts with allowed base and doesn't contain traversal sequences
+    return fullPath.startsWith(allowedBase) && !cachePath.includes('..');
+}
+
 export async function processAndGetBase64Icon(
     iconCachePath: string | null,
     daoId: string,
@@ -10,6 +25,12 @@ export async function processAndGetBase64Icon(
 ): Promise<string | null> {
     // Try to use cached file first
     if (iconCachePath) {
+        // Validate path to prevent traversal attacks
+        if (!validateCachePath(iconCachePath)) {
+            console.error(`Security: Invalid cache path detected for DAO ${daoId}: ${iconCachePath}`);
+            return fallbackIconUrl || null;
+        }
+
         try {
             const imagePath = path.join(process.cwd(), 'public', iconCachePath);
             const imageBuffer = await fs.readFile(imagePath);
