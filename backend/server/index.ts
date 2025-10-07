@@ -46,7 +46,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 app.get('/', async (req, res) => {
-	res.send({ message: '🚀 API is functional 🚀' });
+	res.send({ message: '🚀 API is functional 🚀', version: '1.0.11' });
 });
 
 app.get('/health', async (req, res) => {
