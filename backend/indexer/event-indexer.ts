@@ -162,7 +162,18 @@ class SequentialEventProcessor {
                     // Always wait between requests, even if no events found
                     await this.delay(INDEXER_CONFIG.DELAY_BETWEEN_REQUESTS);
 
-                } catch (error) {
+                } catch (error: any) {
+                    // Handle missing historical data gracefully
+                    if (error.code === -32603 && error.message?.includes('Could not find')) {
+                        console.warn(`Skipping missing transaction for ${tracker.type}:`, cursor);
+                        // Skip this cursor and continue to next page
+                        if (cursor) {
+                            // Try to continue with a slightly modified cursor or skip
+                            hasMore = false; // Stop this batch, will retry on next cycle
+                        }
+                        continue;
+                    }
+
                     console.error(`Error processing ${tracker.type}:`, error);
                     hasMore = false;
                 }
