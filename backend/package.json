@@ -29,6 +29,7 @@
 		"indexer": "tsx watch ./indexer/index.ts",
 		"indexer:prod": "cross-env NODE_ENV=production tsx ./indexer/index.ts",
 		"bot:prod": "cross-env NODE_ENV=production tsx bot.ts",
+		"regenerate-images": "tsx ./scripts/regenerate-dao-images.ts",
 		"start:railway": "./railway-deploy.sh"
 	},
 	"keywords": [],
