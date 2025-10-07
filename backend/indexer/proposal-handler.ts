@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
 import { CONFIG } from '../config';
 import { sendDiscordWebhook } from './discord-webhook';
+import { safeBigInt, serializeBigInt } from '../utils/bigint';
 
 interface ProposalCreated {
     proposal_id: string;
@@ -41,24 +42,6 @@ interface ProposalNotificationPayload {
     details: string;
     outcome_messages: string[];
     is_verified: boolean;
-}
-
-// Helper to safely convert string to BigInt
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
-}
-
-// Custom serializer for BigInt values
-function serializeBigInt(key: string, value: any): any {
-    if (typeof value === 'bigint') {
-        return value.toString();
-    }
-    return value;
 }
 
 // Send Discord webhook notification for new proposal

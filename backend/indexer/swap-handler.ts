@@ -1,6 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { safeBigInt } from '../utils/bigint';
 
 interface SwapEventData {
     market_id: string;
@@ -14,15 +15,6 @@ interface SwapEventData {
     timestamp: string;
     asset_reserve: string;
     stable_reserve: string;
-}
-
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
 }
 
 function validateSwapEventData(data: any): data is SwapEventData {

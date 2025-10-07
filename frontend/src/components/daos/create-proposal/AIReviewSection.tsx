@@ -31,23 +31,28 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
   const handleReview = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
-      const response = await fetch(`${CONSTANTS.apiEndpoint}api/review-proposal`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `${CONSTANTS.apiEndpoint}api/review-proposal`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title,
+            outcomeMessages,
+            description,
+          }),
         },
-        body: JSON.stringify({
-          title,
-          outcomeMessages,
-          description,
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to review: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to review: ${response.statusText}`,
+        );
       }
 
       const reviewData: AIReviewResponse = await response.json();
@@ -77,7 +82,9 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
   return (
     <div className="space-y-4 p-4 bg-gray-900 rounded-lg">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-200">AI Proposal Review</h3>
+        <h3 className="text-lg font-medium text-gray-200">
+          AI Proposal Review
+        </h3>
         {!hasReviewed && (
           <button
             type="button"
@@ -116,14 +123,18 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
 
           {/* Assessment */}
           <div className="p-3 bg-gray-800 rounded-md">
-            <h4 className="text-sm font-medium text-gray-300 mb-2">Overall Assessment</h4>
+            <h4 className="text-sm font-medium text-gray-300 mb-2">
+              Overall Assessment
+            </h4>
             <p className="text-gray-200">{review.assessment}</p>
           </div>
 
           {/* Feedback Details */}
           {review.feedback_details.length > 0 && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-300">Detailed Feedback</h4>
+              <h4 className="text-sm font-medium text-gray-300">
+                Detailed Feedback
+              </h4>
               <ul className="space-y-2">
                 {review.feedback_details.map((feedback, index) => (
                   <li key={index} className="flex items-start gap-2">
@@ -139,8 +150,9 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
           {review.consistency_rating < 6 && (
             <div className="p-3 bg-yellow-900/20 border border-yellow-500 rounded-md">
               <p className="text-yellow-400 text-sm">
-                <strong>Note:</strong> Your proposal needs a consistency rating of at least 6/10 to be submitted. 
-                Please address the feedback above and try again.
+                <strong>Note:</strong> Your proposal needs a consistency rating
+                of at least 6/10 to be submitted. Please address the feedback
+                above and try again.
               </p>
             </div>
           )}
@@ -149,7 +161,8 @@ export const AIReviewSection: React.FC<AIReviewSectionProps> = ({
           {review.consistency_rating >= 6 && (
             <div className="p-3 bg-green-900/20 border border-green-500 rounded-md">
               <p className="text-green-400 text-sm">
-                <strong>Great!</strong> Your proposal has passed the consistency check. You can now submit it.
+                <strong>Great!</strong> Your proposal has passed the consistency
+                check. You can now submit it.
               </p>
             </div>
           )}

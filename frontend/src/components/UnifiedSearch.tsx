@@ -93,7 +93,7 @@ const UnifiedSearch = () => {
       setSearchParams({ dao: result.dao_id });
     } else {
       // Navigate to proposal page
-      navigate(`/trade/${result.market_state_id}`);
+      navigate(`/trade/${result.proposal_id}`);
     }
 
     setSearchTerm("");

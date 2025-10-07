@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "noEmit": false,
+    "jsx": "react"
+  },
+  "include": ["src/entry-server.tsx", "src/**/*"]
+}

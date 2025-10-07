@@ -22,7 +22,7 @@ const TradeDetails: React.FC<TradeDetailsProps> = ({
   const [showTradeDetails, setShowTradeDetails] = useState<boolean>(false);
 
   useEffect(() => {
-    const isMobile = window.innerWidth < 768; // Common breakpoint for mobile devices
+    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false; // Common breakpoint for mobile devices
     setShowTradeDetails(!isMobile);
   }, []);
 

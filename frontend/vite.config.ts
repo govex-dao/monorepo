@@ -3,10 +3,18 @@ import react from "@vitejs/plugin-react-swc";
 import Pages from "vite-plugin-pages";
 import path from "path";
 
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ command, mode, isSsrBuild }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
   return {
+    ssr: {
+      noExternal: ['@mysten/dapp-kit', '@mysten/sui', '@radix-ui/themes', 'react-helmet-async', 'react-syntax-highlighter'],
+      external: [],
+      resolve: {
+        conditions: ['import', 'module', 'browser', 'default'],
+        externalConditions: ['import', 'module']
+      }
+    },
     plugins: [
       react(),
       Pages({
@@ -24,7 +32,7 @@ export default defineConfig(({ command, mode }) => {
       sourcemap: true,
       rollupOptions: {
         output: {
-          manualChunks: {
+          manualChunks: isSsrBuild ? undefined : {
             "react-vendor": ["react", "react-dom"],
             "ui-vendor": ["@radix-ui/themes", "@radix-ui/react-icons"],
           },
@@ -55,6 +63,7 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
+        "react-router-dom": path.resolve(__dirname, "./node_modules/react-router-dom/dist/index.mjs"),
       },
       extensions: [".ts", ".tsx", ".js", ".jsx", ".json"],
     },
@@ -77,7 +86,7 @@ export default defineConfig(({ command, mode }) => {
     preview: {
       host: "0.0.0.0",
       port: 4173,
-      allowedHosts: [".railway.app"], // allow any Railway preview domain
+      allowedHosts: [".railway.app", "*", "c6e056d4d792.ngrok-free.app"], // allow any Railway preview domain
     },
   };
 });
