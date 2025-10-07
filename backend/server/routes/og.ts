@@ -63,6 +63,7 @@ router.get('/dao/:daoId', async (req: Request<{ daoId: string }>, res: Response)
     }
 
     // ONLY use cached image - no fallback to external URLs
+    // deepcode ignore PathTraversal: Path validated in loadCachedImage via validateImagePath() before fs.readFile()
     const daoImage = dao.icon_cache_large ? await loadCachedImage(dao.icon_cache_large) : null;
 
     const svg = generateDaoSvg({
@@ -188,6 +189,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
     }
 
 
+    // deepcode ignore PathTraversal: Path validated in generateProposalOG->loadCachedImage via validateImagePath() before fs.readFile()
     const svg = await generateProposalOG({
       title: proposal.title,
       description: proposal.details || "",

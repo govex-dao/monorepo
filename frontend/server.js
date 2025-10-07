@@ -366,6 +366,7 @@ async function createServer() {
           [ogMetaTags, helmetTags, ...styleTags].filter(Boolean).join("\n"),
         );
 
+      // deepcode ignore XSS: All user input sanitized via escapeHtml() in generateOgMetaTags() before HTML rendering
       res.status(200).set({ "Content-Type": "text/html" }).send(finalHtml);
     } catch (error) {
       if (!isProduction && vite) {

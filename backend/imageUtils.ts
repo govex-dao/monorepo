@@ -6,8 +6,11 @@ import fs from 'fs/promises';
 /**
  * Validates that a file path is within the allowed directory
  * Prevents path traversal attacks (CWE-23)
+ * @public - Exported for use in route handlers
  */
-function validateCachePath(cachePath: string): boolean {
+export function validateCachePath(cachePath: string | null | undefined): boolean {
+    if (!cachePath) return false;
+
     // Define allowed base directory
     const allowedBase = path.join(process.cwd(), 'public', 'dao-images');
 

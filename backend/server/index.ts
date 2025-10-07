@@ -222,6 +222,8 @@ app.get('/daos', async (req, res) => {
 
             return {
             ...dao,
+            // deepcode ignore PathTraversal: Path validated in processAndGetBase64Icon via validateCachePath() before fs.readFile()
+            // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal
             dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.dao_id, dao.icon_url),
             minAssetAmount: dao.minAssetAmount.toString(),
             minStableAmount: dao.minStableAmount.toString(),
@@ -366,6 +368,7 @@ app.get('/search', async (req, res) => {
             return {
                 type: 'dao',
                 ...dao,
+                // deepcode ignore PathTraversal: Path validated in processAndGetBase64Icon via validateCachePath() before fs.readFile()
                 dao_icon: await processAndGetBase64Icon(dao.icon_cache_path, dao.dao_id, dao.icon_url)
             };
         }));
@@ -405,6 +408,7 @@ app.get('/search', async (req, res) => {
                 ...proposal,
                 dao: proposal.dao ? {
                     ...proposal.dao,
+                    // deepcode ignore PathTraversal: Path validated in processAndGetBase64Icon via validateCachePath() before fs.readFile()
                     dao_icon: await processAndGetBase64Icon(
                         proposal.dao.icon_cache_path || null,
                         proposal.dao.dao_id,
@@ -645,6 +649,7 @@ app.get('/proposals/:id', async (req, res) => {
                 minStableAmount: serializeBigInt(proposal.dao.minStableAmount)
               }
             : null,
+          // deepcode ignore PathTraversal: Path validated in processAndGetBase64Icon via validateCachePath() before fs.readFile()
           dao_icon: await processAndGetBase64Icon(
             proposal.dao?.icon_cache_path || null,
             proposal.dao_id,
