@@ -386,6 +386,7 @@ app.get('/search', async (req, res) => {
                         dao_id: true,
                         dao_name: true,
                         icon_cache_path: true,
+                        icon_url: true,
                         verification: {
                             select: { verified: true }
                         }
