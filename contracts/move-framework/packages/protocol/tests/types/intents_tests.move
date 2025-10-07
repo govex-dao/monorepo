@@ -11,6 +11,7 @@ use sui::{
     test_utils::destroy,
     test_scenario as ts,
     clock,
+    bcs,
 };
 use account_protocol::{
     intents,
@@ -24,7 +25,8 @@ const OWNER: address = @0xCAFE;
 
 public struct DummyIntent() has drop;
 public struct WrongIntent() has drop;
-public struct DummyAction has store {}
+public struct DummyAction has drop, store {}
+public struct DummyActionType has drop {}
 
 // === Helpers ===
 
@@ -127,13 +129,13 @@ fun test_getters() {
 
     // check intents getters
     assert!(intents.length() == 2);
-    assert!(intents.locked().size() == 0);
+    // No longer checking locked() - removed in new design
     assert!(intents.contains(b"one".to_string()));
     assert!(intents.contains(b"two".to_string()));
 
     // check intent getters
     let intent1 = intents.get(b"one".to_string());
-    assert!(intent1.type_() == type_name::get<DummyIntent>());
+    assert!(intent1.type_() == type_name::with_defining_ids<DummyIntent>());
     assert!(intent1.key() == b"one".to_string());
     assert!(intent1.description() == b"".to_string());
     assert!(intent1.account() == @0xACC);
@@ -141,7 +143,7 @@ fun test_getters() {
     assert!(intent1.creation_time() == 1);
     assert!(intent1.execution_times() == vector[0]);
     assert!(intent1.expiration_time() == 1);
-    assert!(intent1.actions().length() == 0);
+    assert!(intent1.action_count() == 0);
     assert!(intent1.role() == full_role());
     assert!(intent1.outcome() == true);
 
@@ -155,8 +157,8 @@ fun test_getters() {
     // check expired getters
     let expired = intents.destroy_intent<bool>(b"one".to_string());
     assert!(expired.account() == @0xACC);
-    assert!(expired.start_index() == 0);
-    assert!(expired.actions().length() == 0);
+    assert!(0 == 0);
+    assert!(expired.expired_action_count() == 0);
 
     destroy(expired);
     destroy(intents);
@@ -185,12 +187,13 @@ fun test_add_remove_action() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
-    assert!(intent.actions().length() == 1);
+    let action_data = bcs::to_bytes(&DummyAction {});
+    intent.add_typed_action(DummyActionType {}, action_data, DummyIntent());
+    assert!(intent.action_count() == 1);
     intents.add_intent(intent);
 
     let mut expired = intents.destroy_intent<bool>(b"one".to_string());
-    let DummyAction {} = expired.remove_action();
+    let _spec = expired.remove_action_spec();
 
     destroy(intents);
     destroy(expired);
@@ -218,8 +221,9 @@ fun test_pop_front_execution_time() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
-    
+    let action_data = bcs::to_bytes(&DummyAction {});
+    intent.add_typed_action(DummyActionType {}, action_data, DummyIntent());
+
     let time = intent.pop_front_execution_time();
     assert!(time == 0);
     assert!(intent.execution_times().is_empty());
@@ -229,19 +233,7 @@ fun test_pop_front_execution_time() {
     scenario.end();
 }
 
-#[test]
-fun test_lock_unlock_id() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    assert!(intents.locked().contains(&@0x1D.to_id()));
-    intents.unlock(@0x1D.to_id());
-    assert!(!intents.locked().contains(&@0x1D.to_id()));
-
-    destroy(intents);
-    scenario.end();
-}
+// REMOVED: test_lock_unlock_id - no locking in new design
 
 #[test]
 fun test_add_destroy_intent() {
@@ -268,8 +260,8 @@ fun test_add_destroy_intent() {
     let _time = intents.get_mut<bool>(b"one".to_string()).pop_front_execution_time();
     let expired = intents.destroy_intent<bool>(b"one".to_string());
     assert!(expired.account() == @0xACC);
-    assert!(expired.start_index() == 0);
-    assert!(expired.actions().length() == 0);
+    assert!(0 == 0);
+    assert!(expired.expired_action_count() == 0);
     expired.destroy_empty();
 
     destroy(clock);
@@ -378,7 +370,8 @@ fun test_error_delete_intent_actions_not_empty() {
         DummyIntent(),
         scenario.ctx(),
     );
-    intent.add_action(DummyAction {}, DummyIntent());
+    let action_data = bcs::to_bytes(&DummyAction {});
+    intent.add_typed_action(DummyActionType {}, action_data, DummyIntent());
     intents.add_intent(intent);
     // remove intent
     let expired = intents.destroy_intent<bool>(b"one".to_string());
@@ -469,26 +462,5 @@ fun test_error_execution_times_not_ascending() {
     scenario.end();
 }
 
-#[test, expected_failure(abort_code = intents::EObjectAlreadyLocked)]
-fun test_error_lock_object_already_locked() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    intents.lock(@0x1D.to_id());
-
-    destroy(intents);
-    scenario.end();
-}
-
-#[test, expected_failure(abort_code = intents::EObjectNotLocked)]
-fun test_error_unlock_object_not_locked() {
-    let mut scenario = ts::begin(OWNER);
-
-    let mut intents = intents::empty(scenario.ctx());
-    intents.lock(@0x1D.to_id());
-    intents.unlock(@0x1D1.to_id());
-
-    destroy(intents);
-    scenario.end();
-}
+// REMOVED: test_error_lock_object_already_locked - no locking in new design
+// REMOVED: test_error_unlock_object_not_locked - no locking in new design

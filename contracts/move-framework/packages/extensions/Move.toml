@@ -5,6 +5,5 @@ license = "Apache-2.0"
 authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
-
 [addresses]
-account_extensions = "0x87bee60d3ea6dc5b42e1074134373af27733fb3c5ebc3ac8e013901426d85d53"
+account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"

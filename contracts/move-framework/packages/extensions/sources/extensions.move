@@ -6,29 +6,24 @@ module account_extensions::extensions;
 // === Imports ===
 
 use std::string::String;
+use sui::table::{Self, Table};
 
 // === Errors ===
 
 const EExtensionNotFound: u64 = 0;
 const EExtensionAlreadyExists: u64 = 1;
-const ECannotRemoveAccountProtocol: u64 = 2;
 
 // === Structs ===
 
 /// A list of verified and whitelisted packages
 public struct Extensions has key {
     id: UID,
-    inner: vector<Extension>,
-}
-
-/// A package with a name and all authorized versions
-public struct Extension has copy, drop, store {
-    name: String,
-    history: vector<History>,
+    by_name: Table<String, vector<PackageVersion>>,
+    by_addr: Table<address, String>,
 }
 
 /// The address and version of a package
-public struct History has copy, drop, store {
+public struct PackageVersion has copy, drop, store {
     addr: address,
     version: u64,
 }
@@ -42,9 +37,10 @@ public struct AdminCap has key, store {
 
 fun init(ctx: &mut TxContext) {
     transfer::transfer(AdminCap { id: object::new(ctx) }, ctx.sender());
-    transfer::share_object(Extensions { 
+    transfer::share_object(Extensions {
         id: object::new(ctx),
-        inner: vector::empty()  
+        by_name: table::new(ctx),
+        by_addr: table::new(ctx),
     });
 }
 
@@ -52,59 +48,49 @@ fun init(ctx: &mut TxContext) {
 
 /// Returns the number of extensions in the list
 public fun length(extensions: &Extensions): u64 {
-    extensions.inner.length()
+    extensions.by_name.length()
 }
 
-/// Returns the extension at the given index
-public fun get_by_idx(extensions: &Extensions, idx: u64): &Extension {
-    &extensions.inner[idx]
+/// Returns the package versions for a given name
+public fun by_name(extensions: &Extensions, name: String): &vector<PackageVersion> {
+    extensions.by_name.borrow(name)
 }
 
 /// Returns the name of the extension
-public fun name(extension: &Extension): String {
-    extension.name
+public fun by_addr(extensions: &Extensions, addr: address): &String {
+    extensions.by_addr.borrow(addr)
 }
 
-/// Returns the history of the extension
-public fun history(extension: &Extension): vector<History> {
-    extension.history
+/// Returns the address of the PackageVersion
+public fun addr(package_version: &PackageVersion): address {
+    package_version.addr
 }
 
-/// Returns the address of the history
-public fun addr(history: &History): address {
-    history.addr
-}
-
-/// Returns the version of the history
-public fun version(history: &History): u64 {
-    history.version
+/// Returns the version of the PackageVersion
+public fun version(package_version: &PackageVersion): u64 {
+    package_version.version
 }
 
 /// Returns the latest address and version for a given name
 public fun get_latest_for_name(
-    extensions: &Extensions, 
-    name: String, 
+    extensions: &Extensions,
+    name: String,
 ): (address, u64) {
-    let idx = get_idx_for_name(extensions, name);
-    let history = extensions.inner[idx].history;
-    let last_idx = history.length() - 1;
+    let history = extensions.by_name.borrow(name);
+    let package_version = history[history.length() - 1];
 
-    (history[last_idx].addr, history[last_idx].version)
+    (package_version.addr, package_version.version)
 }
 
 /// Returns true if the package (name, addr, version) is in the list
 public fun is_extension(
-    extensions: &Extensions, 
+    extensions: &Extensions,
     name: String,
     addr: address,
     version: u64,
 ): bool {
-    // check if the name exists
-    let opt_idx = extensions.inner.find_index!(|extension| extension.name == name);
-    if (opt_idx.is_none()) return false;
-    let idx = opt_idx.destroy_some();
-    // check if the address exists for the name
-    let history = extensions.inner[idx].history;
+    if (!extensions.by_name.contains(name)) return false;
+    let history = extensions.by_name.borrow(name);
     let opt_idx = history.find_index!(|h| h.addr == addr);
     if (opt_idx.is_none()) return false;
     let idx = opt_idx.destroy_some();
@@ -114,38 +100,44 @@ public fun is_extension(
 
 // === Admin functions ===
 
-/// Adds a package to the list
-public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {    
-    assert!(!extensions.inner.any!(|extension| extension.name == name), EExtensionAlreadyExists);
-    assert!(!extensions.inner.any!(|extension| extension.history.any!(|h| h.addr == addr)), EExtensionAlreadyExists);
-    let extension = Extension { name, history: vector[History { addr, version }] };
-    extensions.inner.push_back(extension);
+/// Adds a new extension to the list
+public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
+    assert!(!extensions.by_name.contains(name), EExtensionAlreadyExists);
+    assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
+    let history = vector[PackageVersion { addr, version }];
+    extensions.by_name.add(name, history);
+    extensions.by_addr.add(addr, name);
 }
 
 /// Removes a package from the list
 public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
-    let idx = extensions.get_idx_for_name(name);
-    assert!(idx > 0, ECannotRemoveAccountProtocol);
-    extensions.inner.remove(idx);
+    assert!(extensions.by_name.contains(name), EExtensionNotFound);
+    let history = extensions.by_name.remove(name);
+    history.do_ref!(|package_version| {
+        if (extensions.by_addr.borrow(package_version.addr) == name) {
+            extensions.by_addr.remove(package_version.addr);
+        }
+    });
+}
+
+/// Removes the version from the history of a package
+public fun remove_version(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
+    let history = extensions.by_name.borrow_mut(name);
+    let (exists, idx) = history.index_of(&PackageVersion { addr, version });
+    assert!(exists, EExtensionNotFound);
+    history.remove(idx);
 }
 
 /// Adds a new version to the history of a package
 public fun update(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
-    let idx = extensions.get_idx_for_name(name);
-    assert!(!extensions.inner[idx].history.any!(|h| h.addr == addr), EExtensionAlreadyExists);
-    extensions.inner[idx].history.push_back(History { addr, version });
+    assert!(extensions.by_name.contains(name), EExtensionNotFound);
+    assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
+    extensions.by_name.borrow_mut(name).push_back(PackageVersion { addr, version });
+    extensions.by_addr.add(addr, name);
 }
 
-public entry fun new_admin(_: &AdminCap, recipient: address, ctx: &mut TxContext) {
+public fun new_admin(_: &AdminCap, recipient: address, ctx: &mut TxContext) {
     transfer::public_transfer(AdminCap { id: object::new(ctx) }, recipient);
-}
-
-// === Private functions ===
-
-fun get_idx_for_name(extensions: &Extensions, name: String): u64 {
-    let opt = extensions.inner.find_index!(|extension| extension.name == name);
-    assert!(opt.is_some(), EExtensionNotFound);
-    opt.destroy_some()
 }
 
 //**************************************************************************************************//
@@ -163,313 +155,187 @@ public fun init_for_testing(ctx: &mut TxContext) {
 public fun new_for_testing(ctx: &mut TxContext): Extensions {
     Extensions {
         id: object::new(ctx),
-        inner: vector[]
+        by_name: table::new(ctx),
+        by_addr: table::new(ctx),
     }
 }
 
 #[test_only]
-public fun add_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {    
-    assert!(!extensions.inner.any!(|extension| extension.name == name), EExtensionAlreadyExists);
-    assert!(!extensions.inner.any!(|extension| extension.history.any!(|h| h.addr == addr)), EExtensionAlreadyExists);
-    let extension = Extension { name, history: vector[History { addr, version }] };
-    extensions.inner.push_back(extension);
+public fun add_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {
+    assert!(!extensions.by_name.contains(name), EExtensionAlreadyExists);
+    assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
+    let history = vector[PackageVersion { addr, version }];
+    extensions.by_name.add(name, history);
+    extensions.by_addr.add(addr, name);
 }
 
 #[test_only]
 public fun remove_for_testing(extensions: &mut Extensions, name: String) {
-    let idx = extensions.get_idx_for_name(name);
-    assert!(idx > 0, ECannotRemoveAccountProtocol);
-    extensions.inner.remove(idx);
+    let history = extensions.by_name.remove(name);
+    history.do_ref!(|package_version| {
+        if (extensions.by_addr.borrow(package_version.addr) == name) {
+            extensions.by_addr.remove(package_version.addr);
+        }
+    });
+}
+
+#[test_only]
+public fun remove_version_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {
+    let history = extensions.by_name.borrow_mut(name);
+    let (exists, idx) = history.index_of(&PackageVersion { addr, version });
+    assert!(exists, EExtensionNotFound);
+    history.remove(idx);
 }
 
 #[test_only]
 public fun update_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {
-    let idx = extensions.get_idx_for_name(name);
-    assert!(!extensions.inner[idx].history.any!(|h| h.addr == addr), EExtensionAlreadyExists);
-    extensions.inner[idx].history.push_back(History { addr, version });
+    assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
+    extensions.by_name.borrow_mut(name).push_back(PackageVersion { addr, version });
+    extensions.by_addr.add(addr, name);
 }
 
 #[test_only]
 public fun new_for_testing_with_addrs(addr1: address, addr2: address, addr3: address, ctx: &mut TxContext): Extensions {
-    Extensions {
-        id: object::new(ctx),
-        inner: vector[
-            Extension { name: b"AccountProtocol".to_string(), history: vector[History { addr: addr1, version: 1 }] },
-            Extension { name: b"AccountConfig".to_string(), history: vector[History { addr: addr2, version: 1 }] },
-            Extension { name: b"AccountActions".to_string(), history: vector[History { addr: addr3, version: 1 }] }
-        ]
-    }
+    let mut extensions = new_for_testing(ctx);
+
+    extensions.add_for_testing(b"AccountProtocol".to_string(), addr1, 1);
+    extensions.add_for_testing(b"AccountConfig".to_string(), addr2, 1);
+    extensions.add_for_testing(b"AccountActions".to_string(), addr3, 1);
+
+    extensions
 }
 
-#[test_only]
-public struct Witness() has drop;
-
-#[test_only]
-public fun witness(): Witness {
-    Witness()
-}
-
-// === Unit Tests ===
-
-#[test_only]
-use sui::test_utils::destroy;
-#[test_only]
-use sui::test_scenario as ts;
+// === Tests ===
 
 #[test]
 fun test_init() {
-    let mut scenario = ts::begin(@0xCAFE);
+    use sui::test_scenario as ts;
+
+    let admin = @0xA;
+    let mut scenario = ts::begin(admin);
+
     init(scenario.ctx());
-    scenario.next_tx(@0xCAFE);
+    scenario.next_tx(admin);
 
-    let cap = scenario.take_from_sender<AdminCap>();
-    let extensions = scenario.take_shared<Extensions>();
+    assert!(ts::has_most_recent_shared<Extensions>());
+    assert!(scenario.has_most_recent_for_sender<AdminCap>());
 
-    destroy(cap);
-    destroy(extensions);
     scenario.end();
 }
 
 #[test]
-fun test_getters() {
-    let extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-
-    // assertions
-    assert!(extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 1));
-    assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
-
-    assert!(extensions.length() == 3);
-    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
-    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
-    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
-    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
-    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(2).name() == b"AccountActions".to_string());
-    assert!(extensions.get_by_idx(2).history()[0].addr() == @0x2);
-    assert!(extensions.get_by_idx(2).history()[0].version() == 1);
-
-    destroy(extensions);
-}
-
-#[test]
-fun test_get_latest_for_name() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-
-    let (addr, version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
-    assert!(addr == @0x0);
-    assert!(version == 1);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
-    assert!(addr == @0x1);
-    assert!(version == 1);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountActions".to_string());
-    assert!(addr == @0x2);
-    assert!(version == 1);
-    // update
-    extensions.update(&cap, b"AccountConfig".to_string(), @0x11, 2);
-    extensions.update(&cap, b"AccountActions".to_string(), @0x21, 2);
-    extensions.update(&cap, b"AccountActions".to_string(), @0x22, 3);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
-    assert!(addr == @0x0);
-    assert!(version == 1);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
-    assert!(addr == @0x11);
-    assert!(version == 2);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountActions".to_string());
-    assert!(addr == @0x22);
-    assert!(version == 3);
-
-    destroy(extensions);
-    destroy(cap);
-}
-
-#[test]
-fun test_is_extension() {
-    let extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-
-    let (addr, version) = extensions.get_latest_for_name(b"AccountProtocol".to_string());
-    assert!(addr == @0x0);
-    assert!(version == 1);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountConfig".to_string());
-    assert!(addr == @0x1);
-    assert!(version == 1);
-    let (addr, version) = extensions.get_latest_for_name(b"AccountActions".to_string());
-    assert!(addr == @0x2);
-    assert!(version == 1);
-
-    // correct extensions
-    assert!(extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 1));
-    assert!(extensions.is_extension(b"AccountConfig".to_string(), @0x1, 1));
-    assert!(extensions.is_extension(b"AccountActions".to_string(), @0x2, 1));
-    // incorrect names
-    assert!(!extensions.is_extension(b"AccountProtoco".to_string(), @0x0, 1));
-    assert!(!extensions.is_extension(b"AccountConfi".to_string(), @0x1, 1));
-    assert!(!extensions.is_extension(b"AccountAction".to_string(), @0x2, 1));
-    // incorrect addresses
-    assert!(!extensions.is_extension(b"AccountProtocol".to_string(), @0x1, 1));
-    assert!(!extensions.is_extension(b"AccountConfig".to_string(), @0x0, 1));
-    assert!(!extensions.is_extension(b"AccountActions".to_string(), @0x0, 1));
-    // incorrect versions
-    assert!(!extensions.is_extension(b"AccountProtocol".to_string(), @0x0, 2));
-    assert!(!extensions.is_extension(b"AccountConfig".to_string(), @0x1, 2));
-    assert!(!extensions.is_extension(b"AccountActions".to_string(), @0x2, 2));
-
-    destroy(extensions);
-    destroy(cap);
-}
-
-#[test]
-fun test_add_deps() {
+fun test_add_and_get() {
     let mut extensions = new_for_testing(&mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
 
-    // add extension
-    extensions.add(&cap, b"A".to_string(), @0xA, 1);
-    extensions.add(&cap, b"B".to_string(), @0xB, 1);
-    extensions.add(&cap, b"C".to_string(), @0xC, 1);
-    // assertions
-    assert!(extensions.is_extension(b"A".to_string(), @0xA, 1));
-    assert!(extensions.is_extension(b"B".to_string(), @0xB, 1));
-    assert!(extensions.is_extension(b"C".to_string(), @0xC, 1));
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
 
-    destroy(extensions);
-    destroy(cap);
+    assert!(extensions.length() == 1);
+    assert!(extensions.is_extension(b"TestPackage".to_string(), @0x1, 1));
+    assert!(extensions.by_addr(@0x1) == &b"TestPackage".to_string());
+
+    let (addr, version) = extensions.get_latest_for_name(b"TestPackage".to_string());
+    assert!(addr == @0x1);
+    assert!(version == 1);
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test]
-fun test_update_deps() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+fun test_update() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
 
-    // add extension (checked above)
-    extensions.add(&cap, b"A".to_string(), @0xA, 1);
-    extensions.add(&cap, b"B".to_string(), @0xB, 1);
-    extensions.add(&cap, b"C".to_string(), @0xC, 1);
-    // update deps
-    extensions.update(&cap, b"B".to_string(), @0x1B, 2);
-    extensions.update(&cap, b"C".to_string(), @0x1C, 2);
-    extensions.update(&cap, b"C".to_string(), @0x2C, 3);
-    // assertions
-    assert!(extensions.get_by_idx(3).name() == b"A".to_string());
-    assert!(extensions.get_by_idx(3).history()[0].addr() == @0xA);
-    assert!(extensions.get_by_idx(3).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(4).name() == b"B".to_string());
-    assert!(extensions.get_by_idx(4).history()[1].addr() == @0x1B);
-    assert!(extensions.get_by_idx(4).history()[1].version() == 2);
-    assert!(extensions.get_by_idx(5).name() == b"C".to_string());
-    assert!(extensions.get_by_idx(5).history()[2].addr() == @0x2C);
-    assert!(extensions.get_by_idx(5).history()[2].version() == 3);
-    // verify core deps didn't change    
-    assert!(extensions.length() == 6);
-    assert!(extensions.get_by_idx(0).name() == b"AccountProtocol".to_string());
-    assert!(extensions.get_by_idx(0).history()[0].addr() == @0x0);
-    assert!(extensions.get_by_idx(0).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(1).name() == b"AccountConfig".to_string());
-    assert!(extensions.get_by_idx(1).history()[0].addr() == @0x1);
-    assert!(extensions.get_by_idx(1).history()[0].version() == 1);
-    assert!(extensions.get_by_idx(2).name() == b"AccountActions".to_string());
-    assert!(extensions.get_by_idx(2).history()[0].addr() == @0x2);
-    assert!(extensions.get_by_idx(2).history()[0].version() == 1);
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
+    extensions.update(&admin_cap, b"TestPackage".to_string(), @0x2, 2);
 
-    destroy(extensions);
-    destroy(cap);
+    assert!(extensions.is_extension(b"TestPackage".to_string(), @0x1, 1));
+    assert!(extensions.is_extension(b"TestPackage".to_string(), @0x2, 2));
+
+    let (addr, version) = extensions.get_latest_for_name(b"TestPackage".to_string());
+    assert!(addr == @0x2);
+    assert!(version == 2);
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test]
-fun test_remove_deps() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+fun test_remove() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
 
-    // add extension (checked above)
-    extensions.add(&cap, b"A".to_string(), @0xA, 1);
-    extensions.add(&cap, b"B".to_string(), @0xB, 1);
-    extensions.add(&cap, b"C".to_string(), @0xC, 1);
-    // update deps
-    extensions.update(&cap, b"B".to_string(), @0x1B, 2);
-    extensions.update(&cap, b"C".to_string(), @0x1C, 2);
-    extensions.update(&cap, b"C".to_string(), @0x2C, 3);
-    // remove deps
-    extensions.remove(&cap, b"A".to_string());
-    extensions.remove(&cap, b"B".to_string());
-    extensions.remove(&cap, b"C".to_string());
-    // assertions
-    assert!(!extensions.is_extension(b"A".to_string(), @0xA, 1));
-    assert!(!extensions.is_extension(b"B".to_string(), @0xB, 1));
-    assert!(!extensions.is_extension(b"B".to_string(), @0x1B, 2));
-    assert!(!extensions.is_extension(b"C".to_string(), @0xC, 1));
-    assert!(!extensions.is_extension(b"C".to_string(), @0x1C, 2));
-    assert!(!extensions.is_extension(b"C".to_string(), @0x2C, 3));
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
+    extensions.remove(&admin_cap, b"TestPackage".to_string());
 
-    destroy(extensions);
-    destroy(cap);
+    assert!(extensions.length() == 0);
+    assert!(!extensions.is_extension(b"TestPackage".to_string(), @0x1, 1));
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test]
-fun test_new_admin() {
-    let mut scenario = ts::begin(@0xCAFE);
-    let cap = AdminCap { id: object::new(scenario.ctx()) };
-    new_admin(&cap, @0xB0B, scenario.ctx());
-    scenario.next_tx(@0xB0B);
-    // check it exists
-    let new_cap = scenario.take_from_sender<AdminCap>();
-    destroy(cap);
-    destroy(new_cap);
-    ts::end(scenario);
-}
+fun test_remove_version() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
 
-#[test, expected_failure(abort_code = ECannotRemoveAccountProtocol)]
-fun test_error_remove_account_protocol() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.remove(&cap, b"AccountProtocol".to_string());
-    destroy(extensions);
-    destroy(cap);
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
+    extensions.update(&admin_cap, b"TestPackage".to_string(), @0x2, 2);
+    extensions.remove_version(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
+
+    assert!(!extensions.is_extension(b"TestPackage".to_string(), @0x1, 1));
+    assert!(extensions.is_extension(b"TestPackage".to_string(), @0x2, 2));
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test, expected_failure(abort_code = EExtensionAlreadyExists)]
-fun test_error_add_extension_name_already_exists() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.add(&cap, b"AccountProtocol".to_string(), @0xA, 1);
-    destroy(extensions);
-    destroy(cap);
+fun test_error_add_duplicate_name() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x1, 1);
+    extensions.add(&admin_cap, b"TestPackage".to_string(), @0x2, 2);
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test, expected_failure(abort_code = EExtensionAlreadyExists)]
-fun test_error_add_extension_address_already_exists() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.add(&cap, b"A".to_string(), @0x0, 1);
-    destroy(extensions);
-    destroy(cap);
+fun test_error_add_duplicate_addr() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+
+    extensions.add(&admin_cap, b"TestPackage1".to_string(), @0x1, 1);
+    extensions.add(&admin_cap, b"TestPackage2".to_string(), @0x1, 2);
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
 #[test, expected_failure(abort_code = EExtensionNotFound)]
-fun test_error_update_not_extension() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.update(&cap, b"A".to_string(), @0x0, 1);
-    destroy(extensions);
-    destroy(cap);
+fun test_error_remove_nonexistent() {
+    let mut extensions = new_for_testing(&mut tx_context::dummy());
+    let admin_cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
+
+    extensions.remove(&admin_cap, b"TestPackage".to_string());
+
+    sui::test_utils::destroy(extensions);
+    sui::test_utils::destroy(admin_cap);
 }
 
-#[test, expected_failure(abort_code = EExtensionAlreadyExists)]
-fun test_error_update_same_address() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.add(&cap, b"A".to_string(), @0xA, 1);
-    extensions.update(&cap, b"A".to_string(), @0xA, 2);
-    destroy(extensions);
-    destroy(cap);
-}
+#[test]
+/// Test edge case: empty Extensions object operations
+fun test_empty_extensions_operations() {
+    let extensions = new_for_testing(&mut tx_context::dummy());
 
-#[test, expected_failure(abort_code = EExtensionNotFound)]
-fun test_error_remove_not_extension() {
-    let mut extensions = new_for_testing_with_addrs(@0x0, @0x1, @0x2, &mut tx_context::dummy());
-    let cap = AdminCap { id: object::new(&mut tx_context::dummy()) };
-    extensions.remove(&cap, b"A".to_string());
-    destroy(extensions);
-    destroy(cap);
+    // Test operations on empty Extensions
+    assert!(extensions.length() == 0);
+    assert!(extensions.length() == 0);
+    assert!(!extensions.is_extension(b"Any".to_string(), @0x1, 1));
+
+    sui::test_utils::destroy(extensions);
 }

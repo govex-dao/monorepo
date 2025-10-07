@@ -1,3 +1,13 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Vault Intents
+// ============================================================================
+// Intent helper module for vault operations.
+//
+// CHANGES IN THIS FORK:
+// - PTBs handle object flow naturally - no ExecutionContext needed
+// - Removed ActionResult consumption - no longer needed
+// ============================================================================
+
 module account_actions::vault_intents;
 
 // === Imports ===
@@ -11,7 +21,6 @@ use account_protocol::{
 };
 use account_actions::{
     transfer as acc_transfer,
-    vesting,
     vault,
     version,
 };
@@ -31,8 +40,6 @@ const ECoinTypeDoesntExist: u64 = 2;
 
 /// Intent Witness defining the vault spend and transfer intent, and associated role.
 public struct SpendAndTransferIntent() has copy, drop;
-/// Intent Witness defining the vault spend and vesting intent, and associated role.
-public struct SpendAndVestIntent() has copy, drop;
 
 // === Public Functions ===
 
@@ -88,53 +95,110 @@ public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
     );
 }
 
-/// Creates a SpendAndVestIntent and adds it to an Account.
-public fun request_spend_and_vest<Config, Outcome: store, CoinType: drop>(
+// === Stream Control Actions ===
+
+/// Request to toggle stream pause (pause or resume)
+public fun request_toggle_stream_pause<Config, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    vault_name: String, 
-    coin_amount: u64, 
-    start_timestamp: u64, 
-    end_timestamp: u64, 
-    recipient: address, 
+    vault_name: String,
+    stream_id: ID,
+    pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
     ctx: &mut TxContext
 ) {
     account.verify(auth);
-    params.assert_single_execution();
-
-    let vault = vault::borrow_vault(account, vault_name);
-    assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
-    assert!(vault.coin_type_value<CoinType>() >= coin_amount, EInsufficientFunds);
 
     account.build_intent!(
         params,
         outcome,
         vault_name,
         version::current(),
-        SpendAndVestIntent(),
+        SpendAndTransferIntent(), // TODO: Should this be a different witness?
         ctx,
         |intent, iw| {
-            vault::new_spend<_, CoinType, _>(intent, vault_name, coin_amount, iw);
-            vesting::new_vest(intent, start_timestamp, end_timestamp, recipient, iw);
+            vault::new_toggle_stream_pause(intent, vault_name, stream_id, pause_duration_ms, iw);
         }
     );
 }
 
-/// Executes a SpendAndVestIntent, create a vesting from a coin in the vault.
-public fun execute_spend_and_vest<Config, Outcome: store, CoinType: drop>(
-    executable: &mut Executable<Outcome>, 
-    account: &mut Account<Config>, 
+/// Request to toggle stream emergency freeze
+public fun request_toggle_stream_freeze<Config, Outcome: store>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    params: Params,
+    outcome: Outcome,
+    vault_name: String,
+    stream_id: ID,
+    freeze: bool, // true = freeze, false = unfreeze
+    ctx: &mut TxContext
+) {
+    account.verify(auth);
+
+    account.build_intent!(
+        params,
+        outcome,
+        vault_name,
+        version::current(),
+        SpendAndTransferIntent(), // TODO: Should this be a different witness?
+        ctx,
+        |intent, iw| {
+            vault::new_toggle_stream_freeze(intent, vault_name, stream_id, freeze, iw);
+        }
+    );
+}
+
+// === Execution Functions ===
+
+/// Executes toggle stream pause action
+public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vault_name: String,
+    clock: &sui::clock::Clock,
     ctx: &mut TxContext
 ) {
     account.process_intent!(
         executable,
         version::current(),
-        SpendAndVestIntent(),
+        SpendAndTransferIntent(),
         |executable, iw| {
-            let coin = vault::do_spend<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
-            vesting::do_vest(executable, coin, iw, ctx);
+            vault::do_toggle_stream_pause<_, _, CoinType, _>(
+                executable,
+                account,
+                vault_name,
+                clock,
+                version::current(),
+                iw,
+                ctx
+            );
         }
     );
 }
+
+/// Executes toggle stream freeze action
+public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    vault_name: String,
+    clock: &sui::clock::Clock,
+    ctx: &mut TxContext
+) {
+    account.process_intent!(
+        executable,
+        version::current(),
+        SpendAndTransferIntent(),
+        |executable, iw| {
+            vault::do_toggle_stream_freeze<_, _, CoinType, _>(
+                executable,
+                account,
+                vault_name,
+                clock,
+                version::current(),
+                iw
+            );
+        }
+    );
+}
+

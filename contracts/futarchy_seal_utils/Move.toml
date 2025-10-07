@@ -1,0 +1,10 @@
+[package]
+name = "futarchy_seal_utils"
+edition = "2024.beta"
+published-at  = "0x0"
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "framework/testnet" }
+
+[addresses]
+futarchy_seal_utils = "0x82844122f7e106439b87948ea938a7a043273f90ec409e0c02b201c7281b55e2"

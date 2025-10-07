@@ -1,7 +1,37 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Intents with Serialize-Then-Destroy Pattern
+// ============================================================================
+// Core module managing Intents with type-safe action execution.
+//
+// MAJOR CHANGES IN THIS FORK:
+//
+// 1. REMOVED OBJECT LOCKING:
+//    - No locking - multiple intents can reference same objects
+//    - Conflicts resolved naturally by blockchain (first to execute wins)
+//
+// 2. SERIALIZE-THEN-DESTROY PATTERN:
+//    - add_typed_action() now accepts pre-serialized bytes instead of action structs
+//    - Enables explicit destruction of action structs after serialization
+//    - Maintains BCS compatibility while improving resource safety
+//
+// 3. TYPE-BASED ACTION SYSTEM:
+//    Original: Used action_descriptors with string categories (b"treasury")
+//    New: Uses action_types: vector<TypeName> for compile-time safety
+//    - Removed dependency on action_descriptor module
+//    - Added add_typed_action<Outcome, Action, T, IW>() with compile-time types
+//    - Type names captured using type_name::with_defining_ids<T>() for zero-overhead routing
+//
+// BENEFITS:
+// - Eliminates risk of permanently locked objects from incomplete cleanup
+// - Compile-time type safety for all actions
+// - Better gas efficiency (no string comparisons)
+// - Simplifies codebase by ~100 lines
+// - Better suits DAO governance where competing proposals are natural
+// ============================================================================
 /// This is the core module managing Intents.
 /// It provides the interface to create and execute intents which is used in the `account` module.
-/// The `locked` field tracks the owned objects used in an intent, to prevent state changes.
-/// e.g. withdraw coinA (value=10sui), coinA must not be split before intent is executed.
+/// In the new design, there is no locking - multiple intents can reference the same objects.
+/// Conflicts are resolved naturally: if coinA is withdrawn by intent1, intent2 will fail when it tries.
 
 module account_protocol::intents;
 
@@ -10,12 +40,14 @@ module account_protocol::intents;
 use std::{
     string::String,
     type_name::{Self, TypeName},
+    bcs,
+    vector,
 };
 use sui::{
     bag::{Self, Bag},
     dynamic_field,
-    vec_set::{Self, VecSet},
     clock::Clock,
+    object::{Self, ID},
 };
 
 // === Aliases ===
@@ -23,12 +55,12 @@ use sui::{
 use fun dynamic_field::add as UID.df_add;
 use fun dynamic_field::borrow as UID.df_borrow;
 use fun dynamic_field::remove as UID.df_remove;
+// Type-based action system - no string descriptors
 
 // === Errors ===
 
 const EIntentNotFound: u64 = 0;
-const EObjectAlreadyLocked: u64 = 1;
-const EObjectNotLocked: u64 = 2;
+// REMOVED: EObjectAlreadyLocked and EObjectNotLocked - no locking in new design
 const ENoExecutionTime: u64 = 3;
 const EExecutionTimesNotAscending: u64 = 4;
 const EActionsNotEmpty: u64 = 5;
@@ -36,15 +68,46 @@ const EKeyAlreadyExists: u64 = 6;
 const EWrongAccount: u64 = 7;
 const EWrongWitness: u64 = 8;
 const ESingleExecution: u64 = 9;
+const EMaxPlaceholdersExceeded: u64 = 10;
+const EUnsupportedActionVersion: u64 = 11;
+const EActionDataTooLarge: u64 = 12;
+
+// Version constants
+const CURRENT_ACTION_VERSION: u8 = 1;
+
+// === Limits ===
+
+/// Maximum number of placeholders allowed in a single intent.
+/// Exposed as a function to allow future upgrades to change this value.
+public fun max_placeholders(): u64 { 50 }
+
+/// Maximum size for action data in bytes (4KB).
+/// Exposed as a function to allow future upgrades to change this value.
+/// Prevents excessively large action data that could cause DoS.
+public fun max_action_data_size(): u64 { 4096 }
 
 // === Structs ===
+
+/// A blueprint for a single action within an intent.
+public struct ActionSpec has store, copy, drop {
+    version: u8,                // Version byte for forward compatibility
+    action_type: TypeName,      // The type of the action struct
+    action_data: vector<u8>,    // The BCS-serialized action struct
+}
+
+/// Create a new ActionSpec for testing
+public fun new_action_spec<T>(action_data: vector<u8>, version: u8): ActionSpec {
+    ActionSpec {
+        version,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data,
+    }
+}
 
 /// Parent struct protecting the intents
 public struct Intents has store {
     // map of intents: key -> Intent<Outcome>
     inner: Bag,
-    // ids of the objects that are being requested in intents, to avoid state changes
-    locked: VecSet<ID>,
 }
 
 /// Child struct, intent owning a sequence of actions requested to be executed
@@ -68,10 +131,12 @@ public struct Intent<Outcome> has store {
     execution_times: vector<u64>,
     // the intent can be deleted from this timestamp
     expiration_time: u64,
-    // role for the intent 
+    // role for the intent
     role: String,
-    // heterogenous array of actions to be executed in order
-    actions: Bag,
+    // Structured action specifications for type-safe routing (single source of truth)
+    action_specs: vector<ActionSpec>,
+    // Counter for unique placeholder IDs
+    next_placeholder_id: u64,
     // Generic struct storing vote related data, depends on the config
     outcome: Outcome,
 }
@@ -80,10 +145,12 @@ public struct Intent<Outcome> has store {
 public struct Expired {
     // address of the account that created the intent
     account: address,
-    // index of the first action in the bag
-    start_index: u64,
-    // actions that expired
-    actions: Bag
+    // action specs that expired or were executed
+    action_specs: vector<ActionSpec>,
+    // NEW: Track which actions were executed for proper destruction
+    executed_actions: vector<bool>,
+    // intent ID for tracking
+    intent_id: ID,
 }
 
 /// Params of an intent to reduce boilerplate.
@@ -100,6 +167,40 @@ public struct ParamsFieldsV1 has copy, drop, store {
 }
 
 // === Public functions ===
+
+/// Reserve a placeholder ID for use during intent creation
+public(package) fun reserve_placeholder_id<Outcome>(
+    intent: &mut Intent<Outcome>
+): u64 {
+    let id = intent.next_placeholder_id;
+    assert!(id < max_placeholders(), EMaxPlaceholdersExceeded);
+    intent.next_placeholder_id = id + 1;
+    id
+}
+
+/// Add an action specification with pre-serialized bytes (serialize-then-destroy pattern)
+public fun add_action_spec<Outcome, T: drop, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    action_type_witness: T,
+    action_data_bytes: vector<u8>,
+    intent_witness: IW,
+) {
+    intent.assert_is_witness(intent_witness);
+
+    // Validate action data size to prevent excessively large actions
+    assert!(
+        action_data_bytes.length() <= max_action_data_size(),
+        EActionDataTooLarge
+    );
+
+    // Create and store the action spec with BCS-serialized action
+    let spec = ActionSpec {
+        version: CURRENT_ACTION_VERSION,
+        action_type: type_name::with_defining_ids<T>(),
+        action_data: action_data_bytes,
+    };
+    intent.action_specs.push_back(spec);
+}
 
 public fun new_params(
     key: String,
@@ -142,31 +243,55 @@ public fun new_params_with_rand_key(
     (params, key)
 }
 
-public fun add_action<Outcome, Action: store, IW: drop>(
+// REMOVED: Old add_action function without types - use add_typed_action instead
+
+/// Add a typed action with pre-serialized bytes (serialize-then-destroy pattern)
+/// Callers must serialize the action and then explicitly destroy it
+public fun add_typed_action<Outcome, T: drop, IW: drop>(
     intent: &mut Intent<Outcome>,
-    action: Action,
+    action_type: T,
+    action_data: vector<u8>,
     intent_witness: IW,
 ) {
-    intent.assert_is_witness(intent_witness);
-
-    let idx = intent.actions().length();
-    intent.actions_mut().add(idx, action);
+    add_action_spec(intent, action_type, action_data, intent_witness);
 }
 
-public fun remove_action<Action: store>(
-    expired: &mut Expired, 
-): Action {
-    let idx = expired.start_index;
-    expired.start_index = idx + 1;
+public fun remove_action_spec(
+    expired: &mut Expired,
+): ActionSpec {
+    // Also mark as not executed when removing
+    expired.executed_actions.remove(0);
+    expired.action_specs.remove(0)
+}
 
-    expired.actions.remove(idx)
+/// Mark an action as executed in the Expired struct
+public fun mark_action_executed(
+    expired: &mut Expired,
+    index: u64,
+) {
+    let executed = vector::borrow_mut(&mut expired.executed_actions, index);
+    *executed = true;
+}
+
+/// Check if an action was executed
+public fun is_action_executed(
+    expired: &Expired,
+    index: u64,
+): bool {
+    *vector::borrow(&expired.executed_actions, index)
+}
+
+/// Get the number of actions in the Expired struct
+public fun expired_action_count(expired: &Expired): u64 {
+    expired.action_specs.length()
 }
 
 public use fun destroy_empty_expired as Expired.destroy_empty;
 public fun destroy_empty_expired(expired: Expired) {
-    let Expired { actions, .. } = expired;
-    assert!(actions.is_empty(), EActionsNotEmpty);
-    actions.destroy_empty();
+    let Expired { action_specs, executed_actions, .. } = expired;
+    assert!(action_specs.is_empty(), EActionsNotEmpty);
+    assert!(executed_actions.is_empty(), EActionsNotEmpty);
+    // vectors don't need explicit destroy
 }
 
 // === View functions ===
@@ -200,9 +325,7 @@ public fun length(intents: &Intents): u64 {
     intents.inner.length()
 }
 
-public fun locked(intents: &Intents): &VecSet<ID> {
-    &intents.locked
-}
+// REMOVED: locked() getter - no longer tracking locked objects
 
 public fun contains(intents: &Intents, key: String): bool {
     intents.inner.contains(key)
@@ -254,12 +377,9 @@ public fun role<Outcome>(intent: &Intent<Outcome>): String {
     intent.role
 }
 
-public fun actions<Outcome>(intent: &Intent<Outcome>): &Bag {
-    &intent.actions
-}
-
-public fun actions_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Bag {
-    &mut intent.actions
+// Actions are now accessed through action_specs
+public fun action_count<Outcome>(intent: &Intent<Outcome>): u64 {
+    intent.action_specs.length()
 }
 
 public fun outcome<Outcome>(intent: &Intent<Outcome>): &Outcome {
@@ -270,19 +390,37 @@ public fun outcome_mut<Outcome>(intent: &mut Intent<Outcome>): &mut Outcome {
     &mut intent.outcome
 }
 
+public fun action_specs<Outcome>(intent: &Intent<Outcome>): &vector<ActionSpec> {
+    &intent.action_specs
+}
+
+public fun action_spec_version(spec: &ActionSpec): u8 {
+    spec.version
+}
+
+public fun action_spec_type(spec: &ActionSpec): TypeName {
+    spec.action_type
+}
+
+public fun action_spec_data(spec: &ActionSpec): &vector<u8> {
+    &spec.action_data
+}
+
+public fun action_spec_action_data(spec: ActionSpec): vector<u8> {
+    let ActionSpec { version: _, action_data, .. } = spec;
+    action_data
+}
+
 public use fun expired_account as Expired.account;
 public fun expired_account(expired: &Expired): address {
     expired.account
 }
 
-public use fun expired_start_index as Expired.start_index;
-public fun expired_start_index(expired: &Expired): u64 {
-    expired.start_index
-}
+// start_index no longer exists in ActionSpec-based design
 
-public use fun expired_actions as Expired.actions;
-public fun expired_actions(expired: &Expired): &Bag {
-    &expired.actions
+public use fun expired_action_specs as Expired.action_specs;
+public fun expired_action_specs(expired: &Expired): &vector<ActionSpec> {
+    &expired.action_specs
 }
 
 public fun assert_is_account<Outcome>(
@@ -296,7 +434,7 @@ public fun assert_is_witness<Outcome, IW: drop>(
     intent: &Intent<Outcome>,
     _: IW,
 ) {
-    assert!(intent.type_ == type_name::get<IW>(), EWrongWitness);
+    assert!(intent.type_ == type_name::with_defining_ids<IW>(), EWrongWitness);
 }
 
 public use fun assert_expired_is_account as Expired.assert_is_account;
@@ -316,7 +454,7 @@ public fun assert_single_execution(params: &Params) {
 /// The following functions are only used in the `account` module
 
 public(package) fun empty(ctx: &mut TxContext): Intents {
-    Intents { inner: bag::new(ctx), locked: vec_set::empty() }
+    Intents { inner: bag::new(ctx) }
 }
 
 public(package) fun new_intent<Outcome, IW: drop>(
@@ -338,8 +476,8 @@ public(package) fun new_intent<Outcome, IW: drop>(
     } = id.df_remove(true);
     id.delete();
 
-    Intent<Outcome> { 
-        type_: type_name::get<IW>(),
+    Intent<Outcome> {
+        type_: type_name::with_defining_ids<IW>(),
         key,
         description,
         account: account_addr,
@@ -348,7 +486,8 @@ public(package) fun new_intent<Outcome, IW: drop>(
         execution_times,
         expiration_time,
         role: new_role<IW>(managed_name),
-        actions: bag::new(ctx),
+        action_specs: vector::empty(),
+        next_placeholder_id: 0,
         outcome,
     }
 }
@@ -375,15 +514,9 @@ public(package) fun pop_front_execution_time<Outcome>(
     intent.execution_times.remove(0)
 }
 
-public(package) fun lock(intents: &mut Intents, id: ID) {
-    assert!(!intents.locked.contains(&id), EObjectAlreadyLocked);
-    intents.locked.insert(id);
-}
-
-public(package) fun unlock(intents: &mut Intents, id: ID) {
-    assert!(intents.locked.contains(&id), EObjectNotLocked);
-    intents.locked.remove(&id);
-}
+// REMOVED: lock and unlock functions - no locking needed in the new design
+// Conflicts between intents are natural in DAO governance where multiple proposals
+// can compete for the same resources
 
 /// Removes an intent being executed if the execution_time is reached
 /// Outcome must be validated in AccountMultisig to be destroyed
@@ -391,18 +524,28 @@ public(package) fun destroy_intent<Outcome: store + drop>(
     intents: &mut Intents,
     key: String,
 ): Expired {
-    let Intent<Outcome> { account, actions, .. } = intents.inner.remove(key);
-    
-    Expired { account, start_index: 0, actions }
+    let Intent<Outcome> { account, action_specs, key, .. } = intents.inner.remove(key);
+    let num_actions = action_specs.length();
+    let mut executed_actions = vector::empty<bool>();
+    let mut i = 0;
+    while (i < num_actions) {
+        vector::push_back(&mut executed_actions, false);
+        i = i + 1;
+    };
+
+    // Create a dummy ID for now - in production you might want to use a hash of the key
+    let intent_id = object::id_from_address(@0x0);
+
+    Expired { account, action_specs, executed_actions, intent_id }
 }
 
 // === Private functions ===
 
 fun new_role<IW: drop>(managed_name: String): String {
-    let intent_type = type_name::get<IW>();
-    let mut role = intent_type.get_address().to_string();
+    let intent_type = type_name::with_defining_ids<IW>();
+    let mut role = intent_type.address_string().to_string();
     role.append_utf8(b"::");
-    role.append(intent_type.get_module().to_string());
+    role.append(intent_type.module_string().to_string());
 
     if (!managed_name.is_empty()) {
         role.append_utf8(b"::");
@@ -424,7 +567,9 @@ use sui::clock;
 #[test_only]
 public struct TestOutcome has copy, drop, store {}
 #[test_only]
-public struct TestAction has store {}
+public struct TestAction has drop, store {}
+#[test_only]
+public struct TestActionType has drop {}
 #[test_only]
 public struct TestIntentWitness() has drop;
 #[test_only]
@@ -539,7 +684,7 @@ fun test_new_intent() {
     assert_eq(intent.creation_time(), clock.timestamp_ms());
     assert_eq(intent.execution_times(), vector[1000]);
     assert_eq(intent.expiration_time(), 2000);
-    assert_eq(intent.actions().length(), 0);
+    assert_eq(intent.action_count(), 0);
     
     destroy(intent);
     destroy(clock);
@@ -568,11 +713,13 @@ fun test_add_action() {
         ctx
     );
     
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
-    assert_eq(intent.actions().length(), 1);
-    
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
-    assert_eq(intent.actions().length(), 2);
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+    assert_eq(intent.action_count(), 1);
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
+    assert_eq(intent.action_count(), 2);
     
     destroy(intent);
     destroy(clock);
@@ -602,23 +749,23 @@ fun test_remove_action() {
         ctx
     );
     
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
-    add_action(&mut intent, TestAction {}, TestIntentWitness());
+    let action_data1 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data1, TestIntentWitness());
+
+    let action_data2 = bcs::to_bytes(&TestAction {});
+    intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
     add_intent(&mut intents, intent);
     
     let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string());
     
-    let action1: TestAction = remove_action(&mut expired);
-    let action2: TestAction = remove_action(&mut expired);
-    
-    assert_eq(expired.start_index, 2);
-    assert_eq(expired.actions().length(), 0);
-    
+    let _action1 = expired.remove_action_spec();
+    let _action2 = expired.remove_action_spec();
+
+    assert_eq(expired.expired_action_count(), 0);
+
     expired.destroy_empty();
     destroy(intents);
     destroy(clock);
-    destroy(action1);
-    destroy(action2);
 }
 
 #[test]
@@ -627,7 +774,7 @@ fun test_empty_intents() {
     let intents = empty(ctx);
     
     assert_eq(length(&intents), 0);
-    assert_eq(locked(&intents).size(), 0);
+    // No longer checking locked() - removed in new design
     assert!(!contains(&intents, b"test_key".to_string()));
     
     destroy(intents);
@@ -730,45 +877,9 @@ fun test_remove_nonexistent_intent() {
     destroy(intents);
 }
 
-#[test]
-fun test_lock_and_unlock_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    assert!(!locked(&intents).contains(&object_id));
-    
-    lock(&mut intents, object_id);
-    assert!(locked(&intents).contains(&object_id));
-    
-    unlock(&mut intents, object_id);
-    assert!(!locked(&intents).contains(&object_id));
-    
-    destroy(intents);
-}
-
-#[test, expected_failure(abort_code = EObjectAlreadyLocked)]
-fun test_lock_already_locked_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    lock(&mut intents, object_id);
-    lock(&mut intents, object_id);
-    
-    destroy(intents);
-}
-
-#[test, expected_failure(abort_code = EObjectNotLocked)]
-fun test_unlock_not_locked_object() {
-    let ctx = &mut tx_context::dummy();
-    let mut intents = empty(ctx);
-    let object_id = tx_context::fresh_object_address(ctx).to_id();
-    
-    unlock(&mut intents, object_id);
-    
-    destroy(intents);
-}
+// REMOVED: test_lock_and_unlock_object - no locking in new design
+// REMOVED: test_lock_already_locked_object - no locking in new design  
+// REMOVED: test_unlock_not_locked_object - no locking in new design
 
 #[test]
 fun test_pop_front_execution_time() {

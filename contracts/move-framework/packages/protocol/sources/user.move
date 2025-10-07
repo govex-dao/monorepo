@@ -1,3 +1,11 @@
+/// === FORK MODIFICATIONS ===
+/// TYPE-BASED ACTION SYSTEM:
+/// - Updated to use type_name::with_defining_ids for better type safety
+/// - No other structural changes, user module works with type-based intents
+///
+/// NOTE: The reorder_accounts function uses the original simple approach
+/// as duplicates are already prevented during add_account operations
+
 /// Users have a non-transferable User account object used to track Accounts in which they are a member.
 /// Each account type can define a way to send on-chain invites to Users.
 /// Invited users can accept or refuse the invite, to add the Account id to their User account or not.
@@ -16,7 +24,7 @@ use sui::{
     vec_map::{Self, VecMap},
     table::{Self, Table},
 };
-use account_protocol::account::Account;
+use account_protocol::account::{Self, Account};
 
 // === Errors ===
 
@@ -113,21 +121,16 @@ public fun refuse_invite(invite: Invite) {
 }
 
 public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
-    let account_type = type_name::get<Config>().into_string().to_string();
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     assert!(user.accounts.contains(&account_type), ENoAccountsToReorder);
 
     let accounts = user.accounts.get_mut(&account_type);
+    // there can never be duplicates in the first place (add_account asserts this)
+    // we only need to check there is the same number of accounts and that all accounts are present
     assert!(accounts.length() == addrs.length(), EWrongNumberOfAccounts);
+    assert!(accounts.all!(|acc| addrs.contains(acc)), EAccountNotFound);
 
-    let mut new_order = vector[];
-    addrs.do!(|addr| {
-        let (exists, idx) = accounts.index_of(&addr);
-        assert!(exists, EAccountNotFound);
-        accounts.swap_remove(idx);
-        new_order.push_back(addr);
-    });
-
-    *accounts = new_order;
+    *accounts = addrs;
 }
 // === Config-only functions ===
 
@@ -136,8 +139,8 @@ public fun add_account<Config, CW: drop>(
     account: &Account<Config>, 
     config_witness: CW,
 ) {
-    account.assert_is_config_module(config_witness);
-    let account_type = type_name::get<Config>().into_string().to_string();
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account.addr()), EAccountAlreadyRegistered);
@@ -152,8 +155,8 @@ public fun remove_account<Config, CW: drop>(
     account: &Account<Config>, 
     config_witness: CW,
 ) {
-    account.assert_is_config_module(config_witness);
-    let account_type = type_name::get<Config>().into_string().to_string();
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
     let (exists, idx) = user.accounts[&account_type].index_of(&account.addr());
@@ -172,8 +175,8 @@ public fun send_invite<Config, CW: drop>(
     config_witness: CW,
     ctx: &mut TxContext,
 ) {
-    account.assert_is_config_module(config_witness);
-    let account_type = type_name::get<Config>().into_string().to_string();
+    account::assert_is_config_module(account, config_witness);
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
     transfer::transfer(Invite { 
         id: object::new(ctx), 
@@ -189,7 +192,7 @@ public fun users(registry: &Registry): &Table<address, ID> {
 }
 
 public fun ids_for_type<Config>(user: &User): vector<address> {
-    let account_type = type_name::get<Config>().into_string().to_string();
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     user.accounts[&account_type]
 }
 
@@ -229,7 +232,7 @@ public fun add_account_for_testing<Config>(
     user: &mut User,
     account_addr: address,
 ) {
-    let account_type = type_name::get<Config>().into_string().to_string();
+    let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
         user.accounts.get_mut(&account_type).push_back(account_addr);
@@ -327,12 +330,12 @@ fun test_accept_invite_already_registered() {
     let invite = Invite {
         id: object::new(scenario.ctx()),
         account_addr: @0xACC,
-        account_type: type_name::get<DummyConfig>().into_string().to_string(),
+        account_type: type_name::with_defining_ids<DummyConfig>().into_string().to_string(),
     };
 
     user.add_account_for_testing<DummyConfig>(@0xACC);
-    assert!(user.accounts.contains(&type_name::get<DummyConfig>().into_string().to_string()));
-    assert!(user.accounts[&type_name::get<DummyConfig>().into_string().to_string()].contains(&@0xACC));
+    assert!(user.accounts.contains(&type_name::with_defining_ids<DummyConfig>().into_string().to_string()));
+    assert!(user.accounts[&type_name::with_defining_ids<DummyConfig>().into_string().to_string()].contains(&@0xACC));
     
     accept_invite(&mut user, invite);
 
@@ -366,7 +369,7 @@ fun test_reorder_accounts() {
     user.add_account_for_testing<DummyConfig>(@0x1);
     user.add_account_for_testing<DummyConfig>(@0x2);
     user.add_account_for_testing<DummyConfig>(@0x3);
-    let key = type_name::get<DummyConfig>().into_string().to_string();
+    let key = type_name::with_defining_ids<DummyConfig>().into_string().to_string();
     assert!(user.accounts.get(&key) == vector[@0x1, @0x2, @0x3]);
 
     user.reorder_accounts<DummyConfig>(vector[@0x2, @0x3, @0x1]);

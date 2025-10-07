@@ -1,3 +1,17 @@
+// ============================================================================
+// FORK MODIFICATION NOTICE - Currency Management with Serialize-Then-Destroy Pattern
+// ============================================================================
+// This module manages TreasuryCap and CoinMetadata operations for Account.
+//
+// CHANGES IN THIS FORK:
+// - Actions use type markers: CurrencyMint, CurrencyBurn, CurrencyUpdate, CurrencyDisable
+// - Implemented serialize-then-destroy pattern for all 4 action types
+// - Added destruction functions: destroy_mint_action, destroy_burn_action, etc.
+// - Actions serialize to bytes before adding to intent via add_typed_action()
+// - Enhanced BCS validation: version checks + validate_all_bytes_consumed
+// - Type-safe action validation through compile-time TypeName comparison
+// - REMOVED ExecutionContext - PTBs handle object flow naturally
+// ============================================================================
 /// Authenticated users can lock a TreasuryCap in the Account to restrict minting and burning operations,
 /// as well as modifying the CoinMetadata.
 
@@ -6,20 +20,32 @@ module account_actions::currency;
 // === Imports ===
 
 use std::{
-    string::String,
+    string::{Self, String},
     ascii,
+    option,
+
 };
-use sui::coin::{Coin, TreasuryCap, CoinMetadata};
+use sui::{
+    coin::{Self, Coin, TreasuryCap, CoinMetadata},
+    url::{Self, Url},
+    bcs,
+    object,
+};
 use account_protocol::{
-    account::{Account, Auth},
-    intents::{Expired, Intent},
-    executable::Executable,
+    action_validation,
+    account::{Self, Account, Auth},
+    intents::{Self, Expired, Intent},
+    executable::{Self, Executable},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_actions::{
     currency,
     version
 };
+use account_extensions::framework_action_types::{Self, CurrencyDisable, CurrencyMint, CurrencyBurn, CurrencyUpdate};
+// === Use Fun Aliases ===
+// Removed - add_typed_action is now called directly
 
 // === Errors ===
 
@@ -32,6 +58,7 @@ const ECannotUpdateSymbol: u64 = 5;
 const ECannotUpdateDescription: u64 = 6;
 const ECannotUpdateIcon: u64 = 7;
 const EMaxSupply: u64 = 8;
+const EUnsupportedActionVersion: u64 = 9;
 
 // === Structs ===    
 
@@ -107,6 +134,104 @@ public fun lock_cap<Config, CoinType>(
     account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
 }
 
+/// Lock treasury cap during initialization - works on unshared Accounts
+/// This function is for use during account creation, before the account is shared.
+///
+/// ## FORK NOTE
+/// **Added**: `do_lock_cap_unshared()` for init-time TreasuryCap locking
+/// **Reason**: Enable DAOs to lock their TreasuryCap during atomic initialization
+/// without Auth checks. Sets default CurrencyRules permissively to allow minting.
+/// **Safety**: `public(package)` visibility + naming convention enforces unshared-only usage
+///
+/// SAFETY: This function MUST only be called on unshared Accounts.
+/// Calling this on a shared Account bypasses Auth checks.
+public(package) fun do_lock_cap_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    treasury_cap: TreasuryCap<CoinType>,
+) {
+    // SAFETY REQUIREMENT: Account must be unshared
+    // Default rules with no max supply
+    let rules = CurrencyRules<CoinType> {
+        max_supply: option::none(),
+        total_minted: 0,
+        total_burned: 0,
+        can_mint: true,
+        can_burn: true,
+        can_update_symbol: true,
+        can_update_name: true,
+        can_update_description: true,
+        can_update_icon: true,
+    };
+    account.add_managed_data(CurrencyRulesKey<CoinType>(), rules, version::current());
+    account.add_managed_asset(TreasuryCapKey<CoinType>(), treasury_cap, version::current());
+}
+
+/// Mint coins during initialization - works on unshared Accounts
+/// Transfers minted coins directly to recipient
+///
+/// ## FORK NOTE
+/// **Added**: `do_mint_unshared()` for init-time minting
+/// **Reason**: Allow initial token distribution during DAO creation (founders, team, treasury)
+/// without requiring Auth or proposal approval. Validates against CurrencyRules.
+/// **Safety**: `public(package)` visibility ensures only callable during init
+///
+/// SAFETY: This function MUST only be called on unshared Accounts.
+/// Calling this on a shared Account bypasses Auth checks.
+public(package) fun do_mint_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    amount: u64,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    // SAFETY REQUIREMENT: Account must be unshared
+    let rules: &mut CurrencyRules<CoinType> =
+        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+
+    assert!(rules.can_mint, EMintDisabled);
+    if (rules.max_supply.is_some()) {
+        let total_supply = rules.total_minted - rules.total_burned;
+        assert!(amount + total_supply <= *rules.max_supply.borrow(), EMaxSupply);
+    };
+
+    rules.total_minted = rules.total_minted + amount;
+
+    let cap: &mut TreasuryCap<CoinType> =
+        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+
+    let coin = cap.mint(amount, ctx);
+    transfer::public_transfer(coin, recipient);
+}
+
+/// Mint coins to Coin object during initialization - works on unshared Accounts
+/// Returns Coin for further use in the same transaction
+///
+/// ## FORK NOTE
+/// **Added**: `do_mint_to_coin_unshared()` for composable init-time minting
+/// **Reason**: Mint coins and return Coin object for immediate use in same PTB
+/// (e.g., mint then deposit to vault, or mint then add to liquidity pool)
+/// **Safety**: `public(package)` visibility ensures only callable during init
+public(package) fun do_mint_to_coin_unshared<Config, CoinType>(
+    account: &mut Account<Config>,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    let rules: &mut CurrencyRules<CoinType> =
+        account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
+
+    assert!(rules.can_mint, EMintDisabled);
+    if (rules.max_supply.is_some()) {
+        let total_supply = rules.total_minted - rules.total_burned;
+        assert!(amount + total_supply <= *rules.max_supply.borrow(), EMaxSupply);
+    };
+
+    rules.total_minted = rules.total_minted + amount;
+
+    let cap: &mut TreasuryCap<CoinType> =
+        account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
+
+    cap.mint(amount, ctx)
+}
+
 /// Checks if a TreasuryCap exists for a given coin type.
 public fun has_cap<Config, CoinType>(
     account: &Account<Config>
@@ -173,19 +298,68 @@ public fun can_update_icon<CoinType>(lock: &CurrencyRules<CoinType>): bool {
     lock.can_update_icon
 }
 
+/// Read metadata from a CoinMetadata object
+/// Simple helper to extract all metadata fields in one call
+/// Returns: (decimals, symbol, name, description, icon_url)
+public fun read_coin_metadata<CoinType>(
+    metadata: &CoinMetadata<CoinType>,
+): (u8, ascii::String, String, String, ascii::String) {
+    (
+        metadata.get_decimals(),
+        metadata.get_symbol(),
+        metadata.get_name(),
+        metadata.get_description(),
+        metadata.get_icon_url().extract().inner_url()
+    )
+}
+
 /// Anyone can burn coins they own if enabled.
 public fun public_burn<Config, CoinType>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     coin: Coin<CoinType>
 ) {
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
     assert!(rules_mut.can_burn, EBurnDisabled);
     rules_mut.total_burned = rules_mut.total_burned + coin.value();
 
-    let cap_mut: &mut TreasuryCap<CoinType> = 
+    let cap_mut: &mut TreasuryCap<CoinType> =
         account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current());
     cap_mut.burn(coin);
+}
+
+// === Destruction Functions ===
+
+/// Destroy a DisableAction after serialization
+public fun destroy_disable_action<CoinType>(action: DisableAction<CoinType>) {
+    let DisableAction {
+        mint: _,
+        burn: _,
+        update_symbol: _,
+        update_name: _,
+        update_description: _,
+        update_icon: _
+    } = action;
+}
+
+/// Destroy a MintAction after serialization
+public fun destroy_mint_action<CoinType>(action: MintAction<CoinType>) {
+    let MintAction { amount: _ } = action;
+}
+
+/// Destroy a BurnAction after serialization
+public fun destroy_burn_action<CoinType>(action: BurnAction<CoinType>) {
+    let BurnAction { amount: _ } = action;
+}
+
+/// Destroy an UpdateAction after serialization
+public fun destroy_update_action<CoinType>(action: UpdateAction<CoinType>) {
+    let UpdateAction {
+        symbol: _,
+        name: _,
+        description: _,
+        icon_url: _
+    } = action;
 }
 
 // Intent functions
@@ -202,8 +376,22 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
     intent_witness: IW,
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
-    
-    intent.add_action(DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon }, intent_witness);
+
+    // Create the action struct (no drop)
+    let action = DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::currency_disable(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_disable_action(action);
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
@@ -211,18 +399,39 @@ public fun do_disable<Config, Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &DisableAction<CoinType> = executable.next_action(intent_witness);
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
 
-    let (mint, burn, update_symbol, update_name, update_description, update_icon) = 
-        (action.mint, action.burn, action.update_symbol, action.update_name, action.update_description, action.update_icon);
-    
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyDisable>(spec);
+
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let mint = bcs::peel_bool(&mut reader);
+    let burn = bcs::peel_bool(&mut reader);
+    let update_symbol = bcs::peel_bool(&mut reader);
+    let update_name = bcs::peel_bool(&mut reader);
+    let update_description = bcs::peel_bool(&mut reader);
+    let update_icon = bcs::peel_bool(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
-    
+
     // if disabled, can be true or false, it has no effect
     if (mint) rules_mut.can_mint = false;
     if (burn) rules_mut.can_burn = false;
@@ -230,11 +439,15 @@ public fun do_disable<Config, Outcome: store, CoinType, IW: drop>(
     if (update_name) rules_mut.can_update_name = false;
     if (update_description) rules_mut.can_update_description = false;
     if (update_icon) rules_mut.can_update_icon = false;
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Deletes a DisableAction from an expired intent.
 public fun delete_disable<CoinType>(expired: &mut Expired) {
-    let DisableAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
 }
 
 /// Creates an UpdateAction and adds it to an intent.
@@ -248,7 +461,21 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
 
-    intent.add_action(UpdateAction<CoinType> { symbol, name, description, icon_url }, intent_witness);
+    // Create the action struct (no drop)
+    let action = UpdateAction<CoinType> { symbol, name, description, icon_url };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::currency_update(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_update_action(action);
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
@@ -257,150 +484,241 @@ public fun do_update<Config, Outcome: store, CoinType, IW: drop>(
     account: &mut Account<Config>,
     metadata: &mut CoinMetadata<CoinType>,
     version_witness: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &UpdateAction<CoinType> = executable.next_action(intent_witness);
-    let (symbol, name, description, icon_url) = (action.symbol, action.name, action.description, action.icon_url);
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyUpdate>(spec);
+
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+
+    // Deserialize Option fields
+    let symbol = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_vec_u8(&mut reader).to_ascii_string())
+    } else {
+        option::none()
+    };
+
+    let name = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_vec_u8(&mut reader).to_string())
+    } else {
+        option::none()
+    };
+
+    let description = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_vec_u8(&mut reader).to_string())
+    } else {
+        option::none()
+    };
+
+    let icon_url = if (bcs::peel_bool(&mut reader)) {
+        option::some(bcs::peel_vec_u8(&mut reader).to_ascii_string())
+    } else {
+        option::none()
+    };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
 
     if (!rules_mut.can_update_symbol) assert!(symbol.is_none(), ECannotUpdateSymbol);
     if (!rules_mut.can_update_name) assert!(name.is_none(), ECannotUpdateName);
     if (!rules_mut.can_update_description) assert!(description.is_none(), ECannotUpdateDescription);
     if (!rules_mut.can_update_icon) assert!(icon_url.is_none(), ECannotUpdateIcon);
-    
-    let (default_symbol, default_name, default_description, default_icon_url) = 
+
+    let (default_symbol, default_name, default_description, default_icon_url) =
         (metadata.get_symbol(), metadata.get_name(), metadata.get_description(), metadata.get_icon_url().extract().inner_url());
-    let cap: &TreasuryCap<CoinType> = 
+    let cap: &TreasuryCap<CoinType> =
         account.borrow_managed_asset(TreasuryCapKey<CoinType>(), version_witness);
 
     cap.update_symbol(metadata, symbol.get_with_default(default_symbol));
     cap.update_name(metadata, name.get_with_default(default_name));
     cap.update_description(metadata, description.get_with_default(default_description));
     cap.update_icon_url(metadata, icon_url.get_with_default(default_icon_url));
+
+    // Increment action index
+    executable::increment_action_idx(executable);
 }
 
 /// Deletes an UpdateAction from an expired intent.
 public fun delete_update<CoinType>(expired: &mut Expired) {
-    let UpdateAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
 }
 
-/// Creates a MintAction and adds it to an intent.
+/// Creates a MintAction and adds it to an intent with descriptor.
 public fun new_mint<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
     amount: u64,
     intent_witness: IW,
 ) {
-    intent.add_action(MintAction<CoinType> { amount }, intent_witness);
+    // Create the action struct (no drop)
+    let action = MintAction<CoinType> { amount };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::currency_mint(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_mint_action(action);
 }
 
 /// Processes a MintAction, mints and returns new coins.
 public fun do_mint<Config, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>, 
+    executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     version_witness: VersionWitness,
-    intent_witness: IW, 
+    _intent_witness: IW,
     ctx: &mut TxContext
 ): Coin<CoinType> {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &MintAction<CoinType> = executable.next_action(intent_witness);
-    
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyMint>(spec);
+
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let amount = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
     let total_supply = currency::coin_type_supply<_, CoinType>(account);
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
 
     assert!(rules_mut.can_mint, EMintDisabled);
-    if (rules_mut.max_supply.is_some()) assert!(action.amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
-    
-    rules_mut.total_minted = rules_mut.total_minted + action.amount;
+    if (rules_mut.max_supply.is_some()) assert!(amount + total_supply <= *rules_mut.max_supply.borrow(), EMaxSupply);
 
-    let cap_mut: &mut TreasuryCap<CoinType> = 
+    rules_mut.total_minted = rules_mut.total_minted + amount;
+
+    let cap_mut: &mut TreasuryCap<CoinType> =
         account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version_witness);
-        
-    cap_mut.mint(action.amount, ctx)  
+
+    // Mint the coin
+    let coin = cap_mut.mint(amount, ctx);
+
+    // Store coin info in context for potential use by later actions
+    // PTBs handle object flow naturally - no context storage needed
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    coin
 }
 
 /// Deletes a MintAction from an expired intent.
 public fun delete_mint<CoinType>(expired: &mut Expired) {
-    let MintAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
 }
 
-/// Creates a BurnAction and adds it to an intent.
+/// Creates a BurnAction and adds it to an intent with descriptor.
 public fun new_burn<Outcome, CoinType, IW: drop>(
     intent: &mut Intent<Outcome>,
-    amount: u64, 
+    amount: u64,
     intent_witness: IW,
 ) {
-    intent.add_action(BurnAction<CoinType> { amount }, intent_witness);
+    // Create the action struct
+    let action = BurnAction<CoinType> { amount };
+
+    // Serialize it
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with pre-serialized bytes
+    intent.add_typed_action(
+        framework_action_types::currency_burn(),
+        action_data,
+        intent_witness
+    );
+
+    // Explicitly destroy the action struct
+    destroy_burn_action(action);
 }
 
 /// Processes a BurnAction, burns coins and returns the amount burned.
 public fun do_burn<Config, Outcome: store, CoinType, IW: drop>(
-    executable: &mut Executable<Outcome>, 
+    executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
     coin: Coin<CoinType>,
     version_witness: VersionWitness,
-    intent_witness: IW, 
+    _intent_witness: IW,
 ) {
     executable.intent().assert_is_account(account.addr());
 
-    let action: &BurnAction<CoinType> = executable.next_action(intent_witness);
-    assert!(action.amount == coin.value(), EWrongValue);
-        
-    let rules_mut: &mut CurrencyRules<CoinType> = 
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<CurrencyBurn>(spec);
+
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Create BCS reader and deserialize
+    let mut reader = bcs::new(*action_data);
+    let amount = bcs::peel_u64(&mut reader);
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    assert!(amount == coin.value(), EWrongValue);
+
+    let rules_mut: &mut CurrencyRules<CoinType> =
         account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version_witness);
     assert!(rules_mut.can_burn, EBurnDisabled);
-    
-    rules_mut.total_burned = rules_mut.total_burned + action.amount;
 
-    let cap_mut: &mut TreasuryCap<CoinType> = 
+    rules_mut.total_burned = rules_mut.total_burned + amount;
+
+    let cap_mut: &mut TreasuryCap<CoinType> =
         account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version_witness);
-        
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
     cap_mut.burn(coin);
 }
 
 /// Deletes a BurnAction from an expired intent.
 public fun delete_burn<CoinType>(expired: &mut Expired) {
-    let BurnAction<CoinType> { .. } = expired.remove_action();
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
 }
 
-// === Test functions ===
-
-#[test_only] 
-public fun toggle_can_mint<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_mint = !rules_mut.can_mint;
-}
-
-#[test_only] 
-public fun toggle_can_burn<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_burn = !rules_mut.can_burn;
-}
-
-#[test_only] 
-public fun toggle_can_update_symbol<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_update_symbol = !rules_mut.can_update_symbol;
-}
-
-#[test_only] 
-public fun toggle_can_update_name<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_update_name = !rules_mut.can_update_name;
-}
-
-#[test_only] 
-public fun toggle_can_update_description<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_update_description = !rules_mut.can_update_description;
-}
-
-#[test_only] 
-public fun toggle_can_update_icon<Config, CoinType>(account: &mut Account<Config>) {
-    let rules_mut: &mut CurrencyRules<CoinType> = account.borrow_managed_data_mut(CurrencyRulesKey<CoinType>(), version::current());
-    rules_mut.can_update_icon = !rules_mut.can_update_icon;
-}

@@ -1,0 +1,673 @@
+/// Comprehensive tests for execution-time locking mechanism
+/// Tests the new behavior where objects are only locked during execution, not at intent creation
+#[test_only]
+module account_protocol::execution_time_locking_tests;
+
+// === Imports ===
+
+use sui::{
+    test_scenario::{Self as ts, Scenario},
+    test_utils,
+    clock::{Self, Clock},
+    coin::{Self, Coin},
+    sui::SUI,
+};
+use account_protocol::{
+    account::{Self, Account},
+    deps,
+    version,
+    intents::{Self, Intent},
+    owned,
+    executable::Executable,
+};
+
+// === Test Structs ===
+
+public struct Config has store {}
+public struct Witness has drop {}
+public struct IntentWitness has drop {}
+public struct Outcome has store, drop, copy {}
+
+// === Constants ===
+
+const OWNER: address = @0xCAFE;
+const ALICE: address = @0xA11CE;
+const BOB: address = @0xB0B;
+
+// === Helper Functions ===
+
+fun setup(): (Scenario, Account<Config>, Clock) {
+    let mut scenario = ts::begin(OWNER);
+    let account = account::new(
+        Config {}, 
+        deps::new_for_testing(), 
+        version::current(), 
+        Witness {}, 
+        scenario.ctx()
+    );
+    let clock = clock::create_for_testing(scenario.ctx());
+    (scenario, account, clock)
+}
+
+fun create_test_intent(
+    scenario: &mut Scenario,
+    account: &Account<Config>,
+    clock: &Clock,
+    key: vector<u8>,
+): Intent<Outcome> {
+    let params = intents::new_params(
+        key.to_string(),
+        b"Test intent".to_string(),
+        vector[100], // execution time
+        1000000,     // expiration
+        clock,
+        scenario.ctx()
+    );
+    
+    account::create_intent(
+        account,
+        params,
+        Outcome {},
+        b"Test".to_string(),
+        version::current(),
+        IntentWitness {},
+        scenario.ctx()
+    )
+}
+
+fun send_test_coin(to: address, amount: u64, scenario: &mut Scenario): ID {
+    let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
+    let id = object::id(&coin);
+    transfer::public_transfer(coin, to);
+    scenario.next_tx(OWNER);
+    id
+}
+
+fun cleanup(scenario: Scenario, account: Account<Config>, clock: Clock) {
+    test_utils::destroy(account);
+    test_utils::destroy(clock);
+    ts::end(scenario);
+}
+
+// ============================================================================
+// HAPPY PATH TESTS
+// ============================================================================
+
+#[test]
+/// Test that objects are NOT locked when creating withdraw intent
+fun test_no_lock_on_intent_creation() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create intent with withdraw action
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"test1");
+    
+    // Add withdraw action - this should NOT lock the object
+    owned::new_withdraw(&mut intent, &account, coin_id, IntentWitness {});
+    
+    // Verify object is NOT locked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin_id), 0);
+    assert!(locked.is_empty(), 1);
+    
+    // Insert the intent
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Verify object is still NOT locked after insertion
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin_id), 2);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test that objects ARE locked during execution
+fun test_lock_during_execution() {
+    let (mut scenario, mut account, mut clock) = setup();
+    clock.increment_for_testing(101); // Past execution time
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create and insert intent with withdraw action
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"test2");
+    owned::new_withdraw(&mut intent, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Execute the intent
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        b"test2".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    // The object should be locked during do_withdraw execution
+    // We can't directly observe the lock during execution since it's atomic,
+    // but we can verify the withdrawal succeeds
+    let coin = owned::do_withdraw<Config, Outcome, Coin<SUI>, IntentWitness>(
+        &mut executable,
+        &mut account,
+        ts::receiving_ticket_by_id<Coin<SUI>>(coin_id),
+        IntentWitness {}
+    );
+    
+    // Verify we got the coin
+    assert!(coin.value() == 100, 0);
+    
+    // Complete execution
+    account.confirm_execution(executable);
+    
+    // Verify object is NOT locked after execution completes
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin_id), 1);
+    
+    test_utils::destroy(coin);
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test multiple withdraws in single intent
+fun test_multiple_withdraws_no_lock() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send multiple coins to the account
+    let coin1_id = send_test_coin(account.addr(), 100, &mut scenario);
+    let coin2_id = send_test_coin(account.addr(), 200, &mut scenario);
+    let coin3_id = send_test_coin(account.addr(), 300, &mut scenario);
+    
+    // Create intent with multiple withdraw actions
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"multi");
+    owned::new_withdraw(&mut intent, &account, coin1_id, IntentWitness {});
+    owned::new_withdraw(&mut intent, &account, coin2_id, IntentWitness {});
+    owned::new_withdraw(&mut intent, &account, coin3_id, IntentWitness {});
+    
+    // Verify none of the objects are locked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin1_id), 0);
+    assert!(!locked.contains(&coin2_id), 1);
+    assert!(!locked.contains(&coin3_id), 2);
+    assert!(locked.is_empty(), 3);
+    
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Still not locked after insertion
+    let locked = account.intents().locked();
+    assert!(locked.is_empty(), 4);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test cancel intent doesn't need to unlock
+fun test_cancel_intent_no_unlock_needed() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send coins to the account
+    let coin1_id = send_test_coin(account.addr(), 100, &mut scenario);
+    let coin2_id = send_test_coin(account.addr(), 200, &mut scenario);
+    
+    // Create intent with withdraw actions
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"cancel_test");
+    owned::new_withdraw(&mut intent, &account, coin1_id, IntentWitness {});
+    owned::new_withdraw(&mut intent, &account, coin2_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Verify objects are not locked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin1_id), 0);
+    assert!(!locked.contains(&coin2_id), 1);
+    
+    // Cancel the intent
+    let mut expired = account::cancel_intent<Config, Outcome, Witness>(
+        &mut account,
+        b"cancel_test".to_string(),
+        version::current(),
+        Witness {}
+    );
+    
+    // Objects should still not be locked (they never were)
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin1_id), 2);
+    assert!(!locked.contains(&coin2_id), 3);
+    
+    // Drain the expired bag (no unlocking happens)
+    owned::delete_withdraw(&mut expired, &account);
+    owned::delete_withdraw(&mut expired, &account);
+    intents::destroy_empty_expired(expired);
+    
+    // Verify objects remain unlocked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin1_id), 4);
+    assert!(!locked.contains(&coin2_id), 5);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test that the same object can be in multiple intents now
+fun test_same_object_multiple_intents() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create first intent with withdraw action
+    let mut intent1 = create_test_intent(&mut scenario, &account, &clock, b"intent1");
+    owned::new_withdraw(&mut intent1, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent1, version::current(), IntentWitness {});
+    
+    // Create second intent with the SAME coin - this should work now!
+    let mut intent2 = create_test_intent(&mut scenario, &account, &clock, b"intent2");
+    owned::new_withdraw(&mut intent2, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent2, version::current(), IntentWitness {});
+    
+    // Both intents exist with the same coin
+    assert!(account.intents().contains(b"intent1".to_string()), 0);
+    assert!(account.intents().contains(b"intent2".to_string()), 1);
+    
+    // Object is not locked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin_id), 2);
+    
+    cleanup(scenario, account, clock);
+}
+
+// ============================================================================
+// EDGE CASE TESTS
+// ============================================================================
+
+#[test]
+/// Test executing intent after expiration with withdraw
+fun test_expired_intent_with_withdraw() {
+    let (mut scenario, mut account, mut clock) = setup();
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create intent that will expire
+    let params = intents::new_params(
+        b"expired".to_string(),
+        b"Test expired".to_string(),
+        vector[100],
+        500, // Short expiration
+        &clock,
+        scenario.ctx()
+    );
+    
+    let mut intent = account::create_intent(
+        &account,
+        params,
+        Outcome {},
+        b"Test".to_string(),
+        version::current(),
+        IntentWitness {},
+        scenario.ctx()
+    );
+    
+    owned::new_withdraw(&mut intent, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Advance time past expiration
+    clock.increment_for_testing(501);
+    
+    // Delete expired intent
+    let mut expired = account::delete_expired_intent<Config, Outcome>(
+        &mut account,
+        b"expired".to_string(),
+        &clock
+    );
+    
+    // Drain without unlocking (no locks to release)
+    owned::delete_withdraw(&mut expired, &account);
+    intents::destroy_empty_expired(expired);
+    
+    // Verify object was never locked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin_id), 0);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test that object can be withdrawn after a canceled intent
+fun test_withdraw_after_cancel() {
+    let (mut scenario, mut account, mut clock) = setup();
+    clock.increment_for_testing(101);
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create and cancel first intent
+    let mut intent1 = create_test_intent(&mut scenario, &account, &clock, b"intent1");
+    owned::new_withdraw(&mut intent1, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent1, version::current(), IntentWitness {});
+    
+    let mut expired = account::cancel_intent<Config, Outcome, Witness>(
+        &mut account,
+        b"intent1".to_string(),
+        version::current(),
+        Witness {}
+    );
+    owned::delete_withdraw(&mut expired, &account);
+    intents::destroy_empty_expired(expired);
+    
+    // Create second intent with same coin and execute it
+    let mut intent2 = create_test_intent(&mut scenario, &account, &clock, b"intent2");
+    owned::new_withdraw(&mut intent2, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent2, version::current(), IntentWitness {});
+    
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        b"intent2".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    // This should succeed - no permanent lock from canceled intent
+    let coin = owned::do_withdraw<Config, Outcome, Coin<SUI>, IntentWitness>(
+        &mut executable,
+        &mut account,
+        ts::receiving_ticket_by_id<Coin<SUI>>(coin_id),
+        IntentWitness {}
+    );
+    
+    assert!(coin.value() == 100, 0);
+    account.confirm_execution(executable);
+    
+    test_utils::destroy(coin);
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test empty intent (no actions) cancel
+fun test_cancel_empty_intent() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Create intent with no actions
+    let intent = create_test_intent(&mut scenario, &account, &clock, b"empty");
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Cancel the empty intent
+    let expired = account::cancel_intent<Config, Outcome, Witness>(
+        &mut account,
+        b"empty".to_string(),
+        version::current(),
+        Witness {}
+    );
+    
+    // Should be able to destroy immediately (no actions to drain)
+    intents::destroy_empty_expired(expired);
+    
+    // No locks should exist
+    let locked = account.intents().locked();
+    assert!(locked.is_empty(), 0);
+    
+    cleanup(scenario, account, clock);
+}
+
+// ============================================================================
+// ERROR CONDITION TESTS
+// ============================================================================
+
+#[test]
+#[expected_failure(abort_code = owned::EObjectLocked)]
+/// Test that creating withdraw for already locked object fails
+fun test_error_withdraw_locked_object() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Manually lock the object (simulating it being locked by execution)
+    account.lock_object(coin_id);
+    
+    // Try to create withdraw for locked object - should fail
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"test");
+    owned::new_withdraw(&mut intent, &account, coin_id, IntentWitness {});
+    
+    test_utils::destroy(intent);
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+#[expected_failure(abort_code = owned::EWrongObject)]
+/// Test withdrawing wrong object ID fails
+fun test_error_withdraw_wrong_object() {
+    let (mut scenario, mut account, mut clock) = setup();
+    clock.increment_for_testing(101);
+    
+    // Send two coins to the account
+    let coin1_id = send_test_coin(account.addr(), 100, &mut scenario);
+    let coin2_id = send_test_coin(account.addr(), 200, &mut scenario);
+    
+    // Create intent for coin1
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"test");
+    owned::new_withdraw(&mut intent, &account, coin1_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Try to execute with coin2 - should fail
+    let (_, mut executable) = account.create_executable<Config, Outcome, Witness>(
+        b"test".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    let _coin = owned::do_withdraw<Config, Outcome, Coin<SUI>, IntentWitness>(
+        &mut executable,
+        &mut account,
+        ts::receiving_ticket_by_id<Coin<SUI>>(coin2_id), // Wrong coin!
+        IntentWitness {}
+    );
+    
+    abort 0 // Should never reach here
+}
+
+#[test]
+#[expected_failure(abort_code = intents::EObjectAlreadyLocked)]
+/// Test manual double lock fails
+fun test_error_double_lock() {
+    let (scenario, mut account, clock) = setup();
+    
+    let test_id = @0x123.to_id();
+    
+    // Lock once
+    account.lock_object(test_id);
+    
+    // Try to lock again - should fail
+    account.lock_object(test_id);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+#[expected_failure(abort_code = intents::EObjectNotLocked)]
+/// Test unlock without lock fails
+fun test_error_unlock_not_locked() {
+    let (scenario, mut account, clock) = setup();
+    
+    let test_id = @0x456.to_id();
+    
+    // Try to unlock without locking first - should fail
+    account.unlock_object(test_id);
+    
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+#[expected_failure]
+/// Test executing intent before execution time fails
+fun test_error_execute_too_early() {
+    let (mut scenario, mut account, clock) = setup();
+    // Don't increment clock - stay at time 0
+    
+    // Send a coin to the account
+    let coin_id = send_test_coin(account.addr(), 100, &mut scenario);
+    
+    // Create intent with future execution time
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"future");
+    owned::new_withdraw(&mut intent, &account, coin_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Try to execute before execution time - should fail
+    let (_, _executable) = account.create_executable<Config, Outcome, Witness>(
+        b"future".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    abort 0 // Should never reach here
+}
+
+// Note: Testing wrong witness for cancel_intent is already covered in account_tests.move
+// The witness checking is part of the Account protocol, not the locking mechanism.
+// Our tests focus on the execution-time locking behavior.
+
+// ============================================================================
+// CONCURRENT EXECUTION TESTS
+// ============================================================================
+
+#[test]
+/// Test that execution properly locks and unlocks in sequence
+fun test_sequential_execution_locking() {
+    let (mut scenario, mut account, mut clock) = setup();
+    clock.increment_for_testing(101);
+    
+    // Send multiple coins to the account
+    let coin1_id = send_test_coin(account.addr(), 100, &mut scenario);
+    let coin2_id = send_test_coin(account.addr(), 200, &mut scenario);
+    
+    // Create first intent
+    let mut intent1 = create_test_intent(&mut scenario, &account, &clock, b"intent1");
+    owned::new_withdraw(&mut intent1, &account, coin1_id, IntentWitness {});
+    account.insert_intent(intent1, version::current(), IntentWitness {});
+    
+    // Create second intent with different coin
+    let mut intent2 = create_test_intent(&mut scenario, &account, &clock, b"intent2");
+    owned::new_withdraw(&mut intent2, &account, coin2_id, IntentWitness {});
+    account.insert_intent(intent2, version::current(), IntentWitness {});
+    
+    // Execute first intent
+    let (_, mut executable1) = account.create_executable<Config, Outcome, Witness>(
+        b"intent1".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    let coin1 = owned::do_withdraw<Config, Outcome, Coin<SUI>, IntentWitness>(
+        &mut executable1,
+        &mut account,
+        ts::receiving_ticket_by_id<Coin<SUI>>(coin1_id),
+        IntentWitness {}
+    );
+    account.confirm_execution(executable1);
+    
+    // Verify no locks remain after first execution
+    let locked = account.intents().locked();
+    assert!(locked.is_empty(), 0);
+    
+    // Execute second intent
+    let (_, mut executable2) = account.create_executable<Config, Outcome, Witness>(
+        b"intent2".to_string(),
+        &clock,
+        version::current(),
+        Witness {}
+    );
+    
+    let coin2 = owned::do_withdraw<Config, Outcome, Coin<SUI>, IntentWitness>(
+        &mut executable2,
+        &mut account,
+        ts::receiving_ticket_by_id<Coin<SUI>>(coin2_id),
+        IntentWitness {}
+    );
+    account.confirm_execution(executable2);
+    
+    // Verify no locks remain after second execution
+    let locked = account.intents().locked();
+    assert!(locked.is_empty(), 1);
+    
+    assert!(coin1.value() == 100, 2);
+    assert!(coin2.value() == 200, 3);
+    
+    test_utils::destroy(coin1);
+    test_utils::destroy(coin2);
+    cleanup(scenario, account, clock);
+}
+
+#[test]
+/// Test merge and split operations don't interfere with locking
+fun test_merge_split_with_intents() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    // Send multiple coins to the account
+    let coin1_id = send_test_coin(account.addr(), 100, &mut scenario);
+    let coin2_id = send_test_coin(account.addr(), 200, &mut scenario);
+    let coin3_id = send_test_coin(account.addr(), 300, &mut scenario);
+    
+    // Create intent for coin1 only
+    let mut intent = create_test_intent(&mut scenario, &account, &clock, b"intent1");
+    owned::new_withdraw(&mut intent, &account, coin1_id, IntentWitness {});
+    account.insert_intent(intent, version::current(), IntentWitness {});
+    
+    // Merge and split other coins (not in any intent)
+    let auth = account::new_auth(&account, version::current(), Witness {});
+    let mut receiving_coins = vector::empty();
+    receiving_coins.push_back(ts::receiving_ticket_by_id<Coin<SUI>>(coin2_id));
+    receiving_coins.push_back(ts::receiving_ticket_by_id<Coin<SUI>>(coin3_id));
+    
+    let split_amounts = vector[250, 250];
+    let new_ids = owned::merge_and_split<Config, SUI>(
+        auth,
+        &mut account,
+        receiving_coins,
+        split_amounts,
+        scenario.ctx()
+    );
+    
+    // Verify we got new coin IDs
+    assert!(new_ids.length() == 2, 0);
+    
+    // Verify coin1 is still not locked (only locked during execution)
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&coin1_id), 1);
+    
+    // Verify new coins are not locked
+    assert!(!locked.contains(new_ids.borrow(0)), 2);
+    assert!(!locked.contains(new_ids.borrow(1)), 3);
+    
+    cleanup(scenario, account, clock);
+}
+
+// ============================================================================
+// MIGRATION PATH TESTS (if needed for backward compatibility)
+// ============================================================================
+
+#[test]
+/// Test that the system handles objects that might have been locked in old system
+fun test_migration_cleanup_old_locks() {
+    let (mut scenario, mut account, clock) = setup();
+    
+    let test_id = @0x789.to_id();
+    
+    // Simulate an old lock that might exist from previous system
+    account.lock_object(test_id);
+    
+    // Verify it's locked
+    let locked = account.intents().locked();
+    assert!(locked.contains(&test_id), 0);
+    
+    // Can unlock it manually if needed for migration
+    account.unlock_object(test_id);
+    
+    // Verify it's unlocked
+    let locked = account.intents().locked();
+    assert!(!locked.contains(&test_id), 1);
+    
+    cleanup(scenario, account, clock);
+}
+}

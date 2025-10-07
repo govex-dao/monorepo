@@ -1,0 +1,44 @@
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_one_shot_utils
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/binary_heap.move:5:10
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+  [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./sources/metadata.move:5:22
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use sui::bag::{Self, [0m[33mBag[0m};
+  [0m[34m│[0m                      [0m[33m^^^[0m [0m[33mUnused 'use' of alias 'Bag'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/unique_key.move:5:11
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use sui::{[0m[33mobject[0m, tx_context::TxContext};
+  [0m[34m│[0m           [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/unique_key.move:5:31
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use sui::{object, tx_context::[0m[33mTxContext[0m};
+  [0m[34m│[0m                               [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+   [0m[34m┌─[0m ./sources/vectors.move:65:55
+   [0m[34m│[0m
+[0m[34m65[0m [0m[34m│[0m public fun merge_coins<T>(mut coins: vector<Coin<T>>, [0m[33mctx[0m: &mut TxContext): Coin<T> {
+   [0m[34m│[0m                                                       [0m[33m^^^[0m [0m[33mUnused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

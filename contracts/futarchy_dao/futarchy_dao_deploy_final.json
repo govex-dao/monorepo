@@ -1,0 +1,408 @@
+[Warning]: Dependency sources are no longer verified automatically during publication and upgrade, so the `--skip-dependency-verification` flag is no longer necessary.
+INCLUDING DEPENDENCY futarchy_actions
+INCLUDING DEPENDENCY futarchy_specialized_actions
+INCLUDING DEPENDENCY futarchy_lifecycle
+INCLUDING DEPENDENCY futarchy_multisig
+INCLUDING DEPENDENCY futarchy_vault
+INCLUDING DEPENDENCY AccountActions
+INCLUDING DEPENDENCY Kiosk
+INCLUDING DEPENDENCY futarchy_core
+INCLUDING DEPENDENCY AccountProtocol
+INCLUDING DEPENDENCY AccountExtensions
+INCLUDING DEPENDENCY futarchy_markets
+INCLUDING DEPENDENCY futarchy_one_shot_utils
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING futarchy_dao
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/../futarchy_markets/sources/spot/spot_oracle_interface.move:199:1
+    [0m[34m│[0m  
+[0m[34m199[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Example: How a lending protocol would use this[0m
+[0m[34m200[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m201[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// ```move[0m
+[0m[34m202[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// // In lending protocol[0m
+    [0m[34m·[0m [0m[33m│[0m
+[0m[34m217[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// [0m
+[0m[34m218[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// It just gets a continuous price feed that never stops.[0m
+    [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+     [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/../futarchy_core/sources/futarchy_config.move:1143:1
+     [0m[34m│[0m  
+[0m[34m1143[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1144[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Execute a proposal's intent with generic outcome type[0m
+[0m[34m1145[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This allows standard intents to work with any outcome type[0m
+     [0m[34m│[0m [0m[33m╰[0m[0m[33m──────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/janitor.move:4:10
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use std::[0m[33mvector[0m;
+  [0m[34m│[0m          [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/janitor.move:117:5
+    [0m[34m│[0m
+[0m[34m117[0m [0m[34m│[0m fun [0m[33mdrain_oracle_mint_for_coin[0m<CoinType>(expired: &mut Expired) {
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'drain_oracle_mint_for_coin' is never called. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/janitor.move:123:5
+    [0m[34m│[0m
+[0m[34m123[0m [0m[34m│[0m fun [0m[33mdrain_liquidity_actions_for_pair[0m<AssetType, StableType>(expired: &mut Expired) {
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'drain_liquidity_actions_for_pair' is never called. Consider removing it.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/janitor.move:226:8
+    [0m[34m│[0m
+[0m[34m226[0m [0m[34m│[0m public [0m[33mentry[0m fun cleanup_expired_intent(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/janitor.move:235:8
+    [0m[34m│[0m
+[0m[34m235[0m [0m[34m│[0m public [0m[33mentry[0m fun cleanup_expired_intents(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:3:19
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:3:19
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::{[0m[33mSelf[0m, Option};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'option'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:3:25
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:3:25
+  [0m[34m│[0m
+[0m[34m3[0m [0m[34m│[0m use std::option::{Self, [0m[33mOption[0m};
+  [0m[34m│[0m                         [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Option'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:6:17
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m     tx_context::[0m[33mTxContext[0m,
+  [0m[34m│[0m                 [0m[33m^^^^^^^^^[0m [0m[33mUnnecessary alias 'TxContext' for module member 'sui::tx_context::TxContext'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:9:13
+  [0m[34m│[0m
+[0m[34m9[0m [0m[34m│[0m     object::[0m[33mID[0m,
+  [0m[34m│[0m             [0m[33m^^[0m [0m[33mUnnecessary alias 'ID' for module member 'sui::object::ID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:10:5
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnnecessary alias 'transfer' for module 'sui::transfer'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:10:5
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m     [0m[33mtransfer[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnused 'use' of alias 'transfer'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09011][0m[1m: unused constant[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/core/execute.move:32:7
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m const [0m[33mEPermitMismatch[0m: u64 = 779;
+   [0m[34m│[0m       [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mThe constant 'EPermitMismatch' is never used. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:7:5
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m     [0m[33moption[0m,
+  [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'option' for module 'std::option'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:8:5
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m     [0m[33mvector[0m,
+  [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'vector' for module 'std::vector'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:8:5
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m     [0m[33mvector[0m,
+  [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'vector'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This alias does not shadow the built-in type 'vector' in type annotations.
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:11:13
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m     clock::{[0m[33mSelf[0m, Clock},
+   [0m[34m│[0m             [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'clock'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:12:12
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m     coin::{[0m[33mSelf[0m, Coin},
+   [0m[34m│[0m            [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'coin'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:13:21
+   [0m[34m│[0m
+[0m[34m13[0m [0m[34m│[0m     balance::{Self, [0m[33mBalance[0m},
+   [0m[34m│[0m                     [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'Balance'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:15:5
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     [0m[33mobject[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:19:18
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m     executable::{[0m[33mSelf[0m, Executable},
+   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'executable'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:19:24
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m     executable::{Self, [0m[33mExecutable[0m},
+   [0m[34m│[0m                        [0m[33m^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'Executable'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:20:21
+   [0m[34m│[0m
+[0m[34m20[0m [0m[34m│[0m     intents::{Self, [0m[33mIntent[0m},
+   [0m[34m│[0m                     [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Intent'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:24:43
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m     priority_queue::{Self, ProposalQueue, [0m[33mQueuedProposal[0m},
+   [0m[34m│[0m                                           [0m[33m^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'QueuedProposal'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:25:28
+   [0m[34m│[0m
+[0m[34m25[0m [0m[34m│[0m     proposal_fee_manager::{[0m[33mSelf[0m, ProposalFeeManager},
+   [0m[34m│[0m                            [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'proposal_fee_manager'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:33:5
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m     [0m[33maction_dispatcher[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'action_dispatcher'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:44:5
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m     [0m[33mfutarchy_vault[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'futarchy_vault'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:93:8
+   [0m[34m│[0m
+[0m[34m93[0m [0m[34m│[0m public [0m[33mentry[0m fun execute_approved_proposal_with_fee<AssetType, StableType, IW: copy + drop>(
+   [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+   [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:173:5
+    [0m[34m│[0m
+[0m[34m173[0m [0m[34m│[0m     [0m[33mproposal_fee_manager[0m: &mut ProposalFeeManager,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused parameter 'proposal_fee_manager'. Consider removing or prefixing with an underscore: '_proposal_fee_manager'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:404:5
+    [0m[34m│[0m
+[0m[34m404[0m [0m[34m│[0m     [0m[33mqueue[0m: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'queue'. Consider removing or prefixing with an underscore: '_queue'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:405:5
+    [0m[34m│[0m
+[0m[34m405[0m [0m[34m│[0m     [0m[33mfee_manager[0m: &mut ProposalFeeManager,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused parameter 'fee_manager'. Consider removing or prefixing with an underscore: '_fee_manager'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:406:5
+    [0m[34m│[0m
+[0m[34m406[0m [0m[34m│[0m     [0m[33mregistry[0m: &mut governance_actions::ProposalReservationRegistry,
+    [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnused parameter 'registry'. Consider removing or prefixing with an underscore: '_registry'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:466:5
+    [0m[34m│[0m
+[0m[34m466[0m [0m[34m│[0m     [0m[33mqueue[0m: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused parameter 'queue'. Consider removing or prefixing with an underscore: '_queue'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:467:5
+    [0m[34m│[0m
+[0m[34m467[0m [0m[34m│[0m     [0m[33mfee_manager[0m: &mut ProposalFeeManager,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused parameter 'fee_manager'. Consider removing or prefixing with an underscore: '_fee_manager'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:468:5
+    [0m[34m│[0m
+[0m[34m468[0m [0m[34m│[0m     [0m[33mregistry[0m: &mut governance_actions::ProposalReservationRegistry,
+    [0m[34m│[0m     [0m[33m^^^^^^^^[0m [0m[33mUnused parameter 'registry'. Consider removing or prefixing with an underscore: '_registry'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:521:8
+    [0m[34m│[0m
+[0m[34m521[0m [0m[34m│[0m public [0m[33mentry[0m fun reserve_next_proposal_for_premarket<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:524:5
+    [0m[34m│[0m
+[0m[34m524[0m [0m[34m│[0m     [0m[33mproposal_fee_manager[0m: &mut ProposalFeeManager,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused parameter 'proposal_fee_manager'. Consider removing or prefixing with an underscore: '_proposal_fee_manager'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:530:39
+    [0m[34m│[0m
+[0m[34m530[0m [0m[34m│[0m     use futarchy_markets::proposal as [0m[33mproposal_mod[0m;
+    [0m[34m│[0m                                       [0m[33m^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'proposal_mod'. Consider removing it[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[Lint W99010][0m[1m: unnecessary `entry` on a `public` function[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:616:8
+    [0m[34m│[0m
+[0m[34m616[0m [0m[34m│[0m public [0m[33mentry[0m fun initialize_reserved_premarket_to_review<AssetType, StableType>(
+    [0m[34m│[0m        [0m[33m^^^^^[0m [0m[33m`entry` on `public` functions limits composability as it adds restrictions, e.g. the type of each return value must have `drop`. `entry` on `public` is only meaningful in niche scenarios.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m `public` functions can be called from PTBs. `entry` can be used to allow non-`public` functions to be called from PTBs, but it adds restrictions on the usage of input arguments and on the type of return values. Unless this `public` function interacts with an intricate set of other `entry` functions, the `entry` modifier should be removed.
+    [0m[34m=[0m This warning can be suppressed with '#[allow(lint(public_entry))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/governance/proposal_lifecycle.move:617:5
+    [0m[34m│[0m
+[0m[34m617[0m [0m[34m│[0m     [0m[33maccount[0m: &mut Account<FutarchyConfig>,
+    [0m[34m│[0m     [0m[33m^^^^^^^[0m [0m[33mUnused parameter 'account'. Consider removing or prefixing with an underscore: '_account'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/registry.move:6:5
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m     [0m[33mowned[0m,
+  [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'owned'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/registry.move:31:5
+   [0m[34m│[0m
+[0m[34m31[0m [0m[34m│[0m     [0m[33msecurity_council_actions[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'security_council_actions'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/registry.move:32:5
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m     [0m[33mpolicy_actions[0m,
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'policy_actions'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W01004][0m[1m: invalid documentation comment[0m
+   [0m[34m┌─[0m /Users/admin/monorepo/contracts/futarchy_dao/sources/dao/garbage-collection/registry.move:35:1
+   [0m[34m│[0m  
+[0m[34m35[0m [0m[34m│[0m [0m[33m╭[0m [0m[33m/// Register one delete_* per action you actually use in futarchy.[0m
+[0m[34m36[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// This module serves as a central registry for all delete functions.[0m
+[0m[34m37[0m [0m[34m│[0m [0m[33m│[0m [0m[33m/// Each function delegates to the appropriate module's delete function.[0m
+   [0m[34m│[0m [0m[33m╰[0m[0m[33m────────────────────────────────────────────────────────────────────────^ Documentation comment cannot be matched to a language item[0m
+
+Please report feedback on the linter warnings at https://forums.sui.io
+
+Skipping dependency verification
+Error executing transaction '8WjThxFgKxsTmPfQCHyKKtjJ8JFoNEpqdivZ9WB1e5Z4': PublishUpgradeMissingDependency in command 0

@@ -1,0 +1,542 @@
+INCLUDING DEPENDENCY AccountExtensions
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING AccountProtocol
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:5:10
+  [0m[34m│[0m
+[0m[34m5[0m [0m[34m│[0m use std::[0m[33mtype_name[0m;
+  [0m[34m│[0m          [0m[33m^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'type_name'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:6:38
+  [0m[34m│[0m
+[0m[34m6[0m [0m[34m│[0m use sui::test_scenario::{Self as ts, [0m[33mScenario[0m};
+  [0m[34m│[0m                                      [0m[33m^^^^^^^^[0m [0m[33mUnused 'use' of alias 'Scenario'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:8:24
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m use sui::clock::{Self, [0m[33mClock[0m};
+  [0m[34m│[0m                        [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'Clock'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:10:39
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use account_protocol::intents::{Self, [0m[33mIntent[0m, Intents, Params};
+   [0m[34m│[0m                                       [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Intent'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:10:47
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use account_protocol::intents::{Self, Intent, [0m[33mIntents[0m, Params};
+   [0m[34m│[0m                                               [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'Intents'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/intents_comprehensive_tests.move:10:56
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use account_protocol::intents::{Self, Intent, Intents, [0m[33mParams[0m};
+   [0m[34m│[0m                                                        [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'Params'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:32:35
+   [0m[34m│[0m
+[0m[34m32[0m [0m[34m│[0m use std::{string::String, option::[0m[33mOption[0m, type_name::TypeName};
+   [0m[34m│[0m                                   [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:33:21
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m use sui::{vec_set::{[0m[33mSelf[0m, VecSet}, event};
+   [0m[34m│[0m                     [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'vec_set'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:33:27
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m use sui::{vec_set::{Self, [0m[33mVecSet[0m}, event};
+   [0m[34m│[0m                           [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'VecSet'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:33:36
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m use sui::{vec_set::{Self, VecSet}, [0m[33mevent[0m};
+   [0m[34m│[0m                                    [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'event'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:44:56
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m use account_extensions::framework_action_types::{Self, [0m[33mConfigUpdateDeps[0m, ConfigUpdateMetadata};
+   [0m[34m│[0m                                                        [0m[33m^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'ConfigUpdateDeps'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/config.move:44:74
+   [0m[34m│[0m
+[0m[34m44[0m [0m[34m│[0m use account_extensions::framework_action_types::{Self, ConfigUpdateDeps, [0m[33mConfigUpdateMetadata[0m};
+   [0m[34m│[0m                                                                          [0m[33m^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'ConfigUpdateMetadata'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+    [0m[34m┌─[0m ./sources/actions/config.move:46:1
+    [0m[34m│[0m
+[0m[34m 46[0m [0m[34m│[0m [0m[33muse fun account_protocol::intents::add_typed_action as Intent.add_typed_action;[0m
+    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnnecessary method alias 'account_protocol::intents::Intent.add_typed_action' for 'account_protocol::intents::add_typed_action'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m ./sources/types/intents.move:183:12
+    [0m[34m│[0m
+[0m[34m183[0m [0m[34m│[0m public fun add_typed_action<Outcome, Action: store, T: drop, IW: drop>(
+    [0m[34m│[0m            [0m[34m----------------[0m [0m[34mThe same alias was previously declared here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/types/intents.move:186:5
+    [0m[34m│[0m
+[0m[34m186[0m [0m[34m│[0m     [0m[33maction_type[0m: T,
+    [0m[34m│[0m     [0m[33m^^^^^^^^^^^[0m [0m[33mUnused parameter 'action_type'. Consider removing or prefixing with an underscore: '_action_type'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/deps_comprehensive_tests.move:4:18
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use std::string::[0m[33mString[0m;
+  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/deps_comprehensive_tests.move:9:36
+  [0m[34m│[0m
+[0m[34m9[0m [0m[34m│[0m use account_protocol::deps::{Self, [0m[33mDeps[0m};
+  [0m[34m│[0m                                    [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'Deps'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/deps_comprehensive_tests.move:10:23
+   [0m[34m│[0m
+[0m[34m10[0m [0m[34m│[0m use account_protocol::[0m[33mversion_witness[0m;
+   [0m[34m│[0m                       [0m[33m^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'version_witness'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09008][0m[1m: unused function[0m
+   [0m[34m┌─[0m ./tests/types/deps_comprehensive_tests.move:37:5
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m fun [0m[33mget_test_addr[0m(i: u64): address {
+   [0m[34m│[0m     [0m[33m^^^^^^^^^^^^^[0m [0m[33mThe non-'public', non-'entry' function 'get_test_addr' is never called. Consider removing it.[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_function)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+   [0m[34m┌─[0m ./tests/account_object_tracking_tests.move:84:9
+   [0m[34m│[0m
+[0m[34m84[0m [0m[34m│[0m     let [0m[33mobj1_id[0m = object::id(&obj1);
+   [0m[34m│[0m         [0m[33m^^^^^^^[0m [0m[33mUnused local variable 'obj1_id'. Consider removing or prefixing with an underscore: '_obj1_id'[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+   [0m[34m┌─[0m ./tests/account_object_tracking_tests.move:88:9
+   [0m[34m│[0m
+[0m[34m88[0m [0m[34m│[0m     let [0m[33mobj2_id[0m = object::id(&obj2);
+   [0m[34m│[0m         [0m[33m^^^^^^^[0m [0m[33mUnused local variable 'obj2_id'. Consider removing or prefixing with an underscore: '_obj2_id'[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/deps_tests.move:4:18
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use std::string::[0m[33mString[0m;
+  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/deps_tests.move:12:44
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m use account_extensions::extensions::{Self, [0m[33mExtensions[0m};
+   [0m[34m│[0m                                            [0m[33m^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'Extensions'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/deps_tests.move:15:18
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     deps::{Self, [0m[33mDeps[0m},
+   [0m[34m│[0m                  [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'Deps'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/types/deps_tests.move:19:1
+   [0m[34m│[0m
+[0m[34m19[0m [0m[34m│[0m [0m[33muse fun std::string::utf8 as vector.utf8;[0m
+   [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnused 'use fun' of 'vector.utf8'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:4:18
+  [0m[34m│[0m
+[0m[34m4[0m [0m[34m│[0m use std::string::[0m[33mString[0m;
+  [0m[34m│[0m                  [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'String'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04028][0m[1m: implicit copy of a constant[0m
+   [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:24:14
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m     if (i >= [0m[33mTEST_ADDRS[0m.length()) TEST_ADDRS[TEST_ADDRS.length() - 1]
+   [0m[34m│[0m              [0m[33m^^^^^^^^^^[0m [0m[33mThis access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04028][0m[1m: implicit copy of a constant[0m
+   [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:24:35
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m     if (i >= TEST_ADDRS.length()) [0m[33mTEST_ADDRS[0m[TEST_ADDRS.length() - 1]
+   [0m[34m│[0m                                   [0m[33m^^^^^^^^^^[0m [0m[33mThis access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04028][0m[1m: implicit copy of a constant[0m
+   [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:24:46
+   [0m[34m│[0m
+[0m[34m24[0m [0m[34m│[0m     if (i >= TEST_ADDRS.length()) TEST_ADDRS[[0m[33mTEST_ADDRS[0m.length() - 1]
+   [0m[34m│[0m                                              [0m[33m^^^^^^^^^^[0m [0m[33mThis access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04028][0m[1m: implicit copy of a constant[0m
+   [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:25:10
+   [0m[34m│[0m
+[0m[34m25[0m [0m[34m│[0m     else [0m[33mTEST_ADDRS[0m[i]
+   [0m[34m│[0m          [0m[33m^^^^^^^^^^[0m [0m[33mThis access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:567:9
+    [0m[34m│[0m
+[0m[34m567[0m [0m[34m│[0m     let [0m[33mnames[0m = vector[
+    [0m[34m│[0m         [0m[33m^^^^^[0m [0m[33mUnused local variable 'names'. Consider removing or prefixing with an underscore: '_names'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:574:9
+    [0m[34m│[0m
+[0m[34m574[0m [0m[34m│[0m     let [0m[33maddresses[0m = vector[@0x1, @0x1001, @0x1002, @0x1003, @0x1004];
+    [0m[34m│[0m         [0m[33m^^^^^^^^^[0m [0m[33mUnused local variable 'addresses'. Consider removing or prefixing with an underscore: '_addresses'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:575:9
+    [0m[34m│[0m
+[0m[34m575[0m [0m[34m│[0m     let [0m[33mversions[0m = vector[1, 1, 1, 1, 1];
+    [0m[34m│[0m         [0m[33m^^^^^^^^[0m [0m[33mUnused local variable 'versions'. Consider removing or prefixing with an underscore: '_versions'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./tests/types/deps_vecset_optimization_tests.move:578:9
+    [0m[34m│[0m
+[0m[34m578[0m [0m[34m│[0m     let [0m[33mresult[0m = std::option::none<Deps>();
+    [0m[34m│[0m         [0m[33m^^^^^^[0m [0m[33mUnused local variable 'result'. Consider removing or prefixing with an underscore: '_result'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./tests/account_object_tracking_comprehensive_tests.move:7:18
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use sui::object::[0m[33mUID[0m;
+  [0m[34m│[0m                  [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/account_object_tracking_comprehensive_tests.move:11:27
+   [0m[34m│[0m
+[0m[34m11[0m [0m[34m│[0m use sui::dynamic_field as [0m[33mdf[0m;
+   [0m[34m│[0m                           [0m[33m^^[0m [0m[33mUnused 'use' of alias 'df'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/account_object_tracking_comprehensive_tests.move:12:10
+   [0m[34m│[0m
+[0m[34m12[0m [0m[34m│[0m use sui::[0m[33mvec_set[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'vec_set'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./tests/account_object_tracking_comprehensive_tests.move:104:9
+    [0m[34m│[0m
+[0m[34m104[0m [0m[34m│[0m     let [0m[33mobj_id[0m = object::id(&obj);
+    [0m[34m│[0m         [0m[33m^^^^^^[0m [0m[33mUnused local variable 'obj_id'. Consider removing or prefixing with an underscore: '_obj_id'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/user.move:33:21
+   [0m[34m│[0m
+[0m[34m33[0m [0m[34m│[0m     vec_set::{Self, [0m[33mVecSet[0m},
+   [0m[34m│[0m                     [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'VecSet'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/types/deps.move:37:26
+   [0m[34m│[0m
+[0m[34m37[0m [0m[34m│[0m use sui::vec_set::{Self, [0m[33mVecSet[0m};
+   [0m[34m│[0m                          [0m[33m^^^^^^[0m [0m[33mUnused 'use' of alias 'VecSet'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./tests/cancel_intent_tests.move:15:21
+   [0m[34m│[0m
+[0m[34m15[0m [0m[34m│[0m     account::{Self, [0m[33mAccount[0m},
+   [0m[34m│[0m                     [0m[33m^^^^^^^[0m [0m[33mUnused 'use' of alias 'Account'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;9merror[E04017][0m[1m: too many arguments[0m
+    [0m[34m┌─[0m ./tests/cancel_intent_tests.move:182:19
+    [0m[34m│[0m    
+[0m[34m182[0m [0m[34m│[0m         let expired = [0m[31maccount.cancel_intent<Config, Outcome, NotConfigWitness>([0m
+    [0m[34m│[0m [0m[31m╭[0m[0m[31m──[0m[0m[31m───────────────────^[0m
+    [0m[34m│[0m [0m[31m│[0m [0m[34m╭[0m[0m[34m───────────────────────────────────────────────────────────────────────────'[0m
+[0m[34m183[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        &mut account,[0m
+[0m[34m184[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        b"test".to_string(),[0m
+[0m[34m185[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        version::current(),[0m
+[0m[34m186[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m        NotConfigWitness()[0m
+[0m[34m187[0m [0m[34m│[0m [0m[31m│[0m [0m[34m│[0m [0m[31m    )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─[0m[0m[34m│[0m[0m[31m─────^ Invalid call of 'account_protocol::account::cancel_intent'. The call expected 4 argument(s) but got 5[0m
+    [0m[34m│[0m   [0m[34m╰[0m[0m[34m─────' Found 5 argument(s) here[0m
+    [0m[34m│[0m    
+    [0m[34m┌─[0m ./sources/account.move:284:12
+    [0m[34m│[0m
+[0m[34m284[0m [0m[34m│[0m public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
+    [0m[34m│[0m            [0m[34m-------------[0m [0m[34mExpected 4 argument(s)[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m ./tests/cancel_intent_tests.move:182:19
+    [0m[34m│[0m  
+[0m[34m182[0m [0m[34m│[0m       let expired = [0m[31maccount.cancel_intent<Config, Outcome, NotConfigWitness>([0m
+    [0m[34m│[0m                                                            [0m[34m----------------[0m [0m[34mExpected: 'account_protocol::cancel_intent_tests::NotConfigWitness'[0m
+    [0m[34m│[0m [0m[31m╭[0m[0m[31m───────────────────^[0m
+[0m[34m183[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        &mut account,[0m
+[0m[34m184[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        b"test".to_string(),[0m
+[0m[34m185[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        version::current(),[0m
+[0m[34m186[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        NotConfigWitness()[0m
+[0m[34m187[0m [0m[34m│[0m [0m[31m│[0m [0m[31m    )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────^ Invalid call of 'account_protocol::account::cancel_intent'. Invalid argument for parameter 'config_witness'[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m ./sources/version.move:19:32
+    [0m[34m│[0m
+[0m[34m 19[0m [0m[34m│[0m public(package) fun current(): VersionWitness {
+    [0m[34m│[0m                                [0m[34m--------------[0m [0m[34mGiven: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m ./tests/cancel_intent_tests.move:182:19
+    [0m[34m│[0m  
+[0m[34m182[0m [0m[34m│[0m       let expired = [0m[31maccount.cancel_intent<Config, Outcome, NotConfigWitness>([0m
+    [0m[34m│[0m [0m[31m╭[0m[0m[31m───────────────────^[0m
+[0m[34m183[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        &mut account,[0m
+[0m[34m184[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        b"test".to_string(),[0m
+[0m[34m185[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        version::current(),[0m
+[0m[34m186[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        NotConfigWitness()[0m
+[0m[34m187[0m [0m[34m│[0m [0m[31m│[0m [0m[31m    )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────^ Invalid call of 'account_protocol::account::cancel_intent'. Invalid argument for parameter 'deps_witness'[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m /Users/admin/.move/https___github_com_MystenLabs_sui_git_2cde80b5766b0bc2073908e10f6e3c81c93fd691/crates/sui-framework/packages/move-stdlib/sources/string.move:24:37
+    [0m[34m│[0m
+[0m[34m 24[0m [0m[34m│[0m public fun utf8(bytes: vector<u8>): String {
+    [0m[34m│[0m                                     [0m[34m------[0m [0m[34mGiven: 'std::string::String'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m ./sources/account.move:287:19
+    [0m[34m│[0m
+[0m[34m287[0m [0m[34m│[0m     deps_witness: VersionWitness,
+    [0m[34m│[0m                   [0m[34m--------------[0m [0m[34mExpected: 'account_protocol::version_witness::VersionWitness'[0m
+
+[0m[1m[38;5;9merror[E04007][0m[1m: incompatible types[0m
+    [0m[34m┌─[0m ./tests/cancel_intent_tests.move:182:19
+    [0m[34m│[0m  
+[0m[34m182[0m [0m[34m│[0m       let expired = [0m[31maccount.cancel_intent<Config, Outcome, NotConfigWitness>([0m
+    [0m[34m│[0m [0m[31m╭[0m[0m[31m───────────────────^[0m
+[0m[34m183[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        &mut account,[0m
+    [0m[34m│[0m [0m[31m│[0m         [0m[34m------------[0m [0m[34mGiven: '&mut account_protocol::account::Account<account_protocol::cancel_intent_tests::Config>'[0m
+[0m[34m184[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        b"test".to_string(),[0m
+[0m[34m185[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        version::current(),[0m
+[0m[34m186[0m [0m[34m│[0m [0m[31m│[0m [0m[31m        NotConfigWitness()[0m
+[0m[34m187[0m [0m[34m│[0m [0m[31m│[0m [0m[31m    )[0m;
+    [0m[34m│[0m [0m[31m╰[0m[0m[31m─────^ Invalid call of 'account_protocol::account::cancel_intent'. Invalid argument for parameter 'key'[0m
+    [0m[34m│[0m  
+    [0m[34m┌─[0m ./sources/account.move:286:10
+    [0m[34m│[0m
+[0m[34m286[0m [0m[34m│[0m     key: String,
+    [0m[34m│[0m          [0m[34m------[0m [0m[34mExpected: 'std::string::String'[0m
+
+[0m[1m[38;5;9merror[E03013][0m[1m: positional call mismatch[0m
+    [0m[34m┌─[0m ./tests/cancel_intent_tests.move:186:9
+    [0m[34m│[0m
+[0m[34m 27[0m [0m[34m│[0m public struct NotConfigWitness has drop {}
+    [0m[34m│[0m               [0m[34m----------------[0m [0m[34m'NotConfigWitness' is declared here[0m
+    [0m[34m·[0m
+[0m[34m186[0m [0m[34m│[0m         [0m[31mNotConfigWitness()[0m
+    [0m[34m│[0m         [0m[31m^^^^^^^^^^^^^^^^^^[0m [0m[31mInvalid struct instantiation. Named struct declarations require named instantiations[0m
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+  [0m[34m┌─[0m ./sources/types/intent_spec.move:7:22
+  [0m[34m│[0m
+[0m[34m7[0m [0m[34m│[0m use std::type_name::{[0m[33mSelf[0m, TypeName};
+  [0m[34m│[0m                      [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'type_name'. Consider removing it[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/types/intent_spec.move:8:19
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m use sui::object::{[0m[33mSelf[0m, UID};
+  [0m[34m│[0m                   [0m[33m^^^^[0m [0m[33mUnnecessary alias 'object' for module 'sui::object'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+  [0m[34m┌─[0m ./sources/types/intent_spec.move:8:25
+  [0m[34m│[0m
+[0m[34m8[0m [0m[34m│[0m use sui::object::{Self, [0m[33mUID[0m};
+  [0m[34m│[0m                         [0m[33m^^^[0m [0m[33mUnnecessary alias 'UID' for module member 'sui::object::UID'. This alias is provided by default[0m
+  [0m[34m│[0m
+  [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/owned.move:30:10
+   [0m[34m│[0m
+[0m[34m30[0m [0m[34m│[0m use std::[0m[33mtype_name[0m;
+   [0m[34m│[0m          [0m[33m^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'type_name'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/actions/owned.move:41:56
+   [0m[34m│[0m
+[0m[34m41[0m [0m[34m│[0m use account_extensions::framework_action_types::{Self, [0m[33mOwnedWithdraw[0m};
+   [0m[34m│[0m                                                        [0m[33m^^^^^^^^^^^^^[0m [0m[33mUnused 'use' of alias 'OwnedWithdraw'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+    [0m[34m┌─[0m ./sources/actions/owned.move:43:1
+    [0m[34m│[0m
+[0m[34m 43[0m [0m[34m│[0m [0m[33muse fun account_protocol::intents::add_typed_action as Intent.add_typed_action;[0m
+    [0m[34m│[0m [0m[33m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m [0m[33mUnnecessary method alias 'account_protocol::intents::Intent.add_typed_action' for 'account_protocol::intents::add_typed_action'[0m
+    [0m[34m│[0m
+    [0m[34m┌─[0m ./sources/types/intents.move:183:12
+    [0m[34m│[0m
+[0m[34m183[0m [0m[34m│[0m public fun add_typed_action<Outcome, Action: store, T: drop, IW: drop>(
+    [0m[34m│[0m            [0m[34m----------------[0m [0m[34mThe same alias was previously declared here[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+    [0m[34m┌─[0m ./sources/actions/owned.move:129:5
+    [0m[34m│[0m
+[0m[34m129[0m [0m[34m│[0m     [0m[33maccount[0m: &Account<Config>,
+    [0m[34m│[0m     [0m[33m^^^^^^^[0m [0m[33mUnused parameter 'account'. Consider removing or prefixing with an underscore: '_account'[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W02021][0m[1m: duplicate alias[0m
+   [0m[34m┌─[0m ./sources/account.move:48:13
+   [0m[34m│[0m
+[0m[34m48[0m [0m[34m│[0m     option::[0m[33mOption[0m,
+   [0m[34m│[0m             [0m[33m^^^^^^[0m [0m[33mUnnecessary alias 'Option' for module member 'std::option::Option'. This alias is provided by default[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/account.move:57:5
+   [0m[34m│[0m
+[0m[34m57[0m [0m[34m│[0m     [0m[33mevent[0m,
+   [0m[34m│[0m     [0m[33m^^^^^[0m [0m[33mUnused 'use' of alias 'event'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09001][0m[1m: unused alias[0m
+   [0m[34m┌─[0m ./sources/account.move:62:23
+   [0m[34m│[0m
+[0m[34m62[0m [0m[34m│[0m     version_witness::{[0m[33mSelf[0m, VersionWitness},
+   [0m[34m│[0m                       [0m[33m^^^^[0m [0m[33mUnused 'use' of alias 'version_witness'. Consider removing it[0m
+   [0m[34m│[0m
+   [0m[34m=[0m This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/account.move:216:26
+    [0m[34m│[0m
+[0m[34m216[0m [0m[34m│[0m                 vec_set::[0m[33msize[0m(&tracker.whitelisted_types) < max_whitelist_size(),
+    [0m[34m│[0m                          [0m[33m^^^^[0m [0m[33mThe function 'sui::vec_set::size' is deprecated: Renamed to `length` for consistency.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/account.move:699:26
+    [0m[34m│[0m
+[0m[34m699[0m [0m[34m│[0m                 vec_set::[0m[33msize[0m(&tracker.whitelisted_types) < max_whitelist_size(),
+    [0m[34m│[0m                          [0m[33m^^^^[0m [0m[33mThe function 'sui::vec_set::size' is deprecated: Renamed to `length` for consistency.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/account.move:734:32
+    [0m[34m│[0m
+[0m[34m734[0m [0m[34m│[0m     let type_addr = type_name::[0m[33mget_address[0m(&type_name);
+    [0m[34m│[0m                                [0m[33m^^^^^^^^^^^[0m [0m[33mThe function 'std::type_name::get_address' is deprecated: Renamed to `address_string` for consistency.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W04037][0m[1m: deprecated usage[0m
+    [0m[34m┌─[0m ./sources/account.move:738:38
+    [0m[34m│[0m
+[0m[34m738[0m [0m[34m│[0m         let module_name = type_name::[0m[33mget_module[0m(&type_name);
+    [0m[34m│[0m                                      [0m[33m^^^^^^^^^^[0m [0m[33mThe function 'std::type_name::get_module' is deprecated: Renamed to `module_string` for consistency.[0m
+    [0m[34m│[0m
+    [0m[34m=[0m This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+[0m[1m[38;5;11mwarning[W09002][0m[1m: unused variable[0m
+     [0m[34m┌─[0m ./sources/account.move:1165:73
+     [0m[34m│[0m
+[0m[34m1165[0m [0m[34m│[0m public fun track_object_addition<Config>(account: &mut Account<Config>, [0m[33mid[0m: ID) {
+     [0m[34m│[0m                                                                         [0m[33m^^[0m [0m[33mUnused parameter 'id'. Consider removing or prefixing with an underscore: '_id'[0m
+     [0m[34m│[0m
+     [0m[34m=[0m This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

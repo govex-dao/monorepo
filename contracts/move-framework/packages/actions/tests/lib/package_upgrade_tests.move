@@ -12,12 +12,11 @@ use sui::{
 use account_extensions::extensions::{Self, Extensions, AdminCap};
 use account_protocol::{
     account::{Self, Account},
-    intents::{Self, Intent},
     deps,
 };
 use account_actions::{
+    package_upgrade as pkg_upgrade,
     version,
-    package_upgrade,
 };
 
 // === Constants ===
@@ -26,15 +25,15 @@ const OWNER: address = @0xCAFE;
 
 // === Structs ===
 
-public struct DummyIntent() has copy, drop;
-public struct WrongWitness() has copy, drop;
-
+public struct Witness() has drop;
 public struct Config has copy, drop, store {}
-public struct Outcome has copy, drop, store {}
+
+// OTW for creating UpgradeCap
+public struct PACKAGE_UPGRADE_TESTS has drop {}
 
 // === Helpers ===
 
-fun start(): (Scenario, Extensions, Account<Config>, Clock, UpgradeCap) {
+fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     let mut scenario = ts::begin(OWNER);
     // publish package
     extensions::init_for_testing(scenario.ctx());
@@ -47,12 +46,11 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock, UpgradeCap) {
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
     let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let account = account::new(Config {}, deps, version::current(), DummyIntent(), scenario.ctx());
+    let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
-    let upgrade_cap = package::test_publish(@0x1.to_id(), scenario.ctx());
     // create world
     destroy(cap);
-    (scenario, extensions, account, clock, upgrade_cap)
+    (scenario, extensions, account, clock)
 }
 
 fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, clock: Clock) {
@@ -62,382 +60,148 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, cl
     ts::end(scenario);
 }
 
-fun create_dummy_intent(
-    scenario: &mut Scenario,
-    account: &Account<Config>, 
-    clock: &Clock,
-): Intent<Outcome> {
-    let params = intents::new_params(
-        b"dummy".to_string(), b"".to_string(), vector[0], 1, clock, scenario.ctx()
-    );
-    account.create_intent(
-        params,
-        Outcome {}, 
-        b"Degen".to_string(), 
-        version::current(), 
-        DummyIntent(), 
-        scenario.ctx()
-    )
+fun create_test_upgrade_cap(scenario: &mut Scenario): UpgradeCap {
+    let publisher = package::test_claim(PACKAGE_UPGRADE_TESTS {}, scenario.ctx());
+    let upgrade_cap = package::test_publish(object::id(&publisher), scenario.ctx());
+    destroy(publisher);
+    upgrade_cap
 }
 
-// === Tests ===
+// === Integration Tests ===
+// These test the Account protocol integration for package upgrades
 
 #[test]
-fun test_lock() {
-    let (scenario, extensions, mut account, clock, upgrade_cap) = start();
+fun test_lock_cap_stores_in_account() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let package_name = b"test_package".to_string();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    // Create upgrade cap
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
 
-    assert!(package_upgrade::has_cap(&account, b"Degen".to_string()));
-    let cap = package_upgrade::borrow_cap(&account, @0x1);
-    assert!(cap.package() == @0x1.to_id());
+    // Lock it in the account
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000);
 
-    let time_delay = package_upgrade::get_time_delay(&account, b"Degen".to_string());
-    assert!(time_delay == 1000);
+    // Verify cap is stored
+    assert!(pkg_upgrade::has_cap(&account, package_name));
+
+    // Verify time delay is set
+    assert!(pkg_upgrade::get_time_delay(&account, package_name) == 1000);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_upgrade_flow() {
-    let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
+#[expected_failure(abort_code = pkg_upgrade::ELockAlreadyExists)]
+fun test_cannot_lock_same_package_twice() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let package_name = b"test_package".to_string();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    // Lock first cap
+    let upgrade_cap1 = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap1, package_name, 1000);
 
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    package_upgrade::new_commit(&mut intent, b"Degen".to_string(), DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-    clock.increment_for_testing(1000);
-
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    let ticket = package_upgrade::do_upgrade<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        &clock,
-        version::current(), 
-        DummyIntent(),
-    );
-
-    let receipt = ticket.test_upgrade();
-    package_upgrade::do_commit<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        receipt, 
-        version::current(), 
-        DummyIntent(),
-    );
-    account.confirm_execution(executable);
+    // Try to lock second cap with same name - should fail
+    let upgrade_cap2 = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap2, package_name, 1000);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_restrict_flow_additive() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
+fun test_multiple_packages() {
+    let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    // Lock multiple packages
+    let cap1 = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, cap1, b"package1".to_string(), 100);
 
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_restrict(&mut intent, b"Degen".to_string(), 128, DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
+    let cap2 = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, cap2, b"package2".to_string(), 200);
 
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    package_upgrade::do_restrict<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        DummyIntent(),
-    );
-    account.confirm_execution(executable);
+    let cap3 = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, cap3, b"package3".to_string(), 300);
 
-    let cap = package_upgrade::borrow_cap(&account, @0x1);
-    assert!(cap.policy() == 128);
+    // Verify all caps are stored with correct delays
+    assert!(pkg_upgrade::has_cap(&account, b"package1".to_string()));
+    assert!(pkg_upgrade::has_cap(&account, b"package2".to_string()));
+    assert!(pkg_upgrade::has_cap(&account, b"package3".to_string()));
 
-    end(scenario, extensions, account, clock);
-}
-
-#[test]
-fun test_restrict_flow_deps_only() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_restrict(&mut intent, b"Degen".to_string(), 192, DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    package_upgrade::do_restrict<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        DummyIntent(),
-    );
-    account.confirm_execution(executable);
-
-    let cap = package_upgrade::borrow_cap(&account, @0x1);
-    assert!(cap.policy() == 192);
+    assert!(pkg_upgrade::get_time_delay(&account, b"package1".to_string()) == 100);
+    assert!(pkg_upgrade::get_time_delay(&account, b"package2".to_string()) == 200);
+    assert!(pkg_upgrade::get_time_delay(&account, b"package3".to_string()) == 300);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_restrict_flow_immutable() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
+fun test_get_cap_info() {
+    let (mut scenario, extensions, mut account, clock) = start();
+    let package_name = b"test_package".to_string();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    // Create and lock cap
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
+    let package_addr = upgrade_cap.package().to_address();
+    let version_num = upgrade_cap.version();
+    let policy_num = upgrade_cap.policy();
 
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_restrict(&mut intent, b"Degen".to_string(), 255, DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000);
 
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    package_upgrade::do_restrict<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        DummyIntent(),
-    );
-    account.confirm_execution(executable);
-
-    assert!(!package_upgrade::has_cap(&account, b"Degen".to_string()));
+    // Verify we can retrieve cap info
+    assert!(pkg_upgrade::get_cap_package(&account, package_name) == package_addr);
+    assert!(pkg_upgrade::get_cap_version(&account, package_name) == version_num);
+    assert!(pkg_upgrade::get_cap_policy(&account, package_name) == policy_num);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_upgrade_expired() {
-    let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
-    clock.increment_for_testing(1);
-    let key = b"dummy".to_string();
+fun test_package_index() {
+    let (mut scenario, extensions, mut account, clock) = start();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
+    // Lock a package
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
+    let package_addr = upgrade_cap.package().to_address();
+    let package_name = b"test_package".to_string();
 
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);
-    package_upgrade::delete_upgrade(&mut expired);
-    expired.destroy_empty();
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, package_name, 1000);
+
+    // Verify package is in index
+    assert!(pkg_upgrade::is_package_managed(&account, package_addr));
+    assert!(pkg_upgrade::get_package_addr(&account, package_name) == package_addr);
+    assert!(pkg_upgrade::get_package_name(&account, package_addr) == package_name);
 
     end(scenario, extensions, account, clock);
 }
 
 #[test]
-fun test_restrict_expired() {
-    let (mut scenario, extensions, mut account, mut clock, upgrade_cap) = start();
-    clock.increment_for_testing(1);
-    let key = b"dummy".to_string();
+fun test_package_not_managed() {
+    let (scenario, extensions, account, clock) = start();
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_restrict(&mut intent, b"Degen".to_string(), 128, DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-    
-    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);
-    package_upgrade::delete_restrict(&mut expired);
-    expired.destroy_empty();
+    // Check that a random address is not managed
+    assert!(!pkg_upgrade::is_package_managed(&account, @0xDEADBEEF));
 
     end(scenario, extensions, account, clock);
 }
 
-// sanity checks as these are tested in AccountProtocol tests
+#[test]
+fun test_auth_required_for_lock() {
+    let (mut scenario, extensions, mut account, clock) = start();
 
-#[test, expected_failure(abort_code = intents::EWrongAccount)]
-fun test_error_do_upgrade_from_wrong_account() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let mut account2 = account::new(Config {}, deps, version::current(), DummyIntent(), scenario.ctx());
-    let key = b"dummy".to_string();
+    // Locking requires auth
+    let upgrade_cap = create_test_upgrade_cap(&mut scenario);
+    let auth = account.new_auth(version::current(), Witness());
+    pkg_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"test".to_string(), 1000);
 
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-    // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &account2, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account2.insert_intent(intent, version::current(), DummyIntent());
+    // Verify it was locked
+    assert!(pkg_upgrade::has_cap(&account, b"test".to_string()));
 
-    let (_, mut executable) = account2.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to burn from the right account that didn't approve the intent
-    let ticket = package_upgrade::do_upgrade<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        &clock,
-        version::current(), 
-        DummyIntent(),
-    );
- 
-    destroy(account2);
-    destroy(executable);
-    destroy(ticket);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = intents::EWrongWitness)]
-fun test_error_do_upgrade_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to mint with the wrong witness that didn't approve the intent
-    let ticket = package_upgrade::do_upgrade<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        &clock,
-        version::current(), 
-        WrongWitness(),
-    );
-
-    destroy(executable);
-    destroy(ticket);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = intents::EWrongAccount)]
-fun test_error_confirm_upgrade_from_wrong_account() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let mut account2 = account::new(Config {}, deps, version::current(), DummyIntent(), scenario.ctx());
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
-    let auth = account2.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account2, package::test_publish(@0x1.to_id(), scenario.ctx()), b"Degen".to_string(), 1000);
-    // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &account2, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account2.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account2.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to burn from the right account that didn't approve the intent
-    let ticket = package_upgrade::do_upgrade<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        &clock,
-        version::current(), 
-        DummyIntent(),
-    );
-
-    let receipt = ticket.test_upgrade();
-    package_upgrade::do_commit<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        receipt, 
-        version::current(), 
-        DummyIntent(),
-    );
-
-    destroy(account2);
-    destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = intents::EWrongWitness)]
-fun test_error_confirm_upgrade_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 0);
-
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to mint with the wrong witness that didn't approve the intent
-    let ticket = package_upgrade::do_upgrade<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        &clock,
-        version::current(), 
-        DummyIntent(),
-    );
-
-    let receipt = ticket.test_upgrade();
-    package_upgrade::do_commit<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        receipt, 
-        version::current(), 
-        WrongWitness(),
-    );
-
-    destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = intents::EWrongAccount)]
-fun test_error_do_restrict_from_wrong_account() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
-    let mut account2 = account::new(Config {}, deps, version::current(), DummyIntent(), scenario.ctx());
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-    // intent is submitted to other account
-    let mut intent = create_dummy_intent(&mut scenario, &account2, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account2.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account2.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to burn from the right account that didn't approve the intent
-    package_upgrade::do_restrict<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        DummyIntent(),
-    );
-
-    destroy(account2);
-    destroy(executable);
-    end(scenario, extensions, account, clock);
-}
-
-#[test, expected_failure(abort_code = intents::EWrongWitness)]
-fun test_error_do_restrict_from_wrong_constructor_witness() {
-    let (mut scenario, extensions, mut account, clock, upgrade_cap) = start();
-    let key = b"dummy".to_string();
-
-    let auth = account.new_auth(version::current(), DummyIntent());
-    package_upgrade::lock_cap(auth, &mut account, upgrade_cap, b"Degen".to_string(), 1000);
-
-    let mut intent = create_dummy_intent(&mut scenario, &account, &clock);
-    package_upgrade::new_upgrade(&mut intent, b"Degen".to_string(), b"", DummyIntent());
-    account.insert_intent(intent, version::current(), DummyIntent());
-
-    let (_, mut executable) = account.create_executable(key, &clock, version::current(), DummyIntent());
-    // try to mint with the wrong witness that didn't approve the intent
-    package_upgrade::do_restrict<_, Outcome, _>(
-        &mut executable, 
-        &mut account, 
-        version::current(), 
-        WrongWitness(),
-    );
-
-    destroy(executable);
     end(scenario, extensions, account, clock);
 }

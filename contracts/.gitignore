@@ -1,0 +1,35 @@
+# Build directories
+*/build/
+build/
+
+# Move build artifacts
+*.mv
+*.bcs
+
+# Deployment logs and results
+deployment-logs/
+*_deploy.log
+*_deploy_output.log
+deploy_output.log
+deploy.log
+deployment_*.log
+deployment_*.json
+deployment_results_*.json
+deployment_verified_*.log
+deployment_verified_*.json
+full_deployment*.log
+final_deployment*.log
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+
+# Published addresses
+published_addresses.txt
+deploy_result.txt

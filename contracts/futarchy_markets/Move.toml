@@ -1,0 +1,16 @@
+[package]
+name = "futarchy_markets"
+edition = "2024"
+license = "BSL"
+
+[dependencies]
+futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+futarchy_types = { local = "../futarchy_types" }
+futarchy_core = { local = "../futarchy_core" }
+futarchy_seal_utils = { local = "../futarchy_seal_utils" }
+[addresses]
+futarchy_markets = "0x42d84d8ee0ba4bc75cf0ce327624c187eabcc82c0d934187db8c7f5913a16987"
+futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
+futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
+futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
+futarchy_seal_utils = "0x82844122f7e106439b87948ea938a7a043273f90ec409e0c02b201c7281b55e2"

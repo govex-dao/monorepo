@@ -1,0 +1,47 @@
+## Package Size Report (Sui Max Limit: 131KB)
+
+### ⚠️ WARNING: 2 Move Framework packages EXCEED the 131KB limit!
+
+### Deployed Packages:
+
+1. **AccountExtensions**: 48.91 KB ✓ SAFE
+   - Storage Cost: 48,913,600 MIST
+   - PackageID: 0x0a18cccb215c49f6eeacc1c4b9e97893b4688e558b7fe58ccacd64797c90ac76
+
+2. **AccountProtocol**: 223.68 KB ✗ EXCEEDS LIMIT (170% of max)
+   - Storage Cost: 223,683,200 MIST
+   - PackageID: 0x17372c27d7bc68370c36978ad125189e39922a2a395b8e3041a13c7fe6c89d3e
+   - ⚠️ THIS PACKAGE IS TOO LARGE FOR MAINNET!
+
+3. **AccountActions**: 610.26 KB ✗ EXCEEDS LIMIT (466% of max)
+   - Storage Cost: 610,257,200 MIST
+   - PackageID: 0x40874c7047dc00806abce7d4a807606dca1f1c7f616f0b340000c8eb3ebcc84d
+   - ⚠️ THIS PACKAGE IS TOO LARGE FOR MAINNET!
+
+4. **futarchy_types**: 10.21 KB ✓ SAFE
+   - Storage Cost: 10,206,800 MIST
+   - PackageID: 0x2a146ca44ee81a9f689054dea849cfa671d6a5ad6e90d5203d4dd26121d87b2d
+
+5. **futarchy_one_shot_utils**: 66.28 KB ✓ SAFE
+   - Storage Cost: 66,279,600 MIST
+   - PackageID: 0x01a50643840c32dcfea10d0ffa5be071257314ce5bd9d74e196c93154b52a9da
+
+### Remaining Packages (deployment in progress):
+- futarchy_seal_utils
+- futarchy_core
+- futarchy_markets
+- futarchy_vault
+- futarchy_multisig
+- futarchy_oracle
+- futarchy_payments
+- futarchy_streams
+- futarchy_lifecycle
+- futarchy_actions
+- futarchy_legal_actions
+- futarchy_governance_actions
+- futarchy_dao
+
+### Summary:
+- **Devnet allows larger packages** - That's why deployment succeeded
+- **Mainnet has 131KB limit** - AccountProtocol and AccountActions will fail
+- **Action needed**: These packages must be split or refactored before mainnet deployment

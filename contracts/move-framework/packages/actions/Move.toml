@@ -6,9 +6,7 @@ authors = [ "Thouny (thouny@tuta.io)", "Greshamscode" ]
 
 [dependencies]
 AccountProtocol = { local = "../protocol" }
-Kiosk = { local = "../../deps/kiosk" }
 
 [addresses]
-account_actions = "0xf477dbfad6ab1de1fdcb6042c0afeda2aa5bf12eb7ef42d280059fc8d6c36c94"
-account_protocol = "0x10c87c29ea5d5674458652ababa246742a763f9deafed11608b7f0baea296484"
-account_extensions = "0x87bee60d3ea6dc5b42e1074134373af27733fb3c5ebc3ac8e013901426d85d53"
+account_actions = "0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784"
+account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
