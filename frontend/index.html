@@ -4,18 +4,11 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/images/curved-4.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Loading...</title>
-    <!-- Ensure SEO tools see an initial description -->
-    <meta name="description" content="From Index" data-rh="true" />
-
-    <meta property="og:title" content="Trade on Govex" />
-    <meta property="og:description" content="Organization governance powered by markets" />
-    <meta property="og:image" content="https://www.govex.ai/images/twitter-image-govex.png" />
-    <meta property="og:url" content="https://govex.ai" />
-    <meta property="og:type" content="website" />
+    <!--app-head-->
     
     <!-- Link to verify the new image URL is working -->
-    <link rel="icon" type="image/png" href="/images/gvx-icon.png" />
+    <link rel="icon" type="image/png" href="/images/og.png" />
+    
 
     <style>
       /*
@@ -64,7 +57,18 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root"><!--app-html--></div>
+    <script>
+      // Hide content initially in dev mode (localhost) to prevent style flash
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        document.documentElement.style.visibility = 'hidden';
+        document.addEventListener('DOMContentLoaded', () => {
+          requestAnimationFrame(() => {
+            document.documentElement.style.visibility = 'visible';
+          });
+        });
+      }
+    </script>
+    <script type="module" src="/src/entry-client.tsx"></script>
   </body>
 </html>

@@ -1,8 +1,9 @@
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { processAndGetBase64Icon } from '../imageUtils';
 import aiReviewRouter from './routes/ai-review';
-
+import ogRouter from './routes/og';
 
 import { prisma } from '../db';
 import {
@@ -13,6 +14,7 @@ import {
 	WhereParamTypes,
 } from '../utils/api-queries';
 import { swapCache, SWAP_CACHE_TTL, cleanupExpiredCache, getCacheStats } from '../utils/cache-utils';
+import { serializeBigInt } from '../utils/bigint';
 
 // Clean up expired cache entries every minute
 setInterval(() => {
@@ -25,6 +27,23 @@ app.use(express.json());
 
 // Mount AI Review routes
 app.use(aiReviewRouter);
+
+// Mount OG routes with rate limiting only in production
+if (process.env.NODE_ENV === 'production') {
+  const ogImageLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50, // Limit each IP to 50 requests per window
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: 'Too many OG image requests, please try again later',
+    handler: (req, res) => {
+      res.status(429).json({ error: 'Too many requests, please try again later' });
+    }
+  });
+  app.use('/og', ogImageLimiter, ogRouter);
+} else {
+  app.use('/og', ogRouter);
+}
 
 app.get('/', async (req, res) => {
 	res.send({ message: '🚀 API is functional 🚀' });
@@ -542,7 +561,7 @@ app.get('/proposals/:id', async (req, res) => {
               asset_symbol: true,
               stable_symbol: true,
               asset_decimals: true,  
-              stable_decimals: true, 
+              stable_decimals: true,
               verification: {
                 select: {
                   verified: true
@@ -612,10 +631,6 @@ app.get('/proposals/:id', async (req, res) => {
         res.status(404).send({ message: 'Proposal not found' });
         return;
       }
-  
-      // Helper function to serialize BigInt values
-      const serializeBigInt = (value: any): any =>
-        typeof value === 'bigint' ? value.toString() : value;
   
       // Build the transformed proposal,
       // manually converting necessary fields to ensure JSON compatibility.
@@ -751,7 +766,6 @@ app.get('/swaps', async (req, res) => {
             
             // Check if cache is valid (within 5 seconds)
             if (cached && (Date.now() - cached.timestamp < SWAP_CACHE_TTL)) {
-                console.log(`Cache hit for proposal ${marketId}`);
                 res.send(cached.data);
                 return;
             }
@@ -789,7 +803,6 @@ app.get('/swaps', async (req, res) => {
                 data: response,
                 timestamp: Date.now()
             });
-            console.log(`Cache set for proposal ${marketId}`);
         }
 
         res.send(response);
@@ -826,4 +839,4 @@ app.get('/results/:proposalId', async (req, res) => {
 });
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const server = app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Server ready at: http://0.0.0.0:${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server ready at: http://localhost:${PORT}`));

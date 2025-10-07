@@ -1,6 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db';
+import { safeBigInt } from '../utils/bigint';
 
 interface VerificationData {
     dao_id: string;
@@ -10,15 +11,6 @@ interface VerificationData {
     validator: string;
     timestamp: string;
     reject_reason: string;
-}
-
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
 }
 
 function validateVerificationData(data: any): data is VerificationData {

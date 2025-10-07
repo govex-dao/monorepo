@@ -241,8 +241,6 @@ const CreateDaoForm = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log(formData);
-    console.log(assetMetadata, stableMetadata);
     e.preventDefault();
 
     if (!currentAccount?.address) {

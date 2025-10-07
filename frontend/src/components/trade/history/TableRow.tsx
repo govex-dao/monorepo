@@ -14,8 +14,7 @@ const formatNumber = (() => {
     const absNum = Math.abs(num);
     const isNegative = num < 0;
     let result: string;
-    
-    if (absNum < 0.000001) {
+    if (num < 0.000001) {
       result = num.toExponential(2);
     } else if (absNum >= 1000000) {
       result = absNum.toLocaleString(undefined, {
@@ -35,8 +34,6 @@ const formatNumber = (() => {
       const decimalPlaces = Math.min(6, leadingZeros + 3);
       result = absNum.toFixed(decimalPlaces).replace(/\.?0+$/, "");
     }
-    
-    if (isNegative) result = "-" + result;
 
     memo.set(num, result);
     return result;

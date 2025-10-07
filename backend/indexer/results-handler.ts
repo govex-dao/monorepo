@@ -1,6 +1,7 @@
 import { SuiEvent } from '@mysten/sui/client';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { prisma } from '../db';
+import { safeBigInt } from '../utils/bigint';
 
 interface ProposalResult {
     proposal_id: string;
@@ -23,15 +24,6 @@ type ProposalResultCreate = {
         };
     };
 };
-
-function safeBigInt(value: string | undefined | null, defaultValue: bigint = 0n): bigint {
-    if (!value) return defaultValue;
-    try {
-        return BigInt(value);
-    } catch {
-        return defaultValue;
-    }
-}
 
 function validateResultData(data: any): data is ProposalResult {
     const requiredFields = [
