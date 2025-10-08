@@ -554,6 +554,40 @@ const TradeForm: React.FC<TradeFormProps> = ({
           step={1 / Number(toToken.scale)}
         />
 
+        {/* Existing tokens breakdown */}
+        {amount && parseFloat(amount) > 0 && filteredTokens.length > 0 && (() => {
+          const totalExisting = filteredTokens.reduce(
+            (sum, token) => sum + BigInt(token.balance),
+            0n,
+          );
+          const existingAmount = Number(totalExisting) / Number(fromToken.scale);
+          const amountNum = parseFloat(amount);
+
+          if (existingAmount > 0 && existingAmount < amountNum) {
+            const fromWallet = amountNum - existingAmount;
+            return (
+              <div className="bg-blue-900/20 border border-blue-700/30 rounded-md p-2.5 text-xs space-y-1">
+                <div className="flex justify-between text-gray-300">
+                  <span>Total swap amount:</span>
+                  <span className="font-medium text-white">{amountNum.toFixed(6)} {fromToken.symbol}</span>
+                </div>
+                <div className="flex justify-between text-blue-300">
+                  <span>├─ From existing tokens:</span>
+                  <span className="font-medium">{existingAmount.toFixed(6)} {fromToken.symbol}</span>
+                </div>
+                <div className="flex justify-between text-yellow-300">
+                  <span>└─ From wallet:</span>
+                  <span className="font-medium">{fromWallet.toFixed(6)} {fromToken.symbol}</span>
+                </div>
+                <div className="text-gray-400 text-[10px] mt-1 pt-1 border-t border-gray-700">
+                  Wallet will show {fromWallet.toFixed(2)} {fromToken.symbol} (reusing existing tokens)
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {/* Details of swap amounts */}
         <TradeDetails
           amount={amount}
