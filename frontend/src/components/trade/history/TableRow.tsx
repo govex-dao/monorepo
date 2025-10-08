@@ -45,17 +45,21 @@ const formatPercentage = (num: number): string => {
   if (num === 0) return "0.00";
 
   const absNum = Math.abs(num);
+  let formatted: string;
 
   // For percentages, use fixed decimal places
   if (absNum >= 10) {
-    return absNum.toFixed(1); // e.g., 12.5
+    formatted = absNum.toFixed(1); // e.g., 12.5
   } else if (absNum >= 1) {
-    return absNum.toFixed(2); // e.g., 1.13
+    formatted = absNum.toFixed(2); // e.g., 1.13
   } else if (absNum >= 0.01) {
-    return absNum.toFixed(3); // e.g., 0.125
+    formatted = absNum.toFixed(3); // e.g., 0.125
   } else {
-    return absNum.toFixed(4); // e.g., 0.0013
+    formatted = absNum.toFixed(4); // e.g., 0.0013
   }
+
+  // Remove trailing zeros (e.g., "0.230" -> "0.23")
+  return parseFloat(formatted).toString();
 };
 
 // Table row component
