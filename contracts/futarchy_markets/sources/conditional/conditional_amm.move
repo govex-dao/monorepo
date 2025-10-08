@@ -3,7 +3,7 @@ module futarchy_markets::conditional_amm;
 use futarchy_markets::market_state::MarketState;
 use futarchy_one_shot_utils::math;
 use futarchy_markets::oracle::{Self, Oracle};
-use futarchy_markets::ring_buffer_oracle::{Self, RingBufferOracle};
+use futarchy_markets::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
 use sui::clock::Clock;
 use sui::event;
@@ -61,8 +61,8 @@ public struct LiquidityPool has key, store {
     asset_reserve: u64,
     stable_reserve: u64,
     fee_percent: u64,
-    oracle: Oracle,  // Original write-through oracle for futarchy
-    ring_buffer_oracle: RingBufferOracle,  // Ring buffer oracle for lending protocols
+    oracle: Oracle,  // Futarchy oracle (for determining winner, internal use)
+    simple_twap: SimpleTWAP,  // SimpleTWAP oracle (for external consumers)
     protocol_fees: u64, // Track accumulated stable fees
     lp_supply: u64, // Track total LP shares for this pool
 }
@@ -112,6 +112,7 @@ public fun new_pool(
     twap_initial_observation: u128,
     twap_start_delay: u64,
     twap_step_max: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): LiquidityPool {
     assert!(initial_asset > 0 && initial_stable > 0, EZeroAmount);
@@ -119,18 +120,24 @@ public fun new_pool(
     assert!(k >= MINIMUM_LIQUIDITY, ELowLiquidity);
     assert!(fee_percent <= constants::max_amm_fee_bps(), EInvalidFeeRate);
 
-    let twap_initialization_price = twap_initial_observation;
-    let initial_price = math::mul_div_to_128(initial_stable, constants::basis_points(), initial_asset);
+    // Use twap_initial_observation for BOTH oracles to ensure consistency
+    let initial_price = twap_initial_observation;
 
     check_price_under_max(initial_price);
-    check_price_under_max(twap_initialization_price);
 
-    // Initialize oracle
+    // Initialize futarchy oracle (for determining winner)
     let oracle = oracle::new_oracle(
-        twap_initialization_price,
+        initial_price,
         twap_start_delay,
         twap_step_max,
-        ctx, // Add ctx parameter here
+        ctx,
+    );
+
+    // Initialize SimpleTWAP oracle (for external consumers)
+    // Uniswap V2 style - no capping
+    let simple_twap_oracle = simple_twap::new(
+        initial_price,
+        clock,
     );
 
     // Create pool object
@@ -142,19 +149,12 @@ public fun new_pool(
         stable_reserve: initial_stable,
         fee_percent,
         oracle,
-        ring_buffer_oracle: ring_buffer_oracle::new(1440), // 24 hours of observations
+        simple_twap: simple_twap_oracle,
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
     };
 
     pool
-}
-
-// === Getter Functions ===
-
-/// Get ring buffer oracle reference (for spot_oracle_interface)
-public fun get_ring_buffer_oracle(pool: &LiquidityPool): &RingBufferOracle {
-    &pool.ring_buffer_oracle
 }
 
 // === Core Swap Functions ===
@@ -217,9 +217,9 @@ public fun swap_asset_to_stable(
         timestamp,
         old_price,
     );
-    
-    // Also update ring buffer oracle for continuous price feeds
-    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, old_price, clock);
+
+    // Update SimpleTWAP oracle (for external consumers)
+    simple_twap::update(&mut pool.simple_twap, old_price, clock);
 
     // Update reserves.
     pool.asset_reserve = pool.asset_reserve + amount_in;
@@ -309,9 +309,9 @@ public fun swap_stable_to_asset(
         timestamp,
         old_price,
     );
-    
-    // Also update ring buffer oracle for continuous price feeds
-    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, old_price, clock);
+
+    // Update SimpleTWAP oracle (for external consumers)
+    simple_twap::update(&mut pool.simple_twap, old_price, clock);
 
     // Update reserves. The amount added to the stable reserve is the portion used for the swap
     // PLUS the LP share of the fee. The protocol share was already removed.
@@ -401,11 +401,11 @@ public fun add_liquidity_proportional(
     pool.asset_reserve = new_asset_reserve;
     pool.stable_reserve = new_stable_reserve;
     pool.lp_supply = new_lp_supply;
-    
-    // Update ring buffer oracle with new price after liquidity change
+
+    // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
-    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, new_price, clock);
-    
+    simple_twap::update(&mut pool.simple_twap, new_price, clock);
+
     event::emit(LiquidityAdded {
         market_id: pool.market_id,
         outcome: pool.outcome_idx,
@@ -451,10 +451,10 @@ public fun remove_liquidity_proportional(
     pool.asset_reserve = pool.asset_reserve - asset_to_remove;
     pool.stable_reserve = pool.stable_reserve - stable_to_remove;
     pool.lp_supply = pool.lp_supply - lp_amount;
-    
-    // Update ring buffer oracle with new price after liquidity change
+
+    // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
-    ring_buffer_oracle::write(&mut pool.ring_buffer_oracle, new_price, clock);
+    simple_twap::update(&mut pool.simple_twap, new_price, clock);
 
     event::emit(LiquidityRemoved {
         market_id: pool.market_id,
@@ -465,7 +465,7 @@ public fun remove_liquidity_proportional(
         sender: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
-    
+
     (asset_to_remove, stable_to_remove)
 }
 
@@ -490,6 +490,10 @@ fun write_observation(oracle: &mut Oracle, timestamp: u64, price: u128) {
 
 public fun get_oracle(pool: &LiquidityPool): &Oracle {
     &pool.oracle
+}
+
+public fun get_simple_twap(pool: &LiquidityPool): &SimpleTWAP {
+    &pool.simple_twap
 }
 
 // === View Functions ===
@@ -637,8 +641,11 @@ public fun create_test_pool(
     fee_percent: u64,
     asset_reserve: u64,
     stable_reserve: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): LiquidityPool {
+    let initial_price = math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve);
+
     LiquidityPool {
         id: object::new(ctx),
         market_id,
@@ -647,12 +654,12 @@ public fun create_test_pool(
         stable_reserve,
         fee_percent,
         oracle: oracle::new_oracle(
-            math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve),
+            initial_price,
             0, // Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
             1_000,
-            ctx, // Add ctx parameter here
+            ctx,
         ),
-        ring_buffer_oracle: ring_buffer_oracle::new(1440), // 24 hours of observations
+        simple_twap: simple_twap::new(initial_price, clock),  // Uniswap V2 style
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
     }
@@ -668,11 +675,11 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         stable_reserve: _,
         fee_percent: _,
         oracle,
-        ring_buffer_oracle,
+        simple_twap,
         protocol_fees: _,
         lp_supply: _,
     } = pool;
     id.delete();
     oracle.destroy_for_testing();
-    ring_buffer_oracle::destroy_for_testing(ring_buffer_oracle);
+    simple_twap.destroy_for_testing();
 }

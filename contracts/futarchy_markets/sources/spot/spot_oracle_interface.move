@@ -22,8 +22,8 @@
 /// without knowing about proposals, conditional AMMs, or quantum liquidity.
 /// 
 /// HOW IT WORKS:
-/// - Normal times: Reads from spot's ring_buffer_oracle
-/// - During proposals: Reads from winning conditional's ring_buffer_oracle
+/// - Normal times: Reads from spot's base fair value TWAP oracle
+/// - During proposals: Reads from winning conditional's futarchy oracle
 /// - Seamless transition with no gaps in price feed
 /// 
 /// ============================================================================
@@ -31,17 +31,18 @@
 module futarchy_markets::spot_oracle_interface;
 
 use sui::clock::Clock;
-use futarchy_markets::ring_buffer_oracle::{Self, RingBufferOracle};
-use futarchy_markets::spot_amm::SpotAMM;
-use futarchy_markets::conditional_amm::LiquidityPool;
+use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets::simple_twap::{Self, SimpleTWAP};
 use std::vector;
+use std::option;
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const LENDING_WINDOW_SECONDS: u64 = 1800; // 30 minutes standard
-const GOVERNANCE_MAX_WINDOW: u64 = 777600; // 9 days maximum
+const GOVERNANCE_MAX_WINDOW: u64 = 2_592_000; // 30 days maximum
 
 // Errors
 const ENoOracles: u64 = 1;
@@ -66,8 +67,8 @@ public fun get_lending_twap<AssetType, StableType>(
         // This is temporary - winner can change until finalization
         get_highest_conditional_twap(conditional_pools, LENDING_WINDOW_SECONDS, clock)
     } else {
-        // Get TWAP from spot's ring buffer (includes merged history)
-        ring_buffer_oracle::get_lending_twap(spot_pool.get_ring_buffer_oracle(), clock)
+        // Get TWAP from spot's SimpleTWAP (30-day window)
+        spot_pool.get_twap(option::none(), clock)
     }
 }
 
@@ -75,26 +76,27 @@ public fun get_lending_twap<AssetType, StableType>(
 public fun get_twap_custom_window<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
-    seconds: u64,
+    _seconds: u64,  // Note: Currently ignored, spot uses 30-day window
     clock: &Clock,
 ): u128 {
     if (spot_pool.is_locked_for_proposal()) {
-        get_highest_conditional_twap(conditional_pools, seconds, clock)
+        get_highest_conditional_twap(conditional_pools, _seconds, clock)
     } else {
-        ring_buffer_oracle::get_twap(spot_pool.get_ring_buffer_oracle(), seconds, clock)
+        // Use spot's SimpleTWAP (always 30-day window)
+        spot_pool.get_twap(option::none(), clock)
     }
 }
 
-/// Get instantaneous price (1 second TWAP)
+/// Get instantaneous price
 public fun get_spot_price<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
-    clock: &Clock,
+    _clock: &Clock,
 ): u128 {
     if (spot_pool.is_locked_for_proposal()) {
         get_highest_conditional_price(conditional_pools)
     } else {
-        ring_buffer_oracle::get_latest_price(spot_pool.get_ring_buffer_oracle())
+        spot_pool.get_spot_price()
     }
 }
 
@@ -103,26 +105,24 @@ public fun get_spot_price<AssetType, StableType>(
 // ============================================================================
 
 /// Get longest possible TWAP for governance decisions and token minting
-/// Uses base fair value from spot AMM (includes historical stitching)
+/// Uses SimpleTWAP from spot AMM (30-day window)
+/// During proposals: properly combines spot frozen + conditional live cumulatives
 public fun get_governance_twap<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
-    // For governance, we want the base fair value TWAP
-    // This includes historical segments from past proposals
+    // For governance, we want the 30-day TWAP with proper time weighting
     if (spot_pool.is_locked_for_proposal()) {
-        // During proposal, add conditional contribution
-        let winning_conditional = get_highest_conditional_twap(
-            conditional_pools,
-            GOVERNANCE_MAX_WINDOW,
-            clock
-        );
-        // This would integrate with spot's base fair value calculation
-        spot_pool.get_twap(option::some(winning_conditional), clock)
+        // During proposal: extract conditional oracle data for proper cumulative combination
+        let winning_conditional_oracle = get_highest_conditional_oracle(conditional_pools);
+        let conditional_data = spot_amm::extract_oracle_data(winning_conditional_oracle);
+
+        // Sophisticated cumulative combination (not naive averaging)
+        spot_pool.get_twap(option::some(conditional_data), clock)
     } else {
-        // Use spot's longest TWAP
-        ring_buffer_oracle::get_longest_twap(spot_pool.get_ring_buffer_oracle(), clock)
+        // Use spot's SimpleTWAP only
+        spot_pool.get_twap(option::none(), clock)
     }
 }
 
@@ -130,64 +130,84 @@ public fun get_governance_twap<AssetType, StableType>(
 // Helper Functions
 // ============================================================================
 
-/// Get highest TWAP from conditional pools
+/// Get SimpleTWAP oracle from highest priced conditional pool
+/// Used for sophisticated cumulative combination with spot oracle
+fun get_highest_conditional_oracle(pools: &vector<LiquidityPool>): &SimpleTWAP {
+    assert!(!pools.is_empty(), ENoOracles);
+
+    let mut highest_idx = 0;
+    let mut highest_price = 0u128;
+    let mut i = 0;
+
+    // Find pool with highest price
+    while (i < pools.length()) {
+        let pool = pools.borrow(i);
+        let pool_simple_twap = conditional_amm::get_simple_twap(pool);
+        let price = simple_twap::get_spot_price(pool_simple_twap);
+        if (price > highest_price) {
+            highest_price = price;
+            highest_idx = i;
+        };
+        i = i + 1;
+    };
+
+    // Return oracle from highest priced pool
+    let winning_pool = pools.borrow(highest_idx);
+    conditional_amm::get_simple_twap(winning_pool)
+}
+
+/// Get highest TWAP from conditional pools using SimpleTWAP
+/// Note: SimpleTWAP uses 30-day window, `seconds` parameter is ignored
 fun get_highest_conditional_twap(
     pools: &vector<LiquidityPool>,
-    seconds: u64,
+    _seconds: u64,  // Note: SimpleTWAP uses fixed 30-day window
     clock: &Clock,
 ): u128 {
     assert!(!pools.is_empty(), ENoOracles);
-    
+
     let mut highest_twap = 0u128;
     let mut i = 0;
-    
+
     while (i < pools.length()) {
         let pool = pools.borrow(i);
-        let twap = ring_buffer_oracle::get_twap(pool.get_ring_buffer_oracle(), seconds, clock);
+        let pool_simple_twap = conditional_amm::get_simple_twap(pool);
+        let twap = simple_twap::get_twap(pool_simple_twap, clock);
         if (twap > highest_twap) {
             highest_twap = twap;
         };
         i = i + 1;
     };
-    
+
     highest_twap
 }
 
-/// Get highest current price from conditional pools
+/// Get highest current price from conditional pools using SimpleTWAP
 fun get_highest_conditional_price(pools: &vector<LiquidityPool>): u128 {
     assert!(!pools.is_empty(), ENoOracles);
-    
+
     let mut highest_price = 0u128;
     let mut i = 0;
-    
+
     while (i < pools.length()) {
         let pool = pools.borrow(i);
-        let price = ring_buffer_oracle::get_latest_price(pool.get_ring_buffer_oracle());
+        let pool_simple_twap = conditional_amm::get_simple_twap(pool);
+        let price = simple_twap::get_spot_price(pool_simple_twap);
         if (price > highest_price) {
             highest_price = price;
         };
         i = i + 1;
     };
-    
+
     highest_price
 }
 
 /// Check if TWAP is available for a given window
 public fun is_twap_available<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
-    conditional_pools: &vector<LiquidityPool>,
-    seconds: u64,
+    _conditional_pools: &vector<LiquidityPool>,
+    _seconds: u64,  // Note: Currently ignored, spot TWAP readiness is based on 30-day window
     clock: &Clock,
 ): bool {
-    if (spot_pool.is_locked_for_proposal()) {
-        // Check conditionals
-        if (conditional_pools.is_empty()) {
-            return false
-        };
-        let pool = conditional_pools.borrow(0);
-        ring_buffer_oracle::has_sufficient_history(pool.get_ring_buffer_oracle(), seconds, clock)
-    } else {
-        // Check spot
-        ring_buffer_oracle::has_sufficient_history(spot_pool.get_ring_buffer_oracle(), seconds, clock)
-    }
+    // Check if spot's base fair value TWAP is ready (requires 30 days of history)
+    spot_pool.is_twap_ready(clock)
 }

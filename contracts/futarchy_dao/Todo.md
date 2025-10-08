@@ -74,18 +74,22 @@ or should have a type that doesnt and type that does?
 - [X] Only allow founder mint or other stuff 4x above launchpad price ( make those configurable)
 - [NAH] Bring this into my code https://x.com/themoveguy/status/1968372304544706598?s=46
 - [X] Dao file walrus chink should have config about how far ahead the can be renuewed or prepaid for 
-- [ ] Merge PR
-- [ ] Merge in to main
-- [ ] Fix front end cache bug
-- [ ] Fix front end github bugs
-- [ ] Fix front end snyk integration
+- [X] Merge PR
+- [X] Merge in to main
+- [X] Fix front end cache bug
+- [X] Fix front end github bugs
+- [X] Fix front end snyk integration
+
+- [ ] make launchpad just allow creator to set cap as they see fit (above minimum) if they dont come back default goes pro rata!!!! have 1 day to do this ( compare to m-ta launchpad)
+- [ ] check does my policy actually work / enfore for move framework actions
+- [ ] or make proposal time depend on actions and have custom proposal fee depending on market time
+- [ ] compare geometric mean oracle to twap oracle to ring buffer
 - [ ] Error Codes: While consistent, the use of raw u64 constants for errors is a bit dated. Modern Sui Move often uses custom structs or std::errors for more descriptive, on-chain error reporting, although this is a stylistic choice and doesn't affect correctness.
-- [ ] allow fouder to come in and set launchpad cap
+- [ ] allow founder to come in and set launchpad cap on execution not before
 - [ ] maybe dont make launchpad run full time no matter what if cap reached
 - [ ] AMM INTEGRATION
 - [ ] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
 - [ ] migrate coin metadata 
-- [ ] Post about tokenomics and plan
 
 - [ ]set up multisig
 
@@ -333,6 +337,7 @@ like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
 # Consider for V3
+- [ ] set proposal time by policy / action and proposal fee proportoonal to proposal time
 - [ ] FLASH LOANS FROM LAUNHPAD. 1% OF LAUNCHPAD ALLOCATION GOES TO A PERP 1X LONG OR SHORT, HELPS PRICE DISCOVERY, CAN SHORT
 - [ ] seperate out just multsig???? as have leading multisig implementation???
 - [ ] dont charge dao fee for frist X proposal / multsig votes

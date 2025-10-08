@@ -302,30 +302,17 @@ public fun finalize_proposal_market<AssetType, StableType>(
     
     // If this proposal used DAO liquidity, integrate the winning conditional TWAP
     if (proposal::uses_dao_liquidity(proposal)) {
-        // Get proposal timing info before borrowing the pool
-        let proposal_start = proposal::get_market_initialized_at(proposal);
-        let proposal_end = clock.timestamp_ms();
-
-        // Get the winning pool's TWAP and current price
+        // Get the winning pool's SimpleTWAP oracle
         let winning_pool = proposal::get_pool_mut_by_outcome(proposal, winning_outcome as u8);
-        let conditional_twap = conditional_amm::get_twap(winning_pool, clock);
-        let conditional_price = conditional_amm::get_price(winning_pool);
+        let winning_conditional_oracle = conditional_amm::get_simple_twap(winning_pool);
 
-        // Fill the TWAP gap with the winning conditional's TWAP (for futarchy oracle)
-        // Use TWAP for backfilling (average during proposal) but current price for resume point
-        spot_amm::fill_twap_gap_from_proposal(
+        // Backfill spot's SimpleTWAP with winning conditional's oracle data
+        // This fills the gap [proposal_start, proposal_end] with conditional's price history
+        // Updates both window_cumulative and total_cumulative for seamless continuity
+        spot_amm::backfill_from_winning_conditional(
             spot_pool,
-            conditional_twap,      // Backfill gap with average TWAP
-            conditional_price,     // Resume from actual current price
+            winning_conditional_oracle,
             clock
-        );
-
-        // Merge the winning conditional's ring buffer observations into spot (for lending oracle)
-        spot_amm::merge_winning_conditional_oracle(
-            spot_pool,
-            winning_pool,
-            proposal_start,
-            proposal_end
         );
     };
     

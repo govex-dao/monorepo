@@ -70,6 +70,7 @@ public fun create_outcome_markets<AssetType, StableType>(
             twap_initial_observation,
             twap_start_delay,
             twap_step_max,
+            clock,
             ctx,
         );
         amm_pools.push_back(pool);
