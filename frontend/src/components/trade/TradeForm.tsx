@@ -160,7 +160,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
 
       setSwapDetails(breakdown);
       // Format based on the *output* token's decimals
-      setExpectedAmountOut(breakdown.exactAmountOut.toFixed(toToken.decimals));
+      setExpectedAmountOut(breakdown.minAmountOut.toFixed(toToken.decimals));
     } catch (error) {
       console.error("Swap calculation error:", error);
       toast.error(
