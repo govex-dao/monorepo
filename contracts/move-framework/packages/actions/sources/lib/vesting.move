@@ -59,8 +59,8 @@ module account_actions::vesting;
 use std::{
     string::{Self, String},
     option::{Self, Option},
+    type_name::{Self, TypeName},
     u64,
-
 };
 use sui::{
     balance::Balance,
@@ -78,6 +78,7 @@ use account_protocol::{
     intents::{Self, Expired, Intent},
     executable::{Self, Executable},
     version_witness::VersionWitness,
+    bcs_validation,
 };
 use account_extensions::framework_action_types::{Self, VestingCreate, VestingCancel};
 use account_actions::{stream_utils, version};
@@ -309,7 +310,7 @@ public fun new_vesting<Config, Outcome, CoinType, IW: copy + drop>(
 
     let mut i = 0;
     while (i < len) {
-        // Create the action struct for each recipient
+        // Create action struct for this recipient
         let action = CreateVestingAction<CoinType> {
             amount: *vector::borrow(&amounts, i),
             start_timestamp,
@@ -324,17 +325,17 @@ public fun new_vesting<Config, Outcome, CoinType, IW: copy + drop>(
             metadata,
         };
 
-        // Serialize it
+        // Serialize the entire struct directly
         let action_data = bcs::to_bytes(&action);
 
-        // Add to intent with pre-serialized bytes
+        // Add to intent
         intent.add_typed_action(
             framework_action_types::vesting_create(),
             action_data,
             intent_witness // Now copyable, so can be used in loop
         );
 
-        // Explicitly destroy the action struct
+        // Destroy the action struct
         destroy_create_vesting_action(action);
 
         i = i + 1;
@@ -360,7 +361,7 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
 
     let action_data = intents::action_spec_data(spec);
 
-    // Create BCS reader and deserialize
+    // Deserialize the entire action struct directly
     let mut reader = bcs::new(*action_data);
     let amount = bcs::peel_u64(&mut reader);
     let start_timestamp = bcs::peel_u64(&mut reader);
@@ -381,6 +382,9 @@ public fun do_vesting<Config, Outcome: store, CoinType, IW: drop>(
     } else {
         option::none()
     };
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
 
     // Validate parameters
     assert!(amount > 0, EInvalidVestingParameters);

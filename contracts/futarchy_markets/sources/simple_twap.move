@@ -5,10 +5,10 @@
 /// PURPOSE: External price oracle for lending protocols and integrations
 ///
 /// KEY FEATURES:
-/// - Rolling 30-day window for time-weighted average (longer = safer)
+/// - Rolling 90-day window for time-weighted average (longer = safer)
 /// - Pure arithmetic mean (no price capping needed)
 /// - Uniswap V2 proven design with extended window
-/// - Manipulation cost scales with window size (30 days = extremely expensive)
+/// - Manipulation cost scales with window size (90 days = extremely expensive)
 ///
 /// USED BY:
 /// - External lending protocols (Compound, Aave style)
@@ -20,7 +20,7 @@
 /// - Determining proposal winners (use futarchy oracle)
 ///
 /// DESIGN:
-/// - Accumulates price × time over rolling 30-day window
+/// - Accumulates price × time over rolling 90-day window
 /// - NO price capping (like Uniswap V2)
 /// - Returns TWAP = cumulative / window_duration
 /// - Long window makes manipulation economically infeasible
@@ -37,7 +37,7 @@ use sui::event;
 // Constants
 // ============================================================================
 
-const THIRTY_DAYS_MS: u64 = 2_592_000_000; // 30 days in milliseconds
+const NINETY_DAYS_MS: u64 = 7_776_000_000; // 90 days in milliseconds
 const PRICE_SCALE: u128 = 1_000_000_000_000; // 10^12 for precision
 const PPM_DENOMINATOR: u64 = 1_000_000; // Parts per million
 
@@ -91,8 +91,8 @@ public struct SimpleTWAP has store {
     last_price: u128,              // Last recorded price
     last_timestamp: u64,           // Last update timestamp
 
-    // Rolling window (30 days) - for simple consumers
-    window_start_timestamp: u64,   // Start of current 30-day window
+    // Rolling window (90 days) - for simple consumers
+    window_start_timestamp: u64,   // Start of current 90-day window
     window_cumulative_price: u256, // Cumulative price × time in current window
 
     // Infinite accumulation (Uniswap V2) - for advanced consumers
@@ -110,7 +110,7 @@ public struct SimpleTWAP has store {
 /// * `clock` - Sui clock for timestamp
 ///
 /// # Design
-/// - Simple consumers use get_twap() for 30-day TWAP
+/// - Simple consumers use get_twap() for 90-day TWAP
 /// - Advanced consumers use get_cumulative_and_timestamp() for custom windows (Uniswap V2)
 public fun new(
     initial_price: u128,
@@ -144,7 +144,7 @@ public fun update(
     // Accumulate price × time for elapsed period
     let price_time = (oracle.last_price as u256) * (time_elapsed as u256);
 
-    // Update rolling window (30-day)
+    // Update rolling window (90-day)
     oracle.window_cumulative_price = oracle.window_cumulative_price + price_time;
 
     // Update infinite cumulative (Uniswap V2 - never resets)
@@ -168,12 +168,12 @@ public fun update(
     oracle.last_timestamp = now;
 }
 
-/// Get current TWAP over 30-day window with overflow protection
+/// Get current TWAP over 90-day window with overflow protection
 public fun get_twap(oracle: &SimpleTWAP, clock: &Clock): u128 {
     let now = clock.timestamp_ms();
 
-    // Require at least 30 days of history
-    assert!(now >= oracle.initialized_at + THIRTY_DAYS_MS, ETwapNotReady);
+    // Require at least 90 days of history
+    assert!(now >= oracle.initialized_at + NINETY_DAYS_MS, ETwapNotReady);
 
     // Project cumulative to now
     let time_since_last = now - oracle.last_timestamp;
@@ -182,8 +182,8 @@ public fun get_twap(oracle: &SimpleTWAP, clock: &Clock): u128 {
 
     // Calculate window duration
     let window_age = now - oracle.window_start_timestamp;
-    let effective_duration = if (window_age > THIRTY_DAYS_MS) {
-        THIRTY_DAYS_MS
+    let effective_duration = if (window_age > NINETY_DAYS_MS) {
+        NINETY_DAYS_MS
     } else {
         window_age
     };
@@ -203,25 +203,25 @@ public fun get_spot_price(oracle: &SimpleTWAP): u128 {
     oracle.last_price
 }
 
-/// Check if TWAP is ready (has 30+ days of history)
+/// Check if TWAP is ready (has 90+ days of history)
 public fun is_ready(oracle: &SimpleTWAP, clock: &Clock): bool {
     let now = clock.timestamp_ms();
-    now >= oracle.initialized_at + THIRTY_DAYS_MS
+    now >= oracle.initialized_at + NINETY_DAYS_MS
 }
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
 
-/// Update rolling 30-day window - Uniswap V2 style (simple estimation)
+/// Update rolling 90-day window - Uniswap V2 style (simple estimation)
 fun update_rolling_window(oracle: &mut SimpleTWAP, now: u64) {
     let window_age = now - oracle.window_start_timestamp;
 
-    if (window_age > THIRTY_DAYS_MS) {
+    if (window_age > NINETY_DAYS_MS) {
         let old_start = oracle.window_start_timestamp;
 
         // Slide window forward
-        let new_window_start = now - THIRTY_DAYS_MS;
+        let new_window_start = now - NINETY_DAYS_MS;
         let time_to_remove = new_window_start - oracle.window_start_timestamp;
 
         // Estimate old price using current price (Uniswap V2 approach)
@@ -238,8 +238,8 @@ fun update_rolling_window(oracle: &mut SimpleTWAP, now: u64) {
         if (oracle.window_cumulative_price > price_to_remove) {
             oracle.window_cumulative_price = oracle.window_cumulative_price - price_to_remove;
         } else {
-            // Fallback: reset to current price × 30 days
-            oracle.window_cumulative_price = (oracle.last_price as u256) * (THIRTY_DAYS_MS as u256);
+            // Fallback: reset to current price × 90 days
+            oracle.window_cumulative_price = (oracle.last_price as u256) * (NINETY_DAYS_MS as u256);
         };
 
         oracle.window_start_timestamp = new_window_start;
@@ -401,8 +401,8 @@ public fun backfill_from_conditional(
 
     // Recalculate window TWAP with backfilled data
     let window_age = period_end - oracle.window_start_timestamp;
-    let window_duration = if (window_age > THIRTY_DAYS_MS) {
-        THIRTY_DAYS_MS
+    let window_duration = if (window_age > NINETY_DAYS_MS) {
+        NINETY_DAYS_MS
     } else {
         window_age
     };

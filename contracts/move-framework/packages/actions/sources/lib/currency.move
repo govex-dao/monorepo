@@ -84,7 +84,7 @@ public struct CurrencyRules<phantom CoinType> has store {
 }
 
 /// Action disabling permissions marked as true, cannot be reenabled.
-public struct DisableAction<phantom CoinType> has store {
+public struct DisableAction<phantom CoinType> has store, drop {
     mint: bool,
     burn: bool,
     update_symbol: bool,
@@ -93,15 +93,15 @@ public struct DisableAction<phantom CoinType> has store {
     update_icon: bool,
 }
 /// Action minting new coins.
-public struct MintAction<phantom CoinType> has store {
+public struct MintAction<phantom CoinType> has store, drop {
     amount: u64,
 }
 /// Action burning coins.
-public struct BurnAction<phantom CoinType> has store {
+public struct BurnAction<phantom CoinType> has store, drop {
     amount: u64,
 }
 /// Action updating a CoinMetadata object using a locked TreasuryCap.
-public struct UpdateAction<phantom CoinType> has store { 
+public struct UpdateAction<phantom CoinType> has store, drop {
     symbol: Option<ascii::String>,
     name: Option<String>,
     description: Option<String>,
@@ -239,6 +239,15 @@ public fun has_cap<Config, CoinType>(
     account.has_managed_asset(TreasuryCapKey<CoinType>())
 }
 
+/// Borrows a mutable reference to the TreasuryCap for a given coin type.
+/// This is used by oracle mints and other patterns that need direct cap access
+/// to bypass object-level policies (only Account access matters).
+public fun borrow_treasury_cap_mut<Config, CoinType>(
+    account: &mut Account<Config>
+): &mut TreasuryCap<CoinType> {
+    account.borrow_managed_asset_mut(TreasuryCapKey<CoinType>(), version::current())
+}
+
 /// Borrows the CurrencyRules for a given coin type.
 public fun borrow_rules<Config, CoinType>(
     account: &Account<Config>
@@ -330,18 +339,6 @@ public fun public_burn<Config, CoinType>(
 
 // === Destruction Functions ===
 
-/// Destroy a DisableAction after serialization
-public fun destroy_disable_action<CoinType>(action: DisableAction<CoinType>) {
-    let DisableAction {
-        mint: _,
-        burn: _,
-        update_symbol: _,
-        update_name: _,
-        update_description: _,
-        update_icon: _
-    } = action;
-}
-
 /// Destroy a MintAction after serialization
 public fun destroy_mint_action<CoinType>(action: MintAction<CoinType>) {
     let MintAction { amount: _ } = action;
@@ -350,16 +347,6 @@ public fun destroy_mint_action<CoinType>(action: MintAction<CoinType>) {
 /// Destroy a BurnAction after serialization
 public fun destroy_burn_action<CoinType>(action: BurnAction<CoinType>) {
     let BurnAction { amount: _ } = action;
-}
-
-/// Destroy an UpdateAction after serialization
-public fun destroy_update_action<CoinType>(action: UpdateAction<CoinType>) {
-    let UpdateAction {
-        symbol: _,
-        name: _,
-        description: _,
-        icon_url: _
-    } = action;
 }
 
 // Intent functions
@@ -377,21 +364,20 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
 ) {
     assert!(mint || burn || update_symbol || update_name || update_description || update_icon, ENoChange);
 
-    // Create the action struct (no drop)
+    // Create the action struct with drop ability
     let action = DisableAction<CoinType> { mint, burn, update_symbol, update_name, update_description, update_icon };
 
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent - action used as witness preserves CoinType in TypeName
     intent.add_typed_action(
-        framework_action_types::currency_disable(),
+        action,  // ✅ Preserves CoinType parameter in TypeName
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_disable_action(action);
+    // No destroy needed - action consumed by add_typed_action
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
@@ -461,21 +447,20 @@ public fun new_update<Outcome, CoinType, IW: drop>(
 ) {
     assert!(symbol.is_some() || name.is_some() || description.is_some() || icon_url.is_some(), ENoChange);
 
-    // Create the action struct (no drop)
+    // Create the action struct with drop ability
     let action = UpdateAction<CoinType> { symbol, name, description, icon_url };
 
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent - action used as witness preserves CoinType in TypeName
     intent.add_typed_action(
-        framework_action_types::currency_update(),
+        action,  // ✅ Preserves CoinType parameter in TypeName
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_update_action(action);
+    // No destroy needed - action consumed by add_typed_action
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
@@ -573,15 +558,15 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent with parameterized type witness
+    // The action struct itself serves as the type witness, preserving CoinType parameter
     intent.add_typed_action(
-        framework_action_types::currency_mint(),
+        action,  // Action moved here, TypeName becomes MintAction<CoinType>
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_mint_action(action);
+    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Processes a MintAction, mints and returns new coins.
@@ -657,15 +642,15 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent with parameterized type witness
+    // The action struct itself serves as the type witness, preserving CoinType parameter
     intent.add_typed_action(
-        framework_action_types::currency_burn(),
+        action,  // Action moved here, TypeName becomes BurnAction<CoinType>
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_burn_action(action);
+    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Processes a BurnAction, burns coins and returns the amount burned.

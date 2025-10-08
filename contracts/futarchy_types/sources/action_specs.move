@@ -70,3 +70,58 @@ public fun action_count(specs: &InitActionSpecs): u64 {
 public fun get_action(specs: &InitActionSpecs, index: u64): &ActionSpec {
     vector::borrow(&specs.actions, index)
 }
+
+// === Equality Functions ===
+
+/// Check if two ActionSpecs are equal
+/// Compares both action_type and action_data
+public fun action_spec_equals(a: &ActionSpec, b: &ActionSpec): bool {
+    if (a.action_type != b.action_type) {
+        return false
+    };
+
+    // Compare action_data vectors
+    let a_data = &a.action_data;
+    let b_data = &b.action_data;
+
+    if (vector::length(a_data) != vector::length(b_data)) {
+        return false
+    };
+
+    let mut i = 0;
+    let len = vector::length(a_data);
+    while (i < len) {
+        if (*vector::borrow(a_data, i) != *vector::borrow(b_data, i)) {
+            return false
+        };
+        i = i + 1;
+    };
+
+    true
+}
+
+/// Check if two InitActionSpecs are equal
+/// Compares all actions in both specs
+public fun init_action_specs_equals(a: &InitActionSpecs, b: &InitActionSpecs): bool {
+    let a_actions = &a.actions;
+    let b_actions = &b.actions;
+
+    if (vector::length(a_actions) != vector::length(b_actions)) {
+        return false
+    };
+
+    let mut i = 0;
+    let len = vector::length(a_actions);
+    while (i < len) {
+        let a_spec = vector::borrow(a_actions, i);
+        let b_spec = vector::borrow(b_actions, i);
+
+        if (!action_spec_equals(a_spec, b_spec)) {
+            return false
+        };
+
+        i = i + 1;
+    };
+
+    true
+}

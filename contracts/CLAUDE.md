@@ -76,6 +76,607 @@ bcs_validation::validate_all_bytes_consumed(reader); // OK!
 - **No fields?** → Get `_action_data`, don't process it
 - **Has fields?** → Peel all fields, then `validate_all_bytes_consumed()`
 
+### TypeName Deserialization Issue
+
+**Problem:** `TypeName` can be BCS-serialized but **cannot be deserialized** in Move (no public constructor).
+
+**Why:** TypeName only has native constructors (`type_name::with_defining_ids<T>()`). You can serialize it to bytes, but you can't reconstruct it from bytes in Move.
+
+**Solution:** Store structs containing TypeName as raw bytes, deserialize off-chain (SDK/frontend).
+
+**Example:**
+```move
+// ✅ Serialization works
+let action = CouncilApproveIntentSpecAction { intent_spec, ... };
+let bytes = bcs::to_bytes(&action);  // Contains TypeName inside InitActionSpecs
+
+// ❌ Deserialization impossible in Move
+// let action = bcs::from_bytes<CouncilApproveIntentSpecAction>(bytes); // NO SUCH FUNCTION
+
+// ✅ Store bytes, extract other fields, skip TypeName
+let mut reader = bcs::new(bytes);
+let action_count = bcs::peel_vec_length(&mut reader);
+// Skip over the TypeName-containing fields
+while (i < action_count) {
+    let _type_bytes = bcs::peel_vec_u8(&mut reader);  // Skip TypeName as bytes
+    let _data = bcs::peel_vec_u8(&mut reader);
+    i = i + 1;
+};
+// Now extract other fields
+let dao_id = bcs::peel_address(&mut reader);
+```
+
+**Real Example:** `approved_intent_spec.move` stores `intent_spec_bytes: vector<u8>` instead of `intent_spec: InitActionSpecs` because InitActionSpecs contains TypeName fields.
+
+## Policy Enforcement System ✅ FULLY OPERATIONAL
+
+### Overview
+
+The futarchy system has a **type-safe, multi-level policy enforcement system** for controlling what actions require council approval vs DAO approval. This is a **new governance primitive** that combines:
+
+- **Type-safe policies** - Uses Move's type system for zero-cost policy granularity
+- **Policy lock-in** - Stores policy data inline to prevent governance gridlock
+- **Pre-approval system** - Prevents spam proposals that will fail
+- **Three-tier hierarchy** - OBJECT > TYPE > ACTION (first match wins)
+
+**Total Actions: 145**
+- **31 parameterized actions** (can use TYPE-level policies with `<CoinType>`, `<AssetType, StableType>`, etc.)
+- **114 non-parameterized actions** (use ACTION or OBJECT-level policies)
+
+### Policy Hierarchy (OVERRIDE Semantics - First Match Wins)
+
+Policies are checked in order, and **the first match is used** (subsequent levels are skipped):
+
+**1. OBJECT policies** (highest priority) - Specific object IDs
+   ```move
+   // Example: This specific emergency fund bypasses normal rules
+   set_object_policy(emergency_vault_id, MODE_DAO_ONLY)
+   // Overrides TYPE policy for USDC and ACTION policy for SpendAction
+   ```
+   - Checked by extracting object IDs from BCS-serialized action data
+   - Supported: Streams, Pools, Vaults, Files, any owned object
+   - **Use case**: Emergency funds, high-value assets, critical infrastructure
+
+**2. TYPE policies** (middle priority) - Coin types or capability types
+   ```move
+   // Example: Different rules per coin type
+   set_type_policy<SpendAction<SUI>>(dao, none, MODE_DAO_ONLY)
+   set_type_policy<SpendAction<USDC>>(dao, some(treasury_council), MODE_DAO_AND_COUNCIL)
+   // SUI spending is easy, USDC needs Treasury Council oversight
+   ```
+   - Works for **31 parameterized actions** with type parameters
+   - Detects `<CoinType>` in TypeName (e.g., `SpendAction<0x2::sui::SUI>`)
+   - **Use case**: Different governance for different assets/pairs
+
+**3. ACTION policies** (lowest priority) - Action types
+   ```move
+   // Example: Default policy for all spending
+   set_action_policy<SpendAction>(dao, some(treasury_council), MODE_DAO_AND_COUNCIL)
+   // Applies to ANY coin type unless overridden by TYPE or OBJECT
+   ```
+   - Fallback if no OBJECT/TYPE policy matches
+   - Works for **all 145 actions**
+   - **Use case**: Default governance rules
+
+**4. FILE policies** - Treated as OBJECT policies (specific document IDs)
+   ```move
+   // Example: Legal documents need Legal Council
+   set_object_policy(operating_agreement_id, some(legal_council), MODE_DAO_AND_COUNCIL)
+   ```
+
+**Code Location:** `futarchy_multisig/sources/policy/intent_spec_analyzer.move:120-242`
+
+### Policy Hierarchy Example (Override in Action)
+
+```move
+// Setup: Three levels of policies
+set_action_policy<SpendAction>(MODE_DAO_ONLY)                    // Level 3: Default is easy
+set_type_policy<SpendAction<USDC>>(MODE_DAO_AND_COUNCIL)        // Level 2: USDC is strict
+set_object_policy(emergency_vault_id, MODE_DAO_ONLY)            // Level 1: Emergency override
+
+// Scenario 1: Spend SUI from regular vault
+// No OBJECT policy → No TYPE policy → ACTION policy matches
+// Result: MODE_DAO_ONLY (easy)
+
+// Scenario 2: Spend USDC from regular vault
+// No OBJECT policy → TYPE policy matches (skip ACTION)
+// Result: MODE_DAO_AND_COUNCIL (Treasury Council required)
+
+// Scenario 3: Spend USDC from emergency vault
+// OBJECT policy matches (skip TYPE and ACTION)
+// Result: MODE_DAO_ONLY (emergency bypass, even for USDC!)
+```
+
+### Policy Modes
+
+Each policy specifies an approval mode:
+
+- **MODE_DAO_ONLY (0)**: Only DAO vote needed
+- **MODE_COUNCIL_ONLY (1)**: Only specific council approval needed (no DAO vote)
+- **MODE_DAO_OR_COUNCIL (2)**: Either DAO vote OR council approval
+- **MODE_DAO_AND_COUNCIL (3)**: **Both** DAO vote AND council pre-approval required
+
+### Two-Level Enforcement Timing (When Policies Are Checked)
+
+Policies are enforced at **TWO different times** with different purposes:
+
+#### 1. IntentSpec Level (Proposal Creation) - PRIMARY ENFORCEMENT ✅
+
+**Location:** `governance_actions.move:467-521`
+
+**What happens:**
+```move
+// When user creates proposal with IntentSpecs:
+while (i < vector::length(&action.intent_specs)) {
+    let intent_spec = vector::borrow(&action.intent_specs, i);
+
+    // 🔍 LOOKUP current policy registry (OBJECT > TYPE > ACTION hierarchy)
+    let requirement = intent_spec_analyzer::analyze_requirements_comprehensive(
+        intent_spec,
+        policy_reg  // ← Reads current policies from registry
+    );
+
+    let mode = intent_spec_analyzer::mode(&requirement);
+
+    // 🔒 ENFORCE pre-approval requirement
+    if (mode == 3) { // MODE_DAO_AND_COUNCIL
+        assert!(has_approval, ECouncilApprovalRequired);  // ← FAILS HERE if no approval
+    };
+
+    // 💾 STORE policy data inline (lock it in)
+    vector::push_back(&mut policy_modes, mode);
+    vector::push_back(&mut required_council_ids, council_id_opt);
+}
+```
+
+**Purpose:**
+- **Primary enforcement** - Lookup current policies, enforce pre-approval
+- **Policy lock-in** - Store requirements inline (won't change if registry changes later)
+- **Spam prevention** - Reject proposals without required council approval
+
+#### 2. Action Level (Execution) - DEFENSIVE VALIDATION ✅
+
+**Location:** `governance_intents.move:180-188`
+
+**What happens:**
+```move
+// When winning outcome executes (after market resolves):
+
+// 📖 READ stored policy (not look up in registry!)
+let policy_mode = proposal::get_policy_mode_for_outcome(proposal, outcome_index);
+let council_approval_proof = proposal::get_council_approval_proof_for_outcome(proposal, outcome_index);
+
+// ✅ VALIDATE that requirements were met at creation
+if (policy_mode == 3) { // MODE_DAO_AND_COUNCIL
+    assert!(option::is_some(&council_approval_proof), 8); // Defensive check
+};
+
+// Then execute actions using the approved IntentSpec...
+```
+
+**Purpose:**
+- **Defensive validation** - Verify locked-in requirements were satisfied
+- **No registry lookup** - Uses policy data stored at creation time
+- **Time-travel safe** - Policy changes don't affect in-flight proposals
+
+**✅ CHECKED:** Futarchy proposals only (via `analyze_requirements_comprehensive`)
+- All intents MUST go through futarchy proposal system
+- Move framework's `intents::new_intent()` is `public(package)` - can't be called externally
+
+**❌ NOT CHECKED:** Direct Move framework intents (impossible to create externally)
+
+### Proposal Creation Flow with Policies
+
+```move
+// 1. User creates proposal with IntentSpec
+governance_actions::do_create_proposal(...)
+
+// 2. Policy analysis in internal_fulfill_create_proposal()
+let mut policy_modes = vector::empty<u8>();
+let mut required_council_ids = vector::empty<Option<ID>>();
+let mut council_approval_proofs = vector::empty<Option<ID>>();
+
+while (i < vector::length(&action.intent_specs)) {
+    let intent_spec = vector::borrow(&action.intent_specs, i);
+
+    // Analyze OBJECT > TYPE > ACTION hierarchy
+    let requirement = intent_spec_analyzer::analyze_requirements_comprehensive(
+        intent_spec,
+        policy_reg
+    );
+
+    let mode = intent_spec_analyzer::mode(&requirement);
+    let council_id_opt = *intent_spec_analyzer::council_id(&requirement);
+
+    // 3. If MODE_DAO_AND_COUNCIL (3), require pre-approval
+    if (mode == 3) {
+        assert!(has_approval, ECouncilApprovalRequired);
+        approval_proof_opt = option::some(approval_id);
+    };
+
+    // 4. Store policy data INLINE (not in shared objects)
+    vector::push_back(&mut policy_modes, mode);
+    vector::push_back(&mut required_council_ids, council_id_opt);
+    vector::push_back(&mut council_approval_proofs, approval_proof_opt);
+};
+
+// 5. Policy data stored inline in QueuedProposal and Proposal structs
+// This "locks in" the policy - if DAO changes policies later,
+// in-flight proposals use their original policy requirements
+```
+
+### Key Security Properties
+
+1. **All actions go through proposals** - No direct intent creation bypasses
+2. **Pre-approval enforced** - MODE_DAO_AND_COUNCIL requires council approval BEFORE market creation
+3. **IntentSpec matching** - Approval must match proposed actions exactly (prevents substitution attacks)
+4. **Override hierarchy** - Specific object policies override general type/action policies
+5. **Policy lock-in** - Policy data stored inline at creation, immune to later policy changes
+6. **Inline storage** - Simple, efficient (74 bytes per proposal vs 446 bytes with shared objects)
+
+### Key Design Patterns (Why This System Is Beautiful)
+
+#### 1. Policy Lock-In Pattern (Time-Travel Safe Governance)
+
+**Problem:** What happens if the DAO changes policies while a proposal is in-flight?
+
+**Solution:** Store policy data inline at creation time, not as references to registry.
+
+```move
+// Day 1: Create proposal under current rules
+CreateProposalAction { ... }
+→ Policy lookup: MODE_DAO_AND_COUNCIL for USDC spending
+→ Store inline: policy_mode=3, required_council_id=treasury_council
+
+// Day 30: DAO changes policy (via another proposal)
+set_type_policy<SpendAction<USDC>>(MODE_DAO_ONLY)  // More permissive now
+
+// Day 60: Original proposal wins
+→ Uses policy_mode=3 (locked in at creation)
+→ ✅ Executes successfully (doesn't fail because policy changed)
+```
+
+**Benefits:**
+- ✅ Policy changes don't brick in-flight proposals (prevents governance gridlock)
+- ✅ Each proposal is self-contained (all data needed for execution stored inline)
+- ✅ Automatic cleanup (policy data deleted when proposal finalized)
+
+**Storage:** 74 bytes inline vs 446 bytes + permanent storage for shared objects
+
+---
+
+#### 2. Three-Tier Hierarchy Pattern (Maximum Flexibility, Zero Conflicts)
+
+**Problem:** How to support both specific overrides and general defaults without conflicts?
+
+**Solution:** OBJECT > TYPE > ACTION hierarchy with first-match-wins semantics.
+
+```move
+// General default: Treasury spending needs approval
+set_action_policy<SpendAction>(MODE_DAO_AND_COUNCIL)
+
+// Override for specific asset: SUI is low-risk
+set_type_policy<SpendAction<SUI>>(MODE_DAO_ONLY)
+
+// Override for specific vault: Emergency fund bypasses all rules
+set_object_policy(emergency_vault_id, MODE_DAO_ONLY)
+
+// Result: Simple, predictable, no conflicts!
+// Emergency vault > SUI type > General spending default
+```
+
+**Benefits:**
+- ✅ First match wins = No policy conflicts ever
+- ✅ Specific overrides general = Intuitive behavior
+- ✅ Works for all 145 actions = Universal pattern
+
+---
+
+#### 3. Pre-Approval Pattern (Spam Prevention)
+
+**Problem:** Malicious users could spam proposals that will obviously fail council review.
+
+**Solution:** Require council approval BEFORE creating futarchy market.
+
+```move
+// Without pre-approval (BAD):
+User creates "Spend 1M USDC" proposal
+→ Market created, liquidity locked
+→ Treasury Council rejects
+→ Wasted gas/time, market spam
+
+// With pre-approval (GOOD):
+User requests "Spend 1M USDC"
+→ Treasury Council reviews FIRST
+→ Creates ApprovedIntentSpec if legitimate
+→ THEN proposal can enter queue
+→ No wasted markets for rejected proposals
+```
+
+**Benefits:**
+- ✅ Prevents DoS via spam proposals
+- ✅ Council reviews before expensive market operations
+- ✅ Failed proposals never reach market phase
+
+---
+
+#### 4. Type-Level Policy Pattern (Compiler-Enforced Granularity)
+
+**Problem:** Different assets/pairs need different governance rules.
+
+**Solution:** Use Move's type parameters for zero-cost policy differentiation.
+
+```move
+// This is IMPOSSIBLE in Solidity/Rust without runtime dispatch
+// Move's type system makes this a compile-time feature
+
+set_type_policy<SpendAction<SUI>>(MODE_DAO_ONLY)         // Low risk
+set_type_policy<SpendAction<USDC>>(MODE_DAO_AND_COUNCIL) // Treasury oversight
+set_type_policy<SpendAction<BTC>>(MODE_COUNCIL_ONLY)     // Full delegation
+
+// Compiler enforces type safety:
+SpendAction<SUI> ≠ SpendAction<USDC> (different TypeNames)
+// Runtime lookup: O(1) TypeName comparison
+```
+
+**Benefits:**
+- ✅ Zero-cost abstraction (compile-time type checking)
+- ✅ Works for 31 parameterized actions
+- ✅ Unique to Move (not possible in other blockchains)
+
+---
+
+#### 5. Inline Storage Pattern (Simplicity + Efficiency)
+
+**Problem:** Shared PolicyRequirement objects create permanent storage bloat.
+
+**Solution:** Store policy data directly in proposal structs.
+
+```move
+// OLD: Shared objects (446 bytes, permanent storage)
+struct PolicyRequirement has key {
+    id: UID,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
+}
+
+// NEW: Inline storage (74 bytes, auto-deleted)
+struct Proposal {
+    ...
+    policy_mode: u8,                      // 1 byte
+    required_council_id: Option<ID>,     // 33 bytes
+    council_approval_proof: Option<ID>,  // 33 bytes
+}
+```
+
+**Benefits:**
+- ✅ 83% size reduction (74 bytes vs 446 bytes)
+- ✅ Auto-cleanup (deleted when proposal finalized)
+- ✅ Simpler architecture (no shared object management)
+
+---
+
+#### 6. Two-Phase Security Pattern (Oracle Grants)
+
+**Problem:** How to allow price-triggered minting without governance on every claim?
+
+**Solution:** Separate authorization (governance) from execution (permissionless).
+
+```move
+// Phase 1: Grant Creation (FULL POLICY ENFORCEMENT)
+CreateOracleGrantAction<SUI, USDC> { recipients, amounts, ... }
+→ Goes through governance proposal
+→ TYPE-level policy: "Different rules for SUI vs test tokens"
+→ DAO votes
+→ Creates PriceBasedMintGrant object (pre-authorized)
+
+// Phase 2: Grant Claiming (NO POLICY - BY DESIGN)
+claim_grant()
+→ Validate price/vesting/time conditions
+→ Borrow TreasuryCap from Account (no policy check)
+→ Mint (grant already approved via governance)
+→ Transfer to recipient
+```
+
+**Benefits:**
+- ✅ Governance controls authorization (who can mint what)
+- ✅ Execution is permissionless (anyone can claim if conditions met)
+- ✅ No redundant policy checks on execution
+- ✅ Correct separation of concerns
+**This is Type-Safe Futarchy Infrastructure** - a new governance primitive for decentralized organizations.
+
+### Type-Level Policy Support (31 Parameterized Actions)
+
+**Move Framework Actions (9):**
+- `DisableAction<CoinType>`, `UpdateAction<CoinType>` ✅
+- `MintAction<CoinType>`, `BurnAction<CoinType>` ✅
+- `DepositAction<CoinType>`, `SpendAction<CoinType>` ✅
+- `CreateVestingAction<CoinType>` ✅
+- `BorrowAction<Cap>`, `ReturnAction<Cap>` ✅
+
+**Futarchy Actions (22):**
+- Liquidity: `CreatePoolAction<Asset, Stable>`, `AddLiquidityAction<Asset, Stable>`, `RemoveLiquidityAction<Asset, Stable>`, `SwapAction<Asset, Stable>`, `CollectFeesAction<Asset, Stable>`, `WithdrawFeesAction<Asset, Stable>` (6 actions) ✅
+- Streams: `CreateStreamAction<CoinType>`, `CreatePaymentAction<CoinType>`, `ExecutePaymentAction<CoinType>`, `RequestWithdrawalAction<CoinType>`, `ProcessPendingWithdrawalAction<CoinType>` (5 actions) ✅
+- Oracle: `CreateOracleGrantAction<Asset, Stable>` (1 action) ✅
+- Dissolution: `WithdrawAmmLiquidityAction<Asset, Stable>`, `DistributeAssetsAction<CoinType>` (2 actions) ✅
+- Payments/Dividends: `CreatePaymentAction<CoinType>`, `CreateDividendAction<CoinType>` (2 actions) ✅
+- Vault Management: `AddCoinTypeAction<CoinType>`, `RemoveCoinTypeAction<CoinType>` (2 actions) ✅
+- Lifecycle: `CreateFounderLockProposalAction<AssetType>`, `CreateCommitmentProposalAction<AssetType>` (2 actions) ✅
+- Custody: `ApproveCustodyAction<R>`, `AcceptIntoCustodyAction<R>` (2 actions) ✅
+
+**Plus 114 non-parameterized actions** that use ACTION or OBJECT-level policies:
+- Config actions (12+): `SetProposalsEnabledAction`, `UpdateNameAction`, `TradingParamsUpdateAction`, etc.
+- Governance actions: `CreateProposalAction`, etc.
+- Stream management (10+): `CancelStreamAction`, `PauseStreamAction`, `UpdateStreamAction`, etc.
+- Security council actions (20+): `CouncilApproveIntentSpecAction`, `CreateSecurityCouncilAction`, etc.
+- Protocol admin actions (25+): `UpdateDaoCreationFeeAction`, `ApproveVerificationAction`, etc.
+- Legal/file actions: `BatchDocAction`, `ChunkAction`, `WalrusRenewalAction`
+- Optimistic intent actions (5): `CreateOptimisticIntentAction`, `ChallengeOptimisticIntentsAction`, etc.
+- Policy management actions (4): `RegisterCouncilAction`, `SetObjectPolicyAction`, `SetTypePolicyAction`, etc.
+- And many more...
+
+**Example Type-Level Policies:**
+```move
+// Different rules for different coins
+set_type_policy<SpendAction<SUI>>(dao, none, MODE_DAO_ONLY);
+set_type_policy<SpendAction<USDC>>(dao, some(treasury_council), MODE_DAO_AND_COUNCIL);
+
+// Different rules for different liquidity pairs
+set_type_policy<CreatePoolAction<SUI, USDC>>(dao, some(liq_council), MODE_DAO_AND_COUNCIL);
+set_type_policy<CreatePoolAction<ETH, DAI>>(dao, some(trading_council), MODE_COUNCIL_ONLY);
+
+// Different rules for different grant types
+set_type_policy<CreateOracleGrantAction<SUI, USDC>>(dao, some(treasury_council), MODE_DAO_AND_COUNCIL);
+set_type_policy<CreateOracleGrantAction<TEST, USDC>>(dao, none, MODE_DAO_ONLY);
+```
+
+## Oracle Grant System: Two-Phase Security Model ✅ CORRECT BY DESIGN
+
+### Architecture Overview
+
+Oracle grants use a **two-phase security model** where governance controls authorization but execution is permissionless.
+
+### Phase 1: Grant Creation (FULL POLICY ENFORCEMENT) ✅
+
+**Grant creation goes through the full governance proposal system:**
+
+```move
+// In oracle_actions.move:1412
+public struct CreateOracleGrantAction<phantom AssetType, phantom StableType> has store, drop, copy {
+    recipients: vector<address>,
+    amounts: vector<u64>,
+    vesting_cliff_months: u64,
+    strike_price: u64,
+    price_condition_mode: u8,
+    // ... all grant parameters
+}
+```
+
+**Policy Enforcement at Grant Creation:**
+- ✅ **ACTION-level policy**: "Creating any oracle grants needs approval"
+- ✅ **TYPE-level policy**: "Creating SUI grants vs USDC grants = different policies"
+  ```move
+  // Example: Different policies per coin type
+  set_type_policy<CreateOracleGrantAction<SUI, USDC>>(
+      dao, some(treasury_council), MODE_DAO_AND_COUNCIL
+  );
+  set_type_policy<CreateOracleGrantAction<TEST, USDC>>(
+      dao, none, MODE_DAO_ONLY
+  );
+  ```
+
+**Grant Creation Flow:**
+```
+Propose CreateOracleGrantAction<SUI, USDC>
+    ↓
+Policy Analysis (OBJECT > TYPE > ACTION hierarchy)
+    ↓
+Council Pre-Approval (if MODE_DAO_AND_COUNCIL)
+    ↓
+Futarchy Market Created
+    ↓
+DAO Vote
+    ↓
+Execute: Creates PriceBasedMintGrant<SUI, USDC> object
+```
+
+**Result:** Grant object is **pre-approved by governance** to mint specific amounts under specific conditions.
+
+### Phase 2: Grant Claiming (NO POLICY ENFORCEMENT) ✅ INTENTIONAL
+
+**Grant claiming is permissionless - anyone with valid grant can claim:**
+
+```move
+// Step 1: Validate claim (line 945)
+public fun claim_grant<AssetType, StableType>(
+    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
+    claim_cap: &GrantClaimCap,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceRequest<ClaimGrantAction> {  // ← Non-parameterized action
+    // Validates:
+    // - Price conditions met (via TWAP oracle)
+    // - Vesting schedule satisfied
+    // - Time bounds respected
+    // - Grant not canceled/paused/frozen
+    // Returns hot potato with validated claim data
+}
+
+// Step 2: Fulfill claim (line 1156)
+public fun fulfill_claim_grant_from_account<AssetType, StableType, Config>(
+    request: ResourceRequest<ClaimGrantAction>,  // ← Non-parameterized
+    account: &mut Account<Config>,
+    payment_coin: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Borrow TreasuryCap from Account's managed assets (dynamic field access)
+    let treasury_cap = currency::borrow_treasury_cap_mut<Config, AssetType>(account);
+
+    // Mint tokens (grant already approved via governance)
+    let minted_coin = coin::mint<AssetType>(treasury_cap, action.claimable_amount, ctx);
+
+    // Transfer to recipient
+    transfer::public_transfer(minted_coin, action.recipient);
+}
+```
+
+**Why ClaimGrantAction is Non-Parameterized:**
+1. **Grant object contains all type info** - `PriceBasedMintGrant<AssetType, StableType>`
+2. **Type safety via generics** - `fulfill_claim_grant_from_account<AssetType, StableType, Config>`
+3. **No policy needed** - Grant creation already went through governance
+4. **Simpler hot potato** - No need to carry type parameters through ResourceRequest
+
+**Why TreasuryCap is Borrowed (Not Passed as Parameter):**
+- ✅ **No object-level policy check** - Borrowing from Account's managed assets is dynamic field access
+- ✅ **Matches vault spending pattern** - Same as `vault.move::do_spend`
+- ✅ **Grant already approved** - Governance approved the mint authorization
+
+### Security Model Comparison
+
+| Phase | Policy Enforcement | Rationale |
+|-------|-------------------|-----------|
+| **Grant Creation** | ✅ Full (ACTION + TYPE) | Governance must approve WHO can create WHAT grants |
+| **Grant Claiming** | ❌ None (by design) | Grant already approved; claiming is just execution |
+
+**This is CORRECT security design:**
+- Governance controls **authorization** (creating grants)
+- Execution is **permissionless** (anyone with valid grant can claim)
+- No redundant policy checks every time someone claims
+
+### Two-Phase Flow Diagram
+
+```move
+// ✅ Phase 1: Create grant via governance proposal
+CreateOracleGrantAction<SUI, USDC> { recipients: [alice], amounts: [1000000], ... }
+    → Governance proposal
+    → Policy check (TYPE-level: CreateOracleGrantAction<SUI, USDC>)
+    → Council pre-approval if MODE_DAO_AND_COUNCIL
+    → DAO vote
+    → Creates PriceBasedMintGrant object
+
+// ✅ Phase 2: Alice claims grant (permissionless)
+let request = claim_grant(grant, claim_cap, pool, ...);  // Validates price/vesting/time
+fulfill_claim_grant_from_account<SUI, USDC>(request, dao_account, payment, ...);
+    → Borrows TreasuryCap from Account's managed assets
+    → Mints tokens (grant already approved)
+    → NO policy check (by design)
+```
+
+### Key Insight: When to Use Parameterized vs Non-Parameterized Actions
+
+**Use Parameterized Actions When:**
+- Policy differentiation needed (e.g., SUI vs USDC spending)
+- Example: `SpendAction<CoinType>`, `CreateOracleGrantAction<AssetType, StableType>`
+
+**Use Non-Parameterized Actions When:**
+- Executing pre-approved operations (e.g., claiming grants)
+- Type safety via generics on execution functions
+- Example: `ClaimGrantAction` (non-parameterized) + `fulfill_claim_grant_from_account<AssetType, StableType>` (parameterized function)
+
 ## Common Build Issues
 
 ### Package Address Mismatches

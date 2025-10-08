@@ -6,7 +6,7 @@ use std::type_name::{Self, TypeName};
 use std::option::{Self as option, Option};
 use std::vector;
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin, TreasuryCap};
+use sui::coin::{Self, Coin, CoinMetadata, TreasuryCap};
 use sui::clock::{Clock};
 use sui::event;
 use sui::dynamic_field as df;
@@ -18,12 +18,12 @@ use futarchy_factory::factory;
 use futarchy_types::action_specs;
 use futarchy_factory::init_actions;
 use account_protocol::account::{Self, Account};
+use account_actions::init_actions as account_init_actions;
 use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
 use futarchy_core::priority_queue::ProposalQueue;
 use futarchy_markets::{fee, account_spot_pool::{Self, AccountSpotPool}};
 use futarchy_one_shot_utils::{math, constants};
 use account_extensions::extensions::Extensions;
-use futarchy_seal_utils::seal_commit_reveal::{Self, SealedParams, SealContainer};
 
 // === Witnesses ===
 public struct LaunchpadWitness has drop {}
@@ -36,7 +36,6 @@ const EMinRaiseNotMet: u64 = 3;
 const EMinRaiseAlreadyMet: u64 = 4;
 const ENotAContributor: u64 = 6;
 const EInvalidStateForAction: u64 = 7;
-const EWrongTotalSupply: u64 = 9;
 const EReentrancy: u64 = 10;
 const EArithmeticOverflow: u64 = 11;
 const ENotUSDC: u64 = 12;
@@ -59,15 +58,15 @@ const EIntentsAlreadyLocked: u64 = 113;
 const EResourcesNotFound: u64 = 114;
 const EInitActionsFailed: u64 = 115;
 const EInvalidMaxRaise: u64 = 116;
-const EAlreadyRevealed: u64 = 117;
-const EHashMismatch: u64 = 118;
-const ERevealDeadlineNotReached: u64 = 119;
 const EInvalidCapValue: u64 = 120;
 const EAllowedCapsNotSorted: u64 = 121;
 const EAllowedCapsEmpty: u64 = 122;
 const EFinalRaiseAmountZero: u64 = 123;
-const EInvalidSaltLength: u64 = 124;  // Salt must be exactly 32 bytes
 const EInvalidMinFillPct: u64 = 126;  // min_fill_pct must be 0-100
+const ECompletionRestricted: u64 = 127;  // Completion still restricted to creator
+const ETreasuryCapMissing: u64 = 128;    // Treasury cap must be pre-locked in DAO
+const EMetadataMissing: u64 = 129;       // Coin metadata must be supplied before completion
+const ESupplyNotZero: u64 = 130;         // Treasury cap supply must be zero at raise creation
 
 // === Constants ===
 // Note: Most constants moved to futarchy_one_shot_utils::constants for centralized management
@@ -77,6 +76,8 @@ const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
 const DEFAULT_AMM_TOTAL_FEE_BPS: u64 = 30; // 0.3% default AMM fee
+
+const PERMISSIONLESS_COMPLETION_DELAY_MS: u64 = 2 * 24 * 60 * 60 * 1000;
 
 // === Structs ===
 
@@ -111,6 +112,8 @@ public struct ContributorKey has copy, drop, store {
 public struct DaoAccountKey has copy, drop, store {}
 public struct DaoQueueKey has copy, drop, store {}
 public struct DaoPoolKey has copy, drop, store {}
+public struct DaoMetadataKey has copy, drop, store {}
+public struct CoinMetadataKey has copy, drop, store {}
 
 // Key for tracking pending intent specs (removed - using dao_params instead)
 // public struct PendingIntentsKey has copy, drop, store {}
@@ -195,9 +198,6 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     dao_id: Option<ID>,
     /// Whether init actions can still be added
     intents_locked: bool,
-    /// Seal integration for hidden max raise - uses shared seal_commit_reveal module
-    max_raise_seal: Option<SealContainer<u64>>,
-    reveal_deadline_ms: u64,                          // deadline_ms + 7 days grace period
     /// Admin trust score and review (set by protocol DAO validators)
     admin_trust_score: Option<u64>,
     admin_review_text: Option<String>,
@@ -311,31 +311,6 @@ public struct RefundClaimed has copy, drop {
     refund_amount: u64,
 }
 
-public struct RaiseCreatedWithSealedCap has copy, drop {
-    raise_id: ID,
-    creator: address,
-    raise_token_type: String,
-    stable_coin_type: String,
-    min_raise_amount: u64,
-    tokens_for_sale: u64,
-    deadline_ms: u64,
-    reveal_deadline_ms: u64,
-    description: String,
-}
-
-public struct MaxRaiseRevealed has copy, drop {
-    raise_id: ID,
-    decrypted_max_raise: u64,
-    timestamp_ms: u64,
-}
-
-public struct RaiseFailedSealTimeout has copy, drop {
-    raise_id: ID,
-    deadline_ms: u64,
-    reveal_deadline_ms: u64,
-    timestamp_ms: u64,
-}
-
 public struct RaiseEndedEarly has copy, drop {
     raise_id: ID,
     total_raised: u64,
@@ -353,6 +328,7 @@ fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
 
 /// Pre-create a DAO for a raise but keep it unshared
 /// This allows adding init intents before the raise starts
+/// Treasury cap and metadata remain in Raise until completion
 public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     factory: &mut factory::Factory,
@@ -369,16 +345,9 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     // Can't pre-create if already created
     assert!(raise.dao_id.is_none(), EInvalidStateForAction);
 
-    // Extract the TreasuryCap
-    let treasury_cap = if (raise.treasury_cap.is_some()) {
-        option::some(raise.treasury_cap.extract())
-    } else {
-        option::none()
-    };
-
     let params = &raise.dao_params;
 
-    // Create DAO WITHOUT sharing it yet
+    // Create DAO WITHOUT treasury cap (will be deposited on completion)
     let (account, queue, spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
         factory,
         extensions,
@@ -397,22 +366,21 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
         DEFAULT_AMM_TOTAL_FEE_BPS,
         params.dao_description,
         params.max_outcomes,
-        treasury_cap,
+        option::none(), // Treasury cap deposited on completion
         clock,
         ctx
     );
-    
+
     // Store DAO ID
     raise.dao_id = option::some(object::id(&account));
-    
+
     // Store unshared components in dynamic fields
     df::add(&mut raise.id, DaoAccountKey {}, account);
     df::add(&mut raise.id, DaoQueueKey {}, queue);
     df::add(&mut raise.id, DaoPoolKey {}, spot_pool);
-    
+
     // Init action specs are now stored in dao_params.init_action_specs
 }
-
 
 /// Lock intents - no more can be added after this
 public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
@@ -436,7 +404,8 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
     treasury_cap: TreasuryCap<RaiseToken>,
-    tokens_for_raise: Coin<RaiseToken>,
+    coin_metadata: CoinMetadata<RaiseToken>,
+    tokens_for_sale_amount: u64,
     min_raise_amount: u64,
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>, // Creator-defined allowed cap values
@@ -460,12 +429,16 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     // Collect launchpad creation fee
     fee::deposit_launchpad_creation_payment(fee_manager, launchpad_fee, clock, ctx);
 
+    // CRITICAL: Validate treasury cap and metadata
+    // Both treasury_cap and coin_metadata MUST be for RaiseToken (enforced by type system)
+    assert!(coin::total_supply(&treasury_cap) == 0, ESupplyNotZero);
+
     // Check that StableCoin is allowed
     assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
 
     // Validate max_raise_amount
     if (option::is_some(&max_raise_amount)) {
-        assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidStateForAction);
+        assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidMaxRaise);
     };
 
     let dao_params = DAOParameters {
@@ -477,57 +450,16 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     };
 
     init_raise<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps, description, dao_params, clock, ctx
-    );
-}
-
-/// Create a raise with Seal-encrypted max_raise_amount
-/// The max cap is hidden during fundraising to prevent oversubscription gaming
-/// Anyone can decrypt and reveal it after the deadline using Seal
-public entry fun create_raise_with_sealed_cap<RaiseToken: drop, StableCoin: drop>(
-    factory: &factory::Factory,
-    fee_manager: &mut fee::FeeManager,
-    treasury_cap: TreasuryCap<RaiseToken>,
-    tokens_for_raise: Coin<RaiseToken>,
-    min_raise_amount: u64,
-    allowed_caps: vector<u64>, // Creator-defined allowed cap values
-    max_raise_sealed_blob_id: vector<u8>,
-    max_raise_commitment_hash: vector<u8>,
-    description: String,
-    dao_name: ascii::String,
-    dao_description: String,
-    icon_url_string: ascii::String,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
-    amm_twap_initial_observation: u128,
-    twap_threshold: u64,
-    max_outcomes: u64,
-    agreement_lines: vector<String>,
-    agreement_difficulties: vector<u64>,
-    launchpad_fee: Coin<sui::sui::SUI>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Collect launchpad creation fee
-    fee::deposit_launchpad_creation_payment(fee_manager, launchpad_fee, clock, ctx);
-
-    assert!(tokens_for_raise.value() == treasury_cap.total_supply(), EWrongTotalSupply);
-    assert!(factory::is_stable_type_allowed<StableCoin>(factory), EStableTypeNotAllowed);
-
-    let dao_params = DAOParameters {
-        dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
-        amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
-        twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
-        init_actions_must_succeed: true,
-        init_action_specs: option::none(),
-    };
-
-    init_raise_with_sealed_cap<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, allowed_caps,
-        max_raise_sealed_blob_id, max_raise_commitment_hash,
-        description, dao_params, clock, ctx
+        treasury_cap,
+        coin_metadata,
+        tokens_for_sale_amount,
+        min_raise_amount,
+        max_raise_amount,
+        allowed_caps,
+        description,
+        dao_params,
+        clock,
+        ctx,
     );
 }
 
@@ -862,64 +794,6 @@ public entry fun start_settlement<RT, SC>(
     transfer::public_share_object(settlement);
 }
 
-/// Reveal the Seal-encrypted max_raise_amount and begin settlement
-/// Anyone can call this after the deadline with the decrypted values from Seal
-///
-/// Uses shared seal_commit_reveal module - delegates all verification logic
-///
-/// # Error Codes (Breaking Change)
-/// This function now uses error codes from `futarchy_seal_utils::seal_commit_reveal`:
-/// - Hash mismatch: seal_commit_reveal::EHashMismatch (0) instead of launchpad::EHashMismatch (63)
-/// - Invalid salt: seal_commit_reveal::EInvalidSaltLength (1) instead of launchpad::EInvalidSaltLength (69)
-/// - Too early: seal_commit_reveal::ETooEarlyToReveal (4)
-/// - Already revealed: launchpad::EAlreadyRevealed (68) - checked explicitly before delegation
-public entry fun reveal_and_begin_settlement<RT, SC>(
-    raise: &mut Raise<RT, SC>,
-    decrypted_max_raise: u64,     // Decrypted from SEAL blob
-    decrypted_salt: vector<u8>,   // Also decrypted from SEAL blob (32 bytes)
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Validation checks
-    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
-    assert!(!raise.settlement_done && !raise.settlement_in_progress, ESettlementAlreadyStarted);
-    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
-
-    // CRITICAL: Validate decrypted value is reasonable
-    assert!(decrypted_max_raise >= raise.min_raise_amount, EInvalidMaxRaise);
-
-    // Use shared seal_commit_reveal module for verification and reveal
-    // This handles: salt length check, hash verification, time-lock enforcement, event emission
-    if (option::is_some(&raise.max_raise_seal)) {
-        let container = option::borrow_mut(&mut raise.max_raise_seal);
-
-        // CRITICAL: Explicit check to prevent double-reveal attempts
-        // While seal_commit_reveal::reveal() also checks this, explicit validation
-        // in financial operations is safer than relying on implicit module behavior
-        assert!(!seal_commit_reveal::is_revealed(container), EAlreadyRevealed);
-
-        // Delegate to shared module - handles all verification logic
-        seal_commit_reveal::reveal(
-            container,
-            decrypted_max_raise,
-            decrypted_salt,
-            clock,
-            ctx
-        );
-    };
-
-    // Emit launchpad-specific event
-    event::emit(MaxRaiseRevealed {
-        raise_id: object::id(raise),
-        decrypted_max_raise,
-        timestamp_ms: clock.timestamp_ms(),
-    });
-
-    // Begin settlement with revealed cap
-    let settlement = begin_settlement(raise, clock, ctx);
-    transfer::public_share_object(settlement);
-}
-
 /// Entry function to finalize settlement
 public entry fun complete_settlement<RT, SC>(
     raise: &mut Raise<RT, SC>,
@@ -927,41 +801,6 @@ public entry fun complete_settlement<RT, SC>(
     ctx: &mut TxContext,
 ) {
     finalize_settlement(raise, s, ctx);
-}
-
-/// Fail a raise if Seal decryption times out (7 days after deadline)
-/// This safety mechanism allows contributors to get refunds if Seal is unavailable
-public entry fun fail_raise_seal_timeout<RT: drop, SC>(
-    raise: &mut Raise<RT, SC>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Can only call after reveal deadline (deadline + 7 days)
-    assert!(clock.timestamp_ms() >= raise.reveal_deadline_ms, ERevealDeadlineNotReached);
-
-    // Must have sealed cap to timeout
-    assert!(option::is_some(&raise.max_raise_seal), EInvalidStateForAction);
-
-    // Check if not already revealed
-    let container = option::borrow(&raise.max_raise_seal);
-    assert!(!seal_commit_reveal::is_revealed(container), EAlreadyRevealed);
-
-    // Mark raise as failed
-    if (raise.state == STATE_FUNDING) {
-        raise.state = STATE_FAILED;
-
-        // Cleanup pre-created DAO components if they exist
-        // Note: These objects remain in dynamic fields and cannot be easily cleaned up
-        // without specific delete functions. The raise being marked as FAILED prevents
-        // them from being used, and the objects remain frozen in the Raise.
-
-        event::emit(RaiseFailedSealTimeout {
-            raise_id: object::id(raise),
-            deadline_ms: raise.deadline_ms,
-            reveal_deadline_ms: raise.reveal_deadline_ms,
-            timestamp_ms: clock.timestamp_ms(),
-        });
-    };
 }
 
 /// Allow creator to end raise early if minimum raise is met
@@ -1001,6 +840,33 @@ public entry fun end_raise_early<RT, SC>(
     });
 }
 
+/// Creator-only fast path to finalize a raise once settlement is complete.
+/// Allows founders to close as soon as the market has cleared, before the permissionless window.
+public entry fun close_raise_early<RaiseToken: drop + store, StableCoin: drop + store>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    factory: &mut factory::Factory,
+    extensions: &Extensions,
+    fee_manager: &mut fee::FeeManager,
+    payment: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+
+    complete_raise_internal(
+        raise,
+        factory,
+        extensions,
+        fee_manager,
+        payment,
+        clock,
+        ctx,
+    );
+}
+
 /// Activates pre-created DAO and executes pending intents
 /// If init actions fail and init_actions_must_succeed is true, the raise fails
 /// This ensures atomic execution - either all init actions succeed or the raise fails
@@ -1017,6 +883,39 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.settlement_done, ESettlementNotStarted);
 
+    let permissionless_open = raise.deadline_ms + PERMISSIONLESS_COMPLETION_DELAY_MS;
+    if (clock.timestamp_ms() < permissionless_open) {
+        assert!(ctx.sender() == raise.creator, ECompletionRestricted);
+    };
+
+    complete_raise_internal(
+        raise,
+        factory,
+        extensions,
+        fee_manager,
+        payment,
+        clock,
+        ctx,
+    );
+}
+
+fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
+    raise: &mut Raise<RaiseToken, StableCoin>,
+    _factory: &mut factory::Factory,
+    _extensions: &Extensions,
+    fee_manager: &mut fee::FeeManager,
+    payment: Coin<sui::sui::SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
+    assert!(raise.settlement_done, ESettlementNotStarted);
+    assert!(raise.dao_id.is_some(), EDaoNotPreCreated);
+
+    // CRITICAL: Verify treasury cap and metadata exist and match
+    assert!(raise.treasury_cap.is_some(), ETreasuryCapMissing);
+    assert!(df::exists_(&raise.id, CoinMetadataKey {}), EMetadataMissing);
+
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
@@ -1025,23 +924,8 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
     assert!(consensual_total >= raise.min_raise_amount, EMinRaiseNotMet);
     assert!(consensual_total > 0, EMinRaiseNotMet);
 
-    // --- THE CRUCIAL HYBRID LOGIC ---
-    // The final raise is the lesser of the market consensus and the creator's hard cap.
-    // Check both revealed (from Seal) and public max_raise_amount
-    let final_total = if (option::is_some(&raise.max_raise_seal)) {
-        // Check if Seal was revealed
-        let container = option::borrow(&raise.max_raise_seal);
-        if (seal_commit_reveal::is_revealed(container)) {
-            // Use revealed value from Seal decryption
-            // is_revealed() is more explicit than has_params() for MODE_SEALED containers
-            let revealed_max = *seal_commit_reveal::get_params(container);
-            math::min(consensual_total, revealed_max)
-        } else {
-            // Seal not revealed yet, use consensual total
-            consensual_total
-        }
-    } else if (option::is_some(&raise.max_raise_amount)) {
-        // Use public max_raise_amount
+    // --- The final raise is the lesser of the market consensus and the creator's hard cap. ---
+    let final_total = if (option::is_some(&raise.max_raise_amount)) {
         math::min(consensual_total, *option::borrow(&raise.max_raise_amount))
     } else {
         consensual_total
@@ -1054,74 +938,88 @@ public entry fun claim_success_and_activate_dao<RaiseToken: drop + store, Stable
     assert!(raise.final_raise_amount <= raise.final_total_eligible, EInvalidSettlementState);
     assert!(raise.final_raise_amount <= raise.stable_coin_vault.value(), EInvalidSettlementState);
 
-    // Check if DAO was pre-created
-    if (raise.dao_id.is_some()) {
-        // Extract the unshared DAO components
-        let mut account: Account<FutarchyConfig> = df::remove(&mut raise.id, DaoAccountKey {});
-        let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
-        let mut spot_pool: AccountSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
+    // Extract the unshared DAO components
+    let mut account: Account<FutarchyConfig> = df::remove(&mut raise.id, DaoAccountKey {});
+    let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
+    let mut spot_pool: AccountSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
-        // CRITICAL: Set the launchpad initial price (write-once, immutable)
-        // This is the canonical raise price: tokens_for_sale / final_raise_amount
-        // Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
+    // Extract and deposit treasury cap into DAO account
+    let treasury_cap = raise.treasury_cap.extract();
+    account_init_actions::init_lock_treasury_cap<FutarchyConfig, RaiseToken>(
+        &mut account,
+        treasury_cap
+    );
 
-        // Validate non-zero amounts
-        assert!(raise.tokens_for_sale_amount > 0, EInvalidStateForAction);
-        assert!(raise.final_raise_amount > 0, EInvalidStateForAction);
+    // Extract and deposit metadata into DAO account
+    let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
+    account_init_actions::init_store_object<FutarchyConfig, DaoMetadataKey, CoinMetadata<RaiseToken>>(
+        &mut account,
+        DaoMetadataKey {},
+        metadata,
+        ctx
+    );
 
-        let raise_price = {
-            // Use safe math to calculate: (stable * price_multiplier_scale) / tokens
-            // MUST match AMM spot price precision (1e9) to ensure consistency
-            math::mul_div_mixed(
-                (raise.final_raise_amount as u128),
-                constants::price_multiplier_scale(),
-                (raise.tokens_for_sale_amount as u128)
-            )
-        };
+    // CRITICAL: Set the launchpad initial price (write-once, immutable)
+    // This is the canonical raise price: tokens_for_sale / final_raise_amount
+    // Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
 
-        futarchy_config::set_launchpad_initial_price(
-            futarchy_config::internal_config_mut(&mut account, version::current()),
-            raise_price
-        );
+    // Validate non-zero amounts
+    assert!(raise.tokens_for_sale_amount > 0, EInvalidStateForAction);
+    assert!(raise.final_raise_amount > 0, EInvalidStateForAction);
 
-        // Check if there are staged init actions
-        if (raise.dao_params.init_action_specs.is_some()) {
-            let specs = *raise.dao_params.init_action_specs.borrow();
-
-            // ATOMIC EXECUTION: Execute all init actions as a batch
-            // If ANY action fails, this function will abort and the entire transaction reverts
-            // This means:
-            // 1. The raise remains in STATE_FUNDING (not marked successful)
-            // 2. The DAO components remain unshared
-            // 3. Contributors can claim refunds after deadline
-            // 4. The launchpad automatically takes the fail path
-            //
-            // This is enforced by Move's transaction atomicity - no partial state changes
-            init_actions::execute_init_intent_with_resources<RaiseToken, StableCoin>(
-                &mut account,
-                specs,
-                &mut queue,
-                &mut spot_pool,
-                clock,
-                ctx
-            );
-        };
-
-        // Mark successful only if we reach here (init actions succeeded)
-        raise.state = STATE_SUCCESSFUL;
-
-        // Share all objects now that everything succeeded
-        transfer::public_share_object(account);
-        transfer::public_share_object(queue);
-        account_spot_pool::share(spot_pool);
-    } else {
-        // DAO must be pre-created - remove backward compatibility
-        abort EDaoNotPreCreated
+    let raise_price = {
+        // Use safe math to calculate: (stable * price_multiplier_scale) / tokens
+        // MUST match AMM spot price precision (1e9) to ensure consistency
+        math::mul_div_mixed(
+            (raise.final_raise_amount as u128),
+            constants::price_multiplier_scale(),
+            (raise.tokens_for_sale_amount as u128)
+        )
     };
-    
-    // Transfer the final, capped amount to the creator
+
+    futarchy_config::set_launchpad_initial_price(
+        futarchy_config::internal_config_mut(&mut account, version::current()),
+        raise_price
+    );
+
+    // Check if there are staged init actions
+    if (raise.dao_params.init_action_specs.is_some()) {
+        let specs = *raise.dao_params.init_action_specs.borrow();
+
+        // ATOMIC EXECUTION: Execute all init actions as a batch
+        // If ANY action fails, this function will abort and the entire transaction reverts
+        // This means:
+        // 1. The raise remains in STATE_FUNDING (not marked successful)
+        // 2. The DAO components remain unshared
+        // 3. Contributors can claim refunds after deadline
+        // 4. The launchpad automatically takes the fail path
+        //
+        // This is enforced by Move's transaction atomicity - no partial state changes
+        init_actions::execute_init_intent_with_resources<RaiseToken, StableCoin>(
+            &mut account,
+            specs,
+            &mut queue,
+            &mut spot_pool,
+            clock,
+            ctx
+        );
+    };
+
+    // Deposit the capped raise amount into the DAO treasury vault.
     let raised_funds = coin::from_balance(raise.stable_coin_vault.split(raise.final_raise_amount), ctx);
-    transfer::public_transfer(raised_funds, raise.creator);
+    account_init_actions::init_vault_deposit_default<FutarchyConfig, StableCoin>(
+        &mut account,
+        raised_funds,
+        ctx
+    );
+
+    // Mark successful only if we reach here (init actions succeeded)
+    raise.state = STATE_SUCCESSFUL;
+
+    // Share all objects now that everything succeeded
+    transfer::public_share_object(account);
+    transfer::public_share_object(queue);
+    account_spot_pool::share(spot_pool);
 
     event::emit(RaiseSuccessful {
         raise_id: object::id(raise),
@@ -1320,6 +1218,11 @@ public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
             timestamp: clock.timestamp_ms(),
         });
     };
+
+    if (df::exists_(&raise.id, CoinMetadataKey {})) {
+        let metadata: CoinMetadata<RaiseToken> = df::remove(&mut raise.id, CoinMetadataKey {});
+        transfer::public_transfer(metadata, raise.creator);
+    };
 }
 
 /// Refund for eligible contributors who were partially refunded due to hard cap
@@ -1422,15 +1325,14 @@ public entry fun sweep_dust<RaiseToken, StableCoin>(
     };
 }
 
-/// Internal function to initialize a raise with optional Seal encryption
+/// Internal function to initialize a raise.
 fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
-    tokens_for_raise: Coin<RaiseToken>,
+    coin_metadata: CoinMetadata<RaiseToken>,
+    tokens_for_sale_amount: u64,
     min_raise_amount: u64,
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>,
-    max_raise_sealed_blob_id: Option<vector<u8>>,
-    max_raise_commitment_hash: Option<vector<u8>>,
     description: String,
     dao_params: DAOParameters,
     clock: &Clock,
@@ -1440,17 +1342,22 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
     assert!(!vector::is_empty(&allowed_caps), EAllowedCapsEmpty);
     assert!(is_sorted_ascending(&allowed_caps), EAllowedCapsNotSorted);
 
-    let tokens_for_sale = tokens_for_raise.value();
+    // CRITICAL: Validate treasury cap before minting
+    // Treasury cap and metadata are both typed as RaiseToken (enforced by type system)
+    let mut treasury_cap = treasury_cap;
+    assert!(coin::total_supply(&treasury_cap) == 0, ESupplyNotZero);
+
+    if (option::is_some(&max_raise_amount)) {
+        assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidMaxRaise);
+    };
+
+    // Mint tokens for sale from the treasury cap
+    let minted_for_raise = coin::mint(&mut treasury_cap, tokens_for_sale_amount, ctx);
+    let tokens_for_sale_balance = coin::into_balance(minted_for_raise);
+
     let deadline = clock.timestamp_ms() + constants::launchpad_duration_ms();
 
-    // Create SealContainer if using SEAL - uses helper to avoid Option unwrapping verbosity
-    let max_raise_seal = seal_commit_reveal::new_sealed_container_from_options<u64>(
-        max_raise_sealed_blob_id,
-        max_raise_commitment_hash,
-        deadline
-    );
-
-    let raise = Raise<RaiseToken, StableCoin> {
+    let mut raise = Raise<RaiseToken, StableCoin> {
         id: object::new(ctx),
         creator: ctx.sender(),
         state: STATE_FUNDING,
@@ -1458,8 +1365,8 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         min_raise_amount,
         max_raise_amount,
         deadline_ms: deadline,
-        raise_token_vault: tokens_for_raise.into_balance(),
-        tokens_for_sale_amount: tokens_for_sale,
+        raise_token_vault: tokens_for_sale_balance,
+        tokens_for_sale_amount,
         stable_coin_vault: balance::zero(),
         crank_pool: balance::zero(),  // Filled by contributor fees
         contributor_count: 0,
@@ -1475,37 +1382,22 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         final_raise_amount: 0,
         dao_id: option::none(),
         intents_locked: false,
-        max_raise_seal,
-        reveal_deadline_ms: deadline + constants::seal_reveal_grace_period_ms(),
         admin_trust_score: option::none(),
         admin_review_text: option::none(),
     };
 
-    // Emit appropriate event based on whether Seal is used
-    if (option::is_some(&raise.max_raise_seal)) {
-        event::emit(RaiseCreatedWithSealedCap {
-            raise_id: object::id(&raise),
-            creator: raise.creator,
-            raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
-            stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
-            min_raise_amount,
-            tokens_for_sale,
-            deadline_ms: raise.deadline_ms,
-            reveal_deadline_ms: raise.reveal_deadline_ms,
-            description: raise.description,
-        });
-    } else {
-        event::emit(RaiseCreated {
-            raise_id: object::id(&raise),
-            creator: raise.creator,
-            raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
-            stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
-            min_raise_amount,
-            tokens_for_sale,
-            deadline_ms: raise.deadline_ms,
-            description: raise.description,
-        });
-    };
+    df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata);
+
+    event::emit(RaiseCreated {
+        raise_id: object::id(&raise),
+        creator: raise.creator,
+        raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
+        stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
+        min_raise_amount,
+        tokens_for_sale: tokens_for_sale_amount,
+        deadline_ms: raise.deadline_ms,
+        description: raise.description,
+    });
 
     transfer::public_share_object(raise);
 }
@@ -1513,7 +1405,8 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
 /// Internal function to initialize a raise.
 fun init_raise<RaiseToken: drop, StableCoin: drop>(
     treasury_cap: TreasuryCap<RaiseToken>,
-    tokens_for_raise: Coin<RaiseToken>,
+    coin_metadata: CoinMetadata<RaiseToken>,
+    tokens_for_sale_amount: u64,
     min_raise_amount: u64,
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>,
@@ -1523,28 +1416,16 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
     ctx: &mut TxContext,
 ) {
     init_raise_internal<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, max_raise_amount, allowed_caps,
-        option::none<vector<u8>>(), option::none<vector<u8>>(), description, dao_params, clock, ctx
-    );
-}
-
-/// Internal function to initialize a raise with Seal-encrypted cap
-fun init_raise_with_sealed_cap<RaiseToken: drop, StableCoin: drop>(
-    treasury_cap: TreasuryCap<RaiseToken>,
-    tokens_for_raise: Coin<RaiseToken>,
-    min_raise_amount: u64,
-    allowed_caps: vector<u64>,
-    max_raise_sealed_blob_id: vector<u8>,
-    max_raise_commitment_hash: vector<u8>,
-    description: String,
-    dao_params: DAOParameters,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    init_raise_internal<RaiseToken, StableCoin>(
-        treasury_cap, tokens_for_raise, min_raise_amount, option::none<u64>(), allowed_caps,
-        option::some(max_raise_sealed_blob_id), option::some(max_raise_commitment_hash),
-        description, dao_params, clock, ctx
+        treasury_cap,
+        coin_metadata,
+        tokens_for_sale_amount,
+        min_raise_amount,
+        max_raise_amount,
+        allowed_caps,
+        description,
+        dao_params,
+        clock,
+        ctx
     );
 }
 

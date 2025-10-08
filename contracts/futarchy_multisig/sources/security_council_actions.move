@@ -14,6 +14,7 @@ use account_protocol::{
     action_validation,
 };
 use futarchy_core::{futarchy_config::FutarchyConfig, version};
+use futarchy_multisig::approved_intent_spec;
 // Removed dependency on action_data_structs module which doesn't exist
 
 /// Create a new Security Council (WeightedMultisig) for the DAO.
@@ -46,6 +47,7 @@ public struct SweepIntentsWitness has drop {}
 public struct CouncilCreateOptimisticIntentWitness has drop {}
 public struct CouncilExecuteOptimisticIntentWitness has drop {}
 public struct CouncilCancelOptimisticIntentWitness has drop {}
+public struct CouncilApproveIntentSpecWitness has drop {}
 
 // --- Constructors, Getters, Cleanup ---
 
@@ -126,6 +128,15 @@ public struct CouncilCancelOptimisticIntentAction has store {
     dao_id: ID,
     intent_id: ID,
     reason: String,
+}
+
+/// Action for council to approve an IntentSpec for proposal creation
+/// Creates a shared ApprovedIntentSpec object that users can reference
+public struct CouncilApproveIntentSpecAction has store, drop {
+    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    dao_id: ID,
+    expiration_period_ms: u64,
+    metadata: String,
 }
 
 // === Execution Functions (do_ pattern) ===
@@ -509,6 +520,75 @@ public fun do_council_cancel_optimistic_intent<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Execute council approve intent spec action
+/// Creates a shared ApprovedIntentSpec object that users can reference
+public fun do_council_approve_intent_spec<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    dao_account: &Account<FutarchyConfig>,
+    _version_witness: VersionWitness,
+    _witness: IW,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // Assert action type with witness
+    action_validation::assert_action_type<CouncilApproveIntentSpecWitness>(spec);
+
+    let action_data = protocol_intents::action_spec_data(spec);
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // The action_data contains a serialized CouncilApproveIntentSpecAction
+    // We need to extract dao_id, expiration_period_ms, and metadata
+    // But we DON'T deserialize the InitActionSpecs (it has TypeName which can't be deserialized)
+    // Instead we just pass the whole action_data as bytes
+
+    // Copy the bytes so we can use them later
+    let action_data_copy = *action_data;
+    let mut reader = bcs::new(action_data_copy);
+
+    // Skip over InitActionSpecs (it's a vector of ActionSpecs)
+    let action_count = bcs::peel_vec_length(&mut reader);
+    let mut i = 0;
+    while (i < action_count) {
+        let _action_type_bytes = bcs::peel_vec_u8(&mut reader); // TypeName as bytes
+        let _action_data_bytes = bcs::peel_vec_u8(&mut reader); // Action data
+        i = i + 1;
+    };
+
+    // Now extract the other fields
+    let dao_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let expiration_period_ms = bcs::peel_u64(&mut reader);
+    let metadata = string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+
+    // Get council ID from the account executing this action
+    let account_address = protocol_intents::account(executable::intent(executable));
+    let council_id = object::id_from_address(account_address);
+
+    // Create and share the approval object with the serialized bytes
+    // Users will deserialize the full struct off-chain to inspect InitActionSpecs
+    let approval_id = approved_intent_spec::create_and_share(
+        action_data_copy,
+        dao_id,
+        council_id,
+        expiration_period_ms,
+        metadata,
+        clock,
+        ctx
+    );
+
+    approval_id
+}
+
 // === New Constructor Functions with Serialize-Then-Destroy Pattern ===
 
 /// Create and add a create security council action to an intent
@@ -767,6 +847,35 @@ public fun new_council_cancel_optimistic_intent<Outcome, IW: drop>(
     );
 }
 
+/// Create and add a council approve intent spec action to an intent
+/// This creates a shared ApprovedIntentSpec object that users can reference
+public fun new_council_approve_intent_spec<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    dao_id: ID,
+    expiration_period_ms: u64,
+    metadata: String,
+    intent_witness: IW,
+) {
+    // Serialize the entire CouncilApproveIntentSpecAction struct at once
+    let action = CouncilApproveIntentSpecAction {
+        intent_spec,
+        dao_id,
+        expiration_period_ms,
+        metadata,
+    };
+
+    let data = bcs::to_bytes(&action);
+
+    // Add to intent with witness type marker
+    protocol_intents::add_action_spec(
+        intent,
+        CouncilApproveIntentSpecWitness {},
+        data,
+        intent_witness,
+    );
+}
+
 // === Legacy Constructors (deprecated - use new_* functions above) ===
 
 // Optimistic Intent Constructors
@@ -822,6 +931,29 @@ public fun get_council_cancel_optimistic_intent_params(
 
 public fun delete_council_cancel_optimistic_intent(expired: &mut Expired) {
     let _ = expired.remove_action_spec();
+}
+
+public fun new_council_approve_intent_spec_action(
+    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    dao_id: ID,
+    expiration_period_ms: u64,
+    metadata: String,
+): CouncilApproveIntentSpecAction {
+    CouncilApproveIntentSpecAction { intent_spec, dao_id, expiration_period_ms, metadata }
+}
+
+public fun get_council_approve_intent_spec_params(
+    action: &CouncilApproveIntentSpecAction
+): (&futarchy_types::action_specs::InitActionSpecs, ID, u64, &String) {
+    (&action.intent_spec, action.dao_id, action.expiration_period_ms, &action.metadata)
+}
+
+public fun delete_council_approve_intent_spec(expired: &mut Expired) {
+    let _ = expired.remove_action_spec();
+}
+
+public fun destroy_council_approve_intent_spec(action: CouncilApproveIntentSpecAction) {
+    let CouncilApproveIntentSpecAction { intent_spec: _, dao_id: _, expiration_period_ms: _, metadata: _ } = action;
 }
 
 // Other Constructors

@@ -257,14 +257,14 @@ public struct StreamUnfrozen has copy, drop {
 }
 
 /// Action to deposit an amount of this coin to the targeted Vault.
-public struct DepositAction<phantom CoinType> has store {
+public struct DepositAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
     // exact amount to be deposited
     amount: u64,
 }
 /// Action to be used within intent making good use of the returned coin, similar to owned::withdraw.
-public struct SpendAction<phantom CoinType> has store {
+public struct SpendAction<phantom CoinType> has store, drop {
     // vault name
     name: String,
     // amount to withdraw
@@ -473,21 +473,24 @@ public fun new_deposit<Outcome, CoinType, IW: drop>(
     amount: u64,
     intent_witness: IW,
 ) {
-    // Create the action struct (no drop)
-    let action = DepositAction<CoinType> { name, amount };
+    // Create action struct
+    let action = DepositAction<CoinType> {
+        name,
+        amount,
+    };
 
-    // Serialize it
+    // Serialize the entire struct directly
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent with parameterized type witness
+    // The action struct itself serves as the type witness, preserving CoinType parameter
     intent.add_typed_action(
-        framework_action_types::vault_deposit(),
+        action,  // Action moved here, TypeName becomes DepositAction<CoinType>
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_deposit_action(action);
+    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Processes a DepositAction and deposits a coin to the vault.
@@ -513,12 +516,12 @@ public fun do_deposit<Config, Outcome: store, CoinType: drop, IW: drop>(
     let spec_version = intents::action_spec_version(spec);
     assert!(spec_version == 1, EUnsupportedActionVersion);
 
-    // Create BCS reader and deserialize
+    // Deserialize the entire action struct directly
     let mut reader = bcs::new(*action_data);
     let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
     let amount = bcs::peel_u64(&mut reader);
 
-    // CRITICAL: Validate all bytes consumed to prevent trailing data attacks
+    // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
     assert!(amount == coin.value(), EIntentAmountMismatch);
@@ -549,21 +552,24 @@ public fun new_spend<Outcome, CoinType, IW: drop>(
     amount: u64,
     intent_witness: IW,
 ) {
-    // Create the action struct (no drop)
-    let action = SpendAction<CoinType> { name, amount };
+    // Create action struct
+    let action = SpendAction<CoinType> {
+        name,
+        amount,
+    };
 
-    // Serialize it
+    // Serialize the entire struct directly
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with pre-serialized bytes
+    // Add to intent with parameterized type witness
+    // The action struct itself serves as the type witness, preserving CoinType parameter
     intent.add_typed_action(
-        framework_action_types::vault_spend(),
+        action,  // Action moved here, TypeName becomes SpendAction<CoinType>
         action_data,
         intent_witness
     );
 
-    // Explicitly destroy the action struct
-    destroy_spend_action(action);
+    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Creates a ToggleStreamPauseAction and adds it to an intent
@@ -716,12 +722,12 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
     let spec_version = intents::action_spec_version(spec);
     assert!(spec_version == 1, EUnsupportedActionVersion);
 
-    // Create BCS reader and deserialize
+    // Deserialize the entire action struct directly
     let mut reader = bcs::new(*action_data);
     let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
     let amount = bcs::peel_u64(&mut reader);
 
-    // CRITICAL: Validate all bytes consumed to prevent trailing data attacks
+    // Validate all bytes consumed
     bcs_validation::validate_all_bytes_consumed(reader);
 
     let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);

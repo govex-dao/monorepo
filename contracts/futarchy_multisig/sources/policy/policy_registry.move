@@ -44,10 +44,6 @@ public fun MAX_TYPE_POLICIES(): u64 { 200 }
 /// Rationale: DAOs typically have 5-20 critical objects needing special governance
 public fun MAX_OBJECT_POLICIES(): u64 { 100 }
 
-/// Maximum number of file-specific policies (e.g., different legal documents)
-/// Rationale: DAOs typically have 10-50 documents
-public fun MAX_FILE_POLICIES(): u64 { 100 }
-
 /// Maximum number of security councils
 /// Rationale: Even large DAOs rarely need more than 5-10 councils
 /// (Treasury, Technical, Legal, Emergency, Community, etc.)
@@ -69,26 +65,16 @@ public struct PolicyRegistry has store {
     /// Using String instead of TypeName to enable on-chain change permission enforcement
     type_policies: Table<String, PolicyRule>,
 
-    /// Object-specific policies (e.g., specific UpgradeCap)
+    /// Object-specific policies (e.g., specific UpgradeCap, specific File ID)
     /// Maps object ID to PolicyRule (council ID + mode)
+    /// Note: This now includes file policies - files are objects with IDs
     object_policies: Table<ID, PolicyRule>,
-
-    /// File-level policies (e.g., "bylaws" requires Legal Council)
-    /// Maps file name to PolicyRule (council ID + mode)
-    file_policies: Table<String, PolicyRule>,
-
-    /// Default file policy (fallback when specific file has no policy)
-    /// Separate from file_policies to avoid key collision
-    default_file_policy: Option<PolicyRule>,
 
     /// Pending type policy changes awaiting delay expiration
     pending_type_changes: Table<String, PendingChange>,
 
     /// Pending object policy changes awaiting delay expiration
     pending_object_changes: Table<ID, PendingChange>,
-
-    /// Pending file policy changes awaiting delay expiration
-    pending_file_changes: Table<String, PendingChange>,
 
     /// Registered security councils for this DAO
     registered_councils: vector<ID>,
@@ -304,11 +290,8 @@ public fun initialize<Config>(
             PolicyRegistry {
                 type_policies: table::new(ctx),
                 object_policies: table::new(ctx),
-                file_policies: table::new(ctx),
-                default_file_policy: option::none(),
                 pending_type_changes: table::new(ctx),
                 pending_object_changes: table::new(ctx),
-                pending_file_changes: table::new(ctx),
                 registered_councils: vector::empty(),
             },
             version_witness
@@ -320,6 +303,11 @@ public fun initialize<Config>(
 
 
 
+
+/// Check if account has a policy registry
+public fun has_registry<Config>(account: &Account<Config>): bool {
+    account.has_managed_data(PolicyRegistryKey {})
+}
 
 /// Helper function to get a mutable reference to the PolicyRegistry from an Account
 public fun borrow_registry_mut<Config>(
@@ -750,169 +738,6 @@ public fun has_object_policy(registry: &PolicyRegistry, object_id: ID): bool {
     table::contains(&registry.object_policies, object_id)
 }
 
-// === File-Level Policy Functions ===
-
-/// Check if a file needs council approval for execution
-/// Uses fallback: specific file -> default_file_policy -> default (false)
-public fun file_needs_council(registry: &PolicyRegistry, file_name: String): bool {
-    // 1. Try specific file policy
-    if (table::contains(&registry.file_policies, file_name)) {
-        let rule = table::borrow(&registry.file_policies, file_name);
-        return rule.execution_mode != 0
-    };
-
-    // 2. Try default file policy
-    if (option::is_some(&registry.default_file_policy)) {
-        let rule = option::borrow(&registry.default_file_policy);
-        return rule.execution_mode != 0
-    };
-
-    // 3. Default to DAO_ONLY (no council needed)
-    false
-}
-
-/// Get the council ID for a file's execution
-/// Uses fallback: specific file -> default_file_policy -> default (None)
-public fun get_file_council(registry: &PolicyRegistry, file_name: String): Option<ID> {
-    // 1. Try specific file policy
-    if (table::contains(&registry.file_policies, file_name)) {
-        let rule = table::borrow(&registry.file_policies, file_name);
-        return rule.execution_council_id
-    };
-
-    // 2. Try default file policy
-    if (option::is_some(&registry.default_file_policy)) {
-        let rule = option::borrow(&registry.default_file_policy);
-        return rule.execution_council_id
-    };
-
-    // 3. Default to no council
-    option::none()
-}
-
-/// Get the approval mode for a file's execution
-/// Uses fallback: specific file -> default_file_policy -> default (0)
-public fun get_file_mode(registry: &PolicyRegistry, file_name: String): u8 {
-    // 1. Try specific file policy
-    if (table::contains(&registry.file_policies, file_name)) {
-        let rule = table::borrow(&registry.file_policies, file_name);
-        return rule.execution_mode
-    };
-
-    // 2. Try default file policy
-    if (option::is_some(&registry.default_file_policy)) {
-        let rule = option::borrow(&registry.default_file_policy);
-        return rule.execution_mode
-    };
-
-    // 3. Default to DAO_ONLY
-    0
-}
-
-/// Get the complete policy rule for a file (for checking change permissions)
-/// Uses fallback: specific file -> default_file_policy -> aborts if neither exist
-public fun get_file_policy_rule(registry: &PolicyRegistry, file_name: String): &PolicyRule {
-    // 1. Try specific file policy
-    if (table::contains(&registry.file_policies, file_name)) {
-        return table::borrow(&registry.file_policies, file_name)
-    };
-
-    // 2. Try default file policy
-    if (option::is_some(&registry.default_file_policy)) {
-        return option::borrow(&registry.default_file_policy)
-    };
-
-    // 3. Abort - this function requires a policy to exist
-    abort EPolicyNotFound
-}
-
-/// Set a file-level policy with execution and change control
-public fun set_file_policy(
-    registry: &mut PolicyRegistry,
-    dao_id: ID,
-    file_name: String,
-    execution_council_id: Option<ID>,
-    execution_mode: u8,
-    change_council_id: Option<ID>,
-    change_mode: u8,
-    change_delay_ms: u64,
-    proposer_id: ID,
-    clock: &Clock,
-) {
-    let rule = PolicyRule {
-        execution_council_id,
-        execution_mode,
-        change_council_id,
-        change_mode,
-        change_delay_ms,
-    };
-
-    // Check if existing policy has delay
-    if (table::contains(&registry.file_policies, file_name)) {
-        let existing = table::borrow(&registry.file_policies, file_name);
-
-        // If existing policy has delay, create pending change instead of applying immediately
-        if (existing.change_delay_ms > 0) {
-            let current_time = sui::clock::timestamp_ms(clock);
-            let effective_at_ms = current_time + existing.change_delay_ms;
-            let pending = PendingChange {
-                new_rule: rule,
-                effective_at_ms,
-                proposer_id,
-                proposed_at_ms: current_time,
-            };
-
-            // Replace existing pending change if any
-            if (table::contains(&registry.pending_file_changes, file_name)) {
-                table::remove(&mut registry.pending_file_changes, file_name);
-            };
-            table::add(&mut registry.pending_file_changes, file_name, pending);
-            return
-        };
-
-        // No delay - apply immediately
-        let existing_mut = table::borrow_mut(&mut registry.file_policies, file_name);
-        *existing_mut = rule;
-    } else {
-        // New policy - apply immediately (no existing delay to respect)
-        assert!(table::length(&registry.file_policies) < MAX_FILE_POLICIES(), ETooManyFilePolicies);
-        table::add(&mut registry.file_policies, file_name, rule);
-    };
-
-    event::emit(FilePolicySet {
-        dao_id,
-        file_name,
-        execution_council_id,
-        execution_mode,
-        change_council_id,
-        change_mode,
-    });
-}
-
-/// Set the default file policy (fallback for all files without specific policies)
-public fun set_default_file_policy(
-    registry: &mut PolicyRegistry,
-    execution_council_id: Option<ID>,
-    execution_mode: u8,
-    change_council_id: Option<ID>,
-    change_mode: u8,
-    change_delay_ms: u64,
-) {
-    let rule = PolicyRule {
-        execution_council_id,
-        execution_mode,
-        change_council_id,
-        change_mode,
-        change_delay_ms,
-    };
-    registry.default_file_policy = option::some(rule);
-}
-
-/// Remove the default file policy
-public fun remove_default_file_policy(registry: &mut PolicyRegistry) {
-    registry.default_file_policy = option::none();
-}
-
 // === Pending Policy Change Functions ===
 
 /// Finalize a pending type policy change after delay has elapsed
@@ -959,28 +784,6 @@ public fun finalize_pending_object_policy(
     };
 }
 
-/// Finalize a pending file policy change after delay has elapsed
-public fun finalize_pending_file_policy(
-    registry: &mut PolicyRegistry,
-    file_name: String,
-    clock: &Clock,
-) {
-    assert!(table::contains(&registry.pending_file_changes, file_name), EPendingChangeNotFound);
-    let pending = table::remove(&mut registry.pending_file_changes, file_name);
-
-    // Ensure delay has elapsed
-    assert!(sui::clock::timestamp_ms(clock) >= pending.effective_at_ms, EDelayNotElapsed);
-
-    // Apply the policy change
-    if (table::contains(&registry.file_policies, file_name)) {
-        let existing = table::borrow_mut(&mut registry.file_policies, file_name);
-        *existing = pending.new_rule;
-    } else {
-        assert!(table::length(&registry.file_policies) < MAX_FILE_POLICIES(), ETooManyFilePolicies);
-        table::add(&mut registry.file_policies, file_name, pending.new_rule);
-    };
-}
-
 /// Cancel a pending type policy change
 /// Only the DAO or authorized council can cancel
 public fun cancel_pending_type_policy(
@@ -999,16 +802,6 @@ public fun cancel_pending_object_policy(
 ) {
     assert!(table::contains(&registry.pending_object_changes, object_id), EPendingChangeNotFound);
     table::remove(&mut registry.pending_object_changes, object_id);
-}
-
-/// Cancel a pending file policy change
-/// Only the DAO or authorized council can cancel
-public fun cancel_pending_file_policy(
-    registry: &mut PolicyRegistry,
-    file_name: String,
-) {
-    assert!(table::contains(&registry.pending_file_changes, file_name), EPendingChangeNotFound);
-    table::remove(&mut registry.pending_file_changes, file_name);
 }
 
 // === Pending Change Cleanup Functions ===
@@ -1076,37 +869,6 @@ public fun cleanup_abandoned_object_policies(
     cleaned
 }
 
-/// Clean up abandoned pending file policy changes older than MAX_PENDING_CHANGE_AGE_MS
-/// Returns the number of cleaned up entries
-public fun cleanup_abandoned_file_policies(
-    registry: &mut PolicyRegistry,
-    file_names: vector<String>,
-    clock: &Clock,
-): u64 {
-    let current_time = sui::clock::timestamp_ms(clock);
-    let cutoff_time = if (current_time > MAX_PENDING_CHANGE_AGE_MS()) {
-        current_time - MAX_PENDING_CHANGE_AGE_MS()
-    } else {
-        0
-    };
-
-    let mut cleaned = 0;
-    let mut i = 0;
-    while (i < vector::length(&file_names)) {
-        let file_name = vector::borrow(&file_names, i);
-        if (table::contains(&registry.pending_file_changes, *file_name)) {
-            let pending = table::borrow(&registry.pending_file_changes, *file_name);
-            if (pending.proposed_at_ms < cutoff_time) {
-                table::remove(&mut registry.pending_file_changes, *file_name);
-                cleaned = cleaned + 1;
-            };
-        };
-        i = i + 1;
-    };
-
-    cleaned
-}
-
 /// Check if a pending change is eligible for cleanup (older than MAX_PENDING_CHANGE_AGE_MS)
 public fun is_pending_change_abandonded(
     pending_proposed_at_ms: u64,
@@ -1122,22 +884,6 @@ public fun is_pending_change_abandonded(
     pending_proposed_at_ms < cutoff_time
 }
 
-/// Check if a file policy exists
-/// Uses fallback: specific file -> default_file_policy
-public fun has_file_policy(registry: &PolicyRegistry, file_name: String): bool {
-    // 1. Check specific file
-    if (table::contains(&registry.file_policies, file_name)) {
-        return true
-    };
-
-    // 2. Check default file policy
-    if (option::is_some(&registry.default_file_policy)) {
-        return true
-    };
-
-    false
-}
-
 // === Query Functions ===
 
 /// Get count of type policies
@@ -1150,29 +896,9 @@ public fun get_object_policy_count(registry: &PolicyRegistry): u64 {
     table::length(&registry.object_policies)
 }
 
-/// Get count of file policies
-public fun get_file_policy_count(registry: &PolicyRegistry): u64 {
-    table::length(&registry.file_policies)
-}
-
 /// Get count of registered councils
 public fun get_council_count(registry: &PolicyRegistry): u64 {
     vector::length(&registry.registered_councils)
-}
-
-/// Get the default file policy (if set)
-public fun get_default_file_policy(registry: &PolicyRegistry): &Option<PolicyRule> {
-    &registry.default_file_policy
-}
-
-// === File Policy Event ===
-public struct FilePolicySet has copy, drop {
-    dao_id: ID,
-    file_name: String,
-    execution_council_id: Option<ID>,
-    execution_mode: u8,
-    change_council_id: Option<ID>,
-    change_mode: u8,
 }
 
 // === Policy Migration Notes ===

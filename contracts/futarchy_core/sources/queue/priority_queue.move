@@ -127,6 +127,17 @@ public struct QueuedProposal<phantom StableCoin> has store {
     data: ProposalData,
     queue_entry_time: u64,  // Track when proposal entered queue for grace period
 
+    // === Policy Enforcement Fields (CRITICAL SECURITY) ===
+    // Inline storage of policy requirements "locked in" at proposal creation time.
+    // This ensures that if the DAO changes its policies via another proposal,
+    // it won't brick execution of in-flight proposals created under the old policy.
+    /// Policy mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
+    policy_mode: u8,
+    /// Which council is required (if any)
+    required_council_id: Option<ID>,
+    /// Proof of council approval (ApprovedIntentSpec ID) if mode required it
+    council_approval_proof: Option<ID>,
+
     // === SEAL Commit-Reveal Fields ===
     /// Market initialization parameters (sealed or public)
     /// Contains SEAL commitment, fallback params, and revealed params
@@ -544,6 +555,9 @@ public fun insert<StableCoin>(
                 uses_dao_liquidity: _,
                 data: _,
                 queue_entry_time: _,
+                policy_mode: _,
+                required_council_id: _,
+                council_approval_proof: _,
                 market_init_params: _,
                 time_reached_top_of_queue: _,
                 mut crank_bounty,
@@ -677,11 +691,14 @@ public fun new_queued_proposal<StableCoin>(
     data: ProposalData,
     bond: Option<Coin<StableCoin>>,
     intent_spec: Option<InitActionSpecs>,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
     let priority_score = create_priority_score(fee, timestamp);
-    
+
     QueuedProposal {
         bond,
         proposal_id: @0x0.to_id(),  // Will be set during insert
@@ -694,6 +711,9 @@ public fun new_queued_proposal<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        policy_mode,
+        required_council_id,
+        council_approval_proof,
         market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
@@ -710,11 +730,14 @@ public fun new_queued_proposal_with_id<StableCoin>(
     data: ProposalData,
     bond: Option<Coin<StableCoin>>,
     intent_spec: Option<InitActionSpecs>,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
     let priority_score = create_priority_score(fee, timestamp);
-    
+
     QueuedProposal {
         bond,
         proposal_id,
@@ -727,6 +750,9 @@ public fun new_queued_proposal_with_id<StableCoin>(
         uses_dao_liquidity,
         data,
         queue_entry_time: 0,  // Will be set during insert
+        policy_mode,
+        required_council_id,
+        council_approval_proof,
         market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
@@ -775,6 +801,9 @@ public fun get_intent_spec<StableCoin>(proposal: &QueuedProposal<StableCoin>): &
 public fun get_uses_dao_liquidity<StableCoin>(proposal: &QueuedProposal<StableCoin>): bool { proposal.uses_dao_liquidity }
 public fun get_data<StableCoin>(proposal: &QueuedProposal<StableCoin>): &ProposalData { &proposal.data }
 public fun get_dao_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): ID { proposal.dao_id }
+public fun get_policy_mode<StableCoin>(proposal: &QueuedProposal<StableCoin>): u8 { proposal.policy_mode }
+public fun get_required_council_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): Option<ID> { proposal.required_council_id }
+public fun get_council_approval_proof<StableCoin>(proposal: &QueuedProposal<StableCoin>): Option<ID> { proposal.council_approval_proof }
 
 // Getter functions for EvictionInfo
 public fun eviction_proposal_id(info: &EvictionInfo): ID { info.proposal_id }
@@ -1063,6 +1092,9 @@ public entry fun cancel_proposal<StableCoin>(
         uses_dao_liquidity: _,
         data: _,
         queue_entry_time: _,
+        policy_mode: _,
+        required_council_id: _,
+        council_approval_proof: _,
         market_init_params: _,
         time_reached_top_of_queue: _,
         mut crank_bounty,
@@ -1232,6 +1264,9 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         uses_dao_liquidity: _,
         data: _,
         queue_entry_time: _,
+        policy_mode: _,
+        required_council_id: _,
+        council_approval_proof: _,
         market_init_params: _,
         time_reached_top_of_queue: _,
         crank_bounty,

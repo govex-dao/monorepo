@@ -67,12 +67,12 @@ public struct AllowedCoinTypes has store {
 }
 
 /// Action to add a new coin type to the allowed list (requires governance)
-public struct AddCoinTypeAction<phantom CoinType> has store {
+public struct AddCoinTypeAction<phantom CoinType> has store, drop {
     vault_name: String,
 }
 
 /// Action to remove a coin type from the allowed list (requires governance)
-public struct RemoveCoinTypeAction<phantom CoinType> has store {
+public struct RemoveCoinTypeAction<phantom CoinType> has store, drop {
     vault_name: String,
 }
 

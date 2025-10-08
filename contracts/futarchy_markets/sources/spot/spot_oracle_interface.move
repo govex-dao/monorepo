@@ -22,7 +22,7 @@
 /// without knowing about proposals, conditional AMMs, or quantum liquidity.
 /// 
 /// HOW IT WORKS:
-/// - Normal times: Reads from spot's base fair value TWAP oracle
+/// - Normal times: Reads from spot's 90-day TWAP oracle
 /// - During proposals: Reads from winning conditional's futarchy oracle
 /// - Seamless transition with no gaps in price feed
 /// 
@@ -42,7 +42,7 @@ use std::option;
 // ============================================================================
 
 const LENDING_WINDOW_SECONDS: u64 = 1800; // 30 minutes standard
-const GOVERNANCE_MAX_WINDOW: u64 = 2_592_000; // 30 days maximum
+const GOVERNANCE_MAX_WINDOW: u64 = 7_776_000; // 90 days maximum
 
 // Errors
 const ENoOracles: u64 = 1;
@@ -67,7 +67,7 @@ public fun get_lending_twap<AssetType, StableType>(
         // This is temporary - winner can change until finalization
         get_highest_conditional_twap(conditional_pools, LENDING_WINDOW_SECONDS, clock)
     } else {
-        // Get TWAP from spot's SimpleTWAP (30-day window)
+        // Get TWAP from spot's SimpleTWAP (90-day window)
         spot_pool.get_twap(option::none(), clock)
     }
 }
@@ -76,13 +76,13 @@ public fun get_lending_twap<AssetType, StableType>(
 public fun get_twap_custom_window<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
-    _seconds: u64,  // Note: Currently ignored, spot uses 30-day window
+    _seconds: u64,  // Note: Currently ignored, spot uses 90-day window
     clock: &Clock,
 ): u128 {
     if (spot_pool.is_locked_for_proposal()) {
         get_highest_conditional_twap(conditional_pools, _seconds, clock)
     } else {
-        // Use spot's SimpleTWAP (always 30-day window)
+        // Use spot's SimpleTWAP (always 90-day window)
         spot_pool.get_twap(option::none(), clock)
     }
 }
@@ -105,14 +105,14 @@ public fun get_spot_price<AssetType, StableType>(
 // ============================================================================
 
 /// Get longest possible TWAP for governance decisions and token minting
-/// Uses SimpleTWAP from spot AMM (30-day window)
+/// Uses SimpleTWAP from spot AMM (90-day window)
 /// During proposals: properly combines spot frozen + conditional live cumulatives
 public fun get_governance_twap<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
-    // For governance, we want the 30-day TWAP with proper time weighting
+    // For governance, we want the 90-day TWAP with proper time weighting
     if (spot_pool.is_locked_for_proposal()) {
         // During proposal: extract conditional oracle data for proper cumulative combination
         let winning_conditional_oracle = get_highest_conditional_oracle(conditional_pools);
@@ -157,10 +157,10 @@ fun get_highest_conditional_oracle(pools: &vector<LiquidityPool>): &SimpleTWAP {
 }
 
 /// Get highest TWAP from conditional pools using SimpleTWAP
-/// Note: SimpleTWAP uses 30-day window, `seconds` parameter is ignored
+/// Note: SimpleTWAP uses 90-day window, `seconds` parameter is ignored
 fun get_highest_conditional_twap(
     pools: &vector<LiquidityPool>,
-    _seconds: u64,  // Note: SimpleTWAP uses fixed 30-day window
+    _seconds: u64,  // Note: SimpleTWAP uses fixed 90-day window
     clock: &Clock,
 ): u128 {
     assert!(!pools.is_empty(), ENoOracles);
@@ -205,9 +205,9 @@ fun get_highest_conditional_price(pools: &vector<LiquidityPool>): u128 {
 public fun is_twap_available<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     _conditional_pools: &vector<LiquidityPool>,
-    _seconds: u64,  // Note: Currently ignored, spot TWAP readiness is based on 30-day window
+    _seconds: u64,  // Note: Currently ignored, spot TWAP readiness is based on 90-day window
     clock: &Clock,
 ): bool {
-    // Check if spot's base fair value TWAP is ready (requires 30 days of history)
+    // Check if spot's base fair value TWAP is ready (requires 90 days of history)
     spot_pool.is_twap_ready(clock)
 }

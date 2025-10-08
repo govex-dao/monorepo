@@ -166,6 +166,27 @@ public fun execute_proposal_intent<AssetType, StableType, Outcome: store + drop 
     clock: &Clock,
     ctx: &mut TxContext
 ): Executable<Outcome> {
+    // === CRITICAL SECURITY: DEFENSIVE POLICY VALIDATION ===
+    // Verify that policy enforcement was satisfied at proposal creation time
+    // This is a defensive check - the real enforcement happens at proposal creation
+    //
+    // IMPORTANT: We validate against the STORED policy data in the Proposal,
+    // NOT against the current policy registry. This ensures that if the DAO
+    // changes its policies via another proposal, it won't brick execution of
+    // in-flight proposals that were created under the old policy.
+    //
+    // Each proposal "locks in" the policy requirements that were active when
+    // it was created, stored INLINE in the Proposal struct (not in shared objects).
+    let policy_mode = proposal::get_policy_mode_for_outcome(proposal, outcome_index);
+    let council_approval_proof = proposal::get_council_approval_proof_for_outcome(proposal, outcome_index);
+
+    // Note: Policy validation happens at proposal creation time.
+    // This defensive check verifies that if council approval was required (mode 3),
+    // the approval proof exists.
+    if (policy_mode == 3) { // MODE_DAO_AND_COUNCIL
+        assert!(option::is_some(&council_approval_proof), 8); // EPolicyRequirementMissing
+    };
+
     // Get the intent spec from the proposal for the specified outcome
     let mut intent_spec_opt = proposal::take_intent_spec_for_outcome(proposal, outcome_index);
 

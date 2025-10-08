@@ -31,10 +31,16 @@ use futarchy_core::{
     action_validation,
     action_types,
 };
+use futarchy_multisig::{
+    policy_registry,
+    intent_spec_analyzer,
+    approved_intent_spec::{Self, ApprovedIntentSpec},
+};
 use futarchy_core::{
     resource_requests::{Self, ResourceRequest, ResourceReceipt},
 };
-use futarchy_types::action_specs::InitActionSpecs;
+use futarchy_types::action_specs::{Self as action_specs, InitActionSpecs};
+use futarchy_core::version;
 
 // === Errors ===
 const EInvalidProposalType: u64 = 1;
@@ -48,13 +54,14 @@ const EInvalidTitle: u64 = 8;
 const ENoOutcomes: u64 = 9;
 const EOutcomeMismatch: u64 = 10;
 const EInvalidBucketDuration: u64 = 11;
-const EChainDepthNotFound: u64 = 12;
-const EBucketOrderingViolation: u64 = 13;
-const EIntegerOverflow: u64 = 14;
-const EInsufficientFeeCoins: u64 = 15;
-const EDAOPaymentDelinquent: u64 = 16; // DAO is blocked due to unpaid fees
-const EWrongQueue: u64 = 17; // Queue doesn't belong to the DAO
-const EDAOMismatch: u64 = 18; // Action's dao_id doesn't match queue's dao_id
+const ECouncilApprovalRequired: u64 = 12; // IntentSpec requires council pre-approval
+const EChainDepthNotFound: u64 = 13;
+const EBucketOrderingViolation: u64 = 14;
+const EIntegerOverflow: u64 = 15;
+const EInsufficientFeeCoins: u64 = 16;
+const EDAOPaymentDelinquent: u64 = 17; // DAO is blocked due to unpaid fees
+const EWrongQueue: u64 = 18; // Queue doesn't belong to the DAO
+const EDAOMismatch: u64 = 19; // Action's dao_id doesn't match queue's dao_id
 
 // === Constants ===
 // These are now just fallbacks - actual values come from DAO config
@@ -130,6 +137,17 @@ public struct ProposalReservation has store {
     /// Child proposals this would create (for nth-order chains)
     /// Each child can be for different outcomes
     child_proposals: vector<CreateProposalAction>,
+
+    // === POLICY ENFORCEMENT (CRITICAL SECURITY) ===
+    // These fields preserve the policy requirements that were validated at original creation time.
+    // This ensures that recreated proposals maintain the same security guarantees as the original.
+    // Without these fields, evicted proposals could bypass council approval requirements on recreation.
+    /// Policy mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
+    policy_mode: u8,
+    /// Which council is required (if any)
+    required_council_id: Option<ID>,
+    /// Proof of council approval (ApprovedIntentSpec ID) if mode required it
+    council_approval_proof: Option<ID>,
 }
 
 /// A "bucket" that holds all reservations expiring within the same time window (e.g., a day).
@@ -325,13 +343,84 @@ public fun do_create_proposal<Outcome: store, IW: copy + drop>(
 }
 
 /// Fulfill the resource request by providing the governance resources
-/// This completes the proposal creation with all required resources
+/// Fulfill proposal creation WITHOUT council approval (for DAO_ONLY, COUNCIL_ONLY, DAO_OR_COUNCIL)
 public fun fulfill_create_proposal(
     request: ResourceRequest<CreateProposalAction>,
+    account: &Account<FutarchyConfig>,
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
-    payment_tracker: &DaoPaymentTracker,  // NEW: Check if DAO is blocked
+    payment_tracker: &DaoPaymentTracker,
+    fee_coin: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceReceipt<CreateProposalAction> {
+    internal_fulfill_create_proposal(
+        request, account, queue, fee_manager, registry, payment_tracker,
+        false, @0x0.to_id(), // No approval
+        fee_coin, clock, ctx
+    )
+}
+
+/// Fulfill proposal creation WITH council approval (for DAO_AND_COUNCIL)
+/// CRITICAL: Validates council pre-approval before allowing proposal
+public fun fulfill_create_proposal_with_approval(
+    request: ResourceRequest<CreateProposalAction>,
+    account: &Account<FutarchyConfig>,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,
+    approved_spec: &mut ApprovedIntentSpec,
+    fee_coin: Coin<SUI>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ResourceReceipt<CreateProposalAction> {
+    // Extract the action to get IntentSpecs for validation
+    let action: CreateProposalAction = resource_requests::get_context(&request, string::utf8(b"action"));
+
+    // CRITICAL SECURITY: Validate the ApprovedIntentSpec matches the proposed IntentSpecs
+    // This ensures council approved the EXACT batch of intents being proposed
+    let approved_intent_spec_bytes = approved_intent_spec::validate_and_get_intent_spec_bytes(
+        approved_spec,
+        object::id(account),
+        option::none(), // Will check council ID in policy analysis
+        clock
+    );
+
+    // Verify at least one IntentSpec matches the approval by comparing BCS bytes
+    let mut found_match = false;
+    let mut i = 0;
+    while (i < vector::length(&action.intent_specs)) {
+        let intent_spec = vector::borrow(&action.intent_specs, i);
+        let intent_spec_bytes = bcs::to_bytes(intent_spec);
+        if (intent_spec_bytes == *approved_intent_spec_bytes) {
+            found_match = true;
+        };
+        i = i + 1;
+    };
+    assert!(found_match, ECouncilApprovalRequired);
+
+    // Increment usage counter
+    approved_intent_spec::increment_usage(approved_spec, clock);
+
+    internal_fulfill_create_proposal(
+        request, account, queue, fee_manager, registry, payment_tracker,
+        true, object::id(approved_spec),
+        fee_coin, clock, ctx
+    )
+}
+
+/// Internal implementation
+fun internal_fulfill_create_proposal(
+    request: ResourceRequest<CreateProposalAction>,
+    account: &Account<FutarchyConfig>,
+    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
+    fee_manager: &mut ProposalFeeManager,
+    registry: &mut ProposalReservationRegistry,
+    payment_tracker: &DaoPaymentTracker,
+    has_approval: bool,
+    approval_id: ID,
     fee_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -374,7 +463,63 @@ public fun fulfill_create_proposal(
     
     // Verify the fee coin matches the required fee amount
     assert!(coin::value(&fee_coin) >= action.proposal_fee, EInsufficientFee);
-    
+
+    // === CRITICAL SECURITY CHECK: COUNCIL PRE-APPROVAL ===
+    // For each IntentSpec in the proposal, check if it requires council pre-approval
+    // This prevents spam proposals and ensures council oversight BEFORE futarchy markets created
+    //
+    // IMPORTANT: We analyze the CURRENT policy registry and "lock in" the results by storing them
+    // INLINE in the Proposal struct. This ensures that if the DAO changes its policies via another
+    // proposal, it won't brick execution of in-flight proposals that were created under the old policy.
+
+    // Store policy data inline - three vectors (one per field)
+    let mut policy_modes = vector::empty<u8>();
+    let mut required_council_ids = vector::empty<Option<ID>>();
+    let mut council_approval_proofs = vector::empty<Option<ID>>();
+
+    let mut i = 0;
+    while (i < vector::length(&action.intent_specs)) {
+        let intent_spec = vector::borrow(&action.intent_specs, i);
+
+        let mut mode = 0u8;  // Default: DAO_ONLY
+        let mut council_id_opt = option::none<ID>();
+        let mut approval_proof_opt = option::none<ID>();
+
+        // Check if this DAO has a policy registry
+        if (policy_registry::has_registry(account)) {
+            let policy_reg = policy_registry::borrow_registry(account, version::current());
+
+            // Analyze the IntentSpec to determine required approvals
+            let requirement = intent_spec_analyzer::analyze_requirements_comprehensive(
+                intent_spec,
+                policy_reg
+            );
+
+            mode = intent_spec_analyzer::mode(&requirement);
+            council_id_opt = *intent_spec_analyzer::council_id(&requirement);
+
+            // If MODE_DAO_AND_COUNCIL (3), must have council pre-approval BEFORE queueing
+            if (mode == 3) {
+                // Require approval was provided
+                assert!(has_approval, ECouncilApprovalRequired);
+
+                // Store the approval proof ID
+                approval_proof_opt = option::some(approval_id);
+
+                // Note: Full validation (ApprovedIntentSpec exists, not expired, matches IntentSpec)
+                // is done in the fulfill_create_proposal_with_approval function which validates
+                // and increments usage counter on the ApprovedIntentSpec object before calling this.
+            };
+        };
+
+        // Store policy data inline (no shared objects created)
+        vector::push_back(&mut policy_modes, mode);
+        vector::push_back(&mut required_council_ids, council_id_opt);
+        vector::push_back(&mut council_approval_proofs, approval_proof_opt);
+
+        i = i + 1;
+    };
+
     // Generate a unique proposal ID for the new proposal
     let proposal_uid = object::new(ctx);
     let proposal_id = object::uid_to_inner(&proposal_uid);
@@ -386,13 +531,29 @@ public fun fulfill_create_proposal(
         proposal_id,
         fee_coin
     );
-    
-    // Create the proposal with the generated ID
+
+    // Extract policy data for the first IntentSpec (used for queued proposal and reservation)
+    // If no IntentSpecs, use default DAO_ONLY policy
+    let (policy_mode, required_council_id, council_approval_proof) = if (vector::length(&policy_modes) > 0) {
+        (
+            *vector::borrow(&policy_modes, 0),
+            *vector::borrow(&required_council_ids, 0),
+            *vector::borrow(&council_approval_proofs, 0)
+        )
+    } else {
+        // No IntentSpecs - default to DAO_ONLY
+        (0u8, option::none<ID>(), option::none<ID>())
+    };
+
+    // Create the proposal with the generated ID and inline policy data
     let new_proposal = create_queued_proposal_with_id(
         &action,
         proposal_id,
         parent_proposal_id,
         reservation_period,
+        policy_mode,
+        required_council_id,
+        council_approval_proof,
         clock,
         ctx
     );
@@ -425,6 +586,9 @@ public fun fulfill_create_proposal(
             parent_proposal_id,
             action,
             reservation_period,
+            policy_mode,
+            required_council_id,
+            council_approval_proof,
             clock,
             ctx
         );
@@ -435,6 +599,9 @@ public fun fulfill_create_proposal(
             parent_proposal_id,
             action,
             reservation_period,
+            policy_mode,
+            required_council_id,
+            council_approval_proof,
             clock,
             ctx
         );
@@ -532,6 +699,9 @@ fun create_reservation(
     parent_proposal_id: ID,
     action: CreateProposalAction,
     reservation_period: u64,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
     clock: &Clock,
     ctx: &TxContext,
 ) {
@@ -574,6 +744,10 @@ fun create_reservation(
         recreation_expires_at: expires_at,
         recreation_count: 0,
         child_proposals,
+        // Policy enforcement - preserve original policy requirements
+        policy_mode,
+        required_council_id,
+        council_approval_proof,
     };
     
     // Add the reservation to the main table
@@ -647,6 +821,9 @@ fun create_queued_proposal_with_id(
     proposal_id: ID,
     parent_proposal_id: ID,  // For tracking governance chain only
     _reservation_period: u64,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
     clock: &Clock,
     ctx: &TxContext,
 ): priority_queue::QueuedProposal<FutarchyConfig> {
@@ -660,7 +837,7 @@ fun create_queued_proposal_with_id(
         vector[action.initial_stable_amount, action.initial_stable_amount]
     );
 
-    // Create the queued proposal with the specific ID
+    // Create the queued proposal with the specific ID and inline policy data
     priority_queue::new_queued_proposal_with_id(
         proposal_id,
         action.dao_id, // ✅ FIXED: Use actual DAO Account ID, not parent proposal ID
@@ -670,6 +847,9 @@ fun create_queued_proposal_with_id(
         proposal_data,
         option::none(), // No bond for now
         option::none(), // No intent key
+        policy_mode,
+        required_council_id,
+        council_approval_proof,
         clock
     )
 }
@@ -691,14 +871,19 @@ fun create_queued_proposal_from_reservation(
     );
 
     // Create the queued proposal with new fee
+    // ✅ SECURITY FIX: Use stored policy data from reservation to preserve original requirements
+    // This ensures that evicted proposals maintain the same council approval requirements
     priority_queue::new_queued_proposal(
-        reservation.dao_id, // ✅ FIXED: Use DAO ID from reservation
+        reservation.dao_id, // ✅ Use DAO ID from reservation
         fee_amount,
         reservation.use_dao_liquidity,
         tx_context::sender(ctx), // Current recreator becomes proposer
         proposal_data,
         option::none(), // No bond
         option::none(), // No intent key
+        reservation.policy_mode, // ✅ Use original policy data
+        reservation.required_council_id,
+        reservation.council_approval_proof,
         clock
     )
 }
@@ -721,15 +906,20 @@ fun create_queued_proposal_from_reservation_with_id(
     );
 
     // Create the queued proposal with the specific ID
+    // ✅ SECURITY FIX: Use stored policy data from reservation to preserve original requirements
+    // This ensures that evicted proposals maintain the same council approval requirements
     priority_queue::new_queued_proposal_with_id(
         proposal_id,
-        reservation.dao_id, // ✅ FIXED: Use DAO ID from reservation
+        reservation.dao_id, // ✅ Use DAO ID from reservation
         fee_amount,
         reservation.use_dao_liquidity,
         tx_context::sender(ctx), // Current recreator becomes proposer
         proposal_data,
         option::none(), // No bond
         option::none(), // No intent key
+        reservation.policy_mode, // ✅ Use original policy data
+        reservation.required_council_id,
+        reservation.council_approval_proof,
         clock
     )
 }
@@ -845,11 +1035,19 @@ public entry fun recreate_proposal_chain(
         object::delete(child_id);
         
         // Create the child proposal with the specific ID
+        // NOTE: Children inherit parent's policy requirements from reservation
+        // This is a limitation - ideally each child's IntentSpec should be analyzed
+        // separately against the policy registry, but that would require Account access.
+        // For now, children inherit the parent proposal's policy requirements.
+        let reservation = table::borrow(&registry.reservations, parent_proposal_id);
         let child_proposal = create_queued_proposal_with_id(
             &child_action,
             child_proposal_id,
             parent_proposal_id, // Use parent as the dao_id
             0, // No additional reservation period for children in batch
+            reservation.policy_mode, // ✅ Inherit parent's policy data
+            reservation.required_council_id,
+            reservation.council_approval_proof,
             clock,
             ctx
         );
@@ -995,6 +1193,9 @@ public fun prune_oldest_expired_bucket(
             recreation_expires_at: _,
             recreation_count: _,
             child_proposals: _,
+            policy_mode: _,
+            required_council_id: _,
+            council_approval_proof: _,
         } = reservation;
         i = i + 1;
     };

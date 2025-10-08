@@ -138,6 +138,20 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     amm_total_fee_bps: u64,
     fee_escrow: Balance<StableType>,
     treasury_address: address,
+
+    // Policy enforcement fields (CRITICAL SECURITY)
+    // One entry per outcome - each outcome's IntentSpec (batch of intents) can have different policy requirements
+    //
+    // IMPORTANT: These fields "lock in" the policy requirements that were active when the proposal was created.
+    // This ensures that if the DAO changes its policies via another proposal, it won't brick execution of
+    // in-flight proposals that were created under the old policy.
+    //
+    /// Policy modes per outcome: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
+    policy_modes: vector<u8>,
+    /// Required council ID per outcome (if any)
+    required_council_ids: vector<Option<ID>>,
+    /// Council approval proof per outcome (ApprovedIntentSpec ID if mode required it)
+    council_approval_proofs: vector<Option<ID>>,
 }
 
 /// A scoped witness proving that a particular (proposal, outcome) had an IntentSpec.
@@ -431,6 +445,11 @@ public fun initialize_market<AssetType, StableType>(
         amm_total_fee_bps,
         fee_escrow,
         treasury_address,
+        // Policy enforcement - Policy data will be set when IntentSpecs are attached
+        // For now, initialize with empty/default values (these MUST be set before market activation)
+        policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
+        required_council_ids: vector::tabulate!(outcome_count, |_| option::none()),
+        council_approval_proofs: vector::tabulate!(outcome_count, |_| option::none()),
     };
 
     event::emit(ProposalCreated {
@@ -544,8 +563,13 @@ public fun new_premarket<AssetType, StableType>(
         amm_total_fee_bps,
         fee_escrow,
         treasury_address,
+        // Policy enforcement - Policy data will be set when IntentSpecs are attached
+        // For now, initialize with empty/default values (these MUST be set before market activation)
+        policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
+        required_council_ids: vector::tabulate!(outcome_count, |_| option::none()),
+        council_approval_proofs: vector::tabulate!(outcome_count, |_| option::none()),
     };
-    
+
     transfer::public_share_object(proposal);
     actual_proposal_id
 }
@@ -750,6 +774,15 @@ public fun add_outcome<AssetType, StableType>(
 
     // Initialize action count for new outcome
     proposal.outcome_data.actions_per_outcome.push_back(0);
+
+    // Initialize IntentSpec slot as empty
+    proposal.outcome_data.intent_specs.push_back(option::none());
+
+    // CRITICAL SECURITY: Initialize policy fields with default values
+    // These MUST be updated when IntentSpec is attached via set_intent_spec_for_outcome
+    proposal.policy_modes.push_back(0u8);  // Default: DAO_ONLY
+    proposal.required_council_ids.push_back(option::none());
+    proposal.council_approval_proofs.push_back(option::none());
 
     let new_idx = proposal.outcome_data.outcome_count;
     proposal.outcome_data.outcome_count = new_idx + 1;
@@ -1048,6 +1081,33 @@ public fun get_state<AssetType, StableType>(proposal: &Proposal<AssetType, Stabl
 public fun get_dao_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
     proposal.dao_id
 }
+
+// === Policy Enforcement Getters ===
+
+/// Get PolicyRequirement ID for a specific outcome
+/// Caller can use this ID to fetch the PolicyRequirement shared object and read policy data
+public fun get_policy_mode_for_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_idx: u64
+): u8 {
+    *vector::borrow(&proposal.policy_modes, outcome_idx)
+}
+
+public fun get_required_council_id_for_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_idx: u64
+): Option<ID> {
+    *vector::borrow(&proposal.required_council_ids, outcome_idx)
+}
+
+public fun get_council_approval_proof_for_outcome<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    outcome_idx: u64
+): Option<ID> {
+    *vector::borrow(&proposal.council_approval_proofs, outcome_idx)
+}
+
+// === End Policy Enforcement Getters ===
 
 public fun proposal_id<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): ID {
     proposal.id.to_inner()
@@ -1363,11 +1423,23 @@ public fun make_cancel_witness<AssetType, StableType>(
 }
 
 /// Set the intent spec for a specific outcome and track action count
+/// Set IntentSpec for an outcome with policy enforcement
+/// This function:
+/// 1. Validates the IntentSpec action count
+/// 2. Stores the IntentSpec in the outcome slot
+/// 3. Stores PolicyRequirement ID for policy enforcement
+///
+/// CRITICAL SECURITY: PolicyRequirement ID must be provided by the caller
+/// who has already analyzed the IntentSpec against the DAO's policy registry
+/// and created a PolicyRequirement shared object
 public fun set_intent_spec_for_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     outcome_index: u64,
     intent_spec: InitActionSpecs,
     max_actions_per_outcome: u64,
+    policy_mode: u8,
+    required_council_id: Option<ID>,
+    council_approval_proof: Option<ID>,
 ) {
     assert!(outcome_index < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
 
@@ -1383,6 +1455,14 @@ public fun set_intent_spec_for_outcome<AssetType, StableType>(
     // Set the intent spec and update count
     *spec_slot = option::some(intent_spec);
     *action_count = num_actions;
+
+    // CRITICAL SECURITY: Store policy data for this outcome
+    let mode_slot = vector::borrow_mut(&mut proposal.policy_modes, outcome_index);
+    *mode_slot = policy_mode;
+    let council_slot = vector::borrow_mut(&mut proposal.required_council_ids, outcome_index);
+    *council_slot = required_council_id;
+    let proof_slot = vector::borrow_mut(&mut proposal.council_approval_proofs, outcome_index);
+    *proof_slot = council_approval_proof;
 }
 
 

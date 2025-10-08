@@ -36,7 +36,7 @@ use account_protocol::{
     intents,
     version_witness::VersionWitness,
 };
-use account_actions::stream_utils;
+use account_actions::{stream_utils, currency};
 use futarchy_core::{
     action_validation,
     action_types,
@@ -119,6 +119,7 @@ const EInvalidGrantAmount: u64 = 22;
 const EExecutionTooEarly: u64 = 23;
 const EGrantExpired: u64 = 24;
 const EInsufficientPayment: u64 = 25;
+const EWrongAccount: u64 = 26;
 
 // === Core Structs ===
 
@@ -1128,29 +1129,47 @@ public fun claim_grant<AssetType, StableType>(
     resource_requests::new_resource_request(action, ctx)
 }
 
-/// Fulfill a grant claim (STEP 2: Execution)
+/// Fulfill a grant claim by borrowing TreasuryCap from DAO's Account (RECOMMENDED)
 ///
-/// This function:
-/// - Takes the ResourceRequest hot potato from claim_grant()
-/// - Extracts the validated claim data
-/// - Handles strike price payment
-/// - Mints tokens using TreasuryCap
-/// - Transfers tokens to recipient
+/// This function bypasses object-level policies on TreasuryCap.
+/// Only TYPE policies on oracle mint actions matter.
 ///
-/// The DAO provides TreasuryCap through vault borrowing in the same PTB:
+/// Architecture:
+/// - Borrows TreasuryCap directly from Account's managed assets
+/// - Same pattern as vault spending and stream withdrawals
+/// - No object policy traversal (it's dynamic field access)
+///
+/// Security:
+/// - Validates Account matches DAO address from ResourceRequest
+/// - ResourceRequest already validated all grant conditions
+/// - Cannot substitute different Account (address check fails)
+///
+/// Usage:
 /// ```
-/// tx.moveCall({ target: 'vault::borrow_treasury_cap', ... });
-/// tx.moveCall({ target: 'oracle_actions::fulfill_claim_grant', arguments: [request, treasuryCap, payment] });
+/// // PTB
+/// tx.moveCall({ target: 'oracle_actions::claim_grant', ... });  // Returns ResourceRequest
+/// tx.moveCall({
+///   target: 'oracle_actions::fulfill_claim_grant_from_account',
+///   arguments: [request, daoAccount, paymentCoin, clock]
+/// });
 /// ```
-public fun fulfill_claim_grant<AssetType, StableType>(
+public fun fulfill_claim_grant_from_account<AssetType, StableType, Config>(
     request: resource_requests::ResourceRequest<ClaimGrantAction>,
-    treasury_cap: &mut TreasuryCap<AssetType>,
+    account: &mut Account<Config>,
     mut payment_coin: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Extract validated claim data from ResourceRequest
     let action = resource_requests::extract_action(request);
+
+    // SECURITY: Verify correct DAO Account (prevents Account substitution)
+    let account_addr = account.addr();
+    assert!(account_addr == action.dao_address, EWrongAccount);
+
+    // Borrow TreasuryCap from Account's managed assets
+    // This bypasses object-level policies - only Account access matters
+    let treasury_cap = currency::borrow_treasury_cap_mut<Config, AssetType>(account);
 
     // Handle strike price payment (if required)
     if (action.strike_payment_required > 0) {
@@ -1177,8 +1196,8 @@ public fun fulfill_claim_grant<AssetType, StableType>(
         };
     };
 
-    // Mint tokens
-    let minted_coin = coin::mint(treasury_cap, action.claimable_amount, ctx);
+    // Mint tokens using borrowed TreasuryCap
+    let minted_coin = coin::mint<AssetType>(treasury_cap, action.claimable_amount, ctx);
 
     // Transfer to recipient
     transfer::public_transfer(minted_coin, action.recipient);

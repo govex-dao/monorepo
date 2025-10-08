@@ -16,6 +16,7 @@ use futarchy_multisig::security_council_actions::{
     CouncilCreateOptimisticIntentAction,
     CouncilExecuteOptimisticIntentAction,
     CouncilCancelOptimisticIntentAction,
+    CouncilApproveIntentSpecAction,
 };
 // SetPolicyFromPlaceholderAction needs to be defined
 public struct SetPolicyFromPlaceholderAction has store, copy, drop {
@@ -65,6 +66,11 @@ public struct CouncilExecuteOptimisticIntentActionDecoder has key, store {
 
 /// Decoder for CouncilCancelOptimisticIntentAction
 public struct CouncilCancelOptimisticIntentActionDecoder has key, store {
+    id: UID,
+}
+
+/// Decoder for CouncilApproveIntentSpecAction
+public struct CouncilApproveIntentSpecActionDecoder has key, store {
     id: UID,
 }
 
@@ -330,6 +336,54 @@ public fun decode_council_cancel_optimistic_intent_action(
     ]
 }
 
+/// Decode a CouncilApproveIntentSpecAction
+public fun decode_council_approve_intent_spec_action(
+    _decoder: &CouncilApproveIntentSpecActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+
+    // Deserialize IntentSpec (vector of ActionSpecs)
+    let action_count = bcs::peel_vec_length(&mut bcs_data);
+
+    // Skip over the action specs (just count them)
+    let mut i = 0;
+    while (i < action_count) {
+        bcs::peel_vec_u8(&mut bcs_data); // action_type
+        bcs::peel_vec_u8(&mut bcs_data); // action_data
+        i = i + 1;
+    };
+
+    let dao_id = bcs::peel_address(&mut bcs_data);
+    let expiration_period_ms = bcs::peel_u64(&mut bcs_data);
+    let metadata = bcs::peel_vec_u8(&mut bcs_data).to_string();
+
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"dao_id".to_string(),
+            dao_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"action_count".to_string(),
+            action_count.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"expiration_period_ms".to_string(),
+            expiration_period_ms.to_string(),
+            b"u64 (milliseconds)".to_string(),
+        ),
+        schema::new_field(
+            b"metadata".to_string(),
+            metadata,
+            b"String".to_string(),
+        ),
+    ]
+}
+
 /// Decode a CreateSecurityCouncilAction
 public fun decode_create_security_council_action(
     _decoder: &CreateSecurityCouncilActionDecoder,
@@ -571,6 +625,7 @@ public fun register_decoders(
     register_council_create_optimistic_intent_decoder(registry, ctx);
     register_council_execute_optimistic_intent_decoder(registry, ctx);
     register_council_cancel_optimistic_intent_decoder(registry, ctx);
+    register_council_approve_intent_spec_decoder(registry, ctx);
 
     // Security council with placeholders
     register_create_security_council_decoder(registry, ctx);
@@ -644,6 +699,15 @@ fun register_council_cancel_optimistic_intent_decoder(
 ) {
     let decoder = CouncilCancelOptimisticIntentActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CouncilCancelOptimisticIntentAction>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_council_approve_intent_spec_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = CouncilApproveIntentSpecActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<CouncilApproveIntentSpecAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 

@@ -93,7 +93,6 @@ fun get_policy_rule_fields(rule: &policy_registry::PolicyRule): (Option<ID>, u8,
 // === Witness Types for Action Validation ===
 public struct SetTypePolicyWitness has drop {}
 public struct SetObjectPolicyWitness has drop {}
-public struct SetFilePolicyWitness has drop {}  // NEW
 public struct RegisterCouncilWitness has drop {}
 public struct RemoveTypePolicyWitness has drop {}
 public struct RemoveObjectPolicyWitness has drop {}
@@ -113,16 +112,6 @@ public struct SetTypePolicyAction has store, drop {
 /// Set an object-specific policy (e.g., specific UpgradeCap requires Technical Council)
 public struct SetObjectPolicyAction has store, drop {
     object_id: ID,
-    execution_council_id: Option<ID>,
-    execution_mode: u8,
-    change_council_id: Option<ID>,
-    change_mode: u8,
-    change_delay_ms: u64, // Delay before policy changes take effect
-}
-
-/// Set a file-level policy (e.g., "bylaws" requires Legal Council) - NEW
-public struct SetFilePolicyAction has store, drop {
-    file_name: String,
     execution_council_id: Option<ID>,
     execution_mode: u8,
     change_council_id: Option<ID>,
@@ -347,10 +336,15 @@ public fun new_remove_object_policy<Outcome, IW: drop>(
     destroy_remove_object_policy(action);
 }
 
-/// Create and add a set file policy action to an intent - NEW
+// === FILE POLICY CONVENIENCE FUNCTIONS ===
+// Files are objects, so file policies use the object_policies table
+// These are convenience wrappers for semantic clarity
+
+/// Set a policy for a specific file/document
+/// Files are objects, so this is a semantic wrapper around set_object_policy
 public fun new_set_file_policy<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    file_name: String,
+    doc_id: ID,  // File/document object ID
     execution_council_id: Option<ID>,
     execution_mode: u8,
     change_council_id: Option<ID>,
@@ -358,29 +352,32 @@ public fun new_set_file_policy<Outcome, IW: drop>(
     change_delay_ms: u64,
     intent_witness: IW,
 ) {
-    // Create action struct
-    let action = SetFilePolicyAction {
-        file_name,
+    // Files are objects - delegate to object policy setter
+    new_set_object_policy(
+        intent,
+        doc_id,
         execution_council_id,
         execution_mode,
         change_council_id,
         change_mode,
         change_delay_ms,
-    };
-
-    // Serialize the entire action struct
-    let data = bcs::to_bytes(&action);
-
-    // Add to intent with witness type marker
-    protocol_intents::add_action_spec(
-        intent,
-        SetFilePolicyWitness {},
-        data,
         intent_witness,
     );
+}
 
-    // Destroy the action struct (serialize-then-destroy pattern)
-    destroy_set_file_policy(action);
+/// Remove a policy from a specific file/document
+/// Files are objects, so this is a semantic wrapper around remove_object_policy
+public fun new_remove_file_policy<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    doc_id: ID,  // File/document object ID
+    intent_witness: IW,
+) {
+    // Files are objects - delegate to object policy remover
+    new_remove_object_policy(
+        intent,
+        doc_id,
+        intent_witness,
+    );
 }
 
 // === Action Execution Functions (do_ pattern) ===
@@ -601,118 +598,6 @@ public fun do_set_object_policy<Outcome: store, IW: drop>(
         registry,
         dao_id,
         action.object_id,
-        action.execution_council_id,
-        action.execution_mode,
-        action.change_council_id,
-        action.change_mode,
-        action.change_delay_ms,
-        intent_account_id,
-        _clock,
-    );
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-}
-
-/// Execute set file policy action - NEW
-public fun do_set_file_policy<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    _version_witness: VersionWitness,
-    _witness: IW,
-    _clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get action spec
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-
-    // Assert action type with witness
-    action_validation::assert_action_type<SetFilePolicyWitness>(spec);
-
-    let action_data = protocol_intents::action_spec_data(spec);
-    let spec_version = protocol_intents::action_spec_version(spec);
-    assert!(spec_version == 1, EUnsupportedActionVersion);
-
-    // Deserialize the entire action struct
-    let mut reader = bcs::new(*action_data);
-    let file_name = ascii::string(bcs::peel_vec_u8(&mut reader));
-    let execution_council_id = if (bcs::peel_bool(&mut reader)) {
-        option::some(bcs::peel_address(&mut reader).to_id())
-    } else {
-        option::none()
-    };
-    let execution_mode = bcs::peel_u8(&mut reader);
-    let change_council_id = if (bcs::peel_bool(&mut reader)) {
-        option::some(bcs::peel_address(&mut reader).to_id())
-    } else {
-        option::none()
-    };
-    let change_mode = bcs::peel_u8(&mut reader);
-    let change_delay_ms = bcs::peel_u64(&mut reader);
-
-    let action = SetFilePolicyAction {
-        file_name,
-        execution_council_id,
-        execution_mode,
-        change_council_id,
-        change_mode,
-        change_delay_ms,
-    };
-
-    // Validate all bytes consumed
-    bcs_validation::validate_all_bytes_consumed(reader);
-
-    // Input validation
-    assert!(action.execution_mode <= 3, EInvalidMode);
-    assert!(action.change_mode <= 3, EInvalidMode);
-    // If mode requires council (1, 2, or 3), council_id must be provided
-    if (action.execution_mode != MODE_DAO_ONLY) {
-        assert!(action.execution_council_id.is_some(), EMissingCouncilId);
-    };
-    if (action.change_mode != MODE_DAO_ONLY) {
-        assert!(action.change_council_id.is_some(), EMissingCouncilId);
-    };
-
-    // Execute the action
-    let dao_id = object::id(account);
-    let dao_address = object::id_to_address(&dao_id);
-    let registry_ref = policy_registry::borrow_registry(account, version::current());
-
-    // Get the account that created this intent
-    let intent = executable::intent(executable);
-    let intent_account_addr = protocol_intents::account(intent);
-    let intent_account_id = object::id_from_address(intent_account_addr);
-
-    // Meta-control: Check if SetFilePolicyAction itself has a policy
-    let meta_action_type = type_name::get<SetFilePolicyAction>();
-    let meta_type_str = type_name::into_string(meta_action_type);
-    if (policy_registry::has_type_policy_by_string(registry_ref, meta_type_str)) {
-        let meta_rule = policy_registry::get_type_policy_rule_by_string(registry_ref, meta_type_str);
-        validate_change_permission(meta_rule, intent_account_id, dao_id);
-    };
-
-    // Check change permissions for the specific file being modified
-    if (policy_registry::has_file_policy(registry_ref, action.file_name)) {
-        let existing_rule = policy_registry::get_file_policy_rule(registry_ref, action.file_name);
-        validate_change_permission(existing_rule, intent_account_id, dao_id);
-    };
-
-    // Validate that councils are registered (prevent referencing non-existent councils)
-    if (action.execution_council_id.is_some()) {
-        let council_id = *action.execution_council_id.borrow();
-        assert!(policy_registry::is_council_registered(registry_ref, council_id), ECouncilNotRegistered);
-    };
-    if (action.change_council_id.is_some()) {
-        let council_id = *action.change_council_id.borrow();
-        assert!(policy_registry::is_council_registered(registry_ref, council_id), ECouncilNotRegistered);
-    };
-
-    let registry = policy_registry::borrow_registry_mut(account, version::current());
-    policy_registry::set_file_policy(
-        registry,
-        dao_id,
-        action.file_name,
         action.execution_council_id,
         action.execution_mode,
         action.change_council_id,
@@ -989,18 +874,6 @@ public fun destroy_set_type_policy(action: SetTypePolicyAction) {
 public fun destroy_set_object_policy(action: SetObjectPolicyAction) {
     let SetObjectPolicyAction {
         object_id: _,
-        execution_council_id: _,
-        execution_mode: _,
-        change_council_id: _,
-        change_mode: _,
-        change_delay_ms: _,
-    } = action;
-}
-
-/// Destroy a SetFilePolicyAction - NEW
-public fun destroy_set_file_policy(action: SetFilePolicyAction) {
-    let SetFilePolicyAction {
-        file_name: _,
         execution_council_id: _,
         execution_mode: _,
         change_council_id: _,
