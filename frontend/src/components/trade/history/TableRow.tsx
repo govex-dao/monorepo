@@ -40,6 +40,24 @@ const formatNumber = (() => {
   };
 })();
 
+// Format percentage without scientific notation
+const formatPercentage = (num: number): string => {
+  if (num === 0) return "0.00";
+
+  const absNum = Math.abs(num);
+
+  // For percentages, use fixed decimal places
+  if (absNum >= 10) {
+    return absNum.toFixed(1); // e.g., 12.5
+  } else if (absNum >= 1) {
+    return absNum.toFixed(2); // e.g., 1.13
+  } else if (absNum >= 0.01) {
+    return absNum.toFixed(3); // e.g., 0.125
+  } else {
+    return absNum.toFixed(4); // e.g., 0.0013
+  }
+};
+
 // Table row component
 export function TableRow({
   event,
@@ -104,12 +122,12 @@ export function TableRow({
         <span className={unitClass}>{stableSymbol}</span>
       </td>
       <td className={`${cellClass} text-center text-gray-200`} role="cell">
-        <span 
+        <span
           className={`${valueClass} ${
             event.impact > 0 ? "text-green-400" : event.impact < 0 ? "text-red-400" : ""
           }`}
         >
-          {event.impact > 0 ? "+" : ""}{formatNumber(event.impact)}%
+          {event.impact > 0 ? "+" : event.impact < 0 ? "-" : ""}{formatPercentage(event.impact)}%
         </span>
       </td>
       <td className={rightAlignedCellClass + " flex flex-row"} role="cell">

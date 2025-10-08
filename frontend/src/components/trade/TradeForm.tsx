@@ -102,12 +102,28 @@ const TradeForm: React.FC<TradeFormProps> = ({
       network,
     });
 
+  // Calculate conditional token balance for the "from" side
+  const conditionalFromBalance = useMemo(() => {
+    const relevantTokens = tokens.filter(
+      (t) =>
+        t.outcome === parseInt(selectedOutcome) &&
+        t.asset_type === (isBuy ? 1 : 0) // 1 for stable, 0 for asset
+    );
+    const total = relevantTokens.reduce(
+      (sum, token) => sum + BigInt(token.balance),
+      0n
+    );
+    const scale = isBuy ? stableScale : assetScale;
+    return (Number(total) / Number(scale)).toString();
+  }, [tokens, selectedOutcome, isBuy, assetScale, stableScale]);
+
   const tokenData = {
     stable: {
       name: "stable",
       symbol: stable_symbol,
       scale: stableScale,
       balance: stableBalance,
+      conditionalBalance: isBuy ? conditionalFromBalance : "0",
       decimals: stable_decimals,
       type: stableType,
     },
@@ -116,6 +132,7 @@ const TradeForm: React.FC<TradeFormProps> = ({
       symbol: asset_symbol,
       scale: assetScale,
       balance: assetBalance,
+      conditionalBalance: !isBuy ? conditionalFromBalance : "0",
       decimals: asset_decimals,
       type: assetType,
     },
@@ -124,6 +141,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
   // Determine from/to tokens based on trade direction
   const fromToken = isBuy ? tokenData.stable : tokenData.asset;
   const toToken = isBuy ? tokenData.asset : tokenData.stable;
+
+  // Calculate combined balance (spot + conditional) with NaN guards
+  const combinedFromBalance = (
+    (parseFloat(fromToken.balance) || 0) +
+    (parseFloat(fromToken.conditionalBalance) || 0)
+  ).toString();
 
   const updateFromAmount = (newAmount: string) => {
     setAmount(newAmount);
@@ -536,7 +559,9 @@ const TradeForm: React.FC<TradeFormProps> = ({
           onChange={updateFromAmount}
           placeholder="0.0"
           symbol={fromToken.symbol}
-          balance={fromToken.balance}
+          balance={combinedFromBalance}
+          spotBalance={fromToken.balance}
+          conditionalBalance={fromToken.conditionalBalance}
           step={1 / Number(fromToken.scale)}
         />
 
