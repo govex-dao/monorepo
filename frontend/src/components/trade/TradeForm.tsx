@@ -467,9 +467,12 @@ const TradeForm: React.FC<TradeFormProps> = ({
         txb,
         {
           onSettled: () => {
-            refreshAssetBalance();
-            refreshStableBalance();
-            refreshTokens();
+            // Add delay to allow blockchain to index changes
+            setTimeout(() => {
+              refreshAssetBalance();
+              refreshStableBalance();
+              refreshTokens();
+            }, 1500);
           },
           onSuccess: () => {
             setAmount("");
