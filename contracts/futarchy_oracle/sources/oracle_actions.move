@@ -27,6 +27,8 @@ use sui::clock::Clock;
 use sui::event;
 use sui::transfer;
 use sui::bcs;
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::table::{Self, Table};
 use account_protocol::{
     bcs_validation,
     executable::{Self, Executable},
@@ -39,6 +41,12 @@ use futarchy_core::{
     action_validation,
     action_types,
     futarchy_config::FutarchyConfig,
+    resource_requests,
+};
+use futarchy_markets::{
+    spot_oracle_interface,
+    spot_amm::SpotAMM,
+    conditional_amm::LiquidityPool,
 };
 
 // === Constants ===
@@ -48,6 +56,20 @@ const MAX_VESTING_DURATION_MS: u64 = 315_360_000_000; // 10 years
 
 // DAO operational states (for dissolution check)
 const DAO_STATE_DISSOLVING: u8 = 1;
+
+// === Strike Price Decimal Configuration ===
+// IMPORTANT: These constants define the decimal assumptions for strike price calculations
+// If your token or stable coin has different decimals, you MUST update these constants
+
+const ASSET_TOKEN_DECIMALS: u64 = 9;        // SUI has 9 decimals (1 SUI = 1_000_000_000 base units)
+const STABLE_COIN_DECIMALS: u64 = 6;        // USDC has 6 decimals (1 USDC = 1_000_000 base units)
+const ORACLE_PRICE_SCALE: u128 = 1_000_000_000_000; // 1e12 (oracle prices scaled by 1e12)
+
+// Derived constant for strike price payment calculation
+// Formula: STRIKE_PAYMENT_DIVISOR = (10^ASSET_TOKEN_DECIMALS) * ORACLE_PRICE_SCALE
+// For SUI + USDC: 1e9 * 1e12 = 1e21
+// But we multiply by stable decimals (1e6), so final divisor = 1e21 / 1e6 = 1e15
+const STRIKE_PAYMENT_DIVISOR: u128 = 1_000_000_000_000_000; // 1e15 = (1e9 * 1e12) / 1e6
 
 // === Storage Keys ===
 
@@ -95,6 +117,8 @@ const EInvalidVestingMode: u64 = 20;
 const EInvalidStrikeMode: u64 = 21;
 const EInvalidGrantAmount: u64 = 22;
 const EExecutionTooEarly: u64 = 23;
+const EGrantExpired: u64 = 24;
+const EInsufficientPayment: u64 = 25;
 
 // === Core Structs ===
 
@@ -163,6 +187,9 @@ public struct PriceBasedMintGrant<phantom AssetType, phantom StableType> has key
     // === TOTAL TRACKING ===
     total_amount: u64,        // Sum of all tier amounts
     claimed_amount: u64,      // Total claimed across all tiers
+
+    // === PER-RECIPIENT TRACKING (for multi-recipient grants) ===
+    recipient_claims: Table<address, u64>,  // Track how much each recipient has claimed
 
     // === LAUNCHPAD ENFORCEMENT (applies to ALL claims across all tiers) ===
     launchpad_enforcement: LaunchpadEnforcement,
@@ -349,6 +376,7 @@ public fun create_employee_option<AssetType, StableType>(
         tiers: vector[tier],
         total_amount,
         claimed_amount: 0,
+        recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: true,
             minimum_multiplier: launchpad_multiplier,
@@ -439,6 +467,7 @@ public fun create_vesting_grant<AssetType, StableType>(
         tiers: vector[tier],
         total_amount,
         claimed_amount: 0,
+        recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: false,
             minimum_multiplier: 0,
@@ -546,6 +575,7 @@ public fun create_milestone_rewards<AssetType, StableType>(
         tiers,
         total_amount,
         claimed_amount: 0,
+        recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: false,
             minimum_multiplier: 0,
@@ -612,6 +642,7 @@ public fun create_conditional_mint<AssetType, StableType>(
         tiers: vector[tier],
         total_amount: mint_amount,
         claimed_amount: 0,
+        recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: false,
             minimum_multiplier: 0,
@@ -653,9 +684,10 @@ public fun claimed_amount<A, S>(grant: &PriceBasedMintGrant<A, S>): u64 {
 }
 
 public fun vested_amount<A, S>(grant: &PriceBasedMintGrant<A, S>): u64 {
-    // Since grants are now tier-based, vested amount is calculated per tier
-    // This is a simplified accessor - real vesting calculation happens in claimable_now
-    0 // TODO: Calculate total vested across all tiers
+    // Since grants are now tier-based and support multi-recipient allocations,
+    // vested amount varies per recipient. Use claimable_now() with clock for accurate calculation.
+    // This simplified accessor returns 0 as a placeholder for legacy compatibility.
+    0
 }
 
 public fun is_canceled<A, S>(grant: &PriceBasedMintGrant<A, S>): bool {
@@ -879,6 +911,372 @@ public fun emergency_unfreeze<A, S>(
     });
 
     // Note: Does NOT auto-unpause - DAO must explicitly unpause after unfreezing
+}
+
+// === Resource Request Pattern Structs ===
+
+/// Claim action data stored in ResourceRequest
+/// Proves that claim validation passed and carries validated data
+public struct ClaimGrantAction has store, drop {
+    grant_id: ID,
+    recipient: address,
+    claimable_amount: u64,
+    strike_payment_required: u64,  // 0 if no strike price
+    dao_address: address,           // Where strike payment goes
+}
+
+// === Claim Functions (Public Entry - Callable by Recipients) ===
+
+/// Claim vested tokens from a grant (STEP 1: Validation)
+///
+/// EXECUTION MODEL: Participant calls this in PTB, then calls fulfill_claim_grant
+/// Returns a ResourceRequest hot potato that MUST be fulfilled in same transaction
+///
+/// HARDCODED: Uses 30-day TWAP from spot_oracle_interface::get_governance_twap()
+///
+/// This function:
+/// - Validates all claim conditions (price, vesting, time bounds, etc.)
+/// - Updates grant state (claimed_amount, execution_count, etc.)
+/// - Returns ResourceRequest with validated claim data
+///
+/// The ResourceRequest proves that all validation passed and must be fulfilled
+/// by calling fulfill_claim_grant() with TreasuryCap in the same PTB
+public fun claim_grant<AssetType, StableType>(
+    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
+    claim_cap: &GrantClaimCap,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): resource_requests::ResourceRequest<ClaimGrantAction> {
+    // Verify claim cap matches grant
+    assert!(claim_cap.grant_id == object::id(grant), EWrongGrantId);
+
+    // Check grant is not canceled/paused/frozen
+    assert!(!grant.canceled, EAlreadyCanceled);
+    assert!(!grant.emergency_frozen, EEmergencyFrozen);
+
+    // Auto-unpause if pause period expired
+    check_and_unpause(grant, clock);
+    assert!(!grant.paused, EGrantPaused);
+
+    let now = clock.timestamp_ms();
+
+    // Check time bounds
+    if (grant.earliest_execution.is_some()) {
+        let earliest = grant.earliest_execution.borrow();
+        assert!(now >= *earliest, EExecutionTooEarly);
+    };
+
+    if (grant.latest_execution.is_some()) {
+        let latest = grant.latest_execution.borrow();
+        assert!(now <= *latest, EGrantExpired);
+    };
+
+    // Read 30-day TWAP from oracle (uses SimpleTWAP with 30-day window)
+    let current_price = spot_oracle_interface::get_governance_twap(
+        spot_pool,
+        conditional_pools,
+        clock
+    );
+
+    // Check price condition from first tier (simple grants have 1 tier)
+    assert!(grant.tiers.length() > 0, EInvalidAmount);
+    let tier = vector::borrow(&grant.tiers, 0);
+
+    // Check price condition (optimized: extract condition ref to avoid multiple option access)
+    let price_condition_ref = &tier.price_condition;
+    if (price_condition_ref.is_some()) {
+        assert!(
+            check_price_condition(price_condition_ref.borrow(), current_price),
+            EPriceConditionNotMet
+        );
+    };
+
+    // Get recipient address FIRST (needed for per-recipient tracking)
+    let recipient = tx_context::sender(ctx);
+
+    // === PER-RECIPIENT CLAIM TRACKING (Security Fix) ===
+    // Find recipient's allocation from tier.recipients vector
+    let mut recipient_allocation = 0u64;
+    let mut found_recipient = false;
+    let mut i = 0;
+    let recipient_count = tier.recipients.length();
+
+    while (i < recipient_count) {
+        let recipient_mint = vector::borrow(&tier.recipients, i);
+        if (recipient_mint.recipient == recipient) {
+            recipient_allocation = recipient_mint.amount;
+            found_recipient = true;
+            break
+        };
+        i = i + 1;
+    };
+
+    assert!(found_recipient, ENotRecipient);
+
+    // Get recipient's already claimed amount from table (0 if first claim)
+    let recipient_already_claimed = if (table::contains(&grant.recipient_claims, recipient)) {
+        *table::borrow(&grant.recipient_claims, recipient)
+    } else {
+        0u64
+    };
+
+    // Calculate recipient's remaining allocation
+    assert!(recipient_allocation >= recipient_already_claimed, EInvalidAmount);
+    let recipient_remaining = recipient_allocation - recipient_already_claimed;
+
+    // Calculate claimable amount (handles vesting)
+    let vested_claimable = claimable_now(grant, clock);
+
+    // SECURITY: Cap claimable to recipient's remaining allocation
+    // This prevents one recipient from claiming another's tokens
+    let claimable = if (vested_claimable > recipient_remaining) {
+        recipient_remaining
+    } else {
+        vested_claimable
+    };
+
+    assert!(claimable > 0, EInsufficientVested);
+
+    // Derive DAO treasury address from grant.dao_id
+    let dao_address = object::id_to_address(&grant.dao_id);
+
+    // Calculate strike price payment required (optimized: extract option ref to avoid redundant access)
+    let strike_price_ref = &tier.strike_price;
+    let strike_payment_required = if (strike_price_ref.is_some()) {
+        let strike = *strike_price_ref.borrow();
+        // Calculate payment required: tokens * strike_price / scale
+        //
+        // STRIKE PRICE SCALE: ORACLE_PRICE_SCALE (1e12, consistent with oracle prices)
+        //   Example: strike = 2_000_000_000_000 = $2.00 per token
+        //
+        // PAYMENT CALCULATION (using constants defined at top of module):
+        //   ASSET_TOKEN_DECIMALS = 9 (SUI has 9 decimals)
+        //   STABLE_COIN_DECIMALS = 6 (USDC has 6 decimals)
+        //   ORACLE_PRICE_SCALE = 1e12
+        //   STRIKE_PAYMENT_DIVISOR = 1e15
+        //
+        //   For SUI (9 decimals) priced at $2.00:
+        //   - claimable = 1_000_000_000 (1 SUI in base units)
+        //   - strike = 2_000_000_000_000 (2.0 in 1e12 scale)
+        //   - payment = (1_000_000_000 * 2_000_000_000_000) / 1e15 = 2_000_000 USDC (6 decimals)
+        //
+        // General formula:
+        //   payment = (claimable * strike) / STRIKE_PAYMENT_DIVISOR
+        //   where STRIKE_PAYMENT_DIVISOR = (10^ASSET_TOKEN_DECIMALS * ORACLE_PRICE_SCALE) / 10^STABLE_COIN_DECIMALS
+        //
+        // WARNING: If your token or stable coin has different decimals, update the constants at the top of this module!
+        ((claimable as u128) * (strike as u128) / STRIKE_PAYMENT_DIVISOR) as u64
+    } else {
+        0  // No strike price - free grant
+    };
+
+    // Handle repeat execution logic (optimized: extract option ref for conditional mints)
+    let repeat_config_ref = &mut grant.repeat_config;
+    if (repeat_config_ref.is_some()) {
+        let config = repeat_config_ref.borrow_mut();
+
+        // Check cooldown period (optimized: extract nested option ref)
+        let last_execution_ref = &config.last_execution;
+        if (last_execution_ref.is_some()) {
+            let last_exec = *last_execution_ref.borrow();
+            assert!(now >= last_exec + config.cooldown_ms, ERepeatCooldownNotMet);
+        };
+
+        // Check max executions limit (0 = unlimited)
+        if (config.max_executions > 0) {
+            assert!(config.execution_count < config.max_executions, EMaxExecutionsReached);
+        };
+
+        // Update execution tracking with overflow protection
+        let new_execution_count = config.execution_count + 1;
+        assert!(new_execution_count >= config.execution_count, ETimeCalculationOverflow);
+        config.execution_count = new_execution_count;
+        config.last_execution = std::option::some(now);
+
+        // For repeatable grants, don't track claimed_amount (can mint infinitely within limits)
+    } else {
+        // Non-repeatable grant - track claimed amount normally with overflow protection
+        let new_claimed = grant.claimed_amount + claimable;
+        assert!(new_claimed >= grant.claimed_amount, ETimeCalculationOverflow);
+        assert!(new_claimed <= grant.total_amount, EInvalidAmount);  // Sanity check
+        grant.claimed_amount = new_claimed;
+    };
+
+    // === UPDATE PER-RECIPIENT TRACKING ===
+    let new_recipient_claimed = recipient_already_claimed + claimable;
+    assert!(new_recipient_claimed >= recipient_already_claimed, ETimeCalculationOverflow);
+    assert!(new_recipient_claimed <= recipient_allocation, EInvalidAmount);
+
+    // Update or insert recipient's claim record
+    if (table::contains(&mut grant.recipient_claims, recipient)) {
+        *table::borrow_mut(&mut grant.recipient_claims, recipient) = new_recipient_claimed;
+    } else {
+        table::add(&mut grant.recipient_claims, recipient, new_recipient_claimed);
+    };
+
+    // Create and return ResourceRequest with validated claim data
+    let action = ClaimGrantAction {
+        grant_id: object::id(grant),
+        recipient,
+        claimable_amount: claimable,
+        strike_payment_required,
+        dao_address,
+    };
+
+    resource_requests::new_resource_request(action, ctx)
+}
+
+/// Fulfill a grant claim (STEP 2: Execution)
+///
+/// This function:
+/// - Takes the ResourceRequest hot potato from claim_grant()
+/// - Extracts the validated claim data
+/// - Handles strike price payment
+/// - Mints tokens using TreasuryCap
+/// - Transfers tokens to recipient
+///
+/// The DAO provides TreasuryCap through vault borrowing in the same PTB:
+/// ```
+/// tx.moveCall({ target: 'vault::borrow_treasury_cap', ... });
+/// tx.moveCall({ target: 'oracle_actions::fulfill_claim_grant', arguments: [request, treasuryCap, payment] });
+/// ```
+public fun fulfill_claim_grant<AssetType, StableType>(
+    request: resource_requests::ResourceRequest<ClaimGrantAction>,
+    treasury_cap: &mut TreasuryCap<AssetType>,
+    mut payment_coin: Coin<StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Extract validated claim data from ResourceRequest
+    let action = resource_requests::extract_action(request);
+
+    // Handle strike price payment (if required)
+    if (action.strike_payment_required > 0) {
+        let payment_value = coin::value(&payment_coin);
+        assert!(payment_value >= action.strike_payment_required, EInsufficientPayment);
+
+        // If exact payment, transfer to DAO treasury
+        // If overpayment, split and return change
+        if (payment_value == action.strike_payment_required) {
+            transfer::public_transfer(payment_coin, action.dao_address);
+        } else {
+            let payment = coin::split(&mut payment_coin, action.strike_payment_required, ctx);
+            transfer::public_transfer(payment, action.dao_address);
+            // Return change to sender
+            transfer::public_transfer(payment_coin, tx_context::sender(ctx));
+        };
+    } else {
+        // No strike price - free grant, destroy zero coin or return to sender
+        if (coin::value(&payment_coin) == 0) {
+            coin::destroy_zero(payment_coin);
+        } else {
+            // Return unused payment coin to sender
+            transfer::public_transfer(payment_coin, tx_context::sender(ctx));
+        };
+    };
+
+    // Mint tokens
+    let minted_coin = coin::mint(treasury_cap, action.claimable_amount, ctx);
+
+    // Transfer to recipient
+    transfer::public_transfer(minted_coin, action.recipient);
+
+    // Emit event
+    event::emit(TokensClaimed {
+        grant_id: action.grant_id,
+        recipient: action.recipient,
+        amount_claimed: action.claimable_amount,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Check if price condition is met
+/// Handles both launchpad-relative and absolute price conditions
+fun check_price_condition(condition: &PriceCondition, current_price: u128): bool {
+    if (condition.mode == 0) {
+        // Launchpad-relative mode (mode 0)
+        // value is a multiplier scaled by 1e9
+        // We don't have launchpad price here, so we treat this as absolute
+        // Frontend should convert launchpad-relative to absolute before creating grant
+        if (condition.is_above) {
+            current_price >= condition.value
+        } else {
+            current_price <= condition.value
+        }
+    } else {
+        // Absolute mode (mode 1)
+        // value is absolute price scaled by 1e12
+        if (condition.is_above) {
+            current_price >= condition.value
+        } else {
+            current_price <= condition.value
+        }
+    }
+}
+
+/// Dev inspect helper - check if price condition would be met
+/// Returns detailed information for debugging
+public struct PriceCheckResult has copy, drop {
+    condition_met: bool,
+    current_price: u128,
+    threshold_value: u128,
+    mode: u8,              // 0 = launchpad-relative, 1 = absolute
+    is_above: bool,        // true = checking >= threshold, false = checking <= threshold
+    current_price_formatted: u64,  // current_price / 1e12 for readability
+    threshold_formatted: u64,      // threshold / 1e12 for readability
+}
+
+/// Public function for dev_inspect - check price condition with detailed output
+public fun dev_inspect_check_price_condition<AssetType, StableType>(
+    grant: &PriceBasedMintGrant<AssetType, StableType>,
+    spot_pool: &SpotAMM<AssetType, StableType>,
+    conditional_pools: &vector<LiquidityPool>,
+    clock: &Clock,
+): PriceCheckResult {
+    // Get current price from oracle (same as claim_grant does)
+    let current_price = spot_oracle_interface::get_governance_twap(
+        spot_pool,
+        conditional_pools,
+        clock
+    );
+
+    // Get price condition from first tier
+    let has_condition = if (grant.tiers.length() > 0) {
+        let tier = vector::borrow(&grant.tiers, 0);
+        tier.price_condition.is_some()
+    } else {
+        false
+    };
+
+    if (!has_condition) {
+        // No price condition - would always pass
+        return PriceCheckResult {
+            condition_met: true,
+            current_price,
+            threshold_value: 0,
+            mode: 0,
+            is_above: true,
+            current_price_formatted: (current_price / 1_000_000_000_000) as u64,
+            threshold_formatted: 0,
+        }
+    };
+
+    let tier = vector::borrow(&grant.tiers, 0);
+    let condition = tier.price_condition.borrow();
+
+    let condition_met = check_price_condition(condition, current_price);
+
+    PriceCheckResult {
+        condition_met,
+        current_price,
+        threshold_value: condition.value,
+        mode: condition.mode,
+        is_above: condition.is_above,
+        current_price_formatted: (current_price / 1_000_000_000_000) as u64,
+        threshold_formatted: (condition.value / 1_000_000_000_000) as u64,
+    }
 }
 
 // === Grant Registry Management ===
@@ -1298,6 +1696,7 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
         tiers: vector[tier],
         total_amount,
         claimed_amount: 0,
+        recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: launchpad_multiplier > 0,
             minimum_multiplier: launchpad_multiplier,
