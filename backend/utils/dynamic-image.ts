@@ -583,7 +583,7 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   // Create outcome tag if needed
   const createOutcomeSection = () => {
     if (currentState === 0) return '';
-    const isRejected = currentState === 2 && winningOutcome === 0;
+    const isRejected = currentState === 2 && winningOutcome === 1;
 
     // Get base outcome text
     let outcomeText = outcomeMessages?.[winningOutcome || 0] || 'Unknown';
