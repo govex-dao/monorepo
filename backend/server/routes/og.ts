@@ -176,31 +176,43 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       // Finalized: use result table
       winningOutcome = Number(proposal.result?.winning_outcome) || 0;
     } else if (currentState === 1) {
-      // Live proposal: calculate from latest TWAP
-      // Note: ProposalTWAP has unique constraint on [proposalId, outcome]
-      // so there's only one TWAP record per outcome (stores latest value)
-      // In the current system: outcome 0 = Reject, outcome 1 = Accept
-      const acceptTwap = await prisma.proposalTWAP.findUnique({
-        where: {
-          proposalId_outcome: {
-            proposalId: proposal.proposal_id,
-            outcome: 1  // Accept is at outcome index 1
-          }
-        },
-        select: { twap: true }
+      // Live proposal: calculate from latest TWAPs
+      // Get ALL TWAPs for all outcomes
+      const allTwaps = await prisma.proposalTWAP.findMany({
+        where: { proposalId: proposal.proposal_id },
+        select: { outcome: true, twap: true },
+        orderBy: { outcome: 'asc' }
       });
 
-      if (acceptTwap && acceptTwap.twap) {
+      if (allTwaps.length > 0) {
         // Get threshold from DAO config
         const dao = await prisma.dao.findUnique({
           where: { dao_id: proposal.dao_id },
           select: { twap_threshold: true }
         });
 
-        const threshold = dao?.twap_threshold || BigInt(0);
+        const threshold = Number(dao?.twap_threshold || BigInt(0));
 
-        // If Accept TWAP > threshold, outcome 1 wins (Accept); otherwise outcome 0 wins (Reject)
-        winningOutcome = acceptTwap.twap > threshold ? 1 : 0;
+        // Calculate adjusted TWAP for each outcome
+        // For outcome 0, multiply by (100000 + threshold) / 100000
+        let maxAdjustedTwap = -Infinity;
+        let winningIndex = 0;
+
+        for (const twapRecord of allTwaps) {
+          if (!twapRecord.twap) continue;
+
+          const rawTwap = Number(twapRecord.twap);
+          const adjustedTwap = twapRecord.outcome === 0
+            ? rawTwap * ((100000 + threshold) / 100000)
+            : rawTwap;
+
+          if (adjustedTwap > maxAdjustedTwap) {
+            maxAdjustedTwap = adjustedTwap;
+            winningIndex = twapRecord.outcome;
+          }
+        }
+
+        winningOutcome = winningIndex;
       }
     }
 

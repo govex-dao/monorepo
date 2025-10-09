@@ -583,16 +583,15 @@ export async function generateProposalOG(params: ProposalOgParams): Promise<stri
   // Create outcome tag if needed
   const createOutcomeSection = () => {
     if (currentState === 0) return '';
+    // Rule: outcome 0 = Reject, outcomes 1+ = Accept
     const isRejected = currentState === 2 && winningOutcome === 0;
 
-    // Get base outcome text
-    let outcomeText = outcomeMessages?.[winningOutcome || 0] || 'Unknown';
+    // Get base outcome text: 0 = Reject, 1/2/3/4/etc = Accept
+    let outcomeText = (winningOutcome || 0) === 0 ? 'Reject' : 'Accept';
 
-    // Add suffixes for binary outcomes (only 2 outcomes)
-    if (outcomeMessages && outcomeMessages.length === 2 && outcomeText !== 'Unknown') {
-      if (currentState === 2) outcomeText += 'ed';
-      else if (currentState === 1) outcomeText += 'ing';
-    }
+    // Add suffixes based on state
+    if (currentState === 2) outcomeText += 'ed';      // "Accept" → "Accepted"
+    else if (currentState === 1) outcomeText += 'ing'; // "Reject" → "Rejecting"
 
     const bgColor = isRejected ? COLORS.accent.red :
       currentState === 1 ? COLORS.accent.blueDark : COLORS.accent.greenDark;
