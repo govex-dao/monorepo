@@ -91,8 +91,51 @@ or should have a type that doesnt and type that does?
 - [ ] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
 - [ ] migrate coin metadata 
 
-- [ ]set up multisig
+- [ ] NFT for LP'ing in AMM so other protocols can track positions!!! look at how turbos and cetus do it
+https://suiscan.xyz/mainnet/object/0x31624aae279cf62b1697aaedad329349626cf6f0777b180a79b0660af582ba63/fields
+pawtato.app
+and patara.app
+- [ ] subsidise LPs during proposals
+- bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins
 
+ Early resolution feature!!!!!
+
+ hmm but if my dao doesnt want this they can but 90% liquidity in normal spot and 10% in a conditional amm\
+\
+oh snap \
+\
+I should make the ratio a param dao can configure!!!
+
+You have to force same ratio for all LPs.
+
+do metadao no cycles thing
+
+I am going to allow like 0 to 100%
+
+1) dao needs to supside LPs during proposals ( use proposer fee)\
+2) I need to slwly replace aftermath!!! \
+3) long term need to allow condiitonal markets to end earlier when winner is clear\
+4) need better market making of conditional markets ( thicker liqudiity)\
+5) need to teach traders to DCA not market order 
+
+ok I am considering adding this feature\
+  \
+  - bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side
+  registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning
+  coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins\
+  \
+  only issue is it mean the quote spread for coisn during proposals where coditonal amms haven differnt prie could be quite bad\
+  \
+  \
+  evaluate this feature as a proffesional sui engineer\
+  \
+  futarchy platform ethusiant and also as a visionary thinker\
+  \
+  Like jane street would probably want this feature they could handle their own conditional coins\
+  \
+  and this really improves thickness of dao liqudity\
+  \
+  but makes coins less liquid during proposals but improves accuracy of information for daos\
 
 ter
 - [X]Write proposal to lock me up
