@@ -3,7 +3,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { bcs } from '@mysten/sui/bcs';
 import { CONFIG } from '../config';
 import { prisma } from '../db';
-import { getClient, getActiveAddress } from '../sui-utils'; // Ensure getActiveAddress is exported from sui-utils
+import { getClient } from '../sui-utils';
 
 // Configuration constants
 const POLLING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -59,8 +59,9 @@ class TWAPPoller {
         ]
       });
 
-      // Use the active sender rather than a dummy sender
-      const sender = getActiveAddress();
+      // Use a dummy address for devInspect (doesn't need to be a real account)
+      // devInspect doesn't execute on-chain, so any valid Sui address works
+      const sender = '0x0000000000000000000000000000000000000000000000000000000000000000';
       const result = (await this.client.devInspectTransactionBlock({
         transactionBlock: txb,
         sender
