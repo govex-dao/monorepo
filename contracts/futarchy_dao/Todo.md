@@ -80,13 +80,13 @@ or should have a type that doesnt and type that does?
 - [X] Fix front end github bugs
 - [X] Fix front end snyk integration
 
-- [ ] make launchpad just allow creator to set cap as they see fit (above minimum) if they dont come back default goes pro rata!!!! have 1 day to do this ( compare to m-ta launchpad)
-- [ ] check does my policy actually work / enfore for move framework actions
-- [ ] or make proposal time depend on actions and have custom proposal fee depending on market time
-- [ ] compare geometric mean oracle to twap oracle to ring buffer
+- [X] make launchpad just allow creator to set cap as they see fit (above minimum) if they dont come back default goes pro rata!!!! have 1 day to do this ( compare to other launchpad)
+- [X] check does my policy actually work / enfore for move framework actions
+- [X] or make proposal time depend on actions and have custom proposal fee depending on market time
+- [X] compare geometric mean oracle to twap oracle to ring buffer
 - [ ] Error Codes: While consistent, the use of raw u64 constants for errors is a bit dated. Modern Sui Move often uses custom structs or std::errors for more descriptive, on-chain error reporting, although this is a stylistic choice and doesn't affect correctness.
-- [ ] allow founder to come in and set launchpad cap on execution not before
-- [ ] maybe dont make launchpad run full time no matter what if cap reached
+- [X] allow founder to come in and set launchpad cap on execution not before
+- [X] maybe dont make launchpad run full time no matter what if cap reached
 - [ ] AMM INTEGRATION
 - [ ] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
 - [ ] migrate coin metadata 
@@ -95,8 +95,8 @@ or should have a type that doesnt and type that does?
 
 
 ter
-- [ ]Write proposal to lock me up
-- [ ]Get all events in db
+- [X]Write proposal to lock me up
+- [x]Get all events in db
 - [ ]Correct witness patterns cross package
 - [ ]Correct public function modifier
 - [ ]Correct  instance of type many places

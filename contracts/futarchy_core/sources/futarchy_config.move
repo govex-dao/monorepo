@@ -54,6 +54,39 @@ public struct SlashDistribution has store, drop, copy {
     burn_bps: u16,
 }
 
+/// Multisig and optimistic intent configuration
+/// Extensible config struct for security council behavior
+public struct MultisigConfig has store, copy, drop {
+    /// If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
+    /// If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
+    optimistic_intent_challenge_enabled: bool,
+    // Future extensibility:
+    // challenge_duration_ms: Option<u64>,      // Custom challenge duration
+    // allowed_challengers: vector<address>,     // Restrict who can challenge
+    // require_bond: bool,                       // Require bond to create optimistic intent
+}
+
+/// Create default multisig config (safe defaults)
+public fun default_multisig_config(): MultisigConfig {
+    MultisigConfig {
+        optimistic_intent_challenge_enabled: true,  // Safe default: require 10-day challenge
+    }
+}
+
+/// Create custom multisig config
+public fun new_multisig_config(
+    optimistic_intent_challenge_enabled: bool,
+): MultisigConfig {
+    MultisigConfig {
+        optimistic_intent_challenge_enabled,
+    }
+}
+
+/// Get challenge enabled setting from MultisigConfig
+public fun multisig_config_challenge_enabled(config: &MultisigConfig): bool {
+    config.optimistic_intent_challenge_enabled
+}
+
 /// Pure Futarchy configuration struct
 /// All dynamic state and object references are stored on the Account<FutarchyConfig> object
 public struct FutarchyConfig has store, copy, drop {
@@ -78,9 +111,15 @@ public struct FutarchyConfig has store, copy, drop {
     verification_level: u8,        // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
     dao_score: u64,                // DAO quality score (0-unlimited, higher = better, admin-set only)
 
+    // Security Council Optimistic Intent Challenge Period
+    // If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
+    // If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
+    // Default: true (safer, gives DAO oversight of council actions)
+    optimistic_intent_challenge_enabled: bool,
+
     // Write-once immutable starting price from launchpad raise
     // Once set to Some(price), can NEVER be changed
-    // Used to enforce: 1) AMM initialization ratio, 2) founder reward mint minimum price
+    // Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
     launchpad_initial_price: Option<u128>,
 }
 
@@ -137,6 +176,7 @@ public fun new<AssetType: drop, StableType: drop>(
         finalization_fee: 1_000_000_000,         // 1 SUI default
         verification_level: 0,                    // Unverified by default
         dao_score: 0,                              // No score by default
+        optimistic_intent_challenge_enabled: true,  // Safe default: require 10-day challenge period
         launchpad_initial_price: option::none(),   // Not set initially
     }
 }
@@ -218,6 +258,10 @@ public fun verification_level(config: &FutarchyConfig): u8 {
 
 public fun dao_score(config: &FutarchyConfig): u64 {
     config.dao_score
+}
+
+public fun optimistic_intent_challenge_enabled(config: &FutarchyConfig): bool {
+    config.optimistic_intent_challenge_enabled
 }
 
 // === Getters for SlashDistribution ===
@@ -308,6 +352,7 @@ public fun with_rewards(
         finalization_fee,
         verification_level: config.verification_level,
         dao_score: config.dao_score,
+        optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
     }
 }
@@ -327,6 +372,7 @@ public fun with_verification_level(
         finalization_fee: config.finalization_fee,
         verification_level,
         dao_score: config.dao_score,
+        optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
     }
 }
@@ -346,6 +392,7 @@ public fun with_dao_score(
         finalization_fee: config.finalization_fee,
         verification_level: config.verification_level,
         dao_score,
+        optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
     }
 }
@@ -365,6 +412,33 @@ public fun with_slash_distribution(
         finalization_fee: config.finalization_fee,
         verification_level: config.verification_level,
         dao_score: config.dao_score,
+        optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
+        launchpad_initial_price: config.launchpad_initial_price,
+    }
+}
+
+/// Builder function: Set optimistic intent challenge enabled
+///
+/// If true: MODE_COUNCIL_ONLY actions require 10-day challenge period (DAO can challenge)
+/// If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
+///
+/// Default: true (safer - gives DAO oversight of council actions)
+public fun with_optimistic_intent_challenge_enabled(
+    config: FutarchyConfig,
+    enabled: bool,
+): FutarchyConfig {
+    FutarchyConfig {
+        asset_type: config.asset_type,
+        stable_type: config.stable_type,
+        config: config.config,
+        slash_distribution: config.slash_distribution,
+        proposal_pass_reward: config.proposal_pass_reward,
+        outcome_win_reward: config.outcome_win_reward,
+        review_to_trading_fee: config.review_to_trading_fee,
+        finalization_fee: config.finalization_fee,
+        verification_level: config.verification_level,
+        dao_score: config.dao_score,
+        optimistic_intent_challenge_enabled: enabled,
         launchpad_initial_price: config.launchpad_initial_price,
     }
 }
@@ -727,6 +801,13 @@ public fun set_conditional_metadata(
 ) {
     let coin_config = dao_config::conditional_coin_config_mut(&mut config.config);
     dao_config::set_conditional_metadata(coin_config, metadata);
+}
+
+public fun set_optimistic_intent_challenge_enabled(
+    config: &mut FutarchyConfig,
+    enabled: bool
+) {
+    config.optimistic_intent_challenge_enabled = enabled;
 }
 
 public fun update_slash_distribution(

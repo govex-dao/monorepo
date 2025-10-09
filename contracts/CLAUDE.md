@@ -193,8 +193,11 @@ Each policy specifies an approval mode:
 
 - **MODE_DAO_ONLY (0)**: Only DAO vote needed
 - **MODE_COUNCIL_ONLY (1)**: Only specific council approval needed (no DAO vote)
+  - Executed via **optimistic intents** (10-day challenge period)
+  - Council creates intent on DAO account → DAO can challenge → Council executes
 - **MODE_DAO_OR_COUNCIL (2)**: Either DAO vote OR council approval
 - **MODE_DAO_AND_COUNCIL (3)**: **Both** DAO vote AND council pre-approval required
+  - Council pre-approves via `ApprovedIntentSpec` → DAO creates proposal → DAO votes
 
 ### Two-Level Enforcement Timing (When Policies Are Checked)
 

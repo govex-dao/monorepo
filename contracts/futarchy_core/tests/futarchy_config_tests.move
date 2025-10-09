@@ -522,7 +522,7 @@ fun test_set_launchpad_initial_price() {
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(2500, 2500, 2500, 2500);
-    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist);
+    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist, true);
 
     futarchy_config::set_launchpad_initial_price(&mut config, 5_000_000_000_000);
 
@@ -556,7 +556,7 @@ fun test_set_launchpad_initial_price_twice() {
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(2500, 2500, 2500, 2500);
-    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist);
+    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist, true);
 
     futarchy_config::set_launchpad_initial_price(&mut config, 5_000_000_000_000);
 

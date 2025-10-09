@@ -115,8 +115,7 @@ public struct DaoPoolKey has copy, drop, store {}
 public struct DaoMetadataKey has copy, drop, store {}
 public struct CoinMetadataKey has copy, drop, store {}
 
-// Key for tracking pending intent specs (removed - using dao_params instead)
-// public struct PendingIntentsKey has copy, drop, store {}
+// Key for tracking pending intent specs removed - using init_action_specs field instead
 
 /// Per-contributor record with amount and cap
 public struct Contribution has store, drop, copy {
@@ -181,8 +180,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     /// Number of unique contributors (contributions stored as dynamic fields)
     contributor_count: u64,
     description: String,
-    // All parameters required to create the DAO are stored here.
-    dao_params: DAOParameters,
+    /// Staged init action specifications for DAO configuration
+    init_action_specs: Option<action_specs::InitActionSpecs>,
     /// TreasuryCap stored until DAO creation
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
     /// Reentrancy guard flag
@@ -203,25 +202,8 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     admin_review_text: Option<String>,
 }
 
-/// Stores all parameters needed for DAO creation to keep the Raise object clean.
-public struct DAOParameters has store, drop, copy {
-    dao_name: ascii::String,
-    dao_description: String,
-    icon_url_string: ascii::String,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
-    amm_twap_initial_observation: u128,
-    twap_threshold: u64,
-    max_outcomes: u64,
-    agreement_lines: vector<String>,
-    agreement_difficulties: vector<u64>,
-    // Whether init actions must all succeed (if false, raise fails on init failure)
-    init_actions_must_succeed: bool,
-    // Staged init action specifications
-    init_action_specs: Option<action_specs::InitActionSpecs>,
-}
+// DAOParameters removed - all DAO config is done via init actions
+// Use stage_init_actions() to configure the DAO before raise completes
 
 
 // === Events ===
@@ -345,27 +327,14 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     // Can't pre-create if already created
     assert!(raise.dao_id.is_none(), EInvalidStateForAction);
 
-    let params = &raise.dao_params;
-
     // Create DAO WITHOUT treasury cap (will be deposited on completion)
+    // All config params will be set via init actions
     let (account, queue, spot_pool) = factory::create_dao_unshared<RaiseToken, StableCoin>(
         factory,
         extensions,
         fee_manager,
         payment,
-        1, // min_asset_amount
-        1, // min_stable_amount
-        params.dao_name,
-        params.icon_url_string,
-        params.review_period_ms,
-        params.trading_period_ms,
-        params.amm_twap_start_delay,
-        params.amm_twap_step_max,
-        params.amm_twap_initial_observation,
-        params.twap_threshold,
-        DEFAULT_AMM_TOTAL_FEE_BPS,
-        params.dao_description,
-        params.max_outcomes,
+        option::none(), // Use default (true - 10-day challenge period)
         option::none(), // Treasury cap deposited on completion
         clock,
         ctx
@@ -379,7 +348,7 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     df::add(&mut raise.id, DaoQueueKey {}, queue);
     df::add(&mut raise.id, DaoPoolKey {}, spot_pool);
 
-    // Init action specs are now stored in dao_params.init_action_specs
+    // Init action specs stored in raise.init_action_specs field
 }
 
 /// Lock intents - no more can be added after this
@@ -399,7 +368,7 @@ public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
 
 /// Create a raise that sells tokens to bootstrap a DAO.
 /// `StableCoin` must be an allowed type in the factory.
-/// Founder rewards and other init actions can be added via pre_create_dao_for_raise.
+/// DAO configuration is done via init actions - use stage_init_actions() after pre_create_dao_for_raise.
 public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
@@ -410,18 +379,6 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>, // Creator-defined allowed cap values
     description: String,
-    dao_name: ascii::String,
-    dao_description: String,
-    icon_url_string: ascii::String,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    amm_twap_start_delay: u64,
-    amm_twap_step_max: u64,
-    amm_twap_initial_observation: u128,
-    twap_threshold: u64,
-    max_outcomes: u64,
-    agreement_lines: vector<String>,
-    agreement_difficulties: vector<u64>,
     launchpad_fee: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -441,14 +398,6 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
         assert!(*option::borrow(&max_raise_amount) >= min_raise_amount, EInvalidMaxRaise);
     };
 
-    let dao_params = DAOParameters {
-        dao_name, dao_description, icon_url_string, review_period_ms, trading_period_ms,
-        amm_twap_start_delay, amm_twap_step_max, amm_twap_initial_observation,
-        twap_threshold, max_outcomes, agreement_lines, agreement_difficulties,
-        init_actions_must_succeed: true,
-        init_action_specs: option::none(),
-    };
-
     init_raise<RaiseToken, StableCoin>(
         treasury_cap,
         coin_metadata,
@@ -457,7 +406,6 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
         max_raise_amount,
         allowed_caps,
         description,
-        dao_params,
         clock,
         ctx,
     );
@@ -983,8 +931,8 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     );
 
     // Check if there are staged init actions
-    if (raise.dao_params.init_action_specs.is_some()) {
-        let specs = *raise.dao_params.init_action_specs.borrow();
+    if (raise.init_action_specs.is_some()) {
+        let specs = *raise.init_action_specs.borrow();
 
         // ATOMIC EXECUTION: Execute all init actions as a batch
         // If ANY action fails, this function will abort and the entire transaction reverts
@@ -1197,8 +1145,8 @@ public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
         };
 
         // Clean up init action specs if they exist
-        if (raise.dao_params.init_action_specs.is_some()) {
-            raise.dao_params.init_action_specs = option::none();
+        if (raise.init_action_specs.is_some()) {
+            raise.init_action_specs = option::none();
         };
 
         // Save DAO ID before clearing
@@ -1334,7 +1282,6 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>,
     description: String,
-    dao_params: DAOParameters,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1371,7 +1318,7 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         crank_pool: balance::zero(),  // Filled by contributor fees
         contributor_count: 0,
         description,
-        dao_params,
+        init_action_specs: option::none(), // DAO config via init actions
         treasury_cap: option::some(treasury_cap),
         claiming: false,
         allowed_caps,
@@ -1411,7 +1358,6 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
     max_raise_amount: Option<u64>,
     allowed_caps: vector<u64>,
     description: String,
-    dao_params: DAOParameters,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -1423,7 +1369,6 @@ fun init_raise<RaiseToken: drop, StableCoin: drop>(
         max_raise_amount,
         allowed_caps,
         description,
-        dao_params,
         clock,
         ctx
     );

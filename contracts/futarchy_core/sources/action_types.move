@@ -60,6 +60,7 @@ public struct QueueParamsUpdate has drop {}
 public struct StorageConfigUpdate has drop {}
 public struct SetQuotas has drop {}
 public struct UpdateConditionalMetadata has drop {}
+public struct SetOptimisticIntentChallengeEnabled has drop {}
 
 // === Liquidity Action Types ===
 
@@ -326,6 +327,7 @@ public fun metadata_table_update(): TypeName { type_name::with_defining_ids<Meta
 public fun slash_distribution_update(): TypeName { type_name::with_defining_ids<SlashDistributionUpdate>() }
 public fun queue_params_update(): TypeName { type_name::with_defining_ids<QueueParamsUpdate>() }
 public fun update_conditional_metadata(): TypeName { type_name::with_defining_ids<UpdateConditionalMetadata>() }
+public fun set_optimistic_intent_challenge_enabled(): TypeName { type_name::with_defining_ids<SetOptimisticIntentChallengeEnabled>() }
 
 // Liquidity actions
 public fun create_pool(): TypeName { type_name::with_defining_ids<CreatePool>() }

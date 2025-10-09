@@ -139,6 +139,11 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
 }
 
 /// Create a new futarchy DAO with Extensions
+///
+/// optimistic_intent_challenge_enabled:
+///   - none(): Use default (true - 10-day challenge period)
+///   - some(true): Enable 10-day challenge period for MODE_COUNCIL_ONLY actions
+///   - some(false): Disable challenge period (instant execution for MODE_COUNCIL_ONLY actions)
 public entry fun create_dao<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
     extensions: &Extensions,
@@ -159,6 +164,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
+    optimistic_intent_challenge_enabled: Option<bool>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -182,6 +188,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
         max_outcomes,
         _agreement_lines,
         _agreement_difficulties,
+        optimistic_intent_challenge_enabled,
         option::none(),
         clock,
         ctx,
@@ -189,6 +196,10 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
 }
 
 /// Internal function to create a DAO with Extensions and optional TreasuryCap
+///
+/// optimistic_intent_challenge_enabled:
+///   - none(): Use default (true - 10-day challenge period)
+///   - some(enabled): Apply custom setting atomically during creation
 #[allow(lint(share_owned))]
 public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableType: drop>(
     factory: &mut Factory,
@@ -210,6 +221,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     max_outcomes: u64,
     _agreement_lines: vector<UTF8String>,
     _agreement_difficulties: vector<u64>,
+    optimistic_intent_challenge_enabled: Option<bool>,
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -320,11 +332,19 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     );
     let spot_pool_id = object::id(&spot_pool);
 
-    // Create the futarchy configuration
-    let config = futarchy_config::new<AssetType, StableType>(
+    // Create the futarchy configuration with safe default
+    let mut config = futarchy_config::new<AssetType, StableType>(
         dao_config,
         slash_distribution,
     );
+
+    // Apply builder pattern if custom challenge setting provided
+    if (optimistic_intent_challenge_enabled.is_some()) {
+        config = futarchy_config::with_optimistic_intent_challenge_enabled(
+            config,
+            *optimistic_intent_challenge_enabled.borrow()
+        );
+    };
 
     // Create the account with Extensions registry validation for security
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
@@ -535,7 +555,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     );
     let spot_pool_id = object::id(&spot_pool);
 
-    // Create the futarchy configuration
+    // Create the futarchy configuration (uses safe default: challenge enabled = true)
     let config = futarchy_config::new<AssetType, StableType>(
         dao_config,
         slash_distribution,
@@ -626,108 +646,59 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 // Removed create_dao_for_init - not needed, use create_dao_unshared
 
 /// Create DAO and return it without sharing (for init actions)
-/// 
+///
+/// ## Minimal API - All config set via init actions
+/// This function only handles what's truly required for DAO creation.
+/// Everything else (metadata, trading params, TWAP, etc.) should be set via init actions.
+///
 /// ## Hot Potato Pattern:
 /// Returns (Account, ProposalQueue, AccountSpotPool) as unshared objects
 /// These can be passed as `&mut` to init actions before being shared
-/// 
+///
 /// ## Usage:
-/// 1. Call this to create unshared DAO components
-/// 2. Execute init actions with the unshared objects
+/// 1. Call this to create unshared DAO components with defaults
+/// 2. Execute init actions to configure metadata, trading params, etc.
 /// 3. Share the objects only after init succeeds
-/// 
+///
 /// This ensures atomicity - if init fails, nothing is shared
+/// Create a DAO with unshared objects (for PTB composition)
+///
+/// optimistic_intent_challenge_enabled:
+///   - none(): Use default (true - 10-day challenge period)
+///   - some(enabled): Apply custom setting atomically during creation
 public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store>(
     factory: &mut Factory,
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
-    min_asset_amount: u64,
-    min_stable_amount: u64,
-    dao_name: AsciiString,
-    icon_url_string: AsciiString,
-    review_period_ms: u64,
-    trading_period_ms: u64,
-    twap_start_delay: u64,
-    twap_step_max: u64,
-    twap_initial_observation: u128,
-    twap_threshold: u64,
-    amm_total_fee_bps: u64,
-    description: UTF8String,
-    max_outcomes: u64,
+    optimistic_intent_challenge_enabled: Option<bool>,
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Account<FutarchyConfig>, ProposalQueue<StableType>, AccountSpotPool<AssetType, StableType>) {
     // Check factory is active
     assert!(!factory.paused, EPaused);
-    
+
     // Check if StableType is allowed
     let stable_type_name = type_name::with_defining_ids<StableType>();
     assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
-    
+
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
-    
-    // Validate parameters (same as create_dao)
-    assert!(twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
-    assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
-    assert!(trading_period_ms <= MAX_TRADING_TIME, ELongTradingTime);
-    assert!(twap_start_delay <= MAX_TWAP_START_DELAY, ELongTwapDelayTime);
-    assert!((twap_start_delay + 60_000) < trading_period_ms, EDelayNearTotalTrading);
-    assert!(twap_threshold <= MAX_TWAP_THRESHOLD, EHighTwapThreshold);
-    assert!(
-        twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
-        ETwapInitialTooLarge,
-    );
-    
-    // Create config parameters
-    let trading_params = dao_config::new_trading_params(
-        min_asset_amount,
-        min_stable_amount,
-        review_period_ms,
-        trading_period_ms,
-        amm_total_fee_bps, // conditional AMM fee
-        amm_total_fee_bps, // spot AMM fee (same as conditional)
-        0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
-        1000, // max_amm_swap_percent_bps (10% max swap per proposal)
-    );
 
-    let twap_config = dao_config::new_twap_config(
-        twap_start_delay,
-        twap_step_max,
-        twap_initial_observation,
-        twap_threshold,
-    );
+    // Use all default configs - init actions will set real values
+    let trading_params = dao_config::default_trading_params();
+    let twap_config = dao_config::default_twap_config();
+    let governance_config = dao_config::default_governance_config();
 
-    let governance_config = dao_config::new_governance_config(
-        max_outcomes,
-        100, // max_actions_per_outcome
-        1_000_000,  // proposal_fee_per_outcome
-        100_000_000, // required_bond_amount
-        10,         // max_concurrent_proposals
-        86400000,   // proposal_recreation_window_ms (24 hours)
-        3,          // max_proposal_chain_depth
-        10,         // fee_escalation_basis_points
-        true, // proposal_creation_enabled
-        true, // accept_new_proposals
-        10, // max_intents_per_outcome
-        604_800_000, // eviction_grace_period_ms (7 days)
-        31_536_000_000, // proposal_intent_expiry_ms (365 days)
-        true, // enable_premarket_reservation_lock (default: true for MEV protection)
-    );
-
+    // Minimal metadata - init actions will update
     let metadata_config = dao_config::new_metadata_config(
-        dao_name,
-        url::new_unsafe_from_bytes(icon_url_string.into_bytes()),
-        description,
+        b"DAO".to_ascii_string(), // Default name (init actions will override)
+        url::new_unsafe_from_bytes(b""), // Empty icon (init actions will override)
+        b"".to_string(), // Empty description (init actions will override)
     );
 
-    let security_config = dao_config::new_security_config(
-        false, // deadman_enabled
-        2_592_000_000, // recovery_liveness_ms (30 days)
-        false, // require_deadman_council
-    );
+    let security_config = dao_config::default_security_config();
 
     let dao_config = dao_config::new_dao_config(
         trading_params,
@@ -752,36 +723,43 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         3000, // burn_bps (30%)
     );
 
-    // Create the futarchy config
-    let config = futarchy_config::new<AssetType, StableType>(
+    // Create the futarchy config with safe default
+    let mut config = futarchy_config::new<AssetType, StableType>(
         dao_config,
         slash_distribution,
     );
-    
+
+    // Apply builder pattern if custom challenge setting provided
+    if (optimistic_intent_challenge_enabled.is_some()) {
+        config = futarchy_config::with_optimistic_intent_challenge_enabled(
+            config,
+            *optimistic_intent_challenge_enabled.borrow()
+        );
+    };
+
     // Create account with config
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
 
-    // Create spot pool
-    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
+    // Create spot pool with default fee
     let spot_pool = account_spot_pool::new<AssetType, StableType>(
-        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
+        30,  // 0.3% default fee (init actions can configure via governance)
         ctx
     );
-    
+
     // Get eviction grace period from config for the queue
     let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(
         dao_config::governance_config(&dao_config)
     );
 
-    // Create queue
+    // Create queue with defaults
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
-        10, // max_concurrent_proposals
-        30, // max_proposer_funded
+        10, // max_concurrent_proposals (init actions can update)
+        30, // max_proposer_funded (init actions can update)
         eviction_grace_period_ms,
         ctx
     );
-    
+
     // Setup treasury cap if provided
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
@@ -798,18 +776,18 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
 
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
-    
-    // Emit event
+
+    // Emit event with default metadata (init actions will update)
     let account_id = object::id_address(&account);
     event::emit(DAOCreated {
         account_id,
-        dao_name,
+        dao_name: b"DAO".to_ascii_string(),
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
         timestamp: clock.timestamp_ms(),
     });
-    
+
     (account, queue, spot_pool)
 }
 
