@@ -179,11 +179,12 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       // Live proposal: calculate from latest TWAP
       // Note: ProposalTWAP has unique constraint on [proposalId, outcome]
       // so there's only one TWAP record per outcome (stores latest value)
+      // In the current system: outcome 0 = Reject, outcome 1 = Accept
       const acceptTwap = await prisma.proposalTWAP.findUnique({
         where: {
           proposalId_outcome: {
             proposalId: proposal.proposal_id,
-            outcome: 0  // OUTCOME_ACCEPTED
+            outcome: 1  // Accept is at outcome index 1
           }
         },
         select: { twap: true }
@@ -198,8 +199,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
 
         const threshold = dao?.twap_threshold || BigInt(0);
 
-        // If Accept TWAP > threshold, outcome 0 wins; otherwise outcome 1 wins
-        winningOutcome = acceptTwap.twap > threshold ? 0 : 1;
+        // If Accept TWAP > threshold, outcome 1 wins (Accept); otherwise outcome 0 wins (Reject)
+        winningOutcome = acceptTwap.twap > threshold ? 1 : 0;
       }
     }
 
