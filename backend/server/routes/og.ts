@@ -104,6 +104,7 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       },
       select: {
         proposal_id: true,
+        dao_id: true,
         title: true,
         details: true,
         created_at: true,
@@ -167,6 +168,54 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       );
     }, 0);
 
+    // Determine winning outcome based on proposal state
+    let winningOutcome = 0;
+    const currentState = proposal.current_state || 0;
+
+    if (currentState === 2) {
+      // Finalized: use result table
+      winningOutcome = Number(proposal.result?.winning_outcome) || 0;
+    } else if (currentState === 1) {
+      // Live proposal: calculate from latest TWAPs
+      // Get ALL TWAPs for all outcomes
+      const allTwaps = await prisma.proposalTWAP.findMany({
+        where: { proposalId: proposal.proposal_id },
+        select: { outcome: true, twap: true },
+        orderBy: { outcome: 'asc' }
+      });
+
+      if (allTwaps.length > 0) {
+        // Get threshold from DAO config
+        const dao = await prisma.dao.findUnique({
+          where: { dao_id: proposal.dao_id },
+          select: { twap_threshold: true }
+        });
+
+        const threshold = Number(dao?.twap_threshold || BigInt(0));
+
+        // Calculate adjusted TWAP for each outcome
+        // For outcome 0, multiply by (100000 + threshold) / 100000
+        let maxAdjustedTwap = -Infinity;
+        let winningIndex = 0;
+
+        for (const twapRecord of allTwaps) {
+          if (!twapRecord.twap) continue;
+
+          const rawTwap = Number(twapRecord.twap);
+          const adjustedTwap = twapRecord.outcome === 0
+            ? rawTwap * ((100000 + threshold) / 100000)
+            : rawTwap;
+
+          if (adjustedTwap > maxAdjustedTwap) {
+            maxAdjustedTwap = adjustedTwap;
+            winningIndex = twapRecord.outcome;
+          }
+        }
+
+        winningOutcome = winningIndex;
+      }
+    }
+
     // Return JSON if requested
     if (returnJson) {
       return res.json({
@@ -175,8 +224,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
         details: proposal.details,
         dao_name: proposal.dao?.dao_name || "DAO",
         dao_icon_url: proposal.dao?.icon_cache_path,
-        current_state: proposal.current_state || 0,
-        winning_outcome: Number(proposal.result?.winning_outcome) || 0,
+        current_state: currentState,
+        winning_outcome: winningOutcome,
         outcome_messages: outcomeMessages,
         traders: uniqueTraders.length,
         trades: swapCount,
@@ -193,8 +242,8 @@ router.get('/proposal/:propId', async (req: Request<{ propId: string }>, res: Re
       description: proposal.details || "",
       daoName: proposal.dao?.dao_name || "DAO",
       daoLogo: proposal.dao?.icon_cache_path || "placeholder",
-      currentState: proposal.current_state || 0,
-      winningOutcome: Number(proposal.result?.winning_outcome) || 0,
+      currentState: currentState,
+      winningOutcome: winningOutcome,
       outcomeMessages,
       traders: uniqueTraders.length,
       trades: swapCount,
