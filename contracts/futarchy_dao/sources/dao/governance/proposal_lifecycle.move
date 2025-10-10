@@ -57,6 +57,8 @@ const EProposalNotApproved: u64 = 3;
 const ENoIntentKey: u64 = 4;
 const EInvalidWinningOutcome: u64 = 5;
 const EIntentExpiryTooLong: u64 = 6;
+const ENotEligibleForEarlyResolve: u64 = 7;
+const EInsufficientSpread: u64 = 8;
 
 // === Constants ===
 const OUTCOME_ACCEPTED: u64 = 0;
@@ -418,6 +420,88 @@ public fun finalize_proposal_market<AssetType, StableType>(
         dao_id: proposal::get_dao_id(proposal),
         winning_outcome,
         approved: winning_outcome == OUTCOME_ACCEPTED,
+        timestamp: clock.timestamp_ms(),
+    });
+}
+
+/// Try to resolve a proposal early if it meets eligibility criteria
+/// This function can be called by anyone (typically keepers) to trigger early resolution
+/// and receive a keeper reward if the proposal is eligible
+public entry fun try_early_resolve<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &mut ProposalReservationRegistry,
+    proposal: &mut Proposal<AssetType, StableType>,
+    market_state: &mut MarketState,
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    fee_manager: &mut ProposalFeeManager,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Get DAO config
+    let config = account::config(account);
+    let early_resolve_config = futarchy_config::early_resolve_config(config);
+
+    // Check basic eligibility (time-based checks, flip count, etc.)
+    let (is_eligible, reason) = proposal::check_early_resolve_eligibility(
+        proposal,
+        early_resolve_config,
+        clock
+    );
+
+    // Abort if not eligible with reason
+    assert!(is_eligible, ENotEligibleForEarlyResolve);
+
+    // Calculate current winner and check spread requirement
+    let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(proposal, clock);
+    let min_spread = futarchy_config::early_resolve_min_spread(early_resolve_config);
+    assert!(spread >= min_spread, EInsufficientSpread);
+
+    // Get proposal age for event
+    let start_time = if (proposal::get_market_initialized_at(proposal) > 0) {
+        proposal::get_market_initialized_at(proposal)
+    } else {
+        proposal::get_created_at(proposal)
+    };
+    let proposal_age_ms = clock.timestamp_ms() - start_time;
+
+    // Call standard finalization
+    finalize_proposal_market(
+        account,
+        registry,
+        proposal,
+        market_state,
+        spot_pool,
+        fee_manager,
+        clock,
+        ctx
+    );
+
+    // Pay keeper reward
+    let keeper_reward_bps = futarchy_config::early_resolve_keeper_reward_bps(early_resolve_config);
+    let keeper_reward = if (keeper_reward_bps > 0) {
+        // Calculate reward based on accumulated fees
+        // TODO: Implement reward calculation based on protocol fees
+        // For now, use a fixed reward
+        let reward_coin = proposal_fee_manager::pay_keeper_reward(
+            fee_manager,
+            100_000_000, // 0.1 SUI as fixed reward
+            ctx
+        );
+        let reward_amount = reward_coin.value();
+        transfer::public_transfer(reward_coin, ctx.sender());
+        reward_amount
+    } else {
+        0
+    };
+
+    // Emit early resolution event
+    event::emit(proposal::ProposalEarlyResolved {
+        proposal_id: proposal::get_id(proposal),
+        winning_outcome: winner_idx,
+        proposal_age_ms,
+        flips_in_window: 0,  // Removed flip tracking
+        keeper: ctx.sender(),
+        keeper_reward,
         timestamp: clock.timestamp_ms(),
     });
 }

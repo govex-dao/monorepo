@@ -56,8 +56,9 @@ const ETooEarlyToRenew: u64 = 4;
 
 // === Constants ===
 
-/// Duration to extend Walrus storage (in epochs, ~1 year)
-public fun default_extend_epochs(): u64 { 52 }
+/// Duration to extend Walrus storage (in epochs, 1 year on mainnet where epochs ≈ 24h)
+/// Matches MIN_WALRUS_BLOB_EXPIRY_EPOCHS to minimize renewal frequency
+public fun default_extend_epochs(): u64 { 365 }
 
 // === Structs ===
 

@@ -22,7 +22,7 @@ use std::string::String;
 use std::option::Option;
 use std::vector;
 use sui::object::{Self, ID, UID};
-use sui::tx_context::TxContext;
+use sui::tx_context::{Self, TxContext};
 use sui::clock::Clock;
 use sui::event;
 use sui::transfer;
@@ -120,6 +120,7 @@ const EExecutionTooEarly: u64 = 23;
 const EGrantExpired: u64 = 24;
 const EInsufficientPayment: u64 = 25;
 const EWrongAccount: u64 = 26;
+const EGrantNotFrozen: u64 = 27;
 
 // === Core Structs ===
 
@@ -144,6 +145,7 @@ public struct PriceCondition has store, copy, drop {
 public struct LaunchpadEnforcement has store, copy, drop {
     enabled: bool,
     minimum_multiplier: u64,  // Scaled 1e9
+    launchpad_price: u128,    // Absolute launchpad price at grant creation (1e12 scale)
 }
 
 /// Repeatability configuration
@@ -276,7 +278,19 @@ public struct GrantUnfrozen has copy, drop {
 
 // === Helper Functions ===
 
+/// Convert relative threshold to absolute price
+/// This should be used at grant creation time to avoid unit mismatches
+public fun relative_to_absolute_threshold(
+    launchpad_price_abs_1e12: u128,
+    multiplier_1e9: u64
+): u128 {
+    // (launchpad_price * multiplier) / 1e9
+    (launchpad_price_abs_1e12 * (multiplier_1e9 as u128)) / (PRICE_MULTIPLIER_SCALE as u128)
+}
+
 /// Create launchpad-relative price condition
+/// DEPRECATED: Use relative_to_absolute_threshold + absolute_price_condition instead
+/// This function is kept for backward compatibility but creates incorrect comparisons
 public fun relative_price_condition(
     multiplier: u64,     // Scaled 1e9
     is_above: bool,
@@ -316,13 +330,17 @@ public fun repeat_config(
 // === Constructor Functions ===
 
 /// Create employee stock option (simple grant = 1 tier with vesting + strike)
+///
+/// @param launchpad_price_abs_1e12: Current launchpad price (1e12 scale) for computing absolute threshold
+/// @param launchpad_multiplier: Multiplier (1e9 scale) - e.g., 3_500_000_000 = 3.5x
 public fun create_employee_option<AssetType, StableType>(
     recipient: address,
     total_amount: u64,
     strike_price: u64,
     cliff_months: u64,
     total_vesting_years: u64,
-    launchpad_multiplier: u64,  // Scaled 1e9
+    launchpad_price_abs_1e12: u128,  // NEW: Current launchpad price for conversion
+    launchpad_multiplier: u64,       // Scaled 1e9
     expiry_years: u64,
     dao_id: ID,
     clock: &Clock,
@@ -359,8 +377,10 @@ public fun create_employee_option<AssetType, StableType>(
     });
 
     // Build single tier with vesting and strike
+    // Convert relative threshold to absolute at creation time
+    let abs_threshold = relative_to_absolute_threshold(launchpad_price_abs_1e12, launchpad_multiplier);
     let tier = PriceTier {
-        price_condition: std::option::some(relative_price_condition(launchpad_multiplier, true)),
+        price_condition: std::option::some(absolute_price_condition(abs_threshold, true)),
         recipients: vector[RecipientMint { recipient, amount: total_amount }],
         vesting: std::option::some(VestingConfig {
             start_time: now,
@@ -381,6 +401,7 @@ public fun create_employee_option<AssetType, StableType>(
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: true,
             minimum_multiplier: launchpad_multiplier,
+            launchpad_price: launchpad_price_abs_1e12,
         },
         repeat_config: std::option::none(),
         earliest_execution: std::option::some(now),
@@ -472,6 +493,7 @@ public fun create_vesting_grant<AssetType, StableType>(
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: false,
             minimum_multiplier: 0,
+            launchpad_price: 0,
         },
         repeat_config: std::option::none(),
         earliest_execution: std::option::some(now),
@@ -508,7 +530,11 @@ public fun create_vesting_grant<AssetType, StableType>(
 }
 
 /// Create milestone rewards
+///
+/// @param launchpad_price_abs_1e12: Current launchpad price (1e12 scale) for computing absolute thresholds
+/// @param tier_multipliers: Multipliers (1e9 scale) for each tier
 public fun create_milestone_rewards<AssetType, StableType>(
+    launchpad_price_abs_1e12: u128,     // NEW: Current launchpad price for conversion
     tier_multipliers: vector<u64>,      // Scaled 1e9
     tier_recipients: vector<vector<RecipientMint>>,
     tier_descriptions: vector<String>,
@@ -544,11 +570,11 @@ public fun create_milestone_rewards<AssetType, StableType>(
             j = j + 1;
         };
 
+        // Convert relative threshold to absolute at creation time
+        let multiplier = *vector::borrow(&tier_multipliers, i);
+        let abs_threshold = relative_to_absolute_threshold(launchpad_price_abs_1e12, multiplier);
         let tier = PriceTier {
-            price_condition: std::option::some(relative_price_condition(
-                *vector::borrow(&tier_multipliers, i),
-                true
-            )),
+            price_condition: std::option::some(absolute_price_condition(abs_threshold, true)),
             recipients: recipients_for_tier,
             vesting: std::option::none(),      // No vesting for milestone rewards
             strike_price: std::option::none(), // Free minting
@@ -578,8 +604,9 @@ public fun create_milestone_rewards<AssetType, StableType>(
         claimed_amount: 0,
         recipient_claims: table::new(ctx),
         launchpad_enforcement: LaunchpadEnforcement {
-            enabled: false,
-            minimum_multiplier: 0,
+            enabled: true,
+            minimum_multiplier: 0,  // No minimum for milestone rewards
+            launchpad_price: launchpad_price_abs_1e12,
         },
         repeat_config: std::option::none(),
         earliest_execution: std::option::some(earliest_execution),
@@ -647,6 +674,7 @@ public fun create_conditional_mint<AssetType, StableType>(
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: false,
             minimum_multiplier: 0,
+            launchpad_price: 0,
         },
         repeat_config: std::option::some(repeat_config(cooldown_ms, max_executions)),
         earliest_execution: std::option::none(),
@@ -731,7 +759,7 @@ public fun claimable_now<A, S>(
     };
 
     // Read vesting from first tier (simple grants have 1 tier)
-    if (grant.tiers.length() == 0) return 0;
+    if (vector::length(&grant.tiers) == 0) return 0;
     let tier = vector::borrow(&grant.tiers, 0);
 
     if (tier.vesting.is_none()) {
@@ -767,7 +795,7 @@ public fun next_vest_time<A, S>(
     clock: &Clock,
 ): Option<u64> {
     // Read vesting from first tier
-    if (grant.tiers.length() == 0 || grant.canceled) {
+    if (vector::length(&grant.tiers) == 0 || grant.canceled) {
         return std::option::none()
     };
     let tier = vector::borrow(&grant.tiers, 0);
@@ -902,7 +930,7 @@ public fun emergency_unfreeze<A, S>(
     grant: &mut PriceBasedMintGrant<A, S>,
     clock: &Clock,
 ) {
-    assert!(grant.emergency_frozen, EGrantNotPaused);
+    assert!(grant.emergency_frozen, EGrantNotFrozen);
 
     grant.emergency_frozen = false;
 
@@ -912,6 +940,22 @@ public fun emergency_unfreeze<A, S>(
     });
 
     // Note: Does NOT auto-unpause - DAO must explicitly unpause after unfreezing
+}
+
+/// Cancel a grant (returns unvested tokens to treasury)
+public fun cancel_grant<A, S>(
+    grant: &mut PriceBasedMintGrant<A, S>,
+    clock: &Clock
+) {
+    assert!(grant.cancelable, EGrantNotCancelable);
+    assert!(!grant.canceled, EAlreadyCanceled);
+    grant.canceled = true;
+    let unvested = grant.total_amount - grant.claimed_amount;
+    event::emit(GrantCanceled {
+        grant_id: object::id(grant),
+        unvested_amount: unvested,
+        timestamp: clock.timestamp_ms()
+    });
 }
 
 // === Resource Request Pattern Structs ===
@@ -943,6 +987,8 @@ public struct ClaimGrantAction has store, drop {
 /// The ResourceRequest proves that all validation passed and must be fulfilled
 /// by calling fulfill_claim_grant() with TreasuryCap in the same PTB
 public fun claim_grant<AssetType, StableType>(
+    account: &Account<FutarchyConfig>,
+    version: VersionWitness,
     grant: &mut PriceBasedMintGrant<AssetType, StableType>,
     claim_cap: &GrantClaimCap,
     spot_pool: &SpotAMM<AssetType, StableType>,
@@ -950,6 +996,9 @@ public fun claim_grant<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): resource_requests::ResourceRequest<ClaimGrantAction> {
+    // Check DAO is not dissolving
+    assert_not_dissolving(account, version);
+
     // Verify claim cap matches grant
     assert!(claim_cap.grant_id == object::id(grant), EWrongGrantId);
 
@@ -982,7 +1031,7 @@ public fun claim_grant<AssetType, StableType>(
     );
 
     // Check price condition from first tier (simple grants have 1 tier)
-    assert!(grant.tiers.length() > 0, EInvalidAmount);
+    assert!(vector::length(&grant.tiers) > 0, EInvalidAmount);
     let tier = vector::borrow(&grant.tiers, 0);
 
     // Check price condition (optimized: extract condition ref to avoid multiple option access)
@@ -1002,7 +1051,7 @@ public fun claim_grant<AssetType, StableType>(
     let mut recipient_allocation = 0u64;
     let mut found_recipient = false;
     let mut i = 0;
-    let recipient_count = tier.recipients.length();
+    let recipient_count = vector::length(&tier.recipients);
 
     while (i < recipient_count) {
         let recipient_mint = vector::borrow(&tier.recipients, i);
@@ -1068,7 +1117,8 @@ public fun claim_grant<AssetType, StableType>(
         //   where STRIKE_PAYMENT_DIVISOR = (10^ASSET_TOKEN_DECIMALS * ORACLE_PRICE_SCALE) / 10^STABLE_COIN_DECIMALS
         //
         // WARNING: If your token or stable coin has different decimals, update the constants at the top of this module!
-        ((claimable as u128) * (strike as u128) / STRIKE_PAYMENT_DIVISOR) as u64
+        // Use safe mul_div to prevent overflow
+        mul_div_u128_floor(claimable as u128, strike as u128, STRIKE_PAYMENT_DIVISOR) as u64
     } else {
         0  // No strike price - free grant
     };
@@ -1211,6 +1261,14 @@ public fun fulfill_claim_grant_from_account<AssetType, StableType, Config>(
     });
 }
 
+/// Safe multiply-divide to prevent overflow
+/// Ensures a * b won't overflow u128 before performing multiplication
+fun mul_div_u128_floor(a: u128, b: u128, d: u128): u128 {
+    // Check if a * b would overflow
+    assert!(a == 0 || b <= 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF / a, ETimeCalculationOverflow);
+    (a * b) / d
+}
+
 /// Check if price condition is met
 /// Handles both launchpad-relative and absolute price conditions
 fun check_price_condition(condition: &PriceCondition, current_price: u128): bool {
@@ -1262,7 +1320,7 @@ public fun dev_inspect_check_price_condition<AssetType, StableType>(
     );
 
     // Get price condition from first tier
-    let has_condition = if (grant.tiers.length() > 0) {
+    let has_condition = if (vector::length(&grant.tiers) > 0) {
         let tier = vector::borrow(&grant.tiers, 0);
         tier.price_condition.is_some()
     } else {
@@ -1607,6 +1665,16 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
     let dao_id = object::id(account);
     let now = clock.timestamp_ms();
 
+    // Read launchpad price from DAO config (if set)
+    use account_protocol::account;
+    let dao_config = account::config(account);
+    let launchpad_price_opt = futarchy_core::futarchy_config::get_launchpad_initial_price(dao_config);
+    let launchpad_price = if (launchpad_price_opt.is_some()) {
+        *launchpad_price_opt.borrow()
+    } else {
+        0u128  // No launchpad price set (DAO not created via launchpad)
+    };
+
     // Build RecipientMint vector and calculate total
     let mut recipient_mints = vector::empty();
     let mut total_amount = 0u64;
@@ -1719,6 +1787,7 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
         launchpad_enforcement: LaunchpadEnforcement {
             enabled: launchpad_multiplier > 0,
             minimum_multiplier: launchpad_multiplier,
+            launchpad_price: launchpad_price,  // Read from DAO config at grant creation
         },
         repeat_config: repeat_config_opt,
         earliest_execution: earliest_execution_opt,
@@ -1867,6 +1936,34 @@ public fun do_emergency_unfreeze_grant<AssetType, StableType, Outcome: store, IW
 
     // Emergency unfreeze the grant
     emergency_unfreeze(grant, clock);
+
+    executable::increment_action_idx(executable);
+}
+
+/// Execute cancel grant action
+public fun do_cancel_grant<AssetType, StableType, Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    _account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    _witness: IW,
+    grant: &mut PriceBasedMintGrant<AssetType, StableType>,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get spec and validate type
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CancelGrant>(spec);
+
+    // Deserialize
+    let action_data = intents::action_spec_data(spec);
+    let mut reader = bcs::new(*action_data);
+    let _grant_id = object::id_from_bytes(bcs::peel_vec_u8(&mut reader));
+
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Cancel the grant
+    cancel_grant(grant, clock);
 
     executable::increment_action_idx(executable);
 }

@@ -681,6 +681,112 @@ public fun content_hash(tree: &DividendTree): vector<u8> { tree.content_hash }
 public fun rolling_hash(tree: &DividendTree): vector<u8> { tree.rolling_hash }
 public fun build_nonce(tree: &DividendTree): u64 { tree.build_nonce }
 
+// === Cleanup Functions ===
+
+/// Delete tree and all its buckets (expensive operation!)
+/// WARNING: This iterates through ALL buckets and deletes them
+/// For large trees (1000+ buckets), this may hit gas limits
+/// Consider calling multiple times with smaller ranges if needed
+///
+/// Use cases:
+/// - Clean up cancelled dividends
+/// - Archive completed dividends
+/// - Free storage after distribution complete
+public fun delete_tree(tree: DividendTree) {
+    let DividendTree {
+        mut id,
+        coin_type: _,
+        total_recipients: _,
+        total_amount: _,
+        num_buckets: _,
+        description: _,
+        finalized: _,
+        prefix_directory,
+        rolling_hash: _,
+        content_hash: _,
+        build_nonce: _,
+    } = tree;
+
+    // Remove all buckets from dynamic fields
+    let mut i = 0;
+    while (i < prefix_directory.length()) {
+        let prefix = *prefix_directory.borrow(i);
+        let key = BucketKey { prefix };
+
+        // Remove bucket if it exists
+        if (dynamic_field::exists_(&id, key)) {
+            let RecipientBucket { recipients, addresses_for_crank: _ } =
+                dynamic_field::remove(&mut id, key);
+
+            // Table has drop ability, will be cleaned up
+            recipients.drop();
+        };
+
+        i = i + 1;
+    };
+
+    // Delete the UID
+    object::delete(id);
+}
+
+/// Delete tree in chunks (for very large trees)
+/// start_idx: Starting bucket index (inclusive)
+/// end_idx: Ending bucket index (exclusive)
+/// Returns: true if all buckets deleted (tree can be finalized), false if more chunks remain
+///
+/// Example for 10k bucket tree:
+///   delete_tree_range(&mut tree, 0, 1000)     // Delete first 1000 buckets
+///   delete_tree_range(&mut tree, 1000, 2000)  // Delete next 1000 buckets
+///   ... repeat 10 times ...
+///   finalize_tree_deletion(tree)  // Final cleanup after all buckets deleted
+public fun delete_tree_range(tree: &mut DividendTree, start_idx: u64, end_idx: u64): bool {
+    let prefix_directory = &tree.prefix_directory;
+    let total_buckets = prefix_directory.length();
+
+    assert!(start_idx < total_buckets, 0);
+    assert!(end_idx <= total_buckets, 0);
+    assert!(start_idx < end_idx, 0);
+
+    // Remove buckets in range
+    let mut i = start_idx;
+    while (i < end_idx) {
+        let prefix = *prefix_directory.borrow(i);
+        let key = BucketKey { prefix };
+
+        if (dynamic_field::exists_(&tree.id, key)) {
+            let RecipientBucket { recipients, addresses_for_crank: _ } =
+                dynamic_field::remove(&mut tree.id, key);
+            recipients.drop();
+        };
+
+        i = i + 1;
+    };
+
+    // Return true if we've processed all buckets
+    end_idx >= total_buckets
+}
+
+/// Finalize tree deletion after all buckets have been removed via delete_tree_range
+/// This should only be called after delete_tree_range returns true
+public fun finalize_tree_deletion(tree: DividendTree) {
+    let DividendTree {
+        id,
+        coin_type: _,
+        total_recipients: _,
+        total_amount: _,
+        num_buckets: _,
+        description: _,
+        finalized: _,
+        prefix_directory: _,
+        rolling_hash: _,
+        content_hash: _,
+        build_nonce: _,
+    } = tree;
+
+    // All buckets should have been removed already
+    object::delete(id);
+}
+
 // === Helper function for testing ===
 
 #[test_only]

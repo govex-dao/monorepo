@@ -236,16 +236,62 @@ public fun decode_add_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
+    let chunk_type = bcs::peel_u8(&mut bcs_data);
+    let expires_at = bcs::peel_option_u64(&mut bcs_data);
+    let effective_from = bcs::peel_option_u64(&mut bcs_data);
+    let immutable = bcs::peel_bool(&mut bcs_data);
+    let immutable_from = bcs::peel_option_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
-    vector[
+    let mut fields = vector[
         schema::new_field(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
         ),
-    ]
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"chunk_type".to_string(),
+            chunk_type.to_string(),
+            b"u8".to_string(),
+        ),
+        schema::new_field(
+            b"immutable".to_string(),
+            if (immutable) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+    ];
+
+    // Add optional fields if present
+    if (option::is_some(&expires_at)) {
+        vector::push_back(&mut fields, schema::new_field(
+            b"expires_at".to_string(),
+            option::borrow(&expires_at).to_string(),
+            b"Option<u64>".to_string(),
+        ));
+    };
+    if (option::is_some(&effective_from)) {
+        vector::push_back(&mut fields, schema::new_field(
+            b"effective_from".to_string(),
+            option::borrow(&effective_from).to_string(),
+            b"Option<u64>".to_string(),
+        ));
+    };
+    if (option::is_some(&immutable_from)) {
+        vector::push_back(&mut fields, schema::new_field(
+            b"immutable_from".to_string(),
+            option::borrow(&immutable_from).to_string(),
+            b"Option<u64>".to_string(),
+        ));
+    };
+
+    fields
 }
 
 /// Decode AddChunkWithText action
@@ -282,6 +328,7 @@ public fun decode_add_sunset_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let expires_at_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
 
@@ -292,6 +339,11 @@ public fun decode_add_sunset_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"expires_at_ms".to_string(),
@@ -314,6 +366,7 @@ public fun decode_add_sunrise_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let effective_from_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
 
@@ -324,6 +377,11 @@ public fun decode_add_sunrise_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"effective_from_ms".to_string(),
@@ -346,6 +404,7 @@ public fun decode_add_temporary_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let effective_from_ms = bcs::peel_u64(&mut bcs_data);
     let expires_at_ms = bcs::peel_u64(&mut bcs_data);
     let immutable = bcs::peel_bool(&mut bcs_data);
@@ -357,6 +416,11 @@ public fun decode_add_temporary_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"effective_from_ms".to_string(),
@@ -384,6 +448,7 @@ public fun decode_add_chunk_with_scheduled_immutability(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let immutable_from_ms = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -393,6 +458,11 @@ public fun decode_add_chunk_with_scheduled_immutability(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"immutable_from_ms".to_string(),
@@ -410,6 +480,7 @@ public fun decode_update_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -419,6 +490,11 @@ public fun decode_update_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"chunk_id".to_string(),
@@ -436,6 +512,7 @@ public fun decode_remove_chunk(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -445,6 +522,11 @@ public fun decode_remove_chunk(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"chunk_id".to_string(),
@@ -462,6 +544,7 @@ public fun decode_set_chunk_immutable(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let chunk_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -471,6 +554,11 @@ public fun decode_set_chunk_immutable(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"chunk_id".to_string(),
@@ -488,6 +576,7 @@ public fun decode_set_document_immutable(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
@@ -496,6 +585,11 @@ public fun decode_set_document_immutable(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
     ]
 }
@@ -508,6 +602,7 @@ public fun decode_set_document_insert_allowed(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let allowed = bcs::peel_bool(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -517,6 +612,11 @@ public fun decode_set_document_insert_allowed(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"allowed".to_string(),
@@ -534,6 +634,7 @@ public fun decode_set_document_remove_allowed(
     let mut bcs_data = bcs::new(action_data);
 
     let doc_id = object::id_from_address(bcs::peel_address(&mut bcs_data));
+    let expected_sequence = bcs::peel_u64(&mut bcs_data);
     let allowed = bcs::peel_bool(&mut bcs_data);
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -543,6 +644,11 @@ public fun decode_set_document_remove_allowed(
             b"doc_id".to_string(),
             object::id_to_bytes(&doc_id).to_string(),
             b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"expected_sequence".to_string(),
+            expected_sequence.to_string(),
+            b"u64".to_string(),
         ),
         schema::new_field(
             b"allowed".to_string(),

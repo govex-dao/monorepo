@@ -43,7 +43,6 @@ use sui::{
     tx_context::TxContext,
     bcs::{Self, BCS},
     table,
-    bag,
 };
 use futarchy_core::{
     action_validation,
@@ -62,10 +61,15 @@ use account_actions::vault::{Self, Vault};
 use futarchy_payments::dividend_tree::{Self, DividendTree};
 
 // === Errors ===
-const EDividendNotFound: u64 = 1;
 const ETreeNotFinalized: u64 = 2;
 const EAllRecipientsProcessed: u64 = 3;
 const EInsufficientFunds: u64 = 4;
+const EWrongCoinType: u64 = 5;
+const EDistributionAlreadyStarted: u64 = 6;
+const EUnauthorizedCancellation: u64 = 7;
+const ENotFullyDistributed: u64 = 9;
+const EPoolNotEmpty: u64 = 10;
+const EUnsortedPrefixes: u64 = 11;
 
 const MAX_BATCH_SIZE: u64 = 100;
 
@@ -134,6 +138,15 @@ public fun resource_receipt_dividend_id<Action>(receipt: &ResourceReceipt<Action
     &receipt.dividend_id
 }
 
+/// Capability proving authority to cancel a specific dividend
+/// Issued during dividend creation, held by governance/multisig
+/// Can only be used if NO payments have been made (sent_count == 0)
+public struct DividendCancelCap has key, store {
+    id: UID,
+    dividend_id: String,
+    account_id: ID,
+}
+
 /// Helper struct for cranking - represents a recipient payment
 /// Replaces tuple type (address, u64) which is not allowed in vectors
 public struct RecipientPayment has drop, store {
@@ -166,6 +179,13 @@ public struct DividendCranked has copy, drop {
     dividend_id: String,
     recipients_processed: u64,
     total_distributed: u64,
+    timestamp: u64,
+}
+
+public struct DividendCancelled has copy, drop {
+    account_id: ID,
+    dividend_id: String,
+    refund_amount: u64,
     timestamp: u64,
 }
 
@@ -211,6 +231,10 @@ public fun do_create_dividend<Config: store, Outcome: store, CoinType: drop, IW:
 
     // Validate tree ID matches
     assert!(dividend_tree::tree_id(&tree) == action.tree_id, 0);
+
+    // CRITICAL: Validate prefix directory is sorted
+    // Binary search in query_allocation and claim_my_dividend relies on this
+    assert!(dividend_tree::is_prefix_directory_sorted(&tree), EUnsortedPrefixes);
 
     // Get tree info
     let total_recipients = dividend_tree::total_recipients(&tree);
@@ -268,6 +292,7 @@ public fun do_create_dividend<Config: store, Outcome: store, CoinType: drop, IW:
 }
 
 /// Fulfill the create dividend resource request by providing the coin
+/// Returns ResourceReceipt and DividendCancelCap for governance
 /// Caller must withdraw coin from vault (via PTB) and pass it here
 public fun fulfill_create_dividend<Config: store, CoinType: drop>(
     request: ResourceRequest<CreateDividendAction<CoinType>>,
@@ -275,11 +300,18 @@ public fun fulfill_create_dividend<Config: store, CoinType: drop>(
     account: &mut Account<Config>,
     clock: &Clock,
     ctx: &mut TxContext,
-): ResourceReceipt<CreateDividendAction<CoinType>> {
+): (ResourceReceipt<CreateDividendAction<CoinType>>, DividendCancelCap) {
     let ResourceRequest { dividend_id, tree, total_amount } = request;
 
     // Verify the coin amount matches the tree total
     assert!(coin::value(&dividend_coin) == total_amount, EInsufficientFunds);
+    assert!(total_amount > 0, EInsufficientFunds);
+
+    // Verify coin type and extract event data BEFORE storing tree
+    assert!(dividend_tree::coin_type(&tree) == type_name::get<CoinType>(), EWrongCoinType);
+    let tree_id = dividend_tree::tree_id(&tree);
+    let total_recipients = dividend_tree::total_recipients(&tree);
+    let num_buckets = dividend_tree::num_buckets(&tree);
 
     // Store tree as managed data
     account::add_managed_data(
@@ -298,16 +330,6 @@ public fun fulfill_create_dividend<Config: store, CoinType: drop>(
         version::current()
     );
 
-    // Get tree info for event
-    let tree_ref: &DividendTree = account::borrow_managed_data(
-        account,
-        DividendTreeKey { dividend_id },
-        version::current()
-    );
-    let tree_id = dividend_tree::tree_id(tree_ref);
-    let total_recipients = dividend_tree::total_recipients(tree_ref);
-    let num_buckets = dividend_tree::num_buckets(tree_ref);
-
     // Emit event
     event::emit(DividendCreated {
         account_id: object::id(account),
@@ -319,8 +341,15 @@ public fun fulfill_create_dividend<Config: store, CoinType: drop>(
         created_at: clock.timestamp_ms(),
     });
 
-    // Return receipt
-    ResourceReceipt { dividend_id }
+    // Create cancel capability (can only be used if sent_count == 0)
+    let cancel_cap = DividendCancelCap {
+        id: object::new(ctx),
+        dividend_id,
+        account_id: object::id(account),
+    };
+
+    // Return receipt and cancel cap
+    (ResourceReceipt { dividend_id }, cancel_cap)
 }
 
 /// Individual claim - user claims their own dividend (out of order, no contention)
@@ -330,6 +359,7 @@ public fun claim_my_dividend<Config: store, CoinType: drop>(
     account: &mut Account<Config>,
     dividend_id: String,
     prefix: vector<u8>,  // User provides their bucket prefix (from off-chain lookup)
+    clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
     let claimer = tx_context::sender(ctx);
@@ -382,7 +412,8 @@ public fun claim_my_dividend<Config: store, CoinType: drop>(
     let amount_ptr = table::borrow_mut(recipients_table, claimer);
     *amount_ptr = 0;  // Mark as claimed
 
-    // Update progress
+    // Update progress (overflow protected by Move runtime)
+    // Note: Move aborts on u64 overflow automatically, which is safe for edge cases
     let progress_key = DividendProgressKey { dividend_id };
     let progress: &mut DividendProgress = account::borrow_managed_data_mut(
         account,
@@ -398,7 +429,7 @@ public fun claim_my_dividend<Config: store, CoinType: drop>(
         dividend_id,
         recipient: claimer,
         amount: amount_to_claim,
-        timestamp: tx_context::epoch(ctx),
+        timestamp: clock.timestamp_ms(),
     });
 
     true
@@ -410,10 +441,11 @@ public fun crank_dividend<Config: store, CoinType: drop>(
     account: &mut Account<Config>,
     dividend_id: String,
     max_recipients: u64,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Step 1: Collect recipients to process (read-only phase)
-    let (current_bucket_prefix, start_index, recipients_to_send) = {
+    let (current_bucket_prefix, start_index, scan_end_idx, recipients_to_send) = {
         let progress_key = DividendProgressKey { dividend_id };
         let progress: &DividendProgress = account::borrow_managed_data(
             account,
@@ -436,6 +468,11 @@ public fun crank_dividend<Config: store, CoinType: drop>(
         );
 
         let prefix_directory = dividend_tree::get_prefix_directory(tree);
+
+        // CRITICAL: Bounds check to prevent out-of-bounds panic
+        // This can happen if all remaining recipients claimed individually
+        assert!(current_bucket_index < prefix_directory.length(), EAllRecipientsProcessed);
+
         let current_prefix = *prefix_directory.borrow(current_bucket_index);
         let bucket = dividend_tree::get_bucket(tree, current_prefix);
         let addresses = dividend_tree::bucket_addresses(bucket);
@@ -458,13 +495,14 @@ public fun crank_dividend<Config: store, CoinType: drop>(
             idx = idx + 1;
         };
 
-        (current_prefix, start_index, to_send)
+        // Return scan_end_idx so we can advance cursor even if processed == 0
+        (current_prefix, start_index, idx, to_send)
     }; // Borrow ends here
 
     // Step 2: Process payments
     let mut processed = 0u64;
     let mut total_distributed = 0u64;
-    let timestamp = tx_context::epoch(ctx);
+    let timestamp = clock.timestamp_ms();
     let account_id = object::id(account); // Get ID before any borrows
 
     if (recipients_to_send.length() > 0) {
@@ -499,25 +537,26 @@ public fun crank_dividend<Config: store, CoinType: drop>(
     };
 
     // Step 3: Update tracking
-    if (processed > 0) {
-        // Mark as sent in tree (in separate scope to release borrow)
-        let (next_idx, bucket_done) = {
-            let tree_key = DividendTreeKey { dividend_id };
-            let tree: &mut DividendTree = account::borrow_managed_data_mut(
-                account,
-                tree_key,
-                version::current()
-            );
+    // Always update cursor to avoid stalling on already-claimed recipients
+    // Mark as sent in tree (in separate scope to release borrow)
+    let (bucket_size, bucket_done) = {
+        let tree_key = DividendTreeKey { dividend_id };
+        let tree: &mut DividendTree = account::borrow_managed_data_mut(
+            account,
+            tree_key,
+            version::current()
+        );
 
-            let bucket = dividend_tree::get_bucket_mut(tree, current_bucket_prefix);
+        let bucket = dividend_tree::get_bucket_mut(tree, current_bucket_prefix);
 
-            // Get bucket size in separate scope to release borrow
-            let bucket_size = {
-                let addresses = dividend_tree::bucket_addresses(bucket);
-                addresses.length()
-            }; // addresses borrow ends here
+        // Get bucket size in separate scope to release borrow
+        let bucket_size = {
+            let addresses = dividend_tree::bucket_addresses(bucket);
+            addresses.length()
+        }; // addresses borrow ends here
 
-            // Now safe to get mutable recipients table
+        // Mark recipients as sent (only if we processed any)
+        if (processed > 0) {
             let recipients_table = dividend_tree::bucket_recipients_mut(bucket);
 
             // Mark recipients as sent using addresses from recipients_to_send
@@ -530,28 +569,29 @@ public fun crank_dividend<Config: store, CoinType: drop>(
                 };
                 i = i + 1;
             };
-
-            let next_idx = start_index + processed;
-            (next_idx, next_idx >= bucket_size)
-        }; // Tree borrow ends here
-
-        // Update progress (now safe to borrow from account again)
-        let progress_key = DividendProgressKey { dividend_id };
-        let progress: &mut DividendProgress = account::borrow_managed_data_mut(
-            account,
-            progress_key,
-            version::current()
-        );
-
-        progress.sent_count = progress.sent_count + processed;
-        progress.total_sent = progress.total_sent + total_distributed;
-        progress.next_index_in_bucket = next_idx;
-
-        // Move to next bucket if current is done
-        if (bucket_done) {
-            progress.next_bucket_index = progress.next_bucket_index + 1;
-            progress.next_index_in_bucket = 0;
         };
+
+        // Check if bucket is done using scan_end_idx (not start_index + processed)
+        (bucket_size, scan_end_idx >= bucket_size)
+    }; // Tree borrow ends here
+
+    // Update progress (now safe to borrow from account again)
+    // Note: Move aborts on u64 overflow automatically, which is safe for edge cases
+    let progress_key = DividendProgressKey { dividend_id };
+    let progress: &mut DividendProgress = account::borrow_managed_data_mut(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    progress.sent_count = progress.sent_count + processed;
+    progress.total_sent = progress.total_sent + total_distributed;
+    progress.next_index_in_bucket = scan_end_idx;  // Always advance, even if processed == 0
+
+    // Move to next bucket if current is done
+    if (bucket_done) {
+        progress.next_bucket_index = progress.next_bucket_index + 1;
+        progress.next_index_in_bucket = 0;
     };
 
     // Emit batch event
@@ -562,6 +602,153 @@ public fun crank_dividend<Config: store, CoinType: drop>(
         total_distributed,
         timestamp,
     });
+}
+
+/// Cancel a dividend and recover all funds
+/// CRITICAL SAFETY: Can ONLY be called if sent_count == 0 (no payments made yet)
+/// This prevents unfairness where some recipients get paid and others don't
+///
+/// Use cases:
+/// - Wrong coin type was used
+/// - Error in tree construction detected
+/// - Governance decides to cancel before distribution starts
+///
+/// Once ANY payment is made, cancellation is permanently disabled
+public fun cancel_dividend<Config: store, CoinType: drop>(
+    cap: DividendCancelCap,
+    account: &mut Account<Config>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    let DividendCancelCap { id, dividend_id, account_id } = cap;
+
+    // Verify cap matches account
+    assert!(account_id == object::id(account), EUnauthorizedCancellation);
+
+    // Check that NO payments have been made
+    let progress_key = DividendProgressKey { dividend_id };
+    let progress: &DividendProgress = account::borrow_managed_data(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    // CRITICAL SAFETY CHECK: Reject if any payments sent
+    assert!(progress.sent_count == 0, EDistributionAlreadyStarted);
+
+    // Remove all dividend data
+    let pool_key = DividendPoolKey { dividend_id };
+    let pool: Balance<CoinType> = account::remove_managed_data(
+        account,
+        pool_key,
+        version::current()
+    );
+
+    let tree_key = DividendTreeKey { dividend_id };
+    let tree: DividendTree = account::remove_managed_data(
+        account,
+        tree_key,
+        version::current()
+    );
+
+    // Clean up tree and all its buckets
+    dividend_tree::delete_tree(tree);
+
+    let DividendProgress {
+        dividend_id: _,
+        tree_id: _,
+        total_recipients: _,
+        total_amount: _,
+        sent_count: _,
+        total_sent: _,
+        next_bucket_index: _,
+        next_index_in_bucket: _,
+        created_at: _,
+    } = account::remove_managed_data(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    // Emit cancellation event
+    let refund_amount = pool.value();
+    event::emit(DividendCancelled {
+        account_id: object::id(account),
+        dividend_id,
+        refund_amount,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Delete capability
+    object::delete(id);
+
+    // Return funds to caller (governance)
+    coin::from_balance(pool, ctx)
+}
+
+/// Clean up a completed dividend to free storage
+/// Can ONLY be called after ALL recipients have been paid (sent_count == total_recipients)
+/// Returns the tree for archival purposes (caller can delete it or keep it)
+///
+/// Use cases:
+/// - Free storage after successful distribution
+/// - Archive old dividends
+/// - Reduce on-chain storage costs
+///
+/// Note: Pool must be empty (all funds distributed)
+public fun cleanup_completed_dividend<Config: store, CoinType: drop>(
+    account: &mut Account<Config>,
+    dividend_id: String,
+    ctx: &mut TxContext,
+): DividendTree {
+    let progress_key = DividendProgressKey { dividend_id };
+    let progress: &DividendProgress = account::borrow_managed_data(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    // CRITICAL: Require 100% distribution complete
+    assert!(progress.sent_count == progress.total_recipients, ENotFullyDistributed);
+
+    // Remove and verify pool is empty
+    let pool_key = DividendPoolKey { dividend_id };
+    let pool: Balance<CoinType> = account::remove_managed_data(
+        account,
+        pool_key,
+        version::current()
+    );
+    assert!(pool.value() == 0, EPoolNotEmpty);
+    pool.destroy_zero();
+
+    // Remove tree
+    let tree_key = DividendTreeKey { dividend_id };
+    let tree: DividendTree = account::remove_managed_data(
+        account,
+        tree_key,
+        version::current()
+    );
+
+    // Remove progress
+    let DividendProgress {
+        dividend_id: _,
+        tree_id: _,
+        total_recipients: _,
+        total_amount: _,
+        sent_count: _,
+        total_sent: _,
+        next_bucket_index: _,
+        next_index_in_bucket: _,
+        created_at: _,
+    } = account::remove_managed_data(
+        account,
+        progress_key,
+        version::current()
+    );
+
+    // Return tree for caller to archive or delete
+    // Use dividend_tree::delete_tree(tree) to fully clean up
+    tree
 }
 
 // === Helper Functions ===

@@ -519,10 +519,16 @@ public fun create_root_document(
     let doc_uid = object::new(ctx);
     let doc_id = object::uid_to_inner(&doc_uid);
 
+    // Clone name for multiple uses (Move doesn't allow reusing moved values)
+    let name_for_doc = std::string::clone(&name);
+    let name_for_vec = std::string::clone(&name);
+    let name_for_map = std::string::clone(&name);
+    let name_for_event = name;  // Move original into event
+
     let doc = File {
         id: doc_uid,
         dao_id: registry.dao_id,
-        name,
+        name: name_for_doc,
         index: registry.next_index,
         creation_time: clock.timestamp_ms(),
         chunks: table::new(ctx),
@@ -536,15 +542,15 @@ public fun create_root_document(
     };
 
     // Update registry indexes
-    vector::push_back(&mut registry.doc_names, name);
-    table::add(&mut registry.docs_by_name, name, doc_id);
+    vector::push_back(&mut registry.doc_names, name_for_vec);
+    table::add(&mut registry.docs_by_name, name_for_map, doc_id);
     table::add(&mut registry.docs_by_index, registry.next_index, doc_id);
     registry.next_index = registry.next_index + 1;
 
     event::emit(DocumentCreated {
         dao_id: registry.dao_id,
         doc_id,
-        name,
+        name: name_for_event,
         timestamp_ms: clock.timestamp_ms(),
     });
 
@@ -1921,7 +1927,16 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
 
             // Collect all chunk data
             vector::push_back(&mut chunk_ids, current_id);
-            vector::push_back(&mut chunk_texts, chunk.text);
+
+            // Clone text if present (can't move from borrowed chunk)
+            let text_opt = if (option::is_some(&chunk.text)) {
+                let text_ref = option::borrow(&chunk.text);
+                option::some(std::string::clone(text_ref))
+            } else {
+                option::none()
+            };
+            vector::push_back(&mut chunk_texts, text_opt);
+
             vector::push_back(&mut chunk_storage_types, chunk.storage_type);
             vector::push_back(&mut chunk_immutables, chunk.immutable);
             vector::push_back(&mut chunk_immutable_froms, chunk.immutable_from);
@@ -1956,7 +1971,7 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
     event::emit(DocumentReadWithStatus {
         dao_id: doc.dao_id,
         doc_id: object::uid_to_inner(&doc.id),
-        name: doc.name,
+        name: std::string::clone(&doc.name),  // Clone name from borrowed doc
         chunk_ids,
         chunk_texts,
         chunk_blob_ids,

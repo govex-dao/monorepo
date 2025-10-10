@@ -228,7 +228,8 @@ public fun do_create_root_document<Outcome: store, IW: drop>(
     assert!(spec_version == 1, EUnsupportedActionVersion);
 
     let mut reader = bcs::new(*action_data);
-    let doc_name = bcs::peel_u64(&mut reader).to_string();
+    let name_bytes = bcs::peel_vec_u8(&mut reader);
+    let doc_name = name_bytes.to_string();
     bcs_validation::validate_all_bytes_consumed(reader);
 
     assert!(doc_name.length() > 0, EEmptyDocName);
@@ -318,6 +319,7 @@ public fun do_add_chunk<Outcome: store, IW: drop>(
 /// Fulfill add_chunk request with Walrus Blob
 public fun fulfill_add_chunk(
     request: ResourceRequest<AddChunkRequest>,
+    account: &Account<FutarchyConfig>,
     doc: &mut File,
     walrus_blob: Blob,
     clock: &Clock,
@@ -325,6 +327,10 @@ public fun fulfill_add_chunk(
 ): ResourceReceipt<AddChunkRequest> {
     let data = resource_requests::extract_action(request);
     assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
+
+    // Verify account owns this document
+    let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
+    assert!(doc_dao_id == object::id(account), EUnauthorizedDocument);
 
     dao_file_registry::add_chunk(
         doc,
@@ -383,6 +389,7 @@ public fun do_add_sunset_chunk<Outcome: store, IW: drop>(
 /// Fulfill add_sunset_chunk request
 public fun fulfill_add_sunset_chunk(
     request: ResourceRequest<AddSunsetChunkRequest>,
+    account: &Account<FutarchyConfig>,
     doc: &mut File,
     walrus_blob: Blob,
     clock: &Clock,
@@ -390,6 +397,10 @@ public fun fulfill_add_sunset_chunk(
 ): ResourceReceipt<AddSunsetChunkRequest> {
     let data = resource_requests::extract_action(request);
     assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
+
+    // Verify account owns this document
+    let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
+    assert!(doc_dao_id == object::id(account), EUnauthorizedDocument);
 
     // Use add_chunk with sunset parameters
     dao_file_registry::add_chunk(
@@ -449,6 +460,7 @@ public fun do_add_sunrise_chunk<Outcome: store, IW: drop>(
 /// Fulfill add_sunrise_chunk request
 public fun fulfill_add_sunrise_chunk(
     request: ResourceRequest<AddSunriseChunkRequest>,
+    account: &Account<FutarchyConfig>,
     doc: &mut File,
     walrus_blob: Blob,
     clock: &Clock,
@@ -456,6 +468,10 @@ public fun fulfill_add_sunrise_chunk(
 ): ResourceReceipt<AddSunriseChunkRequest> {
     let data = resource_requests::extract_action(request);
     assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
+
+    // Verify account owns this document
+    let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
+    assert!(doc_dao_id == object::id(account), EUnauthorizedDocument);
 
     // Use add_chunk with sunrise parameters
     dao_file_registry::add_chunk(
@@ -516,6 +532,7 @@ public fun do_add_temporary_chunk<Outcome: store, IW: drop>(
 /// Fulfill add_temporary_chunk request
 public fun fulfill_add_temporary_chunk(
     request: ResourceRequest<AddTemporaryChunkRequest>,
+    account: &Account<FutarchyConfig>,
     doc: &mut File,
     walrus_blob: Blob,
     clock: &Clock,
@@ -523,6 +540,10 @@ public fun fulfill_add_temporary_chunk(
 ): ResourceReceipt<AddTemporaryChunkRequest> {
     let data = resource_requests::extract_action(request);
     assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
+
+    // Verify account owns this document
+    let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
+    assert!(doc_dao_id == object::id(account), EUnauthorizedDocument);
 
     // Use add_chunk with temporary parameters
     dao_file_registry::add_chunk(
@@ -581,6 +602,7 @@ public fun do_add_chunk_with_scheduled_immutability<Outcome: store, IW: drop>(
 /// Fulfill add_chunk_with_scheduled_immutability request
 public fun fulfill_add_chunk_with_scheduled_immutability(
     request: ResourceRequest<AddChunkWithScheduledImmutabilityRequest>,
+    account: &Account<FutarchyConfig>,
     doc: &mut File,
     walrus_blob: Blob,
     clock: &Clock,
@@ -588,6 +610,10 @@ public fun fulfill_add_chunk_with_scheduled_immutability(
 ): ResourceReceipt<AddChunkWithScheduledImmutabilityRequest> {
     let data = resource_requests::extract_action(request);
     assert!(dao_file_registry::get_file_id(doc) == data.doc_id, EInvalidDocId);
+
+    // Verify account owns this document
+    let doc_dao_id = dao_file_registry::get_document_dao_id(doc);
+    assert!(doc_dao_id == object::id(account), EUnauthorizedDocument);
 
     // Use add_chunk with scheduled immutability parameters
     dao_file_registry::add_chunk(
@@ -937,18 +963,26 @@ public fun new_delete_document<Outcome, IW: drop>(
     );
 }
 
-/// Add chunk intent
+/// Add chunk intent - encodes control fields only (blob provided at fulfill time)
 public fun new_add_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
-    walrus_blob_id: vector<u8>,
+    expected_sequence: u64,
+    chunk_type: u8,
+    expires_at: Option<u64>,
+    effective_from: Option<u64>,
+    immutable: bool,
+    immutable_from: Option<u64>,
     intent_witness: IW,
 ) {
-    assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
-    data.append(bcs::to_bytes(&walrus_blob_id));
+    data.append(bcs::to_bytes(&expected_sequence));
+    data.append(bcs::to_bytes(&chunk_type));
+    data.append(bcs::to_bytes(&expires_at));
+    data.append(bcs::to_bytes(&effective_from));
+    data.append(bcs::to_bytes(&immutable));
+    data.append(bcs::to_bytes(&immutable_from));
 
     protocol_intents::add_action_spec(
         intent,
@@ -958,20 +992,18 @@ public fun new_add_chunk<Outcome, IW: drop>(
     );
 }
 
-/// Add sunset chunk intent (expires at specified time)
+/// Add sunset chunk intent (expires at specified time) - blob provided at fulfill time
 public fun new_add_sunset_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
-    walrus_blob_id: vector<u8>,
+    expected_sequence: u64,
     expires_at_ms: u64,
     immutable: bool,
     intent_witness: IW,
 ) {
-    assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
-    data.append(bcs::to_bytes(&walrus_blob_id));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&expires_at_ms));
     data.append(bcs::to_bytes(&immutable));
 
@@ -983,20 +1015,18 @@ public fun new_add_sunset_chunk<Outcome, IW: drop>(
     );
 }
 
-/// Add sunrise chunk intent (activates after effective_from)
+/// Add sunrise chunk intent (activates after effective_from) - blob provided at fulfill time
 public fun new_add_sunrise_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
-    walrus_blob_id: vector<u8>,
+    expected_sequence: u64,
     effective_from_ms: u64,
     immutable: bool,
     intent_witness: IW,
 ) {
-    assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
-    data.append(bcs::to_bytes(&walrus_blob_id));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&effective_from_ms));
     data.append(bcs::to_bytes(&immutable));
 
@@ -1008,21 +1038,19 @@ public fun new_add_sunrise_chunk<Outcome, IW: drop>(
     );
 }
 
-/// Add temporary chunk intent (active between effective_from and expires_at)
+/// Add temporary chunk intent (active between effective_from and expires_at) - blob provided at fulfill time
 public fun new_add_temporary_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
-    walrus_blob_id: vector<u8>,
+    expected_sequence: u64,
     effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool,
     intent_witness: IW,
 ) {
-    assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
-    data.append(bcs::to_bytes(&walrus_blob_id));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&effective_from_ms));
     data.append(bcs::to_bytes(&expires_at_ms));
     data.append(bcs::to_bytes(&immutable));
@@ -1035,19 +1063,17 @@ public fun new_add_temporary_chunk<Outcome, IW: drop>(
     );
 }
 
-/// Add chunk with scheduled immutability intent
+/// Add chunk with scheduled immutability intent - blob provided at fulfill time
 public fun new_add_chunk_with_scheduled_immutability<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
-    walrus_blob_id: vector<u8>,
+    expected_sequence: u64,
     immutable_from_ms: u64,
     intent_witness: IW,
 ) {
-    assert!(walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
-    data.append(bcs::to_bytes(&walrus_blob_id));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&immutable_from_ms));
 
     protocol_intents::add_action_spec(
@@ -1061,20 +1087,18 @@ public fun new_add_chunk_with_scheduled_immutability<Outcome, IW: drop>(
 /// Create document version intent
 // new_create_document_version removed - version system not needed
 
-/// Update chunk intent
+/// Update chunk intent - new blob provided at fulfill time
 public fun new_update_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     chunk_id: ID,
-    new_walrus_blob_id: vector<u8>,
     intent_witness: IW,
 ) {
-    assert!(new_walrus_blob_id.length() > 0, EEmptyWalrusBlobId);
-
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&object::id_to_address(&chunk_id)));
-    data.append(bcs::to_bytes(&new_walrus_blob_id));
 
     protocol_intents::add_action_spec(
         intent,
@@ -1088,11 +1112,13 @@ public fun new_update_chunk<Outcome, IW: drop>(
 public fun new_remove_chunk<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     chunk_id: ID,
     intent_witness: IW,
 ) {
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&object::id_to_address(&chunk_id)));
 
     protocol_intents::add_action_spec(
@@ -1107,11 +1133,13 @@ public fun new_remove_chunk<Outcome, IW: drop>(
 public fun new_set_chunk_immutable<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     chunk_id: ID,
     intent_witness: IW,
 ) {
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&object::id_to_address(&chunk_id)));
 
     protocol_intents::add_action_spec(
@@ -1122,13 +1150,16 @@ public fun new_set_chunk_immutable<Outcome, IW: drop>(
     );
 }
 
-/// Set document immutable intent (NEW)
+/// Set document immutable intent
 public fun new_set_document_immutable<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     intent_witness: IW,
 ) {
-    let data = bcs::to_bytes(&object::id_to_address(&doc_id));
+    let mut data = vector[];
+    data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
 
     protocol_intents::add_action_spec(
         intent,
@@ -1157,11 +1188,13 @@ public fun new_set_registry_immutable<Outcome, IW: drop>(
 public fun new_set_document_insert_allowed<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     allowed: bool,
     intent_witness: IW,
 ) {
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&allowed));
 
     protocol_intents::add_action_spec(
@@ -1176,11 +1209,13 @@ public fun new_set_document_insert_allowed<Outcome, IW: drop>(
 public fun new_set_document_remove_allowed<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
     doc_id: ID,
+    expected_sequence: u64,
     allowed: bool,
     intent_witness: IW,
 ) {
     let mut data = vector[];
     data.append(bcs::to_bytes(&object::id_to_address(&doc_id)));
+    data.append(bcs::to_bytes(&expected_sequence));
     data.append(bcs::to_bytes(&allowed));
 
     protocol_intents::add_action_spec(

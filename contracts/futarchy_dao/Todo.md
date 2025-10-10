@@ -98,7 +98,9 @@ and patara.app
 - [ ] subsidise LPs during proposals
 - bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins
 
- Early resolution feature!!!!!
+FUTARCHY THICKNESS = DAO CREDIT RATING
+
+ Early resolution feature!!!!! (really need this)
 
  hmm but if my dao doesnt want this they can but 90% liquidity in normal spot and 10% in a conditional amm\
 \
@@ -111,6 +113,9 @@ You have to force same ratio for all LPs.
 do metadao no cycles thing
 
 I am going to allow like 0 to 100%
+
+liquidity weight twap!!!
+
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \

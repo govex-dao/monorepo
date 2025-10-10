@@ -2,6 +2,25 @@
 ///
 /// These types define the parameters that can be hidden via SEAL commit-reveal
 /// to prevent front-running attacks on market initialization strategies.
+///
+/// ## Market Initialization Modes
+///
+/// - `MODE_NONE (0)`: No market initialization (standard governance proposal)
+/// - `MODE_CONDITIONAL_RAISE (1)`: Mint tokens and sell in one outcome's AMM
+/// - `MODE_CONDITIONAL_BUYBACK (2)`: Buy tokens across multiple outcome AMMs
+///
+/// ## Outcome Indexing
+///
+/// Outcomes are 0-indexed:
+/// - Outcome 0: Usually NO
+/// - Outcome 1: Usually YES
+/// - For binary proposals, valid indices are 0 and 1
+///
+/// ## Error Codes
+///
+/// - `EInvalidMode (0)`: Mode value is invalid (unused, reserved for future validation)
+/// - `EZeroAmount (1)`: Amount is zero or all amounts are zero
+/// - `EAmountMismatch (2)`: Vector lengths don't match (outcome_amounts vs min_asset_outs)
 module futarchy_seal_utils::market_init_params;
 
 use std::vector;
@@ -84,6 +103,16 @@ public fun new_conditional_raise(
 }
 
 /// Create conditional buyback params
+///
+/// # Validation
+/// - Validates total amount doesn't overflow u64
+/// - Ensures at least one non-zero buyback amount
+/// - Ensures outcome_amounts and min_asset_outs have matching lengths
+///
+/// # Aborts
+/// - EZeroAmount if no outcomes or all amounts are zero
+/// - EAmountMismatch if vector lengths don't match
+/// - Aborts on u64 overflow when summing amounts
 public fun new_conditional_buyback(
     outcome_amounts: vector<u64>,
     min_asset_outs: vector<u64>,
@@ -92,12 +121,18 @@ public fun new_conditional_buyback(
     assert!(vector::length(&outcome_amounts) == vector::length(&min_asset_outs), EAmountMismatch);
 
     // Validate at least one outcome has non-zero buyback
+    // AND calculate total to ensure no overflow (fail-fast validation)
     let mut has_buyback = false;
+    let mut total: u64 = 0;
     let mut i = 0;
     while (i < vector::length(&outcome_amounts)) {
-        if (*vector::borrow(&outcome_amounts, i) > 0) {
+        let amount = *vector::borrow(&outcome_amounts, i);
+        if (amount > 0) {
             has_buyback = true;
         };
+        // Validate total doesn't overflow (Move will abort on overflow)
+        // This ensures buyback_total_withdraw_amount() can never fail
+        total = total + amount;
         i = i + 1;
     };
     assert!(has_buyback, EZeroAmount);
@@ -130,12 +165,28 @@ public fun is_buyback(params: &MarketInitParams): bool {
     params.mode == MODE_CONDITIONAL_BUYBACK
 }
 
+/// Get raise params by value (copies struct)
+/// For read-only access, prefer `borrow_raise_params()` to avoid copying
 public fun get_raise_params(params: &MarketInitParams): Option<ConditionalRaiseParams> {
     params.raise_params
 }
 
+/// Get buyback params by value (copies struct with vectors)
+/// For read-only access, prefer `borrow_buyback_params()` to avoid copying
 public fun get_buyback_params(params: &MarketInitParams): Option<ConditionalBuybackParams> {
     params.buyback_params
+}
+
+/// Borrow raise params (zero-copy access)
+/// Recommended for read-only operations to save gas
+public fun borrow_raise_params(params: &MarketInitParams): &Option<ConditionalRaiseParams> {
+    &params.raise_params
+}
+
+/// Borrow buyback params (zero-copy access)
+/// Recommended for read-only operations to save gas
+public fun borrow_buyback_params(params: &MarketInitParams): &Option<ConditionalBuybackParams> {
+    &params.buyback_params
 }
 
 // ConditionalRaiseParams getters

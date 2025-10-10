@@ -8,3 +8,5 @@ read https://metadao.mintlify.app/idea-to-funded/after-ico
 - [ ] allow them to ask ai to review again
 - [ ] add hyper link to proposal in botand 
 - [ ] on mobile activity copy button next to trader goes very small fix this
+- [ ] https://docs.blockvision.org/reference/retrieve-account-defi-portfolio
+get in here

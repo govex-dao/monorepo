@@ -17,6 +17,23 @@
 /// - **Fake Reveals**: Hash verification ensures only correct values are accepted
 /// - **Griefing**: Timeout mechanism evicts proposals that fail to reveal
 /// - **Front-Running**: Time-lock prevents early parameter visibility
+///
+/// ## Commitment Format
+///
+/// The commitment hash is computed as: `keccak256(bcs::to_bytes(params) || salt)`
+/// - Hash algorithm: Keccak256 (outputs 32 bytes)
+/// - Concatenation order: params bytes first, then salt
+/// - Salt length: exactly 32 bytes (REQUIRED_SALT_LENGTH constant)
+///
+/// ## Error Codes
+///
+/// - `EHashMismatch (0)`: Revealed params don't match commitment hash
+/// - `EInvalidSaltLength (1)`: Salt must be exactly 32 bytes
+/// - `EAlreadyRevealed (2)`: Container has already been revealed
+/// - `EMissingCommitment (3)`: Container has no sealed params to reveal
+/// - `ETooEarlyToReveal (4)`: Current time is before reveal_time_ms
+/// - `EMissingParams (5)`: No params available (not revealed and no fallback)
+/// - `EInvalidCommitmentLength (6)`: Commitment hash must be exactly 32 bytes
 module futarchy_seal_utils::seal_commit_reveal;
 
 use std::vector;
@@ -25,6 +42,7 @@ use sui::bcs;
 use sui::hash;
 use sui::clock::{Self, Clock};
 use sui::event;
+use sui::tx_context::{Self, TxContext};
 
 // === Errors ===
 
@@ -34,6 +52,7 @@ const EAlreadyRevealed: u64 = 2;
 const EMissingCommitment: u64 = 3;
 const ETooEarlyToReveal: u64 = 4;
 const EMissingParams: u64 = 5;
+const EInvalidCommitmentLength: u64 = 6;
 
 // === Constants ===
 
@@ -45,12 +64,43 @@ const MODE_SEALED: u8 = 0;
 const MODE_SEALED_SAFE: u8 = 1;
 const MODE_PUBLIC: u8 = 2;
 
+// === Internal Helper Functions ===
+
+/// Constant-time byte vector equality comparison
+///
+/// This function compares two byte vectors without early-exit branching,
+/// preventing timing side-channel attacks. While on-chain timing isn't
+/// directly observable like off-chain, constant-time comparison is a
+/// defensive best practice for cryptographic operations.
+///
+/// # Security
+/// - No early exit on mismatch (processes all bytes)
+/// - Uses XOR accumulator to avoid data-dependent branches
+/// - Returns true only if all bytes match AND lengths are equal
+fun bytes_eq(a: &vector<u8>, b: &vector<u8>): bool {
+    let la = vector::length(a);
+    let lb = vector::length(b);
+    if (la != lb) { return false };
+
+    let mut acc: u8 = 0;
+    let mut i = 0;
+    while (i < la) {
+        acc = acc | ((*vector::borrow(a, i)) ^ (*vector::borrow(b, i)));
+        i = i + 1;
+    };
+    acc == 0
+}
+
 // === Events ===
 
 /// Emitted when SEAL parameters are successfully revealed
+///
+/// Note: blob_id_hash is used instead of full blob_id to minimize event size.
+/// To match events with blob IDs, compute: keccak256(blob_id) == blob_id_hash
 public struct SealRevealed has copy, drop {
-    /// Walrus blob ID that was decrypted
-    blob_id: vector<u8>,
+    /// Hash of Walrus blob ID (keccak256(blob_id))
+    /// Using hash instead of full blob_id saves gas on event storage
+    blob_id_hash: vector<u8>,
     /// Original commitment hash
     commitment_hash: vector<u8>,
     /// Scheduled reveal time (when time-lock expired)
@@ -69,7 +119,11 @@ public struct SealRevealed has copy, drop {
 /// 1. Encrypt (params || salt) with time-lock set to reveal_time
 /// 2. Upload to Walrus, get blob_id
 /// 3. Store blob_id on-chain with commitment hash
-public struct SealedParams has store, copy, drop {
+///
+/// DESIGN: No `copy` ability for consistency with SealContainer<T>
+/// Rationale: Maintains ability minimalism and forward compatibility.
+/// All access is via borrows through getter functions.
+public struct SealedParams has store, drop {
     /// Walrus blob ID containing encrypted (params || salt)
     blob_id: vector<u8>,
 
@@ -111,11 +165,17 @@ public struct SealContainer<T: store + drop> has store, drop {
 /// 4. Encrypt with SEAL: `encrypted = seal_encrypt(params_bytes || salt, reveal_time)`
 /// 5. Upload to Walrus: `blob_id = walrus_upload(encrypted)`
 /// 6. Call this function with `blob_id`, `hash`, `reveal_time`
+///
+/// # Aborts
+/// - EInvalidCommitmentLength if commitment_hash is not exactly 32 bytes
 public fun new_sealed_params(
     blob_id: vector<u8>,
     commitment_hash: vector<u8>,
     reveal_time_ms: u64,
 ): SealedParams {
+    // Validate commitment hash length (Keccak256 always outputs 32 bytes)
+    assert!(vector::length(&commitment_hash) == 32, EInvalidCommitmentLength);
+
     SealedParams {
         blob_id,
         commitment_hash,
@@ -208,10 +268,10 @@ public fun reveal<T: store + drop>(
     assert!(vector::length(&decrypted_salt) == REQUIRED_SALT_LENGTH, EInvalidSaltLength);
 
     // Must have sealed params to reveal
-    assert!(option::is_some(&container.sealed), EMissingCommitment);
-    assert!(option::is_none(&container.revealed), EAlreadyRevealed);
+    assert!(container.sealed.is_some(), EMissingCommitment);
+    assert!(container.revealed.is_none(), EAlreadyRevealed);
 
-    let sealed = option::borrow(&container.sealed);
+    let sealed = container.sealed.borrow();
 
     // CRITICAL SECURITY CHECK: Verify SEAL time-lock has expired
     // This prevents early reveal which would defeat the entire purpose
@@ -223,16 +283,18 @@ public fun reveal<T: store + drop>(
     vector::append(&mut data, decrypted_salt);
     let computed_hash = hash::keccak256(&data);
 
-    assert!(computed_hash == sealed.commitment_hash, EHashMismatch);
+    // Use constant-time comparison to prevent timing side-channels
+    assert!(bytes_eq(&computed_hash, &sealed.commitment_hash), EHashMismatch);
 
     // Emit event BEFORE storing (in case storage fails)
     // This ensures indexers can track successful reveals
+    // Note: We hash blob_id to reduce event storage costs
     event::emit(SealRevealed {
-        blob_id: sealed.blob_id,
+        blob_id_hash: hash::keccak256(&sealed.blob_id),
         commitment_hash: sealed.commitment_hash,
         reveal_time_ms: sealed.reveal_time_ms,
         actual_reveal_time_ms: current_time,
-        revealer: ctx.sender(),
+        revealer: tx_context::sender(ctx),
     });
 
     // Store revealed params
@@ -260,13 +322,13 @@ public fun get_params<T: store + drop>(
     container: &SealContainer<T>
 ): &T {
     // Priority 1: Revealed params (SEAL succeeded)
-    if (option::is_some(&container.revealed)) {
-        return option::borrow(&container.revealed)
+    if (container.revealed.is_some()) {
+        return container.revealed.borrow()
     };
 
     // Priority 2: Public fallback (SEAL failed or MODE_PUBLIC)
-    if (option::is_some(&container.public_fallback)) {
-        return option::borrow(&container.public_fallback)
+    if (container.public_fallback.is_some()) {
+        return container.public_fallback.borrow()
     };
 
     // No params available - abort
@@ -277,7 +339,7 @@ public fun get_params<T: store + drop>(
 public fun has_params<T: store + drop>(
     container: &SealContainer<T>
 ): bool {
-    option::is_some(&container.revealed) || option::is_some(&container.public_fallback)
+    container.revealed.is_some() || container.public_fallback.is_some()
 }
 
 /// Get the container's mode
@@ -289,8 +351,8 @@ public fun has_params<T: store + drop>(
 public fun get_mode<T: store + drop>(
     container: &SealContainer<T>
 ): u8 {
-    let has_sealed = option::is_some(&container.sealed);
-    let has_fallback = option::is_some(&container.public_fallback);
+    let has_sealed = container.sealed.is_some();
+    let has_fallback = container.public_fallback.is_some();
 
     if (has_sealed && !has_fallback) {
         MODE_SEALED
@@ -305,22 +367,22 @@ public fun get_mode<T: store + drop>(
 public fun is_revealed<T: store + drop>(
     container: &SealContainer<T>
 ): bool {
-    option::is_some(&container.revealed)
+    container.revealed.is_some()
 }
 
 /// Check if using fallback params (SEAL not revealed, but fallback available)
 public fun is_using_fallback<T: store + drop>(
     container: &SealContainer<T>
 ): bool {
-    option::is_none(&container.revealed) && option::is_some(&container.public_fallback)
+    container.revealed.is_none() && container.public_fallback.is_some()
 }
 
 /// Get reveal time from sealed params
 public fun reveal_time_ms<T: store + drop>(
     container: &SealContainer<T>
 ): Option<u64> {
-    if (option::is_some(&container.sealed)) {
-        let sealed = option::borrow(&container.sealed);
+    if (container.sealed.is_some()) {
+        let sealed = container.sealed.borrow();
         option::some(sealed.reveal_time_ms)
     } else {
         option::none()
@@ -331,8 +393,8 @@ public fun reveal_time_ms<T: store + drop>(
 public fun blob_id<T: store + drop>(
     container: &SealContainer<T>
 ): Option<vector<u8>> {
-    if (option::is_some(&container.sealed)) {
-        let sealed = option::borrow(&container.sealed);
+    if (container.sealed.is_some()) {
+        let sealed = container.sealed.borrow();
         option::some(sealed.blob_id)
     } else {
         option::none()

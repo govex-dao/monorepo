@@ -87,6 +87,78 @@ public fun multisig_config_challenge_enabled(config: &MultisigConfig): bool {
     config.optimistic_intent_challenge_enabled
 }
 
+/// Early resolve configuration - per DAO
+/// Enables proposals to resolve early when markets reach consensus
+///
+/// To disable: set min_proposal_duration_ms = max_proposal_duration_ms (no early resolve window)
+public struct EarlyResolveConfig has store, copy, drop {
+    // Time bounds
+    min_proposal_duration_ms: u64,       // e.g., 43_200_000 (12 hours) - safety floor
+    max_proposal_duration_ms: u64,       // e.g., 172_800_000 (48 hours) - max capital lock
+
+    // Winner stability thresholds
+    min_winner_spread: u128,             // e.g., 50_000_000_000 (5% in 1e12 scale)
+    min_time_since_last_flip_ms: u64,   // e.g., 14_400_000 (4 hours) - simple stability check
+
+    // Keeper incentives
+    keeper_reward_bps: u64,              // e.g., 10 bps (0.1%) of protocol fees
+}
+
+/// Create default early resolve config (disabled by default: min = max)
+public fun default_early_resolve_config(): EarlyResolveConfig {
+    EarlyResolveConfig {
+        min_proposal_duration_ms: 86_400_000,      // 24 hours
+        max_proposal_duration_ms: 86_400_000,      // 24 hours (same = disabled)
+        min_winner_spread: 50_000_000_000,         // 0.05 (5%)
+        min_time_since_last_flip_ms: 14_400_000,  // 4 hours
+        keeper_reward_bps: 10,                     // 0.1% of fees
+    }
+}
+
+/// Create custom early resolve config
+public fun new_early_resolve_config(
+    min_proposal_duration_ms: u64,
+    max_proposal_duration_ms: u64,
+    min_winner_spread: u128,
+    min_time_since_last_flip_ms: u64,
+    keeper_reward_bps: u64,
+): EarlyResolveConfig {
+    EarlyResolveConfig {
+        min_proposal_duration_ms,
+        max_proposal_duration_ms,
+        min_winner_spread,
+        min_time_since_last_flip_ms,
+        keeper_reward_bps,
+    }
+}
+
+// === Getters for EarlyResolveConfig ===
+
+/// Check if early resolution is enabled (min_duration < max_duration)
+public fun early_resolve_enabled(config: &EarlyResolveConfig): bool {
+    config.min_proposal_duration_ms < config.max_proposal_duration_ms
+}
+
+public fun early_resolve_min_duration(config: &EarlyResolveConfig): u64 {
+    config.min_proposal_duration_ms
+}
+
+public fun early_resolve_max_duration(config: &EarlyResolveConfig): u64 {
+    config.max_proposal_duration_ms
+}
+
+public fun early_resolve_min_spread(config: &EarlyResolveConfig): u128 {
+    config.min_winner_spread
+}
+
+public fun early_resolve_min_time_since_flip(config: &EarlyResolveConfig): u64 {
+    config.min_time_since_last_flip_ms
+}
+
+public fun early_resolve_keeper_reward_bps(config: &EarlyResolveConfig): u64 {
+    config.keeper_reward_bps
+}
+
 /// Pure Futarchy configuration struct
 /// All dynamic state and object references are stored on the Account<FutarchyConfig> object
 public struct FutarchyConfig has store, copy, drop {
@@ -121,6 +193,9 @@ public struct FutarchyConfig has store, copy, drop {
     // Once set to Some(price), can NEVER be changed
     // Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
     launchpad_initial_price: Option<u128>,
+
+    // Early resolve configuration
+    early_resolve_config: EarlyResolveConfig,
 }
 
 /// Dynamic state stored on Account<FutarchyConfig> via dynamic fields
@@ -178,6 +253,7 @@ public fun new<AssetType: drop, StableType: drop>(
         dao_score: 0,                              // No score by default
         optimistic_intent_challenge_enabled: true,  // Safe default: require 10-day challenge period
         launchpad_initial_price: option::none(),   // Not set initially
+        early_resolve_config: default_early_resolve_config(),  // Disabled by default
     }
 }
 
@@ -262,6 +338,10 @@ public fun dao_score(config: &FutarchyConfig): u64 {
 
 public fun optimistic_intent_challenge_enabled(config: &FutarchyConfig): bool {
     config.optimistic_intent_challenge_enabled
+}
+
+public fun early_resolve_config(config: &FutarchyConfig): &EarlyResolveConfig {
+    &config.early_resolve_config
 }
 
 // === Getters for SlashDistribution ===
@@ -354,6 +434,7 @@ public fun with_rewards(
         dao_score: config.dao_score,
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
+        early_resolve_config: config.early_resolve_config,
     }
 }
 
@@ -374,6 +455,7 @@ public fun with_verification_level(
         dao_score: config.dao_score,
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
+        early_resolve_config: config.early_resolve_config,
     }
 }
 
@@ -394,6 +476,7 @@ public fun with_dao_score(
         dao_score,
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
+        early_resolve_config: config.early_resolve_config,
     }
 }
 
@@ -414,6 +497,7 @@ public fun with_slash_distribution(
         dao_score: config.dao_score,
         optimistic_intent_challenge_enabled: config.optimistic_intent_challenge_enabled,
         launchpad_initial_price: config.launchpad_initial_price,
+        early_resolve_config: config.early_resolve_config,
     }
 }
 
@@ -440,6 +524,7 @@ public fun with_optimistic_intent_challenge_enabled(
         dao_score: config.dao_score,
         optimistic_intent_challenge_enabled: enabled,
         launchpad_initial_price: config.launchpad_initial_price,
+        early_resolve_config: config.early_resolve_config,
     }
 }
 
@@ -810,6 +895,13 @@ public fun set_optimistic_intent_challenge_enabled(
     config.optimistic_intent_challenge_enabled = enabled;
 }
 
+public fun set_early_resolve_config(
+    config: &mut FutarchyConfig,
+    early_resolve_config: EarlyResolveConfig
+) {
+    config.early_resolve_config = early_resolve_config;
+}
+
 public fun update_slash_distribution(
     config: &mut FutarchyConfig,
     slasher_reward_bps: u16,
@@ -935,9 +1027,19 @@ public fun authenticate(account: &Account<FutarchyConfig>, ctx: &TxContext): Con
 
 // === Launchpad Initial Price Functions ===
 
-/// Set the launchpad initial price (write-once, can only be called once)
+/// Set the launchpad initial price (WRITE-ONCE, IMMUTABLE after set)
+///
+/// SECURITY MODEL:
+/// - Write-once: Can only be set when launchpad_initial_price is None
+/// - Called during DAO initialization by launchpad factory
+/// - Once set to Some(price), can NEVER be changed (no governance action exists to modify it)
+/// - Prevents manipulation of grant enforcement after DAO creation
+///
 /// This is the canonical price from the launchpad raise: tokens_for_sale / final_raise_amount
 /// Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
+///
+/// @param config - Mutable FutarchyConfig (only accessible during initialization or via internal_config_mut)
+/// @param price - Initial launchpad price in 1e12 scale (e.g., $2.00 = 2_000_000_000_000)
 public fun set_launchpad_initial_price(
     config: &mut FutarchyConfig,
     price: u128,
