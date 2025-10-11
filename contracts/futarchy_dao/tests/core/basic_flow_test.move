@@ -259,9 +259,11 @@ fun test_proposal_with_market() {
             asset_coin, // asset_coin
             stable_coin, // stable_coin
             USER, // proposer
+            0, // proposer_fee_paid (no fee for test)
             false, // uses_dao_liquidity
+            false, // used_quota (not using admin budget)
             balance::zero<STABLE>(), // fee_escrow
-            option::none(), // intent_key_for_yes
+            option::none(), // intent_spec_for_yes
             &clock,
             ctx(&mut scenario),
         );

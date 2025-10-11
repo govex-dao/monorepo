@@ -150,6 +150,9 @@ public struct QueuedProposal<phantom StableCoin> has store {
     /// Bounty for permissionless cranking (in SUI)
     /// Anyone can claim this by successfully cranking proposal to PREMARKET state
     crank_bounty: Option<Coin<SUI>>,
+
+    /// Track if proposal used admin quota/budget (excludes from creator rewards)
+    used_quota: bool,
 }
 
 /// Priority queue using binary heap for O(log n) operations
@@ -561,6 +564,7 @@ public fun insert<StableCoin>(
                 market_init_params: _,
                 time_reached_top_of_queue: _,
                 mut crank_bounty,
+                used_quota: _,
             } = evicted;
 
             if (intent_spec.is_some()) {
@@ -694,6 +698,7 @@ public fun new_queued_proposal<StableCoin>(
     policy_mode: u8,
     required_council_id: Option<ID>,
     council_approval_proof: Option<ID>,
+    used_quota: bool,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
@@ -717,6 +722,7 @@ public fun new_queued_proposal<StableCoin>(
         market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
+        used_quota,
     }
 }
 
@@ -733,6 +739,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
     policy_mode: u8,
     required_council_id: Option<ID>,
     council_approval_proof: Option<ID>,
+    used_quota: bool,
     clock: &Clock,
 ): QueuedProposal<StableCoin> {
     let timestamp = clock.timestamp_ms();
@@ -756,6 +763,7 @@ public fun new_queued_proposal_with_id<StableCoin>(
         market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
+        used_quota,
     }
 }
 
@@ -804,6 +812,7 @@ public fun get_dao_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): ID { p
 public fun get_policy_mode<StableCoin>(proposal: &QueuedProposal<StableCoin>): u8 { proposal.policy_mode }
 public fun get_required_council_id<StableCoin>(proposal: &QueuedProposal<StableCoin>): Option<ID> { proposal.required_council_id }
 public fun get_council_approval_proof<StableCoin>(proposal: &QueuedProposal<StableCoin>): Option<ID> { proposal.council_approval_proof }
+public fun get_used_quota<StableCoin>(proposal: &QueuedProposal<StableCoin>): bool { proposal.used_quota }
 
 // Getter functions for EvictionInfo
 public fun eviction_proposal_id(info: &EvictionInfo): ID { info.proposal_id }
@@ -1098,6 +1107,7 @@ public entry fun cancel_proposal<StableCoin>(
         market_init_params: _,
         time_reached_top_of_queue: _,
         mut crank_bounty,
+        used_quota: _,
     } = removed;
     
     // Get the fee refunded as a Coin
@@ -1270,6 +1280,7 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         market_init_params: _,
         time_reached_top_of_queue: _,
         crank_bounty,
+        used_quota: _,
     } = proposal;
 
     // SAFETY: Assert no valuable resources remain

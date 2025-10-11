@@ -1,18 +1,7 @@
-/// Keeper-cranked liquidity subsidy system for conditional AMMs
-///
-/// Architecture:
-/// 1. DAO config specifies subsidy amount per proposal (in stable tokens)
-/// 2. Protocol config specifies crank steps and keeper fee
-/// 3. When proposal enters trading, create SubsidyEscrow with stable coins from DAO
-/// 4. Keepers crank portions of subsidy into conditional AMMs over time
-/// 5. Each crank adds reserves proportionally (not as LP) to all conditional AMMs
-/// 6. Keeper receives fee (1% × outcome_count) per crank
-///
-/// Security:
-/// - Escrow tracks proposal_id and amm_ids to prevent cranking wrong markets
-/// - Only during trading period (before finalization)
-/// - Gradual drip prevents MEV/manipulation
-module futarchy_markets::liquidity_subsidy;
+/// Subsidy escrow execution module for conditional AMMs
+/// Config types live in futarchy_core::subsidy_config
+/// This module handles escrow creation, cranking, and finalization
+module futarchy_markets::subsidy_escrow;
 
 use std::option::{Self, Option};
 use sui::object::{Self, UID, ID};
@@ -20,51 +9,41 @@ use sui::balance::{Self, Balance};
 use sui::coin::{Self, Coin};
 use sui::clock::{Self, Clock};
 use sui::tx_context::{Self, TxContext};
+use sui::sui::SUI;
 use sui::transfer;
 use sui::event;
-use futarchy_markets::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets::simple_twap;
 use futarchy_one_shot_utils::math;
+use futarchy_core::subsidy_config::ProtocolSubsidyConfig;
+use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 
 // === Errors ===
 const ESubsidyExhausted: u64 = 0;           // All cranks completed
 const EProposalMismatch: u64 = 1;           // Escrow not for this proposal
 const EAmmMismatch: u64 = 2;                // AMM ID not in escrow's tracked list
-const EInsufficientBalance: u64 = 3;        // Not enough stable in escrow
+const EInsufficientBalance: u64 = 3;        // Not enough SUI in escrow
 const ETooEarlyCrank: u64 = 4;              // Cranking too fast (min interval not met)
 const EProposalFinalized: u64 = 5;          // Cannot crank after finalization
-const EInvalidConfig: u64 = 6;              // Invalid subsidy config
 const EZeroSubsidy: u64 = 7;                // Subsidy amount is zero
 
-// === Protocol Constants (could be moved to constants module) ===
-const DEFAULT_CRANK_STEPS: u64 = 100;       // Default number of crank iterations
-const DEFAULT_KEEPER_FEE_BPS: u64 = 100;    // 1% base keeper fee (multiplied by outcome_count)
-const MIN_CRANK_INTERVAL_MS: u64 = 300_000; // 5 minutes minimum between cranks
+// === Constants ===
+const MIN_CRANK_INTERVAL_MS: u64 = 300_000;  // 5 minutes minimum between cranks
 
 // === Structs ===
 
-/// Configuration for liquidity subsidy system (stored in DAO config or protocol config)
-public struct SubsidyConfig has store, copy, drop {
-    enabled: bool,                          // If true, subsidies are enabled for this DAO
-    subsidy_amount_per_proposal: u64,       // Amount of stable to subsidize per proposal (0 = disabled)
-    crank_steps: u64,                       // How many times keepers can crank (default: 100)
-    keeper_fee_base_bps: u64,               // Base keeper fee in bps (multiplied by outcome_count)
-    min_crank_interval_ms: u64,             // Minimum time between cranks
-}
-
-/// Escrow holding stable coins for gradual subsidy dripping
+/// Escrow holding DAO treasury funds for gradual subsidy dripping
 /// Created when proposal enters trading state
-public struct SubsidyEscrow<phantom StableType> has key, store {
+public struct SubsidyEscrow has key, store {
     id: UID,
-    proposal_id: ID,                        // Which proposal this subsidizes
-    amm_ids: vector<ID>,                    // Allowed AMM IDs (security check)
-    stable_balance: Balance<StableType>,    // Stable coins to drip feed
-    total_subsidy: u64,                     // Original subsidy amount
-    cranks_completed: u64,                  // How many cranks done
-    total_cranks: u64,                      // Total cranks allowed
-    keeper_fee_base_bps: u64,               // Base keeper fee (× outcome_count)
-    last_crank_time: Option<u64>,          // Last crank timestamp (for rate limiting)
-    finalized: bool,                        // If true, no more cranks allowed
+    proposal_id: ID,                            // Which proposal this subsidizes
+    dao_id: ID,                                 // Which DAO this belongs to (for refund)
+    amm_ids: vector<ID>,                        // Allowed AMM IDs (security check)
+    subsidy_balance: Balance<SUI>,              // DAO treasury funds to drip feed
+    total_subsidy: u64,                         // Original treasury amount
+    cranks_completed: u64,                      // How many cranks done
+    total_cranks: u64,                          // Total cranks allowed
+    keeper_fee_per_crank: u64,                  // Flat keeper fee
+    last_crank_time: Option<u64>,              // Last crank timestamp (for rate limiting)
+    finalized: bool,                            // If true, no more cranks allowed
 }
 
 // === Events ===
@@ -73,9 +52,11 @@ public struct SubsidyEscrow<phantom StableType> has key, store {
 public struct SubsidyEscrowCreated has copy, drop {
     escrow_id: ID,
     proposal_id: ID,
+    dao_id: ID,
     total_subsidy: u64,
     total_cranks: u64,
     outcome_count: u64,
+    subsidy_per_outcome_per_crank: u64,
 }
 
 /// Emitted when keeper cranks subsidy into AMMs
@@ -84,6 +65,7 @@ public struct SubsidyCranked has copy, drop {
     proposal_id: ID,
     crank_number: u64,
     total_cranks: u64,
+    subsidy_distributed: u64,       // Amount added to AMMs (after keeper fee)
     amount_per_amm: u64,
     outcome_count: u64,
     keeper_fee: u64,
@@ -91,102 +73,77 @@ public struct SubsidyCranked has copy, drop {
     timestamp: u64,
 }
 
-/// Emitted when subsidy escrow is finalized (all cranks done or proposal ended)
+/// Emitted when escrow is finalized (returns remainder to treasury)
 public struct SubsidyFinalized has copy, drop {
     escrow_id: ID,
     proposal_id: ID,
+    dao_id: ID,
     cranks_completed: u64,
-    remaining_balance: u64,
+    remaining_balance: u64,         // Returned to DAO treasury
+    timestamp: u64,
 }
+
+// === Getters for SubsidyEscrow ===
+public fun escrow_proposal_id(escrow: &SubsidyEscrow): ID { escrow.proposal_id }
+public fun escrow_dao_id(escrow: &SubsidyEscrow): ID { escrow.dao_id }
+public fun escrow_total_subsidy(escrow: &SubsidyEscrow): u64 { escrow.total_subsidy }
+public fun escrow_cranks_completed(escrow: &SubsidyEscrow): u64 { escrow.cranks_completed }
+public fun escrow_total_cranks(escrow: &SubsidyEscrow): u64 { escrow.total_cranks }
+public fun escrow_remaining_balance(escrow: &SubsidyEscrow): u64 { escrow.subsidy_balance.value() }
+public fun escrow_is_finalized(escrow: &SubsidyEscrow): bool { escrow.finalized }
 
 // === Public Functions ===
 
-/// Create default subsidy config (disabled)
-public fun new_subsidy_config(): SubsidyConfig {
-    SubsidyConfig {
-        enabled: false,
-        subsidy_amount_per_proposal: 0,
-        crank_steps: DEFAULT_CRANK_STEPS,
-        keeper_fee_base_bps: DEFAULT_KEEPER_FEE_BPS,
-        min_crank_interval_ms: MIN_CRANK_INTERVAL_MS,
-    }
-}
-
-/// Create custom subsidy config
-public fun new_subsidy_config_custom(
-    enabled: bool,
-    subsidy_amount_per_proposal: u64,
-    crank_steps: u64,
-    keeper_fee_base_bps: u64,
-    min_crank_interval_ms: u64,
-): SubsidyConfig {
-    assert!(crank_steps > 0, EInvalidConfig);
-    assert!(keeper_fee_base_bps <= 10000, EInvalidConfig); // Max 100% base fee
-
-    SubsidyConfig {
-        enabled,
-        subsidy_amount_per_proposal,
-        crank_steps,
-        keeper_fee_base_bps,
-        min_crank_interval_ms,
-    }
-}
-
-// === Getters for SubsidyConfig ===
-public fun subsidy_enabled(config: &SubsidyConfig): bool { config.enabled }
-public fun subsidy_amount_per_proposal(config: &SubsidyConfig): u64 { config.subsidy_amount_per_proposal }
-public fun crank_steps(config: &SubsidyConfig): u64 { config.crank_steps }
-public fun keeper_fee_base_bps(config: &SubsidyConfig): u64 { config.keeper_fee_base_bps }
-public fun min_crank_interval_ms(config: &SubsidyConfig): u64 { config.min_crank_interval_ms }
-
-// === Getters for SubsidyEscrow ===
-public fun escrow_proposal_id<StableType>(escrow: &SubsidyEscrow<StableType>): ID { escrow.proposal_id }
-public fun escrow_total_subsidy<StableType>(escrow: &SubsidyEscrow<StableType>): u64 { escrow.total_subsidy }
-public fun escrow_cranks_completed<StableType>(escrow: &SubsidyEscrow<StableType>): u64 { escrow.cranks_completed }
-public fun escrow_total_cranks<StableType>(escrow: &SubsidyEscrow<StableType>): u64 { escrow.total_cranks }
-public fun escrow_remaining_balance<StableType>(escrow: &SubsidyEscrow<StableType>): u64 { escrow.stable_balance.value() }
-public fun escrow_is_finalized<StableType>(escrow: &SubsidyEscrow<StableType>): bool { escrow.finalized }
-
 /// Create subsidy escrow when proposal enters trading
 /// Called by proposal lifecycle when transitioning to TRADING state
+/// Withdraws from DAO treasury based on protocol config
 ///
 /// ## Arguments
 /// - `proposal_id`: ID of the proposal being subsidized
+/// - `dao_id`: ID of the DAO (for refund tracking)
 /// - `amm_ids`: Vector of conditional AMM IDs (for security validation)
-/// - `stable_coins`: Stable coins from DAO treasury
-/// - `config`: Subsidy configuration (crank steps, keeper fee, etc.)
+/// - `treasury_coins`: Coins from DAO treasury (calculated amount)
+/// - `config`: Protocol subsidy configuration
 /// - `ctx`: Transaction context
-public fun create_escrow<StableType>(
+public fun create_escrow(
     proposal_id: ID,
+    dao_id: ID,
     amm_ids: vector<ID>,
-    stable_coins: Coin<StableType>,
-    config: &SubsidyConfig,
+    treasury_coins: Coin<SUI>,
+    config: &ProtocolSubsidyConfig,
     ctx: &mut TxContext,
-): SubsidyEscrow<StableType> {
-    let total_subsidy = stable_coins.value();
+): SubsidyEscrow {
+    let total_subsidy = treasury_coins.value();
     assert!(total_subsidy > 0, EZeroSubsidy);
 
     let escrow_id = object::new(ctx);
     let outcome_count = amm_ids.length();
 
+    // Validate subsidy amount matches expected
+    let expected_subsidy = subsidy_config::calculate_total_subsidy(config, outcome_count);
+    assert!(total_subsidy == expected_subsidy, EZeroSubsidy);
+
     // Emit creation event
     event::emit(SubsidyEscrowCreated {
         escrow_id: object::uid_to_inner(&escrow_id),
         proposal_id,
+        dao_id,
         total_subsidy,
-        total_cranks: config.crank_steps,
+        total_cranks: subsidy_config::crank_steps(config),
         outcome_count,
+        subsidy_per_outcome_per_crank: subsidy_config::subsidy_per_outcome_per_crank(config),
     });
 
-    SubsidyEscrow<StableType> {
+    SubsidyEscrow {
         id: escrow_id,
         proposal_id,
+        dao_id,
         amm_ids,
-        stable_balance: coin::into_balance(stable_coins),
+        subsidy_balance: coin::into_balance(treasury_coins),
         total_subsidy,
         cranks_completed: 0,
-        total_cranks: config.crank_steps,
-        keeper_fee_base_bps: config.keeper_fee_base_bps,
+        total_cranks: subsidy_config::crank_steps(config),
+        keeper_fee_per_crank: subsidy_config::keeper_fee_per_crank(config),
         last_crank_time: option::none(),
         finalized: false,
     }
@@ -197,8 +154,8 @@ public fun create_escrow<StableType>(
 /// ## Flow:
 /// 1. Verify escrow matches proposal and AMMs
 /// 2. Calculate crank amount (remaining_balance / remaining_cranks)
-/// 3. Calculate keeper fee (1% × outcome_count of crank amount)
-/// 4. Split remaining stable equally across all conditional AMMs
+/// 3. Calculate keeper fee (flat 0.1 SUI per crank)
+/// 4. Split remaining SUI equally across all conditional AMMs
 /// 5. Add to each AMM's reserves proportionally (maintains price)
 /// 6. Pay keeper fee
 /// 7. Update escrow state
@@ -212,13 +169,13 @@ public fun create_escrow<StableType>(
 ///
 /// ## Returns
 /// - Keeper fee coin
-public fun crank_subsidy<AssetType, StableType>(
-    escrow: &mut SubsidyEscrow<StableType>,
+public fun crank_subsidy(
+    escrow: &mut SubsidyEscrow,
     proposal_id: ID,
     conditional_pools: &mut vector<LiquidityPool>,
     clock: &Clock,
     ctx: &mut TxContext,
-): Coin<StableType> {
+): Coin<SUI> {
     // Security checks
     assert!(escrow.proposal_id == proposal_id, EProposalMismatch);
     assert!(!escrow.finalized, EProposalFinalized);
@@ -228,8 +185,7 @@ public fun crank_subsidy<AssetType, StableType>(
     let now = clock.timestamp_ms();
     if (escrow.last_crank_time.is_some()) {
         let last_crank = *escrow.last_crank_time.borrow();
-        let min_interval = MIN_CRANK_INTERVAL_MS; // Could use escrow.min_crank_interval_ms if stored
-        assert!(now >= last_crank + min_interval, ETooEarlyCrank);
+        assert!(now >= last_crank + MIN_CRANK_INTERVAL_MS, ETooEarlyCrank);
     };
 
     // Verify AMM IDs match escrow
@@ -247,13 +203,13 @@ public fun crank_subsidy<AssetType, StableType>(
 
     // Calculate crank amount (evenly distribute remaining balance across remaining cranks)
     let remaining_cranks = escrow.total_cranks - escrow.cranks_completed;
-    let crank_amount = escrow.stable_balance.value() / remaining_cranks;
+    let current_balance = escrow.subsidy_balance.value();
+    let crank_amount = current_balance / remaining_cranks;
     assert!(crank_amount > 0, EInsufficientBalance);
 
-    // Calculate keeper fee: base_fee_bps × outcome_count
-    // Example: 1% base × 2 outcomes = 2% total keeper fee
-    let keeper_fee_bps = escrow.keeper_fee_base_bps * outcome_count;
-    let keeper_fee = math::mul_div_to_64(crank_amount, keeper_fee_bps, 10000);
+    // Calculate keeper fee: FLAT per crank (0.1 SUI default)
+    // This is correct because keeper does ONE transaction for ALL AMMs
+    let keeper_fee = math::min(escrow.keeper_fee_per_crank, crank_amount);
 
     // Amount to distribute to AMMs (after keeper fee)
     let subsidy_amount = crank_amount - keeper_fee;
@@ -277,10 +233,10 @@ public fun crank_subsidy<AssetType, StableType>(
     escrow.last_crank_time = option::some(now);
 
     // Extract keeper fee from escrow
-    let keeper_fee_balance = escrow.stable_balance.split(keeper_fee);
+    let keeper_fee_balance = escrow.subsidy_balance.split(keeper_fee);
 
     // Extract subsidy amount that was distributed
-    let subsidy_balance = escrow.stable_balance.split(subsidy_amount);
+    let subsidy_balance = escrow.subsidy_balance.split(subsidy_amount);
     subsidy_balance.destroy_zero(); // We already added it to pools, just accounting
 
     // Emit crank event
@@ -289,6 +245,7 @@ public fun crank_subsidy<AssetType, StableType>(
         proposal_id: escrow.proposal_id,
         crank_number: escrow.cranks_completed,
         total_cranks: escrow.total_cranks,
+        subsidy_distributed: subsidy_amount,
         amount_per_amm,
         outcome_count,
         keeper_fee,
@@ -300,49 +257,53 @@ public fun crank_subsidy<AssetType, StableType>(
     coin::from_balance(keeper_fee_balance, ctx)
 }
 
-/// Finalize escrow (after proposal ends or all cranks completed)
-/// Returns remaining balance to DAO treasury
-public fun finalize_escrow<StableType>(
-    escrow: &mut SubsidyEscrow<StableType>,
+/// Finalize escrow and return remaining balance to DAO treasury
+/// Called after proposal ends (win or lose)
+public fun finalize_escrow(
+    escrow: &mut SubsidyEscrow,
+    clock: &Clock,
     ctx: &mut TxContext,
-): Coin<StableType> {
+): Coin<SUI> {
     assert!(!escrow.finalized, EProposalFinalized);
 
     escrow.finalized = true;
-    let remaining = escrow.stable_balance.value();
+    let remaining = escrow.subsidy_balance.value();
 
     // Emit finalization event
     event::emit(SubsidyFinalized {
         escrow_id: object::uid_to_inner(&escrow.id),
         proposal_id: escrow.proposal_id,
+        dao_id: escrow.dao_id,
         cranks_completed: escrow.cranks_completed,
         remaining_balance: remaining,
+        timestamp: clock.timestamp_ms(),
     });
 
-    // Extract all remaining balance
-    let remaining_balance = escrow.stable_balance.withdraw_all();
+    // Extract all remaining balance (return to DAO treasury)
+    let remaining_balance = escrow.subsidy_balance.withdraw_all();
     coin::from_balance(remaining_balance, ctx)
 }
 
 /// Destroy escrow (only after finalization)
-public fun destroy_escrow<StableType>(escrow: SubsidyEscrow<StableType>) {
+public fun destroy_escrow(escrow: SubsidyEscrow) {
     let SubsidyEscrow {
         id,
         proposal_id: _,
+        dao_id: _,
         amm_ids: _,
-        stable_balance,
+        subsidy_balance,
         total_subsidy: _,
         cranks_completed: _,
         total_cranks: _,
-        keeper_fee_base_bps: _,
+        keeper_fee_per_crank: _,
         last_crank_time: _,
         finalized,
     } = escrow;
 
     assert!(finalized, EProposalFinalized);
-    assert!(stable_balance.value() == 0, EInsufficientBalance);
+    assert!(subsidy_balance.value() == 0, EInsufficientBalance);
 
-    stable_balance.destroy_zero();
+    subsidy_balance.destroy_zero();
     object::delete(id);
 }
 
@@ -378,26 +339,29 @@ fun inject_subsidy_proportional(
 // === Entry Functions ===
 
 /// Entry function: Create subsidy escrow and share
-public entry fun create_and_share_escrow<StableType>(
+public entry fun create_and_share_escrow(
     proposal_id: ID,
+    dao_id: ID,
     amm_ids: vector<ID>,
-    stable_coins: Coin<StableType>,
+    treasury_coins: Coin<SUI>,
+    subsidy_per_outcome_per_crank: u64,
     crank_steps: u64,
-    keeper_fee_base_bps: u64,
+    keeper_fee_per_crank: u64,
     ctx: &mut TxContext,
 ) {
-    let config = new_subsidy_config_custom(
+    let config = subsidy_config::new_protocol_config_custom(
         true,
-        stable_coins.value(),
+        subsidy_per_outcome_per_crank,
         crank_steps,
-        keeper_fee_base_bps,
+        keeper_fee_per_crank,
         MIN_CRANK_INTERVAL_MS,
     );
 
     let escrow = create_escrow(
         proposal_id,
+        dao_id,
         amm_ids,
-        stable_coins,
+        treasury_coins,
         &config,
         ctx,
     );
@@ -406,14 +370,14 @@ public entry fun create_and_share_escrow<StableType>(
 }
 
 /// Entry function: Crank subsidy (keeper calls this)
-public entry fun crank_subsidy_entry<AssetType, StableType>(
-    escrow: &mut SubsidyEscrow<StableType>,
+public entry fun crank_subsidy_entry(
+    escrow: &mut SubsidyEscrow,
     proposal_id: ID,
     conditional_pools: &mut vector<LiquidityPool>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let keeper_fee_coin = crank_subsidy<AssetType, StableType>(
+    let keeper_fee_coin = crank_subsidy(
         escrow,
         proposal_id,
         conditional_pools,
@@ -425,54 +389,61 @@ public entry fun crank_subsidy_entry<AssetType, StableType>(
     transfer::public_transfer(keeper_fee_coin, tx_context::sender(ctx));
 }
 
-/// Entry function: Finalize escrow and return remaining to sender
-public entry fun finalize_escrow_entry<StableType>(
-    escrow: &mut SubsidyEscrow<StableType>,
+/// Entry function: Finalize and return remainder to DAO treasury
+public entry fun finalize_escrow_entry(
+    escrow: &mut SubsidyEscrow,
+    clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let remaining_coin = finalize_escrow(escrow, ctx);
+    let remaining_coin = finalize_escrow(escrow, clock, ctx);
+
+    // Transfer to DAO treasury (caller must be authorized)
+    // In production, verify caller has permission to receive DAO funds
     transfer::public_transfer(remaining_coin, tx_context::sender(ctx));
 }
 
 // === Test-Only Functions ===
 
 #[test_only]
-public fun create_test_escrow<StableType>(
+public fun create_test_escrow(
     proposal_id: ID,
+    dao_id: ID,
     amm_ids: vector<ID>,
     total_subsidy: u64,
     total_cranks: u64,
     ctx: &mut TxContext,
-): SubsidyEscrow<StableType> {
-    SubsidyEscrow<StableType> {
+): SubsidyEscrow {
+    SubsidyEscrow {
         id: object::new(ctx),
         proposal_id,
+        dao_id,
         amm_ids,
-        stable_balance: balance::create_for_testing(total_subsidy),
+        subsidy_balance: balance::create_for_testing(total_subsidy),
         total_subsidy,
         cranks_completed: 0,
         total_cranks,
-        keeper_fee_base_bps: DEFAULT_KEEPER_FEE_BPS,
+        keeper_fee_per_crank: 100_000_000,  // 0.1 SUI default
         last_crank_time: option::none(),
         finalized: false,
     }
 }
 
 #[test_only]
-public fun destroy_test_escrow<StableType>(escrow: SubsidyEscrow<StableType>) {
+public fun destroy_test_escrow(escrow: SubsidyEscrow) {
     let SubsidyEscrow {
         id,
         proposal_id: _,
+        dao_id: _,
         amm_ids: _,
-        stable_balance,
+        subsidy_balance,
         total_subsidy: _,
         cranks_completed: _,
         total_cranks: _,
-        keeper_fee_base_bps: _,
+        keeper_fee_per_crank: _,
         last_crank_time: _,
         finalized: _,
     } = escrow;
 
-    balance::destroy_for_testing(stable_balance);
+    balance::destroy_for_testing(subsidy_balance);
     object::delete(id);
 }

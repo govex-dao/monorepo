@@ -339,6 +339,68 @@ public fun deposit_permissionless<Config, CoinType: drop>(
     balance_mut.join(coin.into_balance());
 }
 
+/// Withdraws coins from a vault with authorization.
+/// This is the Auth-based counterpart to `deposit`, used for direct withdrawals
+/// outside of intent execution (e.g., for liquidity subsidy escrow funding).
+///
+/// ## FORK NOTE
+/// **Added**: `spend()` for Auth-based vault withdrawals
+/// **Reason**: Enable direct coin withdrawal from vault for subsidy integration and other
+/// use cases that need vault access outside intent execution flow.
+/// **Complements**: Existing `deposit()` function for symmetric Auth-based vault API
+public fun spend<Config, CoinType: drop>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    name: String,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<CoinType> {
+    account.verify(auth);
+
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(VaultKey(name), version::current());
+
+    // Ensure coin type exists in vault
+    assert!(vault.coin_type_exists<CoinType>(), EWrongCoinType);
+
+    // Withdraw from balance
+    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
+    assert!(balance_mut.value() >= amount, EInsufficientBalance);
+
+    let coin = coin::take(balance_mut, amount, ctx);
+
+    // Clean up empty balance if needed
+    if (balance_mut.value() == 0) {
+        vault.bag.remove<_, Balance<CoinType>>(type_name::with_defining_ids<CoinType>()).destroy_zero();
+    };
+
+    coin
+}
+
+/// Returns the balance of a specific coin type in a vault.
+/// Convenience function that combines vault existence check with balance lookup.
+///
+/// ## FORK NOTE
+/// **Added**: `balance()` for checking vault coin balances
+/// **Reason**: Simplify balance checks before withdrawing (e.g., for subsidy funding)
+/// **Returns**: Balance amount, or 0 if vault doesn't exist or doesn't have the coin type
+public fun balance<Config, CoinType: drop>(
+    account: &Account<Config>,
+    name: String,
+): u64 {
+    if (!has_vault(account, name)) {
+        return 0
+    };
+
+    let vault: &Vault = account.borrow_managed_data(VaultKey(name), version::current());
+
+    if (!coin_type_exists<CoinType>(vault)) {
+        return 0
+    };
+
+    coin_type_value<CoinType>(vault)
+}
+
 /// Default vault name for standard operations
 ///
 /// ## FORK NOTE

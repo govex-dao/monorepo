@@ -850,6 +850,7 @@ fun create_queued_proposal_with_id(
         policy_mode,
         required_council_id,
         council_approval_proof,
+        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
         clock
     )
 }
@@ -884,6 +885,7 @@ fun create_queued_proposal_from_reservation(
         reservation.policy_mode, // ✅ Use original policy data
         reservation.required_council_id,
         reservation.council_approval_proof,
+        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
         clock
     )
 }
@@ -920,6 +922,7 @@ fun create_queued_proposal_from_reservation_with_id(
         reservation.policy_mode, // ✅ Use original policy data
         reservation.required_council_id,
         reservation.council_approval_proof,
+        false, // used_quota - TODO: Integrate quota system to track if admin budget was used
         clock
     )
 }

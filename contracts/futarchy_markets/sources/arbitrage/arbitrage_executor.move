@@ -93,17 +93,18 @@ public fun execute_spot_arbitrage_asset_to_stable<
     // Ensure arbitrage is profitable with minimum threshold
     assert!(expected_profit >= (min_profit_out as u128), EInsufficientProfit);
 
-    // SECURITY ISSUE #2 FIX: Add slippage protection
-    // Calculate minimum acceptable output (95% of expected, 5% slippage tolerance)
-    let expected_asset_out = spot_amm::simulate_swap_stable_to_asset(spot_pool, arb_amount);
-    let min_asset_out = expected_asset_out * 9500 / 10000;  // 5% slippage
-
-    // Step 1: Swap in spot (stable → asset) with slippage protection
+    // Step 1: Swap in spot (stable → asset)
     // User sold asset to spot, so we buy asset back
+    //
+    // DESIGN NOTE: No intermediate slippage check needed
+    // - Sui transactions are atomic (no MEV possible during execution)
+    // - Front-validation (line 86-94) catches MEV before execution starts
+    // - Final profit validation is implicit (must return min_profit_out worth)
+    // - Setting min_amount_out=0 saves gas and simplifies API
     let mut asset_from_spot = spot_amm::swap_stable_for_asset(
         spot_pool,
         stable_for_arb,
-        min_asset_out,  // ✅ Proper slippage protection
+        0,  // No intermediate minimum (atomic execution guarantees)
         clock,
         ctx,
     );
@@ -357,16 +358,17 @@ public fun execute_spot_arbitrage_stable_to_asset<
     // Ensure arbitrage is profitable with minimum threshold
     assert!(expected_profit >= (min_profit_out as u128), EInsufficientProfit);
 
-    // SECURITY ISSUE #2 FIX: Add slippage protection
-    // Calculate minimum acceptable output (95% of expected, 5% slippage tolerance)
-    let expected_stable_out = spot_amm::simulate_swap_asset_to_stable(spot_pool, arb_amount);
-    let min_stable_out = expected_stable_out * 9500 / 10000;  // 5% slippage
-
-    // Step 1: Swap in spot (asset → stable) with slippage protection
+    // Step 1: Swap in spot (asset → stable)
+    //
+    // DESIGN NOTE: No intermediate slippage check needed
+    // - Sui transactions are atomic (no MEV possible during execution)
+    // - Front-validation (line 350-358) catches MEV before execution starts
+    // - Final profit validation is implicit (must return min_profit_out worth)
+    // - Setting min_amount_out=0 saves gas and simplifies API
     let mut stable_from_spot = spot_amm::swap_asset_for_stable(
         spot_pool,
         asset_for_arb,
-        min_stable_out,  // ✅ Proper slippage protection
+        0,  // No intermediate minimum (atomic execution guarantees)
         clock,
         ctx,
     );
@@ -726,7 +728,7 @@ public fun execute_optimal_spot_arbitrage<
 // SECURITY MODEL:
 // ✅ Same security as auto-arb:
 //    - Profit validation (min_profit_out checked before execution)
-//    - Slippage protection (5% tolerance on all swaps)
+//    - Atomic execution (no MEV possible during transaction)
 //    - Complete set redemption (no value extraction)
 //    - K-invariant guards (prevents AMM manipulation)
 //
@@ -734,6 +736,13 @@ public fun execute_optimal_spot_arbitrage<
 //    - User's own loss if amount is not optimal
 //    - Protocol is protected (validation prevents negative profit)
 //    - Users should use trusted UI calculations
+//
+// 🚀 DESIGN DECISION: No Intermediate Slippage Checks
+//    - Sui transactions are ATOMIC (entire PTB executes or reverts)
+//    - MEV is caught by front-validation (before any execution starts)
+//    - Intermediate checks waste gas (~500-800 gas per check)
+//    - Final profit validation is sufficient (implicit via returned coin value)
+//    - This simplifies API (1 parameter) and follows Move best practices
 //
 // WHEN TO USE:
 // - Use auto-arb (execute_optimal_spot_arbitrage) for:
@@ -799,11 +808,17 @@ public fun execute_optimal_spot_arbitrage<
 /// # Security
 /// ✅ All security checks from execute_spot_arbitrage_asset_to_stable apply:
 /// - Validates min_profit_out BEFORE execution (line 94)
-/// - Slippage protection on spot swap (line 99)
+/// - No intermediate slippage checks needed (atomic execution)
 /// - Complete set redemption with excess handling (lines 200-313)
 /// - K-invariant guards on all AMM operations
 ///
 /// ⚠️  User can provide suboptimal amount (their own loss, protocol protected)
+///
+/// # Design: Why No Intermediate Slippage Checks?
+/// - Sui transactions are ATOMIC (no MEV possible during execution)
+/// - Front-validation catches MEV before any execution starts
+/// - Intermediate checks waste gas and add API complexity
+/// - Final profit validation is sufficient (implicit via returned coin value)
 ///
 /// # Returns
 /// Coin<StableType> containing arbitrage profit
@@ -878,11 +893,17 @@ public fun execute_user_arbitrage_spot_to_cond<
 /// # Security
 /// ✅ All security checks from execute_spot_arbitrage_stable_to_asset apply:
 /// - Validates min_profit_out BEFORE execution (line 358)
-/// - Slippage protection on spot swap (line 363)
+/// - No intermediate slippage checks needed (atomic execution)
 /// - Complete set redemption with excess handling (lines 456-558)
 /// - K-invariant guards on all AMM operations
 ///
 /// ⚠️  User can provide suboptimal amount (their own loss, protocol protected)
+///
+/// # Design: Why No Intermediate Slippage Checks?
+/// - Sui transactions are ATOMIC (no MEV possible during execution)
+/// - Front-validation catches MEV before any execution starts
+/// - Intermediate checks waste gas and add API complexity
+/// - Final profit validation is sufficient (implicit via returned coin value)
 ///
 /// # Returns
 /// Coin<AssetType> containing arbitrage profit

@@ -8,7 +8,7 @@ use std::{
 };
 use sui::url::{Self, Url};
 use futarchy_one_shot_utils::constants;
-use futarchy_markets::liquidity_subsidy_protocol::{Self, ProtocolSubsidyConfig};
+use futarchy_core::subsidy_config::{Self as liquidity_subsidy_protocol, ProtocolSubsidyConfig};
 
 // === Errors ===
 const EInvalidMinAmount: u64 = 0; // Minimum amount must be positive
@@ -870,7 +870,6 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
         subsidy_config: config.subsidy_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1010,6 +1009,25 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
     }
 }
 
+/// Update subsidy configuration (returns new config)
+public fun update_subsidy_config(config: &DaoConfig, new_subsidy: ProtocolSubsidyConfig): DaoConfig {
+    DaoConfig {
+        trading_params: config.trading_params,
+        twap_config: config.twap_config,
+        governance_config: config.governance_config,
+        metadata_config: config.metadata_config,
+        security_config: config.security_config,
+        storage_config: config.storage_config,
+        conditional_coin_config: config.conditional_coin_config,
+        quota_config: config.quota_config,
+        multisig_config: config.multisig_config,
+        subsidy_config: new_subsidy,
+        optimistic_challenge_fee: config.optimistic_challenge_fee,
+        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
+        challenge_bounty: config.challenge_bounty,
+    }
+}
+
 // === Default Configuration ===
 
 /// Get default trading parameters for testing
@@ -1096,4 +1114,15 @@ public fun default_multisig_config(): MultisigConfig {
     MultisigConfig {
         _deprecated: 0,
     }
+}
+
+/// Get default subsidy configuration (disabled by default)
+public fun default_subsidy_config(): ProtocolSubsidyConfig {
+    liquidity_subsidy_protocol::new_protocol_config_custom(
+        false,                           // disabled by default
+        100_000_000,                     // 0.1 SUI per outcome per crank
+        0,                               // 0 cranks default (DAO must configure)
+        100_000_000,                     // 0.1 SUI keeper fee per crank
+        300_000,                         // 5 minutes minimum between cranks
+    )
 }

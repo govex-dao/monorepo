@@ -118,6 +118,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     proposer: address, // The original proposer.
     liquidity_provider: Option<address>,
     withdraw_only_mode: bool, // When true, return liquidity to provider instead of auto-reinvesting
+    /// Track if proposal used admin quota/budget (excludes from creator rewards)
+    used_quota: bool,
 
     // Market-related fields (pools now live in MarketState)
     escrow_id: Option<ID>,
@@ -254,6 +256,7 @@ public fun initialize_market<AssetType, StableType>(
     proposer: address, // The original proposer from the queue
     proposer_fee_paid: u64, // Fee paid by proposer (for tracking refunds)
     uses_dao_liquidity: bool,
+    used_quota: bool, // Track if proposal used admin budget (from QueuedProposal)
     fee_escrow: Balance<StableType>, // DAO fees if any
     mut intent_spec_for_yes: Option<InitActionSpecs>, // Intent spec for YES outcome
     clock: &Clock,
@@ -403,6 +406,7 @@ public fun initialize_market<AssetType, StableType>(
         proposer,
         liquidity_provider: option::some(ctx.sender()),
         withdraw_only_mode: false,
+        used_quota,
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
@@ -513,6 +517,7 @@ public fun new_premarket<AssetType, StableType>(
     outcome_details: vector<String>,
     proposer: address,
     uses_dao_liquidity: bool,
+    used_quota: bool, // Track if proposal used admin budget
     fee_escrow: Balance<StableType>,
     intent_spec_for_yes: Option<InitActionSpecs>,
     clock: &Clock,
@@ -533,6 +538,7 @@ public fun new_premarket<AssetType, StableType>(
         proposer,
         liquidity_provider: option::none(),
         withdraw_only_mode: false,
+        used_quota,
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
@@ -1561,6 +1567,11 @@ public fun get_proposer<AssetType, StableType>(proposal: &Proposal<AssetType, St
     proposal.proposer
 }
 
+/// Check if this proposal used admin quota/budget (excludes from creator rewards)
+public fun get_used_quota<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
+    proposal.used_quota
+}
+
 /// Check if this proposal's liquidity is in withdraw-only mode
 public fun is_withdraw_only<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
     proposal.withdraw_only_mode
@@ -1778,6 +1789,7 @@ public fun new_for_testing<AssetType, StableType>(
         proposer,
         liquidity_provider,
         withdraw_only_mode: false,
+        used_quota: false, // Default to false for testing
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
