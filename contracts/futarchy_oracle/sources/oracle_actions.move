@@ -333,6 +333,7 @@ public fun repeat_config(
 ///
 /// @param launchpad_price_abs_1e12: Current launchpad price (1e12 scale) for computing absolute threshold
 /// @param launchpad_multiplier: Multiplier (1e9 scale) - e.g., 3_500_000_000 = 3.5x
+/// @param earliest_execution_offset_ms: Minimum time before grant can be claimed (0 = immediate)
 public fun create_employee_option<AssetType, StableType>(
     recipient: address,
     total_amount: u64,
@@ -341,6 +342,7 @@ public fun create_employee_option<AssetType, StableType>(
     total_vesting_years: u64,
     launchpad_price_abs_1e12: u128,  // NEW: Current launchpad price for conversion
     launchpad_multiplier: u64,       // Scaled 1e9
+    earliest_execution_offset_ms: u64, // NEW: Time lock before claiming (0 = immediate)
     expiry_years: u64,
     dao_id: ID,
     clock: &Clock,
@@ -404,7 +406,11 @@ public fun create_employee_option<AssetType, StableType>(
             launchpad_price: launchpad_price_abs_1e12,
         },
         repeat_config: std::option::none(),
-        earliest_execution: std::option::some(now),
+        earliest_execution: if (earliest_execution_offset_ms > 0) {
+            std::option::some(now + earliest_execution_offset_ms)
+        } else {
+            std::option::none()
+        },
         latest_execution: std::option::some(now + expiry_ms),
         paused: false,
         paused_until: std::option::none(),
@@ -433,12 +439,18 @@ public fun create_employee_option<AssetType, StableType>(
 }
 
 /// Create vesting grant (no strike) - simple grant = 1 tier with vesting only
+/// @param price_threshold: Optional price condition (0 = no price requirement, >0 = absolute price in 1e12 scale)
+/// @param price_is_above: If price_threshold > 0, true = price must be above, false = below
+/// @param earliest_execution_offset_ms: Minimum time before grant can be claimed (0 = immediate)
 public fun create_vesting_grant<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     recipient: address,
     total_amount: u64,
     cliff_months: u64,
     total_vesting_years: u64,
+    price_threshold: u128,               // NEW: Optional price condition (0 = none)
+    price_is_above: bool,                 // NEW: Price direction if threshold > 0
+    earliest_execution_offset_ms: u64,   // NEW: Time lock (0 = immediate)
     dao_id: ID,
     version: VersionWitness,
     clock: &Clock,
@@ -470,9 +482,13 @@ public fun create_vesting_grant<AssetType, StableType>(
         timestamp: now,
     });
 
-    // Build single tier with vesting, no strike
+    // Build single tier with vesting, no strike, optional price condition
     let tier = PriceTier {
-        price_condition: std::option::none(),  // No unlock condition
+        price_condition: if (price_threshold > 0) {
+            std::option::some(absolute_price_condition(price_threshold, price_is_above))
+        } else {
+            std::option::none()
+        },
         recipients: vector[RecipientMint { recipient, amount: total_amount }],
         vesting: std::option::some(VestingConfig {
             start_time: now,
@@ -496,7 +512,11 @@ public fun create_vesting_grant<AssetType, StableType>(
             launchpad_price: 0,
         },
         repeat_config: std::option::none(),
-        earliest_execution: std::option::some(now),
+        earliest_execution: if (earliest_execution_offset_ms > 0) {
+            std::option::some(now + earliest_execution_offset_ms)
+        } else {
+            std::option::none()
+        },
         latest_execution: std::option::some(now + total_vesting_ms),
         paused: false,
         paused_until: std::option::none(),
@@ -628,6 +648,8 @@ public fun create_milestone_rewards<AssetType, StableType>(
 }
 
 /// Create conditional mint (repeatable) - simple grant = 1 tier with absolute price condition and repeat config
+/// @param earliest_execution_offset_ms: Minimum time before first claim (0 = immediate)
+/// @param expiry_years: Maximum time to claim (0 = no expiry)
 public fun create_conditional_mint<AssetType, StableType>(
     recipient: address,
     mint_amount: u64,
@@ -635,6 +657,8 @@ public fun create_conditional_mint<AssetType, StableType>(
     is_above_threshold: bool,
     cooldown_ms: u64,
     max_executions: u64,
+    earliest_execution_offset_ms: u64,  // NEW: Time lock (0 = immediate)
+    expiry_years: u64,                   // NEW: Expiry time (0 = no expiry)
     dao_id: ID,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -643,6 +667,16 @@ public fun create_conditional_mint<AssetType, StableType>(
     assert!(mint_amount > 0, EInvalidAmount);
 
     let now = clock.timestamp_ms();
+
+    // Calculate expiry if needed
+    let expiry_ms = if (expiry_years > 0) {
+        let ms = expiry_years * 365 * 24 * 60 * 60 * 1000;
+        assert!(ms <= MAX_VESTING_DURATION_MS, ETimeCalculationOverflow);
+        ms
+    } else {
+        0
+    };
+
     let grant_id = object::new(ctx);
 
     event::emit(GrantCreated {
@@ -677,8 +711,16 @@ public fun create_conditional_mint<AssetType, StableType>(
             launchpad_price: 0,
         },
         repeat_config: std::option::some(repeat_config(cooldown_ms, max_executions)),
-        earliest_execution: std::option::none(),
-        latest_execution: std::option::none(),
+        earliest_execution: if (earliest_execution_offset_ms > 0) {
+            std::option::some(now + earliest_execution_offset_ms)
+        } else {
+            std::option::none()
+        },
+        latest_execution: if (expiry_years > 0) {
+            std::option::some(now + expiry_ms)
+        } else {
+            std::option::none()
+        },
         paused: false,
         paused_until: std::option::none(),
         paused_at: std::option::none(),
@@ -1666,8 +1708,7 @@ public fun do_create_oracle_grant<AssetType, StableType, Outcome: store, IW: dro
     let now = clock.timestamp_ms();
 
     // Read launchpad price from DAO config (if set)
-    use account_protocol::account;
-    let dao_config = account::config(account);
+    let dao_config = account_protocol::account::config(account);
     let launchpad_price_opt = futarchy_core::futarchy_config::get_launchpad_initial_price(dao_config);
     let launchpad_price = if (launchpad_price_opt.is_some()) {
         *launchpad_price_opt.borrow()

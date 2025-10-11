@@ -6,7 +6,7 @@
 /// ## Architecture
 /// - Metrics stored in Proposal struct (proposal.move owns storage)
 /// - Logic centralized here (single responsibility principle)
-/// - Called from swap::finalize_swap_session for flip detection
+/// - Called from swap_core::finalize_swap_session for flip detection
 ///
 /// ## Flip Detection
 /// Uses instant prices (not TWAP) for fast flip detection during trading.
@@ -77,7 +77,7 @@ public fun new_metrics(
 /// Tracks winner changes - simple design with no exponential decay
 /// Does nothing if early resolution is not enabled for this proposal
 ///
-/// This is called from swap::finalize_swap_session() to ensure flip
+/// This is called from swap_core::finalize_swap_session() to ensure flip
 /// detection happens exactly once per transaction AFTER all swaps complete.
 ///
 /// NOTE: This now works with MarketState directly for pool access,

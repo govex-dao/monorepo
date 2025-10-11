@@ -92,6 +92,7 @@ use futarchy_markets::conditional_amm;
 use futarchy_markets::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
 use futarchy_markets::position_nft;
+use futarchy_markets::swap_position_registry::{Self, SwapPositionRegistry};
 
 /// Data structure for passing conditional oracle information
 /// (Move doesn't allow Option<&T>, so we pass values instead of references)
@@ -124,6 +125,13 @@ const EAlreadyInitialized: u64 = 8;
 const ETwapNotReady: u64 = 9;
 const EPoolLockedForProposal: u64 = 10;
 const EOracleTooStale: u64 = 11;
+const EKInvariantViolation: u64 = 12;
+
+// Aggregator interface errors
+const ENoActiveProposal: u64 = 13;
+const EProposalMismatch: u64 = 14;
+const EEscrowMismatch: u64 = 15;
+const ENoRegistry: u64 = 16;
 
 // MAX_FEE_BPS moved to constants module
 const MINIMUM_LIQUIDITY: u64 = 1000;
@@ -134,9 +142,6 @@ const PRICE_SCALE: u128 = 1_000_000_000_000; // 10^12 for price precision
 
 // Oracle staleness limit (1 hour)
 const MAX_ORACLE_STALENESS_MS: u64 = 3_600_000;
-
-// K-invariant error (guards constant-product invariant)
-const EKInvariantViolation: u64 = 12;
 
 /// Simple spot AMM for <AssetType, StableType> with SimpleTWAP oracle
 public struct SpotAMM<phantom AssetType, phantom StableType> has key, store {
@@ -149,8 +154,15 @@ public struct SpotAMM<phantom AssetType, phantom StableType> has key, store {
     simple_twap: Option<SimpleTWAP>,  // None until first liquidity added
     // Track when DAO liquidity was last used in a proposal
     last_proposal_usage: Option<u64>,
+    // Proposal lock parameters (set when proposal locks pool for liquidity-weighted oracle)
+    conditional_liquidity_ratio_bps: u64,     // % of liquidity moved to conditionals (0 if no active proposal)
+    oracle_conditional_threshold_bps: u64,    // Threshold to trust conditional oracle (0 if no active proposal)
     // Protocol fees accumulated (in stable token)
     protocol_fees_stable: Balance<StableType>,
+    // Active proposal ID for clean aggregator interface
+    active_proposal_id: Option<ID>,
+    // Registry for swap dust positions (owned by AMM)
+    registry: Option<SwapPositionRegistry<AssetType, StableType>>,
 }
 
 /// Event emitted when spot price updates
@@ -173,6 +185,10 @@ public struct SpotTwapUpdate has copy, drop {
 /// Create a new pool (simple Uniswap V2 style)
 public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAMM<AssetType, StableType> {
     assert!(fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
+
+    // Create registry for swap dust positions
+    let registry = swap_position_registry::new<AssetType, StableType>(ctx);
+
     SpotAMM<AssetType, StableType> {
         id: object::new(ctx),
         asset_reserve: balance::zero<AssetType>(),
@@ -181,7 +197,11 @@ public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAM
         fee_bps,
         simple_twap: option::none(),  // Initialize when first liquidity added
         last_proposal_usage: option::none(),
+        conditional_liquidity_ratio_bps: 0,  // No active proposal initially
+        oracle_conditional_threshold_bps: 0,  // No active proposal initially
         protocol_fees_stable: balance::zero<StableType>(),
+        active_proposal_id: option::none(),  // No active proposal initially
+        registry: option::some(registry),  // Registry created with AMM
     }
 }
 
@@ -462,7 +482,7 @@ public fun swap_stable_for_asset<AssetType, StableType>(
 
     // Update reserves
     // Protocol share goes to protocol_fees_stable, LP share + amount_in_after_fee stay in pool
-    let stable_balance = stable_in.into_balance();
+    let mut stable_balance = stable_in.into_balance();
     pool.protocol_fees_stable.join(stable_balance.split(protocol_share));
     pool.stable_reserve.join(stable_balance); // This adds amount_in_after_fee + lp_share
 
@@ -797,6 +817,22 @@ public fun is_locked_for_proposal<AssetType, StableType>(
     pool.last_proposal_usage.is_some()
 }
 
+/// Get conditional liquidity ratio (% of liquidity moved to conditionals)
+/// Returns 0 if no active proposal
+public fun get_conditional_liquidity_ratio_bps<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): u64 {
+    pool.conditional_liquidity_ratio_bps
+}
+
+/// Get oracle conditional threshold (threshold to trust conditional oracle)
+/// Returns 0 if no active proposal
+public fun get_oracle_conditional_threshold_bps<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): u64 {
+    pool.oracle_conditional_threshold_bps
+}
+
 
 /// Get pool reserves
 public fun get_reserves<AssetType, StableType>(
@@ -818,6 +854,72 @@ public fun get_simple_twap<AssetType, StableType>(
 ): &SimpleTWAP {
     assert!(pool.simple_twap.is_some(), ENotInitialized);
     pool.simple_twap.borrow()
+}
+
+// === Aggregator Integration Helpers ===
+
+/// Register a proposal as active in the spot pool
+/// Called when proposal enters TRADING state
+/// This allows aggregators to discover proposal/escrow IDs from spot_pool alone
+public(package) fun register_active_proposal<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    proposal_id: ID,
+) {
+    pool.active_proposal_id = option::some(proposal_id);
+}
+
+/// Clear active proposal from spot pool
+/// Called when proposal ends trading
+public(package) fun clear_active_proposal<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+) {
+    pool.active_proposal_id = option::none();
+}
+
+/// Get active proposal ID (for aggregator discovery)
+/// Returns None if no proposal is currently trading
+public fun get_active_proposal_id<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): Option<ID> {
+    pool.active_proposal_id
+}
+
+/// Validate arbitrage objects and borrow registry
+///
+/// AGGREGATOR INTERFACE: Simplifies integration by validating all objects match.
+///
+/// Aggregators only need to:
+/// 1. Track spot_pool ID in their database
+/// 2. Query get_active_proposal_id(spot_pool) to discover proposal
+/// 3. Query proposal::escrow_id(proposal) to discover escrow
+/// 4. Pass all three objects to swap functions
+/// 5. This function validates they match and returns registry
+///
+/// This allows aggregators to start from spot_pool ID alone.
+public fun validate_arb_objects_and_borrow_registry<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    proposal: &Proposal<AssetType, StableType>,
+    escrow: &TokenEscrow<AssetType, StableType>,
+): &mut SwapPositionRegistry<AssetType, StableType> {
+    use futarchy_markets::proposal;
+    use futarchy_markets::coin_escrow;
+
+    // Validate active proposal exists
+    assert!(pool.active_proposal_id.is_some(), ENoActiveProposal);
+
+    // Validate proposal ID matches
+    let expected_proposal_id = *pool.active_proposal_id.borrow();
+    let actual_proposal_id = proposal::get_id(proposal);
+    assert!(expected_proposal_id == actual_proposal_id, EProposalMismatch);
+
+    // Validate escrow ID matches
+    let expected_escrow_id = proposal::escrow_id(proposal);
+    let actual_escrow_id = object::id(escrow);
+    assert!(expected_escrow_id == actual_escrow_id, EEscrowMismatch);
+
+    // Borrow registry
+    assert!(pool.registry.is_some(), ENoRegistry);
+    pool.registry.borrow_mut()
 }
 
 /// Get pool state (basic info)
@@ -856,9 +958,11 @@ public(package) fun reset_protocol_fees<AssetType, StableType>(
 
 
 /// Mark when DAO liquidity moves to a proposal
-/// This records the timestamp for later TWAP backfilling
+/// This records the timestamp and lock parameters for liquidity-weighted oracle logic
 public fun mark_liquidity_to_proposal<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
+    conditional_liquidity_ratio_bps: u64,
+    oracle_conditional_threshold_bps: u64,
     clock: &Clock,
 ) {
     // Update SimpleTWAP one last time before liquidity moves to proposal
@@ -867,6 +971,9 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
     };
     // Record when liquidity moved to proposal (spot oracle freezes here)
     pool.last_proposal_usage = option::some(clock.timestamp_ms());
+    // Store lock parameters for liquidity-weighted oracle logic
+    pool.conditional_liquidity_ratio_bps = conditional_liquidity_ratio_bps;
+    pool.oracle_conditional_threshold_bps = oracle_conditional_threshold_bps;
 }
 
 /// Backfill spot's SimpleTWAP with winning conditional's data after proposal ends
@@ -908,7 +1015,9 @@ public fun backfill_from_winning_conditional<AssetType, StableType>(
         period_final_price,
     );
 
-    // Unlock the pool
+    // Unlock the pool and reset lock parameters
     pool.last_proposal_usage = option::none();
+    pool.conditional_liquidity_ratio_bps = 0;
+    pool.oracle_conditional_threshold_bps = 0;
 }
 

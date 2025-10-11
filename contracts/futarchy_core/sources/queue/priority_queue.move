@@ -956,6 +956,26 @@ public fun slash_and_distribute_fee<StableCoin>(
     (coin::zero(ctx), dao_coin)
 }
 
+/// Mark a proposal as active after extraction from queue
+/// Increments active_proposal_count and sets DAO liquidity slot if needed
+/// Requires QueueMutationAuth witness to prevent unauthorized state changes
+public fun mark_proposal_activated<StableCoin>(
+    _auth: QueueMutationAuth,  // ← Witness required
+    queue: &mut ProposalQueue<StableCoin>,
+    uses_dao_liquidity: bool,
+) {
+    // Increment active count
+    queue.active_proposal_count = queue.active_proposal_count + 1;
+
+    // Mark DAO liquidity slot as occupied if this proposal uses it
+    if (uses_dao_liquidity) {
+        queue.dao_liquidity_slot_occupied = true;
+    };
+
+    // Post-condition validation: ensure we haven't exceeded limits
+    assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
+}
+
 /// Mark a proposal as completed, freeing up space with state consistency checks
 /// Now requires proposal_id to ensure we're marking the correct proposal
 public fun mark_proposal_completed<StableCoin>(
@@ -965,12 +985,12 @@ public fun mark_proposal_completed<StableCoin>(
 ) {
     // Validate preconditions for state consistency
     assert!(queue.active_proposal_count > 0, EInvalidProposalId);
-    
+
     // If marking a DAO liquidity proposal as complete, verify slot is occupied
     if (uses_dao_liquidity) {
         assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
     };
-    
+
     // Verify the proposal_id matches a reserved/active proposal if tracked
     // This ensures we're completing the right proposal
     if (option::is_some(&queue.reserved_next_proposal)) {
@@ -980,14 +1000,14 @@ public fun mark_proposal_completed<StableCoin>(
             queue.reserved_next_proposal = option::none();
         }
     };
-    
+
     // Update state atomically
     queue.active_proposal_count = queue.active_proposal_count - 1;
-    
+
     if (uses_dao_liquidity) {
         queue.dao_liquidity_slot_occupied = false;
     };
-    
+
     // Post-condition validation: ensure state remains consistent
     assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
 }

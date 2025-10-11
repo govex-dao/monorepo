@@ -204,9 +204,13 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     let data = *priority_queue::get_proposal_data(&queued_proposal);
     let intent_spec = *priority_queue::get_intent_spec(&queued_proposal);
 
-    // Extract bond (mutable borrow needed)
+    // Mark proposal as active (increments counter, sets DAO slot if needed)
     let auth2 = priority_queue::create_mutation_auth();
-    let mut bond = priority_queue::extract_bond(auth2, &mut queued_proposal);
+    priority_queue::mark_proposal_activated(auth2, queue, uses_dao_liquidity);
+
+    // Extract bond (mutable borrow needed)
+    let auth3 = priority_queue::create_mutation_auth();
+    let mut bond = priority_queue::extract_bond(auth3, &mut queued_proposal);
     
     // Get config values from account
     let config = account.config();
@@ -229,9 +233,16 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 
     // Intent specs are now stored in proposals, no need to check intent keys
 
-    // If this proposal uses DAO liquidity, mark the spot pool
+    // If this proposal uses DAO liquidity, mark the spot pool with lock parameters
     if (uses_dao_liquidity) {
-        spot_amm::mark_liquidity_to_proposal(spot_pool, clock);
+        let conditional_liquidity_ratio_bps = futarchy_config::conditional_liquidity_ratio_bps(config);
+        let oracle_conditional_threshold_bps = futarchy_config::oracle_conditional_threshold_bps(config);
+        spot_amm::mark_liquidity_to_proposal(
+            spot_pool,
+            conditional_liquidity_ratio_bps,
+            oracle_conditional_threshold_bps,
+            clock
+        );
     };
 
     // Initialize the market
@@ -726,9 +737,13 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let data = *priority_queue::get_proposal_data(&qp);
     let intent_spec = *priority_queue::get_intent_spec(&qp);
 
-    // Extract optional bond -> becomes fee_escrow in proposal
+    // Mark proposal as active (increments counter, sets DAO slot if needed)
     let auth2 = priority_queue::create_mutation_auth();
-    let mut bond = priority_queue::extract_bond(auth2, &mut qp);
+    priority_queue::mark_proposal_activated(auth2, queue, uses_dao_liquidity);
+
+    // Extract optional bond -> becomes fee_escrow in proposal
+    let auth3 = priority_queue::create_mutation_auth();
+    let mut bond = priority_queue::extract_bond(auth3, &mut qp);
     let fee_escrow = if (bond.is_some()) {
         bond.extract().into_balance()
     } else {
@@ -776,8 +791,8 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
 
     // Mark queue reserved only if enabled in config
     if (futarchy_config::enable_premarket_reservation_lock(cfg)) {
-        let auth3 = priority_queue::create_mutation_auth();
-        priority_queue::set_reserved(auth3, queue, premarket_id);
+        let auth4 = priority_queue::create_mutation_auth();
+        priority_queue::set_reserved(auth4, queue, premarket_id);
     };
     priority_queue::destroy_proposal(qp);
     

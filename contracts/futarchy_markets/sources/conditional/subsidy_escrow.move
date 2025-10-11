@@ -13,7 +13,7 @@ use sui::sui::SUI;
 use sui::transfer;
 use sui::event;
 use futarchy_one_shot_utils::math;
-use futarchy_core::subsidy_config::ProtocolSubsidyConfig;
+use futarchy_core::subsidy_config::{Self, ProtocolSubsidyConfig};
 use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 
 // === Errors ===
@@ -369,8 +369,9 @@ public entry fun create_and_share_escrow(
     transfer::share_object(escrow);
 }
 
-/// Entry function: Crank subsidy (keeper calls this)
-public entry fun crank_subsidy_entry(
+/// Public function: Crank subsidy (keeper calls this from PTB)
+/// Note: Not an entry function because it takes &mut vector<LiquidityPool>
+public fun crank_subsidy_entry(
     escrow: &mut SubsidyEscrow,
     proposal_id: ID,
     conditional_pools: &mut vector<LiquidityPool>,

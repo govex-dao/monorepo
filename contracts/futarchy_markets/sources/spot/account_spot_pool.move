@@ -48,6 +48,9 @@ public struct LPToken<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     /// Amount of LP tokens
     amount: u64,
+    /// Optional lock - if Some(timestamp), LP is locked until proposal at that timestamp ends
+    /// Used when withdrawal would violate minimum liquidity in conditional AMMs
+    locked_until: Option<u64>,
 }
 
 /// Result of a swap operation
@@ -160,12 +163,13 @@ public entry fun add_liquidity<AssetType, StableType>(
     pool.stable_reserve.join(stable_coin.into_balance());
     pool.lp_supply = pool.lp_supply + lp_minted;
     
-    // Mint LP tokens
+    // Mint LP tokens (unlocked by default)
     let lp_token = LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: lp_minted,
+        locked_until: option::none(),
     };
-    
+
     transfer::public_transfer(lp_token, ctx.sender());
     
     event::emit(LiquidityAdded<AssetType, StableType> {
@@ -212,12 +216,13 @@ public fun add_liquidity_and_return<AssetType, StableType>(
     pool.stable_reserve.join(stable_coin.into_balance());
     pool.lp_supply = pool.lp_supply + lp_minted;
     
-    // Create and return LP token
+    // Create and return LP token (unlocked by default)
     let lp_token = LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: lp_minted,
+        locked_until: option::none(),
     };
-    
+
     event::emit(LiquidityAdded<AssetType, StableType> {
         pool_id: object::id(pool),
         asset_amount,
@@ -236,7 +241,7 @@ public fun remove_liquidity_and_return<AssetType, StableType>(
     min_stable_out: u64,
     ctx: &mut TxContext,
 ): (Coin<AssetType>, Coin<StableType>) {
-    let LPToken { id, amount: lp_amount } = lp_token;
+    let LPToken { id, amount: lp_amount, locked_until: _ } = lp_token;
     id.delete();
     
     assert!(lp_amount > 0, EZeroAmount);
@@ -280,7 +285,7 @@ public entry fun remove_liquidity<AssetType, StableType>(
     min_stable_out: u64,
     ctx: &mut TxContext,
 ) {
-    let LPToken { id, amount: lp_amount } = lp_token;
+    let LPToken { id, amount: lp_amount, locked_until: _ } = lp_token;
     id.delete();
     
     assert!(lp_amount > 0, EZeroAmount);
@@ -439,6 +444,40 @@ public fun fee_bps<AssetType, StableType>(
     pool.fee_bps
 }
 
+// === Quantum LP Functions ===
+
+/// Remove liquidity for quantum split (without burning LP tokens)
+/// This is used when liquidity quantum-splits into conditional markets
+/// LP tokens remain valid - they represent liquidity that exists quantum-mechanically in conditional AMMs
+public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    asset_amount: u64,
+    stable_amount: u64,
+): (Balance<AssetType>, Balance<StableType>) {
+    assert!(asset_amount > 0 && stable_amount > 0, EZeroAmount);
+    assert!(asset_amount <= pool.asset_reserve.value(), EInsufficientLiquidity);
+    assert!(stable_amount <= pool.stable_reserve.value(), EInsufficientLiquidity);
+
+    // Remove from reserves but DON'T burn LP tokens
+    // LP tokens still represent value - the liquidity exists quantum-mechanically in conditional markets
+    let asset_balance = pool.asset_reserve.split(asset_amount);
+    let stable_balance = pool.stable_reserve.split(stable_amount);
+
+    (asset_balance, stable_balance)
+}
+
+/// Add liquidity back from quantum split (when proposal ends)
+/// Returns liquidity from conditional markets back to spot pool
+public(package) fun add_liquidity_from_quantum_redeem<AssetType, StableType>(
+    pool: &mut AccountSpotPool<AssetType, StableType>,
+    asset: Balance<AssetType>,
+    stable: Balance<StableType>,
+) {
+    pool.asset_reserve.join(asset);
+    pool.stable_reserve.join(stable);
+    // LP supply unchanged - LP tokens existed throughout the quantum split
+}
+
 // === Internal Functions ===
 
 /// Calculate output amount for a swap
@@ -452,12 +491,12 @@ fun calculate_output(
     // Calculate fee amount
     let fee_amount = math::mul_div_to_64(amount_in, fee_bps, 10000);
     let amount_in_after_fee = amount_in - fee_amount;
-    
+
     // Calculate output using constant product formula
     // amount_out = (amount_in_after_fee * reserve_out) / (reserve_in + amount_in_after_fee)
     // Use mul_div_to_64 to calculate output amount
     let amount_out = math::mul_div_to_64(amount_in_after_fee, reserve_out, reserve_in + amount_in_after_fee);
-    
+
     (amount_out, fee_amount)
 }
 
@@ -476,15 +515,27 @@ public fun merge_lp_tokens<AssetType, StableType>(
     token2: LPToken<AssetType, StableType>,
     ctx: &mut TxContext,
 ): LPToken<AssetType, StableType> {
-    let LPToken { id: id1, amount: amount1 } = token1;
-    let LPToken { id: id2, amount: amount2 } = token2;
-    
+    let LPToken { id: id1, amount: amount1, locked_until: lock1 } = token1;
+    let LPToken { id: id2, amount: amount2, locked_until: lock2 } = token2;
+
     id1.delete();
     id2.delete();
-    
+
+    // When merging, use the later lock time (more restrictive)
+    let merged_lock = if (option::is_some(&lock1) && option::is_some(&lock2)) {
+        let time1 = *option::borrow(&lock1);
+        let time2 = *option::borrow(&lock2);
+        option::some(if (time1 > time2) { time1 } else { time2 })
+    } else if (option::is_some(&lock1)) {
+        lock1
+    } else {
+        lock2
+    };
+
     LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: amount1 + amount2,
+        locked_until: merged_lock,
     }
 }
 
@@ -504,21 +555,23 @@ public fun split_lp_token<AssetType, StableType>(
     split_amount: u64,
     ctx: &mut TxContext,
 ): (LPToken<AssetType, StableType>, LPToken<AssetType, StableType>) {
-    let LPToken { id, amount } = token;
+    let LPToken { id, amount, locked_until } = token;
     id.delete();
-    
+
     assert!(split_amount > 0 && split_amount < amount, EZeroAmount);
-    
+
     let token1 = LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: split_amount,
+        locked_until,  // Preserve lock status
     };
-    
+
     let token2 = LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: amount - split_amount,
+        locked_until,  // Preserve lock status
     };
-    
+
     (token1, token2)
 }
 
@@ -531,6 +584,43 @@ public entry fun split_lp_token_entry<AssetType, StableType>(
     let (token1, token2) = split_lp_token(token, split_amount, ctx);
     transfer::public_transfer(token1, ctx.sender());
     transfer::public_transfer(token2, ctx.sender());
+}
+
+// === LP Token Lock Management ===
+
+/// Check if LP token is locked
+public fun is_locked<AssetType, StableType>(
+    token: &LPToken<AssetType, StableType>,
+    clock: &sui::clock::Clock,
+): bool {
+    if (option::is_none(&token.locked_until)) {
+        false
+    } else {
+        let lock_time = *option::borrow(&token.locked_until);
+        clock.timestamp_ms() < lock_time
+    }
+}
+
+/// Get lock expiration time (None if unlocked)
+public fun get_lock_time<AssetType, StableType>(
+    token: &LPToken<AssetType, StableType>
+): Option<u64> {
+    token.locked_until
+}
+
+/// Set lock time (package-only - called by quantum LP manager)
+public(package) fun set_lock_time<AssetType, StableType>(
+    token: &mut LPToken<AssetType, StableType>,
+    lock_until: u64,
+) {
+    token.locked_until = option::some(lock_until);
+}
+
+/// Clear lock (package-only - called when proposal ends)
+public(package) fun clear_lock<AssetType, StableType>(
+    token: &mut LPToken<AssetType, StableType>,
+) {
+    token.locked_until = option::none();
 }
 
 // === LP Token Recovery Functions ===
@@ -554,6 +644,7 @@ public fun new_lp_token_for_testing<AssetType, StableType>(
     LPToken {
         id: object::new(ctx),
         amount,
+        locked_until: option::none(),
     }
 }
 

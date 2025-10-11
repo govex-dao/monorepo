@@ -176,8 +176,10 @@ public fun new_trading_params(
     // Max swap percent must be reasonable (0-100%)
     assert!(max_amm_swap_percent_bps <= constants::max_fee_bps(), EInvalidFee);
 
-    // Conditional liquidity ratio must be 0-100% (0 = all stays in spot, 10000 = all to conditional)
-    assert!(conditional_liquidity_ratio_bps <= constants::max_fee_bps(), EInvalidFee);
+    // Conditional liquidity ratio must be 10-90% (1000 bps = 10%, 9000 bps = 90%)
+    // This ensures some liquidity stays in spot (for trading) and some moves to conditional markets
+    assert!(conditional_liquidity_ratio_bps >= 1000, EInvalidFee);
+    assert!(conditional_liquidity_ratio_bps <= 9000, EInvalidFee);
 
     TradingParams {
         min_asset_amount,
@@ -625,7 +627,9 @@ public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, per
 }
 
 public(package) fun set_conditional_liquidity_ratio_bps(params: &mut TradingParams, ratio_bps: u64) {
-    assert!(ratio_bps <= constants::max_fee_bps(), EInvalidFee);
+    // Enforce 10-90% range (1000 bps = 10%, 9000 bps = 90%)
+    assert!(ratio_bps >= 1000, EInvalidFee);
+    assert!(ratio_bps <= 9000, EInvalidFee);
     params.conditional_liquidity_ratio_bps = ratio_bps;
 }
 
@@ -1041,7 +1045,7 @@ public fun default_trading_params(): TradingParams {
         spot_amm_fee_bps: 30, // 0.3% for spot pool
         market_op_review_period_ms: 0, // 0 = immediate (allows atomic market init)
         max_amm_swap_percent_bps: 1000, // 10% max swap per proposal (prevents illiquidity)
-        conditional_liquidity_ratio_bps: 10000, // 100% to conditional (original Hanson quantum model)
+        conditional_liquidity_ratio_bps: 8000, // 80% to conditional markets (enforced 10-90% range)
     }
 }
 

@@ -84,50 +84,40 @@ or should have a type that doesnt and type that does?
 - [X] check does my policy actually work / enfore for move framework actions
 - [X] or make proposal time depend on actions and have custom proposal fee depending on market time
 - [X] compare geometric mean oracle to twap oracle to ring buffer
-- [ ] Error Codes: While consistent, the use of raw u64 constants for errors is a bit dated. Modern Sui Move often uses custom structs or std::errors for more descriptive, on-chain error reporting, although this is a stylistic choice and doesn't affect correctness.
 - [X] allow founder to come in and set launchpad cap on execution not before
 - [X] maybe dont make launchpad run full time no matter what if cap reached
-- [ ] AMM INTEGRATION
-- [ ] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
-- [ ] migrate coin metadata 
 
-- [ ] Give daos affiliate cap
-- [ ] And field for affiliate id 
-- [ ] Add time ynlock to price thing
-- [ ] Add hook for conditionalo coin order books need types and deep token
-- [ ] And field for affiliate id 
 
-- [ ] Add time ynlock to price thing
+- [NO] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
+- [ ] qucik check that arbitrage math shows spot price moved away from all other conditonals or closest coditonal to spoit while spot was outside moved away form spot!!!!
+- [X] Make launhcapd position NFT like position for AMM
+- [ ] migrate coin metadata and what that means for my coins metadata
+- [X] Give daos affiliate cap
+- [X] And field for affiliate id 
+- [X] Add time ynlock to price thing
+- [NO] Add hook for conditionalo coin order books need types and deep token
+- [X] send data points!!!
+- [X] dao subsidise conditional liquidity
+- [X] Force at least 10% liquidity into conditional markets Protocol param
+- [X] Check what happens to proposer fee again. Goes to subsidies or money is taken from treasury?????
+- [X] Oohh let dao set max concurrent proposal limit!!!!!
+- [X] Try subsidise but dont if there is not enough balance at start!!!
+- [X] For consitional traders always send their tokens from other markets back to them they know what to do with it!!!
+- [X] Solana enforces k_{\text{new}}\ge k_{\text{old}} and total‑reserve conservation; that’s good. Sui needs the same guards wired everywhere (you’ve started, but make them ubiquitous).
+- [X] Do i allow conditional lps to say they dont wsnt their lp cranked into spot on porposal end
+- [X] And do i allow lps to convert winning lp to spot lp
+- [NO] admin cap to cancel raises we dont like, so can force people to use UI???
+- [X] launchpad min raise amount investors can accept
+- [X] second dimension auction!!! amount that goes to founder every double for 10 doubles!!!!!!
+(ultimately founder is giving away something for free here but can't pay them millions for it due to perverse incentives)
 
-- [ ] Add hook for conditionalo coin order books need types and deep token
-- [ ] send data points!!!
-- [ ] dao subsidise conditional liquidity
-
-- [ ] NFT for LP'ing in AMM so other protocols can track positions!!! look at how turbos and cetus do it
+- [X] NFT for LP'ing in AMM so other protocols can track positions!!! look at how turbos and cetus do it
 https://suiscan.xyz/mainnet/object/0x31624aae279cf62b1697aaedad329349626cf6f0777b180a79b0660af582ba63/fields
 pawtato.app
 and patara.app
-- [ ] subsidise LPs during proposals
-- bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins
-
-FUTARCHY THICKNESS = DAO CREDIT RATING
-
- Early resolution feature!!!!! (really need this)
-
- hmm but if my dao doesnt want this they can but 90% liquidity in normal spot and 10% in a conditional amm\
-\
-oh snap \
-\
-I should make the ratio a param dao can configure!!!
-
-You have to force same ratio for all LPs.
-
-do metadao no cycles thing
-
-I am going to allow like 0 to 100%
-
-liquidity weight twap!!!
-
+- [X] subsidise LPs during proposals
+- [X] bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins
+- [X] Early resolution feature!!!!! (really need this)
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \
@@ -135,24 +125,10 @@ liquidity weight twap!!!
 4) need better market making of conditional markets ( thicker liqudiity)\
 5) need to teach traders to DCA not market order 
 
-ok I am considering adding this feature\
-  \
-  - bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side
+
+- [ ] - bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side
   registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning
   coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins\
-  \
-  only issue is it mean the quote spread for coisn during proposals where coditonal amms haven differnt prie could be quite bad\
-  \
-  \
-  evaluate this feature as a proffesional sui engineer\
-  \
-  futarchy platform ethusiant and also as a visionary thinker\
-  \
-  Like jane street would probably want this feature they could handle their own conditional coins\
-  \
-  and this really improves thickness of dao liqudity\
-  \
-  but makes coins less liquid during proposals but improves accuracy of information for daos\
 
 ter
 - [X]Write proposal to lock me up
@@ -172,8 +148,7 @@ ter
 - [ ]Build sdk
 - [ ]Make audit bot
 - [ ]Start using codex and gemini cli tools
-
-
+- [ ] Error Codes: While consistent, the use of raw u64 constants for errors is a bit dated. Modern Sui Move often uses custom structs or std::errors for more descriptive, on-chain error reporting, although this is a stylistic choice and doesn't affect correctness.
 
 
 # Look at jose seperate packages for each module kinda thing to make upgrades easy

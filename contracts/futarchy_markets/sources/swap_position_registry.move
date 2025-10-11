@@ -53,9 +53,9 @@ const ENoCrankerFeeForSelfRedeem: u64 = 7;
 
 // === Structs ===
 
-/// Shared registry storing all swap-generated conditional positions
-/// One registry per asset/stable pair (created with markets)
-public struct SwapPositionRegistry<phantom AssetType, phantom StableType> has key {
+/// Registry storing all swap-generated conditional positions
+/// One registry per asset/stable pair (stored in SpotAMM for clean aggregator interface)
+public struct SwapPositionRegistry<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     // Map: PositionKey → UID (the UID stores position data as dynamic fields)
     positions: Table<PositionKey, UID>,
@@ -440,25 +440,131 @@ public entry fun crank_position_3<AssetType, StableType,
     let stable_1 = extract_stable_coin<Cond1Stable>(&mut position_uid, 1, ctx);
     let stable_2 = extract_stable_coin<Cond2Stable>(&mut position_uid, 2, ctx);
 
-    // Burn losers, keep winner
-    let (winning_asset, winning_stable) = if (winning_outcome == 0) {
+    // Process each outcome inline (can't use shared function due to type incompatibility)
+    let (spot_asset_amt, spot_stable_amt, cranker_fee) = if (winning_outcome == 0) {
+        // Burn losers
         burn_if_nonzero(escrow, 1, asset_1, stable_1);
         burn_if_nonzero(escrow, 2, asset_2, stable_2);
-        (asset_0, stable_0)
-    } else if (winning_outcome == 1) {
-        burn_if_nonzero(escrow, 0, asset_0, stable_0);
-        burn_if_nonzero(escrow, 2, asset_2, stable_2);
-        (asset_1, stable_1)
-    } else {
-        burn_if_nonzero(escrow, 0, asset_0, stable_0);
-        burn_if_nonzero(escrow, 1, asset_1, stable_1);
-        (asset_2, stable_2)
-    };
 
-    // Convert winner to spot and pay fee (same logic as crank_position_2)
-    let (spot_asset, spot_stable, cranker_fee) = convert_to_spot_and_pay_fee(
-        escrow, winning_outcome, winning_asset, winning_stable, cranker_fee_bps, owner, ctx
-    );
+        // Convert winner to spot
+        let asset_amt = asset_0.value();
+        let stable_amt = stable_0.value();
+
+        let mut spot_asset = if (asset_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 0, asset_0);
+            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
+        } else {
+            coin::destroy_zero(asset_0);
+            coin::zero<AssetType>(ctx)
+        };
+
+        let spot_stable = if (stable_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 0, stable_0);
+            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
+        } else {
+            coin::destroy_zero(stable_0);
+            coin::zero<StableType>(ctx)
+        };
+
+        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
+            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
+            if (fee_amt > 0) {
+                let fee_coin = spot_asset.split(fee_amt, ctx);
+                transfer::public_transfer(fee_coin, ctx.sender());
+                fee_amt
+            } else { 0 }
+        } else { 0 };
+
+        let final_asset = spot_asset.value();
+        let final_stable = spot_stable.value();
+
+        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
+        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
+
+        (final_asset, final_stable, fee)
+    } else if (winning_outcome == 1) {
+        // Burn losers
+        burn_if_nonzero(escrow, 0, asset_0, stable_0);
+        burn_if_nonzero(escrow, 2, asset_2, stable_2);
+
+        // Convert winner to spot
+        let asset_amt = asset_1.value();
+        let stable_amt = stable_1.value();
+
+        let mut spot_asset = if (asset_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 1, asset_1);
+            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
+        } else {
+            coin::destroy_zero(asset_1);
+            coin::zero<AssetType>(ctx)
+        };
+
+        let spot_stable = if (stable_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 1, stable_1);
+            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
+        } else {
+            coin::destroy_zero(stable_1);
+            coin::zero<StableType>(ctx)
+        };
+
+        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
+            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
+            if (fee_amt > 0) {
+                let fee_coin = spot_asset.split(fee_amt, ctx);
+                transfer::public_transfer(fee_coin, ctx.sender());
+                fee_amt
+            } else { 0 }
+        } else { 0 };
+
+        let final_asset = spot_asset.value();
+        let final_stable = spot_stable.value();
+
+        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
+        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
+
+        (final_asset, final_stable, fee)
+    } else {
+        // Burn losers
+        burn_if_nonzero(escrow, 0, asset_0, stable_0);
+        burn_if_nonzero(escrow, 1, asset_1, stable_1);
+
+        // Convert winner to spot
+        let asset_amt = asset_2.value();
+        let stable_amt = stable_2.value();
+
+        let mut spot_asset = if (asset_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 2, asset_2);
+            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
+        } else {
+            coin::destroy_zero(asset_2);
+            coin::zero<AssetType>(ctx)
+        };
+
+        let spot_stable = if (stable_amt > 0) {
+            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 2, stable_2);
+            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
+        } else {
+            coin::destroy_zero(stable_2);
+            coin::zero<StableType>(ctx)
+        };
+
+        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
+            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
+            if (fee_amt > 0) {
+                let fee_coin = spot_asset.split(fee_amt, ctx);
+                transfer::public_transfer(fee_coin, ctx.sender());
+                fee_amt
+            } else { 0 }
+        } else { 0 };
+
+        let final_asset = spot_asset.value();
+        let final_stable = spot_stable.value();
+
+        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
+        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
+
+        (final_asset, final_stable, fee)
+    };
 
     object::delete(position_uid);
     registry.total_positions = registry.total_positions - 1;
@@ -466,8 +572,8 @@ public entry fun crank_position_3<AssetType, StableType,
 
     event::emit(SwapPositionCranked {
         owner, proposal_id, winning_outcome,
-        spot_asset_returned: spot_asset,
-        spot_stable_returned: spot_stable,
+        spot_asset_returned: spot_asset_amt,
+        spot_stable_returned: spot_stable_amt,
         cranker: ctx.sender(), cranker_fee,
         timestamp: clock.timestamp_ms(),
     });

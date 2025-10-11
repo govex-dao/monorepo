@@ -25,13 +25,14 @@ module futarchy_markets::arbitrage_executor;
 use futarchy_markets::spot_amm::{Self, SpotAMM};
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::proposal::{Self, Proposal};
-use futarchy_markets::swap::{Self, SwapSession};
+use futarchy_markets::swap_core::{Self, SwapSession};
 use futarchy_markets::arbitrage_math;
 use futarchy_markets::market_state;
+use futarchy_markets::swap_position_registry::SwapPositionRegistry;
+use sui::balance;
 use sui::coin::{Self, Coin};
 use sui::clock::Clock;
 use sui::tx_context::TxContext;
-use sui::transfer;
 
 // === Errors ===
 const ENoArbitrageProfit: u64 = 0;
@@ -63,9 +64,11 @@ public fun execute_spot_arbitrage_asset_to_stable<
     spot_pool: &mut SpotAMM<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
+    registry: &mut SwapPositionRegistry<AssetType, StableType>,
     swap_session: &SwapSession,
     stable_for_arb: Coin<StableType>,  // Spot stable to use for arbitrage
     min_profit_out: u64,  // Minimum acceptable profit (slippage protection)
+    recipient: address,  // Who receives dust and complete set redemptions
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<StableType> {
@@ -111,46 +114,30 @@ public fun execute_spot_arbitrage_asset_to_stable<
 
     let asset_amount = asset_from_spot.value();
 
-    // Step 2: Deposit asset into escrow and mint conditional assets for ALL outcomes
-    // This splits the asset into N conditional tokens (one per outcome)
-    // ISSUE #3 NOTE: Rounding - last outcome gets remainder to handle division rounding
+    // Step 2: QUANTUM MINT - Deposit asset ONCE to escrow, mint FULL amount to EACH outcome
+    // In quantum liquidity: 100 spot → 100 conditional in EACH outcome (not split)
+    // This is the correct Hanson-style futarchy behavior
+    let asset_balance = coin::into_balance(asset_from_spot);
+    coin_escrow::deposit_spot_liquidity(escrow, asset_balance, balance::zero<StableType>());
+
+    // Mint the FULL amount to each outcome (quantum replication)
     let mut conditional_assets = vector::empty<Coin<AssetConditionalCoin>>();
-    let amount_for_outcome = asset_amount / outcome_count;
-
-    // Handle all outcomes except the last
     let mut i = 0;
-    while (i < outcome_count - 1) {
-        // Split exact amount for this outcome
-        let asset_for_outcome = coin::split(&mut asset_from_spot, amount_for_outcome, ctx);
-
-        // Mint conditional asset for this outcome
-        let conditional_asset = coin_escrow::deposit_asset_and_mint_conditional<
+    while (i < outcome_count) {
+        let conditional_asset = coin_escrow::mint_conditional_asset<
             AssetType,
             StableType,
             AssetConditionalCoin
         >(
             escrow,
             i,
-            asset_for_outcome,
+            asset_amount,  // Full amount for each outcome
             ctx,
         );
 
         vector::push_back(&mut conditional_assets, conditional_asset);
         i = i + 1;
     };
-
-    // Handle last outcome with remaining asset (handles any rounding)
-    let last_conditional_asset = coin_escrow::deposit_asset_and_mint_conditional<
-        AssetType,
-        StableType,
-        AssetConditionalCoin
-    >(
-        escrow,
-        outcome_count - 1,
-        asset_from_spot,
-        ctx,
-    );
-    vector::push_back(&mut conditional_assets, last_conditional_asset);
 
     // Step 3: Swap conditional assets → conditional stables in ALL pools
     let mut conditional_stables = vector::empty<Coin<StableConditionalCoin>>();
@@ -164,7 +151,7 @@ public fun execute_spot_arbitrage_asset_to_stable<
         let conditional_asset = vector::swap_remove(&mut conditional_assets, 0);
 
         // Swap in this outcome's pool
-        let conditional_stable = swap::swap_asset_to_stable<
+        let conditional_stable = swap_core::swap_asset_to_stable<
             AssetType,
             StableType,
             AssetConditionalCoin,
@@ -266,8 +253,21 @@ public fun execute_spot_arbitrage_asset_to_stable<
                     to_burn_excess,
                 );
 
-                // Destroy any remaining dust (< 1 complete set, worthless)
-                coin::destroy_zero(excess_stable);
+                // Deposit remaining dust to registry (< 1 complete set, but user may collect more)
+                if (excess_stable.value() > 0) {
+                    let proposal_id = object::id(proposal);
+                    futarchy_markets::swap_position_registry::store_conditional_stable(
+                        registry,
+                        recipient,
+                        proposal_id,
+                        i,
+                        excess_stable,
+                        clock,
+                        ctx,
+                    );
+                } else {
+                    coin::destroy_zero(excess_stable);
+                };
             } else {
                 // Burn all of it (no remaining dust)
                 coin_escrow::burn_conditional_stable<
@@ -291,13 +291,27 @@ public fun execute_spot_arbitrage_asset_to_stable<
             ctx,
         );
 
-        // Transfer redeemed base tokens to user (not worthless dust!)
-        transfer::public_transfer(excess_redeemed, ctx.sender());
+        // Return redeemed base tokens to recipient (complete set, full value)
+        transfer::public_transfer(excess_redeemed, recipient);
     } else {
-        // No excess complete sets - just destroy empty coins
+        // No excess complete sets - deposit any dust to registry
         while (!vector::is_empty(&excess_stables)) {
-            let empty_excess = vector::pop_back(&mut excess_stables);
-            coin::destroy_zero(empty_excess);
+            let excess_dust = vector::pop_back(&mut excess_stables);
+            if (excess_dust.value() > 0) {
+                let proposal_id = object::id(proposal);
+                let outcome_idx = vector::length(&excess_stables);  // Reverse index
+                futarchy_markets::swap_position_registry::store_conditional_stable(
+                    registry,
+                    recipient,
+                    proposal_id,
+                    outcome_idx,
+                    excess_dust,
+                    clock,
+                    ctx,
+                );
+            } else {
+                coin::destroy_zero(excess_dust);
+            };
         };
     };
 
@@ -329,9 +343,11 @@ public fun execute_spot_arbitrage_stable_to_asset<
     spot_pool: &mut SpotAMM<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
+    registry: &mut SwapPositionRegistry<AssetType, StableType>,
     swap_session: &SwapSession,
     asset_for_arb: Coin<AssetType>,  // Spot asset to use for arbitrage
     min_profit_out: u64,  // Minimum acceptable profit (slippage protection)
+    recipient: address,  // Who receives dust and complete set redemptions
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<AssetType> {
@@ -375,43 +391,29 @@ public fun execute_spot_arbitrage_stable_to_asset<
 
     let stable_amount = stable_from_spot.value();
 
-    // Step 2: Mint conditional stables for all outcomes
-    // ISSUE #3 NOTE: Rounding - last outcome gets remainder to handle division rounding
+    // Step 2: QUANTUM MINT - Deposit stable ONCE to escrow, mint FULL amount to EACH outcome
+    // In quantum liquidity: 100 spot → 100 conditional in EACH outcome (not split)
+    let stable_balance = coin::into_balance(stable_from_spot);
+    coin_escrow::deposit_spot_liquidity(escrow, balance::zero<AssetType>(), stable_balance);
+
+    // Mint the FULL amount to each outcome (quantum replication)
     let mut conditional_stables = vector::empty<Coin<StableConditionalCoin>>();
-    let amount_for_outcome = stable_amount / outcome_count;
-
-    // Handle all outcomes except the last
     let mut i = 0;
-    while (i < outcome_count - 1) {
-        let stable_for_outcome = coin::split(&mut stable_from_spot, amount_for_outcome, ctx);
-
-        let conditional_stable = coin_escrow::deposit_stable_and_mint_conditional<
+    while (i < outcome_count) {
+        let conditional_stable = coin_escrow::mint_conditional_stable<
             AssetType,
             StableType,
             StableConditionalCoin,
         >(
             escrow,
             i,
-            stable_for_outcome,
+            stable_amount,  // Full amount for each outcome
             ctx,
         );
 
         vector::push_back(&mut conditional_stables, conditional_stable);
         i = i + 1;
     };
-
-    // Handle last outcome with remaining stable (handles any rounding)
-    let last_conditional_stable = coin_escrow::deposit_stable_and_mint_conditional<
-        AssetType,
-        StableType,
-        StableConditionalCoin,
-    >(
-        escrow,
-        outcome_count - 1,
-        stable_from_spot,
-        ctx,
-    );
-    vector::push_back(&mut conditional_stables, last_conditional_stable);
 
     // Step 3: Swap conditional stables → conditional assets
     let mut conditional_assets = vector::empty<Coin<AssetConditionalCoin>>();
@@ -421,7 +423,7 @@ public fun execute_spot_arbitrage_stable_to_asset<
         // CRITICAL FIX: Use swap_remove(0) to match forward index
         let conditional_stable = vector::swap_remove(&mut conditional_stables, 0);
 
-        let conditional_asset = swap::swap_stable_to_asset<
+        let conditional_asset = swap_core::swap_stable_to_asset<
             AssetType,
             StableType,
             AssetConditionalCoin,
@@ -522,8 +524,21 @@ public fun execute_spot_arbitrage_stable_to_asset<
                     to_burn_excess,
                 );
 
-                // Destroy any remaining dust (< 1 complete set, worthless)
-                coin::destroy_zero(excess_asset);
+                // Deposit remaining dust to registry (< 1 complete set, but user may collect more)
+                if (excess_asset.value() > 0) {
+                    let proposal_id = object::id(proposal);
+                    futarchy_markets::swap_position_registry::store_conditional_asset(
+                        registry,
+                        recipient,
+                        proposal_id,
+                        i,
+                        excess_asset,
+                        clock,
+                        ctx,
+                    );
+                } else {
+                    coin::destroy_zero(excess_asset);
+                };
             } else {
                 // Burn all of it (no remaining dust)
                 coin_escrow::burn_conditional_asset<
@@ -547,13 +562,27 @@ public fun execute_spot_arbitrage_stable_to_asset<
             ctx,
         );
 
-        // Transfer redeemed base tokens to user (not worthless dust!)
-        transfer::public_transfer(excess_redeemed, ctx.sender());
+        // Return redeemed base tokens to recipient (complete set, full value)
+        transfer::public_transfer(excess_redeemed, recipient);
     } else {
-        // No excess complete sets - just destroy empty coins
+        // No excess complete sets - deposit any dust to registry
         while (!vector::is_empty(&excess_assets)) {
-            let empty_excess = vector::pop_back(&mut excess_assets);
-            coin::destroy_zero(empty_excess);
+            let excess_dust = vector::pop_back(&mut excess_assets);
+            if (excess_dust.value() > 0) {
+                let proposal_id = object::id(proposal);
+                let outcome_idx = vector::length(&excess_assets);  // Reverse index
+                futarchy_markets::swap_position_registry::store_conditional_asset(
+                    registry,
+                    recipient,
+                    proposal_id,
+                    outcome_idx,
+                    excess_dust,
+                    clock,
+                    ctx,
+                );
+            } else {
+                coin::destroy_zero(excess_dust);
+            };
         };
     };
 
@@ -596,10 +625,12 @@ public fun execute_optimal_spot_arbitrage<
     spot_pool: &mut SpotAMM<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
+    registry: &mut SwapPositionRegistry<AssetType, StableType>,
     swap_session: &SwapSession,
     mut max_stable_coin: Coin<StableType>,  // Maximum stable willing to use
     mut max_asset_coin: Coin<AssetType>,    // Maximum asset willing to use
     min_profit_threshold: u64,              // Minimum profit to execute
+    recipient: address,                     // Who receives dust and complete set redemptions
     clock: &Clock,
     ctx: &mut TxContext,
 ): (Coin<StableType>, Coin<AssetType>) {
@@ -649,9 +680,11 @@ public fun execute_optimal_spot_arbitrage<
             spot_pool,
             proposal,
             escrow,
+            registry,
             swap_session,
             stable_for_arb,
             min_profit_threshold,
+            recipient,
             clock,
             ctx,
         );
@@ -685,9 +718,11 @@ public fun execute_optimal_spot_arbitrage<
             spot_pool,
             proposal,
             escrow,
+            registry,
             swap_session,
             asset_for_arb,
             min_profit_threshold,
+            recipient,
             clock,
             ctx,
         );
@@ -698,263 +733,6 @@ public fun execute_optimal_spot_arbitrage<
         // Return (unused_stable, total_asset)
         (max_stable_coin, asset_profit)
     }
-}
-
-
-// ============================================================================
-// UI-DRIVEN ARBITRAGE - USER-PROVIDED CALCULATIONS
-// ============================================================================
-//
-// MOTIVATION:
-// The onchain arbitrage solver (arbitrage_math.move) is powerful but costs gas:
-// - N=10 conditionals: ~11k gas for solver computation
-// - N=20 conditionals: ~18k gas for solver computation
-//
-// For users who want to:
-// 1. Save gas by calculating optimal amounts offchain (UI/SDK)
-// 2. Review arbitrage parameters before execution
-// 3. Set custom slippage tolerances
-// 4. Use their own arbitrage strategies
-//
-// ARCHITECTURE:
-// These functions bypass the onchain solver and directly call the executor
-// functions with user-provided amounts. All security validation is preserved.
-//
-// GAS SAVINGS:
-// - Auto-arb (onchain solver): ~26k gas total (~11k solver + ~15k execution)
-// - UI-driven (offchain calc): ~18k gas total (~3k validation + ~15k execution)
-// - Savings: ~8k gas (31% reduction)
-//
-// SECURITY MODEL:
-// ✅ Same security as auto-arb:
-//    - Profit validation (min_profit_out checked before execution)
-//    - Atomic execution (no MEV possible during transaction)
-//    - Complete set redemption (no value extraction)
-//    - K-invariant guards (prevents AMM manipulation)
-//
-// ⚠️  User can provide suboptimal amounts:
-//    - User's own loss if amount is not optimal
-//    - Protocol is protected (validation prevents negative profit)
-//    - Users should use trusted UI calculations
-//
-// 🚀 DESIGN DECISION: No Intermediate Slippage Checks
-//    - Sui transactions are ATOMIC (entire PTB executes or reverts)
-//    - MEV is caught by front-validation (before any execution starts)
-//    - Intermediate checks waste gas (~500-800 gas per check)
-//    - Final profit validation is sufficient (implicit via returned coin value)
-//    - This simplifies API (1 parameter) and follows Move best practices
-//
-// WHEN TO USE:
-// - Use auto-arb (execute_optimal_spot_arbitrage) for:
-//   * Convenience (no offchain calculation needed)
-//   * Guaranteed optimality (onchain solver finds best amount)
-//   * When gas cost is less important than optimal profit
-//
-// - Use UI-driven (execute_user_arbitrage_*) for:
-//   * Gas savings (skip solver, calculate offchain)
-//   * Custom strategies (user wants specific amounts)
-//   * Transparency (user reviews amounts before execution)
-//   * High-frequency arbitrage (gas optimization matters)
-//
-// VERSION COMPATIBILITY:
-// Added: 2025-10-11 (Version 1.0)
-// - No version field needed yet (additive change, backwards compatible)
-// - Future versions may add version field to AMM structs for state migrations
-// - Current functions work with all existing AMM pools (no upgrade required)
-//
-// EXAMPLE USAGE (Frontend/SDK):
-// ```typescript
-// // 1. Calculate optimal arbitrage offchain (same math as Move)
-// const { optimalAmount, expectedProfit, isSpotToCond } =
-//   calculateOptimalArbitrageBidirectional(spotReserves, conditionalReserves);
-//
-// // 2. User reviews and sets slippage
-// const userSlippage = 0.05; // 5%
-// const minProfitOut = Math.floor(expectedProfit * (1 - userSlippage));
-//
-// // 3. Build PTB for execution
-// const tx = new Transaction();
-// if (isSpotToCond) {
-//   const stableCoin = tx.splitCoins(userStable, [optimalAmount]);
-//   const profitCoin = tx.moveCall({
-//     target: `${pkg}::arbitrage_executor::execute_user_arbitrage_spot_to_cond`,
-//     arguments: [spotPool, proposal, escrow, swapSession, stableCoin,
-//                 tx.pure.u64(minProfitOut), clock],
-//     typeArguments: [AssetType, StableType, AssetCond, StableCond]
-//   });
-//   tx.transferObjects([profitCoin], userAddress);
-// }
-// ```
-//
-// ============================================================================
-
-/// Execute user-provided arbitrage: Spot → Conditional direction
-///
-/// User provides the arbitrage amount calculated offchain (via UI/SDK).
-/// This skips the onchain solver to save ~8k gas.
-///
-/// # Flow
-/// Stable input → Swap to asset in spot → Split to conditionals →
-/// Swap in all conditional pools → Recombine to stable → Return profit
-///
-/// # Arguments
-/// * `stable_for_arb` - Amount of stable to arbitrage (user-provided, not validated for optimality)
-/// * `min_profit_out` - Minimum acceptable profit (slippage protection, validated onchain)
-///
-/// # Gas Savings
-/// - Saves ~8k gas by skipping onchain solver computation
-/// - ~31% gas reduction vs execute_optimal_spot_arbitrage
-///
-/// # Security
-/// ✅ All security checks from execute_spot_arbitrage_asset_to_stable apply:
-/// - Validates min_profit_out BEFORE execution (line 94)
-/// - No intermediate slippage checks needed (atomic execution)
-/// - Complete set redemption with excess handling (lines 200-313)
-/// - K-invariant guards on all AMM operations
-///
-/// ⚠️  User can provide suboptimal amount (their own loss, protocol protected)
-///
-/// # Design: Why No Intermediate Slippage Checks?
-/// - Sui transactions are ATOMIC (no MEV possible during execution)
-/// - Front-validation catches MEV before any execution starts
-/// - Intermediate checks waste gas and add API complexity
-/// - Final profit validation is sufficient (implicit via returned coin value)
-///
-/// # Returns
-/// Coin<StableType> containing arbitrage profit
-///
-/// # Example (PTB)
-/// ```move
-/// // User calculated optimal_amount offchain
-/// let stable_coin = coin::split(&mut user_stable, optimal_amount, ctx);
-/// let profit = execute_user_arbitrage_spot_to_cond(
-///     spot_pool, proposal, escrow, session,
-///     stable_coin,
-///     min_profit_out,  // User's slippage tolerance
-///     clock, ctx
-/// );
-/// coin::join(&mut user_stable, profit);
-/// ```
-///
-/// Added: 2025-10-11 for UI-driven arbitrage feature
-public fun execute_user_arbitrage_spot_to_cond<
-    AssetType,
-    StableType,
-    AssetConditionalCoin,
-    StableConditionalCoin,
->(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    swap_session: &SwapSession,
-    stable_for_arb: Coin<StableType>,
-    min_profit_out: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<StableType> {
-    // Directly execute arbitrage with user-provided amount
-    // (Same executor function used by execute_optimal_spot_arbitrage)
-    // All security validation happens inside execute_spot_arbitrage_asset_to_stable
-    execute_spot_arbitrage_asset_to_stable<
-        AssetType,
-        StableType,
-        AssetConditionalCoin,
-        StableConditionalCoin,
-    >(
-        spot_pool,
-        proposal,
-        escrow,
-        swap_session,
-        stable_for_arb,
-        min_profit_out,
-        clock,
-        ctx,
-    )
-}
-
-
-/// Execute user-provided arbitrage: Conditional → Spot direction
-///
-/// User provides the arbitrage amount calculated offchain (via UI/SDK).
-/// This skips the onchain solver to save ~8k gas.
-///
-/// # Flow
-/// Asset input → Swap to stable in spot → Split to conditionals →
-/// Swap in all conditional pools → Recombine to asset → Return profit
-///
-/// # Arguments
-/// * `asset_for_arb` - Amount of asset to arbitrage (user-provided, not validated for optimality)
-/// * `min_profit_out` - Minimum acceptable profit (slippage protection, validated onchain)
-///
-/// # Gas Savings
-/// - Saves ~8k gas by skipping onchain solver computation
-/// - ~31% gas reduction vs execute_optimal_spot_arbitrage
-///
-/// # Security
-/// ✅ All security checks from execute_spot_arbitrage_stable_to_asset apply:
-/// - Validates min_profit_out BEFORE execution (line 358)
-/// - No intermediate slippage checks needed (atomic execution)
-/// - Complete set redemption with excess handling (lines 456-558)
-/// - K-invariant guards on all AMM operations
-///
-/// ⚠️  User can provide suboptimal amount (their own loss, protocol protected)
-///
-/// # Design: Why No Intermediate Slippage Checks?
-/// - Sui transactions are ATOMIC (no MEV possible during execution)
-/// - Front-validation catches MEV before any execution starts
-/// - Intermediate checks waste gas and add API complexity
-/// - Final profit validation is sufficient (implicit via returned coin value)
-///
-/// # Returns
-/// Coin<AssetType> containing arbitrage profit
-///
-/// # Example (PTB)
-/// ```move
-/// // User calculated optimal_amount offchain
-/// let asset_coin = coin::split(&mut user_asset, optimal_amount, ctx);
-/// let profit = execute_user_arbitrage_cond_to_spot(
-///     spot_pool, proposal, escrow, session,
-///     asset_coin,
-///     min_profit_out,  // User's slippage tolerance
-///     clock, ctx
-/// );
-/// coin::join(&mut user_asset, profit);
-/// ```
-///
-/// Added: 2025-10-11 for UI-driven arbitrage feature
-public fun execute_user_arbitrage_cond_to_spot<
-    AssetType,
-    StableType,
-    AssetConditionalCoin,
-    StableConditionalCoin,
->(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    swap_session: &SwapSession,
-    asset_for_arb: Coin<AssetType>,
-    min_profit_out: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<AssetType> {
-    // Directly execute arbitrage with user-provided amount
-    // (Same executor function used by execute_optimal_spot_arbitrage)
-    // All security validation happens inside execute_spot_arbitrage_stable_to_asset
-    execute_spot_arbitrage_stable_to_asset<
-        AssetType,
-        StableType,
-        AssetConditionalCoin,
-        StableConditionalCoin,
-    >(
-        spot_pool,
-        proposal,
-        escrow,
-        swap_session,
-        asset_for_arb,
-        min_profit_out,
-        clock,
-        ctx,
-    )
 }
 
 
@@ -1009,12 +787,382 @@ public fun execute_user_arbitrage_cond_to_spot<
 // ============================================================================
 
 
-// === Conditional → Spot Arbitrage (Complex) ===
-// NOTE: Pure Conditional→Spot arbitrage (without spot pool interaction) is complex:
-// - Requires acquiring tokens from ALL outcome markets to form complete sets
-// - Need external liquidity source or multi-step swaps
-// - Current implementation handles this via execute_spot_arbitrage_stable_to_asset
-//   (swaps in spot first, then uses conditionals)
+// === Conditional Arbitrage (Cross-Market) ===
 //
-// For direct conditional→spot routing without spot interaction, see swap_coordinator.move
+// These functions enable arbitrage AFTER a conditional swap by:
+// 1. Using conditional swap output as arbitrage budget
+// 2. Temporarily violating quantum invariant during atomic operations
+// 3. Validating invariant restoration at end
+//
+// Pattern: Burn partial conditionals → spot swap → split → conditional swaps → validate
+//
+// This is SAFE because:
+// - Operations are atomic (no intermediate state exposed)
+// - Quantum invariant validated at transaction end
+// - Complete sets ensure no value extraction
+
+/// Execute arbitrage after a conditional stable→asset swap
+///
+/// Strategy (uses swap output as budget):
+/// 1. Take conditional asset from swap output
+/// 2. Try to extract from ALL conditional markets to form complete set
+/// 3. If possible: Burn → spot swap → split → return to conditionals
+/// 4. Validate quantum invariant at end
+///
+/// Returns: (remaining_output, arb_profit)
+public fun execute_conditional_arbitrage_stable_to_asset<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    swap_session: &SwapSession,
+    outcome_idx: u64,                      // Which outcome we just swapped in
+    mut conditional_asset_output: Coin<AssetConditionalCoin>,  // Output from conditional swap
+    min_profit_threshold: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<AssetConditionalCoin>, Coin<AssetConditionalCoin>) {
+    let outcome_count = proposal::outcome_count(proposal);
+    assert!(outcome_count >= 2, EInvalidOutcomeCount);
+
+    let output_amount = conditional_asset_output.value();
+
+    // Use optimal solver to determine best arbitrage amount
+    let market_state = coin_escrow::get_market_state(escrow);
+    let conditional_pools = market_state::borrow_amm_pools(market_state);
+
+    // Calculate optimal amount using b-parameterization (ternary search)
+    let (optimal_arb_amount, expected_profit) = arbitrage_math::compute_optimal_conditional_to_spot<
+        AssetType,
+        StableType,
+    >(
+        spot_pool,
+        conditional_pools,
+        min_profit_threshold,
+    );
+
+    // Clamp to available output
+    let arb_amount = if (optimal_arb_amount > output_amount) {
+        output_amount
+    } else {
+        optimal_arb_amount
+    };
+
+    if (arb_amount == 0 || expected_profit < (min_profit_threshold as u128)) {
+        // Not profitable, return unchanged
+        return (conditional_asset_output, coin::zero<AssetConditionalCoin>(ctx))
+    };
+
+    // Split amount for arbitrage
+    let asset_for_arb = coin::split(&mut conditional_asset_output, arb_amount, ctx);
+
+    // Step 1: Burn conditional asset from this outcome and withdraw spot
+    // This temporarily breaks quantum invariant (will restore at end)
+    coin_escrow::burn_conditional_asset<AssetType, StableType, AssetConditionalCoin>(
+        escrow,
+        outcome_idx,
+        asset_for_arb,
+    );
+    let spot_asset = coin_escrow::withdraw_asset_balance(escrow, arb_amount, ctx);
+
+    // Step 2: Swap in spot (asset → stable)
+    let spot_stable = spot_amm::swap_asset_for_stable(
+        spot_pool,
+        spot_asset,
+        0,
+        clock,
+        ctx,
+    );
+
+    let stable_amount = spot_stable.value();
+
+    // Step 3: Split to conditional stables for ALL outcomes
+    let amount_per_outcome = stable_amount / outcome_count;
+    let mut conditional_stables = vector::empty<Coin<StableConditionalCoin>>();
+
+    let mut i = 0;
+    let mut remaining_stable = spot_stable;
+    while (i < outcome_count - 1) {
+        let stable_for_outcome = coin::split(&mut remaining_stable, amount_per_outcome, ctx);
+        let cond_stable = coin_escrow::deposit_stable_and_mint_conditional<
+            AssetType,
+            StableType,
+            StableConditionalCoin,
+        >(escrow, i, stable_for_outcome, ctx);
+        vector::push_back(&mut conditional_stables, cond_stable);
+        i = i + 1;
+    };
+
+    // Last outcome gets remainder
+    let last_cond_stable = coin_escrow::deposit_stable_and_mint_conditional<
+        AssetType,
+        StableType,
+        StableConditionalCoin,
+    >(escrow, outcome_count - 1, remaining_stable, ctx);
+    vector::push_back(&mut conditional_stables, last_cond_stable);
+
+    // Step 4: Swap conditional stables → conditional assets in ALL markets
+    let mut conditional_assets = vector::empty<Coin<AssetConditionalCoin>>();
+
+    i = 0;
+    while (i < outcome_count) {
+        let cond_stable = vector::swap_remove(&mut conditional_stables, 0);
+        let cond_asset = swap_core::swap_stable_to_asset<
+            AssetType,
+            StableType,
+            AssetConditionalCoin,
+            StableConditionalCoin,
+        >(
+            swap_session,
+            proposal,
+            escrow,
+            i,
+            cond_stable,
+            0,
+            clock,
+            ctx,
+        );
+        vector::push_back(&mut conditional_assets, cond_asset);
+        i = i + 1;
+    };
+    vector::destroy_empty(conditional_stables);
+
+    // Step 5: Restore position for the swapped outcome
+    // The arb should have generated extra tokens
+    let outcome_asset = vector::swap_remove(&mut conditional_assets, outcome_idx);
+
+    // Join with original output
+    coin::join(&mut conditional_asset_output, outcome_asset);
+
+    // Step 6: Handle other outcomes - keep as profit or recombine
+    // For simplicity, burn them back (maintain invariant)
+    i = 0;
+    while (i < outcome_count) {
+        if (i == outcome_idx) {
+            // Skip - already handled
+            i = i + 1;
+            continue
+        };
+
+        let other_outcome_asset = if (vector::length(&conditional_assets) > 0) {
+            vector::pop_back(&mut conditional_assets)
+        } else {
+            break
+        };
+
+        // Burn it back
+        coin_escrow::burn_conditional_asset<AssetType, StableType, AssetConditionalCoin>(
+            escrow,
+            if (i > outcome_idx) { i - 1 } else { i },
+            other_outcome_asset,
+        );
+
+        i = i + 1;
+    };
+    vector::destroy_empty(conditional_assets);
+
+    // Step 7: Validate quantum invariant restored
+    coin_escrow::validate_quantum_invariant_2<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+        AssetConditionalCoin,  // Same type for both outcomes
+        StableConditionalCoin,
+        StableConditionalCoin,
+    >(escrow);
+
+    // Calculate profit (output increased)
+    let final_amount = conditional_asset_output.value();
+    let profit_amount = if (final_amount > output_amount) {
+        final_amount - output_amount
+    } else {
+        0
+    };
+
+    let profit = if (profit_amount > 0) {
+        coin::split(&mut conditional_asset_output, profit_amount, ctx)
+    } else {
+        coin::zero<AssetConditionalCoin>(ctx)
+    };
+
+    (conditional_asset_output, profit)
+}
+
+/// Execute arbitrage after a conditional asset→stable swap
+///
+/// Similar to stable_to_asset but in reverse direction
+public fun execute_conditional_arbitrage_asset_to_stable<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
+    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    swap_session: &SwapSession,
+    outcome_idx: u64,
+    mut conditional_stable_output: Coin<StableConditionalCoin>,
+    min_profit_threshold: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (Coin<StableConditionalCoin>, Coin<StableConditionalCoin>) {
+    let outcome_count = proposal::outcome_count(proposal);
+    assert!(outcome_count >= 2, EInvalidOutcomeCount);
+
+    let output_amount = conditional_stable_output.value();
+
+    // Use optimal solver to determine best arbitrage amount
+    let market_state = coin_escrow::get_market_state(escrow);
+    let conditional_pools = market_state::borrow_amm_pools(market_state);
+
+    // Calculate optimal amount using b-parameterization
+    let (optimal_arb_amount, expected_profit) = arbitrage_math::compute_optimal_conditional_to_spot<
+        AssetType,
+        StableType,
+    >(
+        spot_pool,
+        conditional_pools,
+        min_profit_threshold,
+    );
+
+    // Clamp to available output
+    let arb_amount = if (optimal_arb_amount > output_amount) {
+        output_amount
+    } else {
+        optimal_arb_amount
+    };
+
+    if (arb_amount == 0 || expected_profit < (min_profit_threshold as u128)) {
+        return (conditional_stable_output, coin::zero<StableConditionalCoin>(ctx))
+    };
+
+    let stable_for_arb = coin::split(&mut conditional_stable_output, arb_amount, ctx);
+
+    // Step 1: Burn conditional stable and withdraw spot
+    coin_escrow::burn_conditional_stable<AssetType, StableType, StableConditionalCoin>(
+        escrow,
+        outcome_idx,
+        stable_for_arb,
+    );
+    let spot_stable = coin_escrow::withdraw_stable_balance(escrow, arb_amount, ctx);
+
+    // Step 2: Swap in spot (stable → asset)
+    let spot_asset = spot_amm::swap_stable_for_asset(
+        spot_pool,
+        spot_stable,
+        0,
+        clock,
+        ctx,
+    );
+
+    let asset_amount = spot_asset.value();
+
+    // Step 3: Split to conditional assets
+    let amount_per_outcome = asset_amount / outcome_count;
+    let mut conditional_assets = vector::empty<Coin<AssetConditionalCoin>>();
+
+    let mut i = 0;
+    let mut remaining_asset = spot_asset;
+    while (i < outcome_count - 1) {
+        let asset_for_outcome = coin::split(&mut remaining_asset, amount_per_outcome, ctx);
+        let cond_asset = coin_escrow::deposit_asset_and_mint_conditional<
+            AssetType,
+            StableType,
+            AssetConditionalCoin,
+        >(escrow, i, asset_for_outcome, ctx);
+        vector::push_back(&mut conditional_assets, cond_asset);
+        i = i + 1;
+    };
+
+    let last_cond_asset = coin_escrow::deposit_asset_and_mint_conditional<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+    >(escrow, outcome_count - 1, remaining_asset, ctx);
+    vector::push_back(&mut conditional_assets, last_cond_asset);
+
+    // Step 4: Swap conditional assets → stables in ALL markets
+    let mut conditional_stables = vector::empty<Coin<StableConditionalCoin>>();
+
+    i = 0;
+    while (i < outcome_count) {
+        let cond_asset = vector::swap_remove(&mut conditional_assets, 0);
+        let cond_stable = swap_core::swap_asset_to_stable<
+            AssetType,
+            StableType,
+            AssetConditionalCoin,
+            StableConditionalCoin,
+        >(
+            swap_session,
+            proposal,
+            escrow,
+            i,
+            cond_asset,
+            0,
+            clock,
+            ctx,
+        );
+        vector::push_back(&mut conditional_stables, cond_stable);
+        i = i + 1;
+    };
+    vector::destroy_empty(conditional_assets);
+
+    // Step 5: Restore and profit
+    let outcome_stable = vector::swap_remove(&mut conditional_stables, outcome_idx);
+    coin::join(&mut conditional_stable_output, outcome_stable);
+
+    // Burn other outcomes
+    i = 0;
+    while (i < outcome_count) {
+        if (i == outcome_idx) {
+            i = i + 1;
+            continue
+        };
+
+        let other_outcome_stable = if (vector::length(&conditional_stables) > 0) {
+            vector::pop_back(&mut conditional_stables)
+        } else {
+            break
+        };
+
+        coin_escrow::burn_conditional_stable<AssetType, StableType, StableConditionalCoin>(
+            escrow,
+            if (i > outcome_idx) { i - 1 } else { i },
+            other_outcome_stable,
+        );
+
+        i = i + 1;
+    };
+    vector::destroy_empty(conditional_stables);
+
+    // Validate invariant
+    coin_escrow::validate_quantum_invariant_2<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+        AssetConditionalCoin,
+        StableConditionalCoin,
+        StableConditionalCoin,
+    >(escrow);
+
+    let final_amount = conditional_stable_output.value();
+    let profit_amount = if (final_amount > output_amount) {
+        final_amount - output_amount
+    } else {
+        0
+    };
+
+    let profit = if (profit_amount > 0) {
+        coin::split(&mut conditional_stable_output, profit_amount, ctx)
+    } else {
+        coin::zero<StableConditionalCoin>(ctx)
+    };
+
+    (conditional_stable_output, profit)
+}
 

@@ -44,6 +44,12 @@ use std::option;
 const LENDING_WINDOW_SECONDS: u64 = 1800; // 30 minutes standard
 const GOVERNANCE_MAX_WINDOW: u64 = 7_776_000; // 90 days maximum
 
+// Oracle threshold for liquidity-weighted oracle switching (protocol-level parameter)
+// Default: 5000 bps (50%) - oracle trusts whichever market has more liquidity
+// If conditional_liquidity_ratio >= this threshold, oracle reads from conditionals
+// Otherwise, oracle reads from spot (even during proposals!)
+const ORACLE_CONDITIONAL_THRESHOLD_BPS: u64 = 5000;
+
 // Errors
 const ENoOracles: u64 = 1;
 const ESpotLocked: u64 = 2;
@@ -54,20 +60,21 @@ const ESpotLocked: u64 = 2;
 
 /// Get TWAP for lending protocols (continuous, 30-minute window)
 /// This ALWAYS returns a value, even during proposals
-/// During proposals: reads from highest conditional (but doesn't store)
+/// Uses liquidity-weighted logic: reads from thicker market (spot vs conditionals)
 /// After finalization: reads from spot (which has merged winning data)
 public fun get_lending_twap<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
-    // Check if spot is locked for proposal
-    if (spot_pool.is_locked_for_proposal()) {
-        // READ from highest priced conditional (no storage in spot)
-        // This is temporary - winner can change until finalization
+    // Liquidity-weighted oracle: trust whichever market has more liquidity
+    // Only read from conditionals if: locked AND conditional_ratio >= threshold
+    if (spot_pool.is_locked_for_proposal() &&
+        spot_pool.get_conditional_liquidity_ratio_bps() >= spot_pool.get_oracle_conditional_threshold_bps()) {
+        // Conditionals are thick (ratio >= threshold) - trust them
         get_highest_conditional_twap(conditional_pools, LENDING_WINDOW_SECONDS, clock)
     } else {
-        // Get TWAP from spot's SimpleTWAP (90-day window)
+        // Spot is thicker (ratio < threshold) - trust spot even if locked!
         spot_pool.get_twap(option::none(), clock)
     }
 }
@@ -79,7 +86,9 @@ public fun get_twap_custom_window<AssetType, StableType>(
     _seconds: u64,  // Note: Currently ignored, spot uses 90-day window
     clock: &Clock,
 ): u128 {
-    if (spot_pool.is_locked_for_proposal()) {
+    // Liquidity-weighted oracle: trust whichever market has more liquidity
+    if (spot_pool.is_locked_for_proposal() &&
+        spot_pool.get_conditional_liquidity_ratio_bps() >= spot_pool.get_oracle_conditional_threshold_bps()) {
         get_highest_conditional_twap(conditional_pools, _seconds, clock)
     } else {
         // Use spot's SimpleTWAP (always 90-day window)
@@ -93,7 +102,9 @@ public fun get_spot_price<AssetType, StableType>(
     conditional_pools: &vector<LiquidityPool>,
     _clock: &Clock,
 ): u128 {
-    if (spot_pool.is_locked_for_proposal()) {
+    // Liquidity-weighted oracle: trust whichever market has more liquidity
+    if (spot_pool.is_locked_for_proposal() &&
+        spot_pool.get_conditional_liquidity_ratio_bps() >= spot_pool.get_oracle_conditional_threshold_bps()) {
         get_highest_conditional_price(conditional_pools)
     } else {
         spot_pool.get_spot_price()
@@ -106,22 +117,23 @@ public fun get_spot_price<AssetType, StableType>(
 
 /// Get longest possible TWAP for governance decisions and token minting
 /// Uses SimpleTWAP from spot AMM (90-day window)
-/// During proposals: properly combines spot frozen + conditional live cumulatives
+/// Uses liquidity-weighted logic for proper cumulative combination during proposals
 public fun get_governance_twap<AssetType, StableType>(
     spot_pool: &SpotAMM<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
     // For governance, we want the 90-day TWAP with proper time weighting
-    if (spot_pool.is_locked_for_proposal()) {
-        // During proposal: extract conditional oracle data for proper cumulative combination
+    if (spot_pool.is_locked_for_proposal() &&
+        spot_pool.get_conditional_liquidity_ratio_bps() >= spot_pool.get_oracle_conditional_threshold_bps()) {
+        // Conditionals are thick - use sophisticated cumulative combination
         let winning_conditional_oracle = get_highest_conditional_oracle(conditional_pools);
         let conditional_data = spot_amm::extract_oracle_data(winning_conditional_oracle);
 
         // Sophisticated cumulative combination (not naive averaging)
         spot_pool.get_twap(option::some(conditional_data), clock)
     } else {
-        // Use spot's SimpleTWAP only
+        // Spot is thicker - use spot's SimpleTWAP only
         spot_pool.get_twap(option::none(), clock)
     }
 }

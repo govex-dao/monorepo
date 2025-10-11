@@ -5,6 +5,8 @@ use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::liquidity_initialize;
 use futarchy_markets::market_state;
 use futarchy_markets::coin_validation;
+use futarchy_markets::account_spot_pool;
+use futarchy_markets::quantum_lp_manager;
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;
@@ -143,6 +145,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     
     // Fee-related fields
     amm_total_fee_bps: u64,
+    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move to conditional markets (10-90%)
     fee_escrow: Balance<StableType>,
     treasury_address: address,
 
@@ -244,6 +247,7 @@ public fun initialize_market<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
+    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move (10-90%)
     max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     // Proposal specific parameters
@@ -458,6 +462,7 @@ public fun initialize_market<AssetType, StableType>(
             winning_outcome: option::none(),
         },
         amm_total_fee_bps,
+        conditional_liquidity_ratio_bps,
         fee_escrow,
         treasury_address,
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
@@ -509,6 +514,7 @@ public fun new_premarket<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
+    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move (10-90%)
     max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     title: String,
@@ -578,6 +584,7 @@ public fun new_premarket<AssetType, StableType>(
             winning_outcome: option::none(),
         },
         amm_total_fee_bps,
+        conditional_liquidity_ratio_bps,
         fee_escrow,
         treasury_address,
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
@@ -1313,7 +1320,9 @@ public fun get_market_init_params<AssetType, StableType>(proposal: &Proposal<Ass
 public fun advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_pool: &mut account_spot_pool::AccountSpotPool<AssetType, StableType>,
     clock: &Clock,
+    ctx: &mut TxContext,
 ): bool {
     let current_time = clock.timestamp_ms();
     // Use market_initialized_at for timing calculations instead of created_at
@@ -1347,6 +1356,15 @@ public fun advance_state<AssetType, StableType>(
                 conditional_amm::set_oracle_start_time(pool, market_id, trading_start_time);
                 i = i + 1;
             };
+
+            // Auto-quantum split: Transfer liquidity from spot to conditional AMMs
+            quantum_lp_manager::auto_quantum_split_on_proposal_start(
+                spot_pool,
+                escrow,
+                proposal.conditional_liquidity_ratio_bps,  // Pass DAO-configured ratio (10-90%)
+                clock,
+                ctx,
+            );
 
             return true
         };
@@ -1980,4 +1998,21 @@ fun u64_to_ascii(mut num: u64): AsciiString {
     // Reverse digits
     vector::reverse(&mut digits);
     ascii::string(digits)
+}
+
+// === LP Preferences Dynamic Field Management ===
+
+/// Get mutable reference to proposal's UID for dynamic field operations
+/// Package-visible to allow other futarchy_markets modules to use dynamic fields
+public(package) fun borrow_uid_mut<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>
+): &mut UID {
+    &mut proposal.id
+}
+
+/// Get immutable reference to proposal's UID for dynamic field reads
+public(package) fun borrow_uid<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): &UID {
+    &proposal.id
 }

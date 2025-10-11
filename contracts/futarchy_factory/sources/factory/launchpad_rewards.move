@@ -69,6 +69,8 @@ const MAX_FOUNDER_ALLOCATION_BPS: u64 = 2000; // Max 20% for founders
 /// This is called automatically during launchpad DAO creation
 ///
 /// # Arguments
+/// * `dao_id` - DAO ID for the created DAO
+/// * `launchpad_price` - Launchpad raise price (stable per token, scaled 1e12)
 /// * `founders` - Vector of founder addresses
 /// * `founder_allocations_bps` - Vector of allocations in basis points (must sum to total_founder_allocation_bps)
 /// * `total_founder_allocation_bps` - Total allocation for all founders (max 20% = 2000 bps)
@@ -79,6 +81,7 @@ const MAX_FOUNDER_ALLOCATION_BPS: u64 = 2000; // Max 20% for founders
 /// - founder_allocations_bps = [400, 350, 250] (40%, 35%, 25% of the 10%)
 public fun setup_founder_rewards<AssetType>(
     dao_id: ID,
+    launchpad_price: u128,  // Raise price (stable/token) scaled 1e12
     treasury_cap: &TreasuryCap<AssetType>,
     founders: vector<address>,
     founder_allocations_bps: vector<u64>,
@@ -118,6 +121,7 @@ public fun setup_founder_rewards<AssetType>(
     // Always use tiered mints (simpler, more flexible)
     setup_tiered_founder_rewards<AssetType>(
         dao_id,
+        launchpad_price,
         founders,
         founder_allocations_bps,
         total_founder_allocation,
@@ -134,6 +138,7 @@ public fun setup_founder_rewards<AssetType>(
 /// Distributes rewards across multiple founders with custom allocations
 fun setup_tiered_founder_rewards<AssetType>(
     dao_id: ID,
+    launchpad_price: u128,
     founders: vector<address>,
     founder_allocations_bps: vector<u64>,
     total_allocation: u64,
@@ -209,6 +214,7 @@ fun setup_tiered_founder_rewards<AssetType>(
 
     // Create the shared PriceBasedMintGrant object with proper DAO ID
     oracle_actions::create_milestone_rewards<AssetType, sui::sui::SUI>(
+        launchpad_price,  // Launchpad raise price for strike calculations
         price_multipliers,
         recipients_per_tier,
         descriptions,

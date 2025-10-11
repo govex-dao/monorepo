@@ -92,6 +92,7 @@ public struct DAOCreated has copy, drop {
     asset_type: UTF8String,
     stable_type: UTF8String,
     creator: address,
+    affiliate_id: UTF8String,
     timestamp: u64,
 }
 
@@ -149,6 +150,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
+    affiliate_id: UTF8String,   // Partner identifier (UUID from subclient, empty string if none)
     min_asset_amount: u64,
     min_stable_amount: u64,
     dao_name: AsciiString,
@@ -173,6 +175,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
         extensions,
         fee_manager,
         payment,
+        affiliate_id,
         min_asset_amount,
         min_stable_amount,
         dao_name,
@@ -206,6 +209,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
+    affiliate_id: UTF8String,
     min_asset_amount: u64,
     min_stable_amount: u64,
     dao_name: AsciiString,
@@ -235,7 +239,10 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
-    
+
+    // DoS protection: limit affiliate_id length (UUID is 36 chars, leave room for custom IDs)
+    assert!(affiliate_id.length() <= 64, EInvalidStateForAction);
+
     // Validate parameters
     assert!(twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
@@ -258,7 +265,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         amm_total_fee_bps, // spot AMM fee (same as conditional)
         0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
         1000, // max_amm_swap_percent_bps (10% max swap per proposal)
-        10000, // conditional_liquidity_ratio_bps (100% to conditional - Hanson quantum model)
+        8000, // conditional_liquidity_ratio_bps (80% to conditional - enforced 10-90% range)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -413,7 +420,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
-    
+
     // Emit event
     event::emit(DAOCreated {
         account_id,
@@ -421,6 +428,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
+        affiliate_id,
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -459,7 +467,10 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
-    
+
+    // DoS protection: limit affiliate_id length (UUID is 36 chars, leave room for custom IDs)
+    assert!(affiliate_id.length() <= 64, EInvalidStateForAction);
+
     // Validate parameters
     assert!(twap_step_max >= TWAP_MINIMUM_WINDOW_CAP, ELowTwapWindowCap);
     assert!(review_period_ms <= MAX_REVIEW_TIME, ELongReviewTime);
@@ -482,7 +493,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         amm_total_fee_bps, // spot AMM fee (same as conditional)
         0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
         1000, // max_amm_swap_percent_bps (10% max swap per proposal)
-        10000, // conditional_liquidity_ratio_bps (100% to conditional - Hanson quantum model)
+        8000, // conditional_liquidity_ratio_bps (80% to conditional - enforced 10-90% range)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -630,7 +641,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 
     // Update factory state
     factory.dao_count = factory.dao_count + 1;
-    
+
     // Emit event
     event::emit(DAOCreated {
         account_id,
@@ -638,6 +649,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
+        affiliate_id: b"".to_string(),  // Test function uses empty string
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -787,6 +799,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
+        affiliate_id: b"".to_string(),  // Unshared DAO creation uses empty string (set via init actions)
         timestamp: clock.timestamp_ms(),
     });
 

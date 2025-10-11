@@ -179,36 +179,37 @@ public fun swap_asset_to_stable(
     let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
 
     // When selling outcome tokens (asset -> stable):
-    // 1. Calculate the gross output amount (amount_out_before_fee) based on current reserves and amount_in.
-    // 2. Calculate the fee amount from this gross output.
-    // 3. Split the fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
-    // 4. The `protocol_share` is moved to `pool.protocol_fees`.
-    // 5. The `lp_share` is left in the pool's stable reserve to reward LPs, causing `k` to grow.
-    // 6. The user receives the net output `amount_out = amount_out_before_fee - total_fee`.
-    let amount_out_before_fee = calculate_output(
-        amount_in,
-        pool.asset_reserve,
-        pool.stable_reserve,
-    );
-
-    // Calculate fee from stable output
-    let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
+    // STANDARD UNISWAP V2 FEE MODEL: Take fee from INPUT
+    // 1. Calculate the fee from the input amount (amount_in).
+    // 2. The actual amount used for the swap (amount_in_after_fee) is the original input minus the fee.
+    // 3. Split the total fee: 80% for LPs (lp_share), 20% for the protocol (protocol_share).
+    // 4. `protocol_share` is moved to `pool.protocol_fees`.
+    // 5. `amount_in_after_fee` is used to calculate the swap output.
+    // 6. The pool's asset reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
+    let total_fee = calculate_fee(amount_in, pool.fee_percent);
     let lp_share = math::mul_div_to_64(total_fee, constants::conditional_lp_fee_share_bps(), constants::total_fee_bps());
     let protocol_share = total_fee - lp_share;
 
-    // Net amount for the user
-    let amount_out = amount_out_before_fee - total_fee;
+    // Amount used for the swap calculation (after removing fees)
+    let amount_in_after_fee = amount_in - total_fee;
+
+    // Calculate output based on amount after fee
+    let amount_out = calculate_output(
+        amount_in_after_fee,
+        pool.asset_reserve,
+        pool.stable_reserve,
+    );
 
     // Send protocol's share to the fee collector
     pool.protocol_fees = pool.protocol_fees + protocol_share;
 
     assert!(amount_out >= min_amount_out, EExcessiveSlippage);
-    assert!(amount_out_before_fee < pool.stable_reserve, EPoolEmpty);
+    assert!(amount_out < pool.stable_reserve, EPoolEmpty);
 
     let price_impact = calculate_price_impact(
-        amount_in,
+        amount_in_after_fee,
         pool.asset_reserve,
-        amount_out_before_fee, // Use before-fee amount for impact calculation
+        amount_out,
         pool.stable_reserve,
     );
 
@@ -229,16 +230,16 @@ public fun swap_asset_to_stable(
     // Update SimpleTWAP oracle (for external consumers)
     simple_twap::update(&mut pool.simple_twap, old_price, clock);
 
-    // Update reserves.
-    pool.asset_reserve = pool.asset_reserve + amount_in;
+    // Update reserves. The amount added to the asset reserve is the portion used for the swap
+    // PLUS the LP share of the fee. The protocol share was already removed.
+    let new_asset_reserve = pool.asset_reserve + amount_in_after_fee + lp_share;
+    assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);
 
-    // The stable reserve is reduced by the gross output, BUT the LPs' share is kept in the pool.
-    // So we add it back.
-    // This is equivalent to `pool.stable_reserve - (amount_out + protocol_share)`
-    pool.stable_reserve = pool.stable_reserve - amount_out_before_fee + lp_share;
+    pool.asset_reserve = new_asset_reserve;
+    pool.stable_reserve = pool.stable_reserve - amount_out;
 
     // K-GUARD: Validate k increased (LP fees stay in pool, so k must grow)
-    // Formula: (asset + amount_in) * (stable - amount_out - protocol_share) >= asset * stable
+    // Formula: (asset + amount_in_after_fee + lp_share) * (stable - amount_out) >= asset * stable
     let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
     assert!(k_after >= k_before, EKInvariantViolation);
 
@@ -408,20 +409,29 @@ public fun add_liquidity_proportional(
     
     // Slippage protection: ensure LP tokens minted meet minimum expectation
     assert!(lp_to_mint >= min_lp_out, EExcessiveSlippage);
-    
+
+    // K-GUARD: Capture k before adding liquidity
+    // WHY: Adding liquidity MUST strictly increase k. If not, arithmetic bug or overflow.
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+
     // Update reserves with overflow checks
     let new_asset_reserve = pool.asset_reserve + asset_amount;
     let new_stable_reserve = pool.stable_reserve + stable_amount;
     // Use the precomputed total supply
-    
+
     // Check for overflow
     assert!(new_asset_reserve >= pool.asset_reserve, EOverflow);
     assert!(new_stable_reserve >= pool.stable_reserve, EOverflow);
     assert!(new_lp_supply >= pool.lp_supply, EOverflow);
-    
+
     pool.asset_reserve = new_asset_reserve;
     pool.stable_reserve = new_stable_reserve;
     pool.lp_supply = new_lp_supply;
+
+    // K-GUARD: Validate k strictly increased
+    // Formula: (asset + asset_amount) * (stable + stable_amount) > asset * stable
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    assert!(k_after > k_before, EKInvariantViolation);
 
     // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
@@ -452,26 +462,37 @@ public fun remove_liquidity_proportional(
     // Check for zero liquidity in the pool first to provide a more accurate error message
     assert!(pool.lp_supply > 0, EZeroLiquidity);
     assert!(lp_amount > 0, EZeroAmount);
-    
+
+    // K-GUARD: Capture k before removing liquidity
+    // WHY: Removing liquidity MUST strictly decrease k (but stay ≥ minimum).
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+
     // Calculate proportional share to remove from this AMM
     let asset_to_remove = math::mul_div_to_64(lp_amount, pool.asset_reserve, pool.lp_supply);
     let stable_to_remove = math::mul_div_to_64(lp_amount, pool.stable_reserve, pool.lp_supply);
-    
+
     // Ensure minimum liquidity remains
     assert!(pool.asset_reserve > asset_to_remove, EPoolEmpty);
     assert!(pool.stable_reserve > stable_to_remove, EPoolEmpty);
     assert!(pool.lp_supply > lp_amount, EInsufficientLPTokens);
-    
+
     // Ensure remaining liquidity is above minimum threshold
     let remaining_asset = pool.asset_reserve - asset_to_remove;
     let remaining_stable = pool.stable_reserve - stable_to_remove;
     let remaining_k = math::mul_div_to_128(remaining_asset, remaining_stable, 1);
     assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), ELowLiquidity);
-    
+
     // Update pool state (underflow already checked by earlier asserts)
     pool.asset_reserve = pool.asset_reserve - asset_to_remove;
     pool.stable_reserve = pool.stable_reserve - stable_to_remove;
     pool.lp_supply = pool.lp_supply - lp_amount;
+
+    // K-GUARD: Validate k strictly decreased but stays above minimum
+    // Formula: (asset - asset_to_remove) * (stable - stable_to_remove) < asset * stable
+    //          AND result >= MINIMUM_LIQUIDITY
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    assert!(k_after < k_before, EKInvariantViolation);  // Must decrease
+    assert!(k_after >= (MINIMUM_LIQUIDITY as u128), ELowLiquidity);  // But stay above min
 
     // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
@@ -542,15 +563,15 @@ public fun get_twap(pool: &mut LiquidityPool, clock: &Clock): u128 {
 }
 
 public fun quote_swap_asset_to_stable(pool: &LiquidityPool, amount_in: u64): u64 {
-    // First calculate total output
-    let amount_out_before_fee = calculate_output(
-        amount_in,
+    // Take fee from input (matching swap function)
+    let total_fee = calculate_fee(amount_in, pool.fee_percent);
+    let amount_in_after_fee = amount_in - total_fee;
+    // Calculate output from after-fee amount
+    calculate_output(
+        amount_in_after_fee,
         pool.asset_reserve,
         pool.stable_reserve,
-    );
-    // Then take fee from stable output (same as swap function)
-    let fee_amount = calculate_fee(amount_out_before_fee, pool.fee_percent);
-    amount_out_before_fee - fee_amount
+    )
 }
 
 public fun quote_swap_stable_to_asset(pool: &LiquidityPool, amount_in: u64): u64 {
@@ -596,7 +617,9 @@ public(package) fun feeless_swap_asset_to_stable(
     // Allow tiny rounding tolerance (1 part in 10^6)
     let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
     let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
-    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    // 0.0001% tolerance (min 1 to prevent zero at low liquidity)
+    let tolerance_calc = k_before / 1000000;
+    let tolerance = if (tolerance_calc < 1) { 1 } else { tolerance_calc };
     assert!(k_delta <= tolerance, EKInvariantViolation);
 
     stable_out
@@ -633,7 +656,9 @@ public(package) fun feeless_swap_stable_to_asset(
     // Allow tiny rounding tolerance (1 part in 10^6)
     let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
     let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
-    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    // 0.0001% tolerance (min 1 to prevent zero at low liquidity)
+    let tolerance_calc = k_before / 1000000;
+    let tolerance = if (tolerance_calc < 1) { 1 } else { tolerance_calc };
     assert!(k_delta <= tolerance, EKInvariantViolation);
 
     asset_out
@@ -642,7 +667,7 @@ public(package) fun feeless_swap_stable_to_asset(
 /// Simulate asset→stable swap without executing
 /// Pure function for arbitrage optimization
 ///
-/// AUDIT FIX: Match execution exactly - fee charged on OUTPUT only (not input!)
+/// STANDARD UNISWAP V2 FEE MODEL: Fee charged on INPUT (consistent with swap execution)
 public fun simulate_swap_asset_to_stable(
     pool: &LiquidityPool,
     amount_in: u64,
@@ -650,23 +675,23 @@ public fun simulate_swap_asset_to_stable(
     if (amount_in == 0) return 0;
     if (pool.asset_reserve == 0 || pool.stable_reserve == 0) return 0;
 
-    // CRITICAL FIX: Match swap_asset_to_stable execution exactly
-    // Fee is charged on OUTPUT, NOT input!
-    let amount_out_before_fee = calculate_output(
-        amount_in,  // No input fee!
+    // Take fee from input (matching swap function)
+    let total_fee = calculate_fee(amount_in, pool.fee_percent);
+    let amount_in_after_fee = if (amount_in > total_fee) {
+        amount_in - total_fee
+    } else {
+        return 0
+    };
+
+    let stable_out = calculate_output(
+        amount_in_after_fee,
         pool.asset_reserve,
         pool.stable_reserve,
     );
 
-    if (amount_out_before_fee >= pool.stable_reserve) return 0;
+    if (stable_out >= pool.stable_reserve) return 0;
 
-    // Calculate fee from output (matching swap function logic)
-    let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
-    if (amount_out_before_fee > total_fee) {
-        amount_out_before_fee - total_fee
-    } else {
-        0
-    }
+    stable_out
 }
 
 /// Simulate stable→asset swap without executing

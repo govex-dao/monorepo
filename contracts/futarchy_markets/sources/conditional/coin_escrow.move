@@ -604,3 +604,35 @@ public entry fun recombine_asset_complete_set_3<AssetType, StableType, Cond0, Co
     let spot_asset = withdraw_asset_balance(escrow, amount, ctx);
     transfer::public_transfer(spot_asset, ctx.sender());
 }
+
+// === Quantum Invariant Validation (For Arbitrage) ===
+
+/// Validate quantum invariant at end of transaction (for 2-outcome markets)
+///
+/// This function checks that the quantum liquidity invariant holds:
+/// - spot_asset_balance == each_outcome_asset_supply (for ALL outcomes)
+/// - spot_stable_balance == each_outcome_stable_supply (for ALL outcomes)
+///
+/// This is designed to be called at the END of arbitrage operations, allowing
+/// temporary invariant violations during atomic operations but ensuring the
+/// invariant is restored before transaction completion.
+///
+/// For 2-outcome markets with outcomes 0 and 1.
+public fun validate_quantum_invariant_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+) {
+    let spot_asset = escrow.escrowed_asset.value();
+    let spot_stable = escrow.escrowed_stable.value();
+
+    // Check asset supplies match spot for both outcomes
+    let cond0_asset_supply = get_asset_supply<AssetType, StableType, Cond0Asset>(escrow, 0);
+    let cond1_asset_supply = get_asset_supply<AssetType, StableType, Cond1Asset>(escrow, 1);
+    assert!(cond0_asset_supply == spot_asset, EInvariantViolation);
+    assert!(cond1_asset_supply == spot_asset, EInvariantViolation);
+
+    // Check stable supplies match spot for both outcomes
+    let cond0_stable_supply = get_stable_supply<AssetType, StableType, Cond0Stable>(escrow, 0);
+    let cond1_stable_supply = get_stable_supply<AssetType, StableType, Cond1Stable>(escrow, 1);
+    assert!(cond0_stable_supply == spot_stable, EInvariantViolation);
+    assert!(cond1_stable_supply == spot_stable, EInvariantViolation);
+}

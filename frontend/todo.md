@@ -10,3 +10,4 @@ read https://metadao.mintlify.app/idea-to-funded/after-ico
 - [ ] on mobile activity copy button next to trader goes very small fix this
 - [ ] https://docs.blockvision.org/reference/retrieve-account-defi-portfolio
 get in here
+- [ ] FUTARCHY THICKNESS = DAO CREDIT RATING
