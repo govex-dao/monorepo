@@ -173,7 +173,9 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
     // - Burns conditional asset coins
     // - Updates AMM reserves (sell asset, making it cheaper)
     // - Mints conditional stable coins (output)
+    let session = swap::begin_swap_session(proposal);
     let conditional_stable = swap::swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+        &session,
         proposal,
         escrow,
         (config.target_outcome as u64),
@@ -182,6 +184,7 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
         clock,
         ctx,
     );
+    swap::finalize_swap_session(session, proposal, escrow, clock);
 
     // Validate slippage protection
     let conditional_amount = conditional_stable.value();
@@ -247,6 +250,9 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
     let mut stable_balance = withdrawn_stable.into_balance();
     let mut asset_coins = vector::empty<Coin<AssetType>>();
 
+    // Begin swap session once for all swaps in this function
+    let session = swap::begin_swap_session(proposal);
+
     // Process each outcome
     let mut outcome_idx = 0;
     while (outcome_idx < config.outcome_amounts.length()) {
@@ -268,6 +274,7 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
 
             // Step 3: Swap conditional stable → conditional asset in AMM
             let conditional_asset = swap::swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+                &session,
                 proposal,
                 escrow,
                 outcome_idx,
@@ -303,6 +310,9 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
 
         outcome_idx = outcome_idx + 1;
     };
+
+    // Finalize swap session after all swaps complete
+    swap::finalize_swap_session(session, proposal, escrow, clock);
 
     // Ensure all stable was used
     assert!(stable_balance.value() == 0, EAmountMismatch);

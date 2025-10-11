@@ -91,6 +91,7 @@ use futarchy_one_shot_utils::math;
 use futarchy_markets::conditional_amm;
 use futarchy_markets::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
+use futarchy_markets::position_nft;
 
 /// Data structure for passing conditional oracle information
 /// (Move doesn't allow Option<&T>, so we pass values instead of references)
@@ -134,6 +135,9 @@ const PRICE_SCALE: u128 = 1_000_000_000_000; // 10^12 for price precision
 // Oracle staleness limit (1 hour)
 const MAX_ORACLE_STALENESS_MS: u64 = 3_600_000;
 
+// K-invariant error (guards constant-product invariant)
+const EKInvariantViolation: u64 = 12;
+
 /// Simple spot AMM for <AssetType, StableType> with SimpleTWAP oracle
 public struct SpotAMM<phantom AssetType, phantom StableType> has key, store {
     id: UID,
@@ -145,12 +149,8 @@ public struct SpotAMM<phantom AssetType, phantom StableType> has key, store {
     simple_twap: Option<SimpleTWAP>,  // None until first liquidity added
     // Track when DAO liquidity was last used in a proposal
     last_proposal_usage: Option<u64>,
-}
-
-/// Spot LP token
-public struct SpotLP<phantom AssetType, phantom StableType> has key, store {
-    id: UID,
-    amount: u64,
+    // Protocol fees accumulated (in stable token)
+    protocol_fees_stable: Balance<StableType>,
 }
 
 /// Event emitted when spot price updates
@@ -181,6 +181,7 @@ public fun new<AssetType, StableType>(fee_bps: u64, ctx: &mut TxContext): SpotAM
         fee_bps,
         simple_twap: option::none(),  // Initialize when first liquidity added
         last_proposal_usage: option::none(),
+        protocol_fees_stable: balance::zero<StableType>(),
     }
 }
 
@@ -292,14 +293,21 @@ public entry fun add_liquidity<AssetType, StableType>(
 
     pool.lp_supply = pool.lp_supply + minted;
 
-    let lp = SpotLP<AssetType, StableType> { id: object::new(ctx), amount: minted };
-    transfer::public_transfer(lp, ctx.sender());
+    // Mint NFT position receipt
+    let position = position_nft::mint_spot_position<AssetType, StableType>(
+        object::id(pool),
+        minted,
+        pool.fee_bps,
+        clock,
+        ctx
+    );
+    transfer::public_transfer(position, ctx.sender());
 }
 
 /// Remove liquidity (entry)
 public entry fun remove_liquidity<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
-    lp: SpotLP<AssetType, StableType>,
+    position: position_nft::SpotLPPosition<AssetType, StableType>,
     min_asset_out: u64,
     min_stable_out: u64,
     clock: &Clock,
@@ -309,8 +317,11 @@ public entry fun remove_liquidity<AssetType, StableType>(
     if (pool.simple_twap.is_some()) {
         update_twap(pool, clock);
     };
-    let SpotLP { id, amount } = lp;
-    id.delete();
+
+    // Get LP amount from NFT position and burn it
+    let amount = position_nft::get_spot_lp_amount(&position);
+    position_nft::burn_spot_position(position, clock, ctx);
+
     assert!(amount > 0, EZeroAmount);
     assert!(pool.lp_supply > MINIMUM_LIQUIDITY, EInsufficientLiquidity);
 
@@ -326,76 +337,168 @@ public entry fun remove_liquidity<AssetType, StableType>(
     transfer::public_transfer(s_out, ctx.sender());
 }
 
-/// Swap asset for stable (simple Uniswap V2 style)
-public entry fun swap_asset_for_stable<AssetType, StableType>(
+/// Swap asset for stable (simple spot swap, no inline arbitrage)
+/// Arbitrage happens externally via PTBs - see ARBITRAGE_ANALYSIS.md
+///
+/// Fee split model (matches conditional AMM):
+/// - Calculate gross stable output based on constant product
+/// - Take fee from this output
+/// - Split fee: spot_lp_fee_share_bps to LPs (stays in pool), remainder to protocol
+/// - User receives net stable output
+public fun swap_asset_for_stable<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    asset_in: Coin<AssetType>,
+    min_stable_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    assert!(pool.simple_twap.is_some(), ENotInitialized);
+    update_twap(pool, clock);
+
+    let amount_in = asset_in.value();
+    assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Capture reserves before swap to validate constant-product invariant
+    // WHY: LP fees stay in pool so k must GROW, protocol fees don't. This catches rounding bugs.
+    let asset_before = pool.asset_reserve.value();
+    let stable_before = pool.stable_reserve.value();
+    let k_before = (asset_before as u128) * (stable_before as u128);
+
+    // Calculate gross output using constant product formula (x * y = k)
+    let stable_out_before_fee = math::mul_div_to_64(
+        amount_in,
+        stable_before,
+        asset_before + amount_in
+    );
+
+    // Calculate fee from stable output
+    let total_fee = math::mul_div_to_64(stable_out_before_fee, pool.fee_bps, constants::max_fee_bps());
+    let lp_share = math::mul_div_to_64(total_fee, constants::spot_lp_fee_share_bps(), constants::total_fee_bps());
+    let protocol_share = total_fee - lp_share;
+
+    // Net amount for user
+    let stable_out = stable_out_before_fee - total_fee;
+    assert!(stable_out >= min_stable_out, ESlippageExceeded);
+    assert!(stable_out_before_fee < stable_before, EInsufficientLiquidity);
+
+    // Update reserves
+    pool.asset_reserve.join(asset_in.into_balance());
+
+    // Protocol share goes to protocol_fees_stable, LP share stays in pool
+    pool.protocol_fees_stable.join(pool.stable_reserve.split(protocol_share));
+    let stable_coin = coin::from_balance(pool.stable_reserve.split(stable_out), ctx);
+
+    // K-GUARD: Validate k increased (LP fees stay in pool, so k must grow)
+    // Formula: (asset + amount_in) * (stable - stable_out - protocol_share) >= asset * stable
+    let asset_after = pool.asset_reserve.value();
+    let stable_after = pool.stable_reserve.value();
+    let k_after = (asset_after as u128) * (stable_after as u128);
+    assert!(k_after >= k_before, EKInvariantViolation);
+
+    stable_coin
+}
+
+/// Entry wrapper - swaps and transfers output
+public entry fun swap_asset_for_stable_entry<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
     asset_in: Coin<AssetType>,
     min_stable_out: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(pool.simple_twap.is_some(), ENotInitialized);
-    update_twap(pool, clock);
-    
-    let amount_in = asset_in.value();
-    assert!(amount_in > 0, EZeroAmount);
-    
-    // Apply fee
-    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, constants::max_fee_bps()));
-    
-    // Calculate output using constant product formula (x * y = k)
-    let asset_reserve = pool.asset_reserve.value();
-    let stable_reserve = pool.stable_reserve.value();
-    let stable_out = math::mul_div_to_64(
-        amount_after_fee,
-        stable_reserve,
-        asset_reserve + amount_after_fee
+    let stable_out = swap_asset_for_stable(
+        pool,
+        asset_in,
+        min_stable_out,
+        clock,
+        ctx,
     );
-    assert!(stable_out >= min_stable_out, ESlippageExceeded);
-    assert!(stable_out < stable_reserve, EInsufficientLiquidity);
-    
-    // Update reserves
-    pool.asset_reserve.join(asset_in.into_balance());
-    let stable_coin = coin::from_balance(pool.stable_reserve.split(stable_out), ctx);
-    transfer::public_transfer(stable_coin, ctx.sender());
+    transfer::public_transfer(stable_out, ctx.sender());
 }
 
-/// Swap stable for asset (simple Uniswap V2 style)
-public entry fun swap_stable_for_asset<AssetType, StableType>(
+
+/// Swap stable for asset (simple spot swap, no inline arbitrage)
+/// Arbitrage happens externally via PTBs - see ARBITRAGE_ANALYSIS.md
+///
+/// Fee split model (matches conditional AMM):
+/// - Take fee from stable input
+/// - Split fee: spot_lp_fee_share_bps to LPs (stays in pool), remainder to protocol
+/// - Calculate asset output based on amount after LP fee
+public fun swap_stable_for_asset<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    stable_in: Coin<StableType>,
+    min_asset_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<AssetType> {
+    assert!(pool.simple_twap.is_some(), ENotInitialized);
+    update_twap(pool, clock);
+
+    let amount_in = stable_in.value();
+    assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Capture reserves before swap to validate constant-product invariant
+    // WHY: LP fees stay in pool so k must GROW, protocol fees don't. This catches rounding bugs.
+    let asset_before = pool.asset_reserve.value();
+    let stable_before = pool.stable_reserve.value();
+    let k_before = (asset_before as u128) * (stable_before as u128);
+
+    // Calculate fee from stable input
+    let total_fee = math::mul_div_to_64(amount_in, pool.fee_bps, constants::max_fee_bps());
+    let lp_share = math::mul_div_to_64(total_fee, constants::spot_lp_fee_share_bps(), constants::total_fee_bps());
+    let protocol_share = total_fee - lp_share;
+
+    // Amount used for swap calculation (after removing total fee)
+    let amount_in_after_fee = amount_in - total_fee;
+
+    // Calculate output using constant product formula (x * y = k)
+    let asset_out = math::mul_div_to_64(
+        amount_in_after_fee,
+        asset_before,
+        stable_before + amount_in_after_fee
+    );
+    assert!(asset_out >= min_asset_out, ESlippageExceeded);
+    assert!(asset_out < asset_before, EInsufficientLiquidity);
+
+    // Update reserves
+    // Protocol share goes to protocol_fees_stable, LP share + amount_in_after_fee stay in pool
+    let stable_balance = stable_in.into_balance();
+    pool.protocol_fees_stable.join(stable_balance.split(protocol_share));
+    pool.stable_reserve.join(stable_balance); // This adds amount_in_after_fee + lp_share
+
+    let asset_coin = coin::from_balance(pool.asset_reserve.split(asset_out), ctx);
+
+    // K-GUARD: Validate k increased (LP fees stay in pool, so k must grow)
+    // Formula: (asset - asset_out) * (stable + amount_in_after_fee + lp_share) >= asset * stable
+    let asset_after = pool.asset_reserve.value();
+    let stable_after = pool.stable_reserve.value();
+    let k_after = (asset_after as u128) * (stable_after as u128);
+    assert!(k_after >= k_before, EKInvariantViolation);
+
+    asset_coin
+}
+
+/// Entry wrapper - swaps and transfers output
+public entry fun swap_stable_for_asset_entry<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
     stable_in: Coin<StableType>,
     min_asset_out: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(pool.simple_twap.is_some(), ENotInitialized);
-    update_twap(pool, clock);
-    
-    let amount_in = stable_in.value();
-    assert!(amount_in > 0, EZeroAmount);
-    
-    // Apply fee
-    let amount_after_fee = amount_in - (math::mul_div_to_64(amount_in, pool.fee_bps, constants::max_fee_bps()));
-    
-    // Calculate output using constant product formula (x * y = k)
-    let asset_reserve = pool.asset_reserve.value();
-    let stable_reserve = pool.stable_reserve.value();
-    let asset_out = math::mul_div_to_64(
-        amount_after_fee,
-        asset_reserve,
-        stable_reserve + amount_after_fee
+    let asset_out = swap_stable_for_asset(
+        pool,
+        stable_in,
+        min_asset_out,
+        clock,
+        ctx,
     );
-    assert!(asset_out >= min_asset_out, ESlippageExceeded);
-    assert!(asset_out < asset_reserve, EInsufficientLiquidity);
-    
-    // Update reserves
-    pool.stable_reserve.join(stable_in.into_balance());
-    let asset_coin = coin::from_balance(pool.asset_reserve.split(asset_out), ctx);
-    transfer::public_transfer(asset_coin, ctx.sender());
+    transfer::public_transfer(asset_out, ctx.sender());
 }
 
+
 /// ---- Conversion hook used by coin_escrow during LP conversion (no balance movement here) ----
-/// Returns the ID of the minted spot LP token (the LP is transferred to the sender).
+/// Returns the ID of the minted spot LP position NFT (the NFT is transferred to the sender).
 public fun mint_lp_for_conversion<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
     _asset_amount: u64,
@@ -403,21 +506,158 @@ public fun mint_lp_for_conversion<AssetType, StableType>(
     lp_amount_to_mint: u64,
     _total_lp_supply_at_finalization: u64,
     _market_id: ID,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): ID {
     assert!(lp_amount_to_mint > 0, EZeroAmount);
     pool.lp_supply = pool.lp_supply + lp_amount_to_mint;
-    let lp = SpotLP<AssetType, StableType> { id: object::new(ctx), amount: lp_amount_to_mint };
-    let lp_id = object::id(&lp);
-    transfer::public_transfer(lp, ctx.sender());
-    lp_id
+
+    // Mint NFT position receipt
+    let position = position_nft::mint_spot_position<AssetType, StableType>(
+        object::id(pool),
+        lp_amount_to_mint,
+        pool.fee_bps,
+        clock,
+        ctx
+    );
+    let position_id = object::id(&position);
+    transfer::public_transfer(position, ctx.sender());
+    position_id
+}
+
+// === Arbitrage Helper Functions ===
+
+/// Feeless swap asset→stable (for internal arbitrage only)
+/// No fees charged to maximize arbitrage efficiency
+/// Profits distributed separately by arbitrage module
+///
+/// IMPORTANT: Caller must have already added amount_in to asset_reserve
+/// This function updates reserves and returns output amount
+public(package) fun feeless_swap_asset_to_stable<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    amount_in: u64,
+): u64 {
+    assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Feeless swaps should preserve k EXACTLY (no fees = no k growth)
+    // WHY: Validates b-parameterization math is correct
+    let asset_reserve = pool.asset_reserve.value();
+    let stable_reserve = pool.stable_reserve.value();
+    let k_before = (asset_reserve as u128) * (stable_reserve as u128);
+
+    // No fee for arbitrage swaps (fee-free constant product)
+    let stable_out = math::mul_div_to_64(
+        amount_in,
+        stable_reserve,
+        asset_reserve + amount_in
+    );
+    assert!(stable_out < stable_reserve, EInsufficientLiquidity);
+
+    // K-GUARD: Validate k unchanged (feeless swap preserves k within rounding)
+    // Formula: (asset + amount_in) * (stable - stable_out) ≈ asset * stable
+    // Allow tiny rounding tolerance (1 part in 10^6)
+    let k_after = (asset_reserve + amount_in as u128) * ((stable_reserve - stable_out) as u128);
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    assert!(k_delta <= tolerance, EKInvariantViolation);
+
+    stable_out
+}
+
+/// Feeless swap stable→asset (for internal arbitrage only)
+public(package) fun feeless_swap_stable_to_asset<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    amount_in: u64,
+): u64 {
+    assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Feeless swaps should preserve k EXACTLY (no fees = no k growth)
+    // WHY: Validates b-parameterization math is correct
+    let asset_reserve = pool.asset_reserve.value();
+    let stable_reserve = pool.stable_reserve.value();
+    let k_before = (asset_reserve as u128) * (stable_reserve as u128);
+
+    // No fee for arbitrage swaps
+    let asset_out = math::mul_div_to_64(
+        amount_in,
+        asset_reserve,
+        stable_reserve + amount_in
+    );
+    assert!(asset_out < asset_reserve, EInsufficientLiquidity);
+
+    // K-GUARD: Validate k unchanged (feeless swap preserves k within rounding)
+    // Formula: (asset - asset_out) * (stable + amount_in) ≈ asset * stable
+    // Allow tiny rounding tolerance (1 part in 10^6)
+    let k_after = ((asset_reserve - asset_out) as u128) * ((stable_reserve + amount_in) as u128);
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    assert!(k_delta <= tolerance, EKInvariantViolation);
+
+    asset_out
+}
+
+/// Simulate asset→stable swap without executing
+/// Pure function for arbitrage optimization
+public fun simulate_swap_asset_to_stable<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>,
+    amount_in: u64,
+): u64 {
+    if (amount_in == 0) return 0;
+
+    let asset_reserve = pool.asset_reserve.value();
+    let stable_reserve = pool.stable_reserve.value();
+
+    if (asset_reserve == 0 || stable_reserve == 0) return 0;
+
+    // Simulate with fee (user-facing simulation)
+    let amount_after_fee = amount_in - math::mul_div_to_64(
+        amount_in,
+        pool.fee_bps,
+        constants::max_fee_bps()
+    );
+
+    let stable_out = math::mul_div_to_64(
+        amount_after_fee,
+        stable_reserve,
+        asset_reserve + amount_after_fee
+    );
+
+    if (stable_out >= stable_reserve) return 0;
+
+    stable_out
+}
+
+/// Simulate stable→asset swap without executing
+public fun simulate_swap_stable_to_asset<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>,
+    amount_in: u64,
+): u64 {
+    if (amount_in == 0) return 0;
+
+    let asset_reserve = pool.asset_reserve.value();
+    let stable_reserve = pool.stable_reserve.value();
+
+    if (asset_reserve == 0 || stable_reserve == 0) return 0;
+
+    // Simulate with fee
+    let amount_after_fee = amount_in - math::mul_div_to_64(
+        amount_in,
+        pool.fee_bps,
+        constants::max_fee_bps()
+    );
+
+    let asset_out = math::mul_div_to_64(
+        amount_after_fee,
+        asset_reserve,
+        stable_reserve + amount_after_fee
+    );
+
+    if (asset_out >= asset_reserve) return 0;
+
+    asset_out
 }
 
 // === View Functions ===
-
-public fun get_lp_amount<AssetType, StableType>(lp: &SpotLP<AssetType, StableType>): u64 {
-    lp.amount
-}
 
 /// Get current spot price
 public fun get_spot_price<AssetType, StableType>(pool: &SpotAMM<AssetType, StableType>): u128 {
@@ -565,6 +805,13 @@ public fun get_reserves<AssetType, StableType>(
     (pool.asset_reserve.value(), pool.stable_reserve.value())
 }
 
+/// Get pool fee in basis points
+public fun get_fee_bps<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): u64 {
+    pool.fee_bps
+}
+
 /// Get SimpleTWAP oracle reference (for spot_oracle_interface)
 public fun get_simple_twap<AssetType, StableType>(
     pool: &SpotAMM<AssetType, StableType>
@@ -582,6 +829,27 @@ public fun get_pool_state<AssetType, StableType>(
         pool.stable_reserve.value(),
         pool.lp_supply,
     )
+}
+
+/// Get accumulated protocol fees (in stable tokens)
+public fun get_protocol_fees<AssetType, StableType>(
+    pool: &SpotAMM<AssetType, StableType>
+): u64 {
+    pool.protocol_fees_stable.value()
+}
+
+/// Reset protocol fees to zero and return the balance
+/// Should only be called by fee collection mechanisms
+public(package) fun reset_protocol_fees<AssetType, StableType>(
+    pool: &mut SpotAMM<AssetType, StableType>,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    let fee_amount = pool.protocol_fees_stable.value();
+    if (fee_amount > 0) {
+        coin::from_balance(pool.protocol_fees_stable.split(fee_amount), ctx)
+    } else {
+        coin::zero<StableType>(ctx)
+    }
 }
 
 // === Conditional TWAP Integration ===

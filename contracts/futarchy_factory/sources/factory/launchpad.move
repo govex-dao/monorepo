@@ -1,8 +1,7 @@
 module futarchy_factory::launchpad;
 
-use std::ascii;
 use std::string::{String};
-use std::type_name::{Self, TypeName};
+use std::type_name::{Self};
 use std::option::{Self as option, Option};
 use std::vector;
 use sui::balance::{Self, Balance};
@@ -12,8 +11,6 @@ use sui::event;
 use sui::dynamic_field as df;
 use sui::object::{Self, UID, ID};
 use sui::tx_context::TxContext;
-use sui::table;
-use sui::bcs;
 use futarchy_factory::factory;
 use futarchy_types::action_specs;
 use futarchy_factory::init_actions;
@@ -28,6 +25,15 @@ use account_extensions::extensions::Extensions;
 // === Witnesses ===
 public struct LaunchpadWitness has drop {}
 
+// === Capabilities ===
+
+/// Capability proving ownership/control of a raise
+/// Transferable - allows selling/delegating raise control
+public struct CreatorCap has key, store {
+    id: UID,
+    raise_id: ID,
+}
+
 // === Errors ===
 const ERaiseStillActive: u64 = 0;
 const ERaiseNotActive: u64 = 1;
@@ -36,7 +42,6 @@ const EMinRaiseNotMet: u64 = 3;
 const EMinRaiseAlreadyMet: u64 = 4;
 const ENotAContributor: u64 = 6;
 const EInvalidStateForAction: u64 = 7;
-const EReentrancy: u64 = 10;
 const EArithmeticOverflow: u64 = 11;
 const ENotUSDC: u64 = 12;
 const EZeroContribution: u64 = 13;
@@ -68,6 +73,7 @@ const ETreasuryCapMissing: u64 = 128;    // Treasury cap must be pre-locked in D
 const EMetadataMissing: u64 = 129;       // Coin metadata must be supplied before completion
 const ESupplyNotZero: u64 = 130;         // Treasury cap supply must be zero at raise creation
 const EInvalidClaimNFT: u64 = 131;       // Claim NFT doesn't match this raise
+const EInvalidCreatorCap: u64 = 132;     // Creator cap doesn't match this raise
 
 // === Constants ===
 // Note: Most constants moved to futarchy_one_shot_utils::constants for centralized management
@@ -164,7 +170,8 @@ public struct CapSettlement has key, store {
     running_sum: u64,    // C_k as we walk from high cap to low
     final_total: u64,    // T* once found
     done: bool,
-    cranker: address,    // Who called begin_settlement (gets bounty)
+    initiator: address,  // Who called begin_settlement (gets 25% bonus)
+    finalizer: address,  // Who will call finalize_settlement (gets remaining pool)
 }
 
 /// Claim NFT: Owned object containing pre-calculated claim amounts
@@ -206,8 +213,6 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     init_action_specs: Option<action_specs::InitActionSpecs>,
     /// TreasuryCap stored until DAO creation
     treasury_cap: Option<TreasuryCap<RaiseToken>>,
-    /// Reentrancy guard flag
-    claiming: bool,
     /// Cap-aware accounting
     allowed_caps: vector<u64>,     // Creator-defined allowed cap values (sorted ascending)
     thresholds: vector<u64>,       // Subset of allowed_caps actually used
@@ -374,6 +379,7 @@ fun init(_witness: LAUNCHPAD, _ctx: &mut TxContext) {
 /// Treasury cap and metadata remain in Raise until completion
 public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
     factory: &mut factory::Factory,
     extensions: &Extensions,
     fee_manager: &mut fee::FeeManager,
@@ -381,8 +387,8 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Only creator can pre-create DAO
-    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    // Verify creator cap matches this raise
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
     // Can only pre-create before raise starts
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     // Can't pre-create if already created
@@ -415,13 +421,14 @@ public fun pre_create_dao_for_raise<RaiseToken: drop + store, StableCoin: drop +
 /// Lock intents - no more can be added after this
 public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
-    ctx: &mut TxContext,
+    creator_cap: &CreatorCap,
+    _ctx: &mut TxContext,
 ) {
-    // Only creator can lock intents
-    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    // Verify creator cap matches this raise
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
     // Can only lock once
     assert!(!raise.intents_locked, EInvalidStateForAction);
-    
+
     raise.intents_locked = true;
     // Raise can now begin accepting contributions
 }
@@ -446,6 +453,10 @@ public entry fun create_raise<RaiseToken: drop, StableCoin: drop>(
 ) {
     // Collect launchpad creation fee
     fee::deposit_launchpad_creation_payment(fee_manager, launchpad_fee, clock, ctx);
+
+    // CRITICAL: Validate parameters
+    assert!(tokens_for_sale_amount > 0, EInvalidStateForAction);
+    assert!(min_raise_amount > 0, EInvalidStateForAction);
 
     // CRITICAL: Validate treasury cap and metadata
     // Both treasury_cap and coin_metadata MUST be for RaiseToken (enforced by type system)
@@ -816,7 +827,8 @@ public fun begin_settlement<RT, SC>(
         running_sum: 0,
         final_total: 0,
         done: false,
-        cranker: ctx.sender(), // Record who will finalize (gets 50%)
+        initiator: ctx.sender(),  // Gets 25% of final pool
+        finalizer: @0x0,          // Set when finalize_settlement is called
     };
 
     event::emit(SettlementStarted { raise_id: object::id(raise), caps_count: size });
@@ -925,15 +937,32 @@ public fun finalize_settlement<RT, SC>(
     raise.settlement_done = true;
     raise.settlement_in_progress = false; // Settlement completed
 
-    // CRANK REWARD: Pay all remaining pool to finalizer
-    // Crankers already got paid 0.05 SUI per cap
+    // Record finalizer
+    s.finalizer = ctx.sender();
+
+    // CRANK REWARD: Split remaining pool between initiator (25%) and finalizer (75%)
+    // Crankers already got paid 0.05 SUI per cap during crank_settlement
     let remaining_pool = raise.crank_pool.value();
     if (remaining_pool > 0) {
-        let finalizer_reward = coin::from_balance(
-            raise.crank_pool.split(remaining_pool),
-            ctx
-        );
-        transfer::public_transfer(finalizer_reward, s.cranker);
+        // 25% to initiator (who started settlement)
+        let initiator_share = remaining_pool / 4;
+        if (initiator_share > 0) {
+            let initiator_reward = coin::from_balance(
+                raise.crank_pool.split(initiator_share),
+                ctx
+            );
+            transfer::public_transfer(initiator_reward, s.initiator);
+        };
+
+        // Remaining 75% to finalizer (who completed settlement)
+        let finalizer_share = raise.crank_pool.value();
+        if (finalizer_share > 0) {
+            let finalizer_reward = coin::from_balance(
+                raise.crank_pool.split(finalizer_share),
+                ctx
+            );
+            transfer::public_transfer(finalizer_reward, s.finalizer);
+        };
     };
 
     event::emit(SettlementFinalized { raise_id: object::id(raise), final_total: s.final_total });
@@ -1020,15 +1049,16 @@ public entry fun sweep_unused_cap_bins<RT, SC>(
 /// Creator can end early at any time, settlement will determine success
 ///
 /// Requirements:
-/// - Only creator can call
+/// - Creator cap required
 /// - Before deadline
 public entry fun end_raise_early<RT, SC>(
     raise: &mut Raise<RT, SC>,
+    creator_cap: &CreatorCap,
     clock: &Clock,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
-    // Only creator can end early
-    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    // Verify creator cap matches this raise
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
 
     // Must still be in funding state
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
@@ -1054,6 +1084,7 @@ public entry fun end_raise_early<RT, SC>(
 /// Allows founders to close as soon as the market has cleared, before the permissionless window.
 public entry fun close_raise_early<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
     factory: &mut factory::Factory,
     extensions: &Extensions,
     fee_manager: &mut fee::FeeManager,
@@ -1061,7 +1092,8 @@ public entry fun close_raise_early<RaiseToken: drop + store, StableCoin: drop + 
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    // Verify creator cap matches this raise
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
     assert!(raise.state == STATE_FUNDING, EInvalidStateForAction);
     assert!(clock.timestamp_ms() >= raise.deadline_ms, EDeadlineNotReached);
     assert!(raise.settlement_done, ESettlementNotStarted);
@@ -1248,9 +1280,6 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
     assert!(raise.settlement_done, ESettlementNotStarted);
 
-    assert!(!raise.claiming, EReentrancy);
-    raise.claiming = true;
-
     let caller = ctx.sender();
     let key = ContributorKey { contributor: recipient };
     assert!(df::exists_(&raise.id, key), ENotAContributor);
@@ -1264,7 +1293,8 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
 
     // SECURITY: Remove and get contribution record to prevent double-claim
     let rec: Contribution = df::remove(&mut raise.id, key);
-    
+    raise.contributor_count = raise.contributor_count - 1;
+
     // SECURITY: Verify contribution integrity
     assert!(rec.amount > 0, EInvalidStateForAction);
     assert!(rec.max_total >= rec.amount, EInvalidStateForAction);
@@ -1284,7 +1314,6 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
             refund_amount: rec.amount,
         });
 
-        raise.claiming = false;
         return // Exit early - refund complete
     };
 
@@ -1317,7 +1346,6 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
                 refund_amount: rec.amount,
             });
 
-            raise.claiming = false;
             return // Exit early - min fill not met
         };
     };
@@ -1352,8 +1380,6 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
             existing.amount = existing.amount + refund_due;
         };
     };
-
-    raise.claiming = false;
 }
 
 /// Mint claim NFTs for multiple contributors (FULLY PARALLEL!)
@@ -1365,13 +1391,16 @@ public entry fun claim_tokens<RaiseToken, StableCoin>(
 /// 3. Contributors get owned ClaimNFT objects
 /// 4. Claiming with NFTs is FULLY PARALLEL (no reentrancy guard needed!)
 ///
+/// SECURITY: Removes contribution record when minting NFT to prevent double-claiming
+/// After NFT is minted, contributor can ONLY claim via NFT (not via claim_tokens)
+///
 /// Benefits vs claim_tokens():
 /// - 100x parallelization (no global claiming lock)
 /// - Simpler code (no reentrancy guard)
 /// - Better UX (visible owned NFTs)
 /// - Transferable claims (optional feature)
 public entry fun mint_claim_nfts<RaiseToken, StableCoin>(
-    raise: &Raise<RaiseToken, StableCoin>,
+    raise: &mut Raise<RaiseToken, StableCoin>,
     contributors: vector<address>,
     ctx: &mut TxContext,
 ) {
@@ -1389,9 +1418,11 @@ public entry fun mint_claim_nfts<RaiseToken, StableCoin>(
         let addr = *vector::borrow(&contributors, i);
         let key = ContributorKey { contributor: addr };
 
-        // Skip if contributor doesn't exist
+        // Skip if contributor doesn't exist (already claimed or never contributed)
         if (df::exists_(&raise.id, key)) {
-            let contrib: &Contribution = df::borrow(&raise.id, key);
+            // SECURITY: Remove contribution record to prevent double-claiming
+            let contrib: Contribution = df::remove(&mut raise.id, key);
+            raise.contributor_count = raise.contributor_count - 1;
 
             // Calculate tokens and refunds (same logic as claim_tokens)
             let (tokens_claimable, stable_refund) = if (contrib.max_total >= consensual_total) {
@@ -1685,12 +1716,14 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
     assert!(raise.state == STATE_FAILED, EInvalidStateForAction);
     let contributor = ctx.sender();
     let contributor_key = ContributorKey { contributor };
-    
+
     // Check contributor exists
     assert!(df::exists_(&raise.id, contributor_key), ENotAContributor);
-    
+
     // Remove and get contribution record
     let rec: Contribution = df::remove(&mut raise.id, contributor_key);
+    raise.contributor_count = raise.contributor_count - 1;
+
     let refund_coin = coin::from_balance(raise.stable_coin_vault.split(rec.amount), ctx);
     transfer::public_transfer(refund_coin, contributor);
 
@@ -1706,12 +1739,14 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
 /// - Stablecoins: Go to DAO treasury (contributor funds from rounding)
 public entry fun sweep_dust<RaiseToken, StableCoin: drop>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    creator_cap: &CreatorCap,
     dao_account: &mut Account<FutarchyConfig>,  // DAO Account to receive stablecoin dust
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     assert!(raise.state == STATE_SUCCESSFUL, EInvalidStateForAction);
-    assert!(ctx.sender() == raise.creator, ENotTheCreator);
+    // Verify creator cap matches this raise
+    assert!(creator_cap.raise_id == object::id(raise), EInvalidCreatorCap);
 
     // Verify this is the correct DAO for this raise
     assert!(raise.dao_id.is_some(), EDaoNotPreCreated);
@@ -1801,7 +1836,6 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         description,
         init_action_specs: option::none(), // DAO config via init actions
         treasury_cap: option::some(treasury_cap),
-        claiming: false,
         allowed_caps,
         thresholds: vector::empty<u64>(),
         settlement_done: false,
@@ -1816,8 +1850,10 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
 
     df::add(&mut raise.id, CoinMetadataKey {}, coin_metadata);
 
+    let raise_id = object::id(&raise);
+
     event::emit(RaiseCreated {
-        raise_id: object::id(&raise),
+        raise_id,
         creator: raise.creator,
         raise_token_type: type_name::with_defining_ids<RaiseToken>().into_string().to_string(),
         stable_coin_type: type_name::with_defining_ids<StableCoin>().into_string().to_string(),
@@ -1826,6 +1862,13 @@ fun init_raise_internal<RaiseToken: drop, StableCoin: drop>(
         deadline_ms: raise.deadline_ms,
         description: raise.description,
     });
+
+    // Mint and transfer CreatorCap to creator
+    let creator_cap = CreatorCap {
+        id: object::new(ctx),
+        raise_id,
+    };
+    transfer::public_transfer(creator_cap, raise.creator);
 
     transfer::public_share_object(raise);
 }

@@ -3,6 +3,7 @@ module futarchy_markets::market_state;
 use std::string::String;
 use sui::clock::Clock;
 use sui::event;
+use futarchy_markets::conditional_amm::LiquidityPool;
 
 // === Introduction ===
 // This module tracks proposal life cycle and acts as a source of truth for proposal state
@@ -33,6 +34,11 @@ public struct MarketState has key, store {
     dao_id: ID,
     outcome_count: u64,
     outcome_messages: vector<String>,
+
+    // Market infrastructure - AMM pools for price discovery
+    amm_pools: Option<vector<LiquidityPool>>,
+
+    // Lifecycle state
     status: MarketStatus,
     winning_outcome: Option<u64>,
     creation_time: u64,
@@ -75,6 +81,7 @@ public fun new(
         dao_id,
         outcome_count,
         outcome_messages,
+        amm_pools: option::none(),  // Pools added later during market initialization
         status: MarketStatus {
             trading_started: false,
             trading_ended: false,
@@ -144,6 +151,47 @@ public fun finalize(state: &mut MarketState, winner: u64, clock: &Clock) {
         winning_outcome: winner,
         timestamp_ms: timestamp,
     });
+}
+
+// === Pool Management Functions ===
+
+/// Initialize AMM pools for the market
+/// Called once when market transitions to TRADING state
+public(package) fun set_amm_pools(state: &mut MarketState, pools: vector<LiquidityPool>) {
+    assert!(state.amm_pools.is_none(), 0); // Pools can only be set once
+    option::fill(&mut state.amm_pools, pools);
+}
+
+/// Check if market has AMM pools initialized
+public fun has_amm_pools(state: &MarketState): bool {
+    state.amm_pools.is_some()
+}
+
+/// Borrow AMM pools immutably
+public(package) fun borrow_amm_pools(state: &MarketState): &vector<LiquidityPool> {
+    state.amm_pools.borrow()
+}
+
+/// Borrow AMM pools mutably
+public(package) fun borrow_amm_pools_mut(state: &mut MarketState): &mut vector<LiquidityPool> {
+    state.amm_pools.borrow_mut()
+}
+
+/// Get a specific pool by outcome index
+public(package) fun get_pool_by_outcome(state: &MarketState, outcome_idx: u8): &LiquidityPool {
+    let pools = state.amm_pools.borrow();
+    &pools[(outcome_idx as u64)]
+}
+
+/// Get a specific pool mutably by outcome index
+public(package) fun get_pool_mut_by_outcome(state: &mut MarketState, outcome_idx: u8): &mut LiquidityPool {
+    let pools = state.amm_pools.borrow_mut();
+    &mut pools[(outcome_idx as u64)]
+}
+
+/// Get all pools (for cleanup/migration)
+public(package) fun extract_amm_pools(state: &mut MarketState): vector<LiquidityPool> {
+    state.amm_pools.extract()
 }
 
 // === Assertion Functions ===
@@ -223,6 +271,7 @@ public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
         dao_id: market_id,
         outcome_messages: vector[],
         outcome_count: outcomes,
+        amm_pools: option::none(),
         status: MarketStatus {
             trading_started: false,
             trading_ended: false,

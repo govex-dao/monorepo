@@ -11,11 +11,17 @@ public fun max_fee_bps(): u64 { 10000 }
 /// Maximum AMM fee in basis points (5%) - hard cap for all AMM fees
 public fun max_amm_fee_bps(): u64 { 500 }
 
-/// LP fee share in basis points (80% of fees go to LPs)
-public fun lp_fee_share_bps(): u64 { 8000 }
+/// LP fee share in basis points for CONDITIONAL AMMs (80% of fees go to LPs)
+public fun conditional_lp_fee_share_bps(): u64 { 8000 }
 
-/// Protocol fee share in basis points (20% of fees go to protocol)
-public fun protocol_fee_share_bps(): u64 { 2000 }
+/// Protocol fee share in basis points for CONDITIONAL AMMs (20% of fees go to protocol)
+public fun conditional_protocol_fee_share_bps(): u64 { 2000 }
+
+/// LP fee share in basis points for SPOT AMM (90% of fees go to LPs)
+public fun spot_lp_fee_share_bps(): u64 { 9000 }
+
+/// Protocol fee share in basis points for SPOT AMM (10% of fees go to protocol)
+public fun spot_protocol_fee_share_bps(): u64 { 1000 }
 
 /// Total fee basis points denominator (100%)
 public fun total_fee_bps(): u64 { 10000 }

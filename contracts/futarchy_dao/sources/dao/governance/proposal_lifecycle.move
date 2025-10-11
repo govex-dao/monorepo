@@ -852,7 +852,7 @@ public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     (winning_outcome, twap_prices)
 }
 
-// === Missing Helper Functions for execute_ptb ===
+// === Helper Functions for PTB Execution ===
 
 /// Check if a proposal has passed
 public fun is_passed<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {

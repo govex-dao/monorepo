@@ -453,3 +453,154 @@ public fun assert_quantum_invariant<AssetType, StableType>(
     // This function serves as documentation of the invariant
     // Actual enforcement happens in mint/burn operations that maintain the invariant
 }
+
+// === Complete Set Operations (Split/Recombine) ===
+
+/// Split spot asset into complete set of conditional assets (all outcomes)
+/// Creates 1 conditional asset for EACH outcome (quantum liquidity)
+/// For 2-outcome markets
+public entry fun split_asset_into_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_asset: Coin<AssetType>,
+    ctx: &mut TxContext,
+) {
+    let amount = spot_asset.value();
+    assert!(amount > 0, EZeroAmount);
+
+    // Deposit spot asset to escrow
+    let asset_balance = coin::into_balance(spot_asset);
+    escrow.escrowed_asset.join(asset_balance);
+
+    // Mint conditional asset for outcome 0
+    let cond_0 = mint_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
+
+    // Mint conditional asset for outcome 1
+    let cond_1 = mint_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
+
+    // Transfer to sender
+    transfer::public_transfer(cond_0, ctx.sender());
+    transfer::public_transfer(cond_1, ctx.sender());
+}
+
+/// Split spot stable into complete set of conditional stables (all outcomes)
+/// For 2-outcome markets
+public entry fun split_stable_into_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_stable: Coin<StableType>,
+    ctx: &mut TxContext,
+) {
+    let amount = spot_stable.value();
+    assert!(amount > 0, EZeroAmount);
+
+    // Deposit spot stable to escrow
+    let stable_balance = coin::into_balance(spot_stable);
+    escrow.escrowed_stable.join(stable_balance);
+
+    // Mint conditional stable for outcome 0
+    let cond_0 = mint_conditional_stable<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
+
+    // Mint conditional stable for outcome 1
+    let cond_1 = mint_conditional_stable<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
+
+    // Transfer to sender
+    transfer::public_transfer(cond_0, ctx.sender());
+    transfer::public_transfer(cond_1, ctx.sender());
+}
+
+/// Recombine complete set of conditional assets back into spot asset
+/// Burns 1 conditional asset from EACH outcome, returns 1 spot asset (quantum liquidity)
+/// For 2-outcome markets
+public entry fun recombine_asset_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    ctx: &mut TxContext,
+) {
+    let amount_0 = cond_0.value();
+    let amount_1 = cond_1.value();
+    assert!(amount_0 == amount_1, EInsufficientBalance);
+    assert!(amount_0 > 0, EZeroAmount);
+
+    let amount = amount_0;
+
+    // Burn conditional assets for each outcome
+    burn_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, cond_0);
+    burn_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, cond_1);
+
+    // Withdraw spot asset (1:1 due to quantum liquidity)
+    let spot_asset = withdraw_asset_balance(escrow, amount, ctx);
+
+    // Transfer to sender
+    transfer::public_transfer(spot_asset, ctx.sender());
+}
+
+/// Recombine complete set of conditional stables back into spot stable
+/// For 2-outcome markets
+public entry fun recombine_stable_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    ctx: &mut TxContext,
+) {
+    let amount_0 = cond_0.value();
+    let amount_1 = cond_1.value();
+    assert!(amount_0 == amount_1, EInsufficientBalance);
+    assert!(amount_0 > 0, EZeroAmount);
+
+    let amount = amount_0;
+
+    // Burn conditional stables for each outcome
+    burn_conditional_stable<AssetType, StableType, Cond0>(escrow, 0, cond_0);
+    burn_conditional_stable<AssetType, StableType, Cond1>(escrow, 1, cond_1);
+
+    // Withdraw spot stable
+    let spot_stable = withdraw_stable_balance(escrow, amount, ctx);
+
+    // Transfer to sender
+    transfer::public_transfer(spot_stable, ctx.sender());
+}
+
+/// For 3-outcome markets - split spot asset into complete set
+public entry fun split_asset_into_complete_set_3<AssetType, StableType, Cond0, Cond1, Cond2>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_asset: Coin<AssetType>,
+    ctx: &mut TxContext,
+) {
+    let amount = spot_asset.value();
+    assert!(amount > 0, EZeroAmount);
+
+    let asset_balance = coin::into_balance(spot_asset);
+    escrow.escrowed_asset.join(asset_balance);
+
+    let cond_0 = mint_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
+    let cond_1 = mint_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
+    let cond_2 = mint_conditional_asset<AssetType, StableType, Cond2>(escrow, 2, amount, ctx);
+
+    transfer::public_transfer(cond_0, ctx.sender());
+    transfer::public_transfer(cond_1, ctx.sender());
+    transfer::public_transfer(cond_2, ctx.sender());
+}
+
+/// For 3-outcome markets - recombine conditional assets into spot asset
+public entry fun recombine_asset_complete_set_3<AssetType, StableType, Cond0, Cond1, Cond2>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    cond_2: Coin<Cond2>,
+    ctx: &mut TxContext,
+) {
+    let amount_0 = cond_0.value();
+    let amount_1 = cond_1.value();
+    let amount_2 = cond_2.value();
+    assert!(amount_0 == amount_1 && amount_1 == amount_2, EInsufficientBalance);
+    assert!(amount_0 > 0, EZeroAmount);
+
+    let amount = amount_0;
+
+    burn_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, cond_0);
+    burn_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, cond_1);
+    burn_conditional_asset<AssetType, StableType, Cond2>(escrow, 2, cond_2);
+
+    let spot_asset = withdraw_asset_balance(escrow, amount, ctx);
+    transfer::public_transfer(spot_asset, ctx.sender());
+}

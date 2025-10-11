@@ -1,13 +1,14 @@
 module futarchy_markets::conditional_amm;
 
-use futarchy_markets::market_state::MarketState;
 use futarchy_one_shot_utils::math;
+use sui::object::ID;
 use futarchy_markets::oracle::{Self, Oracle};
 use futarchy_markets::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
 use sui::clock::Clock;
 use sui::event;
 use std::u64;
+use sui::tx_context::TxContext;  // Audit fix: missing import
 
 // === Introduction ===
 // This is a Uniswap V2-style XY=K AMM implementation for futarchy prediction markets.
@@ -45,6 +46,7 @@ const EInsufficientLPTokens: u64 = 8; // Not enough LP tokens to burn
 const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
 const EOverflow: u64 = 10; // Arithmetic overflow detected
 const EInvalidFeeRate: u64 = 11; // Fee rate is invalid (e.g., >= 100%)
+const EKInvariantViolation: u64 = 12; // K-invariant violation (guards constant-product invariant)
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -104,7 +106,7 @@ public struct LiquidityRemoved has copy, drop {
 
 // === Public Functions ===
 public fun new_pool(
-    state: &MarketState,
+    market_id: ID,
     outcome_idx: u8,
     fee_percent: u64,
     initial_asset: u64,
@@ -143,7 +145,7 @@ public fun new_pool(
     // Create pool object
     let pool = LiquidityPool {
         id: object::new(ctx),
-        market_id: state.market_id(),
+        market_id,
         outcome_idx,
         asset_reserve: initial_asset,
         stable_reserve: initial_stable,
@@ -158,17 +160,23 @@ public fun new_pool(
 }
 
 // === Core Swap Functions ===
+// Note: These functions take generic references to allow inline arbitrage
+// without creating circular dependencies between spot_amm and conditional_amm
+
 public fun swap_asset_to_stable(
     pool: &mut LiquidityPool,
-    state: &MarketState,
+    market_id: ID,
     amount_in: u64,
     min_amount_out: u64,
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    state.assert_trading_active();
-    assert!(pool.market_id == state.market_id(), EMarketIdMismatch);
+    assert!(pool.market_id == market_id, EMarketIdMismatch);
     assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Capture reserves before swap to validate constant-product invariant
+    // WHY: LP fees stay in pool, so k must GROW. Catches fee accounting bugs.
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
 
     // When selling outcome tokens (asset -> stable):
     // 1. Calculate the gross output amount (amount_out_before_fee) based on current reserves and amount_in.
@@ -185,7 +193,7 @@ public fun swap_asset_to_stable(
 
     // Calculate fee from stable output
     let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, constants::lp_fee_share_bps(), constants::total_fee_bps());
+    let lp_share = math::mul_div_to_64(total_fee, constants::conditional_lp_fee_share_bps(), constants::total_fee_bps());
     let protocol_share = total_fee - lp_share;
 
     // Net amount for the user
@@ -229,6 +237,11 @@ public fun swap_asset_to_stable(
     // This is equivalent to `pool.stable_reserve - (amount_out + protocol_share)`
     pool.stable_reserve = pool.stable_reserve - amount_out_before_fee + lp_share;
 
+    // K-GUARD: Validate k increased (LP fees stay in pool, so k must grow)
+    // Formula: (asset + amount_in) * (stable - amount_out - protocol_share) >= asset * stable
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    assert!(k_after >= k_before, EKInvariantViolation);
+
     let current_price = get_current_price(pool);
     check_price_under_max(current_price);
 
@@ -252,15 +265,18 @@ public fun swap_asset_to_stable(
 // Modified swap_asset_to_stable (selling outcome tokens)
 public fun swap_stable_to_asset(
     pool: &mut LiquidityPool,
-    state: &MarketState,
+    market_id: ID,
     amount_in: u64,
     min_amount_out: u64,
     clock: &Clock,
     ctx: &TxContext,
 ): u64 {
-    state.assert_trading_active();
-    assert!(pool.market_id == state.market_id(), EMarketIdMismatch);
+    assert!(pool.market_id == market_id, EMarketIdMismatch);
     assert!(amount_in > 0, EZeroAmount);
+
+    // K-GUARD: Capture reserves before swap to validate constant-product invariant
+    // WHY: LP fees stay in pool, so k must GROW. Catches fee accounting bugs.
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
 
     // When buying outcome tokens (stable -> asset):
     // 1. Calculate the fee from the input amount (amount_in).
@@ -270,7 +286,7 @@ public fun swap_stable_to_asset(
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's stable reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, constants::lp_fee_share_bps(), constants::total_fee_bps());
+    let lp_share = math::mul_div_to_64(total_fee, constants::conditional_lp_fee_share_bps(), constants::total_fee_bps());
     let protocol_share = total_fee - lp_share;
 
     // Amount used for the swap calculation
@@ -320,6 +336,11 @@ public fun swap_stable_to_asset(
 
     pool.stable_reserve = new_stable_reserve;
     pool.asset_reserve = pool.asset_reserve - amount_out;
+
+    // K-GUARD: Validate k increased (LP fees stay in pool, so k must grow)
+    // Formula: (asset - amount_out) * (stable + amount_in_after_fee + lp_share) >= asset * stable
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    assert!(k_after >= k_before, EKInvariantViolation);
 
     let current_price = get_current_price(pool);
     check_price_under_max(current_price);
@@ -506,6 +527,11 @@ public fun get_lp_supply(pool: &LiquidityPool): u64 {
     pool.lp_supply
 }
 
+/// Get pool fee in basis points
+public fun get_fee_bps(pool: &LiquidityPool): u64 {
+    pool.fee_percent
+}
+
 public fun get_price(pool: &LiquidityPool): u128 {
     pool.oracle.last_price()
 }
@@ -534,6 +560,140 @@ public fun quote_swap_stable_to_asset(pool: &LiquidityPool, amount_in: u64): u64
         pool.stable_reserve,
         pool.asset_reserve,
     )
+}
+
+// === Arbitrage Helper Functions ===
+
+/// Feeless swap asset→stable (for internal arbitrage only)
+/// No fees charged to maximize arbitrage efficiency
+///
+/// AUDIT FIX: Now MUTATES reserves (Q3: swaps should always update state)
+public(package) fun feeless_swap_asset_to_stable(
+    pool: &mut LiquidityPool,
+    amount_in: u64,
+): u64 {
+    assert!(amount_in > 0, EZeroAmount);
+    assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EPoolEmpty);
+
+    // K-GUARD: Feeless swaps should preserve k EXACTLY (no fees = no k growth)
+    // WHY: Validates arbitrage math is correct (used in executor's multi-pool swaps)
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+
+    // No fee for arbitrage swaps (fee-free constant product)
+    let stable_out = calculate_output(
+        amount_in,
+        pool.asset_reserve,
+        pool.stable_reserve,
+    );
+    assert!(stable_out < pool.stable_reserve, EPoolEmpty);
+
+    // CRITICAL FIX: Update reserves! Any swap must mutate state.
+    pool.asset_reserve = pool.asset_reserve + amount_in;
+    pool.stable_reserve = pool.stable_reserve - stable_out;
+
+    // K-GUARD: Validate k unchanged (feeless swap preserves k within rounding)
+    // Formula: (asset + amount_in) * (stable - stable_out) ≈ asset * stable
+    // Allow tiny rounding tolerance (1 part in 10^6)
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    assert!(k_delta <= tolerance, EKInvariantViolation);
+
+    stable_out
+}
+
+/// Feeless swap stable→asset (for internal arbitrage only)
+///
+/// AUDIT FIX: Now MUTATES reserves (Q3: swaps should always update state)
+public(package) fun feeless_swap_stable_to_asset(
+    pool: &mut LiquidityPool,
+    amount_in: u64,
+): u64 {
+    assert!(amount_in > 0, EZeroAmount);
+    assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EPoolEmpty);
+
+    // K-GUARD: Feeless swaps should preserve k EXACTLY (no fees = no k growth)
+    // WHY: Validates arbitrage math is correct (used in executor's multi-pool swaps)
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+
+    // No fee for arbitrage swaps
+    let asset_out = calculate_output(
+        amount_in,
+        pool.stable_reserve,
+        pool.asset_reserve,
+    );
+    assert!(asset_out < pool.asset_reserve, EPoolEmpty);
+
+    // CRITICAL FIX: Update reserves! Any swap must mutate state.
+    pool.stable_reserve = pool.stable_reserve + amount_in;
+    pool.asset_reserve = pool.asset_reserve - asset_out;
+
+    // K-GUARD: Validate k unchanged (feeless swap preserves k within rounding)
+    // Formula: (asset - asset_out) * (stable + amount_in) ≈ asset * stable
+    // Allow tiny rounding tolerance (1 part in 10^6)
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000; // 0.0001% tolerance
+    assert!(k_delta <= tolerance, EKInvariantViolation);
+
+    asset_out
+}
+
+/// Simulate asset→stable swap without executing
+/// Pure function for arbitrage optimization
+///
+/// AUDIT FIX: Match execution exactly - fee charged on OUTPUT only (not input!)
+public fun simulate_swap_asset_to_stable(
+    pool: &LiquidityPool,
+    amount_in: u64,
+): u64 {
+    if (amount_in == 0) return 0;
+    if (pool.asset_reserve == 0 || pool.stable_reserve == 0) return 0;
+
+    // CRITICAL FIX: Match swap_asset_to_stable execution exactly
+    // Fee is charged on OUTPUT, NOT input!
+    let amount_out_before_fee = calculate_output(
+        amount_in,  // No input fee!
+        pool.asset_reserve,
+        pool.stable_reserve,
+    );
+
+    if (amount_out_before_fee >= pool.stable_reserve) return 0;
+
+    // Calculate fee from output (matching swap function logic)
+    let total_fee = calculate_fee(amount_out_before_fee, pool.fee_percent);
+    if (amount_out_before_fee > total_fee) {
+        amount_out_before_fee - total_fee
+    } else {
+        0
+    }
+}
+
+/// Simulate stable→asset swap without executing
+public fun simulate_swap_stable_to_asset(
+    pool: &LiquidityPool,
+    amount_in: u64,
+): u64 {
+    if (amount_in == 0) return 0;
+    if (pool.asset_reserve == 0 || pool.stable_reserve == 0) return 0;
+
+    // Simulate with fee
+    let total_fee = calculate_fee(amount_in, pool.fee_percent);
+    let amount_in_after_fee = if (amount_in > total_fee) {
+        amount_in - total_fee
+    } else {
+        return 0
+    };
+
+    let asset_out = calculate_output(
+        amount_in_after_fee,
+        pool.stable_reserve,
+        pool.asset_reserve,
+    );
+
+    if (asset_out >= pool.asset_reserve) return 0;
+
+    asset_out
 }
 
 fun calculate_price_impact(
@@ -578,9 +738,8 @@ public fun update_twap_observation(pool: &mut LiquidityPool, clock: &Clock) {
     pool.oracle.write_observation(timestamp, current_price);
 }
 
-public fun set_oracle_start_time(pool: &mut LiquidityPool, state: &MarketState) {
-    assert!(get_ms_id(pool) == state.market_id(), EMarketIdMismatch);
-    let trading_start_time = state.get_trading_start();
+public fun set_oracle_start_time(pool: &mut LiquidityPool, market_id: ID, trading_start_time: u64) {
+    assert!(get_ms_id(pool) == market_id, EMarketIdMismatch);
     pool.oracle.set_oracle_start_time(trading_start_time);
 }
 
@@ -631,6 +790,28 @@ public fun get_ms_id(pool: &LiquidityPool): ID {
 
 public fun reset_protocol_fees(pool: &mut LiquidityPool) {
     pool.protocol_fees = 0;
+}
+
+/// Add subsidy to reserves (for keeper-cranked subsidy system)
+/// Directly increases reserves without minting LP tokens
+/// Benefits existing LPs by increasing k
+///
+/// CRITICAL: Only callable by liquidity_subsidy module to prevent manipulation
+public(package) fun add_subsidy_to_reserves(
+    pool: &mut LiquidityPool,
+    asset_add: u64,
+    stable_add: u64,
+) {
+    // K-GUARD: Adding subsidy should increase k (benefits LPs)
+    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+
+    // Add to reserves directly
+    pool.asset_reserve = pool.asset_reserve + asset_add;
+    pool.stable_reserve = pool.stable_reserve + stable_add;
+
+    // K-GUARD: Validate k increased
+    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    assert!(k_after > k_before, EKInvariantViolation);
 }
 
 // === Test Functions ===

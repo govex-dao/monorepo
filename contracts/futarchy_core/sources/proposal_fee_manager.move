@@ -84,9 +84,9 @@ public fun deposit_queue_fee(
 ) {
     let amount = fee_coin.value();
     if (amount > 0) {
-        // Split fee: 80% to queue, 20% to protocol (same as AMM fees)
+        // Split fee: 80% to queue, 20% to protocol (same as conditional AMM fees)
         // Use mul_div pattern for precision and overflow safety
-        let protocol_share = math::mul_div_to_64(amount, constants::protocol_fee_share_bps(), constants::total_fee_bps());
+        let protocol_share = math::mul_div_to_64(amount, constants::conditional_protocol_fee_share_bps(), constants::total_fee_bps());
         let queue_share = amount - protocol_share;
 
         let mut fee_balance = fee_coin.into_balance();

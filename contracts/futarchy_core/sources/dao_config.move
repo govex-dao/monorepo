@@ -8,6 +8,7 @@ use std::{
 };
 use sui::url::{Self, Url};
 use futarchy_one_shot_utils::constants;
+use futarchy_markets::liquidity_subsidy_protocol::{Self, ProtocolSubsidyConfig};
 
 // === Errors ===
 const EInvalidMinAmount: u64 = 0; // Minimum amount must be positive
@@ -47,6 +48,10 @@ public struct TradingParams has store, drop, copy {
     // Max percentage (in basis points) of AMM reserves that can be auto-swapped per proposal
     // Default: 1000 bps (10%) - prevents market from becoming too illiquid for trading
     max_amm_swap_percent_bps: u64,
+    // Percentage of liquidity that moves to conditional markets when proposal launches
+    // Default: 10000 bps (100%) - all liquidity moves (original Hanson quantum model)
+    // Lower values (e.g., 8000 = 80%) keep some liquidity in spot pool for trading
+    conditional_liquidity_ratio_bps: u64,
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
@@ -136,6 +141,7 @@ public struct DaoConfig has store, drop, copy {
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     multisig_config: MultisigConfig,
+    subsidy_config: ProtocolSubsidyConfig,  // Liquidity subsidy configuration
     optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
     optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
     challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
@@ -153,6 +159,7 @@ public fun new_trading_params(
     spot_amm_fee_bps: u64,
     market_op_review_period_ms: u64,
     max_amm_swap_percent_bps: u64,
+    conditional_liquidity_ratio_bps: u64,
 ): TradingParams {
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
@@ -169,6 +176,9 @@ public fun new_trading_params(
     // Max swap percent must be reasonable (0-100%)
     assert!(max_amm_swap_percent_bps <= constants::max_fee_bps(), EInvalidFee);
 
+    // Conditional liquidity ratio must be 0-100% (0 = all stays in spot, 10000 = all to conditional)
+    assert!(conditional_liquidity_ratio_bps <= constants::max_fee_bps(), EInvalidFee);
+
     TradingParams {
         min_asset_amount,
         min_stable_amount,
@@ -178,6 +188,7 @@ public fun new_trading_params(
         spot_amm_fee_bps,
         market_op_review_period_ms,
         max_amm_swap_percent_bps,
+        conditional_liquidity_ratio_bps,
     }
 }
 
@@ -351,6 +362,7 @@ public fun new_dao_config(
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     multisig_config: MultisigConfig,
+    subsidy_config: ProtocolSubsidyConfig,
     optimistic_challenge_fee: u64,
     optimistic_challenge_period_ms: u64,
     challenge_bounty: u64,
@@ -370,6 +382,7 @@ public fun new_dao_config(
         conditional_coin_config,
         quota_config,
         multisig_config,
+        subsidy_config,
         optimistic_challenge_fee,
         optimistic_challenge_period_ms,
         challenge_bounty,
@@ -389,6 +402,7 @@ public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditi
 public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
 public fun market_op_review_period_ms(params: &TradingParams): u64 { params.market_op_review_period_ms }
 public fun max_amm_swap_percent_bps(params: &TradingParams): u64 { params.max_amm_swap_percent_bps }
+public fun conditional_liquidity_ratio_bps(params: &TradingParams): u64 { params.conditional_liquidity_ratio_bps }
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
@@ -507,6 +521,10 @@ public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigCo
 /// DEPRECATED: multisig_count is no longer tracked. Always returns 0.
 public fun multisig_count(_multisig: &MultisigConfig): u64 { 0 }
 
+// Subsidy config getters
+public fun subsidy_config(config: &DaoConfig): &ProtocolSubsidyConfig { &config.subsidy_config }
+public(package) fun subsidy_config_mut(config: &mut DaoConfig): &mut ProtocolSubsidyConfig { &mut config.subsidy_config }
+
 // Challenge config getters (DAO-level)
 public fun optimistic_challenge_fee(config: &DaoConfig): u64 { config.optimistic_challenge_fee }
 public fun optimistic_challenge_period_ms(config: &DaoConfig): u64 { config.optimistic_challenge_period_ms }
@@ -604,6 +622,11 @@ public(package) fun set_market_op_review_period_ms(params: &mut TradingParams, p
 public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, percent_bps: u64) {
     assert!(percent_bps <= constants::max_fee_bps(), EInvalidFee);
     params.max_amm_swap_percent_bps = percent_bps;
+}
+
+public(package) fun set_conditional_liquidity_ratio_bps(params: &mut TradingParams, ratio_bps: u64) {
+    assert!(ratio_bps <= constants::max_fee_bps(), EInvalidFee);
+    params.conditional_liquidity_ratio_bps = ratio_bps;
 }
 
 // TWAP config direct setters
@@ -784,6 +807,27 @@ public(package) fun decrement_multisig_count(_multisig: &mut MultisigConfig) {
     // No-op: multisig_count is deprecated
 }
 
+// Subsidy config setters
+public(package) fun set_subsidy_enabled(subsidy: &mut ProtocolSubsidyConfig, enabled: bool) {
+    liquidity_subsidy_protocol::set_enabled(subsidy, enabled);
+}
+
+public(package) fun set_subsidy_per_outcome_per_crank(subsidy: &mut ProtocolSubsidyConfig, amount: u64) {
+    liquidity_subsidy_protocol::set_subsidy_per_outcome_per_crank(subsidy, amount);
+}
+
+public(package) fun set_subsidy_crank_steps(subsidy: &mut ProtocolSubsidyConfig, steps: u64) {
+    liquidity_subsidy_protocol::set_crank_steps(subsidy, steps);
+}
+
+public(package) fun set_subsidy_keeper_fee_per_crank(subsidy: &mut ProtocolSubsidyConfig, fee: u64) {
+    liquidity_subsidy_protocol::set_keeper_fee_per_crank(subsidy, fee);
+}
+
+public(package) fun set_subsidy_min_crank_interval_ms(subsidy: &mut ProtocolSubsidyConfig, interval: u64) {
+    liquidity_subsidy_protocol::set_min_crank_interval_ms(subsidy, interval);
+}
+
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -825,6 +869,8 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -843,6 +889,7 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -861,6 +908,7 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -879,6 +927,7 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -897,6 +946,7 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -915,6 +965,7 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -933,6 +984,7 @@ public fun update_conditional_coin_config(config: &DaoConfig, new_coin_config: C
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -951,6 +1003,7 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
         multisig_config: config.multisig_config,
+        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -970,6 +1023,7 @@ public fun default_trading_params(): TradingParams {
         spot_amm_fee_bps: 30, // 0.3% for spot pool
         market_op_review_period_ms: 0, // 0 = immediate (allows atomic market init)
         max_amm_swap_percent_bps: 1000, // 10% max swap per proposal (prevents illiquidity)
+        conditional_liquidity_ratio_bps: 10000, // 100% to conditional (original Hanson quantum model)
     }
 }
 

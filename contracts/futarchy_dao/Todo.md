@@ -91,6 +91,18 @@ or should have a type that doesnt and type that does?
 - [ ] DAO LEVEL CONFIG TO TOGGLE HOW MUCH FOUNDERS CAN MINT FOR THEMSLEVES AT START?
 - [ ] migrate coin metadata 
 
+- [ ] Give daos affiliate cap
+- [ ] And field for affiliate id 
+- [ ] Add time ynlock to price thing
+- [ ] Add hook for conditionalo coin order books need types and deep token
+- [ ] And field for affiliate id 
+
+- [ ] Add time ynlock to price thing
+
+- [ ] Add hook for conditionalo coin order books need types and deep token
+- [ ] send data points!!!
+- [ ] dao subsidise conditional liquidity
+
 - [ ] NFT for LP'ing in AMM so other protocols can track positions!!! look at how turbos and cetus do it
 https://suiscan.xyz/mainnet/object/0x31624aae279cf62b1697aaedad329349626cf6f0777b180a79b0660af582ba63/fields
 pawtato.app

@@ -53,8 +53,9 @@ public fun empty_amm_and_return_to_provider<AssetType, StableType, AssetConditio
     let winning_outcome = proposal.get_winning_outcome();
     market_state.assert_market_finalized();
 
-    // Get winning pool and empty its liquidity (returns conditional coin amounts)
-    let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    // Get winning pool from market_state and empty its liquidity (returns conditional coin amounts)
+    let market_state = escrow.get_market_state_mut();
+    let pool = futarchy_markets::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
     let (conditional_asset_amt, conditional_stable_amt) = pool.empty_all_amm_liquidity(ctx);
 
     // Burn the conditional coins (1:1 with spot due to quantum liquidity)
@@ -91,7 +92,9 @@ public fun empty_amm_and_return_to_dao<AssetType, StableType, AssetConditionalCo
     market_state.assert_market_finalized();
 
     let winning_outcome = proposal.get_winning_outcome();
-    let pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    // Get winning pool from market_state
+    let market_state = escrow.get_market_state_mut();
+    let pool = futarchy_markets::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
     let (conditional_asset_amt, conditional_stable_amt) = pool.empty_all_amm_liquidity(ctx);
 
     // Burn conditional coins and withdraw spot tokens
@@ -231,8 +234,9 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
         stable_in,
     );
 
-    // Get the pool for this outcome
-    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    // Get the pool for this outcome from market_state
+    let market_state = escrow.get_market_state_mut();
+    let pool = futarchy_markets::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
 
     // Add liquidity through the AMM (updates virtual reserves)
     let lp_amount = conditional_amm::add_liquidity_proportional(
@@ -279,8 +283,9 @@ public entry fun remove_liquidity_entry<AssetType, StableType, AssetConditionalC
         lp_token,
     );
 
-    // Get the pool for this outcome
-    let pool = proposal.get_pool_mut_by_outcome((outcome_idx as u8));
+    // Get the pool for this outcome from market_state
+    let market_state = escrow.get_market_state_mut();
+    let pool = futarchy_markets::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
 
     // Remove liquidity through the AMM (updates virtual reserves)
     let (asset_amount, stable_amount) = conditional_amm::remove_liquidity_proportional(
@@ -329,7 +334,9 @@ public fun collect_protocol_fees<AssetType, StableType>(
     assert!(proposal.is_winning_outcome_set(), EInvalidState);
 
     let winning_outcome = proposal.get_winning_outcome();
-    let winning_pool = proposal.get_pool_mut_by_outcome((winning_outcome as u8));
+    // Get winning pool from market_state
+    let market_state = escrow.get_market_state_mut();
+    let winning_pool = futarchy_markets::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
     let protocol_fee_amount = winning_pool.get_protocol_fees();
 
     if (protocol_fee_amount > 0) {
@@ -364,9 +371,10 @@ public fun collect_protocol_fees<AssetType, StableType>(
 
 #[test_only]
 public fun get_liquidity_for_proposal<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
+    escrow: &futarchy_markets::coin_escrow::TokenEscrow<AssetType, StableType>,
 ): vector<u64> {
-    let pools = proposal.get_amm_pools();
+    let market_state = escrow.get_market_state();
+    let pools = futarchy_markets::market_state::borrow_amm_pools(market_state);
     let mut liquidity = vector[];
     let mut i = 0;
     while (i < pools.length()) {

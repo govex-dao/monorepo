@@ -74,9 +74,9 @@ public fun quote_spot_asset_to_stable<AssetType, StableType>(
     
     // Step 1: Complete set minting creates amount_in of each conditional token
     let conditional_asset_amount = amount_in;
-    
+
     // Step 2: Get the AMM for this outcome
-    let amm = proposal.get_pool_by_outcome((outcome_idx as u8));
+    let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
     
     // Step 3: Calculate swap output for asset -> stable
     let stable_out = conditional_amm::quote_swap_asset_to_stable(
@@ -134,9 +134,9 @@ public fun quote_spot_stable_to_asset<AssetType, StableType>(
     
     // Step 1: Complete set minting creates amount_in of each conditional token
     let conditional_stable_amount = amount_in;
-    
+
     // Step 2: Get the AMM for this outcome
-    let amm = proposal.get_pool_by_outcome((outcome_idx as u8));
+    let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
     
     // Step 3: Calculate swap output for stable -> asset
     let asset_out = conditional_amm::quote_swap_stable_to_asset(
@@ -193,9 +193,9 @@ public fun quote_spot_asset_to_stable_detailed<AssetType, StableType>(
     );
     
     // Get AMM for detailed calculations
-    let amm = proposal.get_pool_by_outcome((outcome_idx as u8));
+    let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
     let (asset_reserve_before, stable_reserve_before) = conditional_amm::get_reserves(amm);
-    
+
     // Calculate reserves after trade
     let asset_reserve_after = asset_reserve_before + amount_in;
     let stable_reserve_after = stable_reserve_before - quote.amount_out;
@@ -242,11 +242,11 @@ public fun quote_spot_stable_to_asset_detailed<AssetType, StableType>(
         amount_in,
         clock
     );
-    
+
     // Get AMM for detailed calculations
-    let amm = proposal.get_pool_by_outcome((outcome_idx as u8));
+    let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
     let (asset_reserve_before, stable_reserve_before) = conditional_amm::get_reserves(amm);
-    
+
     // Calculate reserves after trade
     let stable_reserve_after = stable_reserve_before + amount_in;
     let asset_reserve_after = asset_reserve_before - quote.amount_out;

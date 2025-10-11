@@ -61,8 +61,9 @@ public fun create_outcome_markets<AssetType, StableType>(
         let stable_amt = stable_amounts[i];
 
         let ms = escrow.get_market_state();
+        let market_id = futarchy_markets::market_state::market_id(ms);
         let pool = conditional_amm::new_pool(
-            ms,
+            market_id,
             (i as u8),
             amm_total_fee_bps,
             asset_amt,

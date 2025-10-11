@@ -88,9 +88,14 @@ public struct TwapConfig has store {
     twap_threshold: u64,
 }
 
-
-
-
+/// Early resolution metrics for tracking proposal stability
+/// Tracks when winner last flipped across ALL N markets
+/// Simple design: just track last flip time, no exponential decay
+public struct EarlyResolveMetrics has store {
+    // Winner tracking (computed from ALL N markets)
+    current_winner_index: u64,      // Which outcome is currently winning
+    last_flip_time_ms: u64,         // When did winner last change
+}
 
 /// Outcome-related data
 public struct OutcomeData has store {
@@ -113,9 +118,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     proposer: address, // The original proposer.
     liquidity_provider: Option<address>,
     withdraw_only_mode: bool, // When true, return liquidity to provider instead of auto-reinvesting
-    
-    // Market-related fields
-    amm_pools: Option<vector<LiquidityPool>>,
+
+    // Market-related fields (pools now live in MarketState)
     escrow_id: Option<ID>,
     market_state_id: Option<ID>,
 
@@ -132,6 +136,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     timing: ProposalTiming,
     liquidity_config: LiquidityConfig,
     twap_config: TwapConfig,
+    early_resolve_metrics: Option<EarlyResolveMetrics>,
     outcome_data: OutcomeData,
     
     // Fee-related fields
@@ -215,6 +220,8 @@ public struct ProposalOutcomeAdded has copy, drop {
     creator: address,
     timestamp: u64,
 }
+
+// Early resolution events moved to early_resolve.move
 
 // === Public Functions ===
 
@@ -371,6 +378,10 @@ public fun initialize_market<AssetType, StableType>(
         ctx
     );
 
+    // Move pools to MarketState (architectural fix: pools belong to market, not proposal)
+    let market_state = coin_escrow::get_market_state_mut(&mut escrow);
+    market_state::set_amm_pools(market_state, amm_pools);
+
     // Prepare intent_specs and actions_per_outcome
     let mut intent_specs = vector::tabulate!(outcome_count, |_| option::none<InitActionSpecs>());
     let mut actions_per_outcome = vector::tabulate!(outcome_count, |_| 0);
@@ -392,7 +403,6 @@ public fun initialize_market<AssetType, StableType>(
         proposer,
         liquidity_provider: option::some(ctx.sender()),
         withdraw_only_mode: false,
-        amm_pools: option::some(amm_pools),
         escrow_id: option::some(escrow_id),
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
@@ -421,6 +431,7 @@ public fun initialize_market<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
+        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count,
             outcome_messages: initial_outcome_messages,
@@ -522,7 +533,6 @@ public fun new_premarket<AssetType, StableType>(
         proposer,
         liquidity_provider: option::none(),
         withdraw_only_mode: false,
-        amm_pools: option::none(),
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
@@ -551,6 +561,7 @@ public fun new_premarket<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
+        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count,
             outcome_messages,
@@ -723,17 +734,20 @@ public fun initialize_market_with_escrow<AssetType, StableType>(
         clock,
         ctx
     );
-    
+
+    // Move pools to MarketState (architectural fix: pools belong to market, not proposal)
+    let market_state = coin_escrow::get_market_state_mut(&mut escrow);
+    market_state::set_amm_pools(market_state, amm_pools);
+
     // Update proposal's liquidity amounts
     proposal.liquidity_config.asset_amounts = initial_asset_amounts;
     proposal.liquidity_config.stable_amounts = initial_stable_amounts;
-    
+
     // Initialize market fields: PREMARKET → REVIEW
     initialize_market_fields(
         proposal,
         market_state_id,
         escrow_id,
-        amm_pools,
         clock.timestamp_ms(),
         sender
     );
@@ -834,12 +848,11 @@ public entry fun add_outcome_with_fee<AssetType, StableType>(
 }
 
 /// Initializes the market-related fields of the proposal.
+/// Pools are now stored in MarketState, not Proposal
 public fun initialize_market_fields<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     market_state_id: ID,
     escrow_id: ID,
-    amm_pools: vector<LiquidityPool>,
-    // LP tracking moved to conditional tokens
     initialized_at: u64,
     liquidity_provider: address,
 ) {
@@ -848,7 +861,7 @@ public fun initialize_market_fields<AssetType, StableType>(
     // Use option::fill to replace None with Some value
     option::fill(&mut proposal.market_state_id, market_state_id);
     option::fill(&mut proposal.escrow_id, escrow_id);
-    option::fill(&mut proposal.amm_pools, amm_pools);
+    // amm_pools removed - now stored in MarketState
     // LP caps no longer needed - using conditional tokens
     option::fill(&mut proposal.timing.market_initialized_at, initialized_at);
     option::fill(&mut proposal.liquidity_provider, liquidity_provider);
@@ -881,13 +894,15 @@ public fun take_fee_escrow<AssetType, StableType>(
     sui::balance::split(fee_balance, amount)
 }
 
-/// Searches the proposal's liquidity pools for an oracle matching the target ID.
+/// Get TWAPs from all pools via MarketState
 /// Returns a reference to that oracle; aborts if not found.
 public fun get_twaps_for_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
     clock: &Clock,
 ): vector<u128> {
-    let pools = proposal.amm_pools.borrow_mut();
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let pools = market_state::borrow_amm_pools_mut(market_state);
     let mut twaps = vector[];
     let mut i = 0;
     while (i < pools.length()) {
@@ -898,6 +913,100 @@ public fun get_twaps_for_proposal<AssetType, StableType>(
     };
     twaps
 }
+
+/// Calculate current winner by INSTANT PRICE (fast flip detection)
+/// Returns (winner_index, winner_price, spread)
+/// Used for flip detection - faster than TWAP
+public fun calculate_current_winner_by_price<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+): (u64, u128, u128) {
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let pools = market_state::borrow_amm_pools_mut(market_state);
+    let outcome_count = pools.length();
+
+    assert!(outcome_count >= 2, EInvalidOutcome);
+
+    // Get instant prices from all pools
+    let mut winner_idx = 0u64;
+    let mut winner_price = conditional_amm::get_current_price(&pools[0]);
+    let mut second_price = 0u128;
+
+    let mut i = 1u64;
+    while (i < outcome_count) {
+        let current_price = conditional_amm::get_current_price(&pools[i]);
+
+        if (current_price > winner_price) {
+            // New winner
+            second_price = winner_price;
+            winner_price = current_price;
+            winner_idx = i;
+        } else if (current_price > second_price) {
+            // New second place
+            second_price = current_price;
+        };
+
+        i = i + 1;
+    };
+
+    // Calculate spread (winner - second)
+    let spread = if (winner_price > second_price) {
+        winner_price - second_price
+    } else {
+        0u128
+    };
+
+    (winner_idx, winner_price, spread)
+}
+
+/// Calculate current winner by TWAP (for final resolution - manipulation resistant)
+/// Returns (winner_index, winner_twap, spread)
+/// Used for final resolution - slower but more secure
+public fun calculate_current_winner<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    clock: &Clock,
+): (u64, u128, u128) {
+    // Get TWAPs from all markets
+    let twaps = get_twaps_for_proposal(proposal, escrow, clock);
+    let outcome_count = twaps.length();
+
+    assert!(outcome_count >= 2, EInvalidOutcome);  // Need at least 2 outcomes
+
+    // Find highest and second-highest TWAPs
+    let mut winner_idx = 0u64;
+    let mut winner_twap = *twaps.borrow(0);
+    let mut second_twap = 0u128;
+
+    let mut i = 1u64;
+    while (i < outcome_count) {
+        let current_twap = *twaps.borrow(i);
+
+        if (current_twap > winner_twap) {
+            // New winner found
+            second_twap = winner_twap;
+            winner_twap = current_twap;
+            winner_idx = i;
+        } else if (current_twap > second_twap) {
+            // New second place
+            second_twap = current_twap;
+        };
+
+        i = i + 1;
+    };
+
+    // Calculate spread (winner - second)
+    let spread = if (winner_twap > second_twap) {
+        winner_twap - second_twap
+    } else {
+        0u128
+    };
+
+    (winner_idx, winner_twap, spread)
+}
+
+// Early resolve functions removed to avoid circular dependencies.
+// Callers should use early_resolve::update_metrics() and early_resolve::check_eligibility() directly.
 
 // === Private Functions ===
 
@@ -1030,10 +1139,12 @@ public fun get_metadata<AssetType, StableType>(
 
 public fun get_amm_pool_ids<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
+    escrow: &TokenEscrow<AssetType, StableType>,
 ): vector<ID> {
     let mut ids = vector[];
     let mut i = 0;
-    let pools = proposal.amm_pools.borrow();
+    let market_state = coin_escrow::get_market_state(escrow);
+    let pools = market_state::borrow_amm_pools(market_state);
     let len = pools.length();
     while (i < len) {
         let pool = &pools[i];
@@ -1045,19 +1156,23 @@ public fun get_amm_pool_ids<AssetType, StableType>(
 
 public fun get_pool_mut_by_outcome<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u8,
 ): &mut LiquidityPool {
     assert!((outcome_idx as u64) < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
-    let pools_mut = proposal.amm_pools.borrow_mut();
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let pools_mut = market_state::borrow_amm_pools_mut(market_state);
     get_pool_mut(pools_mut, outcome_idx)
 }
 
 public fun get_pool_by_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
+    escrow: &TokenEscrow<AssetType, StableType>,
     outcome_idx: u8,
 ): &LiquidityPool {
     assert!((outcome_idx as u64) < proposal.outcome_data.outcome_count, EOutcomeOutOfBounds);
-    let pools = proposal.amm_pools.borrow();
+    let market_state = coin_escrow::get_market_state(escrow);
+    let pools = market_state::borrow_amm_pools(market_state);
     let mut i = 0;
     let len = pools.length();
     while (i < len) {
@@ -1115,14 +1230,18 @@ public fun proposal_id<AssetType, StableType>(proposal: &Proposal<AssetType, Sta
 
 public fun get_amm_pools<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
+    escrow: &TokenEscrow<AssetType, StableType>,
 ): &vector<LiquidityPool> {
-    proposal.amm_pools.borrow()
+    let market_state = coin_escrow::get_market_state(escrow);
+    market_state::borrow_amm_pools(market_state)
 }
 
 public fun get_amm_pools_mut<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
 ): &mut vector<LiquidityPool> {
-    proposal.amm_pools.borrow_mut()
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+    market_state::borrow_amm_pools_mut(market_state)
 }
 
 public fun get_created_at<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): u64 {
@@ -1209,16 +1328,20 @@ public fun advance_state<AssetType, StableType>(
             // Start trading in the market state
             let market = coin_escrow::get_market_state_mut(escrow);
             market_state::start_trading(market, proposal.timing.trading_period_ms, clock);
-            
+
+            // Extract market_id and trading_start_time before borrowing pools
+            let market_id = market_state::market_id(market);
+            let trading_start_time = market_state::get_trading_start(market);
+
             // Set oracle start time for all pools when trading begins
-            let pools = proposal.amm_pools.borrow_mut();
+            let pools = market_state::borrow_amm_pools_mut(market);
             let mut i = 0;
             while (i < pools.length()) {
                 let pool = &mut pools[i];
-                conditional_amm::set_oracle_start_time(pool, market);
+                conditional_amm::set_oracle_start_time(pool, market_id, trading_start_time);
                 i = i + 1;
             };
-            
+
             return true
         };
     };
@@ -1290,8 +1413,8 @@ public fun finalize_proposal<AssetType, StableType>(
     
     // Critical fix: Compute the winning outcome on-chain from TWAP prices
     // Get TWAP prices from all pools
-    let twap_prices = get_twaps_for_proposal(proposal, clock);
-    
+    let twap_prices = get_twaps_for_proposal(proposal, escrow, clock);
+
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
@@ -1347,6 +1470,87 @@ public fun get_outcome_creator_fees<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>
 ): &vector<u64> {
     &proposal.outcome_data.outcome_creator_fees
+}
+
+/// Get early resolve metrics (if enabled)
+public fun get_early_resolve_metrics<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+): &Option<EarlyResolveMetrics> {
+    &proposal.early_resolve_metrics
+}
+
+// time_until_eligible() removed to avoid circular dependencies.
+// Callers should use early_resolve::time_until_eligible() directly.
+
+// === Package-Level Accessors for early_resolve Module ===
+
+/// Check if proposal has early resolve metrics initialized
+/// Used by early_resolve module to validate metrics exist before processing
+public(package) fun has_early_resolve_metrics<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): bool {
+    proposal.early_resolve_metrics.is_some()
+}
+
+/// Borrow early resolve metrics immutably
+/// Used by early_resolve module to read current metrics state
+public(package) fun borrow_early_resolve_metrics<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): &EarlyResolveMetrics {
+    proposal.early_resolve_metrics.borrow()
+}
+
+/// Borrow early resolve metrics mutably
+/// Used by early_resolve module to update flip tracking
+public(package) fun borrow_early_resolve_metrics_mut<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>
+): &mut EarlyResolveMetrics {
+    proposal.early_resolve_metrics.borrow_mut()
+}
+
+/// Get proposal start time for early resolve calculations
+/// Returns market_initialized_at if available, otherwise created_at
+public(package) fun get_start_time_for_early_resolve<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): u64 {
+    if (proposal.timing.market_initialized_at.is_some()) {
+        *proposal.timing.market_initialized_at.borrow()
+    } else {
+        proposal.timing.created_at
+    }
+}
+
+// === Field Accessors for EarlyResolveMetrics ===
+
+/// Get current winner index from metrics
+public(package) fun metrics_current_winner(metrics: &EarlyResolveMetrics): u64 {
+    metrics.current_winner_index
+}
+
+/// Get last flip time from metrics
+public(package) fun metrics_last_flip_time_ms(metrics: &EarlyResolveMetrics): u64 {
+    metrics.last_flip_time_ms
+}
+
+/// Set current winner index in metrics
+public(package) fun metrics_set_current_winner(metrics: &mut EarlyResolveMetrics, winner_idx: u64) {
+    metrics.current_winner_index = winner_idx;
+}
+
+/// Set last flip time in metrics
+public(package) fun metrics_set_last_flip_time_ms(metrics: &mut EarlyResolveMetrics, time_ms: u64) {
+    metrics.last_flip_time_ms = time_ms;
+}
+
+/// Create new EarlyResolveMetrics
+public(package) fun new_early_resolve_metrics(
+    initial_winner: u64,
+    current_time_ms: u64,
+): EarlyResolveMetrics {
+    EarlyResolveMetrics {
+        current_winner_index: initial_winner,
+        last_flip_time_ms: current_time_ms,
+    }
 }
 
 public fun get_liquidity_provider<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): Option<address> {
@@ -1537,7 +1741,6 @@ public fun get_details_mut<AssetType, StableType>(proposal: &mut Proposal<AssetT
     &mut proposal.details
 }
 
-
 // === Test Functions ===
 
 #[test_only]
@@ -1575,7 +1778,6 @@ public fun new_for_testing<AssetType, StableType>(
         proposer,
         liquidity_provider,
         withdraw_only_mode: false,
-        amm_pools: option::none(),
         escrow_id: option::none(),
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
@@ -1604,6 +1806,7 @@ public fun new_for_testing<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
+        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count: outcome_count as u64,
             outcome_messages,
@@ -1616,6 +1819,9 @@ public fun new_for_testing<AssetType, StableType>(
         amm_total_fee_bps,
         fee_escrow,
         treasury_address,
+        policy_modes: vector::tabulate!(outcome_count as u64, |_| 0u8),
+        required_council_ids: vector::tabulate!(outcome_count as u64, |_| option::none()),
+        council_approval_proofs: vector::tabulate!(outcome_count as u64, |_| option::none()),
     }
 }
 

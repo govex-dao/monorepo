@@ -3,39 +3,45 @@
 module futarchy_dao::ptb_executor;
 
 // === Imports ===
-use std::string::{Self, String};
 use account_protocol::{
     account::{Self, Account},
-    executable::{Self, Executable},
+    executable::Executable,
 };
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     version
 };
+use futarchy_dao::proposal_lifecycle;
+use futarchy_markets::proposal::Proposal;
 use sui::{
-    clock::{Self, Clock},
+    clock::Clock,
     tx_context::TxContext,
 };
+
+// === Errors ===
+const EProposalNotPassed: u64 = 1;
+const EProposalAlreadyExecuted: u64 = 2;
 
 // === Entry Functions for PTB Composition ===
 
 /// Create an Executable from an approved proposal
 /// This is the first call in a PTB execution chain
-public fun create_executable_from_proposal(
+/// Validates proposal state and marks it as executed
+public fun create_executable_from_proposal<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    proposal_id: u64,
+    proposal: &mut Proposal<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Executable<FutarchyOutcome> {
-    // Create the intent key from proposal ID
-    let mut intent_key = b"proposal_".to_string();
-    intent_key.append(proposal_id.to_string());
+    // Validate proposal is passed and not yet executed
+    assert!(proposal_lifecycle::is_passed(proposal), EProposalNotPassed);
+    assert!(!proposal_lifecycle::is_executed(proposal), EProposalAlreadyExecuted);
 
-    // Create the outcome for this proposal
-    let outcome = futarchy_config::new_futarchy_outcome(
-        intent_key,
-        clock.timestamp_ms()
-    );
+    // Mark proposal as executed
+    proposal_lifecycle::mark_executed(proposal);
+
+    // Get the intent key from the proposal
+    let intent_key = proposal_lifecycle::intent_key(proposal);
 
     // Create executable from the account's stored intent
     let (_, executable) = account::create_executable(
@@ -52,17 +58,16 @@ public fun create_executable_from_proposal(
 
 /// Finalize execution and cleanup
 /// This is the last call in a PTB execution chain
+/// Consumes the Executable hot potato
 public fun finalize_execution(
-    executable: Executable<FutarchyOutcome>,
     account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext,
+    executable: Executable<FutarchyOutcome>,
 ) {
-    // Consume the executable using account's confirm_execution
-    account::confirm_execution(account, executable);
-
-    // Update account state if needed
-    // Emit events, etc.
-    let _ = ctx;
+    // Confirm execution - this will destroy the Executable
+    account::confirm_execution(
+        account,
+        executable,
+    );
 }
 
 // === Example PTB Execution Pattern ===
@@ -71,10 +76,11 @@ public fun finalize_execution(
 // ```typescript
 // const tx = new TransactionBlock();
 //
-// // Step 1: Create executable
+// // Step 1: Create executable (validates and marks proposal as executed)
 // const executable = tx.moveCall({
 //     target: `${package}::ptb_executor::create_executable_from_proposal`,
-//     arguments: [account, proposalId, clock],
+//     arguments: [account, proposal, clock],
+//     typeArguments: [AssetType, StableType],
 // });
 //
 // // Step 2: Execute each action by calling the appropriate do_* function
@@ -92,10 +98,10 @@ public fun finalize_execution(
 //     arguments: [executable, account, pool, amount],
 // });
 //
-// // Step 3: Finalize
+// // Step 3: Finalize (consumes executable hot potato)
 // tx.moveCall({
 //     target: `${package}::ptb_executor::finalize_execution`,
-//     arguments: [executable, account],
+//     arguments: [account, executable],
 // });
 //
 // await client.signAndExecuteTransactionBlock({ transactionBlock: tx });
