@@ -896,6 +896,10 @@ public fun get_active_proposal_id<AssetType, StableType>(
 /// 5. This function validates they match and returns registry
 ///
 /// This allows aggregators to start from spot_pool ID alone.
+///
+/// TODO: This function has circular dependency issues (needs types from futarchy_dao)
+/// Commented out until dependency structure is resolved
+/*
 public fun validate_arb_objects_and_borrow_registry<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
     proposal: &Proposal<AssetType, StableType>,
@@ -921,6 +925,7 @@ public fun validate_arb_objects_and_borrow_registry<AssetType, StableType>(
     assert!(pool.registry.is_some(), ENoRegistry);
     pool.registry.borrow_mut()
 }
+*/
 
 /// Get pool state (basic info)
 public fun get_pool_state<AssetType, StableType>(
@@ -962,7 +967,6 @@ public(package) fun reset_protocol_fees<AssetType, StableType>(
 public fun mark_liquidity_to_proposal<AssetType, StableType>(
     pool: &mut SpotAMM<AssetType, StableType>,
     conditional_liquidity_ratio_bps: u64,
-    oracle_conditional_threshold_bps: u64,
     clock: &Clock,
 ) {
     // Update SimpleTWAP one last time before liquidity moves to proposal
@@ -971,9 +975,11 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
     };
     // Record when liquidity moved to proposal (spot oracle freezes here)
     pool.last_proposal_usage = option::some(clock.timestamp_ms());
-    // Store lock parameters for liquidity-weighted oracle logic
+    // Store conditional liquidity ratio for liquidity-weighted oracle logic
     pool.conditional_liquidity_ratio_bps = conditional_liquidity_ratio_bps;
-    pool.oracle_conditional_threshold_bps = oracle_conditional_threshold_bps;
+    // Store protocol-level oracle threshold (5000 bps = 50%)
+    // Oracle reads from conditionals when spot has <50% liquidity (majority rule)
+    pool.oracle_conditional_threshold_bps = 5000;
 }
 
 /// Backfill spot's SimpleTWAP with winning conditional's data after proposal ends

@@ -1,7 +1,6 @@
 module futarchy_markets::coin_escrow;
 
 use futarchy_markets::market_state::MarketState;
-use futarchy_markets::spot_amm;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};

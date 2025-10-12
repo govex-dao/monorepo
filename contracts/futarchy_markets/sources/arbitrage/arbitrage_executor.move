@@ -22,7 +22,7 @@
 
 module futarchy_markets::arbitrage_executor;
 
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::proposal::{Self, Proposal};
 use futarchy_markets::swap_core::{Self, SwapSession};
@@ -61,7 +61,7 @@ public fun execute_spot_arbitrage_asset_to_stable<
     AssetConditionalCoin,
     StableConditionalCoin,
 >(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     registry: &mut SwapPositionRegistry<AssetType, StableType>,
@@ -104,7 +104,7 @@ public fun execute_spot_arbitrage_asset_to_stable<
     // - Front-validation (line 86-94) catches MEV before execution starts
     // - Final profit validation is implicit (must return min_profit_out worth)
     // - Setting min_amount_out=0 saves gas and simplifies API
-    let mut asset_from_spot = spot_amm::swap_stable_for_asset(
+    let mut asset_from_spot = unified_spot_pool::swap_stable_for_asset(
         spot_pool,
         stable_for_arb,
         0,  // No intermediate minimum (atomic execution guarantees)
@@ -340,7 +340,7 @@ public fun execute_spot_arbitrage_stable_to_asset<
     AssetConditionalCoin,
     StableConditionalCoin,
 >(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     registry: &mut SwapPositionRegistry<AssetType, StableType>,
@@ -381,7 +381,7 @@ public fun execute_spot_arbitrage_stable_to_asset<
     // - Front-validation (line 350-358) catches MEV before execution starts
     // - Final profit validation is implicit (must return min_profit_out worth)
     // - Setting min_amount_out=0 saves gas and simplifies API
-    let mut stable_from_spot = spot_amm::swap_asset_for_stable(
+    let mut stable_from_spot = unified_spot_pool::swap_asset_for_stable(
         spot_pool,
         asset_for_arb,
         0,  // No intermediate minimum (atomic execution guarantees)
@@ -622,7 +622,7 @@ public fun execute_optimal_spot_arbitrage<
     AssetConditionalCoin,
     StableConditionalCoin,
 >(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     registry: &mut SwapPositionRegistry<AssetType, StableType>,
@@ -816,7 +816,7 @@ public fun execute_conditional_arbitrage_stable_to_asset<
     AssetConditionalCoin,
     StableConditionalCoin,
 >(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     swap_session: &SwapSession,
@@ -870,7 +870,7 @@ public fun execute_conditional_arbitrage_stable_to_asset<
     let spot_asset = coin_escrow::withdraw_asset_balance(escrow, arb_amount, ctx);
 
     // Step 2: Swap in spot (asset → stable)
-    let spot_stable = spot_amm::swap_asset_for_stable(
+    let spot_stable = unified_spot_pool::swap_asset_for_stable(
         spot_pool,
         spot_asset,
         0,
@@ -1001,7 +1001,7 @@ public fun execute_conditional_arbitrage_asset_to_stable<
     AssetConditionalCoin,
     StableConditionalCoin,
 >(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     swap_session: &SwapSession,
@@ -1052,7 +1052,7 @@ public fun execute_conditional_arbitrage_asset_to_stable<
     let spot_stable = coin_escrow::withdraw_stable_balance(escrow, arb_amount, ctx);
 
     // Step 2: Swap in spot (stable → asset)
-    let spot_asset = spot_amm::swap_stable_for_asset(
+    let spot_asset = unified_spot_pool::swap_stable_for_asset(
         spot_pool,
         spot_stable,
         0,

@@ -37,7 +37,7 @@ use futarchy_multisig::policy_registry;
 use futarchy_core::priority_queue::{Self, ProposalQueue};
 use futarchy_markets::{
     fee::{Self, FeeManager},
-    account_spot_pool::{Self, AccountSpotPool},
+    unified_spot_pool::{Self, UnifiedSpotPool},
 };
 
 // === Errors ===
@@ -332,10 +332,11 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
 
-    // Create the spot pool but do not share it yet.
-    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
-    let spot_pool = account_spot_pool::new<AssetType, StableType>(
+    // Create the unified spot pool with aggregator support enabled
+    // This provides TWAP oracle, registry, and full aggregator features
+    let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
+        8000,  // oracle_conditional_threshold_bps (80% threshold from trading params)
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
@@ -413,7 +414,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // All objects are shared at the end of the function. If any step above failed,
     // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
-    account_spot_pool::share(spot_pool);
+    unified_spot_pool::share(spot_pool);
     transfer::public_share_object(queue);
     
     // --- Phase 4: Update Factory State and Emit Event ---
@@ -560,10 +561,10 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
     
-    // Create the spot pool but do not share it yet.
-    // Use spot_amm_fee_bps from the trading params (same as conditional fee in factory)
-    let spot_pool = account_spot_pool::new<AssetType, StableType>(
+    // Create the unified spot pool with aggregator support enabled
+    let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
+        8000,  // oracle_conditional_threshold_bps (80% threshold)
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
@@ -634,9 +635,9 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     // All objects are shared at the end of the function. If any step above failed,
     // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
-    account_spot_pool::share(spot_pool);
+    unified_spot_pool::share(spot_pool);
     transfer::public_share_object(queue);
-    
+
     // --- Phase 4: Update Factory State and Emit Event ---
 
     // Update factory state
@@ -689,7 +690,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     mut treasury_cap: Option<TreasuryCap<AssetType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Account<FutarchyConfig>, ProposalQueue<StableType>, AccountSpotPool<AssetType, StableType>) {
+): (Account<FutarchyConfig>, ProposalQueue<StableType>, UnifiedSpotPool<AssetType, StableType>) {
     // Check factory is active
     assert!(!factory.paused, EPaused);
 
@@ -754,9 +755,10 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     // Create account with config
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
 
-    // Create spot pool with default fee
-    let spot_pool = account_spot_pool::new<AssetType, StableType>(
+    // Create unified spot pool with aggregator support enabled
+    let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         30,  // 0.3% default fee (init actions can configure via governance)
+        8000,  // oracle_conditional_threshold_bps (80% threshold)
         ctx
     );
 
@@ -811,12 +813,12 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
 public fun finalize_and_share_dao<AssetType, StableType>(
     account: Account<FutarchyConfig>,
     queue: ProposalQueue<StableType>,
-    spot_pool: AccountSpotPool<AssetType, StableType>,
+    spot_pool: UnifiedSpotPool<AssetType, StableType>,
 ) {
     // Each module provides its own share function
     account::share_account(account);
     priority_queue::share_queue(queue);
-    account_spot_pool::share_pool(spot_pool);
+    unified_spot_pool::share(spot_pool);
 }
 
 // === Admin Functions ===

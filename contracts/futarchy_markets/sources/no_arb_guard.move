@@ -14,7 +14,7 @@
 /// - f_s, f_i = fees in basis points
 module futarchy_markets::no_arb_guard;
 
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 use futarchy_one_shot_utils::constants;
 
@@ -39,14 +39,14 @@ const PRICE_SCALE: u128 = 1_000_000_000_000; // 1e12
 /// - `floor`: Minimum spot price that prevents Spot→Cond→Spot arbitrage
 /// - `ceiling`: Maximum spot price that prevents Cond→Spot→Cond arbitrage
 public fun compute_noarb_band<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     pools: &vector<LiquidityPool>,
 ): (u128, u128) {
     let n = pools.length();
     assert!(n > 0, ENoPoolsProvided);
 
     let bps = constants::basis_points();           // 10000
-    let f_s = spot_amm::get_fee_bps(spot_pool);   // spot fee in bps
+    let f_s = unified_spot_pool::get_fee_bps(spot_pool);   // spot fee in bps
     let one_minus_fs = bps - f_s;                  // (1 - f_s)*bps
 
     // floor = (1 - f_s) * min_i [ (1 - f_i) * p_i ]
@@ -107,10 +107,10 @@ public fun compute_noarb_band<AssetType, StableType>(
 /// - If spot price is below floor (enables Spot→Cond→Spot arb)
 /// - If spot price is above ceiling (enables Cond→Spot→Cond arb)
 public fun ensure_spot_in_band<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     pools: &vector<LiquidityPool>,
 ) {
-    let p_spot = spot_amm::get_spot_price(spot_pool); // Returns u128 on PRICE_SCALE
+    let p_spot = unified_spot_pool::get_spot_price(spot_pool); // Returns u128 on PRICE_SCALE
     let (floor, ceiling) = compute_noarb_band(spot_pool, pools);
 
     assert!(p_spot >= floor && p_spot <= ceiling, ENoArbBandViolation);
@@ -119,10 +119,10 @@ public fun ensure_spot_in_band<AssetType, StableType>(
 /// Check if spot price is within band without reverting
 /// Returns: (is_in_band, current_price, floor, ceiling)
 public fun check_spot_in_band<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     pools: &vector<LiquidityPool>,
 ): (bool, u128, u128, u128) {
-    let p_spot = spot_amm::get_spot_price(spot_pool);
+    let p_spot = unified_spot_pool::get_spot_price(spot_pool);
     let (floor, ceiling) = compute_noarb_band(spot_pool, pools);
     let is_in_band = p_spot >= floor && p_spot <= ceiling;
 

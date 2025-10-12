@@ -1,11 +1,11 @@
 module futarchy_markets::spot_conditional_quoter;
 
-use std::option::Option;
+use std::option::{Self, Option};
 use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets::proposal::{Self, Proposal};
 use futarchy_markets::coin_escrow::TokenEscrow;
 use futarchy_markets::market_state::MarketState;
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use sui::clock::Clock;
 
 // === Introduction ===
@@ -421,13 +421,13 @@ public fun get_spot_price_after(detailed: &DetailedSpotQuote): u64 {
 // === Oracle Price Functions ===
 
 /// Get combined oracle price from spot AMM
-/// Uses get_twap_mut to ensure TWAP is up-to-date
+/// Uses get_twap_with_conditional for proper time-weighted combination
 public fun get_combined_oracle_price<AssetType, StableType>(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): u128 {
-    // Return the spot AMM TWAP
-    spot_amm::get_twap_mut(spot_pool, clock)
+    // Return the spot AMM TWAP (no conditional data in simple quoter)
+    unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
 }
 
 /// Check if a price meets a threshold condition
@@ -445,30 +445,30 @@ public fun check_price_threshold(
 
 /// Check if proposals can be created based on TWAP readiness
 public fun can_create_proposal<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): bool {
-    spot_amm::is_twap_ready(spot_pool, clock)
+    unified_spot_pool::is_twap_ready(spot_pool, clock)
 }
 
 /// Get time until proposals are allowed (returns 0 if ready)
 public fun time_until_proposals_allowed<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): u64 {
     // Check if TWAP is ready
-    if (spot_amm::is_twap_ready(spot_pool, clock)) {
+    if (unified_spot_pool::is_twap_ready(spot_pool, clock)) {
         return 0
     };
-    
+
     // Calculate remaining time (simplified - assumes 3 days needed)
     259_200_000 // Return 3 days in ms as placeholder
 }
 
 /// Get initialization price for conditional AMMs
 public fun get_initialization_price<AssetType, StableType>(
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): u128 {
-    spot_amm::get_twap_for_conditional_amm(spot_pool, clock)
+    unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
 }

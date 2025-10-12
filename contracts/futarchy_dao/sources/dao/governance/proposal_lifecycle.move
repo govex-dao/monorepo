@@ -39,7 +39,7 @@ use futarchy_governance_actions::{
     governance_intents,
 };
 use futarchy_markets::{
-    spot_amm::{Self, SpotAMM},
+    unified_spot_pool::{Self, UnifiedSpotPool},
     conditional_amm,
     subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow},
 };
@@ -181,7 +181,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
-    spot_pool: &mut SpotAMM<AssetType, StableType>, // Added: For marking liquidity movement
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>, // Added: For marking liquidity movement
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
     clock: &Clock,
@@ -236,11 +236,9 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     // If this proposal uses DAO liquidity, mark the spot pool with lock parameters
     if (uses_dao_liquidity) {
         let conditional_liquidity_ratio_bps = futarchy_config::conditional_liquidity_ratio_bps(config);
-        let oracle_conditional_threshold_bps = futarchy_config::oracle_conditional_threshold_bps(config);
-        spot_amm::mark_liquidity_to_proposal(
+        unified_spot_pool::mark_liquidity_to_proposal(
             spot_pool,
             conditional_liquidity_ratio_bps,
-            oracle_conditional_threshold_bps,
             clock
         );
     };
@@ -323,7 +321,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
     registry: &mut ProposalReservationRegistry, // Added: Registry for pruning
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
-    spot_pool: &mut SpotAMM<AssetType, StableType>, // Added: For TWAP integration
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>, // Added: For TWAP integration
     fee_manager: &mut ProposalFeeManager, // Added: For outcome creator fee refunds
     subsidy_escrow: Option<&mut SubsidyEscrow>, // Optional: Subsidy escrow to finalize (if exists)
     clock: &Clock,
@@ -350,7 +348,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
         // Backfill spot's SimpleTWAP with winning conditional's oracle data
         // This fills the gap [proposal_start, proposal_end] with conditional's price history
         // Updates both window_cumulative and total_cumulative for seamless continuity
-        spot_amm::backfill_from_winning_conditional(
+        unified_spot_pool::backfill_from_winning_conditional(
             spot_pool,
             winning_conditional_oracle,
             clock
@@ -506,7 +504,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
     registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     market_state: &mut MarketState,
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
     subsidy_escrow: Option<&mut SubsidyEscrow>, // Optional: Subsidy escrow to finalize (if exists)
     clock: &Clock,
@@ -978,7 +976,7 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     queue: &mut ProposalQueue<StableType>,
     proposal_fee_manager: &mut ProposalFeeManager,
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_liquidity: Coin<AssetType>,
     stable_liquidity: Coin<StableType>,
     winning_outcome: u64,

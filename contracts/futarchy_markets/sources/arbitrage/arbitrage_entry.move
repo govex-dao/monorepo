@@ -21,7 +21,7 @@
 module futarchy_markets::arbitrage_entry;
 
 use futarchy_markets::arbitrage_math;
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::conditional_amm::LiquidityPool;
 
 // === Structs ===
@@ -65,12 +65,12 @@ public struct SwapQuote has drop, copy {
 /// }
 /// ```
 public fun get_quote_asset_to_stable<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     amount_in: u64,
 ): SwapQuote {
     // 1. Calculate direct swap output (what user actually receives)
-    let direct_output = spot_amm::simulate_swap_asset_to_stable(spot, amount_in);
+    let direct_output = unified_spot_pool::simulate_swap_asset_to_stable(spot, amount_in);
 
     // 2. Calculate optimal arbitrage using NEW EFFICIENT BIDIRECTIONAL SOLVER
     // ✅ Uses b-parameterization (no sqrt)
@@ -98,11 +98,11 @@ public fun get_quote_asset_to_stable<AssetType, StableType>(
 
 /// Get swap quote for stable → asset direction
 public fun get_quote_stable_to_asset<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     amount_in: u64,
 ): SwapQuote {
-    let direct_output = spot_amm::simulate_swap_stable_to_asset(spot, amount_in);
+    let direct_output = unified_spot_pool::simulate_swap_stable_to_asset(spot, amount_in);
 
     // Use NEW EFFICIENT BIDIRECTIONAL SOLVER (same as above)
     let (optimal_arb_amount, expected_arb_profit, _is_spot_to_cond) =
@@ -149,7 +149,7 @@ public fun get_quote_stable_to_asset<AssetType, StableType>(
 /// }
 /// ```
 public fun simulate_pure_arbitrage_with_min_profit<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     min_profit: u64,
 ): (u64, u128, bool) {
@@ -163,7 +163,7 @@ public fun simulate_pure_arbitrage_with_min_profit<AssetType, StableType>(
 /// Legacy interface: Simulate arbitrage in specific direction (asset→stable)
 /// NOTE: New code should use simulate_pure_arbitrage_with_min_profit for bidirectional search
 public fun simulate_pure_arbitrage_asset_to_stable<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
 ): (u64, u128) {
     let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_bidirectional(
@@ -183,7 +183,7 @@ public fun simulate_pure_arbitrage_asset_to_stable<AssetType, StableType>(
 /// Legacy interface: Simulate arbitrage in specific direction (stable→asset)
 /// NOTE: New code should use simulate_pure_arbitrage_with_min_profit for bidirectional search
 public fun simulate_pure_arbitrage_stable_to_asset<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
 ): (u64, u128) {
     let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_bidirectional(

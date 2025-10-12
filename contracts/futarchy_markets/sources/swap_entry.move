@@ -23,7 +23,7 @@
 
 module futarchy_markets::swap_entry;
 
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::proposal::{Self, Proposal};
 use futarchy_markets::swap_core::{Self, SwapSession};
@@ -59,7 +59,7 @@ const STATE_TRADING: u8 = 2; // Must match proposal.move
 /// The recipient parameter allows callers (e.g., DCA bots) to specify
 /// the actual end user who should receive output coins and own the dust.
 public entry fun swap_spot_stable_to_asset<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     stable_in: Coin<StableType>,
@@ -72,7 +72,7 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType, AssetCondition
     assert!(amount_in > 0, EZeroAmount);
 
     // Step 1: Normal swap in spot (user pays fees)
-    let asset_out = spot_amm::swap_stable_for_asset(
+    let asset_out = unified_spot_pool::swap_stable_for_asset(
         spot_pool,
         stable_in,
         min_asset_out,
@@ -85,10 +85,10 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType, AssetCondition
 
     if (proposal_state == STATE_TRADING) {
         // Validate objects and borrow registry from spot_pool
-        let registry = spot_amm::validate_arb_objects_and_borrow_registry(
+        let registry = unified_spot_pool::validate_arb_objects_and_borrow_registry(
             spot_pool,
-            proposal,
-            escrow,
+            object::id(proposal),
+            object::id(escrow),
         );
 
         // Begin swap session for conditional swaps
@@ -126,7 +126,7 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType, AssetCondition
         // If we got stable profit (arb was more profitable in opposite direction),
         // swap it to asset to give user maximum value in their desired token
         if (stable_profit.value() > 0) {
-            let extra_asset = spot_amm::swap_stable_for_asset(
+            let extra_asset = unified_spot_pool::swap_stable_for_asset(
                 spot_pool,
                 stable_profit,
                 0,  // Accept any amount (already profitable from arb)
@@ -159,7 +159,7 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType, AssetCondition
 /// The recipient parameter allows callers (e.g., DCA bots) to specify
 /// the actual end user who should receive output coins and own the dust.
 public entry fun swap_spot_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_in: Coin<AssetType>,
@@ -172,7 +172,7 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType, AssetCondition
     assert!(amount_in > 0, EZeroAmount);
 
     // Step 1: Normal swap in spot (user pays fees)
-    let stable_out = spot_amm::swap_asset_for_stable(
+    let stable_out = unified_spot_pool::swap_asset_for_stable(
         spot_pool,
         asset_in,
         min_stable_out,
@@ -185,10 +185,10 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType, AssetCondition
 
     if (proposal_state == STATE_TRADING) {
         // Validate objects and borrow registry from spot_pool
-        let registry = spot_amm::validate_arb_objects_and_borrow_registry(
+        let registry = unified_spot_pool::validate_arb_objects_and_borrow_registry(
             spot_pool,
-            proposal,
-            escrow,
+            object::id(proposal),
+            object::id(escrow),
         );
 
         let session = swap_core::begin_swap_session(proposal);
@@ -224,7 +224,7 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType, AssetCondition
         // If we got asset profit (arb was more profitable in opposite direction),
         // swap it to stable to give user maximum value in their desired token
         if (asset_profit.value() > 0) {
-            let extra_stable = spot_amm::swap_asset_for_stable(
+            let extra_stable = unified_spot_pool::swap_asset_for_stable(
                 spot_pool,
                 asset_profit,
                 0,  // Accept any amount (already profitable from arb)
@@ -258,7 +258,7 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType, AssetCondition
 /// - Temporarily violates quantum invariant (validated at end)
 /// - Atomic operation ensures safety
 public entry fun swap_conditional_stable_to_asset<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -335,7 +335,7 @@ public entry fun swap_conditional_stable_to_asset<AssetType, StableType, AssetCo
 /// - Temporarily violates quantum invariant (validated at end)
 /// - Atomic operation ensures safety
 public entry fun swap_conditional_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
-    spot_pool: &mut SpotAMM<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,

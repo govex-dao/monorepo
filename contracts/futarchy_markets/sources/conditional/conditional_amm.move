@@ -47,6 +47,7 @@ const EInvalidTokenType: u64 = 9; // Wrong conditional token type provided
 const EOverflow: u64 = 10; // Arithmetic overflow detected
 const EInvalidFeeRate: u64 = 11; // Fee rate is invalid (e.g., >= 100%)
 const EKInvariantViolation: u64 = 12; // K-invariant violation (guards constant-product invariant)
+const EImbalancedLiquidity: u64 = 13; // Liquidity deposit is too imbalanced (>1% difference)
 
 // === Constants ===
 const FEE_SCALE: u64 = 10000;
@@ -395,14 +396,27 @@ public fun add_liquidity_proportional(
         (minted, k)
     } else {
         // Subsequent providers - mint proportionally
-        // The `math::min` function is used here, similar to Uniswap V2, to calculate the LP tokens to mint.
-        // This approach inherently protects against adding imbalanced liquidity by only considering the
-        // smaller of the two potential LP amounts derived from asset and stable contributions.
-        //
-        // The min_lp_out parameter provides slippage protection for users.
         let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
         let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
-        // Use minimum to ensure proper ratio
+
+        // SECURITY: Enforce balanced liquidity to prevent price manipulation attacks
+        // Calculate the imbalance between asset and stable contributions
+        let max_delta = if (lp_from_asset > lp_from_stable) {
+            lp_from_asset - lp_from_stable
+        } else {
+            lp_from_stable - lp_from_asset
+        };
+
+        // Calculate average LP amount for tolerance check
+        let avg = (lp_from_asset + lp_from_stable) / 2;
+
+        // Enforce 1% maximum imbalance tolerance
+        // This prevents attacks where depositing 10,000 asset + 1 stable crashes price
+        // Example attack: 10,000 asset + 1 stable → only 1 LP → price drops 91%
+        // With this check: Max allowed imbalance is avg/100 (1% of average contribution)
+        assert!(max_delta <= avg / 100, EImbalancedLiquidity);
+
+        // Use minimum to ensure proper ratio (after imbalance check passes)
         let minted = math::min(lp_from_asset, lp_from_stable);
         (minted, pool.lp_supply + minted)
     };

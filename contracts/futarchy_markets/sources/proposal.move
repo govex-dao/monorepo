@@ -5,8 +5,6 @@ use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::liquidity_initialize;
 use futarchy_markets::market_state;
 use futarchy_markets::coin_validation;
-use futarchy_markets::account_spot_pool;
-use futarchy_markets::quantum_lp_manager;
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;
@@ -1317,10 +1315,10 @@ public fun get_market_init_params<AssetType, StableType>(proposal: &Proposal<Ass
 /// Advances the proposal state based on elapsed time
 /// Transitions from REVIEW to TRADING when review period ends
 /// Returns true if state was changed
+/// NOTE: spot_pool parameter removed - registration happens in proposal_lifecycle
 public fun advance_state<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    spot_pool: &mut account_spot_pool::AccountSpotPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): bool {
@@ -1339,7 +1337,7 @@ public fun advance_state<AssetType, StableType>(
         let review_end = base_timestamp + proposal.timing.review_period_ms;
         if (current_time >= review_end) {
             proposal.state = STATE_TRADING;
-            
+
             // Start trading in the market state
             let market = coin_escrow::get_market_state_mut(escrow);
             market_state::start_trading(market, proposal.timing.trading_period_ms, clock);
@@ -1357,14 +1355,7 @@ public fun advance_state<AssetType, StableType>(
                 i = i + 1;
             };
 
-            // Auto-quantum split: Transfer liquidity from spot to conditional AMMs
-            quantum_lp_manager::auto_quantum_split_on_proposal_start(
-                spot_pool,
-                escrow,
-                proposal.conditional_liquidity_ratio_bps,  // Pass DAO-configured ratio (10-90%)
-                clock,
-                ctx,
-            );
+            // NOTE: Quantum split and registration happens in proposal_lifecycle
 
             return true
         };
@@ -1380,6 +1371,7 @@ public fun advance_state<AssetType, StableType>(
                 market_state::end_trading(market, clock);
             };
             // Note: Full finalization requires calculating winner and is done separately
+            // NOTE: spot pool registration is cleared in proposal_lifecycle
             return true
         };
     };

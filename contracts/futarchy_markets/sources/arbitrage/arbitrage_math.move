@@ -28,7 +28,7 @@
 
 module futarchy_markets::arbitrage_math;
 
-use futarchy_markets::spot_amm::{Self, SpotAMM};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 use futarchy_one_shot_utils::math;
 
@@ -59,7 +59,7 @@ const BPS_SCALE: u64 = 10000;     // Basis points scale
 ///
 /// Returns the more profitable direction
 public fun compute_optimal_arbitrage_bidirectional<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     min_profit: u64,  // Minimum acceptable profit threshold
 ): (u64, u128, bool) {
@@ -88,7 +88,7 @@ public fun compute_optimal_arbitrage_bidirectional<AssetType, StableType>(
 /// Compute optimal Spot → Conditional arbitrage using b-parameterization
 /// More efficient than x-parameterization (no square roots)
 public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     min_profit: u64,
 ): (u64, u128) {
@@ -98,8 +98,8 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
     assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
 
     // Get spot reserves and fee
-    let (spot_asset, spot_stable) = spot_amm::get_reserves(spot);
-    let spot_fee_bps = spot_amm::get_fee_bps(spot);
+    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot);
+    let spot_fee_bps = unified_spot_pool::get_fee_bps(spot);
 
     // Build T, A, B constants
     let (ts, as_vals, bs) = build_tab_constants(
@@ -153,7 +153,7 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
 /// - Spot→Cond: max_i constraint (bottleneck is worst pool)
 /// - Cond→Spot: sum_i constraint (need to buy from ALL pools)
 public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     min_profit: u64,
 ): (u64, u128) {
@@ -163,8 +163,8 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
 
     // Get spot reserves and fee
-    let (spot_asset, spot_stable) = spot_amm::get_reserves(spot);
-    let spot_fee_bps = spot_amm::get_fee_bps(spot);
+    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot);
+    let spot_fee_bps = unified_spot_pool::get_fee_bps(spot);
     let beta = BPS_SCALE - spot_fee_bps;
 
     // Find upper bound: min_i(R_i_asset) - can't buy more than smallest pool has
@@ -242,7 +242,7 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
 /// Original x-parameterization interface (for compatibility)
 /// Now uses b-parameterization internally for efficiency
 public fun compute_optimal_spot_arbitrage<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     is_asset_to_stable: bool,
 ): (u64, u128) {
@@ -638,7 +638,7 @@ fun build_tab_constants(
 
 /// Calculate arbitrage profit for specific amount (simulation)
 public fun calculate_spot_arbitrage_profit<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     arbitrage_amount: u64,
     is_asset_to_stable: bool,
@@ -647,15 +647,15 @@ public fun calculate_spot_arbitrage_profit<AssetType, StableType>(
 }
 
 fun simulate_spot_to_conditional_profit<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     arbitrage_amount: u64,
     is_asset_to_stable: bool,
 ): u128 {
     let spot_output = if (is_asset_to_stable) {
-        spot_amm::simulate_swap_stable_to_asset(spot, arbitrage_amount)
+        unified_spot_pool::simulate_swap_stable_to_asset(spot, arbitrage_amount)
     } else {
-        spot_amm::simulate_swap_asset_to_stable(spot, arbitrage_amount)
+        unified_spot_pool::simulate_swap_asset_to_stable(spot, arbitrage_amount)
     };
 
     if (spot_output == 0) return 0;
@@ -685,7 +685,7 @@ fun simulate_spot_to_conditional_profit<AssetType, StableType>(
 }
 
 fun simulate_conditional_to_spot_profit<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     arbitrage_amount: u64,
 ): u128 {
@@ -708,7 +708,7 @@ fun simulate_conditional_to_spot_profit<AssetType, StableType>(
     };
 
     // Simulate selling recombined to spot
-    let spot_output = spot_amm::simulate_swap_asset_to_stable(spot, arbitrage_amount);
+    let spot_output = unified_spot_pool::simulate_swap_asset_to_stable(spot, arbitrage_amount);
 
     if ((spot_output as u128) > total_cost) {
         (spot_output as u128) - total_cost
@@ -719,7 +719,7 @@ fun simulate_conditional_to_spot_profit<AssetType, StableType>(
 
 /// Conditional arbitrage (legacy compatibility)
 public fun calculate_conditional_arbitrage_profit<AssetType, StableType>(
-    spot: &SpotAMM<AssetType, StableType>,
+    spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     swapped_outcome_idx: u8,
     arbitrage_amount: u64,
@@ -736,9 +736,9 @@ public fun calculate_conditional_arbitrage_profit<AssetType, StableType>(
     if (cond_output == 0) return 0;
 
     let spot_output = if (is_asset_to_stable) {
-        spot_amm::simulate_swap_asset_to_stable(spot, cond_output)
+        unified_spot_pool::simulate_swap_asset_to_stable(spot, cond_output)
     } else {
-        spot_amm::simulate_swap_stable_to_asset(spot, cond_output)
+        unified_spot_pool::simulate_swap_stable_to_asset(spot, cond_output)
     };
 
     if (spot_output > arbitrage_amount) {

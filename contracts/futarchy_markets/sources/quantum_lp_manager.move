@@ -7,7 +7,7 @@
 /// - No manual split/redeem - all automatic
 module futarchy_markets::quantum_lp_manager;
 
-use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
 use futarchy_markets::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets::market_state::{Self, MarketState};
@@ -29,11 +29,11 @@ const MINIMUM_LIQUIDITY_BUFFER: u64 = 1000; // Minimum liquidity to maintain in 
 /// Returns (can_withdraw, min_violating_amm_index)
 public fun would_violate_minimum_liquidity<AssetType, StableType>(
     lp_token: &LPToken<AssetType, StableType>,
-    spot_pool: &AccountSpotPool<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
 ): (bool, Option<u8>) {
-    let lp_amount = account_spot_pool::lp_token_amount(lp_token);
-    let total_lp_supply = account_spot_pool::lp_supply(spot_pool);
+    let lp_amount = unified_spot_pool::lp_token_amount(lp_token);
+    let total_lp_supply = unified_spot_pool::lp_supply(spot_pool);
 
     if (lp_amount == 0 || total_lp_supply == 0) {
         return (true, option::none())
@@ -73,14 +73,14 @@ public fun would_violate_minimum_liquidity<AssetType, StableType>(
 /// Returns: (can_withdraw_now, lock_until_timestamp)
 public fun check_and_lock_if_needed<AssetType, StableType>(
     lp_token: &mut LPToken<AssetType, StableType>,
-    spot_pool: &AccountSpotPool<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
     proposal_end_time: u64,
     clock: &Clock,
 ): (bool, Option<u64>) {
     // Check if already locked
-    if (account_spot_pool::is_locked(lp_token, clock)) {
-        let lock_time = account_spot_pool::get_lock_time(lp_token);
+    if (unified_spot_pool::is_locked(lp_token, clock)) {
+        let lock_time = unified_spot_pool::get_lock_time(lp_token);
         return (false, lock_time)
     };
 
@@ -96,7 +96,7 @@ public fun check_and_lock_if_needed<AssetType, StableType>(
         (true, option::none())
     } else {
         // Lock until proposal ends
-        account_spot_pool::set_lock_time(lp_token, proposal_end_time);
+        unified_spot_pool::set_lock_time(lp_token, proposal_end_time);
         (false, option::some(proposal_end_time))
     }
 }
@@ -109,11 +109,11 @@ public fun check_and_lock_if_needed<AssetType, StableType>(
 /// Logic: Find the conditional AMM with lowest capacity, calculate how much spot LP
 /// can be split without exceeding that AMM's maximum capacity
 public fun calculate_max_quantum_split<AssetType, StableType>(
-    spot_pool: &AccountSpotPool<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
 ): u64 {
-    let (spot_asset, spot_stable) = account_spot_pool::get_reserves(spot_pool);
-    let spot_lp_supply = account_spot_pool::lp_supply(spot_pool);
+    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot_pool);
+    let spot_lp_supply = unified_spot_pool::lp_supply(spot_pool);
 
     if (spot_lp_supply == 0) {
         return 0
@@ -172,7 +172,7 @@ public fun calculate_max_quantum_split<AssetType, StableType>(
 /// Amount split is based on DAO-configured ratio with safety cap from conditional capacity
 /// @param conditional_liquidity_ratio_bps: Percentage of spot liquidity to move (10-90% = 1000-9000 bps)
 public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     conditional_liquidity_ratio_bps: u64,  // DAO-configured ratio (1000-9000 bps = 10-90%)
     clock: &Clock,
@@ -182,8 +182,8 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     let market_state = coin_escrow::get_market_state_mut(escrow);
 
     // Get current spot reserves
-    let (spot_asset, spot_stable) = account_spot_pool::get_reserves(spot_pool);
-    let spot_lp_supply = account_spot_pool::lp_supply(spot_pool);
+    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot_pool);
+    let spot_lp_supply = unified_spot_pool::lp_supply(spot_pool);
 
     if (spot_lp_supply == 0) {
         return // No liquidity to split
@@ -208,7 +208,7 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     let stable_amount = math::mul_div_to_64(actual_split_lp, spot_stable, spot_lp_supply);
 
     // Remove liquidity from spot pool (without burning LP tokens)
-    let (asset_balance, stable_balance) = account_spot_pool::remove_liquidity_for_quantum_split(
+    let (asset_balance, stable_balance) = unified_spot_pool::remove_liquidity_for_quantum_split(
         spot_pool,
         asset_amount,
         stable_amount,
@@ -249,7 +249,7 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
 /// Returns the LP token representing the added liquidity
 public fun auto_redeem_on_proposal_end<AssetType, StableType, AssetCond, StableCond>(
     winning_outcome: u64,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     clock: &Clock,
@@ -274,7 +274,7 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType, AssetCond, StableC
 
     // Add back to spot pool and return LP token
     // Caller should transfer to DAO treasury or appropriate destination
-    let spot_lp = account_spot_pool::add_liquidity_and_return(
+    let spot_lp = unified_spot_pool::add_liquidity_and_return(
         spot_pool,
         asset_coin,
         stable_coin,
@@ -293,7 +293,7 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType, AssetCond, StableC
 /// If withdrawal would violate minimum liquidity, LP is locked until proposal ends
 public entry fun withdraw_with_lock_check<AssetType, StableType>(
     mut lp_token: LPToken<AssetType, StableType>,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
     proposal_end_time: u64,
     min_asset_out: u64,
@@ -302,7 +302,7 @@ public entry fun withdraw_with_lock_check<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Check if locked
-    assert!(!account_spot_pool::is_locked(&lp_token, clock), ELPLocked);
+    assert!(!unified_spot_pool::is_locked(&lp_token, clock), ELPLocked);
 
     // Check if withdrawal would violate minimum liquidity
     let (can_withdraw, _) = would_violate_minimum_liquidity(
@@ -313,16 +313,20 @@ public entry fun withdraw_with_lock_check<AssetType, StableType>(
 
     if (can_withdraw) {
         // Process withdrawal using existing function
-        account_spot_pool::remove_liquidity(
+        let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity(
             spot_pool,
             lp_token,
             min_asset_out,
             min_stable_out,
             ctx,
         );
+
+        // Transfer coins to user
+        transfer::public_transfer(asset_coin, ctx.sender());
+        transfer::public_transfer(stable_coin, ctx.sender());
     } else {
         // Lock until proposal ends
-        account_spot_pool::set_lock_time(&mut lp_token, proposal_end_time);
+        unified_spot_pool::set_lock_time(&mut lp_token, proposal_end_time);
 
         // Return locked LP token to user
         transfer::public_transfer(lp_token, ctx.sender());
