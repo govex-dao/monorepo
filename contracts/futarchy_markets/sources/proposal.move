@@ -88,15 +88,6 @@ public struct TwapConfig has store {
     twap_threshold: u64,
 }
 
-/// Early resolution metrics for tracking proposal stability
-/// Tracks when winner last flipped across ALL N markets
-/// Simple design: just track last flip time, no exponential decay
-public struct EarlyResolveMetrics has store {
-    // Winner tracking (computed from ALL N markets)
-    current_winner_index: u64,      // Which outcome is currently winning
-    last_flip_time_ms: u64,         // When did winner last change
-}
-
 /// Outcome-related data
 public struct OutcomeData has store {
     outcome_count: u64,
@@ -128,7 +119,8 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     // Conditional coin capabilities (stored dynamically per outcome)
     conditional_treasury_caps: Bag,  // Stores TreasuryCap<ConditionalCoinType> per outcome
     conditional_metadata: Bag,        // Stores CoinMetadata<ConditionalCoinType> per outcome
-    
+    conditional_type_names: vector<TypeName>,  // Track conditional types for external integrators (2N entries: [asset0, stable0, asset1, stable1, ...])
+
     // Proposal content
     title: String,
     details: vector<String>,
@@ -138,7 +130,6 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     timing: ProposalTiming,
     liquidity_config: LiquidityConfig,
     twap_config: TwapConfig,
-    early_resolve_metrics: Option<EarlyResolveMetrics>,
     outcome_data: OutcomeData,
     
     // Fee-related fields
@@ -413,6 +404,7 @@ public fun initialize_market<AssetType, StableType>(
         market_state_id: option::some(market_state_id),
         conditional_treasury_caps: bag::new(ctx),
         conditional_metadata: bag::new(ctx),
+        conditional_type_names: vector::empty(),  // Will be filled when caps are registered
         title,
         details: initial_outcome_details,
         metadata,
@@ -437,7 +429,6 @@ public fun initialize_market<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
-        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count,
             outcome_messages: initial_outcome_messages,
@@ -547,6 +538,7 @@ public fun new_premarket<AssetType, StableType>(
         market_state_id: option::none(),
         conditional_treasury_caps: bag::new(ctx),
         conditional_metadata: bag::new(ctx),
+        conditional_type_names: vector::empty(),
         title,
         details: outcome_details,
         metadata,
@@ -571,7 +563,6 @@ public fun new_premarket<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
-        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count,
             outcome_messages,
@@ -1081,6 +1072,13 @@ public fun state<AssetType, StableType>(proposal: &Proposal<AssetType, StableTyp
     proposal.state
 }
 
+/// Check if proposal is currently live (trading active)
+public fun is_live<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>
+): bool {
+    proposal.state == STATE_TRADING
+}
+
 public fun get_winning_outcome<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
 ): u64 {
@@ -1488,42 +1486,6 @@ public fun get_outcome_creator_fees<AssetType, StableType>(
     &proposal.outcome_data.outcome_creator_fees
 }
 
-/// Get early resolve metrics (if enabled)
-public fun get_early_resolve_metrics<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
-): &Option<EarlyResolveMetrics> {
-    &proposal.early_resolve_metrics
-}
-
-// time_until_eligible() removed to avoid circular dependencies.
-// Callers should use early_resolve::time_until_eligible() directly.
-
-// === Package-Level Accessors for early_resolve Module ===
-
-/// Check if proposal has early resolve metrics initialized
-/// Used by early_resolve module to validate metrics exist before processing
-public(package) fun has_early_resolve_metrics<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>
-): bool {
-    proposal.early_resolve_metrics.is_some()
-}
-
-/// Borrow early resolve metrics immutably
-/// Used by early_resolve module to read current metrics state
-public(package) fun borrow_early_resolve_metrics<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>
-): &EarlyResolveMetrics {
-    proposal.early_resolve_metrics.borrow()
-}
-
-/// Borrow early resolve metrics mutably
-/// Used by early_resolve module to update flip tracking
-public(package) fun borrow_early_resolve_metrics_mut<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>
-): &mut EarlyResolveMetrics {
-    proposal.early_resolve_metrics.borrow_mut()
-}
-
 /// Get proposal start time for early resolve calculations
 /// Returns market_initialized_at if available, otherwise created_at
 public(package) fun get_start_time_for_early_resolve<AssetType, StableType>(
@@ -1533,39 +1495,6 @@ public(package) fun get_start_time_for_early_resolve<AssetType, StableType>(
         *proposal.timing.market_initialized_at.borrow()
     } else {
         proposal.timing.created_at
-    }
-}
-
-// === Field Accessors for EarlyResolveMetrics ===
-
-/// Get current winner index from metrics
-public(package) fun metrics_current_winner(metrics: &EarlyResolveMetrics): u64 {
-    metrics.current_winner_index
-}
-
-/// Get last flip time from metrics
-public(package) fun metrics_last_flip_time_ms(metrics: &EarlyResolveMetrics): u64 {
-    metrics.last_flip_time_ms
-}
-
-/// Set current winner index in metrics
-public(package) fun metrics_set_current_winner(metrics: &mut EarlyResolveMetrics, winner_idx: u64) {
-    metrics.current_winner_index = winner_idx;
-}
-
-/// Set last flip time in metrics
-public(package) fun metrics_set_last_flip_time_ms(metrics: &mut EarlyResolveMetrics, time_ms: u64) {
-    metrics.last_flip_time_ms = time_ms;
-}
-
-/// Create new EarlyResolveMetrics
-public(package) fun new_early_resolve_metrics(
-    initial_winner: u64,
-    current_time_ms: u64,
-): EarlyResolveMetrics {
-    EarlyResolveMetrics {
-        current_winner_index: initial_winner,
-        last_flip_time_ms: current_time_ms,
     }
 }
 
@@ -1828,7 +1757,6 @@ public fun new_for_testing<AssetType, StableType>(
             twap_step_max,
             twap_threshold,
         },
-        early_resolve_metrics: option::none(),  // Early resolution disabled by default
         outcome_data: OutcomeData {
             outcome_count: outcome_count as u64,
             outcome_messages,

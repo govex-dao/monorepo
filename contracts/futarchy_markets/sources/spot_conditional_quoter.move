@@ -421,13 +421,13 @@ public fun get_spot_price_after(detailed: &DetailedSpotQuote): u64 {
 // === Oracle Price Functions ===
 
 /// Get combined oracle price from spot AMM
-/// Uses get_twap_with_conditional for proper time-weighted combination
+/// Returns the spot AMM TWAP (no conditional data in simple quoter)
 public fun get_combined_oracle_price<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): u128 {
     // Return the spot AMM TWAP (no conditional data in simple quoter)
-    unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
+    unified_spot_pool::get_twap(spot_pool, clock)
 }
 
 /// Check if a price meets a threshold condition
@@ -470,5 +470,5 @@ public fun get_initialization_price<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
 ): u128 {
-    unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
+    unified_spot_pool::get_twap(spot_pool, clock)
 }

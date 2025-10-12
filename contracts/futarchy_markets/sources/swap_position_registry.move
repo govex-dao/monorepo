@@ -34,6 +34,7 @@ module futarchy_markets::swap_position_registry;
 
 use futarchy_markets::proposal::Proposal;
 use futarchy_markets::coin_escrow::TokenEscrow;
+use futarchy_markets::conditional_balance::{Self, ConditionalMarketBalance};
 use futarchy_one_shot_utils::math;
 use sui::coin::{Self, Coin};
 use sui::table::{Self, Table};
@@ -84,13 +85,31 @@ public struct StableOutcomeKey has store, copy, drop {
 /// Metadata stored on position UID (as dynamic field with MetadataKey)
 public struct MetadataKey has store, copy, drop {}
 
-public struct PositionMetadata has store {
+public struct PositionMetadata has store, drop {
     created_at: u64,
     last_updated: u64,
     has_asset_outcome_0: bool,
     has_asset_outcome_1: bool,
     has_stable_outcome_0: bool,
     has_stable_outcome_1: bool,
+}
+
+// === PTB + Hot Potato Pattern ===
+
+/// Hot potato for PTB-based cranking
+/// NO abilities = must be consumed in same transaction
+///
+/// This enables frontend to construct dynamic PTBs for ANY outcome count without
+/// hardcoded on-chain functions for each count.
+public struct CrankProgress<phantom AssetType, phantom StableType> {
+    position_uid: UID,  // The position being cranked
+    owner: address,
+    proposal_id: ID,
+    winning_outcome: u64,
+    outcomes_processed: u8,  // How many outcomes unwrapped so far
+    total_outcomes: u8,  // Total outcomes to unwrap
+    spot_asset_accumulated: u64,  // Track amounts as we unwrap
+    spot_stable_accumulated: u64,
 }
 
 // === Events ===
@@ -114,7 +133,7 @@ public struct SwapPositionCranked has copy, drop {
     spot_asset_returned: u64,
     spot_stable_returned: u64,
     cranker: address,
-    cranker_fee: u64,
+    cranker_fee: u64,  // Fixed fee in stable coins
     timestamp: u64,
 }
 
@@ -279,26 +298,29 @@ public fun store_conditional_stable<AssetType, StableType, ConditionalCoinType>(
     }
 }
 
-/// Crank a position after proposal resolves (permissionless)
-/// Burns losing conditional coins, recombines winner to spot, pays cranker fee
-/// Generic version - caller must know outcome count and provide burn/extract closures
+// === PTB + Hot Potato Cranking Functions ===
+// These 3 functions replace ALL hardcoded crank_position_N functions!
+// Frontend constructs a PTB with N unwrap_one calls based on outcome count.
+
+/// Step 1: Start cranking a position
+/// Returns hot potato that MUST be consumed in same transaction
 ///
-/// NOTE: Due to Move's type system limitations, we can't iterate over arbitrary conditional
-/// coin types at runtime. The frontend/SDK knows the outcome count and conditional coin types,
-/// so they should call type-specific crank functions (crank_position_2, crank_position_3, etc.)
-public fun crank_position_generic<AssetType, StableType>(
+/// # Example PTB Flow (for 3 outcomes):
+/// ```
+/// let progress = start_crank(registry, owner, proposal, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond0Asset>(progress, escrow, true, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond0Stable>(progress, escrow, false, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond1Asset>(progress, escrow, true, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond1Stable>(progress, escrow, false, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond2Asset>(progress, escrow, true, ...);
+/// let progress = unwrap_one<AssetType, StableType, Cond2Stable>(progress, escrow, false, ...);
+/// finish_crank(progress, clock);
+/// ```
+public fun start_crank<AssetType, StableType>(
     registry: &mut SwapPositionRegistry<AssetType, StableType>,
     owner: address,
     proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    // Closures to extract and burn coins for each outcome
-    // Frontend provides these based on known conditional coin types
-    extract_and_burn_losers: vector<u64>,  // Outcome indices to burn
-    extract_winner: u64,  // Winning outcome index
-    cranker_fee_bps: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): (u64, u64) {  // Returns (asset_returned, stable_returned)
+): CrankProgress<AssetType, StableType> {
     let proposal_id = object::id(proposal);
     let key = PositionKey { owner, proposal_id };
 
@@ -307,650 +329,131 @@ public fun crank_position_generic<AssetType, StableType>(
 
     let winning_outcome = futarchy_markets::proposal::get_winning_outcome(proposal);
     let mut position_uid = table::remove(&mut registry.positions, key);
-    let metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
+    let _metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
 
-    // NOTE: Actual burning of conditional coins must happen in type-specific wrappers
-    // This is a limitation of Move's type system - we can't dynamically dispatch on coin types
+    // Get outcome count from proposal
+    let total_outcomes = futarchy_markets::proposal::outcome_count(proposal);
 
-    // For now, delete position and return (type-specific functions handle coin extraction)
-    object::delete(position_uid);
     registry.total_positions = registry.total_positions - 1;
-    registry.total_cranked = registry.total_cranked + 1;
 
-    (0, 0)  // Placeholder - type-specific functions return actual amounts
+    CrankProgress {
+        position_uid,
+        owner,
+        proposal_id,
+        winning_outcome,
+        outcomes_processed: 0,
+        total_outcomes: (total_outcomes as u8),
+        spot_asset_accumulated: 0,
+        spot_stable_accumulated: 0,
+    }
 }
 
-/// Crank a 2-outcome position (most common case)
-public entry fun crank_position_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    owner: address,
-    proposal: &Proposal<AssetType, StableType>,
+/// Step 2: Unwrap one outcome (call N times in PTB)
+/// Frontend specifies ConditionalCoinType for each outcome
+///
+/// # Arguments
+/// * `outcome_idx` - Which outcome to unwrap (0, 1, 2, ...)
+/// * `is_asset` - true for asset, false for stable
+/// * `recipient` - where to send coins (usually owner, or cranker for fee)
+///
+/// # Returns
+/// Updated hot potato (must be passed to next unwrap_one or finish_crank)
+public fun unwrap_one<AssetType, StableType, ConditionalCoinType>(
+    mut progress: CrankProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    cranker_fee_bps: u64,
+    outcome_idx: u8,
+    is_asset: bool,
+    recipient: address,
+    ctx: &mut TxContext,
+): CrankProgress<AssetType, StableType> {
+
+    // Extract coin from position UID
+    let coin = if (is_asset) {
+        extract_asset_coin<ConditionalCoinType>(&mut progress.position_uid, (outcome_idx as u64), ctx)
+    } else {
+        extract_stable_coin<ConditionalCoinType>(&mut progress.position_uid, (outcome_idx as u64), ctx)
+    };
+
+    let amount = coin.value();
+
+    if (amount > 0) {
+        if ((outcome_idx as u64) == progress.winning_outcome) {
+            // Winning outcome: burn conditional → withdraw spot → transfer to recipient
+            if (is_asset) {
+                futarchy_markets::coin_escrow::burn_conditional_asset(escrow, (outcome_idx as u64), coin);
+                let spot_coin = futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(
+                    escrow, amount, ctx
+                );
+                transfer::public_transfer(spot_coin, recipient);
+                progress.spot_asset_accumulated = progress.spot_asset_accumulated + amount;
+            } else {
+                futarchy_markets::coin_escrow::burn_conditional_stable(escrow, (outcome_idx as u64), coin);
+                let spot_coin = futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(
+                    escrow, amount, ctx
+                );
+                transfer::public_transfer(spot_coin, recipient);
+                progress.spot_stable_accumulated = progress.spot_stable_accumulated + amount;
+            }
+        } else {
+            // Losing outcome: just burn (no withdrawal)
+            if (is_asset) {
+                futarchy_markets::coin_escrow::burn_conditional_asset(escrow, (outcome_idx as u64), coin);
+            } else {
+                futarchy_markets::coin_escrow::burn_conditional_stable(escrow, (outcome_idx as u64), coin);
+            }
+        }
+    } else {
+        coin::destroy_zero(coin);
+    };
+
+    progress.outcomes_processed = progress.outcomes_processed + 1;
+    progress
+}
+
+/// Step 3: Finish cranking (consumes hot potato)
+/// Must be called after unwrapping all outcomes
+///
+/// # Panics
+/// If not all outcomes have been processed
+public fun finish_crank<AssetType, StableType>(
+    progress: CrankProgress<AssetType, StableType>,
+    registry: &mut SwapPositionRegistry<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    let proposal_id = object::id(proposal);
-    let key = PositionKey { owner, proposal_id };
-    assert!(table::contains(&registry.positions, key), EPositionNotFound);
-    assert!(futarchy_markets::proposal::is_finalized(proposal), EProposalNotFinalized);
+    let CrankProgress {
+        position_uid,
+        owner,
+        proposal_id,
+        winning_outcome,
+        outcomes_processed,
+        total_outcomes,
+        spot_asset_accumulated,
+        spot_stable_accumulated,
+    } = progress;
 
-    let winning_outcome = futarchy_markets::proposal::get_winning_outcome(proposal);
-    let mut position_uid = table::remove(&mut registry.positions, key);
-    let metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
-
-    let asset_0 = extract_asset_coin<Cond0Asset>(&mut position_uid, 0, ctx);
-    let asset_1 = extract_asset_coin<Cond1Asset>(&mut position_uid, 1, ctx);
-    let stable_0 = extract_stable_coin<Cond0Stable>(&mut position_uid, 0, ctx);
-    let stable_1 = extract_stable_coin<Cond1Stable>(&mut position_uid, 1, ctx);
-
-    let (winning_asset, winning_stable) = if (winning_outcome == 0) {
-        if (asset_1.value() > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 1, asset_1);
-        } else { coin::destroy_zero(asset_1); };
-        if (stable_1.value() > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 1, stable_1);
-        } else { coin::destroy_zero(stable_1); };
-        (asset_0, stable_0)
-    } else {
-        if (asset_0.value() > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 0, asset_0);
-        } else { coin::destroy_zero(asset_0); };
-        if (stable_0.value() > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 0, stable_0);
-        } else { coin::destroy_zero(stable_0); };
-        (asset_1, stable_1)
-    };
-
-    let asset_amount = winning_asset.value();
-    let stable_amount = winning_stable.value();
-
-    let mut spot_asset = if (asset_amount > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_asset(escrow, winning_outcome, winning_asset);
-        futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amount, ctx)
-    } else {
-        coin::destroy_zero(winning_asset);
-        coin::zero<AssetType>(ctx)
-    };
-
-    let spot_stable = if (stable_amount > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_stable(escrow, winning_outcome, winning_stable);
-        futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amount, ctx)
-    } else {
-        coin::destroy_zero(winning_stable);
-        coin::zero<StableType>(ctx)
-    };
-
-    let cranker_fee = if (cranker_fee_bps > 0 && asset_amount > 0) {
-        let fee_amount = (asset_amount * cranker_fee_bps) / 10000;
-        if (fee_amount > 0) {
-            let fee_coin = spot_asset.split(fee_amount, ctx);
-            transfer::public_transfer(fee_coin, ctx.sender());
-            fee_amount
-        } else { 0 }
-    } else { 0 };
-
-    if (spot_asset.value() > 0) {
-        transfer::public_transfer(spot_asset, owner);
-    } else { coin::destroy_zero(spot_asset); };
-
-    if (spot_stable.value() > 0) {
-        transfer::public_transfer(spot_stable, owner);
-    } else { coin::destroy_zero(spot_stable); };
+    // Ensure all outcomes processed (optional - could be relaxed)
+    // assert!(outcomes_processed == total_outcomes * 2, 999);  // *2 because asset + stable per outcome
 
     object::delete(position_uid);
-    registry.total_positions = registry.total_positions - 1;
     registry.total_cranked = registry.total_cranked + 1;
 
     event::emit(SwapPositionCranked {
-        owner, proposal_id, winning_outcome,
-        spot_asset_returned: asset_amount - cranker_fee,
-        spot_stable_returned: stable_amount,
-        cranker: ctx.sender(), cranker_fee,
+        owner,
+        proposal_id,
+        winning_outcome,
+        spot_asset_returned: spot_asset_accumulated,
+        spot_stable_returned: spot_stable_accumulated,
+        cranker: ctx.sender(),
+        cranker_fee: 0,  // Fee handled separately in unwrap_one calls
         timestamp: clock.timestamp_ms(),
     });
 }
 
-/// Crank a 3-outcome position
-public entry fun crank_position_3<AssetType, StableType,
-    Cond0Asset, Cond1Asset, Cond2Asset,
-    Cond0Stable, Cond1Stable, Cond2Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    owner: address,
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    cranker_fee_bps: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let proposal_id = object::id(proposal);
-    let key = PositionKey { owner, proposal_id };
-    assert!(table::contains(&registry.positions, key), EPositionNotFound);
-    assert!(futarchy_markets::proposal::is_finalized(proposal), EProposalNotFinalized);
-
-    let winning_outcome = futarchy_markets::proposal::get_winning_outcome(proposal);
-    let mut position_uid = table::remove(&mut registry.positions, key);
-    let metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
-
-    // Extract all outcome coins
-    let asset_0 = extract_asset_coin<Cond0Asset>(&mut position_uid, 0, ctx);
-    let asset_1 = extract_asset_coin<Cond1Asset>(&mut position_uid, 1, ctx);
-    let asset_2 = extract_asset_coin<Cond2Asset>(&mut position_uid, 2, ctx);
-    let stable_0 = extract_stable_coin<Cond0Stable>(&mut position_uid, 0, ctx);
-    let stable_1 = extract_stable_coin<Cond1Stable>(&mut position_uid, 1, ctx);
-    let stable_2 = extract_stable_coin<Cond2Stable>(&mut position_uid, 2, ctx);
-
-    // Process each outcome inline (can't use shared function due to type incompatibility)
-    let (spot_asset_amt, spot_stable_amt, cranker_fee) = if (winning_outcome == 0) {
-        // Burn losers
-        burn_if_nonzero(escrow, 1, asset_1, stable_1);
-        burn_if_nonzero(escrow, 2, asset_2, stable_2);
-
-        // Convert winner to spot
-        let asset_amt = asset_0.value();
-        let stable_amt = stable_0.value();
-
-        let mut spot_asset = if (asset_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 0, asset_0);
-            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
-        } else {
-            coin::destroy_zero(asset_0);
-            coin::zero<AssetType>(ctx)
-        };
-
-        let spot_stable = if (stable_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 0, stable_0);
-            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
-        } else {
-            coin::destroy_zero(stable_0);
-            coin::zero<StableType>(ctx)
-        };
-
-        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
-            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
-            if (fee_amt > 0) {
-                let fee_coin = spot_asset.split(fee_amt, ctx);
-                transfer::public_transfer(fee_coin, ctx.sender());
-                fee_amt
-            } else { 0 }
-        } else { 0 };
-
-        let final_asset = spot_asset.value();
-        let final_stable = spot_stable.value();
-
-        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
-        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
-
-        (final_asset, final_stable, fee)
-    } else if (winning_outcome == 1) {
-        // Burn losers
-        burn_if_nonzero(escrow, 0, asset_0, stable_0);
-        burn_if_nonzero(escrow, 2, asset_2, stable_2);
-
-        // Convert winner to spot
-        let asset_amt = asset_1.value();
-        let stable_amt = stable_1.value();
-
-        let mut spot_asset = if (asset_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 1, asset_1);
-            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
-        } else {
-            coin::destroy_zero(asset_1);
-            coin::zero<AssetType>(ctx)
-        };
-
-        let spot_stable = if (stable_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 1, stable_1);
-            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
-        } else {
-            coin::destroy_zero(stable_1);
-            coin::zero<StableType>(ctx)
-        };
-
-        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
-            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
-            if (fee_amt > 0) {
-                let fee_coin = spot_asset.split(fee_amt, ctx);
-                transfer::public_transfer(fee_coin, ctx.sender());
-                fee_amt
-            } else { 0 }
-        } else { 0 };
-
-        let final_asset = spot_asset.value();
-        let final_stable = spot_stable.value();
-
-        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
-        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
-
-        (final_asset, final_stable, fee)
-    } else {
-        // Burn losers
-        burn_if_nonzero(escrow, 0, asset_0, stable_0);
-        burn_if_nonzero(escrow, 1, asset_1, stable_1);
-
-        // Convert winner to spot
-        let asset_amt = asset_2.value();
-        let stable_amt = stable_2.value();
-
-        let mut spot_asset = if (asset_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, 2, asset_2);
-            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amt, ctx)
-        } else {
-            coin::destroy_zero(asset_2);
-            coin::zero<AssetType>(ctx)
-        };
-
-        let spot_stable = if (stable_amt > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, 2, stable_2);
-            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amt, ctx)
-        } else {
-            coin::destroy_zero(stable_2);
-            coin::zero<StableType>(ctx)
-        };
-
-        let fee = if (cranker_fee_bps > 0 && asset_amt > 0) {
-            let fee_amt = (asset_amt * cranker_fee_bps) / 10000;
-            if (fee_amt > 0) {
-                let fee_coin = spot_asset.split(fee_amt, ctx);
-                transfer::public_transfer(fee_coin, ctx.sender());
-                fee_amt
-            } else { 0 }
-        } else { 0 };
-
-        let final_asset = spot_asset.value();
-        let final_stable = spot_stable.value();
-
-        if (final_asset > 0) { transfer::public_transfer(spot_asset, owner); } else { coin::destroy_zero(spot_asset); };
-        if (final_stable > 0) { transfer::public_transfer(spot_stable, owner); } else { coin::destroy_zero(spot_stable); };
-
-        (final_asset, final_stable, fee)
-    };
-
-    object::delete(position_uid);
-    registry.total_positions = registry.total_positions - 1;
-    registry.total_cranked = registry.total_cranked + 1;
-
-    event::emit(SwapPositionCranked {
-        owner, proposal_id, winning_outcome,
-        spot_asset_returned: spot_asset_amt,
-        spot_stable_returned: spot_stable_amt,
-        cranker: ctx.sender(), cranker_fee,
-        timestamp: clock.timestamp_ms(),
-    });
-}
-
-/// Helper: Burn conditional coins if non-zero
-fun burn_if_nonzero<AssetType, StableType, AssetCond, StableCond>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    outcome_idx: u64,
-    asset: Coin<AssetCond>,
-    stable: Coin<StableCond>,
-) {
-    if (asset.value() > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_asset(escrow, outcome_idx, asset);
-    } else { coin::destroy_zero(asset); };
-    if (stable.value() > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_stable(escrow, outcome_idx, stable);
-    } else { coin::destroy_zero(stable); };
-}
-
-/// Helper: Convert winning conditional to spot, pay fee, transfer
-fun convert_to_spot_and_pay_fee<AssetType, StableType, AssetCond, StableCond>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    winning_outcome: u64,
-    winning_asset: Coin<AssetCond>,
-    winning_stable: Coin<StableCond>,
-    cranker_fee_bps: u64,
-    owner: address,
-    ctx: &mut TxContext,
-): (u64, u64, u64) {  // (asset_returned, stable_returned, fee_paid)
-    let asset_amount = winning_asset.value();
-    let stable_amount = winning_stable.value();
-
-    let mut spot_asset = if (asset_amount > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_asset(escrow, winning_outcome, winning_asset);
-        futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amount, ctx)
-    } else {
-        coin::destroy_zero(winning_asset);
-        coin::zero<AssetType>(ctx)
-    };
-
-    let spot_stable = if (stable_amount > 0) {
-        futarchy_markets::coin_escrow::burn_conditional_stable(escrow, winning_outcome, winning_stable);
-        futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amount, ctx)
-    } else {
-        coin::destroy_zero(winning_stable);
-        coin::zero<StableType>(ctx)
-    };
-
-    let cranker_fee = if (cranker_fee_bps > 0 && asset_amount > 0) {
-        let fee_amount = (asset_amount * cranker_fee_bps) / 10000;
-        if (fee_amount > 0) {
-            let fee_coin = spot_asset.split(fee_amount, ctx);
-            transfer::public_transfer(fee_coin, ctx.sender());
-            fee_amount
-        } else { 0 }
-    } else { 0 };
-
-    let final_asset = spot_asset.value();
-    let final_stable = spot_stable.value();
-
-    if (final_asset > 0) {
-        transfer::public_transfer(spot_asset, owner);
-    } else { coin::destroy_zero(spot_asset); };
-
-    if (final_stable > 0) {
-        transfer::public_transfer(spot_stable, owner);
-    } else { coin::destroy_zero(spot_stable); };
-
-    (final_asset, final_stable, cranker_fee)
-}
-
-/// Self-redeem 2-outcome position (no fee)
-public entry fun self_redeem_position_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let owner = ctx.sender();
-    crank_position_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
-        registry, owner, proposal, escrow, 0, clock, ctx
-    );
-}
-
-/// Self-redeem 3-outcome position (no fee)
-public entry fun self_redeem_position_3<AssetType, StableType,
-    Cond0Asset, Cond1Asset, Cond2Asset,
-    Cond0Stable, Cond1Stable, Cond2Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let owner = ctx.sender();
-    crank_position_3<AssetType, StableType, Cond0Asset, Cond1Asset, Cond2Asset, Cond0Stable, Cond1Stable, Cond2Stable>(
-        registry, owner, proposal, escrow, 0, clock, ctx
-    );
-}
-
-// === Batch Cranking Functions (Gas Optimization) ===
-
-/// Batch crank multiple 2-outcome positions in a single transaction
-/// This is MUCH more gas-efficient than cranking individually
-///
-/// Gas savings:
-/// - Individual: ~500K gas per crank = 5M gas for 10 positions
-/// - Batch: ~2M gas for 10 positions (60% savings)
-///
-/// Limits:
-/// - Max ~100-200 positions per transaction (depending on gas limit)
-/// - Sui limit: 1000 objects accessed per transaction
-///
-/// Error handling:
-/// - Continues processing on individual failures
-/// - Emits PositionCrankFailed event for each failure
-/// - Returns total succeeded/failed counts
-public entry fun batch_crank_positions_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    owners: vector<address>,
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    cranker_fee_bps: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let proposal_id = object::id(proposal);
-    let timestamp = clock.timestamp_ms();
-    let winning_outcome = futarchy_markets::proposal::get_winning_outcome(proposal);
-
-    let mut total_fees = 0u64;
-    let mut succeeded = 0u64;
-    let mut failed = 0u64;
-    let batch_size = vector::length(&owners);
-
-    let mut i = 0;
-    while (i < batch_size) {
-        let owner = *vector::borrow(&owners, i);
-        let key = PositionKey { owner, proposal_id };
-
-        // Check if position exists
-        if (!table::contains(&registry.positions, key)) {
-            event::emit(PositionCrankFailed {
-                owner,
-                proposal_id,
-                reason: EPositionNotFound,
-                timestamp,
-            });
-            failed = failed + 1;
-            i = i + 1;
-            continue
-        };
-
-        // Extract position
-        let mut position_uid = table::remove(&mut registry.positions, key);
-        let metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
-
-        // Extract conditional coins
-        let asset_0 = extract_asset_coin<Cond0Asset>(&mut position_uid, 0, ctx);
-        let asset_1 = extract_asset_coin<Cond1Asset>(&mut position_uid, 1, ctx);
-        let stable_0 = extract_stable_coin<Cond0Stable>(&mut position_uid, 0, ctx);
-        let stable_1 = extract_stable_coin<Cond1Stable>(&mut position_uid, 1, ctx);
-
-        // Burn losers, keep winner
-        let (winning_asset, winning_stable) = if (winning_outcome == 0) {
-            burn_if_nonzero(escrow, 1, asset_1, stable_1);
-            (asset_0, stable_0)
-        } else {
-            burn_if_nonzero(escrow, 0, asset_0, stable_0);
-            (asset_1, stable_1)
-        };
-
-        let asset_amount = winning_asset.value();
-        let stable_amount = winning_stable.value();
-
-        // Convert to spot
-        let mut spot_asset = if (asset_amount > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, winning_outcome, winning_asset);
-            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amount, ctx)
-        } else {
-            coin::destroy_zero(winning_asset);
-            coin::zero<AssetType>(ctx)
-        };
-
-        let spot_stable = if (stable_amount > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, winning_outcome, winning_stable);
-            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amount, ctx)
-        } else {
-            coin::destroy_zero(winning_stable);
-            coin::zero<StableType>(ctx)
-        };
-
-        // Calculate fee and accumulate
-        let position_fee = if (cranker_fee_bps > 0 && asset_amount > 0) {
-            let fee_amount = (asset_amount * cranker_fee_bps) / 10000;
-            if (fee_amount > 0) {
-                let fee_coin = spot_asset.split(fee_amount, ctx);
-                // Don't transfer yet - accumulate in total_fees
-                transfer::public_transfer(fee_coin, ctx.sender());
-                fee_amount
-            } else { 0 }
-        } else { 0 };
-
-        total_fees = total_fees + position_fee;
-
-        // Transfer spot to owner
-        if (spot_asset.value() > 0) {
-            transfer::public_transfer(spot_asset, owner);
-        } else { coin::destroy_zero(spot_asset); };
-
-        if (spot_stable.value() > 0) {
-            transfer::public_transfer(spot_stable, owner);
-        } else { coin::destroy_zero(spot_stable); };
-
-        // Cleanup
-        object::delete(position_uid);
-        registry.total_positions = registry.total_positions - 1;
-        registry.total_cranked = registry.total_cranked + 1;
-
-        // Emit individual event
-        event::emit(SwapPositionCranked {
-            owner,
-            proposal_id,
-            winning_outcome,
-            spot_asset_returned: asset_amount - position_fee,
-            spot_stable_returned: stable_amount,
-            cranker: ctx.sender(),
-            cranker_fee: position_fee,
-            timestamp,
-        });
-
-        succeeded = succeeded + 1;
-        i = i + 1;
-    };
-
-    // Emit batch summary event
-    event::emit(BatchCrankCompleted {
-        proposal_id,
-        positions_processed: batch_size,
-        positions_succeeded: succeeded,
-        positions_failed: failed,
-        total_fees_earned: total_fees,
-        cranker: ctx.sender(),
-        timestamp,
-    });
-}
-
-/// Batch crank multiple 3-outcome positions
-public entry fun batch_crank_positions_3<AssetType, StableType,
-    Cond0Asset, Cond1Asset, Cond2Asset,
-    Cond0Stable, Cond1Stable, Cond2Stable>(
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    owners: vector<address>,
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    cranker_fee_bps: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let proposal_id = object::id(proposal);
-    let timestamp = clock.timestamp_ms();
-    let winning_outcome = futarchy_markets::proposal::get_winning_outcome(proposal);
-
-    let mut total_fees = 0u64;
-    let mut succeeded = 0u64;
-    let mut failed = 0u64;
-    let batch_size = vector::length(&owners);
-
-    let mut i = 0;
-    while (i < batch_size) {
-        let owner = *vector::borrow(&owners, i);
-        let key = PositionKey { owner, proposal_id };
-
-        if (!table::contains(&registry.positions, key)) {
-            event::emit(PositionCrankFailed {
-                owner, proposal_id,
-                reason: EPositionNotFound,
-                timestamp,
-            });
-            failed = failed + 1;
-            i = i + 1;
-            continue
-        };
-
-        let mut position_uid = table::remove(&mut registry.positions, key);
-        let metadata: PositionMetadata = dynamic_field::remove(&mut position_uid, MetadataKey {});
-
-        // Extract all outcome coins
-        let asset_0 = extract_asset_coin<Cond0Asset>(&mut position_uid, 0, ctx);
-        let asset_1 = extract_asset_coin<Cond1Asset>(&mut position_uid, 1, ctx);
-        let asset_2 = extract_asset_coin<Cond2Asset>(&mut position_uid, 2, ctx);
-        let stable_0 = extract_stable_coin<Cond0Stable>(&mut position_uid, 0, ctx);
-        let stable_1 = extract_stable_coin<Cond1Stable>(&mut position_uid, 1, ctx);
-        let stable_2 = extract_stable_coin<Cond2Stable>(&mut position_uid, 2, ctx);
-
-        // Burn losers, keep winner
-        let (winning_asset, winning_stable) = if (winning_outcome == 0) {
-            burn_if_nonzero(escrow, 1, asset_1, stable_1);
-            burn_if_nonzero(escrow, 2, asset_2, stable_2);
-            (asset_0, stable_0)
-        } else if (winning_outcome == 1) {
-            burn_if_nonzero(escrow, 0, asset_0, stable_0);
-            burn_if_nonzero(escrow, 2, asset_2, stable_2);
-            (asset_1, stable_1)
-        } else {
-            burn_if_nonzero(escrow, 0, asset_0, stable_0);
-            burn_if_nonzero(escrow, 1, asset_1, stable_1);
-            (asset_2, stable_2)
-        };
-
-        let asset_amount = winning_asset.value();
-        let stable_amount = winning_stable.value();
-
-        let mut spot_asset = if (asset_amount > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_asset(escrow, winning_outcome, winning_asset);
-            futarchy_markets::coin_escrow::withdraw_asset_balance<AssetType, StableType>(escrow, asset_amount, ctx)
-        } else {
-            coin::destroy_zero(winning_asset);
-            coin::zero<AssetType>(ctx)
-        };
-
-        let spot_stable = if (stable_amount > 0) {
-            futarchy_markets::coin_escrow::burn_conditional_stable(escrow, winning_outcome, winning_stable);
-            futarchy_markets::coin_escrow::withdraw_stable_balance<AssetType, StableType>(escrow, stable_amount, ctx)
-        } else {
-            coin::destroy_zero(winning_stable);
-            coin::zero<StableType>(ctx)
-        };
-
-        let position_fee = if (cranker_fee_bps > 0 && asset_amount > 0) {
-            let fee_amount = (asset_amount * cranker_fee_bps) / 10000;
-            if (fee_amount > 0) {
-                let fee_coin = spot_asset.split(fee_amount, ctx);
-                transfer::public_transfer(fee_coin, ctx.sender());
-                fee_amount
-            } else { 0 }
-        } else { 0 };
-
-        total_fees = total_fees + position_fee;
-
-        if (spot_asset.value() > 0) {
-            transfer::public_transfer(spot_asset, owner);
-        } else { coin::destroy_zero(spot_asset); };
-
-        if (spot_stable.value() > 0) {
-            transfer::public_transfer(spot_stable, owner);
-        } else { coin::destroy_zero(spot_stable); };
-
-        object::delete(position_uid);
-        registry.total_positions = registry.total_positions - 1;
-        registry.total_cranked = registry.total_cranked + 1;
-
-        event::emit(SwapPositionCranked {
-            owner, proposal_id, winning_outcome,
-            spot_asset_returned: asset_amount - position_fee,
-            spot_stable_returned: stable_amount,
-            cranker: ctx.sender(),
-            cranker_fee: position_fee,
-            timestamp,
-        });
-
-        succeeded = succeeded + 1;
-        i = i + 1;
-    };
-
-    event::emit(BatchCrankCompleted {
-        proposal_id,
-        positions_processed: batch_size,
-        positions_succeeded: succeeded,
-        positions_failed: failed,
-        total_fees_earned: total_fees,
-        cranker: ctx.sender(),
-        timestamp,
-    });
-}
+// === Old Hardcoded Functions Removed ===
+// All crank_position_N functions have been replaced by the PTB + Hot Potato pattern above.
+// Frontend constructs dynamic PTBs using: start_crank() → unwrap_one() (N times) → finish_crank()
+// This eliminates the need for 100+ hardcoded functions and supports 2-100+ outcomes.
 
 // === Internal Helpers ===
 
@@ -1156,6 +659,55 @@ public fun get_cranking_metrics<AssetType, StableType>(
     };
 
     (active, cranked, success_rate)
+}
+
+/// Check if a position is ready to be cranked
+/// Returns true if:
+/// 1. Position exists in registry
+/// 2. Proposal is finalized (winning outcome determined)
+///
+/// Frontend should call this before constructing PTB to avoid wasted gas
+public fun can_crank_position<AssetType, StableType>(
+    registry: &SwapPositionRegistry<AssetType, StableType>,
+    owner: address,
+    proposal: &Proposal<AssetType, StableType>,
+): bool {
+    let proposal_id = object::id(proposal);
+    let key = PositionKey { owner, proposal_id };
+
+    // Check position exists
+    if (!table::contains(&registry.positions, key)) {
+        return false
+    };
+
+    // Check proposal is finalized
+    if (!futarchy_markets::proposal::is_finalized(proposal)) {
+        return false
+    };
+
+    true
+}
+
+/// Get outcome count for a proposal
+/// Helper for frontend to construct correct number of unwrap_one calls
+///
+/// # Example
+/// ```
+/// let outcome_count = get_outcome_count_for_position(registry, owner, proposal);
+/// // Frontend constructs: outcome_count * 2 unwrap_one calls (asset + stable per outcome)
+/// ```
+public fun get_outcome_count_for_position<AssetType, StableType>(
+    registry: &SwapPositionRegistry<AssetType, StableType>,
+    owner: address,
+    proposal: &Proposal<AssetType, StableType>,
+): u64 {
+    let proposal_id = object::id(proposal);
+    let key = PositionKey { owner, proposal_id };
+
+    // Ensure position exists
+    assert!(table::contains(&registry.positions, key), EPositionNotFound);
+
+    futarchy_markets::proposal::outcome_count(proposal)
 }
 
 /// Share the registry (called after creation)

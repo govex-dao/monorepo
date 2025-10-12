@@ -4,7 +4,7 @@
 /// that can be resolved early when market consensus is clear and stable.
 ///
 /// ## Architecture
-/// - Metrics stored in Proposal struct (proposal.move owns storage)
+/// - Metrics stored in MarketState struct (market_state.move owns storage)
 /// - Logic centralized here (single responsibility principle)
 /// - Called from swap_core::finalize_swap_session for flip detection
 ///
@@ -27,8 +27,8 @@ const EInvalidOutcome: u64 = 0;
 
 // === Structs ===
 
-// Note: EarlyResolveMetrics is defined in proposal.move to avoid circular dependencies.
-// This module provides logic to manipulate the metrics, but the struct lives where it's stored.
+// Note: EarlyResolveMetrics is defined in market_state.move where it's stored.
+// This module provides logic to manipulate the metrics.
 
 // === Events ===
 
@@ -63,14 +63,14 @@ public struct ProposalEarlyResolved has copy, drop {
 
 // === Public Functions ===
 
-/// Initialize early resolution metrics for a proposal
+/// Initialize early resolution metrics for a market
 /// Called when proposal enters TRADING state
-/// Delegates to proposal module to construct the struct
+/// Delegates to market_state module to construct the struct
 public fun new_metrics(
     initial_winner: u64,
     current_time_ms: u64,
-): proposal::EarlyResolveMetrics {
-    proposal::new_early_resolve_metrics(initial_winner, current_time_ms)
+): market_state::EarlyResolveMetrics {
+    market_state::new_early_resolve_metrics(initial_winner, current_time_ms)
 }
 
 /// Update early resolve metrics (keeper-triggered or swap-triggered)
@@ -80,37 +80,33 @@ public fun new_metrics(
 /// This is called from swap_core::finalize_swap_session() to ensure flip
 /// detection happens exactly once per transaction AFTER all swaps complete.
 ///
-/// NOTE: This now works with MarketState directly for pool access,
-/// but still needs Proposal for metrics storage (until we refactor that too)
+/// NOTE: Metrics now stored in MarketState, not Proposal!
+/// Proposal only needed for proposal_id (could be eliminated later)
 public fun update_metrics<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    market_state: &mut futarchy_markets::market_state::MarketState,
+    proposal: &Proposal<AssetType, StableType>,
+    market_state: &mut MarketState,
     clock: &Clock,
 ) {
     // If early resolution not enabled, do nothing
-    if (!proposal::has_early_resolve_metrics(proposal)) {
+    if (!market_state::has_early_resolve_metrics(market_state)) {
         return
     };
 
     let current_time_ms = clock.timestamp_ms();
     let proposal_id = proposal::get_id(proposal);
 
-    // Calculate current winner from MarketState pools (no Proposal dependency!)
+    // Calculate current winner from MarketState pools
     let (winner_idx, winner_price, spread) = calculate_current_winner_by_price(market_state);
 
-    // Now borrow metrics mutably from proposal
-    let metrics = proposal::borrow_early_resolve_metrics_mut(proposal);
-
-    // Check if winner has flipped
-    let current_winner_idx = proposal::metrics_current_winner(metrics);
+    // Get current winner from metrics
+    let current_winner_idx = market_state::get_current_winner_index(market_state);
     let has_flipped = winner_idx != current_winner_idx;
 
     if (has_flipped) {
         let old_winner = current_winner_idx;
 
-        // Winner changed - update tracking
-        proposal::metrics_set_current_winner(metrics, winner_idx);
-        proposal::metrics_set_last_flip_time_ms(metrics, current_time_ms);
+        // Winner changed - update tracking using market_state function
+        market_state::update_winner_metrics(market_state, winner_idx, current_time_ms);
 
         // Emit WinnerFlipped event
         event::emit(WinnerFlipped {
@@ -126,7 +122,7 @@ public fun update_metrics<AssetType, StableType>(
     // Emit MetricsUpdated event (simplified - no flip count or revenue tracking)
     event::emit(MetricsUpdated {
         proposal_id,
-        current_winner: proposal::metrics_current_winner(metrics),
+        current_winner: market_state::get_current_winner_index(market_state),
         flip_count: 0,  // Removed exponential decay tracking
         total_trades: 0,  // Removed trade tracking
         total_fees: 0,  // Removed revenue tracking
@@ -138,8 +134,11 @@ public fun update_metrics<AssetType, StableType>(
 /// Check if proposal is eligible for early resolution
 /// Returns (is_eligible, reason_if_not)
 /// Simplified design: just check time bounds and stability
+///
+/// NOTE: Metrics now come from MarketState, timing info still from Proposal
 public fun check_eligibility<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
+    market_state: &MarketState,
     config: &EarlyResolveConfig,
     clock: &Clock,
 ): (bool, String) {
@@ -148,12 +147,11 @@ public fun check_eligibility<AssetType, StableType>(
         return (false, string::utf8(b"Early resolution not enabled"))
     };
 
-    // Check if proposal has metrics initialized
-    if (!proposal::has_early_resolve_metrics(proposal)) {
+    // Check if market has metrics initialized
+    if (!market_state::has_early_resolve_metrics(market_state)) {
         return (false, string::utf8(b"Early resolve metrics not initialized"))
     };
 
-    let metrics = proposal::borrow_early_resolve_metrics(proposal);
     let current_time_ms = clock.timestamp_ms();
 
     // Get proposal start time (use market_initialized_at if available, else created_at)
@@ -173,7 +171,7 @@ public fun check_eligibility<AssetType, StableType>(
     };
 
     // Check time since last flip (simple stability check)
-    let last_flip_time = proposal::metrics_last_flip_time_ms(metrics);
+    let last_flip_time = market_state::get_last_flip_time_ms(market_state);
     let time_since_last_flip_ms = current_time_ms - last_flip_time;
     let min_time_since_flip = futarchy_config::early_resolve_min_time_since_flip(config);
     if (time_since_last_flip_ms < min_time_since_flip) {
@@ -188,17 +186,19 @@ public fun check_eligibility<AssetType, StableType>(
 
 /// Get time until proposal is eligible for early resolution (in milliseconds)
 /// Returns 0 if already eligible or if early resolution not enabled
+///
+/// NOTE: Metrics now come from MarketState, timing info still from Proposal
 public fun time_until_eligible<AssetType, StableType>(
     proposal: &Proposal<AssetType, StableType>,
+    market_state: &MarketState,
     config: &EarlyResolveConfig,
     clock: &Clock,
 ): u64 {
     // If not enabled or no metrics, return 0
-    if (!futarchy_config::early_resolve_enabled(config) || !proposal::has_early_resolve_metrics(proposal)) {
+    if (!futarchy_config::early_resolve_enabled(config) || !market_state::has_early_resolve_metrics(market_state)) {
         return 0
     };
 
-    let metrics = proposal::borrow_early_resolve_metrics(proposal);
     let current_time_ms = clock.timestamp_ms();
 
     // Get proposal start time
@@ -212,7 +212,7 @@ public fun time_until_eligible<AssetType, StableType>(
     };
 
     // Check time since last flip requirement
-    let last_flip_time = proposal::metrics_last_flip_time_ms(metrics);
+    let last_flip_time = market_state::get_last_flip_time_ms(market_state);
     let time_since_last_flip_ms = current_time_ms - last_flip_time;
     let min_time_since_flip = futarchy_config::early_resolve_min_time_since_flip(config);
     if (time_since_last_flip_ms < min_time_since_flip) {
@@ -224,15 +224,17 @@ public fun time_until_eligible<AssetType, StableType>(
 }
 
 // === Getter Functions ===
+// Note: These are now redundant wrappers around market_state functions
+// Could be removed in favor of calling market_state functions directly
 
-/// Get current winner index from metrics
-public fun current_winner(metrics: &proposal::EarlyResolveMetrics): u64 {
-    proposal::metrics_current_winner(metrics)
+/// Get current winner index from market state
+public fun current_winner_from_state(market_state: &MarketState): u64 {
+    market_state::get_current_winner_index(market_state)
 }
 
-/// Get last flip timestamp from metrics
-public fun last_flip_time_ms(metrics: &proposal::EarlyResolveMetrics): u64 {
-    proposal::metrics_last_flip_time_ms(metrics)
+/// Get last flip timestamp from market state
+public fun last_flip_time_from_state(market_state: &MarketState): u64 {
+    market_state::get_last_flip_time_ms(market_state)
 }
 
 // === Internal Helper Functions ===

@@ -2,12 +2,17 @@
 /// ARBITRAGE ENTRY POINTS - Phase 3 Implementation
 /// ============================================================================
 ///
-/// Provides aggregator-friendly interfaces and MEV bot entry points
+/// Provides aggregator-friendly interfaces and arbitrage bot entry points
 /// for the deterministic arbitrage solver (arbitrage_math.move).
 ///
 /// INTERFACES:
 /// 1. get_quote() - Quote for aggregators (Aftermath, Cetus, etc.)
-/// 2. simulate_arbitrage() - Profit simulation for MEV bots
+/// 2. simulate_arbitrage() - Profit simulation for arbitrage bots
+///
+/// NOTE ON SUI'S ATOMIC TRANSACTIONS:
+/// - There is no MEV (front-running) on Sui due to atomic transaction execution
+/// - "MEV bot" here refers to arbitrage bots that capture pricing inefficiencies
+/// - All arbitrage is permissionless and happens within atomic transactions
 ///
 /// NOTE: Actual execution requires TokenEscrow integration for:
 /// - Minting/burning conditional tokens
@@ -23,6 +28,7 @@ module futarchy_markets::arbitrage_entry;
 use futarchy_markets::arbitrage_math;
 use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets::conditional_amm::LiquidityPool;
+use futarchy_one_shot_utils::math;
 
 // === Structs ===
 
@@ -34,7 +40,7 @@ use futarchy_markets::conditional_amm::LiquidityPool;
 /// the pool state changes and the actual arbitrage profit will differ.
 ///
 /// Use `direct_output` for accurate user output prediction.
-/// Use `expected_arb_profit` to understand available arbitrage (for MEV bots, not users).
+/// Use `expected_arb_profit` to understand available arbitrage (for arbitrage bots, not users).
 public struct SwapQuote has drop, copy {
     amount_in: u64,
     direct_output: u64,          // Output user receives from direct swap
@@ -50,7 +56,7 @@ public struct SwapQuote has drop, copy {
 ///
 /// Returns SwapQuote with:
 /// - Direct swap output (what user actually receives)
-/// - Available arbitrage profit (for MEV bots, NOT added to user output)
+/// - Available arbitrage profit (for arbitrage bots, NOT added to user output)
 ///
 /// **CRITICAL**: The arbitrage profit is calculated on CURRENT pool state.
 /// If user swaps first, pool state changes, and actual arbitrage differs.
@@ -61,7 +67,7 @@ public struct SwapQuote has drop, copy {
 /// let quote = get_quote_asset_to_stable(spot, conditionals, 1000000);
 /// // User receives: quote.direct_output (arbitrage profit goes to arbitrageur)
 /// if (quote.is_arb_available) {
-///     // MEV bot can capture quote.expected_arb_profit (approximately)
+///     // Arbitrage bot can capture quote.expected_arb_profit (approximately)
 /// }
 /// ```
 public fun get_quote_asset_to_stable<AssetType, StableType>(
@@ -84,14 +90,14 @@ public fun get_quote_asset_to_stable<AssetType, StableType>(
             0,  // No min profit for quote (show all opportunities)
         );
 
-    // 3. Check if arbitrage opportunity exists (for MEV bots, not user profit!)
+    // 3. Check if arbitrage opportunity exists (for arbitrage bots, not user profit!)
     let is_arb_available = optimal_arb_amount > 0 && expected_arb_profit > 0;
 
     SwapQuote {
         amount_in,
         direct_output,        // User receives this
         optimal_arb_amount,   // Arbitrage amount (on current state)
-        expected_arb_profit,  // Arbitrage profit (for MEV bot, NOT user!)
+        expected_arb_profit,  // Arbitrage profit (for arbitrage bot, NOT user!)
         is_arb_available,     // Whether arbitrage exists
     }
 }
@@ -118,15 +124,15 @@ public fun get_quote_stable_to_asset<AssetType, StableType>(
         amount_in,
         direct_output,        // User receives this
         optimal_arb_amount,   // Arbitrage amount (on current state)
-        expected_arb_profit,  // Arbitrage profit (for MEV bot, NOT user!)
+        expected_arb_profit,  // Arbitrage profit (for arbitrage bot, NOT user!)
         is_arb_available,     // Whether arbitrage exists
     }
 }
 
-// === MEV Bot Interface ===
+// === Arbitrage Bot Interface ===
 
 /// Simulate pure arbitrage with minimum profit threshold
-/// MEV bots can call this to check if arbitrage is profitable
+/// Arbitrage bots can call this to check if arbitrage is profitable
 ///
 /// Returns:
 /// - optimal_amount: Optimal amount to arbitrage
@@ -224,13 +230,19 @@ public fun quote_is_arb_available(quote: &SwapQuote): bool {
 
 /// Get arbitrage profit in basis points relative to direct output
 /// Returns 0 if no arbitrage available
-/// NOTE: This is the MEV bot's potential profit, NOT added to user output!
+/// NOTE: This is the arbitrage bot's potential profit, NOT added to user output!
+///
+/// BUG FIX: Use mul_div to prevent u128 overflow on (expected_arb_profit * 10000)
 public fun quote_arb_profit_bps(quote: &SwapQuote): u64 {
     if (quote.is_arb_available && quote.direct_output > 0) {
         // BPS = (arb_profit / direct_output) * 10000
-        // This shows the relative size of arbitrage opportunity
-        // FIX: Proper precedence - divide in u128, then downcast
-        (((quote.expected_arb_profit as u128) * 10000) / (quote.direct_output as u128)) as u64
+        // Use mul_div_mixed (accepts u128, u64, u128) to prevent overflow
+        let bps = math::mul_div_mixed(
+            quote.expected_arb_profit,
+            10000,
+            quote.direct_output as u128
+        );
+        (bps as u64)
     } else {
         0
     }

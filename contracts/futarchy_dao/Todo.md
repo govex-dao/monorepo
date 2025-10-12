@@ -119,6 +119,14 @@ and patara.app
 - [X] bolean at my entry point ( hidden from aftermath wrapper) if yes depositis swappers uncombined conditional tokens in side registry or something for their ID and allwos any one to crank and burn their loosing conditional coins or crank their winning coin back to them for a small fee. If same address swapps multiple time during same porposal merge in with existing coins
 - [X] Early resolution feature!!!!! (really need this)
 
+
+- [ ] Make registry or protocol excess conditional or just keep a boolean!
+- [ ] See if their aggregator can search over that boolean
+- [ ] Maybe need second entry point??
+- [ ] https://v1.metadao.fi/metadao/create
+- [ ] Change liuquidity split ratio to 0 to 100
+- [ ] make sure autocrank registry only takes fee once per recipient
+ 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \
 3) long term need to allow condiitonal markets to end earlier when winner is clear\
@@ -372,6 +380,7 @@ like walrus deep book and leading lending protocols etc
 main ones on defi lama that are new! Deepbook, walrus, jose, account tech, big ones on defillama
 
 # Consider for V3
+- [ ] proposal that dont share liqudity but provide their own liquditity
 - [ ] set proposal time by policy / action and proposal fee proportoonal to proposal time
 - [ ] FLASH LOANS FROM LAUNHPAD. 1% OF LAUNCHPAD ALLOCATION GOES TO A PERP 1X LONG OR SHORT, HELPS PRICE DISCOVERY, CAN SHORT
 - [ ] seperate out just multsig???? as have leading multisig implementation???

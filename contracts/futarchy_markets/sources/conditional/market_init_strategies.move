@@ -173,7 +173,7 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
     // - Burns conditional asset coins
     // - Updates AMM reserves (sell asset, making it cheaper)
     // - Mints conditional stable coins (output)
-    let session = swap_core::begin_swap_session(proposal);
+    let session = swap_core::begin_swap_session(escrow);
     let conditional_stable = swap_core::swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
         &session,
         proposal,
@@ -251,7 +251,7 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
     let mut asset_coins = vector::empty<Coin<AssetType>>();
 
     // Begin swap session once for all swaps in this function
-    let session = swap_core::begin_swap_session(proposal);
+    let session = swap_core::begin_swap_session(escrow);
 
     // Process each outcome
     let mut outcome_idx = 0;

@@ -28,6 +28,13 @@ public struct MarketStatus has copy, drop, store {
     finalized: bool,
 }
 
+/// Early resolution metrics for tracking proposal stability
+/// Tracks when winner last flipped across ALL N markets
+public struct EarlyResolveMetrics has store, copy, drop {
+    current_winner_index: u64,      // Which outcome is currently winning
+    last_flip_time_ms: u64,         // When did winner last change
+}
+
 public struct MarketState has key, store {
     id: UID,
     market_id: ID,
@@ -45,6 +52,9 @@ public struct MarketState has key, store {
     trading_start: u64,
     trading_end: Option<u64>,
     finalization_time: Option<u64>,
+
+    // Early resolution metrics (optional)
+    early_resolve_metrics: Option<EarlyResolveMetrics>,
 }
 
 // === Events ===
@@ -92,6 +102,7 @@ public fun new(
         trading_start: 0,
         trading_end: option::none(),
         finalization_time: option::none(),
+        early_resolve_metrics: option::none(),  // Initialized when trading starts
     }
 }
 
@@ -258,6 +269,71 @@ public fun get_finalization_time(state: &MarketState): Option<u64> {
     state.finalization_time
 }
 
+// === Early Resolve Metrics Functions ===
+
+/// Create a new EarlyResolveMetrics struct (helper for initialization)
+public(package) fun new_early_resolve_metrics(
+    initial_winner_index: u64,
+    current_time_ms: u64,
+): EarlyResolveMetrics {
+    EarlyResolveMetrics {
+        current_winner_index: initial_winner_index,
+        last_flip_time_ms: current_time_ms,
+    }
+}
+
+/// Check if early resolve metrics are initialized
+public fun has_early_resolve_metrics(state: &MarketState): bool {
+    state.early_resolve_metrics.is_some()
+}
+
+/// Initialize early resolve metrics when proposal starts
+public(package) fun init_early_resolve_metrics(
+    state: &mut MarketState,
+    initial_winner_index: u64,
+    current_time_ms: u64,
+) {
+    assert!(state.early_resolve_metrics.is_none(), 0); // Can only init once
+    let metrics = EarlyResolveMetrics {
+        current_winner_index: initial_winner_index,
+        last_flip_time_ms: current_time_ms,
+    };
+    option::fill(&mut state.early_resolve_metrics, metrics);
+}
+
+/// Borrow early resolve metrics immutably
+public fun borrow_early_resolve_metrics(state: &MarketState): &EarlyResolveMetrics {
+    state.early_resolve_metrics.borrow()
+}
+
+/// Borrow early resolve metrics mutably
+public(package) fun borrow_early_resolve_metrics_mut(state: &mut MarketState): &mut EarlyResolveMetrics {
+    state.early_resolve_metrics.borrow_mut()
+}
+
+/// Get current winner index from metrics
+public fun get_current_winner_index(state: &MarketState): u64 {
+    let metrics = state.early_resolve_metrics.borrow();
+    metrics.current_winner_index
+}
+
+/// Get last flip time from metrics
+public fun get_last_flip_time_ms(state: &MarketState): u64 {
+    let metrics = state.early_resolve_metrics.borrow();
+    metrics.last_flip_time_ms
+}
+
+/// Update metrics when winner changes (called by early_resolve module)
+public(package) fun update_winner_metrics(
+    state: &mut MarketState,
+    new_winner_index: u64,
+    current_time_ms: u64,
+) {
+    let metrics = state.early_resolve_metrics.borrow_mut();
+    metrics.current_winner_index = new_winner_index;
+    metrics.last_flip_time_ms = current_time_ms;
+}
+
 // === Test Functions ===
 #[test_only]
 public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
@@ -282,6 +358,7 @@ public fun create_for_testing(outcomes: u64, ctx: &mut TxContext): MarketState {
         trading_start: 0,
         trading_end: option::none(),
         finalization_time: option::none(),
+        early_resolve_metrics: option::none(),
     }
 }
 

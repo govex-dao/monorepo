@@ -11,3 +11,4 @@ read https://metadao.mintlify.app/idea-to-funded/after-ico
 - [ ] https://docs.blockvision.org/reference/retrieve-account-defi-portfolio
 get in here
 - [ ] FUTARCHY THICKNESS = DAO CREDIT RATING
+- [ ] https://v1.metadao.fi/metadao/create

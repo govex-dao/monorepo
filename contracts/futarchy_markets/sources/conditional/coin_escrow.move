@@ -220,6 +220,92 @@ public fun burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
     coin::burn(cap, coin);
 }
 
+// === NEW: Generic Mint/Burn for Balance-Based Operations ===
+
+/// Generic mint function for conditional coins (used by balance unwrap)
+/// Takes outcome_index and is_asset to determine which TreasuryCap to use
+public(package) fun mint_conditional<AssetType, StableType, ConditionalCoinType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u64,
+    is_asset: bool,
+    amount: u64,
+    ctx: &mut TxContext,
+): Coin<ConditionalCoinType> {
+    if (is_asset) {
+        mint_conditional_asset<AssetType, StableType, ConditionalCoinType>(
+            escrow,
+            outcome_index,
+            amount,
+            ctx
+        )
+    } else {
+        mint_conditional_stable<AssetType, StableType, ConditionalCoinType>(
+            escrow,
+            outcome_index,
+            amount,
+            ctx
+        )
+    }
+}
+
+/// Generic burn function for conditional coins (used by balance wrap)
+public(package) fun burn_conditional<AssetType, StableType, ConditionalCoinType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u64,
+    is_asset: bool,
+    coin: Coin<ConditionalCoinType>,
+) {
+    if (is_asset) {
+        burn_conditional_asset<AssetType, StableType, ConditionalCoinType>(
+            escrow,
+            outcome_index,
+            coin
+        )
+    } else {
+        burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
+            escrow,
+            outcome_index,
+            coin
+        )
+    }
+}
+
+/// Deposit spot coins to escrow (for balance-based operations)
+/// Returns amounts deposited (for balance tracking)
+public(package) fun deposit_spot_coins<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_coin: Coin<AssetType>,
+    stable_coin: Coin<StableType>,
+): (u64, u64) {
+    let asset_amt = asset_coin.value();
+    let stable_amt = stable_coin.value();
+
+    // Require at least one non-zero amount
+    assert!(asset_amt > 0 || stable_amt > 0, EZeroAmount);
+
+    // Add to escrow reserves
+    balance::join(&mut escrow.escrowed_asset, coin::into_balance(asset_coin));
+    balance::join(&mut escrow.escrowed_stable, coin::into_balance(stable_coin));
+
+    (asset_amt, stable_amt)
+}
+
+/// Withdraw spot coins from escrow (for complete set burn)
+public(package) fun withdraw_from_escrow<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    asset_amount: u64,
+    stable_amount: u64,
+    ctx: &mut TxContext,
+): (Coin<AssetType>, Coin<StableType>) {
+    assert!(balance::value(&escrow.escrowed_asset) >= asset_amount, ENotEnoughLiquidity);
+    assert!(balance::value(&escrow.escrowed_stable) >= stable_amount, ENotEnoughLiquidity);
+
+    let asset_bal = balance::split(&mut escrow.escrowed_asset, asset_amount);
+    let stable_bal = balance::split(&mut escrow.escrowed_stable, stable_amount);
+
+    (coin::from_balance(asset_bal, ctx), coin::from_balance(stable_bal, ctx))
+}
+
 /// Get the total supply of a specific outcome's asset conditional coin
 public fun get_asset_supply<AssetType, StableType, ConditionalCoinType>(
     escrow: &TokenEscrow<AssetType, StableType>,

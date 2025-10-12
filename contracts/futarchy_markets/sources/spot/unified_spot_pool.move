@@ -11,8 +11,8 @@
 /// DEPENDENCY SAFETY:
 /// This module ONLY imports:
 /// - sui framework (clock, balance, coin, etc.)
-/// - futarchy_markets basic types (swap_position_registry, simple_twap)
-/// - Does NOT import: proposal, coin_escrow, or any lifecycle modules
+/// - futarchy_markets basic types (swap_position_registry, simple_twap, coin_escrow)
+/// - Does NOT import: proposal or lifecycle modules
 ///
 /// This ensures: proposal.move → unified_spot_pool (one-way dependency)
 ///
@@ -26,8 +26,11 @@ use sui::coin::{Self, Coin};
 use sui::object::{Self, UID, ID};
 use sui::transfer;
 use std::option::{Self, Option};
+use std::type_name::TypeName;
+use std::vector;
 use futarchy_markets::swap_position_registry::{Self, SwapPositionRegistry};
 use futarchy_markets::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets::coin_escrow::{Self, TokenEscrow};
 
 // === Errors ===
 const EInsufficientLiquidity: u64 = 1;
@@ -65,8 +68,14 @@ public struct UnifiedSpotPool<phantom AssetType, phantom StableType> has key, st
 
 /// Aggregator-specific configuration (only present when enabled)
 public struct AggregatorConfig<phantom AssetType, phantom StableType> has store {
-    // Registration tracking (uses ID to avoid circular dependency)
-    active_proposal_id: Option<ID>,
+    // Active escrow for proposal trading (owned by pool during trading)
+    // Moved IN when proposal starts, moved OUT when proposal ends
+    active_escrow: Option<TokenEscrow<AssetType, StableType>>,
+
+    // Conditional coin types for active proposal (for external integrators like Aftermath SDK)
+    // Order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
+    // Empty when no proposal is active
+    conditional_type_names: vector<TypeName>,
 
     // Swap position registry for dust tracking
     registry: SwapPositionRegistry<AssetType, StableType>,
@@ -161,7 +170,8 @@ public fun new_with_aggregator<AssetType, StableType>(
     let simple_twap = simple_twap::new(0, clock); // Initialize with 0 price (will be updated on first swap)
 
     let aggregator_config = AggregatorConfig {
-        active_proposal_id: option::none(),
+        active_escrow: option::none(),
+        conditional_type_names: vector::empty(),
         registry,
         simple_twap,
         last_proposal_usage: option::none(),
@@ -195,7 +205,8 @@ public fun enable_aggregator<AssetType, StableType>(
         let simple_twap = simple_twap::new(get_spot_price(pool), clock); // Initialize with current price
 
         let config = AggregatorConfig {
-            active_proposal_id: option::none(),
+            active_escrow: option::none(),
+            conditional_type_names: vector::empty(),
             registry,
             simple_twap,
             last_proposal_usage: option::none(),
@@ -208,50 +219,51 @@ public fun enable_aggregator<AssetType, StableType>(
     }
 }
 
-// === Registration Functions (Aggregator Only) ===
+// === Escrow Management Functions (Aggregator Only) ===
 
-/// Register active proposal for aggregator validation
-/// Uses ID to avoid circular dependency with proposal module
-public(package) fun register_active_proposal<AssetType, StableType>(
+/// Move escrow into pool when proposal starts trading
+/// Stores conditional types for external integrators (Aftermath SDK)
+public(package) fun store_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    proposal_id: ID,
+    escrow: TokenEscrow<AssetType, StableType>,
+    conditional_types: vector<TypeName>,  // Order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
 ) {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow_mut();
-    config.active_proposal_id = option::some(proposal_id);
+    assert!(config.active_escrow.is_none(), ENoActiveProposal); // Must not already have escrow
+    option::fill(&mut config.active_escrow, escrow);
+    config.conditional_type_names = conditional_types;
 }
 
-/// Clear active proposal registration
-public(package) fun clear_active_proposal<AssetType, StableType>(
+/// Extract escrow from pool when proposal ends
+/// Returns the escrow object to caller (usually for finalization)
+public(package) fun extract_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-) {
-    if (pool.aggregator_config.is_some()) {
-        let config = pool.aggregator_config.borrow_mut();
-        config.active_proposal_id = option::none();
-    }
+): TokenEscrow<AssetType, StableType> {
+    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
+    let config = pool.aggregator_config.borrow_mut();
+    assert!(config.active_escrow.is_some(), ENoActiveProposal); // Must have escrow
+    config.conditional_type_names = vector::empty();  // Clear conditional types
+    option::extract(&mut config.active_escrow)
 }
 
-/// Validate aggregator objects and return mutable registry reference
-/// This is used by aggregator swap entry functions
-public fun validate_arb_objects_and_borrow_registry<AssetType, StableType>(
+/// Borrow escrow mutably for swaps (internal use)
+/// Fails if no active escrow
+public(package) fun borrow_active_escrow_mut<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    proposal_id: ID,  // Pass ID instead of &Proposal (avoids circular dep)
-    escrow_id: ID,    // Pass ID instead of &TokenEscrow (avoids circular dep)
+): &mut TokenEscrow<AssetType, StableType> {
+    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
+    let config = pool.aggregator_config.borrow_mut();
+    assert!(config.active_escrow.is_some(), ENoActiveProposal);
+    config.active_escrow.borrow_mut()
+}
+
+/// Get registry reference (for dust management)
+public(package) fun borrow_registry_mut<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
 ): &mut SwapPositionRegistry<AssetType, StableType> {
-    // Check aggregator is enabled
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
-
     let config = pool.aggregator_config.borrow_mut();
-
-    // Validate active proposal exists
-    assert!(config.active_proposal_id.is_some(), ENoActiveProposal);
-
-    let expected_proposal_id = *config.active_proposal_id.borrow();
-    assert!(expected_proposal_id == proposal_id, EProposalMismatch);
-
-    // Note: escrow validation happens at caller level
-    // We can't validate escrow here without importing proposal types
-
     &mut config.registry
 }
 
@@ -359,8 +371,9 @@ public fun remove_liquidity<AssetType, StableType>(
     (asset_coin, stable_coin)
 }
 
-/// Swap stable for asset
-public fun swap_stable_for_asset<AssetType, StableType>(
+/// INTERNAL: Swap stable for asset (used by arbitrage only)
+/// Public swaps must go through swap_entry to trigger auto-arbitrage
+public(package) fun swap_stable_for_asset<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     stable_in: Coin<StableType>,
     min_asset_out: u64,
@@ -391,8 +404,9 @@ public fun swap_stable_for_asset<AssetType, StableType>(
     asset_coin
 }
 
-/// Swap asset for stable
-public fun swap_asset_for_stable<AssetType, StableType>(
+/// INTERNAL: Swap asset for stable (used by arbitrage only)
+/// Public swaps must go through swap_entry to trigger auto-arbitrage
+public(package) fun swap_asset_for_stable<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_in: Coin<AssetType>,
     min_stable_out: u64,
@@ -463,7 +477,20 @@ public fun is_aggregator_enabled<AssetType, StableType>(
     pool.aggregator_config.is_some()
 }
 
-/// Check if pool is locked for proposal (aggregator only)
+/// Check if pool has active escrow (trading proposal active)
+public fun has_active_escrow<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): bool {
+    if (pool.aggregator_config.is_none()) {
+        return false
+    };
+
+    let config = pool.aggregator_config.borrow();
+    config.active_escrow.is_some()
+}
+
+/// Check if pool is locked for proposal (liquidity moved to conditionals)
+/// This is used by oracle interface to determine whether to read from conditional vs spot
 public fun is_locked_for_proposal<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>
 ): bool {
@@ -472,7 +499,7 @@ public fun is_locked_for_proposal<AssetType, StableType>(
     };
 
     let config = pool.aggregator_config.borrow();
-    config.active_proposal_id.is_some()
+    config.last_proposal_usage.is_some()
 }
 
 /// Get conditional liquidity ratio (aggregator only)
@@ -497,6 +524,22 @@ public fun get_oracle_conditional_threshold_bps<AssetType, StableType>(
 
     let config = pool.aggregator_config.borrow();
     config.oracle_conditional_threshold_bps
+}
+
+/// Get conditional types for active proposal (aggregator only)
+/// Returns empty vector if no proposal is active or aggregator not enabled
+/// This is the primary integration point for external SDKs like Aftermath
+///
+/// Returns types in order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
+public fun get_conditional_types<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): vector<TypeName> {
+    if (pool.aggregator_config.is_none()) {
+        return vector::empty()
+    };
+
+    let config = pool.aggregator_config.borrow();
+    config.conditional_type_names
 }
 
 // === Quantum Liquidity Functions ===
@@ -545,10 +588,13 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
         return
     };
 
+    // Calculate spot price first (before borrowing config mutably)
+    let current_price = get_spot_price(pool);
+
     let config = pool.aggregator_config.borrow_mut();
 
     // Update SimpleTWAP one last time before liquidity moves to proposal
-    simple_twap::update(&mut config.simple_twap, get_spot_price(pool), clock);
+    simple_twap::update(&mut config.simple_twap, current_price, clock);
 
     // Record when liquidity moved to proposal (spot oracle freezes here)
     config.last_proposal_usage = option::some(clock.timestamp_ms());
@@ -579,10 +625,9 @@ public fun backfill_from_winning_conditional<AssetType, StableType>(
     let proposal_duration = proposal_end - proposal_start;
 
     // SAFETY: Scale to just the proposal period with overflow protection
-    let period_cumulative = if (conditional_duration > 0) {
+    let period_cumulative: u256 = if (conditional_duration > 0) {
         // Use safe multiplication to avoid overflow
-        let scaled = (conditional_cumulative as u256) * (proposal_duration as u256) / (conditional_duration as u256);
-        (scaled as u128)
+        (conditional_cumulative as u256) * (proposal_duration as u256) / (conditional_duration as u256)
     } else {
         0
     };
@@ -616,15 +661,25 @@ public fun is_twap_ready<AssetType, StableType>(
     simple_twap::is_ready(&config.simple_twap, clock)
 }
 
-/// Get current TWAP with optional conditional integration (sophisticated combination)
+/// Get current TWAP (without conditional integration)
+/// Returns spot SimpleTWAP - normal operation
+public fun get_twap<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>,
+    clock: &Clock,
+): u128 {
+    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
+    let config = pool.aggregator_config.borrow();
+    simple_twap::get_twap(&config.simple_twap, clock)
+}
+
+/// Get current TWAP with conditional integration (sophisticated combination)
 /// During proposals: combines spot's frozen cumulative + conditional's live cumulative
-/// Normal operation: returns spot SimpleTWAP
 ///
 /// # Conditional Oracle Data
-/// Pass oracle data from winning conditional (if proposal active) for proper time-weighted combination
+/// Pass oracle data from winning conditional for proper time-weighted combination
 public fun get_twap_with_conditional<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
-    winning_conditional_oracle: Option<&SimpleTWAP>,
+    winning_conditional_oracle: &SimpleTWAP,
     clock: &Clock,
 ): u128 {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
@@ -632,12 +687,7 @@ public fun get_twap_with_conditional<AssetType, StableType>(
     let spot_oracle = &config.simple_twap;
     let now = clock.timestamp_ms();
 
-    // If no conditional active, just return spot TWAP
-    if (winning_conditional_oracle.is_none()) {
-        return simple_twap::get_twap(spot_oracle, clock)
-    };
-
-    let cond_oracle = *winning_conditional_oracle.borrow();
+    let cond_oracle = winning_conditional_oracle;
 
     // Must have proposal_start timestamp
     if (config.last_proposal_usage.is_none()) {

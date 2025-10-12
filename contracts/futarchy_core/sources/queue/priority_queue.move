@@ -66,7 +66,6 @@ public struct EvictedIntentNeedsCleanup has copy, drop {
 // === Errors ===
 
 const EQueueFullAndFeeTooLow: u64 = 0;
-const EDaoSlotOccupied: u64 = 1;
 const EQueueEmpty: u64 = 2;
 const EInvalidProposalId: u64 = 3;
 const EProposalNotFound: u64 = 4;
@@ -166,14 +165,10 @@ public struct ProposalQueue<phantom StableCoin> has key, store {
     proposal_indices: Table<ID, u64>,
     /// Current size of the heap
     size: u64,
-    /// Maximum concurrent proposals allowed
-    max_concurrent_proposals: u64,
-    /// Current number of active proposals
-    active_proposal_count: u64,
-    /// Maximum proposer-funded proposals
+    /// Whether a proposal is currently live (trading)
+    is_proposal_live: bool,
+    /// Maximum proposer-funded proposals in queue
     max_proposer_funded: u64,
-    /// Whether the DAO liquidity slot is occupied
-    dao_liquidity_slot_occupied: bool,
     /// Grace period in milliseconds before a proposal can be evicted
     eviction_grace_period_ms: u64,
     /// Reserved next on-chain Proposal ID (if locked as the next one to go live)
@@ -398,25 +393,20 @@ fun remove_at<StableCoin>(heap: &mut vector<QueuedProposal<StableCoin>>, indices
 /// Create a new proposal queue with DAO ID
 public fun new<StableCoin>(
     dao_id: ID,
-    max_concurrent_proposals: u64,
     max_proposer_funded: u64,
     eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
 ): ProposalQueue<StableCoin> {
-    // Ensure max_concurrent_proposals is never 0 to prevent division by zero
-    assert!(max_concurrent_proposals > 0, EInvalidProposalId);
     assert!(max_proposer_funded > 0, EInvalidProposalId);
-    
+
     ProposalQueue {
         id: object::new(ctx),
         dao_id,
         heap: vector::empty(),
         proposal_indices: table::new(ctx),
         size: 0,
-        max_concurrent_proposals,
-        active_proposal_count: 0,
+        is_proposal_live: false,
         max_proposer_funded,
-        dao_liquidity_slot_occupied: false,
         eviction_grace_period_ms,
         reserved_next_proposal: option::none(),
     }
@@ -426,12 +416,12 @@ public fun new<StableCoin>(
 public fun new_with_config<StableCoin>(
     dao_id: ID,
     max_proposer_funded: u64,
-    max_concurrent_proposals: u64,
+    _max_concurrent_proposals: u64,  // Ignored - we allow only 1 proposal at a time now
     _max_queue_size: u64,  // Ignored - we use MAX_QUEUE_SIZE constant
     eviction_grace_period_ms: u64,
     ctx: &mut TxContext,
 ): ProposalQueue<StableCoin> {
-    new(dao_id, max_concurrent_proposals, max_proposer_funded, eviction_grace_period_ms, ctx)
+    new(dao_id, max_proposer_funded, eviction_grace_period_ms, ctx)
 }
 
 /// Create priority score from fee and timestamp with validation
@@ -492,104 +482,97 @@ public fun insert<StableCoin>(
     proposal.queue_entry_time = current_time;
     
     // Check capacity and eviction logic
-    if (proposal.uses_dao_liquidity) {
-        if (queue.dao_liquidity_slot_occupied && 
-            queue.active_proposal_count >= queue.max_concurrent_proposals) {
-            abort EDaoSlotOccupied
-        };
-    } else {
-        // Count proposer-funded proposals
-        let proposer_funded_count = count_proposer_funded(&queue.heap, queue.size);
-        
-        if (proposer_funded_count >= queue.max_proposer_funded) {
-            // Find lowest priority proposer-funded proposal
-            let lowest_idx = find_min_index(&queue.heap, queue.size);
-            let lowest = vector::borrow(&queue.heap, lowest_idx);
-            
-            // Check grace period BEFORE removing (use queue entry time, not creation timestamp)
-            assert!(
-                current_time - lowest.queue_entry_time >= queue.eviction_grace_period_ms,
-                EProposalInGracePeriod
-            );
-            
-            // New proposal must have higher priority to evict
-            assert!(
-                compare_priority_scores(&proposal.priority_score, &lowest.priority_score) == COMPARE_GREATER,
-                EQueueFullAndFeeTooLow
-            );
-            
-            // Now safe to remove - assertions have passed
-            let evicted = remove_at(&mut queue.heap, &mut queue.proposal_indices, lowest_idx, &mut queue.size);
-            
-            // Save eviction info before destructuring
-            let evicted_proposal_id = evicted.proposal_id;
-            let evicted_proposer = evicted.proposer;
-            let evicted_fee = evicted.fee;
-            let evicted_timestamp = evicted.timestamp;
-            let evicted_priority_value = evicted.priority_score.computed_value;
-            
-            // Handle eviction
-            eviction_info = option::some(EvictionInfo {
-                proposal_id: evicted_proposal_id,
-                proposer: evicted_proposer,
-            });
-            
-            // Emit eviction event with both priority scores for transparency
-            event::emit(ProposalEvicted {
-                proposal_id: evicted_proposal_id,
-                proposer: evicted_proposer,
-                fee: evicted_fee,
-                evicted_by: proposal.proposal_id,
-                timestamp: evicted_timestamp,
-                priority_score: evicted_priority_value,
-                new_proposal_priority_score: proposal.priority_score.computed_value,
-            });
-            
-            // Clean up evicted proposal
-            let QueuedProposal {
-                mut bond,
+    // Simple: if queue is at capacity, must evict lowest priority proposer-funded proposal
+    let proposer_funded_count = count_proposer_funded(&queue.heap, queue.size);
+
+    if (proposer_funded_count >= queue.max_proposer_funded) {
+        // Find lowest priority proposer-funded proposal
+        let lowest_idx = find_min_index(&queue.heap, queue.size);
+        let lowest = vector::borrow(&queue.heap, lowest_idx);
+
+        // Check grace period BEFORE removing (use queue entry time, not creation timestamp)
+        assert!(
+            current_time - lowest.queue_entry_time >= queue.eviction_grace_period_ms,
+            EProposalInGracePeriod
+        );
+
+        // New proposal must have higher priority to evict
+        assert!(
+            compare_priority_scores(&proposal.priority_score, &lowest.priority_score) == COMPARE_GREATER,
+            EQueueFullAndFeeTooLow
+        );
+
+        // Now safe to remove - assertions have passed
+        let evicted = remove_at(&mut queue.heap, &mut queue.proposal_indices, lowest_idx, &mut queue.size);
+
+        // Save eviction info before destructuring
+        let evicted_proposal_id = evicted.proposal_id;
+        let evicted_proposer = evicted.proposer;
+        let evicted_fee = evicted.fee;
+        let evicted_timestamp = evicted.timestamp;
+        let evicted_priority_value = evicted.priority_score.computed_value;
+
+        // Handle eviction
+        eviction_info = option::some(EvictionInfo {
+            proposal_id: evicted_proposal_id,
+            proposer: evicted_proposer,
+        });
+
+        // Emit eviction event with both priority scores for transparency
+        event::emit(ProposalEvicted {
+            proposal_id: evicted_proposal_id,
+            proposer: evicted_proposer,
+            fee: evicted_fee,
+            evicted_by: proposal.proposal_id,
+            timestamp: evicted_timestamp,
+            priority_score: evicted_priority_value,
+            new_proposal_priority_score: proposal.priority_score.computed_value,
+        });
+
+        // Clean up evicted proposal
+        let QueuedProposal {
+            mut bond,
+            proposal_id,
+            dao_id,
+            proposer: evicted_proposer_addr,
+            fee: _,
+            timestamp: _,
+            priority_score: _,
+            mut intent_spec,
+            uses_dao_liquidity: _,
+            data: _,
+            queue_entry_time: _,
+            policy_mode: _,
+            required_council_id: _,
+            council_approval_proof: _,
+            market_init_params: _,
+            time_reached_top_of_queue: _,
+            mut crank_bounty,
+            used_quota: _,
+        } = evicted;
+
+        if (intent_spec.is_some()) {
+            let _ = intent_spec.extract();
+            event::emit(EvictedIntentNeedsCleanup {
                 proposal_id,
+                has_intent_spec: true,
                 dao_id,
-                proposer: evicted_proposer_addr,
-                fee: _,
-                timestamp: _,
-                priority_score: _,
-                mut intent_spec,
-                uses_dao_liquidity: _,
-                data: _,
-                queue_entry_time: _,
-                policy_mode: _,
-                required_council_id: _,
-                council_approval_proof: _,
-                market_init_params: _,
-                time_reached_top_of_queue: _,
-                mut crank_bounty,
-                used_quota: _,
-            } = evicted;
-
-            if (intent_spec.is_some()) {
-                let _ = intent_spec.extract();
-                event::emit(EvictedIntentNeedsCleanup {
-                    proposal_id,
-                    has_intent_spec: true,
-                    dao_id,
-                    timestamp: current_time,
-                });
-            };
-            
-            // Handle bond properly - return to evicted proposer if it exists
-            if (option::is_some(&bond)) {
-                // Return the bond to the proposer who got evicted
-                transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
-            };
-            option::destroy_none(bond);
-
-            // Handle crank bounty - return to evicted proposer if it exists
-            if (option::is_some(&crank_bounty)) {
-                transfer::public_transfer(option::extract(&mut crank_bounty), evicted_proposer_addr);
-            };
-            option::destroy_none(crank_bounty);
+                timestamp: current_time,
+            });
         };
+
+        // Handle bond properly - return to evicted proposer if it exists
+        if (option::is_some(&bond)) {
+            // Return the bond to the proposer who got evicted
+            transfer::public_transfer(option::extract(&mut bond), evicted_proposer_addr);
+        };
+        option::destroy_none(bond);
+
+        // Handle crank bounty - return to evicted proposer if it exists
+        if (option::is_some(&crank_bounty)) {
+            transfer::public_transfer(option::extract(&mut crank_bounty), evicted_proposer_addr);
+        };
+        option::destroy_none(crank_bounty);
     };
     
     // Save values before moving proposal
@@ -837,28 +820,27 @@ public fun try_activate_next<StableCoin>(
 }
 
 /// Calculate minimum required fee based on queue occupancy
-/// 
+///
 /// The fee scaling regime works as follows:
 /// - Below 50% occupancy: Base fee (1 unit)
 /// - 50-75% occupancy: 2x base fee
 /// - 75-90% occupancy: 5x base fee
 /// - 90-100% occupancy: 10x base fee
-/// - Above 100%: Clamped to 10x (queue can exceed max_concurrent_proposals in pending state)
-/// 
-/// Note: The queue can have more proposals than max_concurrent_proposals since that limit
-/// only applies to ACTIVE proposals. The queue size can grow larger with pending proposals.
+/// - Above 100%: Clamped to 10x
+///
+/// Note: Occupancy is calculated relative to max_proposer_funded (the queue capacity).
 public fun calculate_min_fee<StableCoin>(queue: &ProposalQueue<StableCoin>): u64 {
     let queue_size = queue.size;
-    
+
     // Calculate occupancy ratio, clamped to 100% maximum
-    // max_concurrent_proposals is guaranteed to be > 0 by constructor validation
-    let raw_ratio = (queue_size * 100) / queue.max_concurrent_proposals;
-    // Clamp to 100% - queue can exceed max_concurrent but fee stops scaling at 100%
+    // max_proposer_funded is guaranteed to be > 0 by constructor validation
+    let raw_ratio = (queue_size * 100) / queue.max_proposer_funded;
+    // Clamp to 100%
     let occupancy_ratio = if (raw_ratio > 100) { 100 } else { raw_ratio };
-    
+
     // Base minimum fee
     let min_fee_base = 1_000_000; // 1 unit with 6 decimals
-    
+
     // Escalate fee based on clamped queue occupancy
     if (occupancy_ratio >= 90) {
         min_fee_base * 10  // 10x when queue is 90%+ full
@@ -894,7 +876,7 @@ public fun get_proposals_by_proposer<StableCoin>(
 public fun would_accept_proposal<StableCoin>(
     queue: &ProposalQueue<StableCoin>,
     fee: u64,
-    uses_dao_liquidity: bool,
+    _uses_dao_liquidity: bool,  // Kept for compatibility but not used
     clock: &Clock
 ): bool {
     // Check basic fee requirements
@@ -902,27 +884,22 @@ public fun would_accept_proposal<StableCoin>(
     if (fee < min_fee) {
         return false
     };
-    
-    // Check capacity
-    if (uses_dao_liquidity) {
-        if (queue.dao_liquidity_slot_occupied && 
-            queue.active_proposal_count >= queue.max_concurrent_proposals) {
-            return false
-        };
-    } else {
-        let proposer_funded_count = count_proposer_funded(&queue.heap, queue.size);
-        if (proposer_funded_count >= queue.max_proposer_funded) {
-            // Would need to evict - check if fee is high enough
-            let min_idx = find_min_index(&queue.heap, queue.size);
-            if (min_idx < queue.size) {
-                let lowest = vector::borrow(&queue.heap, min_idx);
-                let new_priority = create_priority_score(fee, clock.timestamp_ms());
-                return compare_priority_scores(&new_priority, &lowest.priority_score) == COMPARE_GREATER
-            };
-        };
+
+    // Check if we can add without eviction
+    let proposer_funded_count = count_proposer_funded(&queue.heap, queue.size);
+    if (proposer_funded_count < queue.max_proposer_funded) {
+        return true  // Room available
     };
-    
-    true
+
+    // Would need to evict - check if fee is high enough
+    let min_idx = find_min_index(&queue.heap, queue.size);
+    if (min_idx < queue.size) {
+        let lowest = vector::borrow(&queue.heap, min_idx);
+        let new_priority = create_priority_score(fee, clock.timestamp_ms());
+        return compare_priority_scores(&new_priority, &lowest.priority_score) == COMPARE_GREATER
+    };
+
+    false
 }
 
 /// Slash and distribute fee according to DAO configuration
@@ -957,23 +934,15 @@ public fun slash_and_distribute_fee<StableCoin>(
 }
 
 /// Mark a proposal as active after extraction from queue
-/// Increments active_proposal_count and sets DAO liquidity slot if needed
+/// Sets is_proposal_live to true
 /// Requires QueueMutationAuth witness to prevent unauthorized state changes
 public fun mark_proposal_activated<StableCoin>(
     _auth: QueueMutationAuth,  // ← Witness required
     queue: &mut ProposalQueue<StableCoin>,
-    uses_dao_liquidity: bool,
+    _uses_dao_liquidity: bool,  // Kept for compatibility but not used
 ) {
-    // Increment active count
-    queue.active_proposal_count = queue.active_proposal_count + 1;
-
-    // Mark DAO liquidity slot as occupied if this proposal uses it
-    if (uses_dao_liquidity) {
-        queue.dao_liquidity_slot_occupied = true;
-    };
-
-    // Post-condition validation: ensure we haven't exceeded limits
-    assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
+    // Set the live flag
+    queue.is_proposal_live = true;
 }
 
 /// Mark a proposal as completed, freeing up space with state consistency checks
@@ -981,15 +950,10 @@ public fun mark_proposal_activated<StableCoin>(
 public fun mark_proposal_completed<StableCoin>(
     queue: &mut ProposalQueue<StableCoin>,
     proposal_id: ID,
-    uses_dao_liquidity: bool
+    _uses_dao_liquidity: bool  // Kept for compatibility but not used
 ) {
-    // Validate preconditions for state consistency
-    assert!(queue.active_proposal_count > 0, EInvalidProposalId);
-
-    // If marking a DAO liquidity proposal as complete, verify slot is occupied
-    if (uses_dao_liquidity) {
-        assert!(queue.dao_liquidity_slot_occupied, EInvalidProposalId);
-    };
+    // Validate preconditions: must have a live proposal
+    assert!(queue.is_proposal_live, EInvalidProposalId);
 
     // Verify the proposal_id matches a reserved/active proposal if tracked
     // This ensures we're completing the right proposal
@@ -1001,15 +965,8 @@ public fun mark_proposal_completed<StableCoin>(
         }
     };
 
-    // Update state atomically
-    queue.active_proposal_count = queue.active_proposal_count - 1;
-
-    if (uses_dao_liquidity) {
-        queue.dao_liquidity_slot_occupied = false;
-    };
-
-    // Post-condition validation: ensure state remains consistent
-    assert!(queue.active_proposal_count <= queue.max_concurrent_proposals, EHeapInvariantViolated);
+    // Clear the live flag
+    queue.is_proposal_live = false;
 }
 
 /// Remove a specific proposal from the queue - O(log n) with index tracking
@@ -1028,14 +985,9 @@ public fun remove_from_queue<StableCoin>(
     remove_at(&mut queue.heap, &mut queue.proposal_indices, idx, &mut queue.size)
 }
 
-/// Get the number of active proposals
-public fun active_count<StableCoin>(queue: &ProposalQueue<StableCoin>): u64 {
-    queue.active_proposal_count
-}
-
-/// Check if the DAO liquidity slot is occupied
-public fun is_dao_slot_occupied<StableCoin>(queue: &ProposalQueue<StableCoin>): bool {
-    queue.dao_liquidity_slot_occupied
+/// Check if a proposal is currently live
+public fun is_proposal_live<StableCoin>(queue: &ProposalQueue<StableCoin>): bool {
+    queue.is_proposal_live
 }
 
 /// Get top N proposal IDs from the queue
@@ -1065,13 +1017,15 @@ public fun update_max_proposer_funded<StableCoin>(
     queue.max_proposer_funded = new_max;
 }
 
-/// Update the maximum concurrent proposals allowed
+/// Update the maximum concurrent proposals allowed (deprecated - kept for compatibility)
+/// Since we now use a simple boolean flag (only 1 proposal at a time), this is a no-op
 public fun update_max_concurrent_proposals<StableCoin>(
-    queue: &mut ProposalQueue<StableCoin>,
+    _queue: &mut ProposalQueue<StableCoin>,
     new_max: u64
 ) {
+    // Validate parameter but don't use it (we always allow 1 proposal)
     assert!(new_max > 0, EInvalidProposalId);
-    queue.max_concurrent_proposals = new_max;
+    // No-op: field no longer exists
 }
 
 /// Cancel a proposal and refund the fee - secured to prevent theft
@@ -1201,12 +1155,11 @@ public fun update_proposal_fee<StableCoin>(
 }
 
 /// Get queue statistics
-public fun get_stats<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, u64, u64, bool) {
+public fun get_stats<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, bool, u64) {
     (
         queue.size,
-        queue.active_proposal_count,
+        queue.is_proposal_live,
         count_proposer_funded(&queue.heap, queue.size),
-        queue.dao_liquidity_slot_occupied
     )
 }
 
@@ -1243,19 +1196,10 @@ public fun clear_reserved<StableCoin>(
 /// Check if a specific proposal can be activated
 public fun can_activate_proposal<StableCoin>(
     queue: &ProposalQueue<StableCoin>,
-    proposal: &QueuedProposal<StableCoin>
+    _proposal: &QueuedProposal<StableCoin>
 ): bool {
-    // Check global limit
-    if (queue.active_proposal_count >= queue.max_concurrent_proposals) {
-        return false
-    };
-    
-    // Check DAO liquidity constraint
-    if (proposal.uses_dao_liquidity && queue.dao_liquidity_slot_occupied) {
-        return false
-    };
-    
-    true
+    // Simple: only one proposal at a time!
+    !queue.is_proposal_live
 }
 
 /// Get all proposals in the queue (for viewing)
@@ -1508,10 +1452,9 @@ public fun share_queue<StableCoin>(queue: ProposalQueue<StableCoin>) {
 // === Test Functions ===
 
 #[test_only]
-public fun test_internals<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, u64, bool) {
+public fun test_internals<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, bool) {
     (
         queue.max_proposer_funded,
-        queue.max_concurrent_proposals,
-        queue.dao_liquidity_slot_occupied
+        queue.is_proposal_live,
     )
 }

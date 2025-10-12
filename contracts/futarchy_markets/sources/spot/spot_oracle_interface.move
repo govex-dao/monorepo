@@ -73,7 +73,7 @@ public fun get_lending_twap<AssetType, StableType>(
         get_highest_conditional_twap(conditional_pools, LENDING_WINDOW_SECONDS, clock)
     } else {
         // Spot has >50% - trust spot even if locked!
-        unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
+        unified_spot_pool::get_twap(spot_pool, clock)
     }
 }
 
@@ -90,7 +90,7 @@ public fun get_twap_custom_window<AssetType, StableType>(
         get_highest_conditional_twap(conditional_pools, _seconds, clock)
     } else {
         // Use spot's SimpleTWAP (always 90-day window)
-        unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
+        unified_spot_pool::get_twap(spot_pool, clock)
     }
 }
 
@@ -128,10 +128,10 @@ public fun get_governance_twap<AssetType, StableType>(
         let winning_conditional_oracle = get_highest_conditional_oracle(conditional_pools);
 
         // Sophisticated cumulative combination (not naive averaging)
-        unified_spot_pool::get_twap_with_conditional(spot_pool, option::some(winning_conditional_oracle), clock)
+        unified_spot_pool::get_twap_with_conditional(spot_pool, winning_conditional_oracle, clock)
     } else {
         // Spot has >50% - use spot's SimpleTWAP only
-        unified_spot_pool::get_twap_with_conditional(spot_pool, option::none(), clock)
+        unified_spot_pool::get_twap(spot_pool, clock)
     }
 }
 

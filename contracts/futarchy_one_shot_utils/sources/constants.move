@@ -74,7 +74,7 @@ public fun max_queue_size(): u64 { 100 }
 public fun proposal_grace_period_ms(): u64 { 24 * 60 * 60_000 } // 24 hours
 
 /// Protocol-level maximum outcomes per proposal
-public fun protocol_max_outcomes(): u64 { 100 }
+public fun protocol_max_outcomes(): u64 { 5 }
 
 /// Protocol-level maximum actions per proposal (across all outcomes)
 public fun protocol_max_actions(): u64 { 50 }
@@ -83,7 +83,7 @@ public fun protocol_max_actions(): u64 { 50 }
 public fun protocol_max_actions_per_outcome(): u64 { 20 }
 
 /// Default maximum outcomes per proposal for DAOs
-public fun default_max_outcomes(): u64 { 10 }
+public fun default_max_outcomes(): u64 { 2 }
 
 /// Default maximum actions per proposal for DAOs (across all outcomes)
 public fun default_max_actions_per_proposal(): u64 { 10 }
