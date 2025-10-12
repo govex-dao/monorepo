@@ -20,7 +20,7 @@ use account_protocol::{
     version_witness::VersionWitness,
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_markets::{
+use futarchy_markets_core::{
     proposal::{Self, Proposal},
     spot_amm::{Self, SpotAMM},
     spot_conditional_quoter,

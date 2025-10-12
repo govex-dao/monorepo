@@ -31,7 +31,7 @@ use futarchy_factory::{
     factory::{Self, Factory, FactoryOwnerCap, ValidatorAdminCap},
     launchpad::{Self, Raise},
 };
-use futarchy_markets::{
+use futarchy_markets_core::{
     fee::{Self, FeeManager, FeeAdminCap},
 };
 // futarchy_dao dependency removed - use ConfigWitness instead

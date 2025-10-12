@@ -27,7 +27,7 @@ use futarchy_core::{
     version,
 };
 use futarchy_types::action_specs::InitActionSpecs;
-use futarchy_markets::{
+use futarchy_markets_core::{
     proposal::{Self, Proposal},
     market_state::{Self, MarketState},
     coin_escrow,
@@ -38,7 +38,7 @@ use futarchy_actions::{
 use futarchy_governance_actions::{
     governance_intents,
 };
-use futarchy_markets::{
+use futarchy_markets_core::{
     unified_spot_pool::{Self, UnifiedSpotPool},
     conditional_amm,
     subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow},
@@ -706,7 +706,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    use futarchy_markets::proposal as proposal_mod;
+    use futarchy_markets_core::proposal as proposal_mod;
     
     // Prevent double reservation
     assert!(!priority_queue::has_reserved(queue), EProposalNotActive);
@@ -1070,7 +1070,7 @@ public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
 
 /// Check if a proposal has passed
 public fun is_passed<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): bool {
-    use futarchy_markets::proposal as proposal_mod;
+    use futarchy_markets_core::proposal as proposal_mod;
     // A proposal is passed if its market is finalized and the winning outcome is ACCEPTED
     proposal_mod::is_finalized(proposal) && proposal_mod::get_winning_outcome(proposal) == OUTCOME_ACCEPTED
 }

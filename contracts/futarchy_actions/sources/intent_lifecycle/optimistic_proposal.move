@@ -22,7 +22,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     dao_config,
 };
-use futarchy_markets::{
+use futarchy_markets_core::{
     proposal::{Self, Proposal},
 };
 

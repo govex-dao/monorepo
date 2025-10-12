@@ -16,7 +16,7 @@ use account_protocol::{
 use futarchy_core::version;
 use futarchy_actions::config_actions;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_markets::{
+use futarchy_markets_core::{
 };
 
 // === Constants ===

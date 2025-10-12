@@ -21,7 +21,7 @@ npm run prettier -- -w sources/amm/amm.move
 
 Run these commands from the project root directory (`/Users/admin/monorepo/`):
 
-**All 12 packages (Move Framework + Futarchy):**
+**All 13 packages (Move Framework + Futarchy):**
 ```bash
 find \
   contracts/move-framework/packages/extensions/sources \
@@ -29,14 +29,15 @@ find \
   contracts/move-framework/packages/actions/sources \
   contracts/futarchy_one_shot_utils/sources \
   contracts/futarchy_core/sources \
-  contracts/futarchy_markets/sources \
+  contracts/futarchy_markets_core/sources \
+  contracts/futarchy_markets_operations/sources \
   contracts/futarchy_vault/sources \
   contracts/futarchy_multisig/sources \
   contracts/futarchy_specialized_actions/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_actions/sources \
   contracts/futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_12_packages.txt
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_13_packages.txt
 ```
 
 **Just 3 Move Framework packages:**
@@ -48,26 +49,27 @@ find \
   -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > move_framework_only.txt
 ```
 
-**Just 9 Futarchy packages:**
+**Just 10 Futarchy packages:**
 ```bash
 find \
   contracts/futarchy_one_shot_utils/sources \
   contracts/futarchy_core/sources \
-  contracts/futarchy_markets/sources \
+  contracts/futarchy_markets_core/sources \
+  contracts/futarchy_markets_operations/sources \
   contracts/futarchy_vault/sources \
   contracts/futarchy_multisig/sources \
   contracts/futarchy_specialized_actions/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_actions/sources \
   contracts/futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_9_packages.txt
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > futarchy_10_packages.txt
 ```
 
 ## Concatenating all .Move files for use with LLMs
 
 Run these commands from the project root directory (`/Users/admin/monorepo/`):
 
-**All 20 packages (Move Framework + Futarchy):**
+**All 21 packages (Move Framework + Futarchy):**
 ```bash
 find \
   contracts/move-framework/packages/extensions/sources \
@@ -76,7 +78,8 @@ find \
   contracts/futarchy_one_shot_utils/sources \
   contracts/futarchy_types/sources \
   contracts/futarchy_core/sources \
-  contracts/futarchy_markets/sources \
+  contracts/futarchy_markets_core/sources \
+  contracts/futarchy_markets_operations/sources \
   contracts/futarchy_vault/sources \
   contracts/futarchy_multisig/sources \
   contracts/futarchy_payments/sources \
@@ -89,7 +92,7 @@ find \
   contracts/futarchy_governance_actions/sources \
   contracts/futarchy_actions/sources \
   contracts/futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_21_packages.txt
 ```
 
 
@@ -113,7 +116,3 @@ for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move bui
 ~/sui-tracing/target/release/sui move coverage summary
 ~/sui-tracing/target/release/sui move coverage source --module math 
  ```
-
- find \
-  contracts/futarchy_markets/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt

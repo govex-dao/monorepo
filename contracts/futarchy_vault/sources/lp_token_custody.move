@@ -22,9 +22,7 @@ use account_protocol::{
 };
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_markets::{
-    account_spot_pool::{Self, LPToken},
-};
+use futarchy_markets_core::unified_spot_pool::{Self, LPToken, UnifiedSpotPool};
 
 // === Errors ===
 const ELPTokenNotFound: u64 = 1;
@@ -133,7 +131,7 @@ public fun deposit_lp_token<AssetType, StableType>(
     );
     
     let token_id = object::id(&token);
-    let amount = account_spot_pool::lp_token_amount(&token);
+    let amount = unified_spot_pool::lp_token_amount(&token);
     
     // Update tokens by pool
     if (!custody.tokens_by_pool.contains(pool_id)) {
@@ -205,8 +203,8 @@ public fun withdraw_lp_token<AssetType, StableType>(
         LPKey { token_id },
         version::current()
     );
-    
-    let amount = account_spot_pool::lp_token_amount(&token);
+
+    let amount = unified_spot_pool::lp_token_amount(&token);
     
     let custody: &mut LPTokenCustody = account::borrow_managed_data_mut(
         account,

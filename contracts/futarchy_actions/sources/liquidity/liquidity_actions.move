@@ -29,8 +29,8 @@ use futarchy_core::{
     action_types,
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
-use futarchy_markets::spot_amm::{Self, SpotAMM};
-use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_markets_core::spot_amm::{Self, SpotAMM};
+use futarchy_markets_core::account_spot_pool::{Self, AccountSpotPool, LPToken};
 // AddLiquidityAction defined locally since futarchy_one_shot_utils module doesn't exist
 
 // === Friend Modules === (deprecated in 2024 edition, using public(package) instead)

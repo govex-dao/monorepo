@@ -12,10 +12,10 @@
 /// - P_s = spot price (stable per asset)
 /// - p_i = conditional pool i price (stable/asset ratio)
 /// - f_s, f_i = fees in basis points
-module futarchy_markets::no_arb_guard;
+module futarchy_markets_core::no_arb_guard;
 
-use futarchy_markets::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
 use futarchy_one_shot_utils::constants;
 
 // === Errors ===

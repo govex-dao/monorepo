@@ -30,7 +30,7 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     priority_queue::{Self, ProposalQueue},
 };
-use futarchy_markets::account_spot_pool::{Self, AccountSpotPool};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_types::action_specs::{Self, ActionSpec, InitActionSpecs};
 
 /// Special witness for init actions that bypass voting
@@ -101,12 +101,12 @@ public entry fun init_create_liquidity_pool<AssetType: drop, StableType: drop>(
     fee_bps: u64,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
-    spot_pool: &mut AccountSpotPool<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     // Add initial liquidity to the unshared pool
-    let lp_tokens = account_spot_pool::add_liquidity_and_return(
+    let lp_tokens = unified_spot_pool::add_liquidity_and_return(
         spot_pool,
         asset_coin,
         stable_coin,
@@ -176,7 +176,7 @@ public fun execute_init_intent_with_resources<RaiseToken, StableCoin>(
     account: &mut Account<FutarchyConfig>,
     specs: InitActionSpecs,
     queue: &mut ProposalQueue<StableCoin>,
-    spot_pool: &mut AccountSpotPool<RaiseToken, StableCoin>,
+    spot_pool: &mut UnifiedSpotPool<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {

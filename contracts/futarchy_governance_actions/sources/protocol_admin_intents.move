@@ -23,7 +23,7 @@ use futarchy_core::{
 };
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_factory::factory::{FactoryOwnerCap, ValidatorAdminCap};
-use futarchy_markets::fee::FeeAdminCap;
+use futarchy_markets_core::fee::FeeAdminCap;
 use futarchy_governance_actions::protocol_admin_actions;
 
 // === Aliases ===

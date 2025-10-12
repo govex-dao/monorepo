@@ -27,7 +27,7 @@ use futarchy_core::{
     action_validation,
     action_types,
 };
-use futarchy_markets::fee::{Self, FeeManager};
+use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_types::coin_types::USDC;
 
 // === Aliases ===

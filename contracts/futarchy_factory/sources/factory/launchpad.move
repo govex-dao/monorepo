@@ -21,7 +21,7 @@ use account_protocol::account::{Self, Account};
 use account_actions::init_actions as account_init_actions;
 use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
 use futarchy_core::priority_queue::ProposalQueue;
-use futarchy_markets::{fee, account_spot_pool::{Self, AccountSpotPool}};
+use futarchy_markets_core::{fee, unified_spot_pool::{Self, UnifiedSpotPool}};
 use futarchy_one_shot_utils::{math, constants};
 use account_extensions::extensions::Extensions;
 
@@ -1411,7 +1411,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     // Extract the unshared DAO components
     let mut account: Account<FutarchyConfig> = df::remove(&mut raise.id, DaoAccountKey {});
     let mut queue: ProposalQueue<StableCoin> = df::remove(&mut raise.id, DaoQueueKey {});
-    let mut spot_pool: AccountSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
+    let mut spot_pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
 
     // Extract and deposit treasury cap into DAO account
     let treasury_cap = raise.treasury_cap.extract();
@@ -1489,7 +1489,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
     // Share all objects now that everything succeeded
     transfer::public_share_object(account);
     transfer::public_share_object(queue);
-    account_spot_pool::share(spot_pool);
+    unified_spot_pool::share(spot_pool);
 
     event::emit(RaiseSuccessful {
         raise_id: object::id(raise),
@@ -1835,9 +1835,9 @@ public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
         };
 
         if (df::exists_(&raise.id, DaoPoolKey {})) {
-            let pool: AccountSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
+            let pool: UnifiedSpotPool<RaiseToken, StableCoin> = df::remove(&mut raise.id, DaoPoolKey {});
             // Use the module's share function for proper handling
-            account_spot_pool::share(pool);
+            unified_spot_pool::share(pool);
         };
 
         // Clean up init action specs if they exist

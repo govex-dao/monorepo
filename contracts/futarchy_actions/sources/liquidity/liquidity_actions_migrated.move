@@ -21,7 +21,7 @@ use account_protocol::{
 };
 use account_actions::vault;
 use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
-use futarchy_markets::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_markets_core::account_spot_pool::{Self, AccountSpotPool, LPToken};
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;

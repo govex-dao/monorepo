@@ -43,9 +43,9 @@ use futarchy_core::{
     futarchy_config::FutarchyConfig,
     resource_requests,
 };
-use futarchy_markets::{
+use futarchy_markets_core::{
     spot_oracle_interface,
-    spot_amm::SpotAMM,
+    unified_spot_pool::UnifiedSpotPool,
     conditional_amm::LiquidityPool,
 };
 
@@ -1033,7 +1033,7 @@ public fun claim_grant<AssetType, StableType>(
     version: VersionWitness,
     grant: &mut PriceBasedMintGrant<AssetType, StableType>,
     claim_cap: &GrantClaimCap,
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1350,7 +1350,7 @@ public struct PriceCheckResult has copy, drop {
 /// Public function for dev_inspect - check price condition with detailed output
 public fun dev_inspect_check_price_condition<AssetType, StableType>(
     grant: &PriceBasedMintGrant<AssetType, StableType>,
-    spot_pool: &SpotAMM<AssetType, StableType>,
+    spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): PriceCheckResult {

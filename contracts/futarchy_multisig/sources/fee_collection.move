@@ -13,7 +13,7 @@ use sui::coin::Coin;
 use account_protocol::account::Account;
 use futarchy_multisig::weighted_multisig::WeightedMultisig;
 use futarchy_multisig::fee_state;
-use futarchy_markets::fee::{Self, FeeManager};
+use futarchy_markets_core::fee::{Self, FeeManager};
 
 /// Atomic wrapper that updates BOTH shared FeeManager and owned FeeState
 /// This ensures consistency between historical records and operational state

@@ -35,7 +35,7 @@ use futarchy_vault::{
 };
 use futarchy_multisig::policy_registry;
 use futarchy_core::priority_queue::{Self, ProposalQueue};
-use futarchy_markets::{
+use futarchy_markets_core::{
     fee::{Self, FeeManager},
     unified_spot_pool::{Self, UnifiedSpotPool},
 };
@@ -667,7 +667,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 /// Everything else (metadata, trading params, TWAP, etc.) should be set via init actions.
 ///
 /// ## Hot Potato Pattern:
-/// Returns (Account, ProposalQueue, AccountSpotPool) as unshared objects
+/// Returns (Account, ProposalQueue, UnifiedSpotPool) as unshared objects
 /// These can be passed as `&mut` to init actions before being shared
 ///
 /// ## Usage:

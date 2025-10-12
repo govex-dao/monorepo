@@ -22,7 +22,7 @@ use futarchy_core::version;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
 };
-use futarchy_markets::{
+use futarchy_markets_core::{
     proposal::{Self, Proposal},
     market_state::MarketState,
 };

@@ -12,7 +12,7 @@ use futarchy_core::{
     version
 };
 use futarchy_dao::proposal_lifecycle;
-use futarchy_markets::proposal::Proposal;
+use futarchy_markets_core::proposal::Proposal;
 use sui::{
     clock::Clock,
     tx_context::TxContext,

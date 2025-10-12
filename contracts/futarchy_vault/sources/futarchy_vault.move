@@ -25,8 +25,6 @@ use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::{action_types, action_validation};
 use sui::bcs;
-use futarchy_markets::{
-};
 
 // === Errors ===
 const ECoinTypeNotAllowed: u64 = 1;
