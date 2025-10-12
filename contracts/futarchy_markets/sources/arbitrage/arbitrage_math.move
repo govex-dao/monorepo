@@ -304,56 +304,6 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
         }
     };
 
-    // Early exit: If no profit found in Phase 1, don't waste gas on Phase 2
-    if (best_profit == 0) {
-        return (0, 0)
-    };
-
-    // PHASE 2: Fine-tune based on PROFIT improvements
-    let profit_threshold = best_profit / 10_000;  // 0.01% of current best profit
-
-    while (right - left > 1) {
-        let third = (right - left) / 3;
-        if (third == 0) break;
-
-        let m1 = left + third;
-        let m2 = right - third;
-
-        let profit_m1 = profit_conditional_to_spot(
-            spot_asset, spot_stable, beta,
-            conditionals, m1
-        );
-        let profit_m2 = profit_conditional_to_spot(
-            spot_asset, spot_stable, beta,
-            conditionals, m2
-        );
-
-        // Check if we're improving significantly
-        let mut improved = false;
-        if (profit_m1 > best_profit && (profit_m1 - best_profit) > profit_threshold) {
-            best_profit = profit_m1;
-            best_b = m1;
-            improved = true;
-        };
-        if (profit_m2 > best_profit && (profit_m2 - best_profit) > profit_threshold) {
-            best_profit = profit_m2;
-            best_b = m2;
-            improved = true;
-        };
-
-        // Early exit: no significant improvement AND range is small
-        // Use largest pool threshold to determine "small" relative to market scale
-        if (!improved && (right - left) < math::max(search_threshold, 1)) {
-            break
-        };
-
-        if (profit_m1 >= profit_m2) {
-            right = m2;
-        } else {
-            left = m1;
-        }
-    };
-
     // Final endpoint check
     let profit_left = profit_conditional_to_spot(
         spot_asset, spot_stable, beta,
@@ -447,51 +397,6 @@ fun optimal_b_search(
         if (profit_m2 > best_profit) {
             best_profit = profit_m2;
             best_b = m2;
-        };
-
-        if (profit_m1 >= profit_m2) {
-            right = m2;
-        } else {
-            left = m1;
-        }
-    };
-
-    // Early exit: If no profit found in Phase 1, don't waste gas on Phase 2
-    if (best_profit == 0) {
-        return (0, 0)
-    };
-
-    // PHASE 2: Fine-tune based on PROFIT improvements
-    // Stop when additional search won't improve profit by > 0.01%
-    let profit_threshold = best_profit / 10_000;  // 0.01% of current best profit
-
-    while (right - left > 1) {
-        let third = (right - left) / 3;
-        if (third == 0) break;  // Can't subdivide further
-
-        let m1 = left + third;
-        let m2 = right - third;
-
-        let profit_m1 = profit_at_b(ts, as_vals, bs, m1);
-        let profit_m2 = profit_at_b(ts, as_vals, bs, m2);
-
-        // Check if we're improving significantly
-        let mut improved = false;
-        if (profit_m1 > best_profit && (profit_m1 - best_profit) > profit_threshold) {
-            best_profit = profit_m1;
-            best_b = m1;
-            improved = true;
-        };
-        if (profit_m2 > best_profit && (profit_m2 - best_profit) > profit_threshold) {
-            best_profit = profit_m2;
-            best_b = m2;
-            improved = true;
-        };
-
-        // Early exit: no significant improvement AND range is small
-        // Use passed threshold (market scale) to determine "small"
-        if (!improved && (right - left) < math::max(threshold, 1)) {
-            break
         };
 
         if (profit_m1 >= profit_m2) {

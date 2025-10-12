@@ -410,188 +410,299 @@ public entry fun swap_spot_asset_to_stable_return_dust<AssetType, StableType>(
     };
 }
 
-// === Conditional Swap Functions (FULLY IMPLEMENTED) ===
+// === OLD CONDITIONAL SWAP FUNCTIONS REMOVED ===
+//
+// The old swap_conditional_stable_to_asset and swap_conditional_asset_to_stable
+// entry functions have been removed. They were inefficient (each swap had its own
+// session overhead) and didn't enforce complete set closure.
+//
+// Use the PTB batching pattern instead (see below):
+// - begin_conditional_swaps() → swap_in_batch() × N → finalize_conditional_swaps()
+//
+// Benefits:
+// - Hot potato forces complete set closure (can't forget to finalize)
+// - Gas efficient (one session for N swaps)
+// - Enables cross-outcome strategies
+//
+// ============================================================================
+// === PTB-BASED CONDITIONAL SWAP BATCHING ===
+// ============================================================================
+//
+// These functions enable chaining multiple conditional swaps in a PTB,
+// then triggering auto-arb at the END of the PTB (not after each swap).
+//
+// KEY FEATURE: Hot potato pattern FORCES users to call finalize at end of PTB.
+// Users CANNOT do conditional swaps without closing the batch.
+//
+// Use Cases:
+// - Cross-outcome strategies (long outcome 0, short outcome 1)
+// - Spread trading (exploit price differences between outcomes)
+// - Gas-optimized multi-outcome swaps (one session for N swaps)
+//
+// Flow:
+// 1. begin_conditional_swaps() → creates ConditionalSwapBatch hot potato
+// 2. swap_in_batch() × N → accumulates swaps in balance (chainable)
+// 3. finalize_conditional_swaps() → closes complete sets, returns profit
+//
+// IMPORTANT: Spot swaps (lines 47-411) remain UNCHANGED - auto-arb still
+// triggers immediately after each spot swap. This pattern is ONLY for
+// conditional swap batching.
+// ============================================================================
 
-/// Swap conditional stable → conditional asset
+/// Hot potato for batching conditional swaps in PTB
+/// NO abilities = MUST be consumed in same transaction
 ///
-/// Uses balance-based swaps from Task D to work for ANY outcome count.
-/// Only needs 2 type parameters + 1 conditional type parameter.
-///
-/// # Arguments
-/// * `proposal` - The proposal (validates state)
-/// * `escrow` - Token escrow (for wrap/unwrap)
-/// * `outcome_index` - Which outcome to swap in (0, 1, 2, ...)
-/// * `stable_in` - Conditional stable coin to swap
-/// * `min_asset_out` - Minimum asset to receive (slippage protection)
-///
-/// # Returns
-/// Conditional asset coin from swap
-///
-/// # Example PTB
-/// ```typescript
-/// const assetOut = tx.moveCall({
-///   target: '${PKG}::swap_entry::swap_conditional_stable_to_asset',
-///   typeArguments: ['${ASSET}', '${STABLE}', '${COND_STABLE}', '${COND_ASSET}'],
-///   arguments: [proposal, escrow, outcomeIndex, stableIn, minAssetOut, clock]
-/// });
-/// ```
-public entry fun swap_conditional_stable_to_asset<AssetType, StableType, StableConditionalCoin, AssetConditionalCoin>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    outcome_index: u64,
-    stable_in: Coin<StableConditionalCoin>,
-    min_asset_out: u64,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let amount_in = coin::value(&stable_in);
-    assert!(amount_in > 0, EZeroAmount);
-
-    // Require trading is active (check market_state, not proposal)
-    let market_state = coin_escrow::get_market_state(escrow);
-    market_state::assert_trading_active(market_state);
-
-    // Begin swap session (hot potato)
-    let session = swap_core::begin_swap_session(escrow);
-
-    // Create temporary balance for coin ↔ balance conversion
-    // Get market info from escrow
-    let market_id = market_state::market_id(market_state);
-    let outcome_count = market_state::outcome_count(market_state);
-    let mut balance = conditional_balance::new<AssetType, StableType>(
-        market_id,
-        (outcome_count as u8),
-        ctx
-    );
-
-    // Wrap stable_in → balance
-    conditional_balance::wrap_coin<AssetType, StableType, StableConditionalCoin>(
-        &mut balance,
-        escrow,
-        stable_in,
-        (outcome_index as u8),
-        false,  // is_asset = false (stable)
-    );
-
-    // Perform balance-based swap (works for ANY outcome count!)
-    let amount_out = swap_core::swap_balance_stable_to_asset<AssetType, StableType>(
-        &session,
-        escrow,
-        &mut balance,
-        (outcome_index as u8),
-        amount_in,
-        min_asset_out,
-        clock,
-        ctx,
-    );
-
-    // Unwrap balance → asset_out coin
-    let asset_out = conditional_balance::unwrap_to_coin<AssetType, StableType, AssetConditionalCoin>(
-        &mut balance,
-        escrow,
-        (outcome_index as u8),
-        true,  // is_asset = true
-        ctx,
-    );
-
-    // Finalize session (consume hot potato)
-    swap_core::finalize_swap_session(session, proposal, escrow, clock);
-
-    // Cleanup (balance should be empty after unwrap)
-    conditional_balance::destroy_empty(balance);
-
-    // Transfer to caller
-    transfer::public_transfer(asset_out, ctx.sender());
+/// This forces users to call finalize_conditional_swaps() at end of PTB,
+/// which closes complete sets and returns profit. Cannot store between transactions.
+public struct ConditionalSwapBatch<phantom AssetType, phantom StableType> {
+    balance: ConditionalMarketBalance<AssetType, StableType>,
+    market_id: ID,
 }
 
-/// Swap conditional asset → conditional stable
+/// Step 1: Begin a conditional swap batch (returns hot potato)
 ///
-/// Uses balance-based swaps from Task D to work for ANY outcome count.
-/// Only needs 2 type parameters + 1 conditional type parameter.
+/// Creates hot potato with empty balance. Must be consumed by finalize_conditional_swaps().
 ///
-/// # Arguments
-/// * `proposal` - The proposal (validates state)
-/// * `escrow` - Token escrow (for wrap/unwrap)
-/// * `outcome_index` - Which outcome to swap in (0, 1, 2, ...)
-/// * `asset_in` - Conditional asset coin to swap
-/// * `min_stable_out` - Minimum stable to receive (slippage protection)
-///
-/// # Returns
-/// Conditional stable coin from swap
-///
-/// # Example PTB
+/// # Example PTB Flow
 /// ```typescript
-/// const stableOut = tx.moveCall({
-///   target: '${PKG}::swap_entry::swap_conditional_asset_to_stable',
-///   typeArguments: ['${ASSET}', '${STABLE}', '${COND_ASSET}', '${COND_STABLE}'],
-///   arguments: [proposal, escrow, outcomeIndex, assetIn, minStableOut, clock]
+/// const batch = tx.moveCall({
+///   target: '${PKG}::swap_entry::begin_conditional_swaps',
+///   typeArguments: [AssetType, StableType],
+///   arguments: [escrow]
+/// });
+///
+/// // Chain swaps...
+/// const batch2 = tx.moveCall({
+///   target: '${PKG}::swap_entry::swap_in_batch',
+///   arguments: [batch, session, escrow, ...] // Returns modified hot potato
+/// });
+///
+/// // Must finalize at end
+/// tx.moveCall({
+///   target: '${PKG}::swap_entry::finalize_conditional_swaps',
+///   arguments: [batch2, ...]
 /// });
 /// ```
-public entry fun swap_conditional_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    outcome_index: u64,
-    asset_in: Coin<AssetConditionalCoin>,
-    min_stable_out: u64,
-    clock: &Clock,
+public fun begin_conditional_swaps<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
     ctx: &mut TxContext,
-) {
-    let amount_in = coin::value(&asset_in);
-    assert!(amount_in > 0, EZeroAmount);
-
-    // Require trading is active (check market_state, not proposal)
+): ConditionalSwapBatch<AssetType, StableType> {
+    // Get market info
     let market_state = coin_escrow::get_market_state(escrow);
     market_state::assert_trading_active(market_state);
 
-    // Begin swap session (hot potato)
-    let session = swap_core::begin_swap_session(escrow);
-
-    // Create temporary balance for coin ↔ balance conversion
-    // Get market info from escrow
     let market_id = market_state::market_id(market_state);
     let outcome_count = market_state::outcome_count(market_state);
-    let mut balance = conditional_balance::new<AssetType, StableType>(
+
+    // Create empty balance
+    let balance = conditional_balance::new<AssetType, StableType>(
         market_id,
         (outcome_count as u8),
         ctx
     );
 
-    // Wrap asset_in → balance
-    conditional_balance::wrap_coin<AssetType, StableType, AssetConditionalCoin>(
-        &mut balance,
+    // Return hot potato (NO abilities = must consume)
+    ConditionalSwapBatch {
+        balance,
+        market_id,
+    }
+}
+
+/// Step 2: Swap in batch (consumes and returns hot potato)
+///
+/// Wraps coin → swaps in balance → unwraps to coin → returns modified hot potato
+///
+/// Can be called N times in a PTB to chain swaps across multiple outcomes.
+/// Each call mutates the balance in the hot potato and returns it for next call.
+///
+/// # Arguments
+/// * `batch` - Hot potato from begin_conditional_swaps or previous swap_in_batch
+/// * `session` - SwapSession hot potato (from swap_core::begin_swap_session)
+/// * `outcome_index` - Which outcome to swap in (0, 1, 2, ...)
+/// * `coin_in` - Input coin (conditional asset or stable)
+/// * `is_asset_to_stable` - true = swap asset→stable, false = swap stable→asset
+/// * `min_amount_out` - Minimum output amount (slippage protection)
+///
+/// # Returns
+/// Modified hot potato (pass to next swap_in_batch or finalize_conditional_swaps)
+///
+/// # Type Parameters
+/// * `InputCoin` - Type of input conditional coin
+/// * `OutputCoin` - Type of output conditional coin
+///
+/// # Example
+/// ```typescript
+/// // Swap in outcome 0: stable → asset
+/// let batch = tx.moveCall({
+///   target: '${PKG}::swap_entry::swap_in_batch',
+///   typeArguments: [AssetType, StableType, Cond0Stable, Cond0Asset],
+///   arguments: [batch, session, escrow, 0, stableCoin, false, minOut, clock]
+/// });
+///
+/// // Swap in outcome 1: asset → stable
+/// batch = tx.moveCall({
+///   target: '${PKG}::swap_entry::swap_in_batch',
+///   typeArguments: [AssetType, StableType, Cond1Asset, Cond1Stable],
+///   arguments: [batch, session, escrow, 1, assetCoin, true, minOut, clock]
+/// });
+/// ```
+public fun swap_in_batch<AssetType, StableType, InputCoin, OutputCoin>(
+    mut batch: ConditionalSwapBatch<AssetType, StableType>,
+    session: &swap_core::SwapSession,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u8,
+    coin_in: Coin<InputCoin>,
+    is_asset_to_stable: bool,
+    min_amount_out: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): (ConditionalSwapBatch<AssetType, StableType>, Coin<OutputCoin>) {
+    let amount_in = coin_in.value();
+    assert!(amount_in > 0, EZeroAmount);
+
+    // Validate market still active
+    let market_state = coin_escrow::get_market_state(escrow);
+    market_state::assert_trading_active(market_state);
+
+    // Wrap coin → balance
+    conditional_balance::wrap_coin<AssetType, StableType, InputCoin>(
+        &mut batch.balance,
         escrow,
-        asset_in,
-        (outcome_index as u8),
-        true,  // is_asset = true
+        coin_in,
+        outcome_index,
+        !is_asset_to_stable,  // is_asset = opposite of swap direction
     );
 
-    // Perform balance-based swap (works for ANY outcome count!)
-    let amount_out = swap_core::swap_balance_asset_to_stable<AssetType, StableType>(
-        &session,
+    // Swap in balance (balance-based swap works for ANY outcome count!)
+    let amount_out = if (is_asset_to_stable) {
+        swap_core::swap_balance_asset_to_stable<AssetType, StableType>(
+            session,
+            escrow,
+            &mut batch.balance,
+            outcome_index,
+            amount_in,
+            min_amount_out,
+            clock,
+            ctx,
+        )
+    } else {
+        swap_core::swap_balance_stable_to_asset<AssetType, StableType>(
+            session,
+            escrow,
+            &mut batch.balance,
+            outcome_index,
+            amount_in,
+            min_amount_out,
+            clock,
+            ctx,
+        )
+    };
+
+    // Unwrap balance → coin
+    let coin_out = conditional_balance::unwrap_to_coin<AssetType, StableType, OutputCoin>(
+        &mut batch.balance,
         escrow,
-        &mut balance,
-        (outcome_index as u8),
-        amount_in,
-        min_stable_out,
-        clock,
+        outcome_index,
+        is_asset_to_stable,  // is_asset = swap direction
         ctx,
     );
 
-    // Unwrap balance → stable_out coin
-    let stable_out = conditional_balance::unwrap_to_coin<AssetType, StableType, StableConditionalCoin>(
-        &mut balance,
-        escrow,
-        (outcome_index as u8),
-        false,  // is_asset = false (stable)
-        ctx,
-    );
+    // Return modified hot potato and output coin
+    (batch, coin_out)
+}
 
-    // Finalize session (consume hot potato)
+/// Step 3: Finalize conditional swaps (consumes hot potato)
+///
+/// Closes complete sets from accumulated balance, withdraws spot coins as profit,
+/// and transfers to recipient. This MUST be called at end of PTB to consume hot potato.
+///
+/// # Arguments
+/// * `batch` - Hot potato from swap_in_batch (final state)
+/// * `spot_pool` - Spot pool (for no-arb guard, NOT for swapping)
+/// * `proposal` - Proposal object
+/// * `escrow` - Token escrow
+/// * `session` - SwapSession hot potato (consumed here)
+/// * `recipient` - Who receives profit
+/// * `clock` - Clock object
+///
+/// # Flow
+/// 1. Find minimum balance across outcomes (complete set limit)
+/// 2. Burn complete sets → withdraw spot coins
+/// 3. Transfer profit to recipient
+/// 4. Finalize session (updates early resolve metrics ONCE)
+/// 5. Destroy empty balance (cleanup)
+///
+/// # Example PTB
+/// ```typescript
+/// tx.moveCall({
+///   target: '${PKG}::swap_entry::finalize_conditional_swaps',
+///   typeArguments: [AssetType, StableType],
+///   arguments: [batch, spot_pool, proposal, escrow, session, recipient, clock]
+/// });
+/// ```
+public fun finalize_conditional_swaps<AssetType, StableType>(
+    batch: ConditionalSwapBatch<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    session: swap_core::SwapSession,
+    recipient: address,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // Destructure hot potato
+    let ConditionalSwapBatch { mut balance, market_id: _ } = batch;
+
+    // Find minimum balances (complete set limits)
+    let min_asset = conditional_balance::find_min_balance(&balance, true);
+    let min_stable = conditional_balance::find_min_balance(&balance, false);
+
+    // Burn complete sets and withdraw spot coins
+    let spot_asset = if (min_asset > 0) {
+        arbitrage::burn_complete_set_and_withdraw_asset<AssetType, StableType>(
+            &mut balance, escrow, min_asset, ctx
+        )
+    } else {
+        coin::zero<AssetType>(ctx)
+    };
+
+    let spot_stable = if (min_stable > 0) {
+        arbitrage::burn_complete_set_and_withdraw_stable<AssetType, StableType>(
+            &mut balance, escrow, min_stable, ctx
+        )
+    } else {
+        coin::zero<StableType>(ctx)
+    };
+
+    // Finalize session (updates early resolve metrics ONCE for entire batch)
     swap_core::finalize_swap_session(session, proposal, escrow, clock);
 
-    // Cleanup (balance should be empty after unwrap)
-    conditional_balance::destroy_empty(balance);
+    // Ensure no-arb band is respected after batch swaps
+    let market_state = coin_escrow::get_market_state(escrow);
+    let pools = market_state::borrow_amm_pools(market_state);
+    no_arb_guard::ensure_spot_in_band(spot_pool, pools);
 
-    // Transfer to caller
-    transfer::public_transfer(stable_out, ctx.sender());
+    // Transfer spot profit to recipient
+    if (spot_asset.value() > 0) {
+        transfer::public_transfer(spot_asset, recipient);
+    } else {
+        coin::destroy_zero(spot_asset);
+    };
+
+    if (spot_stable.value() > 0) {
+        transfer::public_transfer(spot_stable, recipient);
+    } else {
+        coin::destroy_zero(spot_stable);
+    };
+
+    // Cleanup dust (zero out remaining balances)
+    // TODO: Store dust in registry instead of destroying (future enhancement)
+    let outcome_count = conditional_balance::outcome_count(&balance);
+    let mut i = 0u8;
+    while ((i as u64) < (outcome_count as u64)) {
+        conditional_balance::set_balance(&mut balance, i, true, 0);
+        conditional_balance::set_balance(&mut balance, i, false, 0);
+        i = i + 1;
+    };
+    conditional_balance::destroy_empty(balance);
 }

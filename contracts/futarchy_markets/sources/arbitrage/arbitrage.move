@@ -339,7 +339,9 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
 ///
 /// Subtracts amount from ALL outcome stable balances, then withdraws from escrow.
 /// This maintains the quantum liquidity invariant.
-fun burn_complete_set_and_withdraw_stable<AssetType, StableType>(
+///
+/// PUBLIC for use in swap_entry::finalize_conditional_swaps
+public fun burn_complete_set_and_withdraw_stable<AssetType, StableType>(
     balance: &mut ConditionalMarketBalance<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     amount: u64,
@@ -363,7 +365,9 @@ fun burn_complete_set_and_withdraw_stable<AssetType, StableType>(
 /// Burn complete set of conditional assets and withdraw spot asset
 ///
 /// Subtracts amount from ALL outcome asset balances, then withdraws from escrow.
-fun burn_complete_set_and_withdraw_asset<AssetType, StableType>(
+///
+/// PUBLIC for use in swap_entry::finalize_conditional_swaps
+public fun burn_complete_set_and_withdraw_asset<AssetType, StableType>(
     balance: &mut ConditionalMarketBalance<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     amount: u64,

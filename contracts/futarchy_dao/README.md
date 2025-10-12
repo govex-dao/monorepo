@@ -113,3 +113,7 @@ for pkg in */; do [ -f "$pkg/Move.toml" ] && (cd "$pkg" && output=$(sui move bui
 ~/sui-tracing/target/release/sui move coverage summary
 ~/sui-tracing/target/release/sui move coverage source --module math 
  ```
+
+ find \
+  contracts/futarchy_markets/sources \
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
