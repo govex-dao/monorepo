@@ -2,7 +2,7 @@
 
 ## Current Status (2025-10-13)
 
-### Completed Modules ✅ (8/13)
+### Completed Modules ✅ (9/13)
 
 1. **arbitrage_math.move** ✅
    - 40 tests total (32 main + 5 benchmarks + 3 fuzzing)
@@ -57,6 +57,18 @@
    - Security validations (session match, balance match, market state)
    - Works with 2, 3, 5 outcomes (key architecture feature)
    - Test file: `tests/swap_core_tests.move`
+   - Commit: 697dec1
+
+9. **unified_spot_pool.move** ✅
+   - 22 comprehensive tests for unified spot AMM
+   - Pool creation (basic and with aggregator)
+   - LP token management (amount, locking, unlocking)
+   - Add/remove liquidity (initial, proportional)
+   - Swaps (both directions with fees)
+   - All major error codes tested (EZeroAmount, EMinimumLiquidityNotMet, ESlippageExceeded, EInsufficientLiquidity)
+   - View functions (reserves, price, simulations)
+   - Integration tests (complete lifecycle)
+   - Test file: `tests/unified_spot_pool_tests.move`
    - **Status**: Just completed, ready to commit
 
 ## What Was Being Worked On
@@ -144,15 +156,14 @@ git show 9b4c7ea:contracts/futarchy_markets_core/tests/swap_position_registry_te
   - Resolution logic
   - Market finalization
 
-### Remaining Modules ❌ (5/13)
+### Remaining Modules ❌ (4/13)
 
-1. **fee.move** - Fee management
+1. **fee.move** - Fee management (test file exists but disabled)
 2. **liquidity_initialize.move** - Initial liquidity setup
 3. **quantum_lp_manager.move** - Quantum LP token management
 4. **rng.move** - Random number generation
-5. **unified_spot_pool.move** - Unified spot pool (spot/)
 
-### Testing Progress: 8/13 modules (62% complete)
+### Testing Progress: 9/13 modules (69% complete)
 
 ## Testing Philosophy (From TESTING_PLAN.md)
 
