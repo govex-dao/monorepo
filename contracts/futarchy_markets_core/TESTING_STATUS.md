@@ -2,7 +2,7 @@
 
 ## Current Status (2025-10-13)
 
-### Completed Modules ✅ (7/13)
+### Completed Modules ✅ (8/13)
 
 1. **arbitrage_math.move** ✅
    - 40 tests total (32 main + 5 benchmarks + 3 fuzzing)
@@ -22,16 +22,16 @@
    - Complete set burning (stable and asset)
    - Error testing (EInsufficientProfit)
    - Test file: `tests/arbitrage_tests.move`
-   - **Status**: Just completed, ready to commit
+   - Commit: ee7f70e
 
 4. **early_resolve.move** ✅
    - 19 tests covering early resolution system
-   - Commit: Pre-existing
+   - Commit: Pre-existing (ee7f70e)
    - Test file: `tests/early_resolve_tests.move`
 
 5. **proposal.move** ✅
    - 15 tests covering proposal lifecycle
-   - Commit: Pre-existing
+   - Commit: Pre-existing (ee7f70e)
    - Test file: `tests/proposal_tests.move`
 
 6. **subsidy_escrow.move** ✅
@@ -47,6 +47,17 @@
    - Economic helper functions tested
    - Commit: 9b4c7ea
    - Test file: `tests/swap_position_registry_tests.move`
+
+8. **swap_core.move** ✅
+   - 16 comprehensive tests for core swap primitives
+   - Hot potato session management (begin → swap → finalize)
+   - Balance-based swaps (eliminates type explosion)
+   - Both directions (asset→stable, stable→asset)
+   - All 5 error codes tested (EInvalidOutcome, EInvalidState, EInsufficientOutput, ESessionMismatch, EProposalMismatch)
+   - Security validations (session match, balance match, market state)
+   - Works with 2, 3, 5 outcomes (key architecture feature)
+   - Test file: `tests/swap_core_tests.move`
+   - **Status**: Just completed, ready to commit
 
 ## What Was Being Worked On
 
@@ -133,16 +144,15 @@ git show 9b4c7ea:contracts/futarchy_markets_core/tests/swap_position_registry_te
   - Resolution logic
   - Market finalization
 
-### Remaining Modules ❌ (6/13)
+### Remaining Modules ❌ (5/13)
 
 1. **fee.move** - Fee management
 2. **liquidity_initialize.move** - Initial liquidity setup
 3. **quantum_lp_manager.move** - Quantum LP token management
 4. **rng.move** - Random number generation
-5. **swap_core.move** - Core swap operations
-6. **unified_spot_pool.move** - Unified spot pool (spot/)
+5. **unified_spot_pool.move** - Unified spot pool (spot/)
 
-### Testing Progress: 7/13 modules (54% complete)
+### Testing Progress: 8/13 modules (62% complete)
 
 ## Testing Philosophy (From TESTING_PLAN.md)
 
