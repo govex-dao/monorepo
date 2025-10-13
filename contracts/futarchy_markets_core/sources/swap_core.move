@@ -389,3 +389,17 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
 
     amount_out
 }
+
+// === Test Helpers ===
+
+#[test_only]
+/// Create a test swap session for testing
+public fun create_test_swap_session(market_id: ID): SwapSession {
+    SwapSession { market_id }
+}
+
+#[test_only]
+/// Destroy a swap session for testing
+public fun destroy_test_swap_session(session: SwapSession) {
+    let SwapSession { market_id: _ } = session;
+}

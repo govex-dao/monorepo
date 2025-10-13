@@ -463,3 +463,13 @@ public fun borrow_balances_mut_for_testing<AssetType, StableType>(
 ): &mut vector<u64> {
     &mut balance.balances
 }
+
+#[test_only]
+/// Destroy balance unconditionally for testing (even if non-empty)
+/// ONLY use in tests - production code should use destroy_empty
+public fun destroy_for_testing<AssetType, StableType>(
+    balance: ConditionalMarketBalance<AssetType, StableType>
+) {
+    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances: _ } = balance;
+    object::delete(id);
+}

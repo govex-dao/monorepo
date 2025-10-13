@@ -746,6 +746,23 @@ public fun create_test_treasury_cap<CoinType: drop>(
 }
 
 #[test_only]
+/// Create a test escrow with a real MarketState (not a mock)
+/// This is a simplified helper that creates an actual TokenEscrow with sensible defaults
+public fun create_test_escrow<AssetType, StableType>(
+    outcome_count: u64,
+    ctx: &mut TxContext,
+): TokenEscrow<AssetType, StableType> {
+    // Create a real MarketState using existing test infrastructure
+    let market_state = futarchy_markets_primitives::market_state::create_for_testing(
+        outcome_count,
+        ctx
+    );
+
+    // Create and return the TokenEscrow with the real MarketState
+    new<AssetType, StableType>(market_state, ctx)
+}
+
+#[test_only]
 /// Destroy escrow for testing (with remaining balances)
 /// Useful for cleaning up test state
 public fun destroy_for_testing<AssetType, StableType>(

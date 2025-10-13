@@ -849,3 +849,73 @@ public fun create_pool_for_testing<AssetType, StableType>(
         aggregator_config: option::none(),  // No aggregator for simple testing
     }
 }
+
+#[test_only]
+/// Destroy pool for testing
+public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<AssetType, StableType>) {
+    use sui::balance;
+    use sui::test_utils;
+
+    let UnifiedSpotPool {
+        id,
+        asset_reserve,
+        stable_reserve,
+        lp_supply: _,
+        fee_bps: _,
+        minimum_liquidity: _,
+        aggregator_config,
+    } = pool;
+
+    object::delete(id);
+    balance::destroy_for_testing(asset_reserve);
+    balance::destroy_for_testing(stable_reserve);
+
+    if (aggregator_config.is_some()) {
+        let config = option::destroy_some(aggregator_config);
+        let AggregatorConfig {
+            active_escrow,
+            conditional_type_names: _,
+            registry,
+            simple_twap,
+            last_proposal_usage: _,
+            conditional_liquidity_ratio_bps: _,
+            oracle_conditional_threshold_bps: _,
+            protocol_fees_stable,
+        } = config;
+
+        // Destroy active escrow if present
+        if (active_escrow.is_some()) {
+            let escrow = option::destroy_some(active_escrow);
+            coin_escrow::destroy_for_testing(escrow);
+        } else {
+            option::destroy_none(active_escrow);
+        };
+
+        swap_position_registry::destroy_for_testing(registry);
+        simple_twap::destroy_for_testing(simple_twap);
+        balance::destroy_for_testing(protocol_fees_stable);
+    } else {
+        option::destroy_none(aggregator_config);
+    };
+}
+
+#[test_only]
+/// Destroy LP token for testing
+public fun destroy_lp_token_for_testing<AssetType, StableType>(lp_token: LPToken<AssetType, StableType>) {
+    let LPToken { id, amount: _, locked_until: _ } = lp_token;
+    object::delete(id);
+}
+
+#[test_only]
+/// Create LP token for testing
+public fun create_lp_token_for_testing<AssetType, StableType>(
+    amount: u64,
+    locked_until: Option<u64>,
+    ctx: &mut TxContext,
+): LPToken<AssetType, StableType> {
+    LPToken {
+        id: object::new(ctx),
+        amount,
+        locked_until,
+    }
+}
