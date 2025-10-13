@@ -33,17 +33,17 @@ fun create_test_clock(timestamp_ms: u64, ctx: &mut TxContext): Clock {
 /// Create a simple early resolve config for testing
 #[test_only]
 fun create_test_config(
-    enabled: bool,
     min_duration: u64,
     max_duration: u64,
+    min_winner_spread: u128,
     min_time_since_flip: u64,
 ): EarlyResolveConfig {
     futarchy_config::new_early_resolve_config(
-        enabled,
         min_duration,
         max_duration,
+        min_winner_spread,
         min_time_since_flip,
-        100_000, // min_spread (0.01%)
+        100, // keeper_reward_bps (1%)
     )
 }
 
@@ -81,10 +81,10 @@ fun test_new_metrics_creates_valid_metrics() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(1000000, ctx);
 
-    let metrics = early_resolve::new_metrics(0, clock.timestamp_ms());
+    let _metrics = early_resolve::new_metrics(0, clock.timestamp_ms());
 
     // Verify metrics are created (can't inspect internals, but shouldn't abort)
-    market_state::destroy_early_resolve_metrics_for_testing(metrics);
+    // metrics has 'drop' ability so cleanup is automatic
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
@@ -96,13 +96,11 @@ fun test_new_metrics_different_winners() {
     let clock = create_test_clock(2000000, ctx);
 
     // Test with different initial winners
-    let metrics0 = early_resolve::new_metrics(0, clock.timestamp_ms());
-    let metrics1 = early_resolve::new_metrics(1, clock.timestamp_ms());
-    let metrics2 = early_resolve::new_metrics(2, clock.timestamp_ms());
+    let _metrics0 = early_resolve::new_metrics(0, clock.timestamp_ms());
+    let _metrics1 = early_resolve::new_metrics(1, clock.timestamp_ms());
+    let _metrics2 = early_resolve::new_metrics(2, clock.timestamp_ms());
 
-    market_state::destroy_early_resolve_metrics_for_testing(metrics0);
-    market_state::destroy_early_resolve_metrics_for_testing(metrics1);
-    market_state::destroy_early_resolve_metrics_for_testing(metrics2);
+    // metrics have 'drop' ability so cleanup is automatic
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
@@ -116,7 +114,7 @@ fun test_check_eligibility_disabled_config() {
     let clock = create_test_clock(MIN_DURATION + 1000000, ctx);
 
     // Create disabled config
-    let config = create_test_config(false, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     // Create proposal and market state
     let proposal_id = object::id_from_address(@0xA);
@@ -173,7 +171,7 @@ fun test_check_eligibility_no_metrics() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(MIN_DURATION + 1000000, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -215,7 +213,7 @@ fun test_check_eligibility_too_young() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -261,7 +259,7 @@ fun test_check_eligibility_exceeded_max_duration() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -306,7 +304,7 @@ fun test_check_eligibility_winner_changed_recently() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -353,7 +351,7 @@ fun test_check_eligibility_passes_all_checks() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -401,7 +399,7 @@ fun test_time_until_eligible_disabled() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(1000000, ctx);
 
-    let config = create_test_config(false, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -439,7 +437,7 @@ fun test_time_until_eligible_needs_min_duration() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -486,7 +484,7 @@ fun test_time_until_eligible_needs_time_since_flip() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -536,7 +534,7 @@ fun test_time_until_eligible_already_eligible() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -633,7 +631,7 @@ fun test_check_eligibility_at_exact_min_duration() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -677,7 +675,7 @@ fun test_check_eligibility_at_exact_max_duration() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -720,7 +718,7 @@ fun test_time_until_eligible_zero_when_no_metrics() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(1000000, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -760,7 +758,7 @@ fun test_complete_eligibility_workflow() {
     let start_time = 0u64;
     let clock = create_test_clock(start_time, ctx);
 
-    let config = create_test_config(true, MIN_DURATION, MAX_DURATION, MIN_TIME_SINCE_FLIP);
+    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
@@ -828,13 +826,13 @@ fun test_multiple_outcomes_different_winners() {
         proposal_id, dao_id, 5, &clock, ctx
     );
 
-    // Test with different winner indices
+    // Test with different winner indices - set metrics and read them back from market state
     let mut i = 0;
     while (i < 5) {
         let metrics = early_resolve::new_metrics(i, 0);
-        let winner = market_state::get_current_winner_index_for_testing(&metrics);
+        market_state::set_early_resolve_metrics(&mut market_state, metrics);
+        let winner = market_state::get_current_winner_index_for_testing(&market_state);
         assert!(winner == i, i);
-        market_state::destroy_early_resolve_metrics_for_testing(metrics);
         i = i + 1;
     };
 

@@ -37,17 +37,13 @@ fun create_test_clock(timestamp_ms: u64, ctx: &mut TxContext): Clock {
 fun create_test_spot_pool(
     asset_reserve: u64,
     stable_reserve: u64,
-    clock: &Clock,
+    _clock: &Clock,
     ctx: &mut TxContext,
 ): UnifiedSpotPool<TEST_COIN_A, TEST_COIN_B> {
-    let asset_coin = coin::mint_for_testing<TEST_COIN_A>(asset_reserve, ctx);
-    let stable_coin = coin::mint_for_testing<TEST_COIN_B>(stable_reserve, ctx);
-
     unified_spot_pool::create_pool_for_testing(
-        asset_coin,
-        stable_coin,
-        DEFAULT_FEE_BPS,
-        clock,
+        asset_reserve,
+        stable_reserve,
+        (DEFAULT_FEE_BPS as u64),
         ctx,
     )
 }
@@ -380,7 +376,7 @@ fun test_execute_optimal_arbitrage_stable_to_asset_direction_2_outcomes() {
 
     // Create swap session
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 2, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     // Execute arbitrage: Stable→Asset direction
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(1000, ctx);
@@ -432,7 +428,7 @@ fun test_execute_optimal_arbitrage_asset_to_stable_direction_2_outcomes() {
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 2, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     // Execute arbitrage: Asset→Stable direction
     let stable_for_arb = coin::zero<TEST_COIN_B>(ctx);
@@ -484,7 +480,7 @@ fun test_execute_optimal_arbitrage_with_dust_balance_return() {
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 3, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     // Execute with return_dust_balance=true
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(500, ctx);
@@ -535,7 +531,7 @@ fun test_execute_optimal_arbitrage_both_zero_amounts() {
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 2, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     // Execute with both zero
     let stable_for_arb = coin::zero<TEST_COIN_B>(ctx);
@@ -590,7 +586,7 @@ fun test_execute_optimal_arbitrage_insufficient_profit() {
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 2, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     // Set min_profit impossibly high
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(100, ctx);
@@ -640,7 +636,7 @@ fun test_arbitrage_with_5_outcomes() {
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
-    let session = swap_core::create_test_swap_session(proposal_id, 5, ctx);
+    let session = swap_core::create_test_swap_session(proposal_id);
 
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(3000, ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);

@@ -950,3 +950,40 @@ public fun destroy_for_testing(pool: LiquidityPool) {
     oracle.destroy_for_testing();
     simple_twap.destroy_for_testing();
 }
+
+#[test_only]
+/// Add liquidity to a pool for testing (simplified version)
+/// Takes coins directly, extracts values, updates reserves, and destroys coins
+public fun add_liquidity_for_testing<AssetType, StableType>(
+    pool: &mut LiquidityPool,
+    asset_coin: sui::coin::Coin<AssetType>,
+    stable_coin: sui::coin::Coin<StableType>,
+    _fee_bps: u16,  // Not used in test helper, kept for API compatibility
+    _ctx: &mut TxContext,
+) {
+    // Extract amounts from coins
+    let asset_amount = asset_coin.value();
+    let stable_amount = stable_coin.value();
+
+    // Destroy test coins (we just want to update reserves)
+    sui::test_utils::destroy(asset_coin);
+    sui::test_utils::destroy(stable_coin);
+
+    // Update reserves directly (simplified for testing)
+    pool.asset_reserve = pool.asset_reserve + asset_amount;
+    pool.stable_reserve = pool.stable_reserve + stable_amount;
+
+    // Update LP supply proportionally (simplified calculation for testing)
+    if (pool.lp_supply == 0) {
+        // First liquidity provider
+        let k_squared = math::mul_div_to_128(asset_amount, stable_amount, 1);
+        let k = (math::sqrt_u128(k_squared) as u64);
+        pool.lp_supply = k;
+    } else {
+        // Subsequent providers - mint proportionally
+        let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve - asset_amount);
+        let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve - stable_amount);
+        let lp_to_mint = if (lp_from_asset < lp_from_stable) { lp_from_asset } else { lp_from_stable };
+        pool.lp_supply = pool.lp_supply + lp_to_mint;
+    };
+}

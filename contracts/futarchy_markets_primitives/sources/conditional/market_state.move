@@ -413,3 +413,41 @@ public fun test_set_finalized(state: &mut MarketState) {
     state.status.trading_ended = true;
     state.finalization_time = option::some(0);
 }
+
+#[test_only]
+/// Test helper to borrow AMM pool mutably by outcome index (u64 instead of u8)
+public fun borrow_amm_pool_mut(state: &mut MarketState, outcome_idx: u64): &mut LiquidityPool {
+    let pools = state.amm_pools.borrow_mut();
+    &mut pools[outcome_idx]
+}
+
+#[test_only]
+/// Test helper to set early resolve metrics directly (bypasses initialization check)
+public fun set_early_resolve_metrics(state: &mut MarketState, metrics: EarlyResolveMetrics) {
+    if (state.early_resolve_metrics.is_some()) {
+        state.early_resolve_metrics.extract();
+    };
+    option::fill(&mut state.early_resolve_metrics, metrics);
+}
+
+#[test_only]
+/// Test helper to destroy early resolve metrics
+public fun destroy_early_resolve_metrics_for_testing(state: &mut MarketState) {
+    if (state.early_resolve_metrics.is_some()) {
+        state.early_resolve_metrics.extract();
+    };
+}
+
+#[test_only]
+/// Test helper to update last flip time directly
+public fun update_last_flip_time_for_testing(state: &mut MarketState, time_ms: u64) {
+    let metrics = state.early_resolve_metrics.borrow_mut();
+    metrics.last_flip_time_ms = time_ms;
+}
+
+#[test_only]
+/// Test helper to get current winner index
+public fun get_current_winner_index_for_testing(state: &MarketState): u64 {
+    let metrics = state.early_resolve_metrics.borrow();
+    metrics.current_winner_index
+}

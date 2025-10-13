@@ -348,7 +348,7 @@ fun test_remove_liquidity_zero_amount() {
     let mut pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(DEFAULT_FEE_BPS, ctx);
 
     // Create LP token with zero amount
-    let lp_token = unified_spot_pool::create_lp_token_for_testing<TEST_COIN_A, TEST_COIN_B>(0, ctx);
+    let lp_token = unified_spot_pool::create_lp_token_for_testing<TEST_COIN_A, TEST_COIN_B>(0, option::none(), ctx);
 
     let (asset_out, stable_out) = unified_spot_pool::remove_liquidity(&mut pool, lp_token, 0, 0, ctx);
 
