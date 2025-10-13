@@ -15,10 +15,8 @@ use futarchy_one_shot_utils::coin_validation;
 // === Errors ===
 const ENoCoinSetsAvailable: u64 = 0;
 const EInsufficientFee: u64 = 1;
-const EInvalidCoinSet: u64 = 2;
-const ERegistryNotEmpty: u64 = 3;
-const ERegistryFull: u64 = 4;
-const ENotEnoughCoins: u64 = 5;
+const ERegistryNotEmpty: u64 = 2;
+const ERegistryFull: u64 = 3;
 
 // === Constants ===
 const MAX_COIN_SETS: u64 = 100_000;
