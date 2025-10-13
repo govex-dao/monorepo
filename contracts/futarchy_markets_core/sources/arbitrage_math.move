@@ -5,11 +5,12 @@
 /// IMPROVEMENTS IMPLEMENTED (Mathematician's Suggestions):
 /// ✅ 1. B-parameterization - No square roots, cleaner math
 /// ✅ 2. Active-set pruning - 40-60% gas reduction
-/// ✅ 3. Early exit checks - Skip calculation when no arbitrage exists
+/// ✅ 3. Early exit checks - BOTH directions optimized
 /// ✅ 4. Bidirectional solving - Catches all opportunities
 /// ✅ 5. Min profit threshold - Simple profitability check
 /// ✅ 6. u256 arithmetic - Accurate overflow-free calculations
-/// ✅ 7. Pofit precision - 0.01% (of largest pool size) profit accuracy
+/// ✅ 7. Ternary search precision - 0.1% of search space (optimal for concave F(b))
+/// ✅ 8. Concavity proof - F(b) is strictly concave, ternary search is optimal
 ///
 /// MATH FOUNDATION:
 ///
@@ -36,6 +37,7 @@ use futarchy_one_shot_utils::math;
 
 // === Errors ===
 const ETooManyConditionals: u64 = 0;
+const EInvalidFee: u64 = 1;
 
 // === Constants ===
 const MAX_CONDITIONALS: u64 = 50; // Protocol limit - O(N²) with pruning stays performant
@@ -127,25 +129,23 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
 
     assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
 
-    // Get spot reserves and fee
-    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot);
-    let spot_fee_bps = unified_spot_pool::get_fee_bps(spot);
-
-    // Find largest pool to determine market scale for precision
-    // Using max (not min) ensures tiny outlier pools don't force unnecessary precision
-    let mut max_pool_reserve = spot_asset;
+    // Check for zero liquidity in any conditional pool (early rejection)
     let mut i = 0;
     while (i < num_conditionals) {
         let conditional = vector::borrow(conditionals, i);
-        let (cond_asset, _cond_stable) = conditional_amm::get_reserves(conditional);
-        if (cond_asset > max_pool_reserve) {
-            max_pool_reserve = cond_asset;
+        let (cond_asset, cond_stable) = conditional_amm::get_reserves(conditional);
+        if (cond_asset == 0 || cond_stable == 0) {
+            return (0, 0)  // Zero liquidity makes arbitrage impossible
         };
         i = i + 1;
     };
 
-    // Threshold: 0.01% of LARGEST pool (represents market scale)
-    let search_threshold = math::max(max_pool_reserve / 10_000, 100);
+    // Get spot reserves and fee
+    let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot);
+    if (spot_asset == 0 || spot_stable == 0) {
+        return (0, 0)  // Zero liquidity in spot makes arbitrage impossible
+    };
+    let spot_fee_bps = unified_spot_pool::get_fee_bps(spot);
 
     // Build T, A, B constants
     let (ts, as_vals, bs) = build_tab_constants(
@@ -165,8 +165,8 @@ public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
 
     if (vector::length(&ts_pruned) == 0) return (0, 0);
 
-    // OPTIMIZATION 3: B-parameterization search with two-phase profit precision
-    let (b_star, profit) = optimal_b_search(&ts_pruned, &as_pruned, &bs_pruned, search_threshold);
+    // OPTIMIZATION 3: B-parameterization ternary search (F(b) is concave)
+    let (b_star, profit) = optimal_b_search(&ts_pruned, &as_pruned, &bs_pruned);
 
     // Check min profit threshold
     if (profit < (min_profit as u128)) {
@@ -208,22 +208,44 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
 
     assert!(num_conditionals <= MAX_CONDITIONALS, ETooManyConditionals);
 
+    // Check for zero liquidity in any conditional pool (early rejection)
+    let mut i = 0;
+    while (i < num_conditionals) {
+        let conditional = vector::borrow(conditionals, i);
+        let (cond_asset, cond_stable) = conditional_amm::get_reserves(conditional);
+        if (cond_asset == 0 || cond_stable == 0) {
+            return (0, 0)  // Zero liquidity makes arbitrage impossible
+        };
+        i = i + 1;
+    };
+
     // Get spot reserves and fee
     let (spot_asset, spot_stable) = unified_spot_pool::get_reserves(spot);
+    if (spot_asset == 0 || spot_stable == 0) {
+        return (0, 0)  // Zero liquidity in spot makes arbitrage impossible
+    };
     let spot_fee_bps = unified_spot_pool::get_fee_bps(spot);
+
+    // FIX: Validate fee to prevent underflow in beta calculation
+    assert!(spot_fee_bps <= BPS_SCALE, EInvalidFee);
     let beta = BPS_SCALE - spot_fee_bps;
 
-    // Find BOTH largest (for precision) and smallest (for upper bound)
-    let mut max_pool_reserve = spot_asset;              // Largest pool determines precision
+    // OPTIMIZATION 1: Early exit check - compare derivatives at b=0
+    // F'(0) = S'(0) - C'(0) where:
+    // S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
+    // C'(0) = Σ_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
+    // Need F'(0) > 0 for profit to exist
+    if (early_exit_check_cond_to_spot(spot_asset, spot_stable, beta, conditionals)) {
+        return (0, 0)
+    };
+
+    // Find smallest conditional reserve (for upper bound on b)
     let mut upper_bound = std::u64::max_value!();       // Start at max, find minimum conditional
     let mut i = 0;
     while (i < num_conditionals) {
         let conditional = vector::borrow(conditionals, i);
         let (cond_asset, _cond_stable) = conditional_amm::get_reserves(conditional);
 
-        if (cond_asset > max_pool_reserve) {
-            max_pool_reserve = cond_asset;
-        };
         if (cond_asset < upper_bound) {
             upper_bound = cond_asset;
         };
@@ -231,19 +253,13 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     };
 
     // Need reasonable liquidity for arbitrage
-    if (upper_bound < 100) return (0, 0);
+    if (upper_bound < 2) return (0, 0);
 
-    // Use 95% of upper bound to avoid edge case issues near boundary
-    let max_b = ((upper_bound as u128) * 95) / 100;
-    if (max_b > (std::u64::max_value!() as u128)) {
-        return (0, 0) // Overflow protection
-    };
-    let max_b_u64 = (max_b as u64);
+    // Use upper_bound - 1 to stay just inside the boundary
+    // (avoiding vertical asymptote at b = min_i(R_i_asset))
+    let max_b_u64 = upper_bound - 1;
 
-    // Threshold: 0.01% of LARGEST pool (represents market scale)
-    let search_threshold = math::max(max_pool_reserve / 10_000, 100);
-
-    // Two-phase search for 0.01% profit precision
+    // Ternary search for optimal b (F(b) is concave, single peak)
     let mut best_b = 0u64;
     let mut best_profit = 0u128;
     let mut left = 0u64;
@@ -335,15 +351,14 @@ public fun compute_optimal_spot_arbitrage<AssetType, StableType>(
 
 // === Core B-Parameterization Functions ===
 
-/// Find optimal b using two-phase search for 0.01% profit precision
-/// Phase 1: Coarse search (0.1% of search space) to find approximate optimum
-/// Phase 2: Profit-based refinement (stop when improvements < 0.01% of best profit)
-/// Threshold represents market scale (0.01% of largest pool)
+/// Find optimal b using ternary search for unimodal profit function
+/// F(b) = b - x(b) is concave (single peak) since x(b) = max of convex functions
+/// Ternary search converges to 0.1% of search space - sufficient for concave functions
+/// Phase 2 refinement unnecessary: concavity guarantees global optimum found in Phase 1
 fun optimal_b_search(
     ts: &vector<u128>,
     as_vals: &vector<u128>,
     bs: &vector<u128>,
-    threshold: u64,  // Market scale threshold (0.01% of largest pool)
 ): (u64, u128) {
     let n = vector::length(ts);
     if (n == 0) return (0, 0);
@@ -420,7 +435,8 @@ fun profit_at_b(
 /// Calculate input x required to achieve output b
 /// x(b) = max_i [b × A_i / (T_i - b × B_i)]
 ///
-/// OVERFLOW PROTECTION: Checks for u128 overflow on b × B_i and b × A_i
+/// OVERFLOW PROTECTION: Uses u256 arithmetic for all critical multiplications
+/// to prevent underestimating required input (which would inflate profit estimates)
 fun x_required_for_b(
     ts: &vector<u128>,
     as_vals: &vector<u128>,
@@ -430,8 +446,8 @@ fun x_required_for_b(
     let n = vector::length(ts);
     if (n == 0) return 0;
 
-    let b_u128 = (b as u128);
-    let mut x_max = 0u128;
+    let b_u256 = (b as u256);
+    let mut x_max_u256 = 0u256;
 
     let mut i = 0;
     while (i < n) {
@@ -439,51 +455,66 @@ fun x_required_for_b(
         let ai = *vector::borrow(as_vals, i);
         let bi = *vector::borrow(bs, i);
 
-        // OVERFLOW FIX #1: Check b × B_i overflow before calculating denominator
-        let b_bi_product = if (bi > 0 && b_u128 > std::u128::max_value!() / bi) {
-            // Overflow would occur - this pool is dominated, skip it
-            i = i + 1;
-            continue
-        } else {
-            b_u128 * bi
-        };
+        // Convert to u256 for overflow-free arithmetic
+        let ti_u256 = (ti as u256);
+        let ai_u256 = (ai as u256);
+        let bi_u256 = (bi as u256);
+
+        // Calculate b × B_i in u256 (no overflow possible)
+        let bbi_u256 = b_u256 * bi_u256;
 
         // x_i(b) = ceil(b × A_i / (T_i - b × B_i))
-        if (ti <= b_bi_product) {
-            // Denominator would be <= 0, skip this pool
-            i = i + 1;
-            continue
-        };
-
-        let denom = ti - b_bi_product;
-
-        // OVERFLOW FIX #2: Check b × A_i overflow before calculating numerator
-        let numerator = if (b_u128 > 0 && ai > std::u128::max_value!() / b_u128) {
-            // Overflow would occur - this pool requires maximum input
-            // Return saturated max as this pool is the bottleneck
+        // If b × B_i >= T_i, this value of b is infeasible for this pool
+        if (bbi_u256 >= ti_u256) {
+            // This b value exceeds this pool's capacity
+            // Return max value as this pool is the bottleneck
             return std::u64::max_value!()
-        } else {
-            b_u128 * ai
         };
 
-        let xi = div_ceil(numerator, denom);
+        let denom_u256 = ti_u256 - bbi_u256;
 
-        if (xi > x_max) {
-            x_max = xi;
+        // Calculate b × A_i in u256 (no overflow possible)
+        let numer_u256 = b_u256 * ai_u256;
+
+        // Ceiling division: ceil(n/d) = (n + d - 1) / d
+        // Handle case where denom_u256 is 0 (already checked above, but defensive)
+        if (denom_u256 == 0) {
+            return std::u64::max_value!()
+        };
+
+        let xi_u256 = (numer_u256 + denom_u256 - 1) / denom_u256;
+
+        // Track maximum x_i across all pools
+        if (xi_u256 > x_max_u256) {
+            x_max_u256 = xi_u256;
         };
 
         i = i + 1;
     };
 
-    // Saturate to u64
-    if (x_max > (std::u64::max_value!() as u128)) {
+    // Convert back to u64, saturating if necessary
+    if (x_max_u256 > (std::u64::max_value!() as u256)) {
         std::u64::max_value!()
     } else {
-        (x_max as u64)
+        (x_max_u256 as u64)
     }
 }
 
 /// Upper bound on b: floor(min_i (T_i - 1) / B_i)
+///
+/// **Conservative Design (Intentional Trade-off):**
+/// - If ANY pool has bi == 0 or ti <= 1, we set global U_b = 0 (reject all trades)
+/// - This is CORRECT for Spot→Cond because feasibility requires ALL pools to accept b
+/// - Side effect: Rejects barely-feasible small trades when ti ≈ 1
+///
+/// **Why ti - 1 instead of ti:**
+/// - Prevents vertical asymptote at b = T_i/B_i (division by zero in x(b) formula)
+/// - The "−1" adds safety margin to avoid numerical instability near the boundary
+///
+/// **Alternative (not implemented):**
+/// - Could make margin tunable (e.g., T_i - safety_margin) if rejecting small trades is a problem
+/// - For now, strictness prioritized over capturing tiny arbitrage opportunities
+///
 /// SECURITY FIX: Treat ti <= 1 as ub_i = 0 (not skip) to avoid inflating U_b
 fun upper_bound_b(ts: &vector<u128>, bs: &vector<u128>): u64 {
     let n = vector::length(ts);
@@ -520,28 +551,100 @@ fun upper_bound_b(ts: &vector<u128>, bs: &vector<u128>): u64 {
 
 // === Optimization Functions ===
 
-/// Early exit check: if ALL conditionals are cheaper/equal to spot, no Spot→Cond arbitrage
-/// For Spot→Cond: We only need ONE expensive conditional to arbitrage profitably
-/// Check: if ALL pools have T_i <= A_i, return true (exit early)
+/// Early exit check: if ANY conditional is cheaper/equal to spot, no Spot→Cond arbitrage
+///
+/// MATHEMATICAL PROOF:
+/// F'(0) = 1 - max_i(A_i/T_i)
+/// For profit to exist, need F'(0) > 0 ⟺ max_i(A_i/T_i) < 1 ⟺ ALL A_i < T_i
+///
+/// Since x(b) = max_i[x_i(b)], a SINGLE "too-cheap" pool (T_i ≤ A_i) dominates
+/// the max and kills profitability everywhere. Therefore:
+/// - Need ALL pools expensive (T_i > A_i) for arbitrage to exist
+/// - If ANY pool has T_i ≤ A_i → return true (exit early, no profit possible)
 fun early_exit_check_spot_to_cond(ts: &vector<u128>, as_vals: &vector<u128>): bool {
     let n = vector::length(ts);
-    let mut all_cheap = true;  // Assume all are cheap until proven otherwise
 
     let mut i = 0;
     while (i < n) {
         let ti = *vector::borrow(ts, i);
         let ai = *vector::borrow(as_vals, i);
 
-        // If T_i > A_i, conditional i is MORE EXPENSIVE than spot (arbitrage opportunity!)
-        if (ti > ai) {
-            all_cheap = false;
-            break  // Found at least one expensive pool, arbitrage may be profitable
+        // If ANY pool has T_i ≤ A_i, then max_i(A_i/T_i) ≥ 1 → F'(0) ≤ 0 → no profit
+        if (safe_cross_product_le(ti, 1, ai, 1)) {
+            return true  // Exit early: this "cheap" pool kills all arbitrage
         };
 
         i = i + 1;
     };
 
-    all_cheap  // Only exit if ALL conditionals are cheaper/equal to spot
+    false  // All pools have T_i > A_i → arbitrage may exist
+}
+
+/// Early exit check: if spot derivative <= cost derivative at b=0, no Cond→Spot arbitrage
+///
+/// MATHEMATICAL PROOF:
+/// F(b) = S(b) - C(b) where:
+/// - S(b) = (R_spot_stable * b * β) / (R_spot_asset * BPS_SCALE + b * β)
+/// - C(b) = Σ_i (R_i_stable * b * BPS_SCALE) / ((R_i_asset - b) * α_i)
+///
+/// Derivatives at b=0:
+/// S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
+/// C'(0) = Σ_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
+///
+/// For profit: F'(0) > 0 ⟺ S'(0) > C'(0)
+/// Return true (exit early) if S'(0) ≤ C'(0)
+///
+/// CONSERVATIVE APPROXIMATION: Since C'(0) is a sum, if S'(0) <= max_i(c'_i(0)),
+/// then definitely S'(0) < C'(0). This catches the most obvious unprofitable cases.
+fun early_exit_check_cond_to_spot(
+    spot_asset: u64,
+    spot_stable: u64,
+    beta: u64,
+    conditionals: &vector<LiquidityPool>,
+): bool {
+    // Calculate S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
+    let spot_stable_u256 = (spot_stable as u256);
+    let beta_u256 = (beta as u256);
+    let spot_asset_u256 = (spot_asset as u256);
+    let bps_u256 = (BPS_SCALE as u256);
+
+    // S'(0) numerator: R_spot_stable * β
+    let s_prime_num = spot_stable_u256 * beta_u256;
+    // S'(0) denominator: R_spot_asset * BPS_SCALE
+    let s_prime_denom = spot_asset_u256 * bps_u256;
+
+    // Check: if S'(0) <= max_i(c'_i(0)), then S'(0) < C'(0) = Σ_i c'_i(0)
+    // This is conservative but catches obvious failures
+
+    let n = vector::length(conditionals);
+    let mut i = 0;
+    while (i < n) {
+        let conditional = vector::borrow(conditionals, i);
+        let (cond_asset, cond_stable) = conditional_amm::get_reserves(conditional);
+        let cond_fee_bps = conditional_amm::get_fee_bps(conditional);
+
+        // FIX: Validate fee to prevent underflow in alpha_i calculation
+        assert!(cond_fee_bps <= BPS_SCALE, EInvalidFee);
+        let alpha_i = BPS_SCALE - cond_fee_bps;
+
+        // c'_i(0) = (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
+        let c_i_num = (cond_stable as u256) * bps_u256;
+        let c_i_denom = (cond_asset as u256) * (alpha_i as u256);
+
+        // Check if s_prime_num / s_prime_denom <= c_i_num / c_i_denom
+        // ⟺ s_prime_num * c_i_denom <= s_prime_denom * c_i_num
+        if (s_prime_num * c_i_denom <= s_prime_denom * c_i_num) {
+            // Spot slope ≤ this conditional's slope
+            // Since C'(0) = Σ_i c'_i ≥ c'_i ≥ S'(0), definitely no profit
+            return true
+        };
+
+        i = i + 1;
+    };
+
+    // S'(0) > all individual c'_i(0), but C'(0) is their sum
+    // Could still be unprofitable if sum >> S'(0), but let ternary search decide
+    false
 }
 
 /// Safe cross-product comparison: Check if a * b <= c * d without overflow
@@ -658,6 +761,8 @@ fun build_tab_constants(
     let mut as_vec = vector::empty<u128>();
     let mut bs_vec = vector::empty<u128>();
 
+    // FIX #7: Validate spot fee to prevent underflow
+    assert!(spot_fee_bps <= BPS_SCALE, EInvalidFee);
     let beta = BPS_SCALE - spot_fee_bps;
 
     let mut i = 0;
@@ -665,38 +770,55 @@ fun build_tab_constants(
         let conditional = vector::borrow(conditionals, i);
         let (cond_asset, cond_stable) = conditional_amm::get_reserves(conditional);
         let cond_fee_bps = conditional_amm::get_fee_bps(conditional);
+
+        // FIX #7: Validate conditional fee to prevent underflow
+        assert!(cond_fee_bps <= BPS_SCALE, EInvalidFee);
         let alpha_i = BPS_SCALE - cond_fee_bps;
 
-        // T_i = (cond_stable * alpha_i / 10000) * (spot_asset * beta / 10000)
-        let t1 = math::mul_div_to_128(cond_stable, alpha_i, BPS_SCALE);
-        let t2 = math::mul_div_to_128(spot_asset_reserve, beta, BPS_SCALE);
+        // T_i = (cond_stable * alpha_i * spot_asset * beta) / BPS²
+        // FIX #8: Use u256 for entire calculation with SINGLE division to avoid double-rounding
+        let cond_stable_u256 = (cond_stable as u256);
+        let alpha_i_u256 = (alpha_i as u256);
+        let spot_asset_u256 = (spot_asset_reserve as u256);
+        let beta_u256 = (beta as u256);
+        let bps_u256 = (BPS_SCALE as u256);
 
-        // OVERFLOW FIX: Check t1 × t2 overflow and saturate if needed
-        let t1_u128 = (t1 as u128);
-        let t2_u128 = (t2 as u128);
-        let ti = if (t2_u128 > 0 && t1_u128 > std::u128::max_value!() / t2_u128) {
-            // Overflow - saturate to max u128
-            // This pool has extremely large reserves, treat as infinite liquidity
+        // CRITICAL: Multiply ALL terms FIRST, then divide ONCE to avoid precision loss
+        // Old (wrong): (a/b) * (c/d) causes TWO truncations
+        // New (correct): (a * c) / (b * d) causes ONE truncation
+        let ti_u256 = (cond_stable_u256 * alpha_i_u256 * spot_asset_u256 * beta_u256)
+            / (bps_u256 * bps_u256);
+
+        // Clamp to u128 max if needed
+        let ti = if (ti_u256 > (std::u128::max_value!() as u256)) {
             std::u128::max_value!()
         } else {
-            t1_u128 * t2_u128
+            (ti_u256 as u128)
         };
 
-        // A_i = cond_asset * spot_stable (with overflow protection)
-        let cond_asset_u128 = (cond_asset as u128);
-        let spot_stable_u128 = (spot_stable_reserve as u128);
-        let ai = if (spot_stable_u128 > 0 && cond_asset_u128 > std::u128::max_value!() / spot_stable_u128) {
-            // Overflow - saturate to max u128
-            // This pool has extremely large reserves, treat as infinite liquidity
+        // A_i = cond_asset * spot_stable (use u256 to prevent overflow)
+        let cond_asset_u256 = (cond_asset as u256);
+        let spot_stable_u256 = (spot_stable_reserve as u256);
+        let ai_u256 = cond_asset_u256 * spot_stable_u256;
+
+        let ai = if (ai_u256 > (std::u128::max_value!() as u256)) {
             std::u128::max_value!()
         } else {
-            cond_asset_u128 * spot_stable_u128
+            (ai_u256 as u128)
         };
 
-        // B_i = beta * (cond_asset + alpha_i * spot_asset / 10000) / 10000
-        let alpha_spot = math::mul_div_to_128(spot_asset_reserve, alpha_i, BPS_SCALE);
-        let temp = (cond_asset as u128) + alpha_spot;
-        let bi = (temp * (beta as u128)) / (BPS_SCALE as u128);
+        // B_i = β * (R_i,asset * BPS + α_i * R_spot,asset) / BPS²
+        // FIX: Use SINGLE division to avoid double-rounding (same fix as T_i)
+        // Old (wrong): temp = a + b/c; result = temp * d / c (TWO divisions)
+        // New (correct): result = d * (a * c + b) / c² (ONE division)
+        let bi_u256 = (beta_u256 * (cond_asset_u256 * bps_u256 + alpha_i_u256 * spot_asset_u256))
+            / (bps_u256 * bps_u256);
+
+        let bi = if (bi_u256 > (std::u128::max_value!() as u256)) {
+            std::u128::max_value!()
+        } else {
+            (bi_u256 as u128)
+        };
 
         vector::push_back(&mut ts_vec, ti);
         vector::push_back(&mut as_vec, ai);
@@ -819,18 +941,24 @@ public fun calculate_conditional_arbitrage_profit<AssetType, StableType>(
 ): u128 {
     let swapped_conditional = vector::borrow(conditionals, (swapped_outcome_idx as u64));
 
+    // FIX: Correct swap direction to match is_asset_to_stable flag
     let cond_output = if (is_asset_to_stable) {
-        conditional_amm::simulate_swap_stable_to_asset(swapped_conditional, arbitrage_amount)
-    } else {
+        // We are SELLING asset to get stable
         conditional_amm::simulate_swap_asset_to_stable(swapped_conditional, arbitrage_amount)
+    } else {
+        // We are BUYING asset with stable
+        conditional_amm::simulate_swap_stable_to_asset(swapped_conditional, arbitrage_amount)
     };
 
     if (cond_output == 0) return 0;
 
+    // Then swap in opposite direction in spot pool
     let spot_output = if (is_asset_to_stable) {
-        unified_spot_pool::simulate_swap_asset_to_stable(spot, cond_output)
-    } else {
+        // We got stable from conditional, now buy asset back from spot
         unified_spot_pool::simulate_swap_stable_to_asset(spot, cond_output)
+    } else {
+        // We got asset from conditional, now sell it for stable in spot
+        unified_spot_pool::simulate_swap_asset_to_stable(spot, cond_output)
     };
 
     if (spot_output > arbitrage_amount) {
@@ -838,15 +966,6 @@ public fun calculate_conditional_arbitrage_profit<AssetType, StableType>(
     } else {
         0
     }
-}
-
-// === Helper Functions ===
-
-/// Ceiling division: ceil(a / b)
-fun div_ceil(a: u128, b: u128): u128 {
-    if (b == 0) return 0;
-    if (a == 0) return 0;
-    ((a - 1) / b) + 1
 }
 
 // === Conditional → Spot Helper Functions ===
@@ -944,6 +1063,9 @@ fun calculate_conditional_cost(
         let conditional = vector::borrow(conditionals, i);
         let (cond_asset, cond_stable) = conditional_amm::get_reserves(conditional);
         let cond_fee_bps = conditional_amm::get_fee_bps(conditional);
+
+        // FIX: Validate fee to prevent underflow in alpha calculation
+        assert!(cond_fee_bps <= BPS_SCALE, EInvalidFee);
         let alpha = BPS_SCALE - cond_fee_bps;
 
         // Skip if b >= R_i_asset (can't buy more than pool has)
@@ -1026,9 +1148,8 @@ public fun test_only_optimal_b_search(
     ts: &vector<u128>,
     as_vals: &vector<u128>,
     bs: &vector<u128>,
-    threshold: u64,
 ): (u64, u128) {
-    optimal_b_search(ts, as_vals, bs, threshold)
+    optimal_b_search(ts, as_vals, bs)
 }
 
 #[test_only]

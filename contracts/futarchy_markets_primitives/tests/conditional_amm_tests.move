@@ -976,6 +976,225 @@ fun test_roundtrip_swap_loses_to_fees() {
     end(scenario, clock);
 }
 
+// === Stage 2.5: Feeless Swaps (Arbitrage Helpers) ===
+
+#[test]
+fun test_feeless_swap_asset_to_stable() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+    let k_before = conditional_amm::get_k(&pool);
+
+    let amount_in = 10000u64;
+    let amount_out = conditional_amm::feeless_swap_asset_to_stable(
+        &mut pool,
+        amount_in
+    );
+
+    // Should return non-zero output
+    assert!(amount_out > 0, 0);
+
+    // Reserves should have changed
+    let (asset, stable) = conditional_amm::get_reserves(&pool);
+    assert!(asset > 1000000, 1); // Asset increased
+    assert!(stable < 1000000, 2); // Stable decreased
+
+    // K should be approximately preserved (within tolerance)
+    let k_after = conditional_amm::get_k(&pool);
+    // K should be very close to k_before (within 0.0001% tolerance)
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000;
+    assert!(k_delta <= tolerance, 3);
+
+    // No protocol fees should be collected (feeless)
+    assert!(conditional_amm::get_protocol_fees(&pool) == 0, 4);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_feeless_swap_stable_to_asset() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+    let k_before = conditional_amm::get_k(&pool);
+
+    let amount_in = 10000u64;
+    let amount_out = conditional_amm::feeless_swap_stable_to_asset(
+        &mut pool,
+        amount_in
+    );
+
+    // Should return non-zero output
+    assert!(amount_out > 0, 0);
+
+    // Reserves should have changed
+    let (asset, stable) = conditional_amm::get_reserves(&pool);
+    assert!(asset < 1000000, 1); // Asset decreased
+    assert!(stable > 1000000, 2); // Stable increased
+
+    // K should be approximately preserved (within tolerance)
+    let k_after = conditional_amm::get_k(&pool);
+    let k_delta = if (k_after > k_before) { k_after - k_before } else { k_before - k_after };
+    let tolerance = k_before / 1000000;
+    assert!(k_delta <= tolerance, 3);
+
+    // No protocol fees should be collected (feeless)
+    assert!(conditional_amm::get_protocol_fees(&pool) == 0, 4);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+#[expected_failure(abort_code = conditional_amm::EZeroAmount)]
+fun test_feeless_swap_asset_to_stable_zero_fails() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Zero amount should fail
+    let _out = conditional_amm::feeless_swap_asset_to_stable(
+        &mut pool,
+        0
+    );
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+#[expected_failure(abort_code = conditional_amm::EZeroAmount)]
+fun test_feeless_swap_stable_to_asset_zero_fails() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Zero amount should fail
+    let _out = conditional_amm::feeless_swap_stable_to_asset(
+        &mut pool,
+        0
+    );
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+#[expected_failure(abort_code = conditional_amm::EPoolEmpty)]
+fun test_feeless_swap_empty_pool_fails() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Empty the pool
+    let (_asset, _stable) = conditional_amm::empty_all_amm_liquidity(
+        &mut pool,
+        ts::ctx(&mut scenario)
+    );
+
+    // Swap should fail on empty pool
+    let _out = conditional_amm::feeless_swap_asset_to_stable(
+        &mut pool,
+        10000
+    );
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_feeless_vs_normal_swap_output() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    // Create two identical pools
+    let mut pool1 = create_test_pool(&mut scenario, &mut clock);
+    let market_id = object::id_from_address(@0x1);
+    let mut pool2 = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    let amount_in = 10000u64;
+
+    // Feeless swap should give more output than normal swap
+    let feeless_out = conditional_amm::feeless_swap_asset_to_stable(
+        &mut pool1,
+        amount_in
+    );
+
+    let normal_out = conditional_amm::swap_asset_to_stable(
+        &mut pool2,
+        market_id,
+        amount_in,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Feeless swap gives more output (no fees deducted)
+    assert!(feeless_out > normal_out, 0);
+
+    conditional_amm::destroy_for_testing(pool1);
+    conditional_amm::destroy_for_testing(pool2);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_feeless_swap_roundtrip() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    let initial_amount = 10000u64;
+    let k_initial = conditional_amm::get_k(&pool);
+
+    // Swap asset -> stable
+    let stable_out = conditional_amm::feeless_swap_asset_to_stable(
+        &mut pool,
+        initial_amount
+    );
+
+    // Swap stable -> asset (reverse)
+    let asset_back = conditional_amm::feeless_swap_stable_to_asset(
+        &mut pool,
+        stable_out
+    );
+
+    // Should get back approximately the same amount (within rounding)
+    // Allow small difference due to rounding in integer math
+    let diff = if (asset_back > initial_amount) {
+        asset_back - initial_amount
+    } else {
+        initial_amount - asset_back
+    };
+
+    // Difference should be very small (< 1%)
+    assert!(diff < initial_amount / 100, 0);
+
+    // K should be approximately the same
+    let k_final = conditional_amm::get_k(&pool);
+    let k_delta = if (k_final > k_initial) { k_final - k_initial } else { k_initial - k_final };
+    let tolerance = k_initial / 1000000;
+    assert!(k_delta <= tolerance, 1);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
 // === Stage 3: Liquidity Operations ===
 
 #[test]
@@ -1380,73 +1599,9 @@ fun test_empty_all_amm_liquidity() {
     end(scenario, clock);
 }
 
-#[test]
-fun test_add_subsidy_to_reserves() {
-    let (mut scenario, mut clock) = start();
-    clock.set_for_testing(1000);
-    
-    let mut pool = create_test_pool(&mut scenario, &mut clock);
-    
-    let k_before = conditional_amm::get_k(&pool);
-    let lp_supply_before = conditional_amm::get_lp_supply(&pool);
-    let (asset_before, stable_before) = conditional_amm::get_reserves(&pool);
-    
-    // Add subsidy (no LP tokens minted, just increases reserves)
-    let asset_subsidy = 50000;
-    let stable_subsidy = 50000;
-    
-    conditional_amm::add_subsidy_to_reserves(
-        &mut pool,
-        asset_subsidy,
-        stable_subsidy
-    );
-    
-    // Reserves should increase
-    let (asset_after, stable_after) = conditional_amm::get_reserves(&pool);
-    assert!(asset_after == asset_before + asset_subsidy, 0);
-    assert!(stable_after == stable_before + stable_subsidy, 1);
-    
-    // LP supply should NOT change (subsidy doesn't mint LP tokens)
-    assert!(conditional_amm::get_lp_supply(&pool) == lp_supply_before, 2);
-    
-    // K should increase (benefits existing LPs)
-    let k_after = conditional_amm::get_k(&pool);
-    assert!(k_after > k_before, 3);
-    
-    conditional_amm::destroy_for_testing(pool);
-    end(scenario, clock);
-}
-
-#[test]
-fun test_add_subsidy_increases_lp_value() {
-    let (mut scenario, mut clock) = start();
-    clock.set_for_testing(1000);
-    
-    let mut pool = create_test_pool(&mut scenario, &mut clock);
-    
-    let lp_supply = conditional_amm::get_lp_supply(&pool);
-    let (asset_before, stable_before) = conditional_amm::get_reserves(&pool);
-    
-    // Calculate LP token value before subsidy
-    // Each LP token represents asset_reserve/lp_supply asset + stable_reserve/lp_supply stable
-    let asset_per_lp_before = asset_before / lp_supply;
-    let stable_per_lp_before = stable_before / lp_supply;
-    
-    // Add subsidy
-    conditional_amm::add_subsidy_to_reserves(&mut pool, 100000, 100000);
-    
-    // Calculate LP token value after subsidy
-    let (asset_after, stable_after) = conditional_amm::get_reserves(&pool);
-    let asset_per_lp_after = asset_after / lp_supply;
-    let stable_per_lp_after = stable_after / lp_supply;
-    
-    // Each LP token should be worth more after subsidy
-    assert!(asset_per_lp_after > asset_per_lp_before, 0);
-    assert!(stable_per_lp_after > stable_per_lp_before, 1);
-    
-    conditional_amm::destroy_for_testing(pool);
-    end(scenario, clock);
-}
+// NOTE: Old subsidy tests removed - see reward_claiming_tests.move for new reward system tests
+// The deprecated add_subsidy_to_reserves() function has been replaced with accumulate_subsidy_rewards()
+// which uses a separate reward pool instead of manipulating AMM reserves
 
 fun create_test_pool(scenario: &mut ts::Scenario, clock: &mut Clock) : conditional_amm::LiquidityPool {
     conditional_amm::create_test_pool(
@@ -1780,6 +1935,473 @@ fun test_twap_time_weighted() {
     // (time-weighted, so closer to new price since it lasted longer)
     let twap = conditional_amm::get_twap(&mut pool, &clock);
     assert!(twap > 0, 1);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+// === Stage 5: LP Reward System (View Functions) ===
+// NOTE: Most reward functions are package-level and tested in reward_claiming_tests.move
+// These tests verify the public view functions and initial state
+
+#[test]
+fun test_initial_reward_state() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Initial reward state should be zero
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 0);
+    assert!(conditional_amm::get_lp_rewards(&pool) == 0, 1);
+    assert!(conditional_amm::get_rewards_accumulator(&pool) == 0, 2);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_get_claimable_rewards_zero_lp() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Zero LP amount should return zero claimable
+    let claimable = conditional_amm::get_claimable_rewards(&pool, 0, 0);
+    assert!(claimable == 0, 0);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_get_claimable_rewards_no_accumulator() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let pool = create_test_pool(&mut scenario, &mut clock);
+
+    // With no accumulator, claimable should be zero even with LP tokens
+    let claimable = conditional_amm::get_claimable_rewards(&pool, 1000, 0);
+    assert!(claimable == 0, 0);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_get_claimable_rewards_already_claimed() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let pool = create_test_pool(&mut scenario, &mut clock);
+
+    // If already_claimed equals what would be earned, claimable is zero
+    // Accumulator is 0, so total_earned = 0, already_claimed = 100
+    let claimable = conditional_amm::get_claimable_rewards(&pool, 1000, 100);
+    assert!(claimable == 0, 0);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_reward_getter_aliases() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let pool = create_test_pool(&mut scenario, &mut clock);
+
+    // get_total_rewards and get_lp_rewards should return the same value (aliases)
+    let total = conditional_amm::get_total_rewards(&pool);
+    let lp = conditional_amm::get_lp_rewards(&pool);
+    assert!(total == lp, 0);
+    assert!(total == 0, 1); // Both should be zero initially
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_rewards_persist_through_swaps() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Initial state
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 0);
+    assert!(conditional_amm::get_rewards_accumulator(&pool) == 0, 1);
+
+    // Do swaps (should not affect reward state since no subsidies added)
+    let _out = conditional_amm::swap_asset_to_stable(
+        &mut pool,
+        market_id,
+        10000,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Reward state should still be zero
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 2);
+    assert!(conditional_amm::get_rewards_accumulator(&pool) == 0, 3);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_rewards_persist_through_liquidity_changes() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Initial state
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 0);
+
+    // Add liquidity
+    let _lp = conditional_amm::add_liquidity_proportional(
+        &mut pool,
+        100000,
+        100000,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Reward state should still be zero (no subsidies added)
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 1);
+    assert!(conditional_amm::get_rewards_accumulator(&pool) == 0, 2);
+
+    // Remove liquidity
+    let (_asset, _stable) = conditional_amm::remove_liquidity_proportional(
+        &mut pool,
+        50,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Reward state should still be zero
+    assert!(conditional_amm::get_total_rewards(&pool) == 0, 3);
+    assert!(conditional_amm::get_rewards_accumulator(&pool) == 0, 4);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+// === Stage 6: Edge Cases & Extreme Scenarios ===
+
+#[test]
+fun test_swap_very_large_amount() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Try to swap 50% of pool (very large)
+    let large_amount = 500000u64;
+    let amount_out = conditional_amm::swap_asset_to_stable(
+        &mut pool,
+        market_id,
+        large_amount,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should work but with high slippage
+    assert!(amount_out > 0, 0);
+    assert!(amount_out < large_amount, 1); // High slippage
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_extreme_price_ratio() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    // Create pool with 100:1 price ratio
+    let pool = conditional_amm::create_test_pool(
+        object::id_from_address(@0x1),
+        0,
+        30,
+        10000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Price should be 100x higher
+    let price = conditional_amm::get_current_price(&pool);
+    assert!(price > 50_000_000_000_000, 0); // Much higher than 1:1
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_minimum_liquidity_boundary() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    // Create pool with exactly minimum liquidity (sqrt(k) = 1000)
+    // k = 1,000,000, so asset = stable = 1000
+    let pool = conditional_amm::create_test_pool(
+        object::id_from_address(@0x1),
+        0,
+        30,
+        1000,
+        1000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    let k = conditional_amm::get_k(&pool);
+    assert!(k == 1000000, 0); // k = 1000 * 1000
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_tiny_swap_amount() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Swap just 1 unit (minimal amount)
+    let amount_out = conditional_amm::swap_asset_to_stable(
+        &mut pool,
+        market_id,
+        1,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should still work (may be 0 due to fees)
+    assert!(amount_out == 0, 0); // Fee might consume entire amount
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_precision_rounding() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    // Multiple small swaps to test rounding
+    let k_initial = conditional_amm::get_k(&pool);
+
+    // Do 10 tiny swaps
+    let market_id = object::id_from_address(@0x1);
+    let mut i = 0;
+    while (i < 10) {
+        let _out = conditional_amm::swap_asset_to_stable(
+            &mut pool,
+            market_id,
+            100,
+            0,
+            &clock,
+            ts::ctx(&mut scenario)
+        );
+        i = i + 1;
+    };
+
+    // K should have grown due to fees
+    let k_after = conditional_amm::get_k(&pool);
+    assert!(k_after > k_initial, 0);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_alternating_swaps() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    let initial_price = conditional_amm::get_current_price(&pool);
+
+    // Alternate between buying and selling
+    let _out1 = conditional_amm::swap_stable_to_asset(&mut pool, market_id, 10000, 0, &clock, ts::ctx(&mut scenario));
+    let _out2 = conditional_amm::swap_asset_to_stable(&mut pool, market_id, 10000, 0, &clock, ts::ctx(&mut scenario));
+    let _out3 = conditional_amm::swap_stable_to_asset(&mut pool, market_id, 10000, 0, &clock, ts::ctx(&mut scenario));
+    let _out4 = conditional_amm::swap_asset_to_stable(&mut pool, market_id, 10000, 0, &clock, ts::ctx(&mut scenario));
+
+    let final_price = conditional_amm::get_current_price(&pool);
+
+    // Price may have moved slightly but should be relatively close
+    let price_diff = if (final_price > initial_price) {
+        final_price - initial_price
+    } else {
+        initial_price - final_price
+    };
+
+    // Allow up to 10% price movement
+    assert!(price_diff < initial_price / 10, 0);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_liquidity_add_remove_cycle() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let mut pool = create_test_pool(&mut scenario, &mut clock);
+
+    let (initial_asset, initial_stable) = conditional_amm::get_reserves(&pool);
+    let initial_lp = conditional_amm::get_lp_supply(&pool);
+
+    // Add liquidity
+    let lp_minted = conditional_amm::add_liquidity_proportional(
+        &mut pool,
+        100000,
+        100000,
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Remove the same amount
+    let (asset_removed, stable_removed) = conditional_amm::remove_liquidity_proportional(
+        &mut pool,
+        lp_minted,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should get back similar amounts (within rounding)
+    assert!(asset_removed >= 99000 && asset_removed <= 101000, 0);
+    assert!(stable_removed >= 99000 && stable_removed <= 101000, 1);
+
+    // LP supply should be back to initial
+    assert!(conditional_amm::get_lp_supply(&pool) == initial_lp, 2);
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_swap_huge_amount_never_empties_reserve() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30,
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Try to swap way more than the reserve
+    // Due to constant product formula, this should never empty the reserve
+    let amount_out = conditional_amm::swap_asset_to_stable(
+        &mut pool,
+        market_id,
+        10000000, // 10x the reserve
+        0,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should get close to the entire reserve, but never all of it
+    let (_, stable) = conditional_amm::get_reserves(&pool);
+    assert!(stable > 0, 0); // Reserve should never be completely empty
+    assert!(amount_out < 1000000, 1); // Should be less than initial reserve
+
+    conditional_amm::destroy_for_testing(pool);
+    end(scenario, clock);
+}
+
+#[test]
+fun test_fee_accumulation_over_many_swaps() {
+    let (mut scenario, mut clock) = start();
+    clock.set_for_testing(1000);
+
+    let market_id = object::id_from_address(@0x1);
+    let mut pool = conditional_amm::create_test_pool(
+        market_id,
+        0,
+        30, // 0.3% fee
+        1000000,
+        1000000,
+        &clock,
+        ts::ctx(&mut scenario)
+    );
+
+    assert!(conditional_amm::get_protocol_fees(&pool) == 0, 0);
+
+    // Do 100 small swaps
+    let mut i = 0;
+    while (i < 100) {
+        let _out = conditional_amm::swap_asset_to_stable(
+            &mut pool,
+            market_id,
+            1000,
+            0,
+            &clock,
+            ts::ctx(&mut scenario)
+        );
+        i = i + 1;
+    };
+
+    // Protocol fees should have accumulated significantly
+    let fees = conditional_amm::get_protocol_fees(&pool);
+    assert!(fees > 0, 1);
 
     conditional_amm::destroy_for_testing(pool);
     end(scenario, clock);

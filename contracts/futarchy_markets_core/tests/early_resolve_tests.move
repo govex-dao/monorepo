@@ -113,8 +113,8 @@ fun test_check_eligibility_disabled_config() {
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(MIN_DURATION + 1000000, ctx);
 
-    // Create disabled config
-    let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
+    // Create disabled config (min >= max disables early resolution)
+    let config = create_test_config(MAX_DURATION, MIN_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
     // Create proposal and market state
     let proposal_id = object::id_from_address(@0xA);
@@ -211,7 +211,7 @@ fun test_check_eligibility_too_young() {
 
     // Start at time 0
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -257,7 +257,7 @@ fun test_check_eligibility_exceeded_max_duration() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -302,7 +302,7 @@ fun test_check_eligibility_winner_changed_recently() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -349,7 +349,7 @@ fun test_check_eligibility_passes_all_checks() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -435,7 +435,7 @@ fun test_time_until_eligible_needs_min_duration() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -482,7 +482,7 @@ fun test_time_until_eligible_needs_time_since_flip() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -532,7 +532,7 @@ fun test_time_until_eligible_already_eligible() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -629,7 +629,7 @@ fun test_check_eligibility_at_exact_min_duration() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -673,7 +673,7 @@ fun test_check_eligibility_at_exact_max_duration() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 
@@ -756,7 +756,7 @@ fun test_complete_eligibility_workflow() {
     let ctx = ts::ctx(&mut scenario);
 
     let start_time = 0u64;
-    let clock = create_test_clock(start_time, ctx);
+    let mut clock = create_test_clock(start_time, ctx);
 
     let config = create_test_config(MIN_DURATION, MAX_DURATION, 100_000u128, MIN_TIME_SINCE_FLIP);
 

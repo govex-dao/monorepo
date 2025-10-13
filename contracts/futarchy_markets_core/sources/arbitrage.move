@@ -207,6 +207,13 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
     // Validate profit meets minimum
     assert!(profit_stable.value() >= min_profit, EInsufficientProfit);
 
+    // Calculate net profit (handle losses where output < input)
+    let net_profit_stable = if (profit_stable.value() >= stable_amt) {
+        profit_stable.value() - stable_amt
+    } else {
+        0  // Loss case - report as 0 profit
+    };
+
     // Emit event
     event::emit(SpotArbitrageExecuted {
         proposal_id: market_id,
@@ -216,7 +223,7 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
         output_asset: 0,
         output_stable: profit_stable.value(),
         profit_asset: 0,
-        profit_stable: profit_stable.value() - stable_amt,
+        profit_stable: net_profit_stable,
     });
 
     // 8. Handle dust: return balance object OR destroy it
@@ -303,6 +310,13 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
     // Validate profit meets minimum
     assert!(profit_asset.value() >= min_profit, EInsufficientProfit);
 
+    // Calculate net profit (handle losses where output < input)
+    let net_profit_asset = if (profit_asset.value() >= asset_amt) {
+        profit_asset.value() - asset_amt
+    } else {
+        0  // Loss case - report as 0 profit
+    };
+
     // Emit event
     event::emit(SpotArbitrageExecuted {
         proposal_id: market_id,
@@ -311,7 +325,7 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
         input_stable: 0,
         output_asset: profit_asset.value(),
         output_stable: 0,
-        profit_asset: profit_asset.value() - asset_amt,
+        profit_asset: net_profit_asset,
         profit_stable: 0,
     });
 

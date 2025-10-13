@@ -84,6 +84,45 @@ fun create_test_escrow_with_markets(
     )
 }
 
+/// Initialize AMM pools in market state
+#[test_only]
+fun initialize_amm_pools(escrow: &mut TokenEscrow<TEST_COIN_A, TEST_COIN_B>, ctx: &mut TxContext) {
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+
+    // Check if pools already initialized
+    if (market_state::has_amm_pools(market_state)) {
+        return
+    };
+
+    // Get the market_id to ensure pools match
+    let market_id = market_state::market_id(market_state);
+
+    let outcome_count = market_state::outcome_count(market_state);
+    let mut pools = vector::empty();
+    let mut i = 0;
+    let clock = create_test_clock(1000000, ctx);
+    while (i < outcome_count) {
+        // Create pool with correct market_id
+        let pool = conditional_amm::create_test_pool(
+            market_id,
+            (i as u8), // outcome_idx
+            (DEFAULT_FEE_BPS as u64), // fee_percent
+            1000, // minimal asset_reserve
+            1000, // minimal stable_reserve
+            &clock,
+            ctx
+        );
+        vector::push_back(&mut pools, pool);
+        i = i + 1;
+    };
+    clock::destroy_for_testing(clock);
+
+    market_state::set_amm_pools(market_state, pools);
+
+    // Initialize trading for tests
+    market_state::init_trading_for_testing(market_state);
+}
+
 /// Add initial liquidity to all conditional pools in escrow
 #[test_only]
 fun add_liquidity_to_conditional_pools(
@@ -91,6 +130,9 @@ fun add_liquidity_to_conditional_pools(
     reserve_per_outcome: u64,
     ctx: &mut TxContext,
 ) {
+    // Initialize pools first if not already done
+    initialize_amm_pools(escrow, ctx);
+
     let market_state = coin_escrow::get_market_state_mut(escrow);
     let outcome_count = market_state::outcome_count(market_state);
 
@@ -374,6 +416,11 @@ fun test_execute_optimal_arbitrage_stable_to_asset_direction_2_outcomes() {
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
+    // Deposit spot coins to escrow for withdrawal during arbitrage
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(2000, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(2000, ctx);
+    coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
+
     // Create swap session
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
@@ -427,6 +474,11 @@ fun test_execute_optimal_arbitrage_asset_to_stable_direction_2_outcomes() {
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
+    // Deposit spot coins to escrow for withdrawal during arbitrage
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(3000, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(3000, ctx);
+    coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
+
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
 
@@ -479,6 +531,11 @@ fun test_execute_optimal_arbitrage_with_dust_balance_return() {
     let mut escrow = create_test_escrow_with_markets(3, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
+    // Deposit spot coins to escrow for withdrawal during arbitrage
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(1000, ctx);
+    coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
+
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
 
@@ -486,7 +543,7 @@ fun test_execute_optimal_arbitrage_with_dust_balance_return() {
     let stable_for_arb = coin::mint_for_testing<TEST_COIN_B>(500, ctx);
     let asset_for_arb = coin::zero<TEST_COIN_A>(ctx);
 
-    let (stable_profit, asset_profit, dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
+    let (stable_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage(
         &mut spot_pool,
         &mut escrow,
         &session,
@@ -529,6 +586,9 @@ fun test_execute_optimal_arbitrage_both_zero_amounts() {
     );
 
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
+
+    // Initialize AMM pools to enable trading
+    initialize_amm_pools(&mut escrow, ctx);
 
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
@@ -585,6 +645,11 @@ fun test_execute_optimal_arbitrage_insufficient_profit() {
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
+    // Deposit spot coins to escrow for withdrawal during arbitrage
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(500, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(500, ctx);
+    coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
+
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
 
@@ -635,6 +700,11 @@ fun test_arbitrage_with_5_outcomes() {
     let mut escrow = create_test_escrow_with_markets(5, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
     add_liquidity_to_conditional_pools(&mut escrow, INITIAL_CONDITIONAL_RESERVE, ctx);
 
+    // Deposit spot coins to escrow for withdrawal during arbitrage
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(5000, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(5000, ctx);
+    coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
+
     let proposal_id = object::id_from_address(@0xABC);
     let session = swap_core::create_test_swap_session(proposal_id);
 
@@ -678,9 +748,9 @@ fun test_burn_complete_set_with_zero_amount() {
 
     let mut escrow = create_test_escrow_with_markets(2, INITIAL_CONDITIONAL_RESERVE, &clock, ctx);
 
-    // Deposit minimal coins
-    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(0, ctx);
-    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(0, ctx);
+    // Deposit some coins (needed for escrow to have balance, even if we withdraw 0)
+    let asset_deposit = coin::mint_for_testing<TEST_COIN_A>(100, ctx);
+    let stable_deposit = coin::mint_for_testing<TEST_COIN_B>(100, ctx);
     coin_escrow::deposit_spot_coins(&mut escrow, asset_deposit, stable_deposit);
 
     let market_id = object::id_from_address(@0xABC);

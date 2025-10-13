@@ -851,6 +851,71 @@ fun test_zero_liquidity() {
 }
 
 #[test]
+/// Test with zero spot pool liquidity
+fun test_zero_spot_liquidity() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Zero asset in spot pool
+    let spot_pool_zero_asset = create_test_spot_pool(
+        0,          // Zero asset reserve
+        1_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conditional_pools = create_test_conditional_pools_2(
+        500_000, 500_000,
+        500_000, 500_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should handle gracefully, not abort
+    let (amount, profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool_zero_asset,
+        &conditional_pools,
+        0,
+    );
+
+    // No arbitrage possible with zero spot liquidity
+    assert!(amount == 0, 0);
+    assert!(profit == 0, 1);
+
+    cleanup_spot_pool(spot_pool_zero_asset);
+    cleanup_conditional_pools(conditional_pools);
+
+    // Zero stable in spot pool
+    let spot_pool_zero_stable = create_test_spot_pool(
+        1_000_000,
+        0,          // Zero stable reserve
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conditional_pools_2 = create_test_conditional_pools_2(
+        500_000, 500_000,
+        500_000, 500_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should handle gracefully, not abort
+    let (amount_2, profit_2, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool_zero_stable,
+        &conditional_pools_2,
+        0,
+    );
+
+    // No arbitrage possible with zero spot liquidity
+    assert!(amount_2 == 0, 2);
+    assert!(profit_2 == 0, 3);
+
+    cleanup_spot_pool(spot_pool_zero_stable);
+    cleanup_conditional_pools(conditional_pools_2);
+    ts::end(scenario);
+}
+
+#[test]
 /// Test infinite cost guard: asking for more than pool holds
 fun test_infinite_cost_guard() {
     let mut scenario = ts::begin(ADMIN);
@@ -1407,9 +1472,8 @@ fun test_unimodality_profit_at_b_grid() {
         return
     };
 
-    // Find b* via optimal search
-    let market_scale = if (r_asset / 10_000 == 0) { 100 } else { r_asset / 10_000 };
-    let (b_star, _p_star) = arbitrage_math::test_only_optimal_b_search(&ts, &as_vals, &bs, market_scale);
+    // Find b* via optimal search (no threshold needed - ternary search finds global optimum)
+    let (b_star, _p_star) = arbitrage_math::test_only_optimal_b_search(&ts, &as_vals, &bs);
 
     // Sample around b* (±5 steps, step = ub / 200)
     let step = if (ub / 200 == 0) { 1 } else { ub / 200 };

@@ -84,7 +84,7 @@ public fun get_quote_asset_to_stable<AssetType, StableType>(
     // ✅ Early exit checks
     // ✅ Checks both directions automatically
     let (optimal_arb_amount, expected_arb_profit, _is_spot_to_cond) =
-        arbitrage_math::compute_optimal_arbitrage_bidirectional(
+        arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
             spot,
             conditionals,
             0,  // No min profit for quote (show all opportunities)
@@ -112,7 +112,7 @@ public fun get_quote_stable_to_asset<AssetType, StableType>(
 
     // Use NEW EFFICIENT BIDIRECTIONAL SOLVER (same as above)
     let (optimal_arb_amount, expected_arb_profit, _is_spot_to_cond) =
-        arbitrage_math::compute_optimal_arbitrage_bidirectional(
+        arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
             spot,
             conditionals,
             0,  // No min profit for quote
@@ -159,7 +159,7 @@ public fun simulate_pure_arbitrage_with_min_profit<AssetType, StableType>(
     conditionals: &vector<LiquidityPool>,
     min_profit: u64,
 ): (u64, u128, bool) {
-    arbitrage_math::compute_optimal_arbitrage_bidirectional(
+    arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         min_profit,
@@ -172,7 +172,7 @@ public fun simulate_pure_arbitrage_asset_to_stable<AssetType, StableType>(
     spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
 ): (u64, u128) {
-    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_bidirectional(
+    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         0,  // No min profit
@@ -192,7 +192,7 @@ public fun simulate_pure_arbitrage_stable_to_asset<AssetType, StableType>(
     spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
 ): (u64, u128) {
-    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_bidirectional(
+    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         0,  // No min profit

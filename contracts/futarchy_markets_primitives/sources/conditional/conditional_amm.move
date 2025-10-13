@@ -1,7 +1,7 @@
 module futarchy_markets_primitives::conditional_amm;
 
 use futarchy_one_shot_utils::math;
-use sui::object::ID;
+use sui::object::{Self, ID, UID};
 use futarchy_markets_primitives::oracle::{Self, Oracle};
 use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
@@ -9,6 +9,8 @@ use sui::clock::Clock;
 use sui::event;
 use std::u64;
 use sui::tx_context::TxContext;  // Audit fix: missing import
+use sui::balance::{Self, Balance};  // For LP reward system
+use sui::sui::SUI;  // For LP reward system
 
 // === Introduction ===
 // This is a Uniswap V2-style XY=K AMM implementation for futarchy prediction markets.
@@ -68,6 +70,12 @@ public struct LiquidityPool has key, store {
     simple_twap: SimpleTWAP,  // SimpleTWAP oracle (for external consumers)
     protocol_fees: u64, // Track accumulated stable fees
     lp_supply: u64, // Track total LP shares for this pool
+
+    // LP Reward System (Subsidy Distribution)
+    // NOTE: Only for CONDITIONAL pools (not spot pools)
+    // Subsidies are distributed to LPs as SUI rewards (not added to reserves)
+    lp_rewards: Balance<SUI>,  // Accumulated SUI rewards from subsidies
+    rewards_per_lp_share_accumulator: u128,  // Fixed-point accumulator (scaled by 1e9)
 }
 
 // === Events ===
@@ -155,6 +163,10 @@ public fun new_pool(
         simple_twap: simple_twap_oracle,
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
+
+        // LP Reward System (initialized empty)
+        lp_rewards: balance::zero<SUI>(),
+        rewards_per_lp_share_accumulator: 0,
     };
 
     pool
@@ -831,26 +843,86 @@ public fun reset_protocol_fees(pool: &mut LiquidityPool) {
     pool.protocol_fees = 0;
 }
 
-/// Add subsidy to reserves (for keeper-cranked subsidy system)
-/// Directly increases reserves without minting LP tokens
-/// Benefits existing LPs by increasing k
+/// Add subsidy as LP rewards (CORRECT IMPLEMENTATION)
+/// Accumulates SUI rewards for LPs to claim later
+/// Does NOT manipulate pool reserves or price
 ///
-/// CRITICAL: Only callable by liquidity_subsidy module to prevent manipulation
-public fun add_subsidy_to_reserves(
+/// ## Reward Accumulation Formula
+/// rewards_per_lp_share += (subsidy_amount * 1e9) / lp_supply
+///
+/// ## Security
+/// - No price manipulation (reserves unchanged)
+/// - Fair distribution (proportional to LP ownership)
+/// - Hard-backed (actual SUI tokens deposited)
+///
+/// CRITICAL: Only callable by subsidy_escrow module
+public fun accumulate_subsidy_rewards(
     pool: &mut LiquidityPool,
-    asset_add: u64,
-    stable_add: u64,
+    subsidy: Balance<SUI>,
 ) {
-    // K-GUARD: Adding subsidy should increase k (benefits LPs)
-    let k_before = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
+    let subsidy_amount = subsidy.value();
+    assert!(subsidy_amount > 0, EZeroAmount);
+    assert!(pool.lp_supply > 0, EZeroLiquidity); // Prevent division by zero
 
-    // Add to reserves directly
-    pool.asset_reserve = pool.asset_reserve + asset_add;
-    pool.stable_reserve = pool.stable_reserve + stable_add;
+    // Calculate reward per LP share (fixed-point math, scaled by 1e9)
+    let reward_per_share = (subsidy_amount as u128) * 1_000_000_000 / (pool.lp_supply as u128);
 
-    // K-GUARD: Validate k increased
-    let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
-    assert!(k_after > k_before, EKInvariantViolation);
+    // Update accumulator
+    pool.rewards_per_lp_share_accumulator = pool.rewards_per_lp_share_accumulator + reward_per_share;
+
+    // Add subsidy to reward pool (actual tokens!)
+    pool.lp_rewards.join(subsidy);
+}
+
+/// Get accumulated rewards for an LP amount (view function)
+/// Returns claimable SUI amount
+public fun get_claimable_rewards(
+    pool: &LiquidityPool,
+    lp_amount: u64,
+    already_claimed: u128,
+): u64 {
+    if (lp_amount == 0) { return 0 };
+
+    // Calculate total earned: lp_amount * accumulator / 1e9
+    let total_earned = (lp_amount as u128) * pool.rewards_per_lp_share_accumulator / 1_000_000_000;
+
+    // Claimable = total_earned - already_claimed
+    if (total_earned > already_claimed) {
+        ((total_earned - already_claimed) as u64)
+    } else {
+        0
+    }
+}
+
+/// Get rewards per LP share accumulator (view function)
+public fun get_rewards_accumulator(pool: &LiquidityPool): u128 {
+    pool.rewards_per_lp_share_accumulator
+}
+
+/// Get total accumulated rewards in pool (view function)
+public fun get_total_rewards(pool: &LiquidityPool): u64 {
+    pool.lp_rewards.value()
+}
+
+/// Get LP rewards balance (view function) - alias for get_total_rewards
+public fun get_lp_rewards(pool: &LiquidityPool): u64 {
+    pool.lp_rewards.value()
+}
+
+/// Extract all accumulated rewards from pool
+/// Only callable from futarchy_markets_core (for claim operations)
+/// Leaves pool in clean state with zero rewards
+///
+/// ## Security
+/// - Caller must verify LP ownership and DAO check
+/// - All tokens are extracted (hard backing proof)
+public fun extract_all_rewards(
+    pool: &mut LiquidityPool,
+): Balance<SUI> {
+    let reward_amount = pool.lp_rewards.value();
+
+    // Extract all rewards, leaving pool with zero balance
+    pool.lp_rewards.withdraw_all()
 }
 
 // === Test Functions ===
@@ -887,6 +959,8 @@ public fun create_test_pool(
         simple_twap: simple_twap::new(initial_price, clock),  // Uniswap V2 style
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
+        lp_rewards: balance::zero<SUI>(),
+        rewards_per_lp_share_accumulator: 0,
     }
 }
 
@@ -929,6 +1003,8 @@ public fun create_pool_for_testing(
         simple_twap,
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
+        lp_rewards: balance::zero<SUI>(),
+        rewards_per_lp_share_accumulator: 0,
     }
 }
 
@@ -945,10 +1021,13 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         simple_twap,
         protocol_fees: _,
         lp_supply: _,
+        lp_rewards,
+        rewards_per_lp_share_accumulator: _,
     } = pool;
     id.delete();
     oracle.destroy_for_testing();
     simple_twap.destroy_for_testing();
+    balance::destroy_for_testing(lp_rewards);
 }
 
 #[test_only]

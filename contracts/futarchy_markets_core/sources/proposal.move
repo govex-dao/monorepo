@@ -40,6 +40,7 @@ const ETooManyActions: u64 = 14;
 const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
+const EDAOCannotClaimRewards: u64 = 18; // DAO cannot claim subsidy rewards (circular)
 
 // === Constants ===
 
@@ -212,6 +213,15 @@ public struct ProposalOutcomeAdded has copy, drop {
     dao_id: ID,
     new_outcome_idx: u64,
     creator: address,
+    timestamp: u64,
+}
+
+/// Event emitted when LP rewards are claimed
+public struct SubsidyRewardsClaimed has copy, drop {
+    proposal_id: ID,
+    dao_id: ID,
+    liquidity_provider: address,
+    total_rewards_claimed: u64,
     timestamp: u64,
 }
 
@@ -1527,6 +1537,83 @@ public entry fun set_withdraw_only_mode<AssetType, StableType>(
     let provider = *proposal.liquidity_provider.borrow();
     assert!(tx_context::sender(ctx) == provider, ENotLiquidityProvider);
     proposal.withdraw_only_mode = withdraw_only;
+}
+
+/// Claim accumulated subsidy rewards from conditional AMMs after proposal finalized
+/// Only callable by external liquidity providers (not DAO)
+///
+/// ## Security
+/// - CRITICAL: Prevents DAO from claiming rewards (circular subsidy)
+/// - Only external LPs can claim (uses_dao_liquidity = false)
+/// - Only after finalization (market resolved)
+/// - Only by actual liquidity provider
+///
+/// ## Flow
+/// 1. Verify proposal finalized
+/// 2. Verify caller is liquidity provider
+/// 3. Verify NOT DAO liquidity (prevent circular rewards!)
+/// 4. Extract rewards from all conditional AMM pools
+/// 5. Return as SUI coin
+///
+/// ## Example
+/// ```
+/// // External LP provided 1000 SUI liquidity
+/// // DAO treasury cranked 10 SUI subsidies across 5 markets = 50 SUI total
+/// // LP can claim their share of the 50 SUI rewards
+/// let rewards = claim_conditional_amm_rewards(proposal, escrow, clock, ctx);
+/// // Returns Coin<SUI> with accumulated rewards
+/// ```
+public fun claim_conditional_amm_rewards<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): Coin<sui::sui::SUI> {
+    use sui::coin;
+    use sui::balance;
+
+    // 1. CRITICAL: Check proposal is finalized (market resolved)
+    assert!(proposal.state == STATE_FINALIZED, ENotFinalized);
+
+    // 2. Verify caller is the liquidity provider
+    assert!(proposal.liquidity_provider.is_some(), ENotLiquidityProvider);
+    let provider = *proposal.liquidity_provider.borrow();
+    assert!(tx_context::sender(ctx) == provider, ENotLiquidityProvider);
+
+    // 3. CRITICAL SECURITY: Prevent DAO from claiming subsidy rewards (circular!)
+    // DAO pays for subsidies to incentivize external liquidity
+    // If DAO could claim its own subsidies → pointless circular flow
+    assert!(!proposal.liquidity_config.uses_dao_liquidity, EDAOCannotClaimRewards);
+
+    // 4. Extract rewards from all conditional AMM pools
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+    let pools = market_state::borrow_amm_pools_mut(market_state);
+    let mut total_rewards = balance::zero<sui::sui::SUI>();
+
+    let mut i = 0;
+    while (i < pools.length()) {
+        let pool = &mut pools[i];
+
+        // Extract all accumulated rewards from this pool
+        let pool_rewards = conditional_amm::extract_all_rewards(pool);
+        total_rewards.join(pool_rewards);
+
+        i = i + 1;
+    };
+
+    let total_amount = total_rewards.value();
+
+    // 5. Emit claim event
+    event::emit(SubsidyRewardsClaimed {
+        proposal_id: get_id(proposal),
+        dao_id: get_dao_id(proposal),
+        liquidity_provider: provider,
+        total_rewards_claimed: total_amount,
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // 6. Convert to coin and return to caller
+    coin::from_balance(total_rewards, ctx)
 }
 
 public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &vector<String> {

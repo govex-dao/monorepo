@@ -75,7 +75,8 @@ fun test_store_conditional_asset_creates_new_position() {
     clock::set_for_testing(&mut clock, 1000000);
 
     let owner = @0xAAA;
-    let proposal_id = object::id_from_address(@0x100);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
     let outcome_index = 0;
     let amount = 1_000_000;
 
@@ -98,6 +99,11 @@ fun test_store_conditional_asset_creates_new_position() {
     assert!(swap_position_registry::total_positions(&registry) == 1, 1);
     assert!(swap_position_registry::has_position(&registry, owner, proposal_id), 2);
 
+    // Cleanup: crank position before destroying
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -113,7 +119,8 @@ fun test_store_conditional_asset_merges_existing_position() {
     clock::set_for_testing(&mut clock, 1000000);
 
     let owner = @0xAAA;
-    let proposal_id = object::id_from_address(@0x100);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
     let outcome_index = 0;
 
     // Store first coin
@@ -145,6 +152,11 @@ fun test_store_conditional_asset_merges_existing_position() {
     assert!(!created2, 1);
     assert!(swap_position_registry::total_positions(&registry) == 1, 2);
 
+    // Cleanup: crank position before destroying
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -160,7 +172,8 @@ fun test_store_conditional_stable_creates_new_position() {
     clock::set_for_testing(&mut clock, 1000000);
 
     let owner = @0xBBB;
-    let proposal_id = object::id_from_address(@0x200);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
     let outcome_index = 1;
     let amount = 2_000_000;
 
@@ -179,6 +192,11 @@ fun test_store_conditional_stable_creates_new_position() {
     assert!(created, 0);
     assert!(swap_position_registry::has_position(&registry, owner, proposal_id), 1);
 
+    // Cleanup: crank position before destroying
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -252,7 +270,8 @@ fun test_store_multiple_outcomes_same_position() {
     clock::set_for_testing(&mut clock, 1000000);
 
     let owner = @0xAAA;
-    let proposal_id = object::id_from_address(@0x100);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
 
     // Store outcome 0 asset
     let coin0_asset = coin::mint_for_testing<TEST_COIN_A>(100_000, ctx);
@@ -278,6 +297,11 @@ fun test_store_multiple_outcomes_same_position() {
     // Verify only one position created
     assert!(swap_position_registry::total_positions(&registry) == 1, 3);
 
+    // Cleanup: crank position before destroying
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -333,12 +357,11 @@ fun test_start_crank_position_not_found() {
     let owner = @0xAAA;
     let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
 
-    // Try to crank non-existent position
+    // Try to crank non-existent position (will abort before returning progress)
     let _progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
 
-    proposal::destroy_for_testing(proposal);
-    destroy_registry(registry);
-    ts::end(scenario);
+    // Unreachable cleanup (test aborts above)
+    abort 0
 }
 
 #[test]
@@ -361,13 +384,11 @@ fun test_start_crank_proposal_not_finalized() {
         &mut registry, owner, proposal_id, 0, coin, &clock, ctx
     );
 
-    // Try to crank before finalization
+    // Try to crank before finalization (will abort before returning progress)
     let _progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
 
-    proposal::destroy_for_testing(proposal);
-    destroy_registry(registry);
-    clock::destroy_for_testing(clock);
-    ts::end(scenario);
+    // Unreachable cleanup (test aborts above)
+    abort 0
 }
 
 #[test]
@@ -421,7 +442,8 @@ fun test_has_position() {
 
     let owner1 = @0xAAA;
     let owner2 = @0xBBB;
-    let proposal_id = object::id_from_address(@0x100);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
 
     // No position initially
     assert!(!swap_position_registry::has_position(&registry, owner1, proposal_id), 0);
@@ -436,6 +458,11 @@ fun test_has_position() {
     assert!(swap_position_registry::has_position(&registry, owner1, proposal_id), 1);
     assert!(!swap_position_registry::has_position(&registry, owner2, proposal_id), 2);
 
+    // Cleanup: crank the position before destroying registry
+    let progress = swap_position_registry::start_crank(&mut registry, owner1, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -452,27 +479,41 @@ fun test_total_positions_tracking() {
 
     assert!(swap_position_registry::total_positions(&registry) == 0, 0);
 
+    // Create proposals
+    let mut proposal1 = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id1 = object::id(&proposal1);
+    let mut proposal2 = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 0, true, ctx);
+    let proposal_id2 = object::id(&proposal2);
+
     // Add position 1
     let coin1 = coin::mint_for_testing<TEST_COIN_A>(100_000, ctx);
     swap_position_registry::store_conditional_asset(
-        &mut registry, @0xAAA, object::id_from_address(@0x100), 0, coin1, &clock, ctx
+        &mut registry, @0xAAA, proposal_id1, 0, coin1, &clock, ctx
     );
     assert!(swap_position_registry::total_positions(&registry) == 1, 1);
 
     // Add position 2
     let coin2 = coin::mint_for_testing<TEST_COIN_A>(200_000, ctx);
     swap_position_registry::store_conditional_asset(
-        &mut registry, @0xBBB, object::id_from_address(@0x200), 0, coin2, &clock, ctx
+        &mut registry, @0xBBB, proposal_id2, 0, coin2, &clock, ctx
     );
     assert!(swap_position_registry::total_positions(&registry) == 2, 2);
 
     // Merge into position 1 (shouldn't increase count)
     let coin3 = coin::mint_for_testing<TEST_COIN_A>(300_000, ctx);
     swap_position_registry::store_conditional_asset(
-        &mut registry, @0xAAA, object::id_from_address(@0x100), 1, coin3, &clock, ctx
+        &mut registry, @0xAAA, proposal_id1, 1, coin3, &clock, ctx
     );
     assert!(swap_position_registry::total_positions(&registry) == 2, 3);
 
+    // Cleanup: crank both positions
+    let progress1 = swap_position_registry::start_crank(&mut registry, @0xAAA, &proposal1);
+    swap_position_registry::finish_crank(progress1, &mut registry, &clock, ctx);
+    let progress2 = swap_position_registry::start_crank(&mut registry, @0xBBB, &proposal2);
+    swap_position_registry::finish_crank(progress2, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal1);
+    proposal::destroy_for_testing(proposal2);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -525,6 +566,7 @@ fun test_get_cranking_metrics() {
 
     let mut registry = create_test_registry<TEST_COIN_A, TEST_COIN_B>(ctx);
     let mut clock = clock::create_for_testing(ctx);
+    clock::set_for_testing(&mut clock, 1000000);
 
     // Initial metrics
     let (active, cranked, success_rate) = swap_position_registry::get_cranking_metrics(&registry);
@@ -533,9 +575,11 @@ fun test_get_cranking_metrics() {
     assert!(success_rate == 0, 2);
 
     // Add position
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
     let coin = coin::mint_for_testing<TEST_COIN_A>(100_000, ctx);
     swap_position_registry::store_conditional_asset(
-        &mut registry, @0xAAA, object::id_from_address(@0x100), 0, coin, &clock, ctx
+        &mut registry, @0xAAA, proposal_id, 0, coin, &clock, ctx
     );
 
     // Metrics with active position
@@ -544,6 +588,11 @@ fun test_get_cranking_metrics() {
     assert!(cranked2 == 0, 4);
     assert!(success_rate2 == 0, 5); // No cranks yet
 
+    // Cleanup: crank the position before destroying registry
+    let progress = swap_position_registry::start_crank(&mut registry, @0xAAA, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -578,6 +627,10 @@ fun test_can_crank_position() {
     // Cannot crank when not finalized
     assert!(!swap_position_registry::can_crank_position(&registry, owner, &proposal_not_finalized), 2);
 
+    // Cleanup: crank the position before destroying registry
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal_finalized);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
+
     proposal::destroy_for_testing(proposal_not_finalized);
     proposal::destroy_for_testing(proposal_finalized);
     destroy_registry(registry);
@@ -608,6 +661,10 @@ fun test_get_outcome_count_for_position() {
     // Get outcome count
     let count = swap_position_registry::get_outcome_count_for_position(&registry, owner, &proposal);
     assert!(count == (outcome_count as u64), 0);
+
+    // Cleanup: crank the position before destroying registry
+    let progress = swap_position_registry::start_crank(&mut registry, owner, &proposal);
+    swap_position_registry::finish_crank(progress, &mut registry, &clock, ctx);
 
     proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
@@ -766,7 +823,8 @@ fun test_multiple_users_same_proposal() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 1000000);
 
-    let proposal_id = object::id_from_address(@0x100);
+    let mut proposal = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id = object::id(&proposal);
     let user1 = @0xAAA;
     let user2 = @0xBBB;
     let user3 = @0xCCC;
@@ -787,6 +845,15 @@ fun test_multiple_users_same_proposal() {
     assert!(swap_position_registry::has_position(&registry, user2, proposal_id), 2);
     assert!(swap_position_registry::has_position(&registry, user3, proposal_id), 3);
 
+    // Cleanup: crank all 3 positions before destroying registry
+    let progress1 = swap_position_registry::start_crank(&mut registry, user1, &proposal);
+    swap_position_registry::finish_crank(progress1, &mut registry, &clock, ctx);
+    let progress2 = swap_position_registry::start_crank(&mut registry, user2, &proposal);
+    swap_position_registry::finish_crank(progress2, &mut registry, &clock, ctx);
+    let progress3 = swap_position_registry::start_crank(&mut registry, user3, &proposal);
+    swap_position_registry::finish_crank(progress3, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);
@@ -802,9 +869,12 @@ fun test_same_user_multiple_proposals() {
     clock::set_for_testing(&mut clock, 1000000);
 
     let owner = @0xAAA;
-    let proposal_id1 = object::id_from_address(@0x100);
-    let proposal_id2 = object::id_from_address(@0x200);
-    let proposal_id3 = object::id_from_address(@0x300);
+    let mut proposal1 = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id1 = object::id(&proposal1);
+    let mut proposal2 = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 0, true, ctx);
+    let proposal_id2 = object::id(&proposal2);
+    let mut proposal3 = create_test_proposal<TEST_COIN_A, TEST_COIN_B>(2, 1, true, ctx);
+    let proposal_id3 = object::id(&proposal3);
 
     // User stores positions for 3 different proposals
     let coin1 = coin::mint_for_testing<TEST_COIN_A>(100_000, ctx);
@@ -822,6 +892,17 @@ fun test_same_user_multiple_proposals() {
     assert!(swap_position_registry::has_position(&registry, owner, proposal_id2), 2);
     assert!(swap_position_registry::has_position(&registry, owner, proposal_id3), 3);
 
+    // Cleanup: crank all 3 positions before destroying registry
+    let progress1 = swap_position_registry::start_crank(&mut registry, owner, &proposal1);
+    swap_position_registry::finish_crank(progress1, &mut registry, &clock, ctx);
+    let progress2 = swap_position_registry::start_crank(&mut registry, owner, &proposal2);
+    swap_position_registry::finish_crank(progress2, &mut registry, &clock, ctx);
+    let progress3 = swap_position_registry::start_crank(&mut registry, owner, &proposal3);
+    swap_position_registry::finish_crank(progress3, &mut registry, &clock, ctx);
+
+    proposal::destroy_for_testing(proposal1);
+    proposal::destroy_for_testing(proposal2);
+    proposal::destroy_for_testing(proposal3);
     destroy_registry(registry);
     clock::destroy_for_testing(clock);
     ts::end(scenario);

@@ -544,7 +544,7 @@ public entry fun lock_intents_and_start_raise<RaiseToken, StableCoin>(
 /// - min_raise_amount: Protocol minimum (L_0)
 /// - max_raise_amount: Optional protocol maximum (U_0)
 /// - allowed_prices: Sorted price ticks (≤128 for on-chain feasibility)
-public entry fun create_raise_2d<RaiseToken: drop, StableCoin: drop>(
+public entry fun create_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     factory: &factory::Factory,
     fee_manager: &mut fee::FeeManager,
     treasury_cap: TreasuryCap<RaiseToken>,
@@ -1130,7 +1130,7 @@ public entry fun crank_settlement_2d<RT, SC>(
 /// Finalize 2D settlement: record (P*, Q*, T*), mint Q* tokens, pay rewards
 /// For 2D auctions, this mints the discovered quantity Q* rather than fixed supply
 /// Pays finalizer 75% of remaining crank pool, initiator gets 25%
-public fun finalize_settlement_2d<RaiseToken: drop, StableCoin: drop>(
+public fun finalize_settlement_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     s: &mut CapSettlement2D,
     clock: &Clock,
@@ -1526,7 +1526,7 @@ fun complete_raise_internal<RaiseToken: drop + store, StableCoin: drop + store>(
 /// Claim tokens for 2D auction winners (FOK semantics)
 /// In 2D auctions, bidders either get EXACTLY their min_tokens or get a full refund
 /// Winner criteria: price_cap >= P* AND [L_i, U_i] contains T*
-public entry fun claim_tokens_2d<RaiseToken, StableCoin>(
+public entry fun claim_tokens_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     recipient: address,
     ctx: &mut TxContext,
@@ -1640,6 +1640,7 @@ public entry fun claim_tokens_2d<RaiseToken, StableCoin>(
 /// - Transferable claims (optional feature)
 public entry fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
     raise: &mut Raise<RaiseToken, StableCoin>,
+    image_config: &LaunchpadImageConfig,
     contributors: vector<address>,
     ctx: &mut TxContext,
 ) {
@@ -1688,7 +1689,7 @@ public entry fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
                 stable_refund,
                 &raise.description
             );
-            let image_url = string::utf8(DEFAULT_CLAIM_NFT_IMAGE);
+            let image_url = get_claim_image_url(image_config);
 
             let nft = ClaimNFT<RaiseToken, StableCoin> {
                 id: object::new(ctx),
@@ -1726,7 +1727,7 @@ public entry fun mint_claim_nfts_2d<RaiseToken, StableCoin>(
 /// Multiple bidders can claim simultaneously without any conflicts!
 ///
 /// Security: NFT is hot potato - must be consumed (destroyed) in this function.
-public entry fun claim_with_nft_2d<RaiseToken, StableCoin>(
+public entry fun claim_with_nft_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     nft: ClaimNFT<RaiseToken, StableCoin>,
     ctx: &mut TxContext,
@@ -1791,7 +1792,7 @@ public entry fun claim_with_nft_2d<RaiseToken, StableCoin>(
 /// Cleanup resources for a failed raise
 /// This properly handles pre-created DAO components that couldn't be shared
 /// Objects with UID need special handling - they can't just be dropped
-public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
+public entry fun cleanup_failed_raise<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1892,7 +1893,7 @@ public entry fun cleanup_failed_raise<RaiseToken: drop, StableCoin>(
 }
 
 /// Refund for eligible contributors who were partially refunded due to hard cap
-public entry fun claim_hard_cap_refund<RaiseToken, StableCoin>(
+public entry fun claim_hard_cap_refund<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     ctx: &mut TxContext,
 ) {
@@ -1921,7 +1922,7 @@ public entry fun claim_hard_cap_refund<RaiseToken, StableCoin>(
 
 /// Refund for failed raises only
 /// Note: For successful raises, use claim_tokens() which auto-refunds ineligible contributors
-public entry fun claim_refund<RaiseToken, StableCoin>(
+public entry fun claim_refund<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -1976,7 +1977,7 @@ public entry fun claim_refund<RaiseToken, StableCoin>(
 /// After a successful raise and a claim period, sweep any remaining "dust" tokens or stablecoins.
 /// - Raise tokens: Go to creator (unsold governance tokens from rounding)
 /// - Stablecoins: Go to DAO treasury (contributor funds from rounding)
-public entry fun sweep_dust<RaiseToken, StableCoin: drop>(
+public entry fun sweep_dust<RaiseToken: drop + store, StableCoin: drop + store>(
     raise: &mut Raise<RaiseToken, StableCoin>,
     creator_cap: &CreatorCap,
     dao_account: &mut Account<FutarchyConfig>,  // DAO Account to receive stablecoin dust
@@ -2036,7 +2037,7 @@ public entry fun sweep_dust<RaiseToken, StableCoin: drop>(
 /// - Does NOT mint tokens upfront (will mint Q* at settlement)
 /// - Uses allowed_prices instead of allowed_caps
 /// - Sets is_2d_auction = true
-fun init_raise_2d<RaiseToken: drop, StableCoin: drop>(
+fun init_raise_2d<RaiseToken: drop + store, StableCoin: drop + store>(
     treasury_cap: TreasuryCap<RaiseToken>,
     coin_metadata: CoinMetadata<RaiseToken>,
     affiliate_id: String,
@@ -2232,6 +2233,7 @@ public fun admin_review_text<RT, SC>(r: &Raise<RT, SC>): &Option<String> {
 /// Set admin trust score and review (called by protocol admin actions)
 public fun set_admin_trust_score<RT, SC>(
     raise: &mut Raise<RT, SC>,
+    _validator_cap: &factory::ValidatorAdminCap,
     trust_score: u64,
     review_text: String,
 ) {

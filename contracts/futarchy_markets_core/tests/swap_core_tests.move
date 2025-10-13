@@ -37,7 +37,11 @@ fun create_test_escrow_with_markets(
     clock: &Clock,
     ctx: &mut TxContext,
 ): TokenEscrow<TEST_COIN_A, TEST_COIN_B> {
-    let proposal_id = object::id_from_address(@0xABC);
+    // Create unique market_id by creating a real object
+    let dummy_uid = object::new(ctx);
+    let proposal_id = object::uid_to_inner(&dummy_uid);
+    object::delete(dummy_uid);
+
     let dao_id = object::id_from_address(@0xDEF);
 
     // Create market state with pools
@@ -65,6 +69,45 @@ fun create_test_escrow_with_markets(
     )
 }
 
+/// Initialize AMM pools in market state
+#[test_only]
+fun initialize_amm_pools(escrow: &mut TokenEscrow<TEST_COIN_A, TEST_COIN_B>, ctx: &mut TxContext) {
+    let market_state = coin_escrow::get_market_state_mut(escrow);
+
+    // Check if pools already initialized
+    if (market_state::has_amm_pools(market_state)) {
+        return
+    };
+
+    // Get the market_id to ensure pools match
+    let market_id = market_state::market_id(market_state);
+
+    let outcome_count = market_state::outcome_count(market_state);
+    let mut pools = vector::empty();
+    let mut i = 0;
+    let clock = create_test_clock(1000000, ctx);
+    while (i < outcome_count) {
+        // Create pool with correct market_id
+        let pool = conditional_amm::create_test_pool(
+            market_id,
+            (i as u8), // outcome_idx
+            (DEFAULT_FEE_BPS as u64), // fee_percent
+            1000, // minimal asset_reserve
+            1000, // minimal stable_reserve
+            &clock,
+            ctx
+        );
+        vector::push_back(&mut pools, pool);
+        i = i + 1;
+    };
+    clock::destroy_for_testing(clock);
+
+    market_state::set_amm_pools(market_state, pools);
+
+    // Initialize trading for tests
+    market_state::init_trading_for_testing(market_state);
+}
+
 /// Add liquidity to all conditional pools in escrow
 #[test_only]
 fun add_liquidity_to_pools(
@@ -72,6 +115,9 @@ fun add_liquidity_to_pools(
     reserve_per_outcome: u64,
     ctx: &mut TxContext,
 ) {
+    // Initialize pools first if not already done
+    initialize_amm_pools(escrow, ctx);
+
     let market_state = coin_escrow::get_market_state_mut(escrow);
     let outcome_count = market_state::outcome_count(market_state);
 
@@ -170,6 +216,9 @@ fun test_finalize_swap_session_success() {
 
     let mut escrow = create_test_escrow_with_markets(2, &clock, ctx);
     let mut proposal = create_test_proposal_trading(2, ctx);
+
+    // Initialize AMM pools first (needed for early resolve metrics)
+    initialize_amm_pools(&mut escrow, ctx);
 
     // Initialize early resolve metrics in market state
     let market_state = coin_escrow::get_market_state_mut(&mut escrow);
@@ -326,7 +375,7 @@ fun test_swap_balance_asset_to_stable_multiple_outcomes() {
 }
 
 #[test]
-#[expected_failure(abort_code = 5)] // EInsufficientOutput
+#[expected_failure(abort_code = 2)] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
 fun test_swap_balance_asset_to_stable_insufficient_output() {
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
@@ -572,7 +621,7 @@ fun test_swap_balance_stable_to_asset_multiple_swaps_same_outcome() {
 }
 
 #[test]
-#[expected_failure(abort_code = 5)] // EInsufficientOutput
+#[expected_failure(abort_code = 2)] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
 fun test_swap_balance_stable_to_asset_insufficient_output() {
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
@@ -620,9 +669,12 @@ fun test_complete_swap_session_workflow() {
     add_liquidity_to_pools(&mut escrow, INITIAL_RESERVE, ctx);
     let mut proposal = create_test_proposal_trading(2, ctx);
 
+    // Get market_id before setting metrics
+    let market_state_ref = coin_escrow::get_market_state(&escrow);
+    let market_id = market_state::market_id(market_state_ref);
+
     // Initialize early resolve metrics
     let market_state = coin_escrow::get_market_state_mut(&mut escrow);
-    let market_id = market_state::market_id(market_state);
     let metrics = futarchy_markets_core::early_resolve::new_metrics(0, 1000000);
     market_state::set_early_resolve_metrics(market_state, metrics);
 
@@ -692,6 +744,7 @@ fun test_swap_with_5_outcomes() {
 // === Edge Cases ===
 
 #[test]
+#[expected_failure(abort_code = 6)] // EZeroAmount (from conditional_amm)
 fun test_swap_zero_amount() {
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
@@ -708,8 +761,8 @@ fun test_swap_zero_amount() {
 
     let session = swap_core::begin_swap_session(&escrow);
 
-    // Swap zero amount (should work but return 0)
-    let amount_out = swap_core::swap_balance_asset_to_stable(
+    // Swap zero amount (should abort with EZeroAmount)
+    let _amount_out = swap_core::swap_balance_asset_to_stable(
         &session,
         &mut escrow,
         &mut balance,
@@ -720,10 +773,7 @@ fun test_swap_zero_amount() {
         ctx,
     );
 
-    assert!(amount_out == 0, 0);
-    assert!(conditional_balance::get_balance(&balance, 0, true) == 10000, 1); // Unchanged
-
-    // Cleanup
+    // Cleanup (unreachable due to abort above)
     swap_core::destroy_test_swap_session(session);
     conditional_balance::destroy_for_testing(balance);
     coin_escrow::destroy_for_testing(escrow);

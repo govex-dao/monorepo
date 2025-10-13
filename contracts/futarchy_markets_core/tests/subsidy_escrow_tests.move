@@ -239,15 +239,21 @@ fun test_crank_subsidy_success() {
     let expected_remaining = total_subsidy - crank_amount;
     assert!(subsidy_escrow::escrow_remaining_balance(&escrow) == expected_remaining, 2);
 
-    // Verify pools received subsidy (reserves should increase)
+    // Verify pools received subsidy (in separate reward pool, NOT reserves!)
+    let rewards0 = conditional_amm::get_lp_rewards(vector::borrow(&pools, 0));
+    let rewards1 = conditional_amm::get_lp_rewards(vector::borrow(&pools, 1));
+
+    // Each pool should have received subsidy in rewards field
+    assert!(rewards0 > 0, 3);
+    assert!(rewards1 > 0, 4);
+
+    // Verify reserves are unchanged (subsidy goes to rewards, not reserves!)
     let (asset0, stable0) = conditional_amm::get_reserves(vector::borrow(&pools, 0));
     let (asset1, stable1) = conditional_amm::get_reserves(vector::borrow(&pools, 1));
-
-    // Each pool should have received subsidy proportional to existing reserves
-    assert!(asset0 > 1_000_000_000, 3);
-    assert!(stable0 > 1_000_000_000, 4);
-    assert!(asset1 > 1_000_000_000, 5);
-    assert!(stable1 > 1_000_000_000, 6);
+    assert!(asset0 == 1_000_000_000, 5);
+    assert!(stable0 == 1_000_000_000, 6);
+    assert!(asset1 == 1_000_000_000, 7);
+    assert!(stable1 == 1_000_000_000, 8);
 
     coin::burn_for_testing(keeper_fee_coin);
     subsidy_escrow::destroy_test_escrow(escrow);
@@ -673,31 +679,37 @@ fun test_subsidy_distributed_equally_across_amms() {
     let fee = subsidy_escrow::crank_subsidy(&mut escrow, proposal_id, &mut pools, &clock, ctx);
     coin::burn_for_testing(fee);
 
-    // Verify all pools received subsidy
+    // Verify all pools received subsidy in rewards field (NOT reserves!)
+    let rewards0 = conditional_amm::get_lp_rewards(vector::borrow(&pools, 0));
+    let rewards1 = conditional_amm::get_lp_rewards(vector::borrow(&pools, 1));
+    let rewards2 = conditional_amm::get_lp_rewards(vector::borrow(&pools, 2));
+
+    // All pools should have received rewards
+    assert!(rewards0 > 0, 0);
+    assert!(rewards1 > 0, 1);
+    assert!(rewards2 > 0, 2);
+
+    // Rewards should be similar across pools (within rounding)
+    // Note: Last pool may have slightly more due to integer division remainder
+    let max_rewards = math::max(math::max(rewards0, rewards1), rewards2);
+    let min_rewards = math::min(math::min(rewards0, rewards1), rewards2);
+    let variance = max_rewards - min_rewards;
+
+    // Variance should be minimal (at most a few tokens from rounding)
+    // With 3 pools and ~90M per pool after keeper fee, variance should be < 100
+    assert!(variance < 100, 3);
+
+    // Verify reserves are unchanged (subsidy goes to rewards, not reserves!)
     let (asset0, stable0) = conditional_amm::get_reserves(vector::borrow(&pools, 0));
     let (asset1, stable1) = conditional_amm::get_reserves(vector::borrow(&pools, 1));
     let (asset2, stable2) = conditional_amm::get_reserves(vector::borrow(&pools, 2));
 
-    // All pools should have increased reserves
-    assert!(asset0 > initial_asset, 0);
-    assert!(stable0 > initial_stable, 1);
-    assert!(asset1 > initial_asset, 2);
-    assert!(stable1 > initial_stable, 3);
-    assert!(asset2 > initial_asset, 4);
-    assert!(stable2 > initial_stable, 5);
-
-    // Total increase should be similar across pools (within rounding)
-    let increase0 = (asset0 - initial_asset) + (stable0 - initial_stable);
-    let increase1 = (asset1 - initial_asset) + (stable1 - initial_stable);
-    let increase2 = (asset2 - initial_asset) + (stable2 - initial_stable);
-
-    // Allow some variance due to rounding in proportional distribution
-    let max_increase = math::max(math::max(increase0, increase1), increase2);
-    let min_increase = math::min(math::min(increase0, increase1), increase2);
-    let variance = max_increase - min_increase;
-
-    // Variance should be minimal (< 1% of total increase)
-    assert!(variance < max_increase / 100, 6);
+    assert!(asset0 == initial_asset, 4);
+    assert!(stable0 == initial_stable, 5);
+    assert!(asset1 == initial_asset, 6);
+    assert!(stable1 == initial_stable, 7);
+    assert!(asset2 == initial_asset, 8);
+    assert!(stable2 == initial_stable, 9);
 
     subsidy_escrow::destroy_test_escrow(escrow);
     destroy_pools(pools);
@@ -958,17 +970,13 @@ fun test_destroy_escrow_nonzero_balance() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 1_000_000);
 
-    // Finalize but keep the coins
-    let _remaining = subsidy_escrow::finalize_escrow(&mut escrow, &clock, ctx);
-    // Don't burn the coins - this simulates incorrect cleanup
+    // Mark as finalized WITHOUT extracting balance (using test helper)
+    subsidy_escrow::mark_finalized_for_testing(&mut escrow);
 
-    // Manually set balance to non-zero for testing
-    // (In practice, finalize_escrow withdraws all balance, so this shouldn't happen)
-    // This test would need direct access to modify the balance, which we can't do
-    // So we'll test the destroy function's expectation that balance is zero
-
+    // Try to destroy with nonzero balance (should fail with EInsufficientBalance)
     subsidy_escrow::destroy_escrow(escrow);
 
+    // Cleanup (unreachable due to abort above)
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }

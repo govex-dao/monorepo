@@ -115,6 +115,7 @@ fun test_lp_token_amount() {
     assert!(unified_spot_pool::lp_token_amount(&lp_token) > 0, 0);
 
     // Cleanup
+    clock::destroy_for_testing(clock);
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
     unified_spot_pool::destroy_for_testing(pool);
     ts::end(scenario);
@@ -133,9 +134,10 @@ fun test_lp_token_unlocked() {
 
     let lp_token = unified_spot_pool::add_liquidity(&mut pool, asset_coin, stable_coin, 0, ctx);
 
-    // LP token should be unlocked by default
-    assert!(!unified_spot_pool::is_locked(&lp_token, &clock), 0);
-    assert!(option::is_none(&unified_spot_pool::get_lock_time(&lp_token)), 1);
+    // LP token should be unlocked by default (no proposal lock)
+    assert!(!unified_spot_pool::is_locked_in_proposal(&lp_token), 0);
+    assert!(option::is_none(&unified_spot_pool::get_locked_proposal(&lp_token)), 1);
+    assert!(!unified_spot_pool::is_withdraw_mode(&lp_token), 2);
 
     // Cleanup
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
@@ -145,7 +147,9 @@ fun test_lp_token_unlocked() {
 }
 
 #[test]
-fun test_lp_token_set_lock() {
+fun test_lp_token_proposal_lock() {
+    use sui::object;
+
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
     let clock = create_test_clock(1000000, ctx);
@@ -157,18 +161,20 @@ fun test_lp_token_set_lock() {
 
     let mut lp_token = unified_spot_pool::add_liquidity(&mut pool, asset_coin, stable_coin, 0, ctx);
 
-    // Set lock time
-    let lock_until = 2000000;
-    unified_spot_pool::set_lock_time(&mut lp_token, lock_until);
+    // Create a fake proposal ID
+    let proposal_id = object::id_from_address(@0xABCD);
+
+    // Lock in proposal
+    unified_spot_pool::lock_in_proposal_for_testing(&mut lp_token, proposal_id);
 
     // Verify lock
-    assert!(unified_spot_pool::is_locked(&lp_token, &clock), 0);
-    assert!(option::is_some(&unified_spot_pool::get_lock_time(&lp_token)), 1);
-    assert!(*option::borrow(&unified_spot_pool::get_lock_time(&lp_token)) == lock_until, 2);
+    assert!(unified_spot_pool::is_locked_in_proposal(&lp_token), 0);
+    assert!(option::is_some(&unified_spot_pool::get_locked_proposal(&lp_token)), 1);
+    assert!(*option::borrow(&unified_spot_pool::get_locked_proposal(&lp_token)) == proposal_id, 2);
 
-    // Advance time past lock
-    clock::set_for_testing(&mut clock, 3000000);
-    assert!(!unified_spot_pool::is_locked(&lp_token, &clock), 3);
+    // Unlock from proposal
+    unified_spot_pool::unlock_from_proposal_for_testing(&mut lp_token);
+    assert!(!unified_spot_pool::is_locked_in_proposal(&lp_token), 3);
 
     // Cleanup
     unified_spot_pool::destroy_lp_token_for_testing(lp_token);
@@ -347,8 +353,13 @@ fun test_remove_liquidity_zero_amount() {
 
     let mut pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(DEFAULT_FEE_BPS, ctx);
 
-    // Create LP token with zero amount
-    let lp_token = unified_spot_pool::create_lp_token_for_testing<TEST_COIN_A, TEST_COIN_B>(0, option::none(), ctx);
+    // Create LP token with zero amount (not locked in proposal, not in withdraw mode)
+    let lp_token = unified_spot_pool::create_lp_token_for_testing<TEST_COIN_A, TEST_COIN_B>(
+        0,              // amount
+        option::none(), // locked_in_proposal
+        false,          // withdraw_mode
+        ctx
+    );
 
     let (asset_out, stable_out) = unified_spot_pool::remove_liquidity(&mut pool, lp_token, 0, 0, ctx);
 

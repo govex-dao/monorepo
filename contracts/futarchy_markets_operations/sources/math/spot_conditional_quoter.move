@@ -472,3 +472,39 @@ public fun get_initialization_price<AssetType, StableType>(
 ): u128 {
     unified_spot_pool::get_twap(spot_pool, clock)
 }
+
+// === Test-Only Functions ===
+
+#[test_only]
+public fun create_quote_for_testing(
+    amount_out: u64,
+    effective_price: u64,
+    price_impact_bps: u64,
+    outcome: u64,
+    is_asset_to_stable: bool,
+): SpotQuote {
+    SpotQuote {
+        amount_out,
+        effective_price,
+        price_impact_bps,
+        outcome,
+        is_asset_to_stable,
+    }
+}
+
+#[test_only]
+public fun create_detailed_quote_for_testing(
+    quote: SpotQuote,
+    conditional_tokens_created: u64,
+    excess_conditional_tokens: u64,
+    spot_price_before: u64,
+    spot_price_after: u64,
+): DetailedSpotQuote {
+    DetailedSpotQuote {
+        quote,
+        conditional_tokens_created,
+        excess_conditional_tokens,
+        spot_price_before,
+        spot_price_after,
+    }
+}

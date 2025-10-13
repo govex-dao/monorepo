@@ -151,14 +151,18 @@ public fun create_escrow(
 
 /// Crank subsidy into conditional AMMs (permissionless keeper function)
 ///
-/// ## Flow:
+/// ## Flow (REWARD SYSTEM):
 /// 1. Verify escrow matches proposal and AMMs
 /// 2. Calculate crank amount (remaining_balance / remaining_cranks)
 /// 3. Calculate keeper fee (flat 0.1 SUI per crank)
 /// 4. Split remaining SUI equally across all conditional AMMs
-/// 5. Add to each AMM's reserves proportionally (maintains price)
+/// 5. Accumulate as LP rewards (NO price manipulation!)
 /// 6. Pay keeper fee
 /// 7. Update escrow state
+///
+/// ## CRITICAL: Stable-Only Rewards
+/// Subsidies are distributed as SUI rewards (stable-side) for LPs to claim
+/// Does NOT touch AMM reserves or manipulate prices
 ///
 /// ## Arguments
 /// - `escrow`: Subsidy escrow to crank from
@@ -217,16 +221,42 @@ public fun crank_subsidy(
     // Split subsidy equally across all conditional AMMs
     let amount_per_amm = subsidy_amount / outcome_count;
 
-    // Add to each conditional AMM's reserves proportionally
+    // If amount rounds to zero, skip this crank (insufficient subsidy)
+    // This can happen when subsidy_amount < outcome_count
+    if (amount_per_amm == 0) {
+        // Return keeper fee anyway (keeper still did work)
+        let keeper_fee_balance = escrow.subsidy_balance.split(keeper_fee);
+
+        // Update state
+        escrow.cranks_completed = escrow.cranks_completed + 1;
+        escrow.last_crank_time = option::some(now);
+
+        return coin::from_balance(keeper_fee_balance, ctx)
+    };
+
+    // CRITICAL FIX: Extract subsidy from escrow (hard backing!)
+    let mut subsidy_balance = escrow.subsidy_balance.split(subsidy_amount);
+
+    // Add to each conditional AMM as LP rewards (NOT reserves!)
     let mut j = 0;
     while (j < outcome_count) {
         let pool = vector::borrow_mut(conditional_pools, j);
 
-        // Add reserves proportionally to maintain current price
-        inject_subsidy_proportional(pool, amount_per_amm, clock);
+        // For the last pool, add all remaining balance (handles remainder from integer division)
+        let pool_reward = if (j == outcome_count - 1) {
+            subsidy_balance.withdraw_all()
+        } else {
+            subsidy_balance.split(amount_per_amm)
+        };
+
+        // Accumulate as LP rewards (does NOT touch reserves or price!)
+        conditional_amm::accumulate_subsidy_rewards(pool, pool_reward);
 
         j = j + 1;
     };
+
+    // subsidy_balance should now be empty (all distributed)
+    subsidy_balance.destroy_zero();
 
     // Update escrow state
     escrow.cranks_completed = escrow.cranks_completed + 1;
@@ -234,10 +264,6 @@ public fun crank_subsidy(
 
     // Extract keeper fee from escrow
     let keeper_fee_balance = escrow.subsidy_balance.split(keeper_fee);
-
-    // Extract subsidy amount that was distributed
-    let subsidy_balance = escrow.subsidy_balance.split(subsidy_amount);
-    subsidy_balance.destroy_zero(); // We already added it to pools, just accounting
 
     // Emit crank event
     event::emit(SubsidyCranked {
@@ -308,33 +334,8 @@ public fun destroy_escrow(escrow: SubsidyEscrow) {
 }
 
 // === Internal Helper Functions ===
-
-/// Inject subsidy proportionally into conditional AMM reserves
-/// Maintains current price ratio to avoid manipulation
-///
-/// CRITICAL: Must add proportionally to both reserves to maintain price!
-fun inject_subsidy_proportional(
-    pool: &mut LiquidityPool,
-    total_subsidy: u64,
-    clock: &Clock,
-) {
-    // Get current reserves
-    let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(pool);
-    let total_reserves = asset_reserve + stable_reserve;
-
-    // Calculate proportional split (maintains current price ratio)
-    let stable_ratio = math::mul_div_to_64(stable_reserve, 1_000_000, total_reserves);
-
-    let stable_add = math::mul_div_to_64(total_subsidy, stable_ratio, 1_000_000);
-    let asset_add = total_subsidy - stable_add;
-
-    // Add to reserves (directly mutates pool state)
-    // Note: This increases k, benefiting existing LPs
-    conditional_amm::add_subsidy_to_reserves(pool, asset_add, stable_add);
-
-    // Update TWAP observation after reserve change
-    conditional_amm::update_twap_observation(pool, clock);
-}
+// NOTE: inject_subsidy_proportional() has been REMOVED (phantom liquidity bug)
+// Subsidies are now accumulated as LP rewards via accumulate_subsidy_rewards()
 
 // === Entry Functions ===
 
@@ -447,4 +448,10 @@ public fun destroy_test_escrow(escrow: SubsidyEscrow) {
 
     balance::destroy_for_testing(subsidy_balance);
     object::delete(id);
+}
+
+#[test_only]
+/// Mark escrow as finalized WITHOUT withdrawing balance (for testing error cases)
+public fun mark_finalized_for_testing(escrow: &mut SubsidyEscrow) {
+    escrow.finalized = true;
 }

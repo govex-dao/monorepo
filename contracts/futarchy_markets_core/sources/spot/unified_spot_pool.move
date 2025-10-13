@@ -97,9 +97,14 @@ public struct LPToken<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     /// Amount of LP tokens
     amount: u64,
-    /// Optional lock - if Some(timestamp), LP is locked until proposal at that timestamp ends
-    /// Used when withdrawal would violate minimum liquidity in conditional AMMs
-    locked_until: Option<u64>,
+    /// Proposal lock - if Some(id), LP is locked in proposal {id}
+    /// Liquidity is quantum-split to conditional markets during proposal
+    /// None = LP is in spot pool and can be withdrawn freely
+    locked_in_proposal: Option<ID>,
+    /// Withdraw mode - if true, extract as coins when proposal ends
+    /// If false (default), auto-recombine to spot LP when proposal ends
+    /// Set to true when user tries to withdraw but would violate minimum liquidity
+    withdraw_mode: bool,
 }
 
 // === LP Token Functions ===
@@ -111,32 +116,59 @@ public fun lp_token_amount<AssetType, StableType>(
     lp_token.amount
 }
 
-/// Check if LP token is locked
-public fun is_locked<AssetType, StableType>(
+/// Check if LP is locked in a proposal
+/// Returns true if locked and proposal is not finalized
+public fun is_locked_in_proposal<AssetType, StableType>(
     lp_token: &LPToken<AssetType, StableType>,
-    clock: &Clock,
 ): bool {
-    if (lp_token.locked_until.is_some()) {
-        let lock_time = *lp_token.locked_until.borrow();
-        clock.timestamp_ms() < lock_time
-    } else {
-        false
-    }
+    lp_token.locked_in_proposal.is_some()
 }
 
-/// Get lock time
-public fun get_lock_time<AssetType, StableType>(
+/// Get the proposal ID this LP is locked in
+public fun get_locked_proposal<AssetType, StableType>(
     lp_token: &LPToken<AssetType, StableType>
-): Option<u64> {
-    lp_token.locked_until
+): Option<ID> {
+    lp_token.locked_in_proposal
 }
 
-/// Set lock time
-public fun set_lock_time<AssetType, StableType>(
+/// Check if LP is in withdraw mode
+public fun is_withdraw_mode<AssetType, StableType>(
+    lp_token: &LPToken<AssetType, StableType>
+): bool {
+    lp_token.withdraw_mode
+}
+
+/// Lock LP in a proposal (package-visible for quantum_lp_manager)
+public(package) fun lock_in_proposal<AssetType, StableType>(
     lp_token: &mut LPToken<AssetType, StableType>,
-    lock_until: u64,
+    proposal_id: ID,
 ) {
-    option::fill(&mut lp_token.locked_until, lock_until);
+    lp_token.locked_in_proposal = option::some(proposal_id);
+}
+
+/// Unlock LP from proposal (package-visible for quantum_lp_manager)
+public(package) fun unlock_from_proposal<AssetType, StableType>(
+    lp_token: &mut LPToken<AssetType, StableType>,
+) {
+    lp_token.locked_in_proposal = option::none();
+}
+
+/// Set withdraw mode (package-visible for quantum_lp_manager)
+public(package) fun set_withdraw_mode<AssetType, StableType>(
+    lp_token: &mut LPToken<AssetType, StableType>,
+    mode: bool,
+) {
+    lp_token.withdraw_mode = mode;
+}
+
+/// Destroy LP token (package-visible for quantum_lp_manager claim flow)
+/// Returns the LP amount for calculation purposes
+public(package) fun destroy_lp_token<AssetType, StableType>(
+    lp_token: LPToken<AssetType, StableType>,
+): u64 {
+    let LPToken { id, amount, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    object::delete(id);
+    amount
 }
 
 // === Creation Functions ===
@@ -322,11 +354,12 @@ public fun add_liquidity_and_return<AssetType, StableType>(
 
     pool.lp_supply = pool.lp_supply + lp_amount;
 
-    // Create and return LP token (unlocked by default)
+    // Create and return LP token (unlocked, normal mode by default)
     LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: lp_amount,
-        locked_until: option::none(),
+        locked_in_proposal: option::none(),
+        withdraw_mode: false,
     }
 }
 
@@ -353,7 +386,7 @@ public fun remove_liquidity<AssetType, StableType>(
     assert!((stable_out as u64) >= min_stable_out, ESlippageExceeded);
 
     // Burn LP token
-    let LPToken { id, amount: _, locked_until: _ } = lp_token;
+    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 
     pool.lp_supply = pool.lp_supply - lp_amount;
@@ -902,7 +935,7 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
 #[test_only]
 /// Destroy LP token for testing
 public fun destroy_lp_token_for_testing<AssetType, StableType>(lp_token: LPToken<AssetType, StableType>) {
-    let LPToken { id, amount: _, locked_until: _ } = lp_token;
+    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 }
 
@@ -910,12 +943,31 @@ public fun destroy_lp_token_for_testing<AssetType, StableType>(lp_token: LPToken
 /// Create LP token for testing
 public fun create_lp_token_for_testing<AssetType, StableType>(
     amount: u64,
-    locked_until: Option<u64>,
+    locked_in_proposal: Option<ID>,
+    withdraw_mode: bool,
     ctx: &mut TxContext,
 ): LPToken<AssetType, StableType> {
     LPToken {
         id: object::new(ctx),
         amount,
-        locked_until,
+        locked_in_proposal,
+        withdraw_mode,
     }
+}
+
+#[test_only]
+/// Lock LP token in proposal for testing
+public fun lock_in_proposal_for_testing<AssetType, StableType>(
+    lp_token: &mut LPToken<AssetType, StableType>,
+    proposal_id: ID,
+) {
+    lp_token.locked_in_proposal = option::some(proposal_id);
+}
+
+#[test_only]
+/// Unlock LP token from proposal for testing
+public fun unlock_from_proposal_for_testing<AssetType, StableType>(
+    lp_token: &mut LPToken<AssetType, StableType>,
+) {
+    lp_token.locked_in_proposal = option::none();
 }

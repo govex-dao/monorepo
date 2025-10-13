@@ -12,3 +12,4 @@ read https://metadao.mintlify.app/idea-to-funded/after-ico
 get in here
 - [ ] FUTARCHY THICKNESS = DAO CREDIT RATING
 - [ ] https://v1.metadao.fi/metadao/create
+- [ ] auto approvals https://github.com/MystenLabs/ts-sdks/discussions/567

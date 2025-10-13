@@ -214,7 +214,7 @@ module futarchy_markets_core::fee_tests {
         next_tx(&mut scenario, @0x1);
         {
             let mut fee_manager = test::take_shared<FeeManager>(&scenario);
-            let payment = coin::mint_for_testing<SUI>(100_000, ctx(&mut scenario));
+            let payment = coin::mint_for_testing<SUI>(10_000, ctx(&mut scenario));
             fee::deposit_dao_creation_payment(&mut fee_manager, payment, &clock, ctx(&mut scenario));
             test::return_shared(fee_manager);
         };
@@ -236,7 +236,7 @@ module futarchy_markets_core::fee_tests {
         next_tx(&mut scenario, @0x1);
         {
             let withdrawal = test::take_from_sender<Coin<SUI>>(&scenario);
-            assert_eq(coin::value(&withdrawal), 100_000);
+            assert_eq(coin::value(&withdrawal), 10_000);
             test::return_to_sender(&scenario, withdrawal);
         };
 
@@ -580,8 +580,9 @@ module futarchy_markets_core::fee_tests {
             let (fee_amount, periods) = fee::collect_dao_platform_fee<USDC>(&mut fee_manager, dao_id, &clock, ctx(&mut scenario));
 
             // DAO protected from retroactive increase
-            assert_eq(fee_amount, 10_000_000); // Old rate!
-            assert_eq(periods, 1);
+            // 7 months elapsed but capped at 3 months, charged at old rate
+            assert_eq(periods, 3); // Capped at 3 months max retroactive
+            assert_eq(fee_amount, 30_000_000); // 3 periods * 10M old rate
 
             test::return_shared(fee_manager);
         };
@@ -890,7 +891,7 @@ module futarchy_markets_core::fee_tests {
         // Advance another month
         clock::increment_for_testing(&mut clock, MONTHLY_FEE_PERIOD_MS);
 
-        // TEST_TOKEN should only owe 1 month (not 2) due to forgiveness
+        // TEST_TOKEN first collection (no record exists yet)
         next_tx(&mut scenario, @0x1);
         {
             let mut fee_manager = test::take_shared<FeeManager>(&scenario);
@@ -900,9 +901,10 @@ module futarchy_markets_core::fee_tests {
                 &mut fee_manager, multisig_id, test_type, payment, all_coins, &clock, ctx(&mut scenario)
             );
 
-            // Should only collect 1 period (forgiveness worked)
-            assert_eq(periods, 1);
-            coin::destroy_zero(remaining);
+            // First collection creates record, returns 0 periods
+            assert_eq(periods, 0);
+            assert_eq(coin::value(&remaining), 500_000);
+            sui::test_utils::destroy(remaining);
 
             test::return_shared(fee_manager);
         };

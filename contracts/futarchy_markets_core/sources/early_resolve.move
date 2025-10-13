@@ -166,7 +166,7 @@ public fun check_eligibility<AssetType, StableType>(
 
     // Check maximum proposal duration (should resolve by now)
     let max_duration = futarchy_config::early_resolve_max_duration(config);
-    if (proposal_age_ms > max_duration) {
+    if (proposal_age_ms >= max_duration) {
         return (false, string::utf8(b"Proposal exceeded max duration"))
     };
 

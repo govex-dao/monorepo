@@ -225,7 +225,7 @@ fun test_initialize_market_three_outcomes() {
 }
 
 #[test]
-#[expected_failure(abort_code = EInvalidAmount)]
+#[expected_failure(abort_code = EInvalidAmount, location = futarchy_markets_core::proposal)]
 fun test_initialize_market_zero_liquidity_fails() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -287,7 +287,7 @@ fun test_initialize_market_zero_liquidity_fails() {
 }
 
 #[test]
-#[expected_failure(abort_code = EAssetLiquidityTooLow)]
+#[expected_failure(abort_code = EAssetLiquidityTooLow, location = futarchy_markets_core::proposal)]
 fun test_initialize_market_insufficient_asset_liquidity() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -349,7 +349,7 @@ fun test_initialize_market_insufficient_asset_liquidity() {
 }
 
 #[test]
-#[expected_failure(abort_code = EStableLiquidityTooLow)]
+#[expected_failure(abort_code = EStableLiquidityTooLow, location = futarchy_markets_core::proposal)]
 fun test_initialize_market_insufficient_stable_liquidity() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -410,7 +410,7 @@ fun test_initialize_market_insufficient_stable_liquidity() {
 }
 
 #[test]
-#[expected_failure(abort_code = EInvalidOutcomeVectors)]
+#[expected_failure(abort_code = EInvalidOutcomeVectors, location = futarchy_markets_core::proposal)]
 fun test_initialize_market_mismatched_outcome_vectors() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -472,7 +472,7 @@ fun test_initialize_market_mismatched_outcome_vectors() {
 }
 
 #[test]
-#[expected_failure(abort_code = ETooManyOutcomes)]
+#[expected_failure(abort_code = ETooManyOutcomes, location = futarchy_markets_core::proposal)]
 fun test_initialize_market_too_many_outcomes() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -592,7 +592,7 @@ fun test_new_premarket_basic() {
 }
 
 #[test]
-#[expected_failure(abort_code = ETooManyOutcomes)]
+#[expected_failure(abort_code = ETooManyOutcomes, location = futarchy_markets_core::proposal)]
 fun test_new_premarket_too_many_outcomes() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);
@@ -782,7 +782,7 @@ fun test_outcome_creator_getters() {
 // === Error Handling Tests ===
 
 #[test]
-#[expected_failure(abort_code = EOutcomeOutOfBounds)]
+#[expected_failure(abort_code = EOutcomeOutOfBounds, location = futarchy_markets_core::proposal)]
 fun test_get_outcome_creator_out_of_bounds() {
     let mut scenario = ts::begin(PROPOSER_ADDR);
     let ctx = ts::ctx(&mut scenario);

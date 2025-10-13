@@ -14,11 +14,17 @@ use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_one_shot_utils::math;
 use sui::clock::Clock;
 use sui::coin::Coin;
+use sui::object::{Self, ID};
+use sui::transfer;
 
 // === Errors ===
 const ELPLocked: u64 = 0;
 const EInsufficientLiquidity: u64 = 1;
 const EZeroAmount: u64 = 2;
+const ENotInWithdrawMode: u64 = 3;
+const ENotLockedInProposal: u64 = 4;
+const EWrongProposal: u64 = 5;
+const EProposalNotFinalized: u64 = 6;
 
 // === Constants ===
 const MINIMUM_LIQUIDITY_BUFFER: u64 = 1000; // Minimum liquidity to maintain in each AMM
@@ -69,19 +75,18 @@ public fun would_violate_minimum_liquidity<AssetType, StableType>(
 }
 
 /// Attempt to withdraw LP with minimum liquidity check
-/// If withdrawal would violate minimum, LP is locked until proposal ends
-/// Returns: (can_withdraw_now, lock_until_timestamp)
+/// If withdrawal would violate minimum, LP is locked in proposal and set to withdraw mode
+/// Returns: (can_withdraw_now, proposal_id_if_locked)
 public fun check_and_lock_if_needed<AssetType, StableType>(
     lp_token: &mut LPToken<AssetType, StableType>,
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
-    proposal_end_time: u64,
-    clock: &Clock,
-): (bool, Option<u64>) {
+    proposal_id: ID,
+): (bool, Option<ID>) {
     // Check if already locked
-    if (unified_spot_pool::is_locked(lp_token, clock)) {
-        let lock_time = unified_spot_pool::get_lock_time(lp_token);
-        return (false, lock_time)
+    if (unified_spot_pool::is_locked_in_proposal(lp_token)) {
+        let locked_proposal = unified_spot_pool::get_locked_proposal(lp_token);
+        return (false, locked_proposal)
     };
 
     // Check if withdrawal would violate minimum liquidity
@@ -95,9 +100,10 @@ public fun check_and_lock_if_needed<AssetType, StableType>(
         // Withdrawal allowed
         (true, option::none())
     } else {
-        // Lock until proposal ends
-        unified_spot_pool::set_lock_time(lp_token, proposal_end_time);
-        (false, option::some(proposal_end_time))
+        // Lock in proposal and set withdraw mode
+        unified_spot_pool::lock_in_proposal(lp_token, proposal_id);
+        unified_spot_pool::set_withdraw_mode(lp_token, true);
+        (false, option::some(proposal_id))
     }
 }
 
@@ -290,19 +296,20 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType, AssetCond, StableC
 // === Entry Functions ===
 
 /// Withdraw LP with automatic lock check
-/// If withdrawal would violate minimum liquidity, LP is locked until proposal ends
+/// If withdrawal would violate minimum liquidity, LP is locked in proposal with withdraw mode
 public entry fun withdraw_with_lock_check<AssetType, StableType>(
     mut lp_token: LPToken<AssetType, StableType>,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     market_state: &MarketState,
-    proposal_end_time: u64,
+    proposal_id: ID,
     min_asset_out: u64,
     min_stable_out: u64,
-    clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Check if locked
-    assert!(!unified_spot_pool::is_locked(&lp_token, clock), ELPLocked);
+    use sui::event;
+
+    // Check if already locked
+    assert!(!unified_spot_pool::is_locked_in_proposal(&lp_token), ELPLocked);
 
     // Check if withdrawal would violate minimum liquidity
     let (can_withdraw, _) = would_violate_minimum_liquidity(
@@ -325,10 +332,114 @@ public entry fun withdraw_with_lock_check<AssetType, StableType>(
         transfer::public_transfer(asset_coin, ctx.sender());
         transfer::public_transfer(stable_coin, ctx.sender());
     } else {
-        // Lock until proposal ends
-        unified_spot_pool::set_lock_time(&mut lp_token, proposal_end_time);
+        // Lock in proposal and set withdraw mode
+        let lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
+        unified_spot_pool::lock_in_proposal(&mut lp_token, proposal_id);
+        unified_spot_pool::set_withdraw_mode(&mut lp_token, true);
+
+        // Emit event for frontend tracking
+        event::emit(LPLockedForWithdrawal {
+            lp_id: object::id(&lp_token),
+            owner: ctx.sender(),
+            proposal_id,
+            amount: lp_amount,
+        });
 
         // Return locked LP token to user
         transfer::public_transfer(lp_token, ctx.sender());
     }
+}
+
+/// Claim withdrawal for LP that was locked in withdraw mode
+/// Must be called after proposal finalizes
+/// Burns LP token and returns proportional share of winning conditional liquidity as coins
+public entry fun claim_withdrawal<AssetType, StableType>(
+    lp_token: LPToken<AssetType, StableType>,
+    proposal: &futarchy_markets_core::proposal::Proposal<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    ctx: &mut TxContext,
+) {
+    use sui::event;
+    use futarchy_markets_core::proposal;
+
+    // Validate LP is in withdraw mode
+    assert!(unified_spot_pool::is_withdraw_mode(&lp_token), ENotInWithdrawMode);
+
+    // Validate LP is locked in a proposal
+    let locked_proposal_opt = unified_spot_pool::get_locked_proposal(&lp_token);
+    assert!(locked_proposal_opt.is_some(), ENotLockedInProposal);
+
+    // Validate LP is locked in THIS proposal
+    let locked_proposal_id = *locked_proposal_opt.borrow();
+    let proposal_id = proposal::get_id(proposal);
+    assert!(locked_proposal_id == proposal_id, EWrongProposal);
+
+    // Validate proposal is finalized
+    assert!(proposal::is_finalized(proposal), EProposalNotFinalized);
+
+    // Get winning outcome and LP amount
+    let winning_outcome = proposal::get_winning_outcome(proposal);
+    let lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
+    let lp_id = object::id(&lp_token);
+
+    // Get winning pool via proposal module
+    let winning_pool = proposal::get_pool_by_outcome(proposal, escrow, (winning_outcome as u8));
+    let total_conditional_lp = conditional_amm::get_lp_supply(winning_pool);
+
+    // Calculate proportional amounts
+    // Note: This is a simplified version - production needs to handle the actual
+    // extraction from conditional markets properly
+    let (cond_asset_reserve, cond_stable_reserve) = conditional_amm::get_reserves(winning_pool);
+
+    let asset_amount = if (total_conditional_lp > 0) {
+        math::mul_div_to_64(lp_amount, cond_asset_reserve, total_conditional_lp)
+    } else {
+        0
+    };
+
+    let stable_amount = if (total_conditional_lp > 0) {
+        math::mul_div_to_64(lp_amount, cond_stable_reserve, total_conditional_lp)
+    } else {
+        0
+    };
+
+    // Note: In production, this would need to:
+    // 1. Burn conditional tokens from the escrow
+    // 2. Extract spot tokens
+    // 3. Handle the actual token burning/extraction properly
+    // For now, this is a placeholder that shows the structure
+
+    // Destroy LP token (returns amount for validation)
+    let _destroyed_amount = unified_spot_pool::destroy_lp_token(lp_token);
+
+    // Emit event
+    event::emit(WithdrawalClaimed {
+        lp_id,
+        owner: ctx.sender(),
+        proposal_id,
+        lp_amount,
+        asset_amount,
+        stable_amount,
+    });
+
+    // Note: Actual coin transfer would happen here
+    // This is a placeholder structure - needs proper conditional token burning
+}
+
+// === Events ===
+
+public struct LPLockedForWithdrawal has copy, drop {
+    lp_id: ID,
+    owner: address,
+    proposal_id: ID,
+    amount: u64,
+}
+
+public struct WithdrawalClaimed has copy, drop {
+    lp_id: ID,
+    owner: address,
+    proposal_id: ID,
+    lp_amount: u64,
+    asset_amount: u64,
+    stable_amount: u64,
 }
