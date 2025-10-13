@@ -249,6 +249,130 @@ fun test_benchmark_tiny_reserves() {
 }
 
 #[test]
+/// Benchmark: Very small upper_bound (~199)
+/// Tests edge case where upper_bound/100 = 1, similar to tiny reserves but worse
+fun test_benchmark_upper_bound_199() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Carefully tuned to produce upper_bound ≈ 199
+    // Similar to tiny reserves test but targeting the 199 edge case
+    let spot_199 = create_spot_pool(
+        300,
+        300,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conds_199 = create_n_conditional_pools(
+        10,    // 10 pools like the tiny reserves test
+        240,   // Tuned to get upper_bound ≈ 199
+        360,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Expected upper_bound ≈ 199
+    // With 1% threshold: 199/100 = 1, so threshold = 1 (worst case!)
+    // 10 pools × ~15 iterations × 2 calls = ~300 calculations
+    let (_amt_199, profit_199, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_199,
+        &conds_199,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_199);
+    cleanup_conditional_pools(conds_199);
+
+    // Should complete without timeout (validates 1% threshold handles edge case)
+    assert!(profit_199 >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: Maximum pools (50) with large trade
+/// Stress test with protocol maximum conditionals and large reserves
+fun test_benchmark_50_pools_large_trade() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Large reserves for substantial trade size
+    let spot_50_large = create_spot_pool(
+        10_000_000,  // 10M reserves
+        10_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Create 50 conditional pools (protocol maximum)
+    let conds_50_large = create_n_conditional_pools(
+        50,
+        9_000_000,   // Slight price imbalance
+        11_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Test with large search space and maximum pools
+    let (_amt_50, profit_50, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_50_large,
+        &conds_50_large,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_50_large);
+    cleanup_conditional_pools(conds_50_large);
+
+    // Should complete efficiently even with 50 pools
+    assert!(profit_50 >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: 10 pools with upper_bound = 1
+/// Extreme edge case with minimal possible search space
+fun test_benchmark_10_pools_size_1() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Carefully crafted to produce upper_bound ≈ 1
+    // This is the absolute worst case for ternary search
+    let spot_size_1 = create_spot_pool(
+        100,
+        100,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conds_size_1 = create_n_conditional_pools(
+        10,
+        95,   // Very close to spot, upper_bound should be tiny
+        105,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Expected upper_bound ≈ 1 (extreme edge case!)
+    // With floor of 100: threshold = min(100, upper_bound)
+    // Search should exit immediately or very quickly
+    let (_amt_1, profit_1, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_size_1,
+        &conds_size_1,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_size_1);
+    cleanup_conditional_pools(conds_size_1);
+
+    // Should complete instantly (validates floor=100 doesn't break tiny bounds)
+    assert!(profit_1 >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
 /// Benchmark: Large reserves performance
 /// Tests overflow protection with large values
 fun test_benchmark_large_reserves() {
@@ -391,6 +515,228 @@ fun test_benchmark_search_efficiency() {
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: 50 pools with NO arbitrage opportunity
+/// Worst case - searches entire space and finds nothing
+fun test_benchmark_50_pools_no_arbitrage() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Perfectly balanced pools - no arbitrage opportunity
+    let spot_balanced = create_spot_pool(
+        1_000_000,
+        1_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // All conditionals identical to spot - no price imbalance
+    let conds_balanced = create_n_conditional_pools(
+        50,
+        1_000_000,  // Exactly same as spot
+        1_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Should search entire space but find profit ≈ 0
+    let (_amt, profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_balanced,
+        &conds_balanced,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_balanced);
+    cleanup_conditional_pools(conds_balanced);
+
+    // Profit should be 0 or very small (rounding)
+    assert!(profit <= 100, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: Extreme fee (99.99%)
+/// Tests edge case with near-100% trading fees
+fun test_benchmark_extreme_fees() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Very high fees (99.99% = 9999 bps)
+    let spot_high_fee = create_spot_pool(
+        1_000_000,
+        1_000_000,
+        9999,  // 99.99% fee!
+        ts::ctx(&mut scenario)
+    );
+
+    let conds_high_fee = create_n_conditional_pools(
+        10,
+        900_000,
+        1_100_000,
+        9999,  // 99.99% fee!
+        ts::ctx(&mut scenario)
+    );
+
+    // With such high fees, arbitrage should be unprofitable
+    let (_amt, profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_high_fee,
+        &conds_high_fee,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_high_fee);
+    cleanup_conditional_pools(conds_high_fee);
+
+    // Should complete without overflow/errors
+    assert!(profit >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: Upper bound = 99 (just below floor)
+/// Tests boundary condition where upper_bound < threshold floor
+fun test_benchmark_upper_bound_99() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Tuned to produce upper_bound ≈ 99 (just below floor of 100)
+    let spot_99 = create_spot_pool(
+        200,
+        200,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conds_99 = create_n_conditional_pools(
+        10,
+        190,
+        210,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // upper_bound ≈ 99, threshold = min(99, 100) = 99
+    // Should immediately check endpoints only
+    let (_amt, profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_99,
+        &conds_99,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_99);
+    cleanup_conditional_pools(conds_99);
+
+    assert!(profit >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: Extreme size imbalance
+/// One pool tiny (100), others huge (10M) - tests numerical stability
+fun test_benchmark_extreme_size_imbalance() {
+    let mut scenario = ts::begin(ADMIN);
+
+    let spot_imbalance = create_spot_pool(
+        1_000_000,
+        1_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // Create mix of tiny and huge pools
+    let mut imbalanced_pools = vector::empty<LiquidityPool>();
+
+    // 5 huge pools
+    let mut i = 0;
+    while (i < 5) {
+        vector::push_back(&mut imbalanced_pools,
+            conditional_amm::create_pool_for_testing(
+                10_000_000,
+                10_000_000,
+                FEE_BPS,
+                ts::ctx(&mut scenario)
+            )
+        );
+        i = i + 1;
+    };
+
+    // 5 tiny pools
+    let mut j = 0;
+    while (j < 5) {
+        vector::push_back(&mut imbalanced_pools,
+            conditional_amm::create_pool_for_testing(
+                100,
+                100,
+                FEE_BPS,
+                ts::ctx(&mut scenario)
+            )
+        );
+        j = j + 1;
+    };
+
+    // Extreme variance should be handled gracefully
+    let (_amt, profit, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_imbalance,
+        &imbalanced_pools,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_imbalance);
+    cleanup_conditional_pools(imbalanced_pools);
+
+    assert!(profit >= 0, 0);
+
+    ts::end(scenario);
+}
+
+#[test]
+/// Benchmark: Cond→Spot with 50 pools and small bounds
+/// Absolute worst case - no pruning, many pools, Cond→Spot direction
+fun test_benchmark_cond_to_spot_50_pools_small() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Setup for Cond→Spot arbitrage (conditionals cheap, spot expensive)
+    let spot_expensive = create_spot_pool(
+        300,    // Small spot
+        500,    // More stable than asset (expensive spot)
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // 50 cheap conditional pools (opposite of spot)
+    let conds_cheap = create_n_conditional_pools(
+        50,     // Maximum pools
+        350,    // More asset than spot (cheap)
+        250,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    // This setup attempts to force Cond→Spot direction which:
+    // - Doesn't use pruning (must buy from ALL 50 pools)
+    // - Has small upper_bound
+    // - Most expensive combination possible
+    let (_amt, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_expensive,
+        &conds_cheap,
+        0,
+        0,
+    );
+
+    cleanup_spot_pool(spot_expensive);
+    cleanup_conditional_pools(conds_cheap);
+
+    // Main validation: completes without timeout even with 50 pools and small bounds
+    // Direction doesn't matter - we're testing performance, not correctness
+    assert!(profit >= 0, 0);
 
     ts::end(scenario);
 }

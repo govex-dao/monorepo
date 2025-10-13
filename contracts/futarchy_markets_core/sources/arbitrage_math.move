@@ -9,7 +9,7 @@
 /// ✅ 4. Bidirectional solving - Catches all opportunities
 /// ✅ 5. Min profit threshold - Simple profitability check
 /// ✅ 6. u256 arithmetic - Accurate overflow-free calculations
-/// ✅ 7. Ternary search precision - 0.01% of search space (optimal for concave F(b))
+/// ✅ 7. Ternary search precision - max(1%, 100) of search space (optimal for concave F(b))
 /// ✅ 8. Concavity proof - F(b) is strictly concave, ternary search is optimal
 /// ✅ 9. Smart bounding - 95%+ gas reduction via 1.1x user swap hint
 ///
@@ -281,8 +281,10 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     let mut left = 0u64;
     let mut right = smart_bound;
 
-    // PHASE 1: Coarse search (0.01% precision via TERNARY_PRECISION constant)
-    let coarse_threshold = math::max(smart_bound / TERNARY_PRECISION, 1);
+    // PHASE 1: Coarse search (1% precision with floor of 100)
+    // Use max(1% of search space, 100) to avoid excessive iterations with small bounds
+    // Floor of 100 ensures fast convergence even for tiny smart_bound values
+    let coarse_threshold = math::max(smart_bound / 100, 100);
 
     while (right - left > coarse_threshold) {
         let third = (right - left) / 3;
@@ -386,8 +388,10 @@ fun optimal_b_search_bounded(
     let mut left = 0u64;
     let mut right = upper_bound;
 
-    // PHASE 1: Coarse search (0.01% precision via TERNARY_PRECISION constant)
-    let coarse_threshold = math::max(upper_bound / TERNARY_PRECISION, 1);
+    // PHASE 1: Coarse search (1% precision with floor of 100)
+    // Use max(1% of search space, 100) to avoid excessive iterations with small bounds
+    // Floor of 100 ensures fast convergence even for tiny upper_bound values
+    let coarse_threshold = math::max(upper_bound / 100, 100);
 
     while (right - left > coarse_threshold) {
         let third = (right - left) / 3;

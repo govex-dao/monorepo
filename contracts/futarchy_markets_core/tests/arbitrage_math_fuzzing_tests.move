@@ -163,6 +163,95 @@ fun test_fuzzing_high_dimensional_markets() {
 }
 
 #[test]
+/// WORST CASE: Adversarial N=50 markets with pathological configurations
+/// This test constructs the absolute worst-case scenario for the optimizer:
+/// - N=50 pools (protocol max) → O(2500) operations per case
+/// - Tiny spot (100-500) + Huge conditionals (1M-5M) → massive price differences
+/// - Near-zero spot fee (0.05%) + High conditional fees (2-5%) → persistent arbitrage
+/// - Alternating pool sizes → prevents early termination, maximizes search space
+/// Expected: ~10x slower than random N=50 test
+fun test_fuzzing_max_dimensional_markets() {
+    let mut rng = rng::seed(0xDEADC0DE, 0xBADC0FFE); // Unique seed for adversarial
+    let mut scenario = ts::begin(ADMIN);
+
+    let num_cases = 10u64;  // Reduced: adversarial cases are 10x slower
+    let n = 50u64;          // MAX_CONDITIONALS = absolute worst case
+
+    let mut case = 0u64;
+    while (case < num_cases) {
+        // ADVERSARIAL: Tiny spot reserves (creates extreme price volatility)
+        let spot_asset = 100 + rng::next_range(&mut rng, 0, 400);
+        let spot_stable = 100 + rng::next_range(&mut rng, 0, 400);
+        let spot_fee = 5; // Near-zero fee (0.05%) - encourages arbitrage
+
+        let spot_pool = create_spot_pool(
+            spot_asset,
+            spot_stable,
+            spot_fee,
+            ts::ctx(&mut scenario),
+        );
+
+        // ADVERSARIAL: Alternate tiny/huge conditional pools for max price differences
+        let mut cond_pools = vector::empty<LiquidityPool>();
+        let mut i = 0u64;
+
+        while (i < n) {
+            // Alternate between extremes to maximize price differences
+            let (cond_asset, cond_stable) = if (i % 2 == 0) {
+                // Tiny reserves (like spot) - creates huge price impact
+                (
+                    100 + rng::next_range(&mut rng, 0, 400),
+                    100 + rng::next_range(&mut rng, 0, 400),
+                )
+            } else {
+                // Massive reserves (1M-5M) - creates large search spaces
+                (
+                    1_000_000 + rng::next_range(&mut rng, 0, 4_000_000),
+                    1_000_000 + rng::next_range(&mut rng, 0, 4_000_000),
+                )
+            };
+
+            // High fees on conditionals (opposite of spot) - forces larger trades
+            let cond_fee = rng::next_range(&mut rng, 200, 500); // 2-5% fee
+
+            vector::push_back(
+                &mut cond_pools,
+                create_conditional_pool(cond_asset, cond_stable, cond_fee, ts::ctx(&mut scenario)),
+            );
+
+            i = i + 1;
+        };
+
+        // Run optimizer on WORST possible market configuration
+        // This forces maximum ternary search iterations across all 50 pools
+        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<ASSET, STABLE>(
+            &spot_pool,
+            &cond_pools,
+            0,
+            0,
+        );
+
+        // PROPERTY: Algorithm must terminate even in adversarial worst case
+        assert!(x_star >= 0, E);
+        assert!(p_star >= 0, E);
+
+        // PROPERTY: If profit found, direction should be valid
+        if (p_star > 0) {
+            assert!(x_star > 0, E);
+            let _ = is_stc; // Used
+        };
+
+        // Cleanup
+        cleanup_spot_pool(spot_pool);
+        cleanup_conditional_pools(cond_pools);
+
+        case = case + 1;
+    };
+
+    ts::end(scenario);
+}
+
+#[test]
 /// Maximum capacity test: N=50 conditionals (protocol limit)
 /// Validates optimizer handles maximum market complexity with pruning
 fun test_fuzzing_max_conditionals() {
@@ -238,7 +327,7 @@ fun test_fuzzing_extreme_values() {
     let mut rng = rng::seed(0xFEEDFACE, 0xBAADF00D);
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 20u64;  // Reduced from 50 to avoid timeouts with large reserves
+    let num_cases = 50;  // Reduced from 50 to avoid timeouts with large reserves
 
     let mut case = 0u64;
     while (case < num_cases) {
