@@ -22,7 +22,7 @@ use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_actions::founder_lock_proposal::{Self, FounderLockProposal, PriceTier};
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets_core::{
-    spot_amm::SpotAMM,
+    unified_spot_pool::UnifiedSpotPool,
     proposal::Proposal,
 };
 use futarchy_core::{action_types, action_validation};

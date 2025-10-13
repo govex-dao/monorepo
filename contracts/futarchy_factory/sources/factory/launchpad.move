@@ -732,12 +732,10 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
     };
 
     // Index interval events for T-sweep
-    // Get T-events vector for this price level
-    let t_events: &mut vector<u64> = df::borrow_mut(&mut raise.id, price_key);
 
     // Start event: at T = min_total_raise, add +min_tokens to S(T)
     let start_key = IntervalDeltaKey { price: price_cap, t_point: min_total_raise };
-    if (!df::exists_(&raise.id, start_key)) {
+    let need_start_t_event = if (!df::exists_(&raise.id, start_key)) {
         let mut bidders = vector::empty<address>();
         vector::push_back(&mut bidders, bidder);  // First bidder at this point
         df::add(&mut raise.id, start_key, IntervalDelta {
@@ -745,12 +743,12 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
             is_start: true,
             bidders,  // FCFS order preserved
         });
-        // Add T-point to sorted list (insertion sort for simplicity)
-        insert_sorted(t_events, min_total_raise);
+        true  // Need to add to t_events
     } else {
         let delta: &mut IntervalDelta = df::borrow_mut(&mut raise.id, start_key);
         delta.delta = delta.delta + min_tokens;
         vector::push_back(&mut delta.bidders, bidder);  // Append = FCFS!
+        false  // Already in t_events
     };
 
     // End event: at T = max_total_raise + 1, subtract min_tokens from S(T)
@@ -762,7 +760,7 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
     };
 
     let end_key = IntervalDeltaKey { price: price_cap, t_point: end_t };
-    if (!df::exists_(&raise.id, end_key)) {
+    let need_end_t_event = if (!df::exists_(&raise.id, end_key)) {
         let mut bidders = vector::empty<address>();
         vector::push_back(&mut bidders, bidder);  // First bidder at this point
         df::add(&mut raise.id, end_key, IntervalDelta {
@@ -770,12 +768,23 @@ public entry fun place_bid_2d<RaiseToken, StableCoin>(
             is_start: false,
             bidders,  // FCFS order preserved
         });
-        // Add T-point to sorted list (insertion sort)
-        insert_sorted(t_events, end_t);
+        true  // Need to add to t_events
     } else {
         let delta: &mut IntervalDelta = df::borrow_mut(&mut raise.id, end_key);
         delta.delta = delta.delta + min_tokens;
         vector::push_back(&mut delta.bidders, bidder);  // Append = FCFS!
+        false  // Already in t_events
+    };
+
+    // Now update t_events with new time points (borrow happens last, after all other borrows are done)
+    {
+        let t_events: &mut vector<u64> = df::borrow_mut(&mut raise.id, price_key);
+        if (need_start_t_event) {
+            insert_sorted(t_events, min_total_raise);
+        };
+        if (need_end_t_event) {
+            insert_sorted(t_events, end_t);
+        };
     };
 
     // Emit event (reuse ContributionAddedCapped event for now)
@@ -1230,15 +1239,18 @@ public entry fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
         return
     };
 
-    let delta: &IntervalDelta = df::borrow(&raise.id, clearing_key);
-    let bidders = &delta.bidders;
-    let len = vector::length(bidders);
+    // Copy the bidders vector to avoid holding a borrow during the loop
+    let bidders = {
+        let delta: &IntervalDelta = df::borrow(&raise.id, clearing_key);
+        *&delta.bidders  // Copy the vector
+    };
+    let len = vector::length(&bidders);
 
     // Process bidders in FCFS order (vector order = insertion order)
     let mut i = 0;
     let mut processed = 0;
     while (i < len && processed < batch_size) {
-        let bidder = *vector::borrow(bidders, i);
+        let bidder = *vector::borrow(&bidders, i);
         let key = ContributorKey { contributor: bidder };
 
         if (df::exists_(&raise.id, key)) {
@@ -2099,8 +2111,8 @@ fun init_raise_2d<RaiseToken: drop, StableCoin: drop>(
         raise_id,
         creator: raise.creator,
         affiliate_id: raise.affiliate_id,
-        raise_token_type: type_name::get<RaiseToken>().into_string(),
-        stable_coin_type: type_name::get<StableCoin>().into_string(),
+        raise_token_type: string::from_ascii(type_name::get<RaiseToken>().into_string()),
+        stable_coin_type: string::from_ascii(type_name::get<StableCoin>().into_string()),
         min_raise_amount,
         tokens_for_sale: 0,  // Variable supply - will be determined at settlement
         deadline_ms: raise.deadline_ms,
@@ -2244,10 +2256,6 @@ fun format_claim_description(
     // Approximate: 50 bytes + raise_name length
     let mut buffer = vector::empty<u8>();
     let raise_name_bytes = string::bytes(raise_name);
-    let estimated_capacity = 50 + vector::length(raise_name_bytes);
-
-    // Reserve capacity upfront
-    vector::reserve(&mut buffer, estimated_capacity);
 
     // Build message directly in bytes (avoids intermediate String allocations)
     vector::append(&mut buffer, b"Claim ");

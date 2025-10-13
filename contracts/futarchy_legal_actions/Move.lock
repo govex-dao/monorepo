@@ -257,3 +257,8 @@ dependencies = [
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.57.2"
+edition = "2024.beta"
+flavor = "sui"

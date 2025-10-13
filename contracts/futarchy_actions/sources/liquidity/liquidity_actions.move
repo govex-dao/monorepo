@@ -29,8 +29,7 @@ use futarchy_core::{
     action_types,
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
-use futarchy_markets_core::spot_amm::{Self, SpotAMM};
-use futarchy_markets_core::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
 // AddLiquidityAction defined locally since futarchy_one_shot_utils module doesn't exist
 
 // === Friend Modules === (deprecated in 2024 edition, using public(package) instead)
@@ -254,10 +253,10 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     assert!(coin::value(&stable_coin) >= initial_stable_amount, EInvalidAmount);
     
     // Create the pool using account_spot_pool
-    let mut pool = account_spot_pool::new<AssetType, StableType>(fee_bps, ctx);
+    let mut pool = unified_spot_pool::new<AssetType, StableType>(fee_bps, ctx);
     
     // Add initial liquidity to the pool
-    let lp_token = account_spot_pool::add_liquidity_and_return(
+    let lp_token = unified_spot_pool::add_liquidity_and_return(
         &mut pool,
         asset_coin,
         stable_coin,
@@ -276,7 +275,7 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
     transfer::public_transfer(lp_token, account_address);
     
     // Share the pool so it can be accessed by anyone
-    account_spot_pool::share(pool);
+    unified_spot_pool::share(pool);
 
     // Return receipt and pool ID
     (resource_requests::fulfill(request), pool_id)
@@ -336,7 +335,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     request: ResourceRequest<AddLiquidityAction<AssetType, StableType>>,
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
-    pool: &mut AccountSpotPool<AssetType, StableType>,
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
     witness: IW,
     ctx: &mut TxContext,
 ): (ResourceReceipt<AddLiquidityAction<AssetType, StableType>>, LPToken<AssetType, StableType>) {
@@ -370,7 +369,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     );
 
     // Add liquidity to pool and get LP token
-    let lp_token = account_spot_pool::add_liquidity_and_return(
+    let lp_token = unified_spot_pool::add_liquidity_and_return(
         pool,
         asset_coin,
         stable_coin,
@@ -389,7 +388,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     _account: &mut Account<FutarchyConfig>,
     _version: VersionWitness,
     witness: IW,
-    pool: &mut AccountSpotPool<AssetType, StableType>,
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
     ctx: &mut TxContext,
 ): (Coin<AssetType>, Coin<StableType>) {
@@ -420,10 +419,10 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     assert!(action.pool_id == object::id(pool), EEmptyPool);
     
     // Verify LP token amount matches
-    assert!(account_spot_pool::lp_token_amount(&lp_token) >= action.lp_amount, EInvalidAmount);
+    assert!(unified_spot_pool::lp_token_amount(&lp_token) >= action.lp_amount, EInvalidAmount);
     
     // Remove liquidity from pool
-    let (asset_coin, stable_coin) = account_spot_pool::remove_liquidity_and_return(
+    let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity(
         pool,
         lp_token,
         action.min_asset_amount,
@@ -836,7 +835,7 @@ public fun get_is_paused(action: &SetPoolStatusAction): bool {
 
 /// Get LP token value helper
 public fun lp_value<AssetType, StableType>(lp_token: &LPToken<AssetType, StableType>): u64 {
-    account_spot_pool::lp_token_amount(lp_token)
+    unified_spot_pool::lp_token_amount(lp_token)
 }
 
 // === Destruction Functions ===

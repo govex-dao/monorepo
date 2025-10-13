@@ -22,7 +22,7 @@ use account_protocol::{
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_markets_core::{
     proposal::{Self, Proposal},
-    spot_amm::{Self, SpotAMM},
+    unified_spot_pool::{Self, UnifiedSpotPool},
     spot_conditional_quoter,
     conditional_amm,
 };

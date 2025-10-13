@@ -272,21 +272,21 @@ public fun decode_add_chunk(
     if (option::is_some(&expires_at)) {
         vector::push_back(&mut fields, schema::new_field(
             b"expires_at".to_string(),
-            option::borrow(&expires_at).to_string(),
+            (*option::borrow(&expires_at)).to_string(),
             b"Option<u64>".to_string(),
         ));
     };
     if (option::is_some(&effective_from)) {
         vector::push_back(&mut fields, schema::new_field(
             b"effective_from".to_string(),
-            option::borrow(&effective_from).to_string(),
+            (*option::borrow(&effective_from)).to_string(),
             b"Option<u64>".to_string(),
         ));
     };
     if (option::is_some(&immutable_from)) {
         vector::push_back(&mut fields, schema::new_field(
             b"immutable_from".to_string(),
-            option::borrow(&immutable_from).to_string(),
+            (*option::borrow(&immutable_from)).to_string(),
             b"Option<u64>".to_string(),
         ));
     };

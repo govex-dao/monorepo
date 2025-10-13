@@ -124,8 +124,8 @@ and patara.app
 - [ ] See if their aggregator can search over that boolean
 - [ ] Maybe need second entry point??
 - [ ] https://v1.metadao.fi/metadao/create
-- [ ] Change liuquidity split ratio to 0 to 100
-- [ ] make sure autocrank registry only takes fee once per recipient
+- [ ] Change liuquidity split ratio to 0 to 100 look at conditional_liqudity_ratio
+
  
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \

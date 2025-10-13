@@ -51,6 +51,7 @@ const ELongReviewTime: u64 = 7;
 const ELongTwapDelayTime: u64 = 8;
 const ETwapInitialTooLarge: u64 = 9;
 const EDelayNearTotalTrading: u64 = 10;
+const EInvalidStateForAction: u64 = 11;
 
 // === Constants ===
 const TWAP_MINIMUM_WINDOW_CAP: u64 = 1;
@@ -314,6 +315,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -337,6 +339,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
         8000,  // oracle_conditional_threshold_bps (80% threshold from trading params)
+        clock,
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
@@ -363,31 +366,29 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     let dao_config = futarchy_config::dao_config(account_config);
     let governance = dao_config::governance_config(dao_config);
     let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(governance);
-    let max_concurrent_proposals = dao_config::max_concurrent_proposals(governance);
 
     // Now create the priority queue but do not share it yet.
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
-        max_concurrent_proposals,
         DEFAULT_MAX_PROPOSER_FUNDED,
         eviction_grace_period_ms,
         ctx
     );
     let priority_queue_id = object::id(&queue);
-    
+
     // --- Phase 2: Configure the objects and link them together ---
 
     // Note: DAO liquidity pool is not used in the new architecture
     // The spot pool handles all liquidity needs
-    
+
     // Update the config with the actual priority queue ID
     futarchy_config::set_proposal_queue_id(&mut account, option::some(priority_queue_id));
-    
+
     // Action registry removed - using statically-typed pattern
-    
+
     // Initialize the policy registry
     policy_registry::initialize(&mut account, version::current(), ctx);
-    
+
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);
     
@@ -543,6 +544,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -565,6 +567,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
         8000,  // oracle_conditional_threshold_bps (80% threshold)
+        clock,
         ctx
     );
     let spot_pool_id = object::id(&spot_pool);
@@ -583,31 +586,29 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
     let dao_config = futarchy_config::dao_config(account_config);
     let governance = dao_config::governance_config(dao_config);
     let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(governance);
-    let max_concurrent_proposals = dao_config::max_concurrent_proposals(governance);
 
     // Now create the priority queue but do not share it yet.
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
-        max_concurrent_proposals,
         DEFAULT_MAX_PROPOSER_FUNDED,
         eviction_grace_period_ms,
         ctx
     );
     let priority_queue_id = object::id(&queue);
-    
+
     // --- Phase 2: Configure the objects and link them together ---
 
     // Update the config with the actual priority queue ID
     futarchy_config::set_proposal_queue_id(&mut account, option::some(priority_queue_id));
-    
+
     // Action registry removed - using statically-typed pattern
-    
+
     // Initialize the vault (test version uses @account_protocol witness)
     {
         use account_protocol::version_witness;
         futarchy_vault_init::initialize(
-            &mut account, 
-            version_witness::new_for_testing(@account_protocol), 
+            &mut account,
+            version_witness::new_for_testing(@account_protocol),
             ctx
         );
     };
@@ -725,6 +726,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -759,6 +761,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
         30,  // 0.3% default fee (init actions can configure via governance)
         8000,  // oracle_conditional_threshold_bps (80% threshold)
+        clock,
         ctx
     );
 
@@ -770,7 +773,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
     // Create queue with defaults
     let queue = priority_queue::new<StableType>(
         object::id(&account), // dao_id
-        10, // max_concurrent_proposals (init actions can update)
         30, // max_proposer_funded (init actions can update)
         eviction_grace_period_ms,
         ctx

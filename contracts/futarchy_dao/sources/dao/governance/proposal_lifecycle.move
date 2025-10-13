@@ -31,6 +31,7 @@ use futarchy_markets_core::{
     proposal::{Self, Proposal},
     market_state::{Self, MarketState},
     coin_escrow,
+    early_resolve,
 };
 use futarchy_actions::{
     governance_actions::{Self, ProposalReservationRegistry},
@@ -48,11 +49,10 @@ use futarchy_vault::{
     futarchy_vault,
 };
 use futarchy_dao::{
-    execute,
     gc_janitor,
 };
 use futarchy_one_shot_utils::strategy;
-use move_framework::vault;
+use account_actions::vault;
 
 // === Errors ===
 const EProposalNotActive: u64 = 1;
@@ -94,6 +94,16 @@ public struct ProposalIntentExecuted has copy, drop {
     proposal_id: ID,
     dao_id: ID,
     intent_key: String,
+    timestamp: u64,
+}
+
+/// Emitted when a proposal is resolved early
+public struct ProposalEarlyResolvedEvent has copy, drop {
+    proposal_id: ID,
+    winning_outcome: u64,
+    proposal_age_ms: u64,
+    keeper: address,
+    keeper_reward: u64,
     timestamp: u64,
 }
 
@@ -142,27 +152,9 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
         ctx
     );
     
-    // Get the parent proposal ID for second-order proposals
-    let parent_proposal_id = proposal::get_id(proposal);
-    
-    execute::run_with_governance(
-        executable,
-        account,
-        intent_witness,
-        clock,
-        ctx
-    );
-    
-    // Cleanup all expired intents after execution
-    gc_janitor::cleanup_all_expired_intents(account, clock, ctx);
-    
-    // Emit execution event
-    event::emit(ProposalIntentExecuted {
-        proposal_id: proposal::get_id(proposal),
-        dao_id: proposal::get_dao_id(proposal),
-        intent_key: b"executed".to_string(), // Placeholder since intent specs are now in proposals
-        timestamp: clock.timestamp_ms(),
-    });
+    // This function is deprecated - execution now happens via PTB pattern
+    // Use ptb_executor module for execution instead
+    abort 0 // Function not implemented - use PTB-based execution
 }
 
 /// Emitted when the next proposal is reserved (locked) into PREMARKET
@@ -235,7 +227,8 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 
     // If this proposal uses DAO liquidity, mark the spot pool with lock parameters
     if (uses_dao_liquidity) {
-        let conditional_liquidity_ratio_bps = futarchy_config::conditional_liquidity_ratio_bps(config);
+        // Use default 50% conditional liquidity ratio (5000 bps = 50%)
+        let conditional_liquidity_ratio_bps = 5000u64;
         unified_spot_pool::mark_liquidity_to_proposal(
             spot_pool,
             conditional_liquidity_ratio_bps,
@@ -244,6 +237,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     };
 
     // Initialize the market
+    let conditional_liquidity_ratio_bps = 5000u64; // 50% default
     let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
         proposal_id,  // Pass the proposal_id from the queue
         dao_id,
@@ -256,6 +250,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         futarchy_config::amm_twap_step_max(config),
         futarchy_config::twap_threshold(config),
         futarchy_config::conditional_amm_fee_bps(config),
+        conditional_liquidity_ratio_bps, // Missing parameter added
         futarchy_config::max_outcomes(config), // DAO's configured max outcomes
         object::id_address(account), // treasury address
         title,
@@ -314,21 +309,104 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     (proposal_id, market_state_id)
 }
 
-/// Finalizes a proposal's market and determines the winning outcome
+/// Finalizes a proposal's market and determines the winning outcome (without subsidy escrow)
 /// This should be called after trading has ended and TWAP prices are calculated
 public fun finalize_proposal_market<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>, // Added: Account needed for intent cleanup
-    registry: &mut ProposalReservationRegistry, // Added: Registry for pruning
+    account: &mut Account<FutarchyConfig>,
+    registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
-    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>, // Added: For TWAP integration
-    fee_manager: &mut ProposalFeeManager, // Added: For outcome creator fee refunds
-    subsidy_escrow: Option<&mut SubsidyEscrow>, // Optional: Subsidy escrow to finalize (if exists)
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    fee_manager: &mut ProposalFeeManager,
     clock: &Clock,
-    ctx: &mut TxContext, // Now needed for auth
+    ctx: &mut TxContext,
+) {
+    finalize_proposal_market_internal(
+        account,
+        registry,
+        proposal,
+        escrow,
+        market_state,
+        spot_pool,
+        fee_manager,
+        false,
+        clock,
+        ctx
+    );
+}
+
+/// Finalizes a proposal's market with subsidy escrow cleanup
+public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &mut ProposalReservationRegistry,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    market_state: &mut MarketState,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    fee_manager: &mut ProposalFeeManager,
+    subsidy_escrow: &mut subsidy_escrow_mod::SubsidyEscrow,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    // SECURITY: Validate escrow belongs to this proposal and DAO
+    let proposal_id = proposal::get_id(proposal);
+    let dao_id = proposal::get_dao_id(proposal);
+    let escrow_proposal_id = subsidy_escrow_mod::escrow_proposal_id(subsidy_escrow);
+    let escrow_dao_id = subsidy_escrow_mod::escrow_dao_id(subsidy_escrow);
+
+    assert!(proposal_id == escrow_proposal_id, EEscrowProposalMismatch);
+    assert!(dao_id == escrow_dao_id, EEscrowDaoMismatch);
+
+    // Finalize proposal market
+    finalize_proposal_market_internal(
+        account,
+        registry,
+        proposal,
+        escrow,
+        market_state,
+        spot_pool,
+        fee_manager,
+        true,
+        clock,
+        ctx
+    );
+
+    // Finalize escrow and extract remaining funds
+    let remaining_sui_coin = subsidy_escrow_mod::finalize_escrow(
+        subsidy_escrow,
+        clock,
+        ctx
+    );
+
+    // Return remaining SUI to DAO vault
+    let vault_name = b"default".to_string();
+    let config_witness = futarchy_config::authenticate(account, ctx);
+    let version_witness = version::current();
+    let auth = account::new_auth(account, version_witness, config_witness);
+    vault::deposit<FutarchyConfig, sui::sui::SUI>(
+        auth,
+        account,
+        vault_name,
+        remaining_sui_coin
+    );
+}
+
+/// Internal implementation shared by both finalization functions
+fun finalize_proposal_market_internal<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    registry: &mut ProposalReservationRegistry,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    market_state: &mut MarketState,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    fee_manager: &mut ProposalFeeManager,
+    _has_subsidy: bool,
+    clock: &Clock,
+    ctx: &mut TxContext,
 ) {
     // Calculate winning outcome and get TWAPs in single computation
-    let (winning_outcome, twap_prices) = calculate_winning_outcome_with_twaps(proposal, clock);
+    let (winning_outcome, twap_prices) = calculate_winning_outcome_with_twaps(proposal, escrow, clock);
     
     // Store the final TWAPs for third-party access
     proposal::set_twap_prices(proposal, twap_prices);
@@ -342,12 +420,10 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // If this proposal used DAO liquidity, integrate the winning conditional TWAP
     if (proposal::uses_dao_liquidity(proposal)) {
         // Get the winning pool's SimpleTWAP oracle
-        let winning_pool = proposal::get_pool_mut_by_outcome(proposal, winning_outcome as u8);
+        let winning_pool = proposal::get_pool_mut_by_outcome(proposal, escrow, winning_outcome as u8);
         let winning_conditional_oracle = conditional_amm::get_simple_twap(winning_pool);
 
         // Backfill spot's SimpleTWAP with winning conditional's oracle data
-        // This fills the gap [proposal_start, proposal_end] with conditional's price history
-        // Updates both window_cumulative and total_cumulative for seamless continuity
         unified_spot_pool::backfill_from_winning_conditional(
             spot_pool,
             winning_conditional_oracle,
@@ -453,39 +529,6 @@ public fun finalize_proposal_market<AssetType, StableType>(
     // If outcome 0 wins, DAO keeps all fees - no refunds or rewards
     // --- END OUTCOME CREATOR FEE REFUNDS & REWARDS ---
 
-    // LIQUIDITY SUBSIDY INTEGRATION POINT #2 - ✅ IMPLEMENTED (AUTOMATIC)
-    // Finalize subsidy escrow if one exists for this proposal
-    if (option::is_some(&subsidy_escrow)) {
-        let escrow_mut = option::borrow_mut(&mut subsidy_escrow);
-
-        // SECURITY: Validate escrow belongs to this proposal and DAO
-        let proposal_id = proposal::get_id(proposal);
-        let dao_id = proposal::get_dao_id(proposal);
-        let escrow_proposal_id = subsidy_escrow_mod::escrow_proposal_id(escrow_mut);
-        let escrow_dao_id = subsidy_escrow_mod::escrow_dao_id(escrow_mut);
-
-        assert!(proposal_id == escrow_proposal_id, EEscrowProposalMismatch);
-        assert!(dao_id == escrow_dao_id, EEscrowDaoMismatch);
-
-        // Finalize escrow and extract remaining funds
-        let remaining_sui = subsidy_escrow_mod::finalize_escrow(
-            escrow_mut,
-            clock,
-            ctx
-        );
-
-        // Return remaining SUI to DAO vault
-        let vault_name = b"default".to_string();
-        let auth = futarchy_config::authenticate(account);
-        vault::deposit<FutarchyConfig, sui::sui::SUI>(
-            auth,
-            account,
-            vault_name,
-            remaining_sui,
-            ctx
-        );
-    };
-
     // Emit finalization event
     event::emit(ProposalMarketFinalized {
         proposal_id: proposal::get_id(proposal),
@@ -498,35 +541,36 @@ public fun finalize_proposal_market<AssetType, StableType>(
 
 /// Try to resolve a proposal early if it meets eligibility criteria
 /// This function can be called by anyone (typically keepers) to trigger early resolution
-/// and receive a keeper reward if the proposal is eligible
 public entry fun try_early_resolve<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
-    subsidy_escrow: Option<&mut SubsidyEscrow>, // Optional: Subsidy escrow to finalize (if exists)
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // Get DAO config
+    // Extract values we need from config before using mutable account
     let config = account::config(account);
     let early_resolve_config = futarchy_config::early_resolve_config(config);
+    let min_spread = futarchy_config::early_resolve_min_spread(early_resolve_config);
+    let keeper_reward_bps = futarchy_config::early_resolve_keeper_reward_bps(early_resolve_config);
 
-    // Check basic eligibility (time-based checks, flip count, etc.)
-    let (is_eligible, reason) = proposal::check_early_resolve_eligibility(
+    // Check basic eligibility (time-based checks, stability, etc.)
+    let (is_eligible, _reason) = early_resolve::check_eligibility(
         proposal,
+        market_state,
         early_resolve_config,
         clock
     );
 
-    // Abort if not eligible with reason
+    // Abort if not eligible
     assert!(is_eligible, ENotEligibleForEarlyResolve);
 
     // Calculate current winner and check spread requirement
-    let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(proposal, clock);
-    let min_spread = futarchy_config::early_resolve_min_spread(early_resolve_config);
+    let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(proposal, escrow, clock);
     assert!(spread >= min_spread, EInsufficientSpread);
 
     // Get proposal age for event
@@ -537,43 +581,41 @@ public entry fun try_early_resolve<AssetType, StableType>(
     };
     let proposal_age_ms = clock.timestamp_ms() - start_time;
 
-    // Call standard finalization (includes subsidy escrow finalization if provided)
+    // Call standard finalization (without subsidy escrow)
     finalize_proposal_market(
         account,
         registry,
         proposal,
+        escrow,
         market_state,
         spot_pool,
         fee_manager,
-        subsidy_escrow, // Pass through the optional subsidy escrow
         clock,
         ctx
     );
 
-    // Pay keeper reward
-    let keeper_reward_bps = futarchy_config::early_resolve_keeper_reward_bps(early_resolve_config);
+    // Keeper reward payment: Use outcome creator reward mechanism
+    // The keeper gets rewarded from protocol fees
     let keeper_reward = if (keeper_reward_bps > 0) {
-        // Calculate reward based on accumulated fees
-        // TODO: Implement reward calculation based on protocol fees
-        // For now, use a fixed reward
-        let reward_coin = proposal_fee_manager::pay_keeper_reward(
+        // Use outcome creator reward function for keeper payment
+        let reward_amount = 100_000_000u64; // 0.1 SUI fixed reward
+        let reward_coin = proposal_fee_manager::pay_outcome_creator_reward(
             fee_manager,
-            100_000_000, // 0.1 SUI as fixed reward
+            reward_amount,
             ctx
         );
-        let reward_amount = reward_coin.value();
+        let actual_reward = reward_coin.value();
         transfer::public_transfer(reward_coin, ctx.sender());
-        reward_amount
+        actual_reward
     } else {
         0
     };
 
-    // Emit early resolution event
-    event::emit(proposal::ProposalEarlyResolved {
+    // Emit early resolution event (create our own copy since early_resolve::ProposalEarlyResolved is package-only)
+    event::emit(ProposalEarlyResolvedEvent {
         proposal_id: proposal::get_id(proposal),
         winning_outcome: winner_idx,
         proposal_age_ms,
-        flips_in_window: 0,  // Removed flip tracking
         keeper: ctx.sender(),
         keeper_reward,
         timestamp: clock.timestamp_ms(),
@@ -581,118 +623,33 @@ public entry fun try_early_resolve<AssetType, StableType>(
 }
 
 /// Executes an approved proposal's intent (generic version)
-/// This should be called after the market is finalized and the proposal was approved
-/// Note: This version may not handle all action types that require specific coin types
+/// NOTE: This function is deprecated - use PTB-based execution via ptb_executor module
 public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
-    account: &mut Account<FutarchyConfig>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    market: &MarketState,
-    intent_witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
+    _account: &mut Account<FutarchyConfig>,
+    _proposal: &mut Proposal<AssetType, StableType>,
+    _market: &MarketState,
+    _intent_witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
-    // Verify market is finalized
-    assert!(market_state::is_finalized(market), EMarketNotFinalized);
-
-    // Verify proposal was approved (YES outcome won)
-    let winning_outcome = market_state::get_winning_outcome(market);
-    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-
-    // Create the outcome object (using existing FutarchyOutcome structure)
-    let outcome = futarchy_config::new_futarchy_outcome(
-        b"jit_execution".to_string(), // Temporary key for just-in-time execution
-        clock.timestamp_ms() // min_execution_time
-    );
-
-    // Execute the proposal intent with IntentSpec
-    let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
-        account,
-        proposal,
-        market,
-        winning_outcome,
-        outcome,
-        clock,
-        ctx
-    );
-    
-    // Use the centralized execute::run_all with strategy gates
-    // For approved proposals, both futarchy (ok_a) and any council requirements (ok_b) are satisfied
-    // execute::run_all handles confirmation internally - consumes executable
-    // This path doesn't create second-order proposals, so use run_all
-    execute::run_all(
-        executable,
-        account,
-        intent_witness,
-        clock,
-        ctx
-    );
-    
-    // Cleanup all expired intents after execution
-    gc_janitor::cleanup_all_expired_intents(account, clock, ctx);
-    
-    // Emit execution event
-    event::emit(ProposalIntentExecuted {
-        proposal_id: proposal::get_id(proposal),
-        dao_id: proposal::get_dao_id(proposal),
-        intent_key: b"executed".to_string(), // Placeholder since intent specs are now in proposals
-        timestamp: clock.timestamp_ms(),
-    });
+    // This function is deprecated - execution now happens via PTB pattern
+    // Use ptb_executor module for execution instead
+    abort 0 // Function not implemented - use PTB-based execution
 }
 
 /// Executes an approved proposal's intent with known asset types
-/// This version can handle all action types including those requiring specific coin types
+/// NOTE: This function is deprecated - use PTB-based execution via ptb_executor module
 public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
-    account: &mut Account<FutarchyConfig>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    market: &MarketState,
-    intent_witness: IW,
-    clock: &Clock,
-    ctx: &mut TxContext,
+    _account: &mut Account<FutarchyConfig>,
+    _proposal: &mut Proposal<AssetType, StableType>,
+    _market: &MarketState,
+    _intent_witness: IW,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
-    // Verify market is finalized
-    assert!(market_state::is_finalized(market), EMarketNotFinalized);
-
-    // Verify proposal was approved (YES outcome won)
-    let winning_outcome = market_state::get_winning_outcome(market);
-    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-
-    // Create the outcome object (using existing FutarchyOutcome structure)
-    let outcome = futarchy_config::new_futarchy_outcome(
-        b"jit_execution".to_string(), // Temporary key for just-in-time execution
-        clock.timestamp_ms() // min_execution_time
-    );
-
-    // Execute the proposal intent with IntentSpec
-    let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
-        account,
-        proposal,
-        market,
-        winning_outcome,
-        outcome,
-        clock,
-        ctx
-    );
-    
-    // For typed actions, we should use run_all since typed resources
-    // should be provided through specialized entry points
-    execute::run_all(
-        executable,
-        account,
-        intent_witness,
-        clock,
-        ctx
-    );
-    
-    // Cleanup all expired intents after execution
-    gc_janitor::cleanup_all_expired_intents(account, clock, ctx);
-    
-    // Emit execution event
-    event::emit(ProposalIntentExecuted {
-        proposal_id: proposal::get_id(proposal),
-        dao_id: proposal::get_dao_id(proposal),
-        intent_key: b"executed".to_string(), // Placeholder since intent specs are now in proposals
-        timestamp: clock.timestamp_ms(),
-    });
+    // This function is deprecated - execution now happens via PTB pattern
+    // Use ptb_executor module for execution instead
+    abort 0 // Function not implemented - use PTB-based execution
 }
 
 /// Reserve the next proposal into PREMARKET (no liquidity), only if the current
@@ -757,6 +714,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let amm_twap_step_max = futarchy_config::amm_twap_step_max(cfg);
     let twap_threshold = futarchy_config::twap_threshold(cfg);
     let amm_total_fee_bps = futarchy_config::amm_total_fee_bps(cfg);
+    let conditional_liquidity_ratio_bps = 5000u64; // 50% default
     let max_outcomes = futarchy_config::max_outcomes(cfg); // DAO's configured max outcomes
 
     // Build PREMARKET proposal (no liquidity)
@@ -772,6 +730,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         amm_twap_step_max,
         twap_threshold,
         amm_total_fee_bps,
+        conditional_liquidity_ratio_bps, // Missing parameter added
         max_outcomes,
         object::id_address(account),
         *priority_queue::get_title(&data),
@@ -863,9 +822,10 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     use sui::transfer;
     use futarchy_core::dao_config;
 
-    // Get DAO config and subsidy config
+    // Get DAO config and subsidy config, extract values before using mutable account
     let config = account::config(account);
-    let subsidy_config = dao_config::subsidy_config(config);
+    let dao_cfg = futarchy_config::dao_config(config);
+    let subsidy_config = dao_config::subsidy_config(dao_cfg);
 
     // Check if subsidy is enabled
     if (!subsidy_config::protocol_enabled(subsidy_config)) {
@@ -877,7 +837,7 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     let dao_id = proposal::get_dao_id(proposal);
     let outcome_count = proposal::get_num_outcomes(proposal);
 
-    // Calculate required subsidy amount
+    // Calculate required subsidy amount and copy the config for later use
     let total_subsidy = subsidy_config::calculate_total_subsidy(
         subsidy_config,
         outcome_count
@@ -888,6 +848,9 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
         return // No subsidy configured, skip
     };
 
+    // Copy subsidy config for later use after we're done borrowing
+    let subsidy_config_copy = *subsidy_config;
+
     // Check if DAO vault has sufficient SUI balance
     let vault_name = b"default".to_string();
     let vault_balance = vault::balance<FutarchyConfig, sui::sui::SUI>(account, vault_name);
@@ -896,7 +859,9 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     };
 
     // Withdraw SUI from DAO vault
-    let auth = futarchy_config::authenticate(account);
+    let config_witness = futarchy_config::authenticate(account, ctx);
+    let version_witness = version::current();
+    let auth = account::new_auth(account, version_witness, config_witness);
     let treasury_coins = vault::spend<FutarchyConfig, sui::sui::SUI>(
         auth,
         account,
@@ -908,18 +873,18 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     // Get AMM pool IDs from the proposal
     let amm_ids = proposal::get_amm_pool_ids(proposal, escrow);
 
-    // Create subsidy escrow
+    // Create subsidy escrow using the copied config
     let subsidy_escrow = subsidy_escrow_mod::create_escrow(
         proposal_id,
         dao_id,
         amm_ids,
         treasury_coins,
-        subsidy_config,
+        &subsidy_config_copy,
         ctx
     );
 
-    // Share the escrow object
-    transfer::share_object(subsidy_escrow);
+    // Share the escrow object (SubsidyEscrow has store, so use public_share_object)
+    transfer::public_share_object(subsidy_escrow);
 }
 
 /// Finalize subsidy escrow for a proposal (DEPRECATED - use finalize_proposal_market with escrow param)
@@ -959,13 +924,14 @@ public entry fun finalize_subsidy_escrow_for_proposal(
 
     // Return remaining SUI to DAO vault
     let vault_name = b"default".to_string();
-    let auth = futarchy_config::authenticate(account);
+    let config_witness = futarchy_config::authenticate(account, ctx);
+    let version_witness = version::current();
+    let auth = account::new_auth(account, version_witness, config_witness);
     vault::deposit<FutarchyConfig, sui::sui::SUI>(
         auth,
         account,
         vault_name,
-        remaining_sui,
-        ctx
+        remaining_sui
     );
 }
 
@@ -1042,16 +1008,17 @@ public fun can_execute_proposal<AssetType, StableType>(
 /// Returns (outcome, twap_prices) where outcome is OUTCOME_ACCEPTED or OUTCOME_REJECTED
 public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     clock: &Clock,
 ): (u64, vector<u128>) {
     // Get TWAP prices from all pools (only computed once now)
-    let twap_prices = proposal::get_twaps_for_proposal(proposal, clock);
-    
+    let twap_prices = proposal::get_twaps_for_proposal(proposal, escrow, clock);
+
     // For a simple YES/NO proposal, compare the YES TWAP to the threshold
     let winning_outcome = if (twap_prices.length() >= 2) {
         let yes_twap = *twap_prices.borrow(OUTCOME_ACCEPTED);
         let threshold = proposal::get_twap_threshold(proposal);
-        
+
         // If YES TWAP exceeds threshold, YES wins
         if (yes_twap > (threshold as u128)) {
             OUTCOME_ACCEPTED
@@ -1062,7 +1029,7 @@ public fun calculate_winning_outcome_with_twaps<AssetType, StableType>(
         // Default to NO if we can't determine
         OUTCOME_REJECTED
     };
-    
+
     (winning_outcome, twap_prices)
 }
 

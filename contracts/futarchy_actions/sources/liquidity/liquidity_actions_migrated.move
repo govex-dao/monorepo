@@ -21,7 +21,7 @@ use account_protocol::{
 };
 use account_actions::vault;
 use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
-use futarchy_markets_core::account_spot_pool::{Self, AccountSpotPool, LPToken};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;
@@ -137,13 +137,13 @@ public fun do_create_pool<AssetType: drop, StableType: drop>(
     assert!(params.minimum_liquidity > 0, EInvalidAmount);
 
     // Create the pool
-    let mut pool = account_spot_pool::new<AssetType, StableType>(
+    let mut pool = unified_spot_pool::new<AssetType, StableType>(
         params.fee_bps,
         ctx,
     );
 
     // Add initial liquidity
-    let lp_tokens = account_spot_pool::add_liquidity_and_return<AssetType, StableType>(
+    let lp_tokens = unified_spot_pool::add_liquidity_and_return<AssetType, StableType>(
         &mut pool,
         asset_coin,
         stable_coin,
@@ -161,7 +161,7 @@ public fun do_create_pool<AssetType: drop, StableType: drop>(
     // Placeholder registration removed - not needed without ExecutionContext
 
     // Share the pool
-    account_spot_pool::share(pool);
+    unified_spot_pool::share(pool);
 
     pool_id
 }
@@ -170,7 +170,7 @@ public fun do_create_pool<AssetType: drop, StableType: drop>(
 public fun do_add_liquidity<AssetType: drop, StableType: drop>(
     params: AddLiquidityAction<AssetType, StableType>,
     account: &mut Account<FutarchyConfig>,
-    pool: &mut AccountSpotPool<AssetType, StableType>,
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
     ctx: &mut TxContext,
@@ -182,7 +182,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop>(
     assert!(object::id(pool) == pool_id, 0);
 
     // Add liquidity
-    let lp_tokens = account_spot_pool::add_liquidity_and_return<AssetType, StableType>(
+    let lp_tokens = unified_spot_pool::add_liquidity_and_return<AssetType, StableType>(
         pool,
         asset_coin,
         stable_coin,
@@ -202,7 +202,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop>(
 public fun do_remove_liquidity<AssetType: drop, StableType: drop>(
     params: RemoveLiquidityAction<AssetType, StableType>,
     account: &mut Account<FutarchyConfig>,
-    pool: &mut AccountSpotPool<AssetType, StableType>,
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
     vault_name: String,
     ctx: &mut TxContext,
@@ -214,7 +214,7 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop>(
     assert!(object::id(pool) == pool_id, 0);
 
     // Remove liquidity from the pool
-    let (asset_coin, stable_coin) = account_spot_pool::remove_liquidity_and_return(
+    let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity(
         pool,
         lp_token,
         params.min_asset_amount,

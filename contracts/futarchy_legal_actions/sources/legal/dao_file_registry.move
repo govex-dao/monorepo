@@ -519,10 +519,10 @@ public fun create_root_document(
     let doc_uid = object::new(ctx);
     let doc_id = object::uid_to_inner(&doc_uid);
 
-    // Clone name for multiple uses (Move doesn't allow reusing moved values)
-    let name_for_doc = std::string::clone(&name);
-    let name_for_vec = std::string::clone(&name);
-    let name_for_map = std::string::clone(&name);
+    // Copy name for multiple uses (Move doesn't allow reusing moved values)
+    let name_for_doc = copy name;
+    let name_for_vec = copy name;
+    let name_for_map = copy name;
     let name_for_event = name;  // Move original into event
 
     let doc = File {
@@ -1931,7 +1931,7 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
             // Clone text if present (can't move from borrowed chunk)
             let text_opt = if (option::is_some(&chunk.text)) {
                 let text_ref = option::borrow(&chunk.text);
-                option::some(std::string::clone(text_ref))
+                option::some(*text_ref)
             } else {
                 option::none()
             };
@@ -1971,7 +1971,7 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
     event::emit(DocumentReadWithStatus {
         dao_id: doc.dao_id,
         doc_id: object::uid_to_inner(&doc.id),
-        name: std::string::clone(&doc.name),  // Clone name from borrowed doc
+        name: copy doc.name,
         chunk_ids,
         chunk_texts,
         chunk_blob_ids,
