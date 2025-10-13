@@ -716,3 +716,36 @@ public fun share<AssetType, StableType>(
 ) {
     transfer::share_object(registry);
 }
+
+// === Test-Only Functions ===
+
+#[test_only]
+/// Destroy registry for testing (cleans up all positions)
+public fun destroy_for_testing<AssetType, StableType>(registry: SwapPositionRegistry<AssetType, StableType>) {
+    let SwapPositionRegistry {
+        id,
+        positions,
+        total_positions: _,
+        total_cranked: _,
+    } = registry;
+
+    table::drop(positions);
+    object::delete(id);
+}
+
+#[test_only]
+/// Destroy crank progress hot potato for testing
+public fun destroy_crank_progress_for_testing<AssetType, StableType>(progress: CrankProgress<AssetType, StableType>) {
+    let CrankProgress {
+        position_uid,
+        owner: _,
+        proposal_id: _,
+        winning_outcome: _,
+        outcomes_processed: _,
+        total_outcomes: _,
+        spot_asset_accumulated: _,
+        spot_stable_accumulated: _,
+    } = progress;
+
+    object::delete(position_uid);
+}
