@@ -100,7 +100,7 @@ fun create_test_proposal_trading(
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
         vector[@0x1, @0x1],
-        outcome_count,
+        (outcome_count as u8), // Cast to u8
         86400000, // review_period_ms
         604800000, // trading_period_ms
         1000000, // min_asset_liquidity
@@ -118,7 +118,7 @@ fun create_test_proposal_trading(
     );
 
     // Transition to TRADING state
-    proposal::set_state_for_testing(&mut proposal, 2); // STATE_TRADING = 2
+    proposal::set_state(&mut proposal, 2); // STATE_TRADING = 2
 
     proposal
 }
@@ -414,7 +414,7 @@ fun test_swap_balance_asset_to_stable_balance_mismatch() {
     add_liquidity_to_pools(&mut escrow, INITIAL_RESERVE, ctx);
 
     // Create balance for DIFFERENT market
-    let wrong_market_id = object::id_from_address(@0xWRONG);
+    let wrong_market_id = object::id_from_address(@0x9999);
     let mut balance = conditional_balance::new<TEST_COIN_A, TEST_COIN_B>(
         wrong_market_id,
         2,

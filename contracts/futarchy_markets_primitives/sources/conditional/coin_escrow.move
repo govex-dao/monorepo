@@ -763,6 +763,17 @@ public fun create_test_escrow<AssetType, StableType>(
 }
 
 #[test_only]
+/// Create a test escrow with a provided MarketState
+/// Useful when you need to customize the market state before creating the escrow
+public fun create_test_escrow_with_market_state<AssetType, StableType>(
+    _outcome_count: u64,  // Not used, but kept for API compatibility
+    market_state: MarketState,
+    ctx: &mut TxContext,
+): TokenEscrow<AssetType, StableType> {
+    new<AssetType, StableType>(market_state, ctx)
+}
+
+#[test_only]
 /// Destroy escrow for testing (with remaining balances)
 /// Useful for cleaning up test state
 public fun destroy_for_testing<AssetType, StableType>(

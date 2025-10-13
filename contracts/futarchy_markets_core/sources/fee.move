@@ -1680,11 +1680,11 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
     let admin_cap = FeeAdminCap {
         id: object::new(ctx),
     };
-    
+
     let mut verification_fees = table::new<u8, u64>(ctx);
     // Start with just level 1 by default
     table::add(&mut verification_fees, 1, DEFAULT_VERIFICATION_FEE);
-    
+
     let fee_manager = FeeManager {
         id: object::new(ctx),
         admin_cap_id: object::id(&admin_cap),
@@ -1701,4 +1701,11 @@ public fun create_fee_manager_for_testing(ctx: &mut TxContext) {
 
     public_share_object(fee_manager);
     public_transfer(admin_cap, ctx.sender());
+}
+
+#[test_only]
+public fun create_fake_admin_cap_for_testing(ctx: &mut TxContext): FeeAdminCap {
+    FeeAdminCap {
+        id: object::new(ctx),
+    }
 }

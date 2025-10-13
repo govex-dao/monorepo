@@ -724,12 +724,17 @@ public fun share<AssetType, StableType>(
 public fun destroy_for_testing<AssetType, StableType>(registry: SwapPositionRegistry<AssetType, StableType>) {
     let SwapPositionRegistry {
         id,
-        positions,
+        mut positions,
         total_positions: _,
         total_cranked: _,
     } = registry;
 
-    table::drop(positions);
+    // Must delete all UIDs before dropping table
+    // Since we can't iterate Table directly, we need to destroy it with remaining UIDs
+    // For testing, we can use destroy_empty after removing all entries elsewhere
+    // Or we need a different approach - let's just check it's empty
+    assert!(table::length(&positions) == 0, 999); // ERegistryNotEmpty
+    table::destroy_empty(positions);
     object::delete(id);
 }
 

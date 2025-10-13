@@ -37,7 +37,7 @@ fun create_test_escrow<AssetType, StableType>(
     outcome_count: u8,
     ctx: &mut TxContext,
 ): TokenEscrow<AssetType, StableType> {
-    coin_escrow::create_test_escrow(outcome_count, ctx)
+    coin_escrow::create_test_escrow((outcome_count as u64), ctx)
 }
 
 /// Cleanup registry

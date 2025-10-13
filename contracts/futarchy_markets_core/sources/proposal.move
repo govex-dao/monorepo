@@ -1938,3 +1938,125 @@ public(package) fun borrow_uid<AssetType, StableType>(
 ): &UID {
     &proposal.id
 }
+
+#[test_only]
+/// Simplified test helper: creates a REAL proposal with sensible defaults
+/// Can configure state (FINALIZED), outcome_count, and winning_outcome for testing
+public fun create_test_proposal<AssetType, StableType>(
+    outcome_count: u8,
+    winning_outcome: u64,
+    is_finalized: bool,
+    ctx: &mut TxContext,
+): Proposal<AssetType, StableType> {
+    use std::string;
+
+    let outcome_messages = vector::tabulate!(outcome_count as u64, |i| {
+        string::utf8(b"Outcome")
+    });
+
+    let outcome_details = vector::tabulate!(outcome_count as u64, |i| {
+        string::utf8(b"Details")
+    });
+
+    let outcome_creators = vector::tabulate!(outcome_count as u64, |_| @0xAAA);
+
+    let intent_specs = vector::tabulate!(outcome_count as u64, |_| option::none());
+
+    let mut proposal = new_for_testing<AssetType, StableType>(
+        @0x1,                       // dao_id
+        @0x2,                       // proposer
+        option::some(@0x3),         // liquidity_provider
+        string::utf8(b"Test"),      // title
+        string::utf8(b"Metadata"),  // metadata
+        outcome_messages,
+        outcome_details,
+        outcome_creators,
+        outcome_count,
+        60000,                      // review_period_ms (1 min)
+        120000,                     // trading_period_ms (2 min)
+        1000,                       // min_asset_liquidity
+        1000,                       // min_stable_liquidity
+        30000,                      // twap_start_delay
+        1000000000000000000u128,    // twap_initial_observation
+        10000,                      // twap_step_max
+        500000000000000000u64,      // twap_threshold
+        30,                         // amm_total_fee_bps (0.3%)
+        option::some(winning_outcome),
+        sui::balance::zero<StableType>(),
+        @0x4,                       // treasury_address
+        intent_specs,
+        ctx
+    );
+
+    if (is_finalized) {
+        set_state(&mut proposal, STATE_FINALIZED);
+    };
+
+    proposal
+}
+
+#[test_only]
+/// Destroy a proposal for testing - handles cleanup of all internal structures
+public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetType, StableType>) {
+    let Proposal {
+        id,
+        queued_proposal_id: _,
+        state: _,
+        dao_id: _,
+        proposer: _,
+        liquidity_provider: _,
+        withdraw_only_mode: _,
+        used_quota: _,
+        escrow_id: _,
+        market_state_id: _,
+        conditional_treasury_caps,
+        conditional_metadata,
+        conditional_type_names: _,
+        title: _,
+        details: _,
+        metadata: _,
+        timing: ProposalTiming {
+            created_at: _,
+            market_initialized_at: _,
+            review_period_ms: _,
+            trading_period_ms: _,
+            last_twap_update: _,
+            twap_start_delay: _,
+        },
+        liquidity_config: LiquidityConfig {
+            min_asset_liquidity: _,
+            min_stable_liquidity: _,
+            asset_amounts: _,
+            stable_amounts: _,
+            uses_dao_liquidity: _,
+        },
+        twap_config: TwapConfig {
+            twap_prices: _,
+            twap_initial_observation: _,
+            twap_step_max: _,
+            twap_threshold: _,
+        },
+        outcome_data: OutcomeData {
+            outcome_count: _,
+            outcome_messages: _,
+            outcome_creators: _,
+            outcome_creator_fees: _,
+            intent_specs: _,
+            actions_per_outcome: _,
+            winning_outcome: _,
+        },
+        amm_total_fee_bps: _,
+        conditional_liquidity_ratio_bps: _,
+        fee_escrow,
+        treasury_address: _,
+        policy_modes: _,
+        required_council_ids: _,
+        council_approval_proofs: _,
+    } = proposal;
+
+    // Destroy bags (must be empty for testing)
+    bag::destroy_empty(conditional_treasury_caps);
+    bag::destroy_empty(conditional_metadata);
+    fee_escrow.destroy_zero();
+    object::delete(id);
+}
