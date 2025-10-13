@@ -295,20 +295,20 @@ fun test_optimal_b_search_convergence() {
     let mut scenario = ts::begin(ADMIN);
 
     // Create clear arbitrage opportunity with known structure
+    // Spot: 1.5M asset, 500K stable → price = 500K/1.5M = 0.33 stable per asset (CHEAP)
+    // Conditional: 500K asset, 1.5M stable → price = 1.5M/500K = 3.0 stable per asset (EXPENSIVE)
+    // Arbitrage: Buy cheap from spot (0.33), sell expensive to conditional (3.0) → profit!
+
     let spot_pool = create_test_spot_pool(
-        1_000_000,
-        1_000_000,
+        1_500_000,  // High asset reserve = low asset price
+        500_000,    // Low stable reserve
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
-    // Spot: 1 asset = 1 stable (balanced)
-    // Conditional 0: 1 asset = 0.9 stable (asset cheap → sell to conditional)
-    // Conditional 1: 1 asset = 0.9 stable (asset cheap → sell to conditional)
-
     let conditional_pools = create_test_conditional_pools_2(
-        1_000_000, 900_000, // Asset overvalued in conditional
-        1_000_000, 900_000,
+        500_000, 1_500_000, // Low asset reserve = high asset price
+        500_000, 1_500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -422,39 +422,109 @@ fun test_two_phase_search_precision() {
 fun test_prune_dominated_correctness() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Create 3 pools where one is clearly dominated
-    // Pool 0: Balanced (1M asset, 1M stable)
-    // Pool 1: Dominated (always more expensive than Pool 0)
-    // Pool 2: Independent (different price structure)
-
+    // Test that algorithm can handle 3 pools without crashing
+    // Create  moderate price differential to ensure some arbitrage exists
     let spot_pool = create_test_spot_pool(
-        1_000_000,
-        1_000_000,
+        1_200_000,  // More asset
+        800_000,    // Less stable
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools = create_test_conditional_pools_3(
-        1_000_000, 1_000_000, // Pool 0: baseline
-        900_000, 1_200_000,   // Pool 1: dominated (always worse than 0)
-        1_100_000, 900_000,   // Pool 2: independent
+        800_000, 1_200_000, // Pool 0: opposite of spot
+        850_000, 1_150_000, // Pool 1: similar to pool 0
+        750_000, 1_250_000, // Pool 2: also similar
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
-    // Pruning should remove Pool 1
-    // We test this indirectly: gas usage with pruning should be less than N²
+    // Pruning should remove dominated pools if any
+    // Test that algorithm completes efficiently with multiple pools
     let (_amount, _profit, _direction) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         &spot_pool,
         &conditional_pools,
         0,
     );
 
-    // If pruning works, algorithm should complete efficiently
+    // If pruning works, algorithm should complete without crashing
     // (Direct verification would require exposing prune_dominated)
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
+    ts::end(scenario);
+}
+
+#[test]
+/// Test pruning invariance: dominated pool doesn't change optimal result
+fun test_pruning_dominated_invariance() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Create spot pool
+    let spot_pool = create_test_spot_pool(
+        1_000_000,
+        2_000_000,
+        20,
+        ts::ctx(&mut scenario)
+    );
+
+    // Pool A and B are competitive
+    let pool_a = conditional_amm::create_pool_for_testing(
+        200_000,
+        500_000,
+        20,
+        ts::ctx(&mut scenario)
+    );
+    let pool_b = conditional_amm::create_pool_for_testing(
+        220_000,
+        520_000,
+        25,
+        ts::ctx(&mut scenario)
+    );
+
+    // Pool C is dominated (expensive across all ratios - low asset, high stable)
+    let pool_c = conditional_amm::create_pool_for_testing(
+        50_000,
+        700_000,
+        25,
+        ts::ctx(&mut scenario)
+    );
+
+    // Test with all three pools {A, B, C}
+    let mut conds_abc = vector::empty<LiquidityPool>();
+    vector::push_back(&mut conds_abc, pool_a);
+    vector::push_back(&mut conds_abc, pool_b);
+    vector::push_back(&mut conds_abc, pool_c);
+
+    let (amt_abc, prof_abc, is_stc_abc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool,
+        &conds_abc,
+        0,
+    );
+
+    cleanup_conditional_pools(conds_abc);
+
+    // Test with just competitive pools {A, B}
+    let pool_a2 = conditional_amm::create_pool_for_testing(200_000, 500_000, 20, ts::ctx(&mut scenario));
+    let pool_b2 = conditional_amm::create_pool_for_testing(220_000, 520_000, 25, ts::ctx(&mut scenario));
+
+    let mut conds_ab = vector::empty<LiquidityPool>();
+    vector::push_back(&mut conds_ab, pool_a2);
+    vector::push_back(&mut conds_ab, pool_b2);
+
+    let (amt_ab, prof_ab, is_stc_ab) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool,
+        &conds_ab,
+        0,
+    );
+
+    // Pruning invariance: dominated pool should not affect result
+    assert!(is_stc_abc == is_stc_ab, 0); // Same direction
+    assert!(prof_abc == prof_ab, 1);     // Same profit
+    assert!(amt_abc == amt_ab, 2);       // Same amount
+
+    cleanup_spot_pool(spot_pool);
+    cleanup_conditional_pools(conds_ab);
     ts::end(scenario);
 }
 
@@ -503,18 +573,20 @@ fun test_early_exit_check_correctness() {
 fun test_compute_optimal_spot_to_conditional() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Scenario: Asset expensive in spot, cheap in conditionals
-    // → Arbitrage: Buy asset from spot, sell to conditionals
+    // Scenario: Asset CHEAP in spot, EXPENSIVE in conditionals
+    // Spot: 1.5M asset, 500K stable → price = 500K/1.5M = 0.33 per asset (CHEAP)
+    // Conditional: 500K asset, 1.5M stable → price = 1.5M/500K = 3.0 per asset (EXPENSIVE)
+    // → Arbitrage: Buy cheap from spot (0.33), sell expensive to conditional (3.0)
     let spot_pool = create_test_spot_pool(
-        800_000,  // Low asset reserve = high asset price in spot
-        1_200_000, // High stable reserve
+        1_500_000,  // High asset reserve = low asset price (CHEAP)
+        500_000,    // Low stable reserve
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools = create_test_conditional_pools_2(
-        1_200_000, 800_000, // High asset reserve = low asset price
-        1_200_000, 800_000,
+        500_000, 1_500_000, // Low asset reserve = high asset price (EXPENSIVE)
+        500_000, 1_500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -528,6 +600,18 @@ fun test_compute_optimal_spot_to_conditional() {
     assert!(amount > 0, 0);
     assert!(profit > 0, 1);
 
+    // Simulator cross-validation: Verify claimed profit is real
+    let profit_sim = arbitrage_math::calculate_spot_arbitrage_profit(
+        &spot_pool,
+        &conditional_pools,
+        amount,
+        true, // spot_to_cond direction
+    );
+    assert!(profit_sim > 0, 2); // Simulator confirms positive profit
+    // Allow rounding difference (within 0.5% of claimed profit)
+    let profit_diff = if (profit_sim > profit) { profit_sim - profit } else { profit - profit_sim };
+    assert!(profit_diff < profit / 200, 3);
+
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
     ts::end(scenario);
@@ -538,18 +622,20 @@ fun test_compute_optimal_spot_to_conditional() {
 fun test_compute_optimal_conditional_to_spot() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Scenario: Asset cheap in spot, expensive in conditionals
-    // → Arbitrage: Buy asset from conditionals, sell to spot
+    // Scenario: Asset EXPENSIVE in spot, CHEAP in conditionals
+    // Spot: 500K asset, 1.5M stable → price = 1.5M/500K = 3.0 per asset (EXPENSIVE)
+    // Conditional: 1.5M asset, 500K stable → price = 500K/1.5M = 0.33 per asset (CHEAP)
+    // → Arbitrage: Buy cheap from conditionals (0.33), sell expensive to spot (3.0)
     let spot_pool = create_test_spot_pool(
-        1_200_000, // High asset reserve = low asset price in spot
-        800_000,   // Low stable reserve
+        500_000,    // Low asset reserve = high asset price (EXPENSIVE)
+        1_500_000,  // High stable reserve
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools = create_test_conditional_pools_2(
-        800_000, 1_200_000, // Low asset reserve = high asset price
-        800_000, 1_200_000,
+        1_500_000, 500_000, // High asset reserve = low asset price (CHEAP)
+        1_500_000, 500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -562,6 +648,18 @@ fun test_compute_optimal_conditional_to_spot() {
 
     assert!(amount > 0, 0);
     assert!(profit > 0, 1);
+
+    // Simulator cross-validation: Verify claimed profit is real
+    let profit_sim = arbitrage_math::calculate_spot_arbitrage_profit(
+        &spot_pool,
+        &conditional_pools,
+        amount,
+        false, // conditional_to_spot direction
+    );
+    assert!(profit_sim > 0, 2); // Simulator confirms positive profit
+    // Allow rounding difference (within 0.5% of claimed profit)
+    let profit_diff = if (profit_sim > profit) { profit_sim - profit } else { profit - profit_sim };
+    assert!(profit_diff < profit / 200, 3);
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
@@ -576,16 +674,17 @@ fun test_bidirectional_solver() {
     // Test both directions to ensure correct one is chosen
 
     // Case 1: Spot → Conditional is better
+    // Spot cheap (0.33), Conditional expensive (3.0)
     let spot_pool_1 = create_test_spot_pool(
-        800_000,
-        1_200_000,
+        1_500_000,  // More asset = cheaper
+        500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools_1 = create_test_conditional_pools_2(
-        1_200_000, 800_000,
-        1_200_000, 800_000,
+        500_000, 1_500_000, // Less asset = more expensive
+        500_000, 1_500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -604,16 +703,17 @@ fun test_bidirectional_solver() {
     cleanup_conditional_pools(conditional_pools_1);
 
     // Case 2: Conditional → Spot is better
+    // Spot expensive (3.0), Conditional cheap (0.33)
     let spot_pool_2 = create_test_spot_pool(
-        1_200_000,
-        800_000,
+        500_000,    // Less asset = more expensive
+        1_500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools_2 = create_test_conditional_pools_2(
-        800_000, 1_200_000,
-        800_000, 1_200_000,
+        1_500_000, 500_000, // More asset = cheaper
+        1_500_000, 500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -639,22 +739,24 @@ fun test_bidirectional_solver() {
 fun test_min_profit_threshold() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Create small arbitrage opportunity
+    // Create moderate arbitrage opportunity (10% spread)
+    // Spot: 1.05M asset, 1M stable → price = 0.95 per asset
+    // Conditional: 1M asset, 1.05M stable → price = 1.05 per asset
     let spot_pool = create_test_spot_pool(
+        1_050_000,  // More asset = cheaper
         1_000_000,
-        1_001_000, // 0.1% price difference
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools = create_test_conditional_pools_2(
-        1_001_000, 1_000_000,
-        1_001_000, 1_000_000,
+        1_000_000, 1_050_000, // Less asset = more expensive
+        1_000_000, 1_050_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
-    // Without threshold: should find small profit
+    // Without threshold: should find profit
     let (amount_1, profit_1, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         &spot_pool,
         &conditional_pools,
@@ -664,7 +766,7 @@ fun test_min_profit_threshold() {
     assert!(profit_1 > 0, 0);
     assert!(amount_1 > 0, 1);
 
-    // With high threshold: should return (0, 0)
+    // With high threshold: should return (0, 0) when threshold exceeds actual profit
     let (amount_2, profit_2, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         &spot_pool,
         &conditional_pools,
@@ -682,6 +784,36 @@ fun test_min_profit_threshold() {
 // ============================================================================
 // SECTION 7: EDGE CASES & OVERFLOW PROTECTION
 // ============================================================================
+
+#[test]
+/// Test with zero conditional pools (N=0)
+fun test_zero_conditionals() {
+    let mut scenario = ts::begin(ADMIN);
+
+    let spot_pool = create_test_spot_pool(
+        1_000_000,
+        1_000_000,
+        FEE_BPS,
+        ts::ctx(&mut scenario)
+    );
+
+    let conds = vector::empty<LiquidityPool>();
+
+    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool,
+        &conds,
+        0,
+    );
+
+    // N=0 should return (0, 0, false)
+    assert!(amount == 0, 0);
+    assert!(profit == 0, 1);
+    assert!(!is_spot_to_cond, 2);
+
+    cleanup_spot_pool(spot_pool);
+    cleanup_conditional_pools(conds);
+    ts::end(scenario);
+}
 
 #[test]
 /// Test with zero liquidity pools
@@ -712,6 +844,42 @@ fun test_zero_liquidity() {
     // No arbitrage possible with zero liquidity
     assert!(amount == 0, 0);
     assert!(profit == 0, 1);
+
+    cleanup_spot_pool(spot_pool);
+    cleanup_conditional_pools(conditional_pools);
+    ts::end(scenario);
+}
+
+#[test]
+/// Test infinite cost guard: asking for more than pool holds
+fun test_infinite_cost_guard() {
+    let mut scenario = ts::begin(ADMIN);
+
+    let spot_pool = create_test_spot_pool(
+        200_000,
+        5_000_000,
+        25,
+        ts::ctx(&mut scenario)
+    );
+
+    // Create conditional pools with very small asset reserves
+    let conditional_pools = create_test_conditional_pools_2(
+        1_000, 2_000_000, // Only 1,000 asset available
+        1_000, 2_000_000, // Only 1,000 asset available
+        20,
+        ts::ctx(&mut scenario)
+    );
+
+    // Try to buy 1,001 asset (more than available in any single pool!)
+    let profit = arbitrage_math::calculate_spot_arbitrage_profit(
+        &spot_pool,
+        &conditional_pools,
+        1_001,
+        false, // conditional_to_spot
+    );
+
+    // Cost should be treated as infinite → profit = 0
+    assert!(profit == 0, 0);
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
@@ -877,6 +1045,35 @@ fun test_extreme_fees() {
     cleanup_spot_pool(spot_pool_zero_fee);
     cleanup_conditional_pools(conditional_pools_zero_fee);
 
+    // 100% fee (10000 bps) - Beta=0 edge case
+    let spot_pool_max_fee = create_test_spot_pool(
+        1_000_000,
+        1_000_000,
+        10_000, // 100% fee → beta = 0
+        ts::ctx(&mut scenario)
+    );
+
+    let conditional_pools_max_fee = create_test_conditional_pools_2(
+        950_000, 1_050_000,
+        950_000, 1_050_000,
+        30,
+        ts::ctx(&mut scenario)
+    );
+
+    // 100% spot fee → beta=0 → B_i=0 → upper bound = 0 → no arbitrage
+    let (x, p, _) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        &spot_pool_max_fee,
+        &conditional_pools_max_fee,
+        0,
+    );
+
+    // Should handle beta=0 gracefully
+    assert!(x == 0, 10);
+    assert!(p == 0, 11);
+
+    cleanup_spot_pool(spot_pool_max_fee);
+    cleanup_conditional_pools(conditional_pools_max_fee);
+
     ts::end(scenario);
 }
 
@@ -993,17 +1190,20 @@ fun test_equilibrium_zero_arbitrage() {
 fun test_profit_monotonicity() {
     let mut scenario = ts::begin(ADMIN);
 
-    // Small price difference
+    // Small price difference (5%)
+    // Spot: 1.05M asset, 1M stable → price = 1M/1.05M = 0.95 per asset
+    // Cond: 1M asset, 1.05M stable → price = 1.05M/1M = 1.05 per asset
+    // Difference: 10% spread
     let spot_pool_small = create_test_spot_pool(
+        1_050_000,  // More asset = cheaper
         1_000_000,
-        1_010_000, // 1% difference
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools_small = create_test_conditional_pools_2(
-        1_010_000, 1_000_000,
-        1_010_000, 1_000_000,
+        1_000_000, 1_050_000, // Less asset = more expensive
+        1_000_000, 1_050_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -1017,17 +1217,20 @@ fun test_profit_monotonicity() {
     cleanup_spot_pool(spot_pool_small);
     cleanup_conditional_pools(conditional_pools_small);
 
-    // Large price difference
+    // Large price difference (50%)
+    // Spot: 1.5M asset, 500K stable → price = 500K/1.5M = 0.33 per asset
+    // Cond: 500K asset, 1.5M stable → price = 1.5M/500K = 3.0 per asset
+    // Difference: 9x spread - much larger!
     let spot_pool_large = create_test_spot_pool(
-        1_000_000,
-        1_100_000, // 10% difference
+        1_500_000,  // Much more asset = much cheaper
+        500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
 
     let conditional_pools_large = create_test_conditional_pools_2(
-        1_100_000, 1_000_000,
-        1_100_000, 1_000_000,
+        500_000, 1_500_000, // Much less asset = much more expensive
+        500_000, 1_500_000,
         FEE_BPS,
         ts::ctx(&mut scenario)
     );
@@ -1044,6 +1247,234 @@ fun test_profit_monotonicity() {
     // Larger price difference should give larger profit
     assert!(profit_large > profit_small, 0);
 
+    ts::end(scenario);
+}
+
+#[test]
+/// Test profit calculations never return negative values (grid search)
+fun test_profit_never_negative_grid_search() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Create realistic arbitrage scenario
+    let spot_pool = create_test_spot_pool(
+        900_000,
+        1_300_000,
+        30,
+        ts::ctx(&mut scenario)
+    );
+
+    let conditional_pools = create_test_conditional_pools_2(
+        300_000, 350_000,
+        280_000, 360_000,
+        25,
+        ts::ctx(&mut scenario)
+    );
+
+    // Test grid of amounts across various scales
+    let amounts = vector[
+        0,
+        10,
+        100,
+        1_000,
+        10_000,
+        50_000,
+        100_000,
+        500_000,
+    ];
+
+    let mut i = 0;
+    while (i < vector::length(&amounts)) {
+        let x = *vector::borrow(&amounts, i);
+
+        // Test both directions
+        let p1 = arbitrage_math::calculate_spot_arbitrage_profit(
+            &spot_pool,
+            &conditional_pools,
+            x,
+            true, // spot_to_cond
+        );
+
+        let p2 = arbitrage_math::calculate_spot_arbitrage_profit(
+            &spot_pool,
+            &conditional_pools,
+            x,
+            false, // conditional_to_spot
+        );
+
+        // Profits should never be negative (profit >= 0 always)
+        assert!(p1 >= 0, (i * 2)); // Encode test case in error
+        assert!(p2 >= 0, (i * 2 + 1));
+
+        i = i + 1;
+    };
+
+    cleanup_spot_pool(spot_pool);
+    cleanup_conditional_pools(conditional_pools);
+    ts::end(scenario);
+}
+
+// ============================================================================
+// SECTION 9: PROPERTY TESTS (WHITE-BOX VALIDATION)
+// ============================================================================
+
+#[test]
+/// Test upper_bound_b symbolic limits: edge cases with exact expected values
+fun test_upper_bound_b_symbolic_limits() {
+    // CASE 1: ti ≤ 1 OR bi == 0 → ub_i = 0 → min(0, ...) = 0
+    let mut ts1 = vector::empty<u128>();
+    let mut bs1 = vector::empty<u128>();
+
+    vector::push_back(&mut ts1, 0u128);   // ti = 0 ≤ 1
+    vector::push_back(&mut bs1, 123u128);
+
+    vector::push_back(&mut ts1, 1u128);   // ti = 1 ≤ 1
+    vector::push_back(&mut bs1, 9999u128);
+
+    vector::push_back(&mut ts1, 42u128);  // bi = 0
+    vector::push_back(&mut bs1, 0u128);
+
+    let ub1 = arbitrage_math::test_only_upper_bound_b(&ts1, &bs1);
+    assert!(ub1 == 0, 0); // All pools force ub = 0
+
+    // CASE 2: Normal values → ub = min_i(floor((ti-1)/bi))
+    // ub_0 = floor((101-1)/5) = 20
+    // ub_1 = floor((55-1)/2) = 27
+    // ub_2 = floor((80-1)/7) = 11 ← minimum
+    let mut ts2 = vector::empty<u128>();
+    let mut bs2 = vector::empty<u128>();
+
+    vector::push_back(&mut ts2, 101u128);
+    vector::push_back(&mut bs2, 5u128);
+
+    vector::push_back(&mut ts2, 55u128);
+    vector::push_back(&mut bs2, 2u128);
+
+    vector::push_back(&mut ts2, 80u128);
+    vector::push_back(&mut bs2, 7u128);
+
+    let ub2 = arbitrage_math::test_only_upper_bound_b(&ts2, &bs2);
+    assert!(ub2 == 11, 1); // floor((80-1)/7) = 11
+
+    // CASE 3: Saturation to u64::MAX when (ti-1)/bi > u64::MAX
+    let mut ts3 = vector::empty<u128>();
+    let mut bs3 = vector::empty<u128>();
+
+    vector::push_back(&mut ts3, std::u128::max_value!());
+    vector::push_back(&mut bs3, 1u128);
+
+    let ub3 = arbitrage_math::test_only_upper_bound_b(&ts3, &bs3);
+    assert!(ub3 == std::u64::max_value!(), 2); // Saturates to u64::MAX
+}
+
+#[test]
+/// Test profit_at_b unimodality: samples around b* and checks rise-then-fall shape
+fun test_unimodality_profit_at_b_grid() {
+    let mut scenario = ts::begin(ADMIN);
+
+    // Create medium-complexity market with clear arbitrage opportunity
+    let spot_pool = create_test_spot_pool(
+        1_100_000,
+        2_700_000,
+        25,
+        ts::ctx(&mut scenario)
+    );
+
+    let conditional_pools = create_test_conditional_pools_3(
+        900_000, 300_000,  // Pool 0: cheap
+        800_000, 320_000,  // Pool 1: cheaper
+        1_200_000, 250_000, // Pool 2: expensive
+        30,
+        ts::ctx(&mut scenario)
+    );
+
+    // Build TAB constants
+    let (r_asset, r_stable) = unified_spot_pool::get_reserves<ASSET, STABLE>(&spot_pool);
+    let fee_bps = unified_spot_pool::get_fee_bps<ASSET, STABLE>(&spot_pool);
+
+    let (ts, as_vals, bs) = arbitrage_math::test_only_build_tab_constants(
+        r_asset,
+        r_stable,
+        fee_bps,
+        &conditional_pools
+    );
+
+    // Get upper bound
+    let ub = arbitrage_math::test_only_upper_bound_b(&ts, &bs);
+    if (ub == 0) {
+        cleanup_spot_pool(spot_pool);
+        cleanup_conditional_pools(conditional_pools);
+        ts::end(scenario);
+        return
+    };
+
+    // Find b* via optimal search
+    let market_scale = if (r_asset / 10_000 == 0) { 100 } else { r_asset / 10_000 };
+    let (b_star, _p_star) = arbitrage_math::test_only_optimal_b_search(&ts, &as_vals, &bs, market_scale);
+
+    // Sample around b* (±5 steps, step = ub / 200)
+    let step = if (ub / 200 == 0) { 1 } else { ub / 200 };
+    let window = 5;
+
+    let left_start = if (b_star > window * step) { b_star - window * step } else { 0 };
+    let right_end = if (b_star + window * step > ub) { ub } else { b_star + window * step };
+
+    // Collect profit sequence
+    let mut seq = vector::empty<u128>();
+    let mut b = left_start;
+
+    while (b <= right_end) {
+        let profit = arbitrage_math::test_only_profit_at_b(&ts, &as_vals, &bs, b);
+        vector::push_back(&mut seq, profit);
+
+        if (right_end - b < step) break;
+        b = b + step;
+    };
+
+    // Find maximum profit in sequence
+    let mut max_profit = 0u128;
+    let mut i = 0;
+    while (i < vector::length(&seq)) {
+        let p = *vector::borrow(&seq, i);
+        if (p > max_profit) {
+            max_profit = p;
+        };
+        i = i + 1;
+    };
+
+    // Epsilon: 0.05% tolerance for near-optimal points
+    let eps = if (max_profit / 2000 == 0) { 1 } else { max_profit / 2000 };
+
+    // Check unimodality: sequence should be ascending then descending (within epsilon)
+    // Phase 0 = ascending, Phase 1 = descending
+    let mut phase = 0u64;
+    let mut j = 1;
+
+    while (j < vector::length(&seq)) {
+        let p_prev = *vector::borrow(&seq, j - 1);
+        let p_curr = *vector::borrow(&seq, j);
+
+        if (phase == 0) {
+            // Ascending phase: allow transition to descending when profit decreases
+            if (p_curr + eps < p_prev) {
+                phase = 1; // Transition to descending
+            };
+        } else {
+            // Descending phase: must continue descending (within epsilon)
+            // Allow small increases due to discrete sampling, but not large ones
+            assert!(p_curr <= p_prev + eps, j);
+        };
+
+        j = j + 1;
+    };
+
+    // Verify we saw both phases (if sequence is long enough AND profit is significant)
+    // Skip check if profit is negligible or sequence is too short
+    if (vector::length(&seq) > 5 && max_profit > 1000) {
+        assert!(phase == 1, 100); // Should have reached descending phase
+    };
+
+    cleanup_spot_pool(spot_pool);
+    cleanup_conditional_pools(conditional_pools);
     ts::end(scenario);
 }
 

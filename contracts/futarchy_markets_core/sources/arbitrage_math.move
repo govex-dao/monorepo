@@ -458,7 +458,7 @@ fun x_required_for_b(
         let denom = ti - b_bi_product;
 
         // OVERFLOW FIX #2: Check b × A_i overflow before calculating numerator
-        let numerator = if (ai > std::u128::max_value!() / b_u128) {
+        let numerator = if (b_u128 > 0 && ai > std::u128::max_value!() / b_u128) {
             // Overflow would occur - this pool requires maximum input
             // Return saturated max as this pool is the bottleneck
             return std::u64::max_value!()
@@ -711,14 +711,21 @@ fun build_tab_constants(
 // === Simulation Functions (For Verification) ===
 
 /// Calculate arbitrage profit for specific amount (simulation)
-/// spot_swap_is_stable_to_asset: true if spot swap is stable→asset, false if asset→stable
+/// spot_swap_is_stable_to_asset: true = Spot→Conditional (buy from spot, sell to conditionals)
+/// spot_swap_is_stable_to_asset: false = Conditional→Spot (buy from conditionals, sell to spot)
 public fun calculate_spot_arbitrage_profit<AssetType, StableType>(
     spot: &UnifiedSpotPool<AssetType, StableType>,
     conditionals: &vector<LiquidityPool>,
     arbitrage_amount: u64,
     spot_swap_is_stable_to_asset: bool,
 ): u128 {
-    simulate_spot_to_conditional_profit(spot, conditionals, arbitrage_amount, spot_swap_is_stable_to_asset)
+    if (spot_swap_is_stable_to_asset) {
+        // Spot→Conditional: Buy asset from spot (stable→asset swap), sell to conditionals
+        simulate_spot_to_conditional_profit(spot, conditionals, arbitrage_amount, spot_swap_is_stable_to_asset)
+    } else {
+        // Conditional→Spot: Buy from conditionals, recombine, sell to spot (asset→stable swap)
+        simulate_conditional_to_spot_profit(spot, conditionals, arbitrage_amount)
+    }
 }
 
 fun simulate_spot_to_conditional_profit<AssetType, StableType>(
@@ -986,4 +993,68 @@ fun calculate_conditional_cost(
     };
 
     total_cost
+}
+
+// ============================================================================
+// TEST-ONLY WRAPPERS
+// ============================================================================
+// These wrappers expose internal functions for white-box testing.
+// They are compiled out of production builds (#[test_only] attribute).
+
+#[test_only]
+public fun test_only_build_tab_constants(
+    spot_asset_reserve: u64,
+    spot_stable_reserve: u64,
+    spot_fee_bps: u64,
+    conditionals: &vector<LiquidityPool>,
+): (vector<u128>, vector<u128>, vector<u128>) {
+    build_tab_constants(spot_asset_reserve, spot_stable_reserve, spot_fee_bps, conditionals)
+}
+
+#[test_only]
+public fun test_only_profit_at_b(
+    ts: &vector<u128>,
+    as_vals: &vector<u128>,
+    bs: &vector<u128>,
+    b: u64,
+): u128 {
+    profit_at_b(ts, as_vals, bs, b)
+}
+
+#[test_only]
+public fun test_only_optimal_b_search(
+    ts: &vector<u128>,
+    as_vals: &vector<u128>,
+    bs: &vector<u128>,
+    threshold: u64,
+): (u64, u128) {
+    optimal_b_search(ts, as_vals, bs, threshold)
+}
+
+#[test_only]
+public fun test_only_upper_bound_b(
+    ts: &vector<u128>,
+    bs: &vector<u128>,
+): u64 {
+    upper_bound_b(ts, bs)
+}
+
+#[test_only]
+public fun test_only_x_required_for_b(
+    ts: &vector<u128>,
+    as_vals: &vector<u128>,
+    bs: &vector<u128>,
+    b: u64,
+): u64 {
+    x_required_for_b(ts, as_vals, bs, b)
+}
+
+#[test_only]
+public fun test_only_calculate_spot_revenue(
+    spot_asset: u64,
+    spot_stable: u64,
+    beta: u64,
+    b: u64,
+): u128 {
+    calculate_spot_revenue(spot_asset, spot_stable, beta, b)
 }
