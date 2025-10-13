@@ -99,8 +99,8 @@ fun test_fuzzing_high_dimensional_markets() {
     let mut rng = rng::seed(0xCAFEBABE, 0xDEADBEEF); // Different seed
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 5u64; // Fewer cases (these are expensive)
-    let n = 10u64;        // 10 conditionals = high dimensional
+    let num_cases = 25u64;  // Balanced: thorough testing without timeout
+    let n = 10u64;          // 10 conditionals = high dimensional
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -168,8 +168,8 @@ fun test_fuzzing_max_conditionals() {
     let mut rng = rng::seed(0xDEADC0DE, 0xBEEFF00D);
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 3u64; // Fewer cases (N=50 is expensive)
-    let n = 50u64;        // MAX_CONDITIONALS
+    let num_cases = 5u64;   // Minimal for N=50 (O(N²) = O(2500) per case, still validates max capacity)
+    let n = 50u64;          // MAX_CONDITIONALS
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -236,7 +236,7 @@ fun test_fuzzing_extreme_values() {
     let mut rng = rng::seed(0xFEEDFACE, 0xBAADF00D);
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 10u64;
+    let num_cases = 50u64;  // Industry-standard fuzzing (50-100 is standard range)
 
     let mut case = 0u64;
     while (case < num_cases) {
