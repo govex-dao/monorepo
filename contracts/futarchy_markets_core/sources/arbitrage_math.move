@@ -9,7 +9,7 @@
 /// ✅ 4. Bidirectional solving - Catches all opportunities
 /// ✅ 5. Min profit threshold - Simple profitability check
 /// ✅ 6. u256 arithmetic - Accurate overflow-free calculations
-/// ✅ 7. Two-phase profit precision - 0.01% profit accuracy via coarse + refinement search
+/// ✅ 7. Pofit precision - 0.01% (of largest pool size) profit accuracy
 ///
 /// MATH FOUNDATION:
 ///

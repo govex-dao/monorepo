@@ -77,6 +77,7 @@ const EMetadataMissing: u64 = 129;       // Coin metadata must be supplied befor
 const ESupplyNotZero: u64 = 130;         // Treasury cap supply must be zero at raise creation
 const EInvalidClaimNFT: u64 = 131;       // Claim NFT doesn't match this raise
 const EInvalidCreatorCap: u64 = 132;     // Creator cap doesn't match this raise
+const EEarlyCompletionNotAllowed: u64 = 133;  // Early completion not allowed for this raise
 
 // === Constants ===
 // Note: Most constants moved to futarchy_one_shot_utils::constants for centralized management
@@ -85,7 +86,7 @@ const STATE_FUNDING: u8 = 0;
 const STATE_SUCCESSFUL: u8 = 1;
 const STATE_FAILED: u8 = 2;
 
-const PERMISSIONLESS_COMPLETION_DELAY_MS: u64 = 2 * 24 * 60 * 60 * 1000;
+const PERMISSIONLESS_COMPLETION_DELAY_MS: u64 = 24 * 60 * 60 * 1000;  // 24 hours
 
 // Max u64 value (used for "no upper limit" in 2D auctions)
 const MAX_U64: u64 = 18446744073709551615;
@@ -263,6 +264,9 @@ public struct Raise<phantom RaiseToken, phantom StableCoin> has key, store {
     min_raise_amount: u64,
     max_raise_amount: Option<u64>, // The new creator-defined hard cap (protocol U_0)
     deadline_ms: u64,
+    /// Whether the founder can end the raise early if minimum raise amount is met.
+    /// Set yes to if you want decntralized holder base and less gaming. Set no to prioirtise instituionals managing large sums of money
+    allow_early_completion: bool,
     /// Balance of the token being sold to contributors.
     raise_token_vault: Balance<RaiseToken>,
     /// Amount of tokens being sold (LEGACY: fixed upfront; 2D: set at settlement to Q*)
@@ -551,6 +555,7 @@ public entry fun create_raise_2d<RaiseToken: drop, StableCoin: drop>(
     max_raise_amount: Option<u64>,     // U_0 (protocol max)
     allowed_prices: vector<u64>,       // Sorted price ticks (bounded to 128)
     allowed_total_raises: vector<u64>, // Sorted T-grid for [L_i, U_i] intervals (bounded to 128)
+    allow_early_completion: bool,      // Whether founder can end raise early if min met
     description: String,
     launchpad_fee: Coin<sui::sui::SUI>,
     clock: &Clock,
@@ -595,6 +600,7 @@ public entry fun create_raise_2d<RaiseToken: drop, StableCoin: drop>(
         max_raise_amount,
         allowed_prices,
         allowed_total_raises,
+        allow_early_completion,
         description,
         clock,
         ctx,
@@ -1286,11 +1292,12 @@ public entry fun allocate_tokens_fcfs_2d<RaiseToken, StableCoin>(
 
 /// Allow creator to end raise early
 /// OPTIMIZATION: Removed minimum raise check (requires total_raised counter)
-/// Creator can end early at any time, settlement will determine success
+/// Creator can end early if allowed by configuration
 ///
 /// Requirements:
 /// - Creator cap required
 /// - Before deadline
+/// - Early completion must be allowed for this raise
 public entry fun end_raise_early<RT, SC>(
     raise: &mut Raise<RT, SC>,
     creator_cap: &CreatorCap,
@@ -1305,6 +1312,9 @@ public entry fun end_raise_early<RT, SC>(
 
     // Must not have already passed deadline
     assert!(clock.timestamp_ms() < raise.deadline_ms, EDeadlineNotReached);
+
+    // Check if early completion is allowed for this raise
+    assert!(raise.allow_early_completion, EEarlyCompletionNotAllowed);
 
     // Save original deadline before modifying
     let original_deadline = raise.deadline_ms;
@@ -2035,6 +2045,7 @@ fun init_raise_2d<RaiseToken: drop, StableCoin: drop>(
     max_raise_amount: Option<u64>,
     allowed_prices: vector<u64>,
     allowed_total_raises: vector<u64>,
+    allow_early_completion: bool,
     description: String,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -2066,6 +2077,7 @@ fun init_raise_2d<RaiseToken: drop, StableCoin: drop>(
         min_raise_amount,
         max_raise_amount,
         deadline_ms: deadline,
+        allow_early_completion,
         raise_token_vault: balance::zero(),  // Empty - will mint Q* at settlement
         tokens_for_sale_amount: 0,           // Will be set to Q* at settlement
         stable_coin_vault: balance::zero(),
