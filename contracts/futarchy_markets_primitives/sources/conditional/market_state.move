@@ -1,9 +1,9 @@
-module futarchy_markets_core::market_state;
+module futarchy_markets_primitives::market_state;
 
 use std::string::String;
 use sui::clock::Clock;
 use sui::event;
-use futarchy_markets_core::conditional_amm::LiquidityPool;
+use futarchy_markets_primitives::conditional_amm::LiquidityPool;
 
 // === Introduction ===
 // This module tracks proposal life cycle and acts as a source of truth for proposal state
@@ -168,7 +168,7 @@ public fun finalize(state: &mut MarketState, winner: u64, clock: &Clock) {
 
 /// Initialize AMM pools for the market
 /// Called once when market transitions to TRADING state
-public(package) fun set_amm_pools(state: &mut MarketState, pools: vector<LiquidityPool>) {
+public fun set_amm_pools(state: &mut MarketState, pools: vector<LiquidityPool>) {
     assert!(state.amm_pools.is_none(), 0); // Pools can only be set once
     option::fill(&mut state.amm_pools, pools);
 }
@@ -179,12 +179,12 @@ public fun has_amm_pools(state: &MarketState): bool {
 }
 
 /// Borrow AMM pools immutably
-public(package) fun borrow_amm_pools(state: &MarketState): &vector<LiquidityPool> {
+public fun borrow_amm_pools(state: &MarketState): &vector<LiquidityPool> {
     state.amm_pools.borrow()
 }
 
 /// Borrow AMM pools mutably
-public(package) fun borrow_amm_pools_mut(state: &mut MarketState): &mut vector<LiquidityPool> {
+public fun borrow_amm_pools_mut(state: &mut MarketState): &mut vector<LiquidityPool> {
     state.amm_pools.borrow_mut()
 }
 
@@ -195,7 +195,7 @@ public(package) fun get_pool_by_outcome(state: &MarketState, outcome_idx: u8): &
 }
 
 /// Get a specific pool mutably by outcome index
-public(package) fun get_pool_mut_by_outcome(state: &mut MarketState, outcome_idx: u8): &mut LiquidityPool {
+public fun get_pool_mut_by_outcome(state: &mut MarketState, outcome_idx: u8): &mut LiquidityPool {
     let pools = state.amm_pools.borrow_mut();
     &mut pools[(outcome_idx as u64)]
 }
@@ -272,7 +272,7 @@ public fun get_finalization_time(state: &MarketState): Option<u64> {
 // === Early Resolve Metrics Functions ===
 
 /// Create a new EarlyResolveMetrics struct (helper for initialization)
-public(package) fun new_early_resolve_metrics(
+public fun new_early_resolve_metrics(
     initial_winner_index: u64,
     current_time_ms: u64,
 ): EarlyResolveMetrics {
@@ -324,7 +324,7 @@ public fun get_last_flip_time_ms(state: &MarketState): u64 {
 }
 
 /// Update metrics when winner changes (called by early_resolve module)
-public(package) fun update_winner_metrics(
+public fun update_winner_metrics(
     state: &mut MarketState,
     new_winner_index: u64,
     current_time_ms: u64,

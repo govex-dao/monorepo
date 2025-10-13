@@ -6,10 +6,10 @@
 /// 2. Intent executes immediately via Executable
 /// 3. Resulting coins are passed to these strategy functions
 /// 4. Strategy performs conditional swaps to create asymmetric markets
-module futarchy_markets_core::market_init_strategies;
+module futarchy_markets_operations::market_init_strategies;
 
 use futarchy_markets_core::swap_core;
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::proposal::Proposal;
 use sui::coin::{Self, Coin};
 use sui::balance;

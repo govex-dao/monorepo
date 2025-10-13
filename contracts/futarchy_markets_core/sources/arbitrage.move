@@ -8,9 +8,9 @@
 
 module futarchy_markets_core::arbitrage;
 
-use futarchy_markets_core::conditional_balance::{Self, ConditionalMarketBalance};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::market_state;
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::market_state;
 use futarchy_markets_core::swap_core::{Self, SwapSession};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_core::swap_position_registry::{Self, SwapPositionRegistry};

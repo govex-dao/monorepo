@@ -1,10 +1,10 @@
-module futarchy_markets_core::spot_conditional_quoter;
+module futarchy_markets_operations::spot_conditional_quoter;
 
 use std::option::{Self, Option};
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_core::coin_escrow::TokenEscrow;
-use futarchy_markets_core::market_state::MarketState;
+use futarchy_markets_primitives::coin_escrow::TokenEscrow;
+use futarchy_markets_primitives::market_state::MarketState;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use sui::clock::Clock;
 

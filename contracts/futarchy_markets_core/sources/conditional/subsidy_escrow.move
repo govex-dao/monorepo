@@ -14,7 +14,7 @@ use sui::transfer;
 use sui::event;
 use futarchy_one_shot_utils::math;
 use futarchy_core::subsidy_config::{Self, ProtocolSubsidyConfig};
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 
 // === Errors ===
 const ESubsidyExhausted: u64 = 0;           // All cranks completed

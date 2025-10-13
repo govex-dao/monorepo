@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "D6717B8EAFC0E17446259C747CD464BCF716770BEB31DB2DFCF88366D215BCF8"
+manifest_digest = "1DBC8FD747CAFCF0D3ECE4CA7173C4885C5010A88F742366E0DA69C421981FD8"
 deps_digest = "8227D341C0550A37580C10FA45FE148A465225149C69D179737E0FE454AD6AEC"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -11,8 +11,8 @@ dependencies = [
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -82,7 +82,6 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -96,8 +95,22 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+]
+
+[[move.package]]
+id = "futarchy_markets_primitives"
+source = { local = "../futarchy_markets_primitives" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -110,14 +123,6 @@ dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
-id = "futarchy_seal_utils"
-source = { local = "../futarchy_seal_utils" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
 ]
 
 [[move.package]]

@@ -7,10 +7,10 @@
 module futarchy_markets_core::arbitrage_core;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::proposal::Proposal;
 use futarchy_markets_core::arbitrage_math;
-use futarchy_markets_core::market_state;
+use futarchy_markets_primitives::market_state;
 use futarchy_markets_core::swap_position_registry::SwapPositionRegistry;
 use sui::coin::{Self, Coin};
 use sui::balance::{Self, Balance};

@@ -8,9 +8,9 @@
 module futarchy_markets_core::quantum_lp_manager;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::market_state::{Self, MarketState};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_one_shot_utils::math;
 use sui::clock::Clock;
 use sui::coin::Coin;

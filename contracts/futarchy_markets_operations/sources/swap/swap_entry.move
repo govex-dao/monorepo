@@ -21,7 +21,7 @@
 /// 4. swap_conditional_asset_to_stable - Returns everything to caller directly
 ///    - No recipient parameter needed (trader is the caller)
 
-module futarchy_markets_core::swap_entry;
+module futarchy_markets_operations::swap_entry;
 
 use sui::coin::{Self, Coin};
 use sui::clock::Clock;
@@ -30,11 +30,11 @@ use sui::transfer;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_core::swap_core;
 use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::conditional_balance::{Self, ConditionalMarketBalance};
-use futarchy_markets_core::market_state;
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::market_state;
 use futarchy_markets_core::arbitrage;
-use futarchy_markets_core::no_arb_guard;
+use futarchy_markets_operations::no_arb_guard;
 use std::option;
 
 // === Errors ===

@@ -14,8 +14,8 @@
 module futarchy_markets_core::early_resolve;
 
 use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_core::conditional_amm;
-use futarchy_markets_core::market_state::{Self, MarketState};
+use futarchy_markets_primitives::conditional_amm;
+use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_core::futarchy_config::{Self, EarlyResolveConfig};
 use std::string::{Self, String};
 use sui::clock::Clock;

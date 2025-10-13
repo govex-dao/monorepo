@@ -33,8 +33,8 @@
 module futarchy_markets_core::swap_position_registry;
 
 use futarchy_markets_core::proposal::Proposal;
-use futarchy_markets_core::coin_escrow::TokenEscrow;
-use futarchy_markets_core::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::coin_escrow::TokenEscrow;
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
 use futarchy_one_shot_utils::math;
 use sui::coin::{Self, Coin};
 use sui::table::{Self, Table};

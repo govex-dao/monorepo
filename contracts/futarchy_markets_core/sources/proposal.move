@@ -1,10 +1,10 @@
 module futarchy_markets_core::proposal;
 
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::liquidity_initialize;
-use futarchy_markets_core::market_state;
-use futarchy_markets_core::coin_validation;
+use futarchy_markets_primitives::market_state;
+use futarchy_one_shot_utils::coin_validation;
 use std::ascii::String as AsciiString;
 use std::string::{Self, String};
 use std::type_name;

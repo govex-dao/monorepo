@@ -1,7 +1,7 @@
 /// Registry of pre-created "blank" coin types that can be used for conditional tokens
 /// Solves the problem that coin types can't be created dynamically in Sui
 /// Allows proposal creators to acquire coin pairs without requiring two transactions
-module futarchy_markets_core::coin_registry;
+module futarchy_one_shot_utils::coin_registry;
 
 use sui::{
     coin::{TreasuryCap, CoinMetadata, Coin},
@@ -10,7 +10,7 @@ use sui::{
     clock::Clock,
     dynamic_field,
 };
-use futarchy_markets_core::coin_validation;
+use futarchy_one_shot_utils::coin_validation;
 
 // === Errors ===
 const ENoCoinSetsAvailable: u64 = 0;

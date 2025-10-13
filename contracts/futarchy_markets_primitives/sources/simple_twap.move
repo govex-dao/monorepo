@@ -27,7 +27,7 @@
 ///
 /// ============================================================================
 
-module futarchy_markets_core::simple_twap;
+module futarchy_markets_primitives::simple_twap;
 
 use futarchy_one_shot_utils::math;
 use sui::clock::Clock;

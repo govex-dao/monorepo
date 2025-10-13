@@ -125,6 +125,7 @@ and patara.app
 - [ ] Maybe need second entry point??
 - [ ] https://v1.metadao.fi/metadao/create
 - [ ] Change liuquidity split ratio to 0 to 100 look at conditional_liqudity_ratio
+- [ ] ad simple window to twap maybe cant accumualte by more than 5%???
 
  
 1) dao needs to supside LPs during proposals ( use proposer fee)\

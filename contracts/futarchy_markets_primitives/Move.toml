@@ -1,18 +1,14 @@
 [package]
-name = "futarchy_markets_operations"
+name = "futarchy_markets_primitives"
 edition = "2024"
 license = "BSL"
 
 [dependencies]
-futarchy_markets_core = { local = "../futarchy_markets_core" }
-futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
 futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 
 [addresses]
-futarchy_markets_operations = "0x0"
-futarchy_markets_core = "0x0"
 futarchy_markets_primitives = "0x0"
 futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
 futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"

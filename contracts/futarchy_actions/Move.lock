@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "40479AE949C0257615DBA7D870386620D1A5894DFA146724B6EA4A1F18670BAA"
-deps_digest = "5644D8F82FD4EE1CAA4A3A54F9B0AA05F59B03EA0BDB596C4AD151FF0689910B"
+manifest_digest = "FFF90EF009A882C65A864AB10C7E39444CADC953A5460621CF5835DCDAA46C9E"
+deps_digest = "A37FF78F7B0CA9C18B30361A5DB661FF64D9B8FB6E6FE30E76ECC6F94D8787DB"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -19,6 +19,7 @@ dependencies = [
   { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
@@ -120,7 +121,6 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -139,10 +139,10 @@ dependencies = [
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
   { id = "futarchy_vault", name = "futarchy_vault" },
 ]
@@ -224,8 +224,8 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -240,8 +240,22 @@ dependencies = [
   { id = "SuiSystem", name = "SuiSystem" },
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_seal_utils", name = "futarchy_seal_utils" },
+  { id = "futarchy_types", name = "futarchy_types" },
+]
+
+[[move.package]]
+id = "futarchy_markets_primitives"
+source = { local = "../futarchy_markets_primitives" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+  { id = "futarchy_core", name = "futarchy_core" },
+  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]
 
@@ -295,14 +309,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "futarchy_seal_utils"
-source = { local = "../futarchy_seal_utils" }
-
-dependencies = [
-  { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
 id = "futarchy_streams"
 source = { local = "../futarchy_streams" }
 
@@ -345,6 +351,7 @@ dependencies = [
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
+  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
 ]

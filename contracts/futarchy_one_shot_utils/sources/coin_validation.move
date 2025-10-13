@@ -1,6 +1,6 @@
 /// Common validation logic for conditional token coin metadata and treasury caps
 /// Used by both coin_registry and proposal modules to enforce invariants
-module futarchy_markets_core::coin_validation;
+module futarchy_one_shot_utils::coin_validation;
 
 use sui::coin::{TreasuryCap, CoinMetadata};
 use std::string;

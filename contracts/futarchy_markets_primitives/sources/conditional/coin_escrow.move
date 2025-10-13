@@ -1,6 +1,6 @@
-module futarchy_markets_core::coin_escrow;
+module futarchy_markets_primitives::coin_escrow;
 
-use futarchy_markets_core::market_state::MarketState;
+use futarchy_markets_primitives::market_state::MarketState;
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
@@ -272,7 +272,7 @@ public(package) fun burn_conditional<AssetType, StableType, ConditionalCoinType>
 
 /// Deposit spot coins to escrow (for balance-based operations)
 /// Returns amounts deposited (for balance tracking)
-public(package) fun deposit_spot_coins<AssetType, StableType>(
+public fun deposit_spot_coins<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_coin: Coin<AssetType>,
     stable_coin: Coin<StableType>,
@@ -291,7 +291,7 @@ public(package) fun deposit_spot_coins<AssetType, StableType>(
 }
 
 /// Withdraw spot coins from escrow (for complete set burn)
-public(package) fun withdraw_from_escrow<AssetType, StableType>(
+public fun withdraw_from_escrow<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_amount: u64,
     stable_amount: u64,

@@ -146,10 +146,10 @@
 ///   arguments: [proposalId, /* ... */],
 /// });
 /// ```
-module futarchy_markets_core::proposal_with_market_init;
+module futarchy_markets_operations::proposal_with_market_init;
 
 use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::market_init_strategies::{
     Self,
     ConditionalRaiseConfig,

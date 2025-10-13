@@ -29,8 +29,8 @@ use std::option::{Self, Option};
 use std::type_name::TypeName;
 use std::vector;
 use futarchy_markets_core::swap_position_registry::{Self, SwapPositionRegistry};
-use futarchy_markets_core::simple_twap::{Self, SimpleTWAP};
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 
 // === Errors ===
 const EInsufficientLiquidity: u64 = 1;
@@ -373,7 +373,7 @@ public fun remove_liquidity<AssetType, StableType>(
 
 /// INTERNAL: Swap stable for asset (used by arbitrage only)
 /// Public swaps must go through swap_entry to trigger auto-arbitrage
-public(package) fun swap_stable_for_asset<AssetType, StableType>(
+public fun swap_stable_for_asset<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     stable_in: Coin<StableType>,
     min_asset_out: u64,
@@ -406,7 +406,7 @@ public(package) fun swap_stable_for_asset<AssetType, StableType>(
 
 /// INTERNAL: Swap asset for stable (used by arbitrage only)
 /// Public swaps must go through swap_entry to trigger auto-arbitrage
-public(package) fun swap_asset_for_stable<AssetType, StableType>(
+public fun swap_asset_for_stable<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_in: Coin<AssetType>,
     min_stable_out: u64,

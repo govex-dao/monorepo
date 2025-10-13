@@ -1,7 +1,7 @@
-module futarchy_markets_core::liquidity_interact;
+module futarchy_markets_operations::liquidity_interact;
 
-use futarchy_markets_core::conditional_amm;
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm;
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::fee::FeeManager;
 use futarchy_markets_core::proposal::Proposal;
 use sui::balance::Balance;

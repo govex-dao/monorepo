@@ -28,12 +28,12 @@
 ///
 /// ============================================================================
 
-module futarchy_markets_core::spot_oracle_interface;
+module futarchy_markets_operations::spot_oracle_interface;
 
 use sui::clock::Clock;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_core::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
 use std::vector;
 use std::option;
 

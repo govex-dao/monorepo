@@ -31,7 +31,7 @@
 /// 
 /// ============================================================================
 
-module futarchy_markets_core::oracle;
+module futarchy_markets_primitives::oracle;
 
 use futarchy_one_shot_utils::math;
 use futarchy_one_shot_utils::constants;

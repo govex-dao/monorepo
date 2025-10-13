@@ -31,7 +31,7 @@
 module futarchy_markets_core::arbitrage_math;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_one_shot_utils::math;
 
 // === Errors ===

@@ -11,13 +11,13 @@
 /// balances = [out0_asset, out0_stable, out1_asset, out1_stable, ...]
 /// Index formula: idx = (outcome_idx * 2) + (is_asset ? 0 : 1)
 
-module futarchy_markets_core::conditional_balance;
+module futarchy_markets_primitives::conditional_balance;
 
 use sui::object::{Self, UID, ID};
 use sui::coin::Coin;
 use sui::event;
 use std::vector;
-use futarchy_markets_core::coin_escrow;
+use futarchy_markets_primitives::coin_escrow;
 
 // === Errors ===
 const EInvalidOutcomeIndex: u64 = 0;

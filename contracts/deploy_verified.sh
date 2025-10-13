@@ -181,7 +181,7 @@ deploy_and_verify() {
     fi
 }
 
-# Package list in deployment order (22 packages total - futarchy_markets split into 2)
+# Package list in deployment order (22 packages total - futarchy_markets split into 3: primitives, core, operations)
 declare -a PACKAGES=(
     # Move Framework packages (3)
     "AccountExtensions:/Users/admin/monorepo/contracts/move-framework/packages/extensions:account_extensions"
@@ -192,11 +192,11 @@ declare -a PACKAGES=(
     "WAL:/Users/admin/monorepo/contracts/walrus_wal:wal"
     "Walrus:/Users/admin/monorepo/contracts/walrus_walrus:walrus"
 
-    # Futarchy packages (17 - split futarchy_markets into _core and _operations)
+    # Futarchy packages (17 - split futarchy_markets into primitives, core, and operations)
     "futarchy_types:/Users/admin/monorepo/contracts/futarchy_types:futarchy_types"
     "futarchy_one_shot_utils:/Users/admin/monorepo/contracts/futarchy_one_shot_utils:futarchy_one_shot_utils"
-    "futarchy_seal_utils:/Users/admin/monorepo/contracts/futarchy_seal_utils:futarchy_seal_utils"
     "futarchy_core:/Users/admin/monorepo/contracts/futarchy_core:futarchy_core"
+    "futarchy_markets_primitives:/Users/admin/monorepo/contracts/futarchy_markets_primitives:futarchy_markets_primitives"
     "futarchy_markets_core:/Users/admin/monorepo/contracts/futarchy_markets_core:futarchy_markets_core"
     "futarchy_markets_operations:/Users/admin/monorepo/contracts/futarchy_markets_operations:futarchy_markets_operations"
     "futarchy_vault:/Users/admin/monorepo/contracts/futarchy_vault:futarchy_vault"

@@ -4,8 +4,8 @@
 /// Users don't call this directly - use swap_entry.move instead.
 module futarchy_markets_core::swap_core;
 
-use futarchy_markets_core::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::conditional_balance::{Self};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_balance::{Self};
 use futarchy_markets_core::early_resolve;
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_one_shot_utils::math;

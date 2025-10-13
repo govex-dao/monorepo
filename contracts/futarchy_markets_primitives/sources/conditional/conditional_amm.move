@@ -1,9 +1,9 @@
-module futarchy_markets_core::conditional_amm;
+module futarchy_markets_primitives::conditional_amm;
 
 use futarchy_one_shot_utils::math;
 use sui::object::ID;
-use futarchy_markets_core::oracle::{Self, Oracle};
-use futarchy_markets_core::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets_primitives::oracle::{Self, Oracle};
+use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
 use sui::clock::Clock;
 use sui::event;
@@ -836,7 +836,7 @@ public fun reset_protocol_fees(pool: &mut LiquidityPool) {
 /// Benefits existing LPs by increasing k
 ///
 /// CRITICAL: Only callable by liquidity_subsidy module to prevent manipulation
-public(package) fun add_subsidy_to_reserves(
+public fun add_subsidy_to_reserves(
     pool: &mut LiquidityPool,
     asset_add: u64,
     stable_add: u64,

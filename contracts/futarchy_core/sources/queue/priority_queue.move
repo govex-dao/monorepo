@@ -20,8 +20,6 @@ use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
 use account_protocol::account::{Self, Account};
 use futarchy_types::action_specs::{Self, InitActionSpecs};
-use futarchy_seal_utils::seal_commit_reveal::{Self, SealContainer};
-use futarchy_seal_utils::market_init_params::MarketInitParams;
 
 // === Events ===
 
@@ -73,13 +71,9 @@ const EInvalidBond: u64 = 5;
 const EProposalInGracePeriod: u64 = 6;
 const EHeapInvariantViolated: u64 = 7;
 const EFeeExceedsMaximum: u64 = 8;
-const ESealNotRevealed: u64 = 9;
 const EProposalNotTimedOut: u64 = 10;
-const EMarketInitParamsNotAvailable: u64 = 11;
 const EBondNotExtracted: u64 = 12;
 const ECrankBountyNotExtracted: u64 = 13;
-const ETooEarlyToReveal: u64 = 14;
-const EInsufficientFundsForBuyback: u64 = 15;
 
 // === Constants ===
 
@@ -136,11 +130,6 @@ public struct QueuedProposal<phantom StableCoin> has store {
     required_council_id: Option<ID>,
     /// Proof of council approval (ApprovedIntentSpec ID) if mode required it
     council_approval_proof: Option<ID>,
-
-    // === SEAL Commit-Reveal Fields ===
-    /// Market initialization parameters (sealed or public)
-    /// Contains SEAL commitment, fallback params, and revealed params
-    market_init_params: Option<SealContainer<MarketInitParams>>,
 
     /// Timestamp when proposal reached top of queue (for timeout mechanism)
     /// Set to Some(timestamp) when proposal becomes #1, None otherwise
@@ -545,7 +534,6 @@ public fun insert<StableCoin>(
             policy_mode: _,
             required_council_id: _,
             council_approval_proof: _,
-            market_init_params: _,
             time_reached_top_of_queue: _,
             mut crank_bounty,
             used_quota: _,
@@ -702,7 +690,6 @@ public fun new_queued_proposal<StableCoin>(
         policy_mode,
         required_council_id,
         council_approval_proof,
-        market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
         used_quota,
@@ -743,7 +730,6 @@ public fun new_queued_proposal_with_id<StableCoin>(
         policy_mode,
         required_council_id,
         council_approval_proof,
-        market_init_params: option::none(),  // No SEAL by default
         time_reached_top_of_queue: option::none(),  // Not at top yet
         crank_bounty: option::none(),  // No bounty by default
         used_quota,
@@ -1078,7 +1064,6 @@ public entry fun cancel_proposal<StableCoin>(
         policy_mode: _,
         required_council_id: _,
         council_approval_proof: _,
-        market_init_params: _,
         time_reached_top_of_queue: _,
         mut crank_bounty,
         used_quota: _,
@@ -1241,7 +1226,6 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
         policy_mode: _,
         required_council_id: _,
         council_approval_proof: _,
-        market_init_params: _,
         time_reached_top_of_queue: _,
         crank_bounty,
         used_quota: _,
@@ -1257,78 +1241,10 @@ public fun destroy_proposal<StableCoin>(proposal: QueuedProposal<StableCoin>) {
     crank_bounty.destroy_none();
 }
 
-// === SEAL Commit-Reveal Functions ===
-
 /// Create queue mutation authority witness
 /// Only package modules can create this witness for authorized mutations
 public fun create_mutation_auth(): QueueMutationAuth {
     QueueMutationAuth {}
-}
-
-/// Set market init params (sealed or public) for a queued proposal
-/// Can only be called before proposal is cranked to PREMARKET
-/// Requires QueueMutationAuth witness for access control
-public fun set_market_init_params<StableCoin>(
-    _auth: QueueMutationAuth,  // ← Witness required
-    proposal: &mut QueuedProposal<StableCoin>,
-    params: SealContainer<MarketInitParams>,
-) {
-    proposal.market_init_params = option::some(params);
-}
-
-/// Reveal sealed market init params using decrypted data
-/// Anyone can call this after SEAL time-lock expires
-/// Clock parameter enforces time-lock - cannot reveal before reveal_time_ms
-public fun reveal_market_init_params<StableCoin>(
-    queue: &mut ProposalQueue<StableCoin>,
-    proposal_id: ID,
-    decrypted_params: MarketInitParams,
-    decrypted_salt: vector<u8>,
-    clock: &Clock,  // ← Pass to seal_commit_reveal for time-lock validation
-    ctx: &TxContext,
-) {
-    assert!(queue.proposal_indices.contains(proposal_id), EProposalNotFound);
-    let idx = *queue.proposal_indices.borrow(proposal_id);
-    let proposal = vector::borrow_mut(&mut queue.heap, idx);
-
-    assert!(option::is_some(&proposal.market_init_params), EMarketInitParamsNotAvailable);
-    let container = option::borrow_mut(&mut proposal.market_init_params);
-
-    // Time-lock validation happens inside reveal()
-    // Event emission happens inside reveal() for indexer tracking
-    seal_commit_reveal::reveal(container, decrypted_params, decrypted_salt, clock, ctx);
-}
-
-/// Get market init params if available (revealed or fallback)
-/// Returns None if SEAL not revealed and no fallback
-public fun get_market_init_params<StableCoin>(
-    proposal: &QueuedProposal<StableCoin>
-): Option<MarketInitParams> {
-    if (option::is_none(&proposal.market_init_params)) {
-        return option::none()
-    };
-
-    let container = option::borrow(&proposal.market_init_params);
-
-    // Check if params are available before getting them
-    if (!seal_commit_reveal::has_params(container)) {
-        return option::none()
-    };
-
-    // Use get_params_copy to get value by copy
-    option::some(*seal_commit_reveal::get_params(container))
-}
-
-/// Check if market init params are available for execution
-public fun has_market_init_params<StableCoin>(
-    proposal: &QueuedProposal<StableCoin>
-): bool {
-    if (option::is_none(&proposal.market_init_params)) {
-        return true  // No SEAL means params not needed, can execute
-    };
-
-    let container = option::borrow(&proposal.market_init_params);
-    seal_commit_reveal::has_params(container)
 }
 
 /// Set crank bounty for permissionless proposal execution

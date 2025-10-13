@@ -69,7 +69,7 @@ find \
 
 Run these commands from the project root directory (`/Users/admin/monorepo/`):
 
-**All 21 packages (Move Framework + Futarchy):**
+**All 20 packages (Move Framework + Futarchy):**
 ```bash
 find \
   contracts/move-framework/packages/extensions/sources \
@@ -80,6 +80,7 @@ find \
   contracts/futarchy_core/sources \
   contracts/futarchy_markets_core/sources \
   contracts/futarchy_markets_operations/sources \
+  contracts/futarchy_markets_primatives/sources \
   contracts/futarchy_vault/sources \
   contracts/futarchy_multisig/sources \
   contracts/futarchy_payments/sources \
@@ -88,11 +89,10 @@ find \
   contracts/futarchy_factory/sources \
   contracts/futarchy_lifecycle/sources \
   contracts/futarchy_legal_actions/sources \
-  contracts/futarchy_seal_utils/sources \
   contracts/futarchy_governance_actions/sources \
   contracts/futarchy_actions/sources \
   contracts/futarchy_dao/sources \
-  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_21_packages.txt
+  -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
 ```
 
 
