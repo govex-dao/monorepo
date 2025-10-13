@@ -1123,7 +1123,7 @@ public fun default_subsidy_config(): ProtocolSubsidyConfig {
     liquidity_subsidy_protocol::new_protocol_config_custom(
         false,                           // disabled by default
         100_000_000,                     // 0.1 SUI per outcome per crank
-        0,                               // 0 cranks default (DAO must configure)
+        100,                             // 100 cranks default
         100_000_000,                     // 0.1 SUI keeper fee per crank
         300_000,                         // 5 minutes minimum between cranks
     )

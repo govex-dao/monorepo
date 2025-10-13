@@ -568,11 +568,18 @@ public fun insert<StableCoin>(
     let proposer = proposal.proposer;
     let fee = proposal.fee;
     let priority_value = proposal.priority_score.computed_value;
-    
-    // Add to heap and bubble up - O(log n)!
+
+    // Add to heap - O(1)
     vector::push_back(&mut queue.heap, proposal);
+    let new_idx = queue.size;
     queue.size = queue.size + 1;
-    bubble_up(&mut queue.heap, &mut queue.proposal_indices, queue.size - 1);
+
+    // CRITICAL: Add to indices table BEFORE bubble_up
+    // bubble_up uses borrow_mut which requires the key to exist
+    queue.proposal_indices.add(proposal_id, new_idx);
+
+    // Now bubble up can safely update indices - O(log n)!
+    bubble_up(&mut queue.heap, &mut queue.proposal_indices, new_idx);
     
     // Emit queued event
     event::emit(ProposalQueued {
@@ -1373,4 +1380,110 @@ public fun test_internals<StableCoin>(queue: &ProposalQueue<StableCoin>): (u64, 
         queue.max_proposer_funded,
         queue.is_proposal_live,
     )
+}
+
+#[test_only]
+/// Create a test queued proposal with minimal required fields
+/// Other fields are set to sensible defaults for testing
+public fun new_test_queued_proposal<StableCoin>(
+    dao_id: ID,
+    proposer: address,
+    fee: u64,
+    title: String,
+    clock: &Clock,
+): QueuedProposal<StableCoin> {
+    use std::string;
+
+    let timestamp = clock.timestamp_ms();
+    let priority_score = create_priority_score(fee, timestamp);
+
+    QueuedProposal {
+        bond: option::none(),
+        proposal_id: @0x0.to_id(),  // Will be set during insert
+        dao_id,
+        proposer,
+        fee,
+        timestamp,
+        priority_score,
+        intent_spec: option::none(),
+        uses_dao_liquidity: false,
+        data: ProposalData {
+            title,
+            metadata: string::utf8(b""),
+            outcome_messages: vector::empty(),
+            outcome_details: vector::empty(),
+        },
+        queue_entry_time: 0,
+        policy_mode: 0,  // MODE_DAO_ONLY
+        required_council_id: option::none(),
+        council_approval_proof: option::none(),
+        time_reached_top_of_queue: option::none(),
+        crank_bounty: option::none(),
+        used_quota: false,
+    }
+}
+
+#[test_only]
+/// Destroy a queued proposal for testing, handling any resources
+/// Unlike the production destroy_proposal, this extracts and destroys resources automatically
+public fun destroy_for_testing<StableCoin>(proposal: QueuedProposal<StableCoin>) {
+    let QueuedProposal {
+        mut bond,
+        proposal_id: _,
+        dao_id: _,
+        proposer: _,
+        fee: _,
+        timestamp: _,
+        priority_score: _,
+        intent_spec: _,
+        uses_dao_liquidity: _,
+        data: _,
+        queue_entry_time: _,
+        policy_mode: _,
+        required_council_id: _,
+        council_approval_proof: _,
+        time_reached_top_of_queue: _,
+        mut crank_bounty,
+        used_quota: _,
+    } = proposal;
+
+    // Extract and destroy any resources
+    if (option::is_some(&bond)) {
+        let coin = option::extract(&mut bond);
+        sui::test_utils::destroy(coin);
+    };
+    option::destroy_none(bond);
+
+    if (option::is_some(&crank_bounty)) {
+        let coin = option::extract(&mut crank_bounty);
+        sui::test_utils::destroy(coin);
+    };
+    option::destroy_none(crank_bounty);
+}
+
+#[test_only]
+/// Destroy a queue for testing, handling any remaining proposals
+public fun destroy_queue_for_testing<StableCoin>(queue: ProposalQueue<StableCoin>) {
+    let ProposalQueue {
+        id,
+        dao_id: _,
+        mut heap,
+        proposal_indices,
+        size: _,
+        is_proposal_live: _,
+        max_proposer_funded: _,
+        eviction_grace_period_ms: _,
+        reserved_next_proposal: _,
+    } = queue;
+
+    // Destroy all remaining proposals
+    while (!vector::is_empty(&heap)) {
+        let proposal = vector::pop_back(&mut heap);
+        destroy_for_testing(proposal);
+    };
+    vector::destroy_empty(heap);
+
+    // Clean up table and UID
+    table::drop(proposal_indices);
+    object::delete(id);
 }

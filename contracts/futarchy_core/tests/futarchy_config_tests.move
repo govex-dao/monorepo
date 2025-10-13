@@ -94,6 +94,7 @@ fun test_new_futarchy_config_basic() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -134,6 +135,7 @@ fun test_new_futarchy_config_invalid_slash() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -167,6 +169,7 @@ fun test_with_rewards() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -205,6 +208,7 @@ fun test_with_verification_level() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -234,6 +238,7 @@ fun test_with_dao_score() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -263,6 +268,7 @@ fun test_with_slash_distribution() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -487,6 +493,7 @@ fun test_launchpad_initial_price_not_set() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
@@ -516,13 +523,14 @@ fun test_set_launchpad_initial_price() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(2500, 2500, 2500, 2500);
-    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist, true);
+    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist);
 
     futarchy_config::set_launchpad_initial_price(&mut config, 5_000_000_000_000);
 
@@ -550,13 +558,14 @@ fun test_set_launchpad_initial_price_twice() {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
+        dao_config::default_subsidy_config(),
         1000000,
         259200000,
         500000,
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(2500, 2500, 2500, 2500);
-    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist, true);
+    let mut config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist);
 
     futarchy_config::set_launchpad_initial_price(&mut config, 5_000_000_000_000);
 

@@ -383,3 +383,183 @@ fun test_deposit_revenue() {
 
     end(scenario, manager, clock);
 }
+
+// === Integration Tests with DaoPaymentTracker ===
+
+#[test]
+fun test_collect_debt_revenue() {
+    let (mut scenario, mut manager, clock) = start();
+
+    // Create payment tracker and add some revenue to it
+    let mut payment_tracker = dao_payment_tracker::new_for_testing(scenario.ctx());
+    let dao_id = object::id_from_address(@0x1);
+
+    // Simulate debt payment (accumulate debt then pay it)
+    dao_payment_tracker::accumulate_debt(&mut payment_tracker, dao_id, 5000);
+    let payment_coin = create_test_coin(5000, scenario.ctx());
+    let change = dao_payment_tracker::pay_dao_debt(&mut payment_tracker, dao_id, payment_coin, scenario.ctx());
+    destroy(change);
+
+    // Now payment_tracker has 5000 in protocol_revenue
+    assert!(dao_payment_tracker::get_protocol_revenue(&payment_tracker) == 5000, 0);
+
+    // Collect 3000 of it into fee manager
+    proposal_fee_manager::collect_debt_revenue(&mut manager, &mut payment_tracker, 3000, scenario.ctx());
+
+    // Verify it moved to fee manager
+    assert!(proposal_fee_manager::protocol_revenue(&manager) == 3000, 1);
+    assert!(dao_payment_tracker::get_protocol_revenue(&payment_tracker) == 2000, 2);
+
+    dao_payment_tracker::destroy_for_testing(payment_tracker);
+    end(scenario, manager, clock);
+}
+
+#[test]
+fun test_total_available_revenue() {
+    let (mut scenario, mut manager, clock) = start();
+
+    // Create payment tracker
+    let mut payment_tracker = dao_payment_tracker::new_for_testing(scenario.ctx());
+    let dao_id = object::id_from_address(@0x1);
+
+    // Add revenue to both places
+    // 1. Add 1000 to fee manager via queue fee (20% = 200)
+    let queue_fee = create_test_coin(1000, scenario.ctx());
+    proposal_fee_manager::deposit_queue_fee(&mut manager, queue_fee, &clock, scenario.ctx());
+
+    // 2. Add 3000 to payment tracker via debt payment
+    dao_payment_tracker::accumulate_debt(&mut payment_tracker, dao_id, 3000);
+    let payment_coin = create_test_coin(3000, scenario.ctx());
+    let change = dao_payment_tracker::pay_dao_debt(&mut payment_tracker, dao_id, payment_coin, scenario.ctx());
+    destroy(change);
+
+    // Total should be 200 (from fee manager) + 3000 (from payment tracker) = 3200
+    let total = proposal_fee_manager::total_available_revenue(&manager, &payment_tracker);
+    assert!(total == 3200, 0);
+
+    dao_payment_tracker::destroy_for_testing(payment_tracker);
+    end(scenario, manager, clock);
+}
+
+// === Integration Tests with ProposalQuotaRegistry ===
+
+#[test]
+fun test_calculate_fee_with_quota_available() {
+    let (mut scenario, manager, clock) = start();
+
+    let dao_id = object::id_from_address(@0x1);
+    let mut quota_registry = proposal_quota_registry::new(dao_id, scenario.ctx());
+
+    // Set quota: 3 proposals per 30 days at reduced fee of 100
+    let users = vector[@0xBEEF];
+    proposal_quota_registry::set_quotas(
+        &mut quota_registry,
+        dao_id,
+        users,
+        3,                    // quota_amount
+        2_592_000_000,        // 30 days in ms
+        100,                  // reduced_fee
+        &clock
+    );
+
+    // Calculate fee with quota
+    let base_fee = 1000;
+    let (actual_fee, used_quota) = proposal_fee_manager::calculate_fee_with_quota(
+        &quota_registry,
+        dao_id,
+        @0xBEEF,
+        base_fee,
+        &clock
+    );
+
+    // Should use reduced fee
+    assert!(used_quota == true, 0);
+    assert!(actual_fee == 100, 1); // Reduced fee, not base fee
+
+    destroy(quota_registry);
+    end(scenario, manager, clock);
+}
+
+#[test]
+fun test_calculate_fee_with_quota_unavailable() {
+    let (mut scenario, manager, clock) = start();
+
+    let dao_id = object::id_from_address(@0x1);
+    let quota_registry = proposal_quota_registry::new(dao_id, scenario.ctx());
+
+    // No quota set for this user
+
+    // Calculate fee without quota
+    let base_fee = 1000;
+    let (actual_fee, used_quota) = proposal_fee_manager::calculate_fee_with_quota(
+        &quota_registry,
+        dao_id,
+        @0xBEEF,
+        base_fee,
+        &clock
+    );
+
+    // Should use full base fee
+    assert!(used_quota == false, 0);
+    assert!(actual_fee == 1000, 1); // Base fee, not reduced
+
+    destroy(quota_registry);
+    end(scenario, manager, clock);
+}
+
+#[test]
+fun test_use_quota_for_proposal() {
+    let (mut scenario, manager, clock) = start();
+
+    let dao_id = object::id_from_address(@0x1);
+    let mut quota_registry = proposal_quota_registry::new(dao_id, scenario.ctx());
+
+    // Set quota: 3 proposals per 30 days
+    let users = vector[@0xBEEF];
+    proposal_quota_registry::set_quotas(
+        &mut quota_registry,
+        dao_id,
+        users,
+        3,                    // quota_amount
+        2_592_000_000,        // 30 days in ms
+        100,                  // reduced_fee
+        &clock
+    );
+
+    // Check initial quota status
+    let (has_quota, remaining, _reduced_fee) = proposal_quota_registry::get_quota_status(
+        &quota_registry,
+        @0xBEEF,
+        &clock
+    );
+    assert!(has_quota == true, 0);
+    assert!(remaining == 3, 1);
+
+    // Use one quota
+    proposal_fee_manager::use_quota_for_proposal(&mut quota_registry, dao_id, @0xBEEF, &clock);
+
+    // Check quota decreased
+    let (has_quota2, remaining2, _) = proposal_quota_registry::get_quota_status(
+        &quota_registry,
+        @0xBEEF,
+        &clock
+    );
+    assert!(has_quota2 == true, 2);
+    assert!(remaining2 == 2, 3); // Down to 2
+
+    // Use remaining quotas
+    proposal_fee_manager::use_quota_for_proposal(&mut quota_registry, dao_id, @0xBEEF, &clock);
+    proposal_fee_manager::use_quota_for_proposal(&mut quota_registry, dao_id, @0xBEEF, &clock);
+
+    // Check quota exhausted
+    let (has_quota3, remaining3, _) = proposal_quota_registry::get_quota_status(
+        &quota_registry,
+        @0xBEEF,
+        &clock
+    );
+    assert!(has_quota3 == false, 4);
+    assert!(remaining3 == 0, 5); // All used up
+
+    destroy(quota_registry);
+    end(scenario, manager, clock);
+}

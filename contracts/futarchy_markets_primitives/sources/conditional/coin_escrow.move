@@ -721,3 +721,51 @@ public fun validate_quantum_invariant_2<AssetType, StableType, Cond0Asset, Cond1
     assert!(cond0_stable_supply == spot_stable, EInvariantViolation);
     assert!(cond1_stable_supply == spot_stable, EInvariantViolation);
 }
+
+// === Test Helpers ===
+
+#[test_only]
+/// Create a blank TreasuryCap for testing (zero supply, blank metadata)
+/// This simulates getting a blank coin from the registry
+public fun create_test_treasury_cap<CoinType: drop>(
+    otw: CoinType,
+    ctx: &mut TxContext
+): (TreasuryCap<CoinType>, CoinMetadata<CoinType>) {
+    // Create coin with blank metadata
+    let (treasury_cap, metadata) = coin::create_currency(
+        otw,
+        0,      // decimals
+        b"",    // symbol (empty)
+        b"",    // name (empty)
+        b"",    // description (empty)
+        option::none(),  // icon_url (empty)
+        ctx
+    );
+
+    (treasury_cap, metadata)
+}
+
+#[test_only]
+/// Destroy escrow for testing (with remaining balances)
+/// Useful for cleaning up test state
+public fun destroy_for_testing<AssetType, StableType>(
+    escrow: TokenEscrow<AssetType, StableType>
+) {
+    let TokenEscrow {
+        id,
+        market_state,
+        escrowed_asset,
+        escrowed_stable,
+        outcome_count: _,
+    } = escrow;
+
+    // Destroy balances
+    balance::destroy_for_testing(escrowed_asset);
+    balance::destroy_for_testing(escrowed_stable);
+
+    // Destroy market state
+    futarchy_markets_primitives::market_state::destroy_for_testing(market_state);
+
+    // Delete UID (TreasuryCaps in dynamic fields will be destroyed automatically)
+    object::delete(id);
+}

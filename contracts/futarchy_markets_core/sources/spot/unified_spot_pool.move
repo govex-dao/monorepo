@@ -812,9 +812,40 @@ public fun new_for_testing<AssetType, StableType>(
     enable_aggregator: bool,
     ctx: &mut TxContext,
 ): UnifiedSpotPool<AssetType, StableType> {
+    use sui::clock;
+
     if (enable_aggregator) {
-        new_with_aggregator<AssetType, StableType>(fee_bps, 8000, ctx)
+        let clock = clock::create_for_testing(ctx);
+        let pool = new_with_aggregator<AssetType, StableType>(fee_bps, 8000, &clock, ctx);
+        clock::destroy_for_testing(clock);
+        pool
     } else {
         new<AssetType, StableType>(fee_bps, ctx)
+    }
+}
+
+#[test_only]
+/// Create a pool with initial liquidity for testing arbitrage_math
+public fun create_pool_for_testing<AssetType, StableType>(
+    asset_amount: u64,
+    stable_amount: u64,
+    fee_bps: u64,
+    ctx: &mut TxContext,
+): UnifiedSpotPool<AssetType, StableType> {
+    use sui::balance;
+    use sui::test_utils;
+
+    // Create balances from amounts
+    let asset_balance = balance::create_for_testing<AssetType>(asset_amount);
+    let stable_balance = balance::create_for_testing<StableType>(stable_amount);
+
+    UnifiedSpotPool {
+        id: object::new(ctx),
+        asset_reserve: asset_balance,
+        stable_reserve: stable_balance,
+        lp_supply: 1000,  // Default LP supply for testing
+        fee_bps,
+        minimum_liquidity: 1000,  // Standard minimum
+        aggregator_config: option::none(),  // No aggregator for simple testing
     }
 }

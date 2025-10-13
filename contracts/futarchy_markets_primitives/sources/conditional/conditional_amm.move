@@ -866,6 +866,16 @@ public fun create_test_pool(
 ): LiquidityPool {
     let initial_price = math::mul_div_to_128(stable_reserve, 1_000_000_000_000, asset_reserve);
 
+    let mut oracle_obj = oracle::new_oracle(
+        initial_price,
+        0, // Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
+        1_000,
+        ctx,
+    );
+
+    // Initialize oracle market start time for tests
+    oracle_obj.set_oracle_start_time(clock.timestamp_ms());
+
     LiquidityPool {
         id: object::new(ctx),
         market_id,
@@ -873,13 +883,50 @@ public fun create_test_pool(
         asset_reserve,
         stable_reserve,
         fee_percent,
-        oracle: oracle::new_oracle(
-            initial_price,
-            0, // Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
-            1_000,
-            ctx,
-        ),
+        oracle: oracle_obj,
         simple_twap: simple_twap::new(initial_price, clock),  // Uniswap V2 style
+        protocol_fees: 0,
+        lp_supply: (MINIMUM_LIQUIDITY as u64),
+    }
+}
+
+#[test_only]
+/// Create a pool with initial liquidity for testing arbitrage_math
+public fun create_pool_for_testing(
+    asset_amount: u64,
+    stable_amount: u64,
+    fee_bps: u64,
+    ctx: &mut TxContext,
+): LiquidityPool {
+    use sui::clock;
+
+    // Create a minimal oracle and simple_twap for testing
+    let clock = clock::create_for_testing(ctx);
+    let initial_price = if (asset_amount > 0 && stable_amount > 0) {
+        ((stable_amount as u128) * 1_000_000_000) / (asset_amount as u128)
+    } else {
+        1_000_000_000
+    };
+
+    let oracle_obj = oracle::new_oracle(
+        initial_price,
+        0, // twap_start_delay - Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
+        100, // twap_step_max (ppm)
+        ctx
+    );
+
+    let simple_twap = simple_twap::new(initial_price, &clock);
+    clock::destroy_for_testing(clock);
+
+    LiquidityPool {
+        id: object::new(ctx),
+        market_id: object::id_from_address(@0x0),
+        outcome_idx: 0,
+        asset_reserve: asset_amount,
+        stable_reserve: stable_amount,
+        fee_percent: fee_bps,
+        oracle: oracle_obj,
+        simple_twap,
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
     }

@@ -115,27 +115,6 @@ public fun compute_optimal_arbitrage_for_n_outcomes<AssetType, StableType>(
     }
 }
 
-/// **DEPRECATED**: Use `compute_optimal_arbitrage_for_n_outcomes()` instead
-/// Kept for backward compatibility during migration
-///
-/// Compute optimal arbitrage with bidirectional search
-/// Returns (optimal_amount, expected_profit, is_spot_to_cond)
-///
-/// Tries both directions:
-/// - Spot → Conditional (buy from spot, sell to conditionals)
-/// - Conditional → Spot (buy from conditionals, sell to spot)
-///
-/// Returns the more profitable direction
-#[deprecated]
-public fun compute_optimal_arbitrage_bidirectional<AssetType, StableType>(
-    spot: &UnifiedSpotPool<AssetType, StableType>,
-    conditionals: &vector<LiquidityPool>,
-    min_profit: u64,  // Minimum acceptable profit threshold
-): (u64, u128, bool) {
-    // Just call the new N-outcome function
-    compute_optimal_arbitrage_for_n_outcomes(spot, conditionals, min_profit)
-}
-
 /// Compute optimal Spot → Conditional arbitrage using b-parameterization
 /// More efficient than x-parameterization (no square roots)
 public fun compute_optimal_spot_to_conditional<AssetType, StableType>(
@@ -340,7 +319,7 @@ public fun compute_optimal_spot_arbitrage<AssetType, StableType>(
     spot_swap_is_stable_to_asset: bool,
 ): (u64, u128) {
     // Use new bidirectional solver with 0 min_profit
-    let (amount, profit, is_spot_to_cond) = compute_optimal_arbitrage_bidirectional(
+    let (amount, profit, is_spot_to_cond) = compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         0,  // No min profit for compatibility

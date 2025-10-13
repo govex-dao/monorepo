@@ -23,6 +23,7 @@ fun test_new_trading_params_basic() {
         30,  // spot_fee_bps
         0,  // market_op_review (instant)
         1000,  // max_amm_swap_percent_bps (10%)
+        80,  // conditional_liquidity_ratio_bps (80%)
     );
 
     assert!(dao_config::min_asset_amount(&params) == 1000000, 0);
@@ -43,6 +44,7 @@ fun test_new_trading_params_zero_asset_amount() {
         30,
         0,
         1000,
+        80,
     );
 }
 
@@ -58,6 +60,7 @@ fun test_new_trading_params_zero_stable_amount() {
         30,
         0,
         1000,
+        80,
     );
 }
 
@@ -73,6 +76,7 @@ fun test_new_trading_params_review_period_too_short() {
         30,
         0,
         1000,
+        80,
     );
 }
 
@@ -88,6 +92,7 @@ fun test_new_trading_params_trading_period_too_short() {
         30,
         0,
         1000,
+        80,
     );
 }
 
@@ -103,6 +108,7 @@ fun test_new_trading_params_conditional_fee_too_high() {
         30,
         0,
         1000,
+        80,
     );
 }
 
@@ -118,6 +124,7 @@ fun test_new_trading_params_spot_fee_too_high() {
         20000,  // > max_amm_fee_bps (10000)
         0,
         1000,
+        80,
     );
 }
 
@@ -133,6 +140,7 @@ fun test_new_trading_params_market_op_review_exceeds_regular() {
         30,
         86400001,  // market_op_review > review_period
         1000,
+        80,
     );
 }
 
@@ -148,6 +156,7 @@ fun test_new_trading_params_max_swap_percent_exceeds_100() {
         30,
         0,
         20000,  // > 10000 (100%)
+        80,
     );
 }
 
@@ -162,6 +171,7 @@ fun test_new_trading_params_market_op_review_zero_allowed() {
         30,
         0,  // Zero is valid (immediate trading)
         1000,
+        80,
     );
 
     assert!(dao_config::market_op_review_period_ms(&params) == 0, 0);
