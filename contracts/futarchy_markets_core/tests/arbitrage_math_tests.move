@@ -620,9 +620,9 @@ fun test_compute_optimal_spot_to_conditional() {
         true, // spot_to_cond direction
     );
     assert!(profit_sim > 0, 2); // Simulator confirms positive profit
-    // Allow rounding difference (within 0.5% of claimed profit)
+    // Allow rounding difference (within 0.1% of claimed profit)
     let profit_diff = if (profit_sim > profit) { profit_sim - profit } else { profit - profit_sim };
-    assert!(profit_diff < profit / 200, 3);
+    assert!(profit_diff < profit / 1000, 3);
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
@@ -670,9 +670,9 @@ fun test_compute_optimal_conditional_to_spot() {
         false, // conditional_to_spot direction
     );
     assert!(profit_sim > 0, 2); // Simulator confirms positive profit
-    // Allow rounding difference (within 0.5% of claimed profit)
+    // Allow rounding difference (within 0.1% of claimed profit)
     let profit_diff = if (profit_sim > profit) { profit_sim - profit } else { profit - profit_sim };
-    assert!(profit_diff < profit / 200, 3);
+    assert!(profit_diff < profit / 1000, 3);
 
     cleanup_spot_pool(spot_pool);
     cleanup_conditional_pools(conditional_pools);
