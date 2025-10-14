@@ -131,7 +131,6 @@ and patara.app
 
 - [WIP] ad simple window to twap maybe cant accumualte by more than 5%???
 - [WIP] dao end proposal early
-- [WIP] spot registry fees
 - [WIP] on disolution of dao / partial ignore tokens in treasury and amm??? / allow emptying full of AMM???
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\

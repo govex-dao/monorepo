@@ -104,11 +104,11 @@ public fun create_display(
 
     // NFT fields with dynamic object ID for user identification
     // Template syntax {id} gets filled with actual object ID by Sui
-    display::add(&mut display, string::utf8(b"name"), string::utf8(b"MetaDAO Incomplete Set - {id}"));
-    display::add(&mut display, string::utf8(b"description"), string::utf8(b"Incomplete conditional token set from MetaDAO futarchy market. Contains dust from spot swaps. Object ID: {id}. Check if this has value before burning. Redeem after proposal resolves to claim winning outcome."));
-    display::add(&mut display, string::utf8(b"image_url"), string::utf8(b"https://metadao.fi/nft/incomplete-set.png"));
-    display::add(&mut display, string::utf8(b"project_url"), string::utf8(b"https://metadao.fi"));
-    display::add(&mut display, string::utf8(b"creator"), string::utf8(b"MetaDAO Futarchy Protocol"));
+    display::add(&mut display, string::utf8(b"name"), string::utf8(b"Govex Incomplete Set - {id}"));
+    display::add(&mut display, string::utf8(b"description"), string::utf8(b"Incomplete conditional token set from Govex futarchy. Contains dust from spot swaps. Object ID: {id}. Check if this has value before burning. Redeem after proposal resolves to claim winning outcome."));
+    display::add(&mut display, string::utf8(b"image_url"), string::utf8(b"https://govex.ai/nft/incomplete-set.png"));
+    display::add(&mut display, string::utf8(b"project_url"), string::utf8(b"https://govex.ai"));
+    display::add(&mut display, string::utf8(b"creator"), string::utf8(b"Govex protocol"));
 
     display::update_version(&mut display);
 

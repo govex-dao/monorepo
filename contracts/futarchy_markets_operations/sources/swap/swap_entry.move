@@ -49,29 +49,48 @@ const STATE_TRADING: u8 = 2;  // Must match proposal.move
 
 /// Swap stable → asset in spot market with automatic arbitrage
 ///
-/// DEX AGGREGATOR COMPATIBLE: Returns incomplete sets as balance objects
+/// **DCA BOT & AGGREGATOR COMPATIBLE** - Supports auto-merge and flexible return modes
 ///
-/// Flow:
-/// 1. Swap stable → asset in spot (user pays fees)
-/// 2. If proposal is live: execute arbitrage (returns profit + dust balance)
-/// 3. Transfer dust balance directly to recipient (shows as NFT in wallet via Display)
-/// 4. Return: output + profit coins to recipient
+/// # Arguments
+/// * `existing_balance_opt` - Optional balance to merge into (DCA bots: pass previous balance)
+/// * `return_balance` - If true: return balance to caller. If false: transfer to recipient
 ///
-/// For DEX aggregators and DCA bots - incomplete sets transferred as balance objects
-/// with Display metadata. User owns balance immediately and can redeem after resolution.
+/// # Returns
+/// * `Coin<AssetType>` - Profit in asset
+/// * `option::Option<ConditionalMarketBalance>` - Dust balance (Some if return_balance=true, None otherwise)
 ///
-/// The recipient parameter allows callers (e.g., DCA bots) to specify
-/// the actual end user who should receive output coins and own the balance.
-public entry fun swap_spot_stable_to_asset<AssetType, StableType>(
+/// # Use Cases
+///
+/// **Regular User (one swap):**
+/// ```typescript
+/// tx.moveCall({
+///   arguments: [..., recipient, null, false, ...] // Transfer balance to recipient
+/// });
+/// ```
+///
+/// **DCA Bot (100 swaps → 1 NFT):**
+/// ```typescript
+/// let balance = null;
+/// for (let i = 0; i < 100; i++) {
+///   const [assetOut, balanceOpt] = tx.moveCall({
+///     arguments: [..., botAddress, balance, true, ...] // Return balance to accumulate
+///   });
+///   balance = balanceOpt;
+/// }
+/// tx.transferObjects([balance], user); // Final: 1 NFT with all dust!
+/// ```
+public fun swap_spot_stable_to_asset<AssetType, StableType>(
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     stable_in: Coin<StableType>,
     min_asset_out: u64,
-    recipient: address,  // Who receives output and owns dust (for aggregator compatibility)
+    recipient: address,
+    mut existing_balance_opt: option::Option<ConditionalMarketBalance<AssetType, StableType>>,
+    return_balance: bool,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (Coin<AssetType>, option::Option<ConditionalMarketBalance<AssetType, StableType>>) {
     let amount_in = stable_in.value();
     assert!(amount_in > 0, EZeroAmount);
 
@@ -91,9 +110,8 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType>(
         // Begin swap session for conditional swaps
         let session = swap_core::begin_swap_session(escrow);
 
-        // Execute optimal arb bidirectionally
-        // Returns dust balance for aggregator mode (will be empty or small amounts)
-        let (stable_profit, mut asset_with_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage<
+        // Execute optimal arb bidirectionally with auto-merge support
+        let (stable_profit, mut asset_with_profit, final_balance) = arbitrage::execute_optimal_spot_arbitrage<
             AssetType,
             StableType,
         >(
@@ -104,19 +122,10 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType>(
             asset_out,                     // Have asset from swap
             0,  // min_profit_threshold (any profit is good)
             recipient,                     // Who owns dust and receives complete sets
-            false,                         // Aggregator mode
+            existing_balance_opt,          // Pass existing balance for auto-merge
             clock,
             ctx,
         );
-
-        // Transfer dust balance directly to recipient
-        // Balance object shows as NFT in wallet (has Display metadata)
-        // User owns incomplete set immediately, can redeem after proposal resolves
-        if (option::is_some(&dust_opt)) {
-            let dust_balance = option::extract(&mut dust_opt);
-            transfer::public_transfer(dust_balance, recipient);
-        };
-        option::destroy_none(dust_opt);
 
         // Finalize swap session
         swap_core::finalize_swap_session(session, proposal, escrow, clock);
@@ -141,39 +150,77 @@ public entry fun swap_spot_stable_to_asset<AssetType, StableType>(
             coin::destroy_zero(stable_profit);
         };
 
-        // Transfer asset + profit to recipient (all in asset)
-        transfer::public_transfer(asset_with_profit, recipient);
+        // Handle balance based on return_balance flag
+        if (return_balance) {
+            // DCA bot mode: Return balance to caller for accumulation
+            (asset_with_profit, option::some(final_balance))
+        } else {
+            // Regular user mode: Transfer balance to recipient
+            transfer::public_transfer(final_balance, recipient);
+            transfer::public_transfer(asset_with_profit, recipient);
+            (coin::zero<AssetType>(ctx), option::none())
+        }
     } else {
-        // No arb, just return swap output to recipient
-        transfer::public_transfer(asset_out, recipient);
-    };
+        // No arb (proposal not trading) - just handle swap output and existing balance
+        if (return_balance) {
+            // Return coins and existing balance (if any) to caller
+            (asset_out, existing_balance_opt)
+        } else {
+            // Transfer everything to recipient
+            transfer::public_transfer(asset_out, recipient);
+            if (option::is_some(&existing_balance_opt)) {
+                transfer::public_transfer(option::extract(&mut existing_balance_opt), recipient);
+            };
+            option::destroy_none(existing_balance_opt);
+            (coin::zero<AssetType>(ctx), option::none())
+        }
+    }
 }
 
 /// Swap asset → stable in spot market with automatic arbitrage
 ///
-/// DEX AGGREGATOR COMPATIBLE: Returns incomplete sets as balance objects
+/// **DCA BOT & AGGREGATOR COMPATIBLE** - Supports auto-merge and flexible return modes
 ///
-/// Flow:
-/// 1. Swap asset → stable in spot (user pays fees)
-/// 2. If proposal is live: execute arbitrage (returns profit + dust balance)
-/// 3. Transfer dust balance directly to recipient (shows as NFT in wallet via Display)
-/// 4. Return: remaining output + arb profit to recipient
+/// # Arguments
+/// * `existing_balance_opt` - Optional balance to merge into (DCA bots: pass previous balance)
+/// * `return_balance` - If true: return balance to caller. If false: transfer to recipient
 ///
-/// For DEX aggregators and DCA bots - incomplete sets transferred as balance objects
-/// with Display metadata. User owns balance immediately and can redeem after resolution.
+/// # Returns
+/// * `Coin<StableType>` - Profit in stable
+/// * `option::Option<ConditionalMarketBalance>` - Dust balance (Some if return_balance=true, None otherwise)
 ///
-/// The recipient parameter allows callers (e.g., DCA bots) to specify
-/// the actual end user who should receive output coins and own the balance.
-public entry fun swap_spot_asset_to_stable<AssetType, StableType>(
+/// # Use Cases
+///
+/// **Regular User (one swap):**
+/// ```typescript
+/// tx.moveCall({
+///   arguments: [..., recipient, null, false, ...] // Transfer balance to recipient
+/// });
+/// ```
+///
+/// **DCA Bot (100 swaps → 1 NFT):**
+/// ```typescript
+/// let balance = null;
+/// for (let i = 0; i < 100; i++) {
+///   const [stableOut, balanceOpt] = tx.moveCall({
+///     arguments: [..., botAddress, balance, true, ...] // Return balance to accumulate
+///   });
+///   balance = balanceOpt;
+/// }
+/// tx.transferObjects([balance], user); // Final: 1 NFT with all dust!
+/// ```
+public fun swap_spot_asset_to_stable<AssetType, StableType>(
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     asset_in: Coin<AssetType>,
     min_stable_out: u64,
-    recipient: address,  // Who receives output and owns dust (for aggregator compatibility)
+    recipient: address,
+    mut existing_balance_opt: option::Option<ConditionalMarketBalance<AssetType, StableType>>,
+    return_balance: bool,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
+): (Coin<StableType>, option::Option<ConditionalMarketBalance<AssetType, StableType>>) {
     let amount_in = asset_in.value();
     assert!(amount_in > 0, EZeroAmount);
 
@@ -192,9 +239,8 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType>(
     if (proposal_state == STATE_TRADING) {
         let session = swap_core::begin_swap_session(escrow);
 
-        // Execute optimal arb bidirectionally
-        // Returns dust balance for aggregator mode (will be empty or small amounts)
-        let (mut stable_with_profit, asset_profit, mut dust_opt) = arbitrage::execute_optimal_spot_arbitrage<
+        // Execute optimal arb bidirectionally with auto-merge support
+        let (mut stable_with_profit, asset_profit, final_balance) = arbitrage::execute_optimal_spot_arbitrage<
             AssetType,
             StableType,
         >(
@@ -205,19 +251,10 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType>(
             coin::zero<AssetType>(ctx),    // Don't have asset
             0,  // min_profit_threshold
             recipient,                      // Who owns dust
-            false,                          // Aggregator mode
+            existing_balance_opt,           // Pass existing balance for auto-merge
             clock,
             ctx,
         );
-
-        // Transfer dust balance directly to recipient
-        // Balance object shows as NFT in wallet (has Display metadata)
-        // User owns incomplete set immediately, can redeem after proposal resolves
-        if (option::is_some(&dust_opt)) {
-            let dust_balance = option::extract(&mut dust_opt);
-            transfer::public_transfer(dust_balance, recipient);
-        };
-        option::destroy_none(dust_opt);
 
         swap_core::finalize_swap_session(session, proposal, escrow, clock);
 
@@ -241,12 +278,31 @@ public entry fun swap_spot_asset_to_stable<AssetType, StableType>(
             coin::destroy_zero(asset_profit);
         };
 
-        // Transfer stable + profit to recipient (all in stable)
-        transfer::public_transfer(stable_with_profit, recipient);
+        // Handle balance based on return_balance flag
+        if (return_balance) {
+            // DCA bot mode: Return balance to caller for accumulation
+            (stable_with_profit, option::some(final_balance))
+        } else {
+            // Regular user mode: Transfer balance to recipient
+            transfer::public_transfer(final_balance, recipient);
+            transfer::public_transfer(stable_with_profit, recipient);
+            (coin::zero<StableType>(ctx), option::none())
+        }
     } else {
-        // No arb, just return swap output to recipient
-        transfer::public_transfer(stable_out, recipient);
-    };
+        // No arb (proposal not trading) - just handle swap output and existing balance
+        if (return_balance) {
+            // Return coins and existing balance (if any) to caller
+            (stable_out, existing_balance_opt)
+        } else {
+            // Transfer everything to recipient
+            transfer::public_transfer(stable_out, recipient);
+            if (option::is_some(&existing_balance_opt)) {
+                transfer::public_transfer(option::extract(&mut existing_balance_opt), recipient);
+            };
+            option::destroy_none(existing_balance_opt);
+            (coin::zero<StableType>(ctx), option::none())
+        }
+    }
 }
 
 // === CONDITIONAL SWAP BATCHING ===
