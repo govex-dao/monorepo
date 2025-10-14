@@ -13,3 +13,4 @@ get in here
 - [ ] FUTARCHY THICKNESS = DAO CREDIT RATING
 - [ ] https://v1.metadao.fi/metadao/create
 - [ ] auto approvals https://github.com/MystenLabs/ts-sdks/discussions/567
+- [ ] show implied price in frontend and check it matches spot, warning if not!!

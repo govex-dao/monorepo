@@ -27,7 +27,6 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     priority_queue,
     proposal_fee_manager::{Self, ProposalFeeManager},
-    dao_payment_tracker::{Self, DaoPaymentTracker},
     action_validation,
     action_types,
 };
@@ -59,7 +58,6 @@ const EChainDepthNotFound: u64 = 13;
 const EBucketOrderingViolation: u64 = 14;
 const EIntegerOverflow: u64 = 15;
 const EInsufficientFeeCoins: u64 = 16;
-const EDAOPaymentDelinquent: u64 = 17; // DAO is blocked due to unpaid fees
 const EWrongQueue: u64 = 18; // Queue doesn't belong to the DAO
 const EDAOMismatch: u64 = 19; // Action's dao_id doesn't match queue's dao_id
 
@@ -350,13 +348,12 @@ public fun fulfill_create_proposal(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
-    payment_tracker: &DaoPaymentTracker,
     fee_coin: Coin<SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
 ): ResourceReceipt<CreateProposalAction> {
     internal_fulfill_create_proposal(
-        request, account, queue, fee_manager, registry, payment_tracker,
+        request, account, queue, fee_manager, registry,
         false, @0x0.to_id(), // No approval
         fee_coin, clock, ctx
     )
@@ -370,7 +367,6 @@ public fun fulfill_create_proposal_with_approval(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
-    payment_tracker: &DaoPaymentTracker,
     approved_spec: &mut ApprovedIntentSpec,
     fee_coin: Coin<SUI>,
     clock: &Clock,
@@ -405,7 +401,7 @@ public fun fulfill_create_proposal_with_approval(
     approved_intent_spec::increment_usage(approved_spec, clock);
 
     internal_fulfill_create_proposal(
-        request, account, queue, fee_manager, registry, payment_tracker,
+        request, account, queue, fee_manager, registry,
         true, object::id(approved_spec),
         fee_coin, clock, ctx
     )
@@ -418,7 +414,6 @@ fun internal_fulfill_create_proposal(
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut ProposalReservationRegistry,
-    payment_tracker: &DaoPaymentTracker,
     has_approval: bool,
     approval_id: ID,
     fee_coin: Coin<SUI>,
@@ -440,12 +435,6 @@ fun internal_fulfill_create_proposal(
     assert!(action.dao_id == account_id, EDAOMismatch);
     assert!(action.dao_id == queue_dao_id, EDAOMismatch);
 
-    // Check if DAO is blocked due to unpaid fees
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, account_id),
-        EDAOPaymentDelinquent
-    );
-    
     // Check chain depth - need to track proposals both in registry and queue
     // For proposals in queue, we assume depth 0 if not in registry
     // This is a conservative approach that prevents bypassing depth limits

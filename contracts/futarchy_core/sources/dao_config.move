@@ -96,10 +96,9 @@ public struct SecurityConfig has store, drop, copy {
     require_deadman_council: bool,       // If true, all councils must support dead-man switch
 }
 
-/// DEPRECATED: Multisig tracking moved to fee system (per-multisig model)
-/// Kept for backward compatibility only - will be removed in future version
+/// Multisig configuration (currently empty, reserved for future features)
 public struct MultisigConfig has store, drop, copy {
-    _deprecated: u64,  // Placeholder for struct compatibility
+    _reserved: u64,  // Reserved for future use
 }
 
 /// Storage configuration for DAO files
@@ -343,12 +342,10 @@ public fun new_quota_config(
     }
 }
 
-/// Create a new multisig configuration (DEPRECATED - field unused)
-public fun new_multisig_config(
-    _multisig_count: u64,
-): MultisigConfig {
+/// Create a new multisig configuration
+public fun new_multisig_config(): MultisigConfig {
     MultisigConfig {
-        _deprecated: 0,
+        _reserved: 0,
     }
 }
 
@@ -519,8 +516,6 @@ public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced
 // Multisig config getters
 public fun multisig_config(config: &DaoConfig): &MultisigConfig { &config.multisig_config }
 public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig { &mut config.multisig_config }
-/// DEPRECATED: multisig_count is no longer tracked. Always returns 0.
-public fun multisig_count(_multisig: &MultisigConfig): u64 { 0 }
 
 // Subsidy config getters
 public fun subsidy_config(config: &DaoConfig): &ProtocolSubsidyConfig { &config.subsidy_config }
@@ -790,23 +785,6 @@ public(package) fun set_default_quota_period_ms(quota: &mut QuotaConfig, period:
 
 public(package) fun set_default_reduced_fee(quota: &mut QuotaConfig, fee: u64) {
     quota.default_reduced_fee = fee;
-}
-
-// Multisig config direct setters (DEPRECATED - all no-ops)
-
-/// DEPRECATED: multisig_count no longer tracked
-public(package) fun set_multisig_count(_multisig: &mut MultisigConfig, _count: u64) {
-    // No-op: multisig_count is deprecated
-}
-
-/// DEPRECATED: multisig_count no longer tracked
-public(package) fun increment_multisig_count(_multisig: &mut MultisigConfig) {
-    // No-op: multisig_count is deprecated
-}
-
-/// DEPRECATED: multisig_count no longer tracked
-public(package) fun decrement_multisig_count(_multisig: &mut MultisigConfig) {
-    // No-op: multisig_count is deprecated
 }
 
 // Subsidy config setters
@@ -1111,10 +1089,10 @@ public fun default_quota_config(): QuotaConfig {
     }
 }
 
-/// Get default multisig configuration (DEPRECATED - field unused)
+/// Get default multisig configuration
 public fun default_multisig_config(): MultisigConfig {
     MultisigConfig {
-        _deprecated: 0,
+        _reserved: 0,
     }
 }
 

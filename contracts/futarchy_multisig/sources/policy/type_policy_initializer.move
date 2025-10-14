@@ -231,16 +231,6 @@ public fun init_protocol_admin_policies(
         policy_registry::MODE_DAO_ONLY(),
         proposal_fee_delay_ms
     );
-
-    policy_registry::set_type_policy<action_types::UpdateMonthlyDaoFee>(
-        registry,
-        dao_id,
-        option::some(admin_council),
-        policy_registry::MODE_DAO_AND_COUNCIL(),
-        option::none(),
-        policy_registry::MODE_DAO_ONLY(),
-        monthly_dao_fee_delay_ms
-    );
 }
 
 /// Initialize liquidity management policies

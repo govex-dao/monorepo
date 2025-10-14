@@ -10,7 +10,6 @@ use sui::{
     transfer
 };
 use futarchy_core::futarchy_config::{Self, SlashDistribution};
-use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
 use futarchy_core::proposal_quota_registry;
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
@@ -261,32 +260,7 @@ public fun withdraw_protocol_revenue(
     coin::from_balance(manager.protocol_revenue.split(amount), ctx)
 }
 
-/// Collect revenue from the payment tracker (from debt repayments)
-/// This allows the fee manager to receive funds that were paid to clear DAO debts
-public fun collect_debt_revenue(
-    manager: &mut ProposalFeeManager,
-    payment_tracker: &mut DaoPaymentTracker,
-    amount: u64,
-    ctx: &mut TxContext
-) {
-    // Transfer revenue from payment tracker to fee manager
-    let revenue_coin = dao_payment_tracker::transfer_revenue_to_fee_manager(
-        payment_tracker,
-        amount,
-        ctx
-    );
-    
-    // Add to fee manager's protocol revenue
-    manager.protocol_revenue.join(revenue_coin.into_balance());
-}
-
-/// Get total available revenue (including debt payments)
-public fun total_available_revenue(
-    manager: &ProposalFeeManager,
-    payment_tracker: &DaoPaymentTracker,
-): u64 {
-    manager.protocol_revenue.value() + dao_payment_tracker::get_protocol_revenue(payment_tracker)
-}
+// Debt tracking system removed - replaced with per-execution fees
 
 /// Called by the priority queue when a proposal is cancelled.
 /// Removes the pending fee from the manager and returns it as a Coin.

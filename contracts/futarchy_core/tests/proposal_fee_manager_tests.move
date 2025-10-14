@@ -13,7 +13,6 @@ use sui::{
 use futarchy_core::{
     proposal_fee_manager::{Self, ProposalFeeManager},
     futarchy_config::{Self, SlashDistribution},
-    dao_payment_tracker::{Self, DaoPaymentTracker},
     proposal_quota_registry::{Self, ProposalQuotaRegistry},
 };
 
@@ -381,63 +380,6 @@ fun test_deposit_revenue() {
 
     assert!(proposal_fee_manager::protocol_revenue(&manager) == 2000, 0);
 
-    end(scenario, manager, clock);
-}
-
-// === Integration Tests with DaoPaymentTracker ===
-
-#[test]
-fun test_collect_debt_revenue() {
-    let (mut scenario, mut manager, clock) = start();
-
-    // Create payment tracker and add some revenue to it
-    let mut payment_tracker = dao_payment_tracker::new_for_testing(scenario.ctx());
-    let dao_id = object::id_from_address(@0x1);
-
-    // Simulate debt payment (accumulate debt then pay it)
-    dao_payment_tracker::accumulate_debt(&mut payment_tracker, dao_id, 5000);
-    let payment_coin = create_test_coin(5000, scenario.ctx());
-    let change = dao_payment_tracker::pay_dao_debt(&mut payment_tracker, dao_id, payment_coin, scenario.ctx());
-    destroy(change);
-
-    // Now payment_tracker has 5000 in protocol_revenue
-    assert!(dao_payment_tracker::get_protocol_revenue(&payment_tracker) == 5000, 0);
-
-    // Collect 3000 of it into fee manager
-    proposal_fee_manager::collect_debt_revenue(&mut manager, &mut payment_tracker, 3000, scenario.ctx());
-
-    // Verify it moved to fee manager
-    assert!(proposal_fee_manager::protocol_revenue(&manager) == 3000, 1);
-    assert!(dao_payment_tracker::get_protocol_revenue(&payment_tracker) == 2000, 2);
-
-    dao_payment_tracker::destroy_for_testing(payment_tracker);
-    end(scenario, manager, clock);
-}
-
-#[test]
-fun test_total_available_revenue() {
-    let (mut scenario, mut manager, clock) = start();
-
-    // Create payment tracker
-    let mut payment_tracker = dao_payment_tracker::new_for_testing(scenario.ctx());
-    let dao_id = object::id_from_address(@0x1);
-
-    // Add revenue to both places
-    // 1. Add 1000 to fee manager via queue fee (20% = 200)
-    let queue_fee = create_test_coin(1000, scenario.ctx());
-    proposal_fee_manager::deposit_queue_fee(&mut manager, queue_fee, &clock, scenario.ctx());
-
-    // 2. Add 3000 to payment tracker via debt payment
-    dao_payment_tracker::accumulate_debt(&mut payment_tracker, dao_id, 3000);
-    let payment_coin = create_test_coin(3000, scenario.ctx());
-    let change = dao_payment_tracker::pay_dao_debt(&mut payment_tracker, dao_id, payment_coin, scenario.ctx());
-    destroy(change);
-
-    // Total should be 200 (from fee manager) + 3000 (from payment tracker) = 3200
-    let total = proposal_fee_manager::total_available_revenue(&manager, &payment_tracker);
-    assert!(total == 3200, 0);
-
-    dao_payment_tracker::destroy_for_testing(payment_tracker);
     end(scenario, manager, clock);
 }
 

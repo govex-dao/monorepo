@@ -17,7 +17,6 @@ use account_protocol::{
 
 use futarchy_core::{version, futarchy_config::{Self, FutarchyConfig}};
 use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
-use futarchy_multisig::fee_state;
 
 // === Errors ===
 
@@ -63,9 +62,6 @@ fun create_multisig_account(
             ]
         )
     );
-
-    // Initialize fee state
-    fee_state::init_fee_state(&mut account, clock);
 
     account
 }
@@ -156,9 +152,6 @@ public fun approve_intent(
     // Assert this is a standalone multisig (no DAO)
     assert!(weighted_multisig::dao_id(config).is_none(), EDaoNotAllowed);
 
-    // CRITICAL: Check fees are current (ZERO shared object access!)
-    fee_state::assert_fees_current(account, clock);
-
     // Verify membership before the macro (this borrow ends at return)
     weighted_multisig::assert_is_member(config, ctx.sender());
 
@@ -209,9 +202,6 @@ public fun approve_intent_with_dao(
         futarchy_config::operational_state(dao_state) != futarchy_config::state_paused(),
         EDaoPaused
     );
-
-    // CRITICAL: Check fees are current (ZERO shared object access!)
-    fee_state::assert_fees_current(account, clock);
 
     // Verify membership before the macro (this borrow ends at return)
     weighted_multisig::assert_is_member(config, ctx.sender());

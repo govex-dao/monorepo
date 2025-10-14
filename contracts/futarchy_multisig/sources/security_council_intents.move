@@ -21,7 +21,6 @@ use fun intent_interface::build_intent as Account.build_intent;
 
 use futarchy_core::version;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
 // use futarchy_one_shot_utils::action_data_structs::CreateSecurityCouncilAction; // Removed - doesn't exist
 use futarchy_multisig::{
     security_council,
@@ -75,7 +74,6 @@ public fun new_approve_policy_change_intent(): ApprovePolicyChangeIntent {
 // Named errors
 const ERequiresCoExecution: u64 = 100;
 const ENotCoExecution: u64 = 101;
-const EDAOPaymentDelinquent: u64 = 101; // DAO is blocked due to unpaid fees
 
 // Public constructor for AcceptUpgradeCapIntent witness
 public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
@@ -85,18 +83,11 @@ public fun new_accept_upgrade_cap_intent(): AcceptUpgradeCapIntent {
 public fun request_package_upgrade(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_futarchy_dao: Auth,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     params: Params,
     package_name: String,
     digest: vector<u8>,
     ctx: &mut TxContext
 ) {
-    // Block if DAO has unpaid fees
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     security_council.verify(auth_from_futarchy_dao);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -117,15 +108,8 @@ public fun request_package_upgrade(
 public fun execute_upgrade_request(
     executable: &mut Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     clock: &Clock,
 ): UpgradeTicket {
-    // Double-check DAO isn't blocked at execution time
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     package_upgrade::do_upgrade(
         executable,
         security_council,
@@ -138,15 +122,8 @@ public fun execute_upgrade_request(
 public fun execute_commit_request(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     receipt: UpgradeReceipt,
 ) {
-    // Check DAO isn't blocked
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     package_upgrade::do_commit(
         &mut executable,
         security_council,
@@ -162,19 +139,11 @@ public fun execute_commit_request(
 public fun request_accept_and_lock_cap(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
-    payment_tracker: &DaoPaymentTracker,
-    dao_id: ID,
     params: Params,
     cap_id: ID,
     package_name: String, // used as resource_key
     ctx: &mut TxContext
 ) {
-    // Block if DAO has unpaid fees
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
-
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -278,19 +247,12 @@ public fun delete_accept_upgrade_cap(
 public fun request_update_council_membership(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     params: Params,
     new_members: vector<address>,
     new_weights: vector<u64>,
     new_threshold: u64,
     ctx: &mut TxContext
 ) {
-    // Block if DAO has unpaid fees
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals(security_council.config());
 
@@ -318,15 +280,8 @@ public fun request_update_council_membership(
 public fun execute_update_council_membership(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     clock: &Clock,
 ) {
-    // Double-check DAO isn't blocked at execution time
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     // Get action spec and deserialize
     let specs = executable::intent(&executable).action_specs();
     let spec = specs.borrow(executable::action_idx(&executable));
@@ -365,18 +320,11 @@ public fun execute_update_council_membership(
 public fun request_update_time_lock(
     security_council: &mut Account<WeightedMultisig>,
     auth_from_member: Auth,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     params: Params,
     new_delay_ms: u64,  // 0 = disable time lock, >0 = delay in milliseconds
     clock: &Clock,
     ctx: &mut TxContext
 ) {
-    // Block if DAO has unpaid fees
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
     security_council.verify(auth_from_member);
     let outcome: Approvals = multisig::new_approvals_with_clock(security_council.config(), clock);
 
@@ -401,16 +349,8 @@ public fun request_update_time_lock(
 public fun execute_update_time_lock(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
-    payment_tracker: &DaoPaymentTracker,  // Check payment status
-    dao_id: ID,  // ID of the DAO that owns this security council
     clock: &Clock,
 ) {
-    // Double-check DAO isn't blocked at execution time
-    assert!(
-        !dao_payment_tracker::is_dao_blocked(payment_tracker, dao_id),
-        EDAOPaymentDelinquent
-    );
-
     // Get action spec and deserialize
     let specs = executable::intent(&executable).action_specs();
     let spec = specs.borrow(executable::action_idx(&executable));

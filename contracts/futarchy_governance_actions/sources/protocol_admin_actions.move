@@ -107,11 +107,6 @@ public struct UpdateProposalFeeAction has store, drop {
     new_fee_per_outcome: u64,
 }
 
-/// Update the monthly DAO fee
-public struct UpdateMonthlyDaoFeeAction has store, drop {
-    new_fee: u64,
-}
-
 /// Update verification fee for a specific level
 public struct UpdateVerificationFeeAction has store, drop {
     level: u8,
@@ -174,30 +169,16 @@ public struct WithdrawFeesToTreasuryAction has store, drop {
     amount: u64,
 }
 
-/// Apply discount to a DAO's monthly fees
-public struct ApplyDaoFeeDiscountAction has store, drop {
-    dao_id: ID,
-    discount_amount: u64,
-}
-
 // Coin-specific fee actions
 
 /// Add a new coin type with fee configuration
 public struct AddCoinFeeConfigAction has store, drop {
     coin_type: TypeName,
     decimals: u8,
-    dao_monthly_fee: u64,
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
     multisig_creation_fee: u64,
-    multisig_monthly_fee: u64,
-}
-
-/// Update monthly fee for a specific coin type (with 6-month delay)
-public struct UpdateCoinMonthlyFeeAction has store, drop {
-    coin_type: TypeName,
-    new_fee: u64,
 }
 
 /// Update creation fee for a specific coin type (with 6-month delay)
@@ -244,10 +225,6 @@ public fun new_update_proposal_fee(new_fee_per_outcome: u64): UpdateProposalFeeA
     UpdateProposalFeeAction { new_fee_per_outcome }
 }
 
-public fun new_update_monthly_dao_fee(new_fee: u64): UpdateMonthlyDaoFeeAction {
-    UpdateMonthlyDaoFeeAction { new_fee }
-}
-
 public fun new_update_verification_fee(level: u8, new_fee: u64): UpdateVerificationFeeAction {
     UpdateVerificationFeeAction { level, new_fee }
 }
@@ -284,10 +261,6 @@ public fun new_update_recovery_fee(new_fee: u64): UpdateRecoveryFeeAction {
     UpdateRecoveryFeeAction { new_fee }
 }
 
-public fun new_apply_dao_fee_discount(dao_id: ID, discount_amount: u64): ApplyDaoFeeDiscountAction {
-    ApplyDaoFeeDiscountAction { dao_id, discount_amount }
-}
-
 public fun new_withdraw_fees_to_treasury(amount: u64): WithdrawFeesToTreasuryAction {
     WithdrawFeesToTreasuryAction { amount }
 }
@@ -297,30 +270,19 @@ public fun new_withdraw_fees_to_treasury(amount: u64): WithdrawFeesToTreasuryAct
 public fun new_add_coin_fee_config(
     coin_type: TypeName,
     decimals: u8,
-    dao_monthly_fee: u64,
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
     multisig_creation_fee: u64,
-    multisig_monthly_fee: u64,
 ): AddCoinFeeConfigAction {
     AddCoinFeeConfigAction {
         coin_type,
         decimals,
-        dao_monthly_fee,
         dao_creation_fee,
         proposal_fee_per_outcome,
         recovery_fee,
         multisig_creation_fee,
-        multisig_monthly_fee,
     }
-}
-
-public fun new_update_coin_monthly_fee(
-    coin_type: TypeName,
-    new_fee: u64,
-): UpdateCoinMonthlyFeeAction {
-    UpdateCoinMonthlyFeeAction { coin_type, new_fee }
 }
 
 public fun new_update_coin_creation_fee(
@@ -508,57 +470,17 @@ public fun do_update_proposal_fee<Outcome: store, IW: drop>(
 
     // Increment action index
     executable::increment_action_idx(executable);
-    
+
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
     );
-    
+
     fee::update_proposal_creation_fee(
         fee_manager,
         cap,
         action.new_fee_per_outcome,
-        clock,
-        ctx
-    );
-}
-
-/// Execute update monthly DAO fee action
-public fun do_update_monthly_dao_fee<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    witness: IW,
-    fee_manager: &mut FeeManager,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateMonthlyDaoFee>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut bcs = bcs::new(*action_data);
-    let new_monthly_fee = bcs::peel_u64(&mut bcs);
-    let action = UpdateMonthlyDaoFeeAction { new_fee: new_monthly_fee };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-    
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
-        account,
-        b"protocol:fee_admin_cap".to_string(),
-        version
-    );
-    
-    // Update the monthly fee (it will have a built-in delay)
-    fee::update_dao_monthly_fee(
-        fee_manager,
-        cap,
-        action.new_fee,
         clock,
         ctx
     );
@@ -873,47 +795,6 @@ public fun do_update_recovery_fee<Outcome: store, IW: drop>(
     fee::update_recovery_fee(fee_manager, cap, action.new_fee, clock, ctx);
 }
 
-/// Execute apply DAO fee discount action
-public fun do_apply_dao_fee_discount<Outcome: store, IW: drop>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    witness: IW,
-    fee_manager: &mut FeeManager,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::ApplyDaoFeeDiscount>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut bcs = bcs::new(*action_data);
-    let dao_id = bcs::peel_address(&mut bcs).to_id();
-    let discount_amount = bcs::peel_u64(&mut bcs);
-    let action = ApplyDaoFeeDiscountAction { dao_id, discount_amount };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-    
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
-        account,
-        b"protocol:fee_admin_cap".to_string(),
-        version
-    );
-    
-    // Note: There's no direct apply_dao_fee_discount function.
-    // Discounts are applied at collection time via collect_dao_platform_fee_with_discount
-    // This action would need to store the discount for later use, which isn't implemented
-    let _ = fee_manager;
-    let _ = cap;
-    let _ = action;
-    let _ = clock;
-    let _ = ctx;
-}
-
 /// Execute withdraw fees to treasury action
 public fun do_withdraw_fees_to_treasury<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
@@ -972,83 +853,37 @@ public fun do_add_coin_fee_config<Outcome: store, IW: drop, StableType>(
     let action_data = intents::action_spec_data(spec);
     let mut bcs = bcs::new(*action_data);
     let decimals = bcs::peel_u8(&mut bcs);
-    let dao_monthly_fee = bcs::peel_u64(&mut bcs);
     let dao_creation_fee = bcs::peel_u64(&mut bcs);
     let proposal_fee_per_outcome = bcs::peel_u64(&mut bcs);
     let recovery_fee = bcs::peel_u64(&mut bcs);
     let multisig_creation_fee = bcs::peel_u64(&mut bcs);
-    let multisig_monthly_fee = bcs::peel_u64(&mut bcs);
     let action = AddCoinFeeConfigAction {
         coin_type: type_name::get<StableType>(),
         decimals,
-        dao_monthly_fee,
         dao_creation_fee,
         proposal_fee_per_outcome,
         recovery_fee,
         multisig_creation_fee,
-        multisig_monthly_fee,
     };
 
     // Increment action index
     executable::increment_action_idx(executable);
-    
+
     let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
         account,
         b"protocol:fee_admin_cap".to_string(),
         version
     );
-    
+
     fee::add_coin_fee_config(
         fee_manager,
         cap,
         action.coin_type,
         action.decimals,
-        action.dao_monthly_fee,
         action.dao_creation_fee,
         action.proposal_fee_per_outcome,
         action.recovery_fee,
         action.multisig_creation_fee,
-        action.multisig_monthly_fee,
-        clock,
-        ctx
-    );
-}
-
-/// Execute action to update coin monthly fee
-public fun do_update_coin_monthly_fee<Outcome: store, IW: drop, StableType>(
-    executable: &mut Executable<Outcome>,
-    account: &mut Account<FutarchyConfig>,
-    version: VersionWitness,
-    witness: IW,
-    fee_manager: &mut FeeManager,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Get spec and validate type BEFORE deserialization
-    let specs = executable::intent(executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(executable));
-    action_validation::assert_action_type<action_types::UpdateCoinMonthlyFee>(spec);
-
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut bcs = bcs::new(*action_data);
-    let new_fee = bcs::peel_u64(&mut bcs);
-    let action = UpdateCoinMonthlyFeeAction { coin_type: type_name::get<StableType>(), new_fee };
-
-    // Increment action index
-    executable::increment_action_idx(executable);
-    
-    let cap = account::borrow_managed_asset<FutarchyConfig, String, FeeAdminCap>(
-        account,
-        b"protocol:fee_admin_cap".to_string(),
-        version
-    );
-    
-    fee::update_coin_monthly_fee(
-        fee_manager,
-        cap,
-        action.coin_type,
-        action.new_fee,
         clock,
         ctx
     );

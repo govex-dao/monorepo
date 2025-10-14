@@ -10,19 +10,10 @@ module futarchy_markets_core::fee_tests {
     use sui::test_utils::assert_eq;
     use std::type_name;
     use futarchy_markets_core::fee::{Self, FeeManager, FeeAdminCap};
-    use futarchy_core::dao_payment_tracker::{Self, DaoPaymentTracker};
 
     // Test coin types
     public struct USDC has drop {}
     public struct TEST_TOKEN has drop {}
-
-    // ========== Constants ==========
-    const MONTHLY_FEE_PERIOD_MS: u64 = 2_592_000_000; // 30 days
-    const FEE_UPDATE_DELAY_MS: u64 = 15_552_000_000; // 6 months
-    const MAX_FEE_COLLECTION_PERIOD_MS: u64 = 7_776_000_000; // 90 days
-    const ABSOLUTE_MAX_MONTHLY_FEE: u64 = 10_000_000_000; // 10,000 USDC
-    const MAX_FEE_MULTIPLIER: u64 = 10;
-    const FEE_BASELINE_RESET_PERIOD_MS: u64 = 15_552_000_000; // 6 months
 
     // ========== Initialization Tests ==========
 
@@ -42,7 +33,6 @@ module futarchy_markets_core::fee_tests {
             assert_eq(fee::get_proposal_creation_fee_per_outcome(&fee_manager), 1_000);
             assert_eq(fee::has_verification_level(&fee_manager, 1), true);
             assert_eq(fee::get_verification_fee_for_level(&fee_manager, 1), 10_000);
-            assert_eq(fee::get_dao_monthly_fee(&fee_manager), 10_000_000); // 10 USDC
             assert_eq(fee::get_recovery_fee(&fee_manager), 5_000_000_000); // 5 SUI
             assert_eq(fee::get_launchpad_creation_fee(&fee_manager), 10_000_000_000); // 10 SUI
             assert_eq(fee::get_sui_balance(&fee_manager), 0);

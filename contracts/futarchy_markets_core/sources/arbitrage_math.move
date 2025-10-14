@@ -9,7 +9,7 @@
 /// ✅ 4. Bidirectional solving - Catches all opportunities
 /// ✅ 5. Min profit threshold - Simple profitability check
 /// ✅ 6. u256 arithmetic - Accurate overflow-free calculations
-/// ✅ 7. Ternary search precision - max(1%, 100) of search space (optimal for concave F(b))
+/// ✅ 7. Ternary search precision - max(1%, MIN_COARSE_THRESHOLD) to prevent infinite loops
 /// ✅ 8. Concavity proof - F(b) is strictly concave, ternary search is optimal
 /// ✅ 9. Smart bounding - 95%+ gas reduction via 1.1x user swap hint
 ///
@@ -18,10 +18,56 @@
 /// ≤ the swap that created it! User swaps 1,000 tokens → search [0, 1,100] not [0, 10^18].
 /// This is not an approximation - it's exact search in a tighter, correct bound.
 ///
+/// ⚠️ CRITICAL: TERNARY SEARCH INFINITE LOOP PREVENTION ⚠️
+///
+/// **MATHEMATICAL PROOF OF INSTABILITY:**
+///
+/// Ternary search uses integer division: third = (right - left) / 3
+///
+/// When coarse_threshold < 3, the loop can enter an infinite loop:
+///
+///   while (right - left > threshold) {
+///       let third = (right - left) / 3;
+///       let m1 = left + third;
+///       let m2 = right - third;
+///       // ... update left or right
+///   }
+///
+/// **Case 1: threshold = 1**
+///   Loop continues when right - left = 2
+///   → third = 2 / 3 = 0 (integer division rounds down!)
+///   → m1 = left + 0 = left
+///   → m2 = right - 0 = right
+///   → Loop never updates left or right → INFINITE LOOP → TIMEOUT
+///
+/// **Case 2: threshold = 2**
+///   Loop continues when right - left = 3
+///   → third = 3 / 3 = 1
+///   → Works for right - left = 3, but...
+///   → If right - left = 2, same as Case 1 → INFINITE LOOP
+///
+/// **Case 3: threshold = 3** (MINIMUM SAFE)
+///   Loop continues when right - left = 4, 5, 6...
+///   → third ≥ 1 for all iterations
+///   → Loop always makes progress
+///   ✅ SAFE
+///
+/// **Our Choice: threshold = 10**
+///   - Safely above minimum (10 >> 3)
+///   - Better precision for small pools (10 units vs 100 units)
+///   - All tests pass without timeouts
+///
+/// **Tests validating this:**
+/// - test_ternary_search_stability() - Verifies small search spaces don't timeout
+/// - test_worst_case_tiny_search_space() - Tests threshold behavior at boundaries
+///
+/// ============================================================================
+///
 /// ARCHITECTURAL NOTE (For Auditors):
 /// Spot→Conditional and Conditional→Spot have different implementations by design:
 /// - Spot→Cond: Uses T,A,B parameterization (bottleneck = max_i constraint)
-/// - Cond→Spot: Direct calculation (must buy from ALL pools = sum_i constraint)
+/// - Cond→Spot: Direct calculation (must buy from ALL pools = max_i constraint due to quantum liquidity)
+/// Both use MAX semantics (not sum) because splitting base USDC creates ALL conditional types simultaneously.
 /// This is NOT duplication - it reflects fundamentally different mathematical structures.
 /// The ternary search pattern IS duplicated (~40 lines) because Move lacks closures.
 ///
@@ -57,13 +103,22 @@ const MAX_CONDITIONALS: u64 = 50; // Protocol limit - O(N²) with pruning stays 
 const BPS_SCALE: u64 = 10000;     // Basis points scale
 const SMART_BOUND_MARGIN_NUM: u64 = 11;   // Smart bound = 1.1x user swap (110%)
 const SMART_BOUND_MARGIN_DENOM: u64 = 10;
-const TERNARY_PRECISION: u64 = 10000; // Search to 0.01% (1/10000) of space
+const TERNARY_SEARCH_DIVISOR: u64 = 100; // Search to 1% of space (or MIN_COARSE_THRESHOLD min)
+
+/// Minimum safe threshold for ternary search to prevent infinite loops.
+///
+/// **Mathematical Requirement:** threshold ≥ 3
+/// - When threshold < 3, loop can continue with right-left=2
+/// - Then third = 2/3 = 0 (integer division) → infinite loop
+///
+/// **Our Choice:** 10 (safely above minimum, good precision for small pools)
+/// See: TERNARY_SEARCH_INFINITE_LOOP_BUG.md for detailed analysis
+const MIN_COARSE_THRESHOLD: u64 = 10;
 
 // Gas cost estimates (with smart bounding + active-set pruning):
 //   N=10:  ~5k gas   ✅ Instant (95% reduction from smart bounding!)
 //   N=20:  ~8k gas   ✅ Very fast
-//   N=50:  ~50k gas  ✅ Fast (new limit)
-//   N=100: ~200k gas ✅ Usable (was 417k without smart bounding)
+//   N=50:  ~50k gas  ✅ Fast (protocol limit - MAX_CONDITIONALS)
 //
 // Complexity: O(N²) from pruning + O(log(1.1*user_swap) × N_pruned) from search
 // Pruning typically reduces N to 2-3 active outcomes
@@ -281,10 +336,10 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     let mut left = 0u64;
     let mut right = smart_bound;
 
-    // PHASE 1: Coarse search (1% precision with floor of 100)
-    // Use max(1% of search space, 100) to avoid excessive iterations with small bounds
-    // Floor of 100 ensures fast convergence even for tiny smart_bound values
-    let coarse_threshold = math::max(smart_bound / 100, 100);
+    // PHASE 1: Coarse search (1% precision with floor of MIN_COARSE_THRESHOLD)
+    // Floor prevents infinite loop: when right-left=2, third=0 causes no progress
+    // See MIN_COARSE_THRESHOLD constant documentation for mathematical proof
+    let coarse_threshold = math::max(smart_bound / TERNARY_SEARCH_DIVISOR, MIN_COARSE_THRESHOLD);
 
     while (right - left > coarse_threshold) {
         let third = (right - left) / 3;
@@ -388,10 +443,10 @@ fun optimal_b_search_bounded(
     let mut left = 0u64;
     let mut right = upper_bound;
 
-    // PHASE 1: Coarse search (1% precision with floor of 100)
-    // Use max(1% of search space, 100) to avoid excessive iterations with small bounds
-    // Floor of 100 ensures fast convergence even for tiny upper_bound values
-    let coarse_threshold = math::max(upper_bound / 100, 100);
+    // PHASE 1: Coarse search (1% precision with floor of MIN_COARSE_THRESHOLD)
+    // Floor prevents infinite loop: when right-left=2, third=0 causes no progress
+    // See MIN_COARSE_THRESHOLD constant documentation for mathematical proof
+    let coarse_threshold = math::max(upper_bound / TERNARY_SEARCH_DIVISOR, MIN_COARSE_THRESHOLD);
 
     while (right - left > coarse_threshold) {
         let third = (right - left) / 3;
@@ -603,17 +658,17 @@ fun early_exit_check_spot_to_cond(ts: &vector<u128>, as_vals: &vector<u128>): bo
 /// MATHEMATICAL PROOF:
 /// F(b) = S(b) - C(b) where:
 /// - S(b) = (R_spot_stable * b * β) / (R_spot_asset * BPS_SCALE + b * β)
-/// - C(b) = Σ_i (R_i_stable * b * BPS_SCALE) / ((R_i_asset - b) * α_i)
+/// - C(b) = max_i (R_i_stable * b * BPS_SCALE) / ((R_i_asset - b) * α_i)  [quantum liquidity!]
 ///
 /// Derivatives at b=0:
 /// S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
-/// C'(0) = Σ_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
+/// C'(0) = max_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)  [max of derivatives]
 ///
-/// For profit: F'(0) > 0 ⟺ S'(0) > C'(0)
+/// For profit: F'(0) > 0 ⟺ S'(0) > C'(0) = max_i(c'_i(0))
 /// Return true (exit early) if S'(0) ≤ C'(0)
 ///
-/// CONSERVATIVE APPROXIMATION: Since C'(0) is a sum, if S'(0) <= max_i(c'_i(0)),
-/// then definitely S'(0) < C'(0). This catches the most obvious unprofitable cases.
+/// CONSERVATIVE CHECK: If S'(0) ≤ ANY c'_i(0), then S'(0) ≤ max_i(c'_i(0)) = C'(0).
+/// This correctly catches unprofitable cases (spot revenue slope too shallow).
 fun early_exit_check_cond_to_spot(
     spot_asset: u64,
     spot_stable: u64,
@@ -653,15 +708,16 @@ fun early_exit_check_cond_to_spot(
         // ⟺ s_prime_num * c_i_denom <= s_prime_denom * c_i_num
         if (s_prime_num * c_i_denom <= s_prime_denom * c_i_num) {
             // Spot slope ≤ this conditional's slope
-            // Since C'(0) = Σ_i c'_i ≥ c'_i ≥ S'(0), definitely no profit
+            // Since C'(0) = max_i(c'_i) ≥ c'_i ≥ S'(0), definitely no profit
             return true
         };
 
         i = i + 1;
     };
 
-    // S'(0) > all individual c'_i(0), but C'(0) is their sum
-    // Could still be unprofitable if sum >> S'(0), but let ternary search decide
+    // S'(0) > all individual c'_i(0)
+    // Since C'(0) = max_i(c'_i) and S'(0) > every c'_i, we have S'(0) > C'(0)
+    // Arbitrage may be profitable - let ternary search find optimal b
     false
 }
 
@@ -1005,7 +1061,7 @@ fun profit_conditional_to_spot(
     // Calculate spot revenue: S(b) = spot output from selling b base assets
     let spot_revenue = calculate_spot_revenue(spot_asset, spot_stable, beta, b);
 
-    // Calculate total cost from all conditional pools: C(b) = Σ_i c_i(b)
+    // Calculate total cost from all conditional pools: C(b) = max_i(c_i(b)) [quantum liquidity!]
     let total_cost = calculate_conditional_cost(conditionals, b);
 
     // Profit: S(b) - C(b)
@@ -1059,10 +1115,19 @@ fun calculate_spot_revenue(
     }
 }
 
-/// Calculate total cost to buy b conditional assets from all pools
-/// C(b) = Σ_i c_i(b) where c_i(b) = (R_i_stable * b * BPS_SCALE) / ((R_i_asset - b) * α_i)
+/// Calculate cost to buy b conditional assets from all pools (QUANTUM LIQUIDITY)
+/// C(b) = max_i(c_i(b)) where c_i(b) = (R_i_stable * b * BPS_SCALE) / ((R_i_asset - b) * α_i)
 ///
-/// Derivation for pool i:
+/// **CRITICAL: Uses MAX not SUM due to quantum liquidity!**
+///
+/// When you split base USDC, you get conditional tokens for ALL outcomes simultaneously:
+///   Split 60 base → 60 YES_USDC + 60 NO_USDC + 60 MAYBE_USDC + ...
+///
+/// To buy b from each pool:
+///   Pool 1 costs 60 YES_USDC, Pool 2 costs 50 NO_USDC
+///   → Split max(60, 50) = 60 base USDC (NOT 60 + 50 = 110!)
+///
+/// Cost derivation for pool i:
 /// - Before swap: (R_i_asset, R_i_stable)
 /// - Add stable_in (after fee: stable_in * α_i / BPS_SCALE)
 /// - Remove b assets
@@ -1073,7 +1138,7 @@ fun calculate_conditional_cost(
     b: u64,
 ): u128 {
     let num_conditionals = vector::length(conditionals);
-    let mut total_cost = 0u128;
+    let mut max_cost = 0u128;  // FIX: Use max, not sum (quantum liquidity!)
     let b_u128 = (b as u128);
 
     let mut i = 0;
@@ -1123,16 +1188,17 @@ fun calculate_conditional_cost(
             (cost_i_u256 as u128)
         };
 
-        // Add to total (check overflow)
-        if (total_cost > std::u128::max_value!() - cost_i) {
-            return std::u128::max_value!() // Saturate (total cost too high)
+        // FIX: Take maximum cost across all pools (quantum liquidity)
+        // You split base USDC once and get ALL conditional token types
+        // So cost = max(c_i) not sum(c_i)
+        if (cost_i > max_cost) {
+            max_cost = cost_i;
         };
-        total_cost = total_cost + cost_i;
 
         i = i + 1;
     };
 
-    total_cost
+    max_cost
 }
 
 // ============================================================================

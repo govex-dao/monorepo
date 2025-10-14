@@ -219,7 +219,6 @@ public struct AddStableType has drop {}
 public struct RemoveStableType has drop {}
 public struct UpdateDaoCreationFee has drop {}
 public struct UpdateProposalFee has drop {}
-public struct UpdateMonthlyDaoFee has drop {}
 public struct UpdateTreasuryAddress has drop {}
 public struct WithdrawProtocolFees has drop {}
 
@@ -244,12 +243,10 @@ public struct SetLaunchpadTrustScore has drop {}
 
 public struct UpdateRecoveryFee has drop {}
 public struct WithdrawFeesToTreasury has drop {}
-public struct ApplyDaoFeeDiscount has drop {}
 
 // === Coin Fee Config Action Types ===
 
 public struct AddCoinFeeConfig has drop {}
-public struct UpdateCoinMonthlyFee has drop {}
 public struct UpdateCoinCreationFee has drop {}
 public struct UpdateCoinProposalFee has drop {}
 public struct UpdateCoinRecoveryFee has drop {}
@@ -446,7 +443,6 @@ public fun add_stable_type(): TypeName { type_name::with_defining_ids<AddStableT
 public fun remove_stable_type(): TypeName { type_name::with_defining_ids<RemoveStableType>() }
 public fun update_dao_creation_fee(): TypeName { type_name::with_defining_ids<UpdateDaoCreationFee>() }
 public fun update_proposal_fee(): TypeName { type_name::with_defining_ids<UpdateProposalFee>() }
-public fun update_monthly_dao_fee(): TypeName { type_name::with_defining_ids<UpdateMonthlyDaoFee>() }
 public fun update_treasury_address(): TypeName { type_name::with_defining_ids<UpdateTreasuryAddress>() }
 public fun withdraw_protocol_fees(): TypeName { type_name::with_defining_ids<WithdrawProtocolFees>() }
 
@@ -477,11 +473,9 @@ public fun set_launchpad_trust_score(): TypeName { type_name::with_defining_ids<
 // Fee Management actions
 public fun update_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateRecoveryFee>() }
 public fun withdraw_fees_to_treasury(): TypeName { type_name::with_defining_ids<WithdrawFeesToTreasury>() }
-public fun apply_dao_fee_discount(): TypeName { type_name::with_defining_ids<ApplyDaoFeeDiscount>() }
 
 // Coin Fee Config actions
 public fun add_coin_fee_config(): TypeName { type_name::with_defining_ids<AddCoinFeeConfig>() }
-public fun update_coin_monthly_fee(): TypeName { type_name::with_defining_ids<UpdateCoinMonthlyFee>() }
 public fun update_coin_creation_fee(): TypeName { type_name::with_defining_ids<UpdateCoinCreationFee>() }
 public fun update_coin_proposal_fee(): TypeName { type_name::with_defining_ids<UpdateCoinProposalFee>() }
 public fun update_coin_recovery_fee(): TypeName { type_name::with_defining_ids<UpdateCoinRecoveryFee>() }

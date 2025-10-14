@@ -301,7 +301,8 @@ fun test_simulate_pure_arbitrage_with_min_profit_basic() {
     let (amount, profit, _direction) = arbitrage_entry::simulate_pure_arbitrage_with_min_profit(
         &spot_pool,
         conditionals,
-        0, // No min profit
+        0,
+        0,
     );
 
     // Should return results (amount and profit may be zero if no arbitrage)
@@ -338,7 +339,8 @@ fun test_simulate_pure_arbitrage_with_high_min_profit() {
     let (amount, profit, _direction) = arbitrage_entry::simulate_pure_arbitrage_with_min_profit(
         &spot_pool,
         conditionals,
-        1_000_000_000, // Very high threshold
+        0,
+        1_000_000_000,
     );
 
     // Likely no arbitrage meets this threshold
@@ -376,6 +378,7 @@ fun test_simulate_pure_arbitrage_asset_to_stable() {
     let (amount, profit) = arbitrage_entry::simulate_pure_arbitrage_asset_to_stable(
         &spot_pool,
         conditionals,
+        0,
     );
 
     // Should return results
@@ -412,6 +415,7 @@ fun test_simulate_pure_arbitrage_stable_to_asset() {
     let (amount, profit) = arbitrage_entry::simulate_pure_arbitrage_stable_to_asset(
         &spot_pool,
         conditionals,
+        0,
     );
 
     // Should return results
