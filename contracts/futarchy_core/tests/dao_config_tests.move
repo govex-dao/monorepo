@@ -23,7 +23,7 @@ fun test_new_trading_params_basic() {
         30,  // spot_fee_bps
         0,  // market_op_review (instant)
         1000,  // max_amm_swap_percent_bps (10%)
-        80,  // conditional_liquidity_ratio_bps (80%)
+        80,  // conditional_liquidity_ratio_percent (80%, base 100)
     );
 
     assert!(dao_config::min_asset_amount(&params) == 1000000, 0);

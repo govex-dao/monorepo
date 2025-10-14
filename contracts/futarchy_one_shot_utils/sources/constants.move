@@ -145,6 +145,20 @@ public fun token_type_asset(): u8 { 0 }
 public fun token_type_stable(): u8 { 1 }
 public fun token_type_lp(): u8 { 2 }
 
+// === Liquidity Constants ===
+
+/// Minimum percentage of liquidity that can move to conditional markets (base 100)
+/// Enforces at least 1% stays in spot pool for trading during proposals
+public fun min_conditional_liquidity_percent(): u64 { 1 }
+
+/// Maximum percentage of liquidity that can move to conditional markets (base 100)
+/// Enforces at least 1% stays in spot pool for trading during proposals
+public fun max_conditional_liquidity_percent(): u64 { 99 }
+
+/// Default percentage of liquidity that moves to conditional markets (base 100)
+/// 80% provides good balance between price discovery and spot liquidity
+public fun default_conditional_liquidity_percent(): u64 { 80 }
+
 // === Document Registry Constants ===
 
 /// Maximum chunks per document (limited by per-tx dynamic field access)

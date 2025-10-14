@@ -14,3 +14,6 @@ get in here
 - [ ] https://v1.metadao.fi/metadao/create
 - [ ] auto approvals https://github.com/MystenLabs/ts-sdks/discussions/567
 - [ ] show implied price in frontend and check it matches spot, warning if not!!
+- [ ] figure out how to handle arbitrage if there is not spot market
+- [ ] for council related proposals allow users to click on council in UI. to bring up details, like formation time and past  proposals
+- [ ] in trade UI outcome should be coloured like line!!!

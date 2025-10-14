@@ -11,7 +11,7 @@
 /// DEPENDENCY SAFETY:
 /// This module ONLY imports:
 /// - sui framework (clock, balance, coin, etc.)
-/// - futarchy_markets basic types (swap_position_registry, simple_twap, coin_escrow)
+/// - futarchy_markets basic types (simple_twap, coin_escrow)
 /// - Does NOT import: proposal or lifecycle modules
 ///
 /// This ensures: proposal.move → unified_spot_pool (one-way dependency)
@@ -28,21 +28,16 @@ use sui::transfer;
 use std::option::{Self, Option};
 use std::type_name::TypeName;
 use std::vector;
-use futarchy_markets_core::swap_position_registry::{Self, SwapPositionRegistry};
 use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 
 // === Errors ===
 const EInsufficientLiquidity: u64 = 1;
-const EInsufficientOutputAmount: u64 = 2;
 const EInsufficientLPSupply: u64 = 3;
 const EZeroAmount: u64 = 4;
 const ESlippageExceeded: u64 = 5;
 const EMinimumLiquidityNotMet: u64 = 6;
 const ENoActiveProposal: u64 = 7;
-const EProposalMismatch: u64 = 8;
-const EEscrowMismatch: u64 = 9;
-const ENoRegistry: u64 = 10;
 const EAggregatorNotEnabled: u64 = 11;
 
 // === Constants ===
@@ -77,15 +72,12 @@ public struct AggregatorConfig<phantom AssetType, phantom StableType> has store 
     // Empty when no proposal is active
     conditional_type_names: vector<TypeName>,
 
-    // Swap position registry for dust tracking
-    registry: SwapPositionRegistry<AssetType, StableType>,
-
     // TWAP oracle for price feeds
     simple_twap: SimpleTWAP,
 
     // Liquidity tracking for oracle switching
     last_proposal_usage: Option<u64>,
-    conditional_liquidity_ratio_bps: u64,  // 0-10000 (0-100%)
+    conditional_liquidity_ratio_percent: u64,  // 1-99 (base 100, enforced by DAO config)
     oracle_conditional_threshold_bps: u64, // When to use conditional vs spot oracle
 
     // Protocol fees (separate from LP fees)
@@ -191,23 +183,21 @@ public fun new<AssetType, StableType>(
 }
 
 /// Create a pool WITH aggregator support
-/// This includes TWAP oracle, registry, and all aggregator features
+/// This includes TWAP oracle and all aggregator features
 public fun new_with_aggregator<AssetType, StableType>(
     fee_bps: u64,
     oracle_conditional_threshold_bps: u64,
     clock: &Clock,
     ctx: &mut TxContext,
 ): UnifiedSpotPool<AssetType, StableType> {
-    let registry = swap_position_registry::new<AssetType, StableType>(ctx);
     let simple_twap = simple_twap::new(0, clock); // Initialize with 0 price (will be updated on first swap)
 
     let aggregator_config = AggregatorConfig {
         active_escrow: option::none(),
         conditional_type_names: vector::empty(),
-        registry,
         simple_twap,
         last_proposal_usage: option::none(),
-        conditional_liquidity_ratio_bps: 0,
+        conditional_liquidity_ratio_percent: 0,
         oracle_conditional_threshold_bps,
         protocol_fees_stable: balance::zero(),
     };
@@ -229,20 +219,18 @@ public fun enable_aggregator<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     oracle_conditional_threshold_bps: u64,
     clock: &Clock,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ) {
     // Only enable if not already enabled
     if (pool.aggregator_config.is_none()) {
-        let registry = swap_position_registry::new<AssetType, StableType>(ctx);
         let simple_twap = simple_twap::new(get_spot_price(pool), clock); // Initialize with current price
 
         let config = AggregatorConfig {
             active_escrow: option::none(),
             conditional_type_names: vector::empty(),
-            registry,
             simple_twap,
             last_proposal_usage: option::none(),
-            conditional_liquidity_ratio_bps: 0,
+            conditional_liquidity_ratio_percent: 0,
             oracle_conditional_threshold_bps,
             protocol_fees_stable: balance::zero(),
         };
@@ -288,15 +276,6 @@ public(package) fun borrow_active_escrow_mut<AssetType, StableType>(
     let config = pool.aggregator_config.borrow_mut();
     assert!(config.active_escrow.is_some(), ENoActiveProposal);
     config.active_escrow.borrow_mut()
-}
-
-/// Get registry reference (for dust management)
-public(package) fun borrow_registry_mut<AssetType, StableType>(
-    pool: &mut UnifiedSpotPool<AssetType, StableType>,
-): &mut SwapPositionRegistry<AssetType, StableType> {
-    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
-    let config = pool.aggregator_config.borrow_mut();
-    &mut config.registry
 }
 
 // === Core AMM Functions ===
@@ -400,6 +379,37 @@ public fun remove_liquidity<AssetType, StableType>(
         balance::split(&mut pool.stable_reserve, (stable_out as u64)),
         ctx
     );
+
+    // CRITICAL: Ensure remaining pool maintains minimum liquidity requirement
+    // Three-layer defense:
+    // 1. Protocol min (100,000 via DAO config) - prevents misconfiguration
+    // 2. Check k >= 1000 - Uniswap V2 invariant (basic protection)
+    // 3. Check against active ratio - Future-proof for multi-proposal scenarios
+    let remaining_asset = balance::value(&pool.asset_reserve);
+    let remaining_stable = balance::value(&pool.stable_reserve);
+    let remaining_k = (remaining_asset as u128) * (remaining_stable as u128);
+
+    // Basic check: k >= 1000 (Uniswap V2 minimum)
+    assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), EMinimumLiquidityNotMet);
+
+    // Enhanced check: If proposal is active with stored ratio, validate against that ratio
+    // This handles future multi-proposal scenarios where ratio might change during active proposals
+    // Current model: one proposal at a time (ratio stored, used, then reset to 0)
+    // Future model: multiple proposals could require stacked ratio validation
+    if (pool.aggregator_config.is_some()) {
+        let config = pool.aggregator_config.borrow();
+        let active_ratio = config.conditional_liquidity_ratio_percent;
+
+        // If ratio is active (non-zero), ensure remaining liquidity could support that ratio
+        // with k >= 1000 after a quantum split
+        if (active_ratio > 0) {
+            let spot_ratio = 100 - active_ratio;
+            let projected_spot_asset = (remaining_asset as u128) * (spot_ratio as u128) / 100u128;
+            let projected_spot_stable = (remaining_stable as u128) * (spot_ratio as u128) / 100u128;
+            let projected_k = projected_spot_asset * projected_spot_stable;
+            assert!(projected_k >= (MINIMUM_LIQUIDITY as u128), EMinimumLiquidityNotMet);
+        };
+    };
 
     (asset_coin, stable_coin)
 }
@@ -536,7 +546,7 @@ public fun is_locked_for_proposal<AssetType, StableType>(
 }
 
 /// Get conditional liquidity ratio (aggregator only)
-public fun get_conditional_liquidity_ratio_bps<AssetType, StableType>(
+public fun get_conditional_liquidity_ratio_percent<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>
 ): u64 {
     if (pool.aggregator_config.is_none()) {
@@ -544,7 +554,7 @@ public fun get_conditional_liquidity_ratio_bps<AssetType, StableType>(
     };
 
     let config = pool.aggregator_config.borrow();
-    config.conditional_liquidity_ratio_bps
+    config.conditional_liquidity_ratio_percent
 }
 
 /// Get oracle threshold (aggregator only)
@@ -593,6 +603,15 @@ public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
     let asset_balance = balance::split(&mut pool.asset_reserve, asset_amount);
     let stable_balance = balance::split(&mut pool.stable_reserve, stable_amount);
 
+    // CRITICAL: Ensure remaining spot pool meets minimum liquidity requirement (k >= 1000)
+    // Protocol enforces min=100,000 per reserve, so with 99% ratio:
+    // → spot keeps 100,000 * 1/100 = 1,000 each → k = 1,000,000 ✅
+    // This check is defense-in-depth to catch bugs in ratio calculations
+    let remaining_asset = balance::value(&pool.asset_reserve);
+    let remaining_stable = balance::value(&pool.stable_reserve);
+    let remaining_k = (remaining_asset as u128) * (remaining_stable as u128);
+    assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), EMinimumLiquidityNotMet);
+
     (asset_balance, stable_balance)
 }
 
@@ -614,7 +633,7 @@ public(package) fun add_liquidity_from_quantum_redeem<AssetType, StableType>(
 /// Updates tracking for liquidity-weighted oracle logic
 public fun mark_liquidity_to_proposal<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    conditional_liquidity_ratio_bps: u64,
+    conditional_liquidity_ratio_percent: u64,
     clock: &Clock,
 ) {
     if (pool.aggregator_config.is_none()) {
@@ -633,7 +652,7 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
     config.last_proposal_usage = option::some(clock.timestamp_ms());
 
     // Store conditional liquidity ratio for liquidity-weighted oracle logic
-    config.conditional_liquidity_ratio_bps = conditional_liquidity_ratio_bps;
+    config.conditional_liquidity_ratio_percent = conditional_liquidity_ratio_percent;
 }
 
 /// Backfill spot's SimpleTWAP with winning conditional's data after proposal ends
@@ -678,7 +697,7 @@ public fun backfill_from_winning_conditional<AssetType, StableType>(
 
     // Unlock the pool and reset lock parameters
     config.last_proposal_usage = option::none();
-    config.conditional_liquidity_ratio_bps = 0;
+    config.conditional_liquidity_ratio_percent = 0;
 }
 
 /// Check if TWAP is ready (has enough history)
@@ -908,10 +927,9 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
         let AggregatorConfig {
             active_escrow,
             conditional_type_names: _,
-            registry,
             simple_twap,
             last_proposal_usage: _,
-            conditional_liquidity_ratio_bps: _,
+            conditional_liquidity_ratio_percent: _,
             oracle_conditional_threshold_bps: _,
             protocol_fees_stable,
         } = config;
@@ -924,7 +942,6 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
             option::destroy_none(active_escrow);
         };
 
-        swap_position_registry::destroy_for_testing(registry);
         simple_twap::destroy_for_testing(simple_twap);
         balance::destroy_for_testing(protocol_fees_stable);
     } else {

@@ -13,7 +13,6 @@ use futarchy_governance_actions::protocol_admin_actions::{
     RemoveStableTypeAction,
     UpdateDaoCreationFeeAction,
     UpdateProposalFeeAction,
-    UpdateMonthlyDaoFeeAction,
     UpdateVerificationFeeAction,
     AddVerificationLevelAction,
     RemoveVerificationLevelAction,
@@ -49,11 +48,6 @@ public struct UpdateDaoCreationFeeActionDecoder has key, store {
 
 /// Decoder for UpdateProposalFeeAction
 public struct UpdateProposalFeeActionDecoder has key, store {
-    id: UID,
-}
-
-/// Decoder for UpdateMonthlyDaoFeeAction
-public struct UpdateMonthlyDaoFeeActionDecoder has key, store {
     id: UID,
 }
 
@@ -200,25 +194,6 @@ public fun decode_update_proposal_fee_action(
         schema::new_field(
             b"new_fee_per_outcome".to_string(),
             new_fee_per_outcome.to_string(),
-            b"u64".to_string(),
-        ),
-    ]
-}
-
-/// Decode an UpdateMonthlyDaoFeeAction
-public fun decode_update_monthly_dao_fee_action(
-    _decoder: &UpdateMonthlyDaoFeeActionDecoder,
-    action_data: vector<u8>,
-): vector<HumanReadableField> {
-    let mut bcs_data = bcs::new(action_data);
-    let new_fee = bcs::peel_u64(&mut bcs_data);
-
-    bcs_validation::validate_all_bytes_consumed(bcs_data);
-
-    vector[
-        schema::new_field(
-            b"new_fee".to_string(),
-            new_fee.to_string(),
             b"u64".to_string(),
         ),
     ]
@@ -467,7 +442,6 @@ public fun register_decoders(
     register_remove_stable_type_decoder(registry, ctx);
     register_update_dao_creation_fee_decoder(registry, ctx);
     register_update_proposal_fee_decoder(registry, ctx);
-    register_update_monthly_dao_fee_decoder(registry, ctx);
     register_update_verification_fee_decoder(registry, ctx);
     register_add_verification_level_decoder(registry, ctx);
     register_remove_verification_level_decoder(registry, ctx);
@@ -521,15 +495,6 @@ fun register_update_proposal_fee_decoder(
 ) {
     let decoder = UpdateProposalFeeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<UpdateProposalFeeAction>();
-    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
-}
-
-fun register_update_monthly_dao_fee_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
-    let decoder = UpdateMonthlyDaoFeeActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<UpdateMonthlyDaoFeeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 

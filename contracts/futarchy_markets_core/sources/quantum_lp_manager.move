@@ -176,11 +176,11 @@ public fun calculate_max_quantum_split<AssetType, StableType>(
 
 /// When proposal starts, automatically quantum-split spot LP to conditional AMMs
 /// Amount split is based on DAO-configured ratio with safety cap from conditional capacity
-/// @param conditional_liquidity_ratio_bps: Percentage of spot liquidity to move (base 100: 0-100)
+/// @param conditional_liquidity_ratio_percent: Percentage of spot liquidity to move (base 100: 1-99)
 public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    conditional_liquidity_ratio_bps: u64,  // DAO-configured ratio (base 100: 0-100)
+    conditional_liquidity_ratio_percent: u64,  // DAO-configured ratio (base 100: 1-99)
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -196,8 +196,8 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     };
 
     // Calculate desired split amount from DAO-configured ratio
-    // ratio_bps: 80 = 80%, 50 = 50%, etc.
-    let desired_split_lp = math::mul_div_to_64(spot_lp_supply, conditional_liquidity_ratio_bps, 100);
+    // ratio_percent: 80 = 80%, 50 = 50%, etc. (base 100, enforced 1-99%)
+    let desired_split_lp = math::mul_div_to_64(spot_lp_supply, conditional_liquidity_ratio_percent, 100);
 
     // Safety cap: Calculate maximum safe split based on conditional AMM capacity
     let max_safe_split_lp = calculate_max_quantum_split(spot_pool, market_state);

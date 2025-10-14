@@ -135,7 +135,7 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     
     // Fee-related fields
     amm_total_fee_bps: u64,
-    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move to conditional markets (10-90%)
+    conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move to conditional markets (1-99%, base 100)
     fee_escrow: Balance<StableType>,
     treasury_address: address,
 
@@ -246,7 +246,7 @@ public fun initialize_market<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
-    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move (10-90%)
+    conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move (1-99%, base 100)
     max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     // Proposal specific parameters
@@ -301,9 +301,21 @@ public fun initialize_market<AssetType, StableType>(
         i = i + 1;
     };
 
-    // Validate minimum liquidity requirements
+    // Validate minimum liquidity requirements for conditional markets
     assert!(asset_per_outcome >= min_asset_liquidity, EAssetLiquidityTooLow);
     assert!(stable_per_outcome >= min_stable_liquidity, EStableLiquidityTooLow);
+
+    // CRITICAL: Pre-validate that spot pool will maintain k >= 1000 after quantum split
+    // Defense-in-depth to catch misconfiguration at proposal creation
+    // Spot ratio = (100 - conditional_liquidity_ratio_percent) / 100
+    // With protocol min = 100,000 and ratio = 99%: spot keeps 1,000 each → k = 1,000,000 ✅
+    // NOTE: This assumes single proposal (current model). If multiple proposals allowed in future,
+    //       may need to store conditional_liquidity_ratio_percent in AMM as optional field.
+    let spot_ratio = 100 - conditional_liquidity_ratio_percent;
+    let spot_asset_projected = (min_asset_liquidity as u128) * (spot_ratio as u128) / 100u128;
+    let spot_stable_projected = (min_stable_liquidity as u128) * (spot_ratio as u128) / 100u128;
+    let projected_spot_k = spot_asset_projected * spot_stable_projected;
+    assert!(projected_spot_k >= 1000u128, EAssetLiquidityTooLow); // Reuse error for simplicity
 
     // Initialize outcome creators to the original proposer
     let outcome_creators = vector::tabulate!(outcome_count, |_| proposer);
@@ -461,7 +473,7 @@ public fun initialize_market<AssetType, StableType>(
             winning_outcome: option::none(),
         },
         amm_total_fee_bps,
-        conditional_liquidity_ratio_bps,
+        conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
@@ -513,7 +525,7 @@ public fun new_premarket<AssetType, StableType>(
     twap_step_max: u64,
     twap_threshold: u64,
     amm_total_fee_bps: u64,
-    conditional_liquidity_ratio_bps: u64,  // Percentage of spot liquidity to move (10-90%)
+    conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move (1-99%, base 100)
     max_outcomes: u64, // DAO's configured max outcomes
     treasury_address: address,
     title: String,
@@ -583,7 +595,7 @@ public fun new_premarket<AssetType, StableType>(
             winning_outcome: option::none(),
         },
         amm_total_fee_bps,
-        conditional_liquidity_ratio_bps,
+        conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
@@ -1855,7 +1867,7 @@ public fun new_for_testing<AssetType, StableType>(
             winning_outcome,
         },
         amm_total_fee_bps,
-        conditional_liquidity_ratio_bps: 5000,
+        conditional_liquidity_ratio_percent: 50,  // 50% (base 100, not bps!)
         fee_escrow,
         treasury_address,
         policy_modes: vector::tabulate!(outcome_count as u64, |_| 0u8),
@@ -2133,7 +2145,7 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
             winning_outcome: _,
         },
         amm_total_fee_bps: _,
-        conditional_liquidity_ratio_bps: _,
+        conditional_liquidity_ratio_percent: _,
         fee_escrow,
         treasury_address: _,
         policy_modes: _,

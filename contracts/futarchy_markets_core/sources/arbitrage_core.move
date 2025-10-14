@@ -11,7 +11,7 @@ use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::proposal::Proposal;
 use futarchy_markets_core::arbitrage_math;
 use futarchy_markets_primitives::market_state;
-use futarchy_markets_core::swap_position_registry::SwapPositionRegistry;
+// swap_position_registry removed - balances transferred directly to users
 use sui::coin::{Self, Coin};
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;

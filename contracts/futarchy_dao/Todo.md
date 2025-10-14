@@ -124,12 +124,15 @@ and patara.app
 - [ ] See if their aggregator can search over that boolean
 - [ ] Maybe need second entry point??
 - [ ] https://v1.metadao.fi/metadao/create
-- [ ] Change liuquidity split ratio to 0 to 100 look at conditional_liqudity_ratio
-- [ ] ad simple window to twap maybe cant accumualte by more than 5%???
-- [ ] figure out how to handle arbitrage if there is not spot market
-- [ ] wait when we multiply bound by 1.1 should we make sure thats min u64 and 1.1 bound? 
-- [ ] Tests allow 0.5% discrepancy between optimizer and simulator - move to 0.01%
+- [NAH] Change liuquidity split ratio to 0 to 100 look at conditional_liqudity_ratio
+- [X] figure out how to handle arbitrage if there is not spot market, it doesnt happen but force psot market tbh
 - [ ] maybe alow conditional only swaps no arb????
+
+
+- [WIP] ad simple window to twap maybe cant accumualte by more than 5%???
+- [WIP] dao end proposal early
+- [WIP] spot registry fees
+- [WIP] on disolution of dao / partial ignore tokens in treasury and amm??? / allow emptying full of AMM???
 
 1) dao needs to supside LPs during proposals ( use proposer fee)\
 2) I need to slwly replace aftermath!!! \

@@ -23,7 +23,6 @@ use account_actions::vault;
 use futarchy_core::{
     version,
     futarchy_config::{Self, FutarchyConfig},
-    dao_payment_tracker::{Self, DaoPaymentTracker},
     action_validation,
     action_types,
 };
@@ -67,7 +66,6 @@ public fun do_collect_platform_fee<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     fee_manager: &mut FeeManager,
-    payment_tracker: &mut DaoPaymentTracker,
     mut payment_coin: Coin<SUI>,
     clock: &Clock,
     version_witness: VersionWitness,
@@ -101,61 +99,16 @@ public fun do_collect_platform_fee<Outcome: store, IW: drop>(
 
     let dao_id = object::id(account);
 
-    // Collect fee or accumulate debt
-    let sui_type = type_name::with_defining_ids<SUI>();
-    let usdc_type = type_name::with_defining_ids<USDC>();
-    // Reset both SUI and USDC debts on successful payment (forgiveness mechanism)
-    let all_coin_types = vector[sui_type, usdc_type];
-    let (remaining, _periods_collected) = fee::collect_dao_platform_fee_with_dao_coin(
-        fee_manager,
-        payment_tracker,
-        dao_id,
-        sui_type,
-        all_coin_types,
-        payment_coin,
-        clock,
-        ctx
-    );
+    // DEPRECATED: Monthly fee collection replaced with arb-loop-based fee system
+    // This function needs to be updated to use the new fee system
+    // For now, just return the payment coin as remaining
+    // TODO: Implement new arb-loop-based fee collection
+    let remaining = payment_coin;
 
     // Increment action index
     executable::increment_action_idx(executable);
 
     remaining
-}
-
-/// Permissionless function to trigger fee collection for any DAO
-/// Anyone can call this to ensure DAOs pay their fees on time
-public entry fun trigger_fee_collection(
-    account: &mut Account<FutarchyConfig>,
-    fee_manager: &mut FeeManager,
-    payment_tracker: &mut DaoPaymentTracker,
-    payment_coin: Coin<SUI>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let dao_id = object::id(account);
-    
-    // Collect fee or accumulate debt using the provided payment coin
-    let sui_type = type_name::with_defining_ids<SUI>();
-    let usdc_type = type_name::with_defining_ids<USDC>();
-    let all_coin_types = vector[sui_type, usdc_type];
-    let (remaining, _) = fee::collect_dao_platform_fee_with_dao_coin(
-        fee_manager,
-        payment_tracker,
-        dao_id,
-        sui_type,
-        all_coin_types,
-        payment_coin,
-        clock,
-        ctx
-    );
-    
-    // Return remainder to sender
-    if (remaining.value() > 0) {
-        transfer::public_transfer(remaining, tx_context::sender(ctx));
-    } else {
-        remaining.destroy_zero();
-    };
 }
 
 /// Witness for permissionless fee collection

@@ -714,6 +714,10 @@ public fun max_amm_swap_percent_bps(config: &FutarchyConfig): u64 {
     dao_config::max_amm_swap_percent_bps(dao_config::trading_params(&config.config))
 }
 
+public fun conditional_liquidity_ratio_percent(config: &FutarchyConfig): u64 {
+    dao_config::conditional_liquidity_ratio_percent(dao_config::trading_params(&config.config))
+}
+
 // === Missing Functions Added for Build Fixes ===
 
 public fun optimistic_challenge_period_ms(config: &FutarchyConfig): u64 {
@@ -873,6 +877,11 @@ public fun set_market_op_review_period_ms(config: &mut FutarchyConfig, period: u
 public fun set_max_amm_swap_percent_bps(config: &mut FutarchyConfig, percent_bps: u64) {
     let trading_params = dao_config::trading_params_mut(&mut config.config);
     dao_config::set_max_amm_swap_percent_bps(trading_params, percent_bps);
+}
+
+public fun set_conditional_liquidity_ratio_percent(config: &mut FutarchyConfig, ratio_percent: u64) {
+    let trading_params = dao_config::trading_params_mut(&mut config.config);
+    dao_config::set_conditional_liquidity_ratio_percent(trading_params, ratio_percent);
 }
 
 public fun set_use_outcome_index(config: &mut FutarchyConfig, use_index: bool) {

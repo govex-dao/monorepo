@@ -68,7 +68,7 @@ public fun get_lending_twap<AssetType, StableType>(
     // Liquidity-weighted oracle: read from conditionals when spot has <50% liquidity
     // Only read from conditionals if: locked AND conditional_ratio >= 50%
     if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_bps(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
         // Conditionals have >=50% (spot has <=50%) - trust conditionals
         get_highest_conditional_twap(conditional_pools, LENDING_WINDOW_SECONDS, clock)
     } else {
@@ -86,7 +86,7 @@ public fun get_twap_custom_window<AssetType, StableType>(
 ): u128 {
     // Liquidity-weighted oracle: read from conditionals when spot has <50% liquidity
     if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_bps(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
         get_highest_conditional_twap(conditional_pools, _seconds, clock)
     } else {
         // Use spot's SimpleTWAP (always 90-day window)
@@ -102,7 +102,7 @@ public fun get_spot_price<AssetType, StableType>(
 ): u128 {
     // Liquidity-weighted oracle: read from conditionals when spot has <50% liquidity
     if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_bps(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
         get_highest_conditional_price(conditional_pools)
     } else {
         unified_spot_pool::get_spot_price(spot_pool)
@@ -123,7 +123,7 @@ public fun get_governance_twap<AssetType, StableType>(
 ): u128 {
     // For governance, we want the 90-day TWAP with proper time weighting
     if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_bps(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
         // Conditionals have >=50% (spot has <=50%) - use sophisticated cumulative combination
         let winning_conditional_oracle = get_highest_conditional_oracle(conditional_pools);
 

@@ -23,7 +23,6 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
     priority_queue::{Self, ProposalQueue, QueuedProposal},
     proposal_fee_manager::{Self, ProposalFeeManager},
-    dao_payment_tracker::DaoPaymentTracker,
     version,
 };
 use futarchy_types::action_specs::InitActionSpecs;
@@ -116,7 +115,6 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
     queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
     registry: &mut governance_actions::ProposalReservationRegistry,
-    payment_tracker: &DaoPaymentTracker,
     fee_coin: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -225,19 +223,19 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 
     // Intent specs are now stored in proposals, no need to check intent keys
 
+    // Read conditional liquidity ratio from DAO config
+    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(config);
+
     // If this proposal uses DAO liquidity, mark the spot pool with lock parameters
     if (uses_dao_liquidity) {
-        // Use default 50% conditional liquidity ratio (5000 bps = 50%)
-        let conditional_liquidity_ratio_bps = 5000u64;
         unified_spot_pool::mark_liquidity_to_proposal(
             spot_pool,
-            conditional_liquidity_ratio_bps,
+            conditional_liquidity_ratio_percent,
             clock
         );
     };
 
-    // Initialize the market
-    let conditional_liquidity_ratio_bps = 5000u64; // 50% default
+    // Initialize the market with the ratio from DAO config
     let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
         proposal_id,  // Pass the proposal_id from the queue
         dao_id,
@@ -250,7 +248,7 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         futarchy_config::amm_twap_step_max(config),
         futarchy_config::twap_threshold(config),
         futarchy_config::conditional_amm_fee_bps(config),
-        conditional_liquidity_ratio_bps, // Missing parameter added
+        conditional_liquidity_ratio_percent, // 50% (base 100)
         futarchy_config::max_outcomes(config), // DAO's configured max outcomes
         object::id_address(account), // treasury address
         title,
@@ -708,13 +706,15 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     
     // Config from account
     let cfg = account.config();
-    
+
     let amm_twap_start_delay = futarchy_config::amm_twap_start_delay(cfg);
     let amm_twap_initial_observation = futarchy_config::amm_twap_initial_observation(cfg);
     let amm_twap_step_max = futarchy_config::amm_twap_step_max(cfg);
     let twap_threshold = futarchy_config::twap_threshold(cfg);
     let amm_total_fee_bps = futarchy_config::amm_total_fee_bps(cfg);
-    let conditional_liquidity_ratio_bps = 5000u64; // 50% default
+
+    // Read conditional liquidity ratio from DAO config (same as activate_proposal)
+    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(cfg);
     let max_outcomes = futarchy_config::max_outcomes(cfg); // DAO's configured max outcomes
 
     // Build PREMARKET proposal (no liquidity)
@@ -730,7 +730,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         amm_twap_step_max,
         twap_threshold,
         amm_total_fee_bps,
-        conditional_liquidity_ratio_bps, // Missing parameter added
+        conditional_liquidity_ratio_percent, // 50% (base 100)
         max_outcomes,
         object::id_address(account),
         *priority_queue::get_title(&data),

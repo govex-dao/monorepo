@@ -12,6 +12,7 @@ use futarchy_core::subsidy_config::{Self as liquidity_subsidy_protocol, Protocol
 
 // === Errors ===
 const EInvalidMinAmount: u64 = 0; // Minimum amount must be positive
+const EMinAmountTooLow: u64 = 16; // Minimum amount must be at least 100,000 (0.1 tokens with 6 decimals)
 const EInvalidPeriod: u64 = 1; // Period must be positive
 const EInvalidFee: u64 = 2; // Fee exceeds maximum (10000 bps = 100%)
 const EInvalidMaxOutcomes: u64 = 3; // Max outcomes must be at least 2
@@ -32,6 +33,18 @@ const ENoConditionalMetadata: u64 = 15; // No conditional metadata available (ne
 // Most constants are now in futarchy_utils::constants
 // Only keep module-specific error codes here
 
+// Minimum liquidity amounts for conditional markets
+// Ensures proposals NEVER blocked by quantum split k>=1000 check
+//
+// With min=100,000 and 99% ratio: spot keeps 100,000 * 1/100 = 1,000 each
+// → k = 1,000 * 1,000 = 1,000,000 ✅ (well above AMM MINIMUM_LIQUIDITY = 1,000)
+//
+// Cost is trivial with common decimal counts:
+// - 6 decimals (USDC): 100,000 = 0.1 tokens
+// - 8 decimals (BTC-style): 100,000 = 0.001 tokens
+// - 9 decimals (Sui): 100,000 = 0.0001 tokens (basically free)
+const PROTOCOL_MIN_LIQUIDITY_AMOUNT: u64 = 100000;
+
 // === Structs ===
 
 /// Trading parameters configuration
@@ -49,9 +62,10 @@ public struct TradingParams has store, drop, copy {
     // Default: 1000 bps (10%) - prevents market from becoming too illiquid for trading
     max_amm_swap_percent_bps: u64,
     // Percentage of liquidity that moves to conditional markets when proposal launches
-    // Base 100 precision (10 = 10%, 80 = 80%, 100 = 100%)
-    // Default: 80 (80%) - most liquidity moves, some stays in spot
-    conditional_liquidity_ratio_bps: u64,
+    // Base 100 precision (1 = 1%, 80 = 80%, 99 = 99%)
+    // Valid range: 1-99 (enforced to ensure both spot and conditional pools have liquidity)
+    // Default: 80 (80%) - balances price discovery with spot trading
+    conditional_liquidity_ratio_percent: u64,
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
@@ -158,11 +172,13 @@ public fun new_trading_params(
     spot_amm_fee_bps: u64,
     market_op_review_period_ms: u64,
     max_amm_swap_percent_bps: u64,
-    conditional_liquidity_ratio_bps: u64,
+    conditional_liquidity_ratio_percent: u64,
 ): TradingParams {
     // Validate inputs
     assert!(min_asset_amount > 0, EInvalidMinAmount);
     assert!(min_stable_amount > 0, EInvalidMinAmount);
+    assert!(min_asset_amount >= PROTOCOL_MIN_LIQUIDITY_AMOUNT, EMinAmountTooLow);
+    assert!(min_stable_amount >= PROTOCOL_MIN_LIQUIDITY_AMOUNT, EMinAmountTooLow);
     assert!(review_period_ms >= constants::min_review_period_ms(), EInvalidPeriod);
     assert!(trading_period_ms >= constants::min_trading_period_ms(), EInvalidPeriod);
     assert!(conditional_amm_fee_bps <= constants::max_amm_fee_bps(), EInvalidFee);
@@ -175,9 +191,13 @@ public fun new_trading_params(
     // Max swap percent must be reasonable (0-100%)
     assert!(max_amm_swap_percent_bps <= constants::max_fee_bps(), EInvalidFee);
 
-    // Conditional liquidity ratio must be 0-100% (base 100: 0 = 0%, 100 = 100%)
-    // This ensures some liquidity stays in spot (for trading) and some moves to conditional markets
-    assert!(conditional_liquidity_ratio_bps <= 100, EInvalidFee);
+    // Conditional liquidity ratio must be within valid range (base 100: 1-99%)
+    // Ensures both spot and conditional pools always have liquidity
+    assert!(
+        conditional_liquidity_ratio_percent >= constants::min_conditional_liquidity_percent() &&
+        conditional_liquidity_ratio_percent <= constants::max_conditional_liquidity_percent(),
+        EInvalidFee
+    );
 
     TradingParams {
         min_asset_amount,
@@ -188,7 +208,7 @@ public fun new_trading_params(
         spot_amm_fee_bps,
         market_op_review_period_ms,
         max_amm_swap_percent_bps,
-        conditional_liquidity_ratio_bps,
+        conditional_liquidity_ratio_percent,
     }
 }
 
@@ -400,7 +420,7 @@ public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditi
 public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
 public fun market_op_review_period_ms(params: &TradingParams): u64 { params.market_op_review_period_ms }
 public fun max_amm_swap_percent_bps(params: &TradingParams): u64 { params.max_amm_swap_percent_bps }
-public fun conditional_liquidity_ratio_bps(params: &TradingParams): u64 { params.conditional_liquidity_ratio_bps }
+public fun conditional_liquidity_ratio_percent(params: &TradingParams): u64 { params.conditional_liquidity_ratio_percent }
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
@@ -580,11 +600,13 @@ public fun validate_config_update(
 // Trading params direct setters
 public(package) fun set_min_asset_amount(params: &mut TradingParams, amount: u64) {
     assert!(amount > 0, EInvalidMinAmount);
+    assert!(amount >= PROTOCOL_MIN_LIQUIDITY_AMOUNT, EMinAmountTooLow);
     params.min_asset_amount = amount;
 }
 
 public(package) fun set_min_stable_amount(params: &mut TradingParams, amount: u64) {
     assert!(amount > 0, EInvalidMinAmount);
+    assert!(amount >= PROTOCOL_MIN_LIQUIDITY_AMOUNT, EMinAmountTooLow);
     params.min_stable_amount = amount;
 }
 
@@ -620,10 +642,14 @@ public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, per
     params.max_amm_swap_percent_bps = percent_bps;
 }
 
-public(package) fun set_conditional_liquidity_ratio_bps(params: &mut TradingParams, ratio_bps: u64) {
-    // Enforce 0-100% range (base 100: 0 = 0%, 100 = 100%)
-    assert!(ratio_bps <= 100, EInvalidFee);
-    params.conditional_liquidity_ratio_bps = ratio_bps;
+public(package) fun set_conditional_liquidity_ratio_percent(params: &mut TradingParams, ratio_percent: u64) {
+    // Enforce valid range using configurable constants (base 100: 1-99%)
+    assert!(
+        ratio_percent >= constants::min_conditional_liquidity_percent() &&
+        ratio_percent <= constants::max_conditional_liquidity_percent(),
+        EInvalidFee
+    );
+    params.conditional_liquidity_ratio_percent = ratio_percent;
 }
 
 // TWAP config direct setters
@@ -1021,7 +1047,7 @@ public fun default_trading_params(): TradingParams {
         spot_amm_fee_bps: 30, // 0.3% for spot pool
         market_op_review_period_ms: 0, // 0 = immediate (allows atomic market init)
         max_amm_swap_percent_bps: 1000, // 10% max swap per proposal (prevents illiquidity)
-        conditional_liquidity_ratio_bps: 80, // 80% to conditional markets (base 100)
+        conditional_liquidity_ratio_percent: constants::default_conditional_liquidity_percent(), // 80% to conditional markets (base 100)
     }
 }
 

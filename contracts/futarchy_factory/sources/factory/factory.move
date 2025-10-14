@@ -266,7 +266,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         amm_total_fee_bps, // spot AMM fee (same as conditional)
         0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
         1000, // max_amm_swap_percent_bps (10% max swap per proposal)
-        8000, // conditional_liquidity_ratio_bps (80% to conditional - enforced 10-90% range)
+        80, // conditional_liquidity_ratio_percent (80%, base 100 - enforced 1-99% range)
     );
 
     let twap_config = dao_config::new_twap_config(
@@ -495,7 +495,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         amm_total_fee_bps, // spot AMM fee (same as conditional)
         0, // market_op_review_period_ms (0 = immediate, allows atomic market init)
         1000, // max_amm_swap_percent_bps (10% max swap per proposal)
-        8000, // conditional_liquidity_ratio_bps (80% to conditional - enforced 10-90% range)
+        80, // conditional_liquidity_ratio_percent (80%, base 100 - enforced 1-99% range)
     );
 
     let twap_config = dao_config::new_twap_config(

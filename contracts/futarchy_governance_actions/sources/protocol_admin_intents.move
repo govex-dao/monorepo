@@ -329,17 +329,6 @@ public fun add_update_proposal_fee_to_intent<Outcome: store, IW: drop>(
     intent.add_typed_action(action_types::update_proposal_fee(), action_data, intent_witness);
 }
 
-/// Update monthly DAO fee
-public fun add_update_monthly_dao_fee_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    new_fee: u64,
-    intent_witness: IW,
-) {
-    let action = protocol_admin_actions::new_update_monthly_dao_fee(new_fee);
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_monthly_dao_fee(), action_data, intent_witness);
-}
-
 /// Update verification fee
 public fun add_update_verification_fee_to_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
@@ -453,18 +442,6 @@ public fun add_set_dao_score_to_intent<Outcome: store, IW: drop>(
     intent.add_typed_action(action_types::set_dao_score(), action_data, intent_witness);
 }
 
-/// Apply DAO fee discount
-public fun add_apply_dao_fee_discount_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    dao_id: ID,
-    discount_amount: u64,
-    intent_witness: IW,
-) {
-    let action = protocol_admin_actions::new_apply_dao_fee_discount(dao_id, discount_amount);
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::apply_dao_fee_discount(), action_data, intent_witness);
-}
-
 // === Coin Fee Configuration Intent Helpers ===
 
 /// Add coin fee configuration
@@ -472,38 +449,22 @@ public fun add_coin_fee_config_to_intent<Outcome: store, IW: drop>(
     intent: &mut Intent<Outcome>,
     coin_type: TypeName,
     decimals: u8,
-    dao_monthly_fee: u64,
     dao_creation_fee: u64,
     proposal_fee_per_outcome: u64,
     recovery_fee: u64,
     multisig_creation_fee: u64,
-    multisig_monthly_fee: u64,
     intent_witness: IW,
 ) {
     let action = protocol_admin_actions::new_add_coin_fee_config(
         coin_type,
         decimals,
-        dao_monthly_fee,
         dao_creation_fee,
         proposal_fee_per_outcome,
         recovery_fee,
         multisig_creation_fee,
-        multisig_monthly_fee,
     );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::add_coin_fee_config(), action_data, intent_witness);
-}
-
-/// Update coin monthly fee
-public fun add_update_coin_monthly_fee_to_intent<Outcome: store, IW: drop>(
-    intent: &mut Intent<Outcome>,
-    coin_type: TypeName,
-    new_fee: u64,
-    intent_witness: IW,
-) {
-    let action = protocol_admin_actions::new_update_coin_monthly_fee(coin_type, new_fee);
-    let action_data = bcs::to_bytes(&action);
-    intent.add_typed_action(action_types::update_coin_monthly_fee(), action_data, intent_witness);
 }
 
 /// Update coin creation fee

@@ -1090,6 +1090,7 @@ public fun do_set_launchpad_trust_score<Outcome: store, IW: drop, RaiseToken, St
     // Set the trust score and review
     launchpad::set_admin_trust_score(
         raise,
+        cap,
         action.trust_score,
         action.review_text
     );

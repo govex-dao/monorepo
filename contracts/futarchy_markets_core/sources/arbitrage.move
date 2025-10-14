@@ -13,7 +13,7 @@ use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_primitives::market_state;
 use futarchy_markets_core::swap_core::{Self, SwapSession};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::swap_position_registry::{Self, SwapPositionRegistry};
+// swap_position_registry removed - balances transferred directly to users
 use sui::coin::{Self, Coin};
 use sui::clock::Clock;
 use sui::object::{Self, ID};
@@ -49,41 +49,56 @@ public struct ConditionalArbitrageExecuted has copy, drop {
 
 // === Main Arbitrage Functions ===
 
-/// Execute spot arbitrage - works for ANY outcome count!
+/// Execute spot arbitrage with auto-merge - works for ANY outcome count!
 ///
 /// Takes spot coins, performs quantum mint + swaps across all outcomes,
-/// finds complete set minimum, stores dust, burns complete set, returns profit.
+/// finds complete set minimum, burns complete set, returns profit + dust.
+///
+/// **NEW: Auto-Merge Support!** Pass your existing dust balance and it will
+/// accumulate into it. DCA bots doing 100 swaps = 1 NFT instead of 100!
 ///
 /// # Arbitrage Flow
 /// 1. Deposit spot coins to escrow (quantum liquidity)
 /// 2. Add amounts to balance for ALL outcomes simultaneously
 /// 3. Swap asset→stable (or stable→asset) in EACH outcome market
 /// 4. Find minimum balance across outcomes (complete set limit)
-/// 5. Store excess as dust (in registry OR return as balance)
-/// 6. Burn complete set and withdraw spot coins as profit
+/// 5. Burn complete set and withdraw spot coins as profit
+/// 6. Merge dust into existing balance OR create new balance
 ///
 /// # Arguments
 /// * `stable_for_arb` - Spot stable coins to use (can be zero)
 /// * `asset_for_arb` - Spot asset coins to use (can be zero)
 /// * `min_profit` - Minimum profit required (0 = no minimum)
-/// * `return_dust_balance` - If true, return dust as ConditionalMarketBalance object
+/// * `recipient` - Address to receive profits
+/// * `existing_balance_opt` - Optional existing balance to merge into (auto-merge!)
+///   - None = Create new balance object
+///   - Some(balance) = Merge dust into existing balance (DCA optimization!)
 ///
 /// # Returns
-/// * Tuple: (stable_profit, asset_profit, optional_dust_balance)
-/// * If return_dust_balance==false: third element is None (dust goes to registry)
-/// * If return_dust_balance==true: third element contains ConditionalMarketBalance with dust
+/// * Tuple: (stable_profit, asset_profit, dust_balance)
+/// * ALWAYS returns a balance (merged or new)
+/// * Caller should transfer balance to recipient
 ///
-/// # Example
+/// # Example - DCA Bot Pattern
 /// ```move
-/// // Works for 2, 3, 4, 5 outcomes with same function!
-/// let (stable_profit, asset_profit, dust_opt) = execute_optimal_spot_arbitrage(
-///     spot_pool, proposal, escrow, registry, &session,
-///     stable_coin, asset_coin, 0, recipient, true, clock, ctx
-/// );
-/// if (option::is_some(&dust_opt)) {
-///     let dust = option::extract(&mut dust_opt);
-///     transfer::public_transfer(dust, recipient);
-/// }
+/// // First swap - no existing balance
+/// let mut balance = option::none();
+///
+/// // Loop 100 swaps - accumulate into one NFT!
+/// let mut i = 0;
+/// while (i < 100) {
+///     let (stable_profit, asset_profit, dust) = execute_optimal_spot_arbitrage(
+///         spot_pool, escrow, &session,
+///         stable_coin, asset_coin, 0, recipient,
+///         balance,  // ← Pass previous balance back!
+///         clock, ctx
+///     );
+///     balance = option::some(dust);  // Accumulate
+///     i = i + 1;
+/// };
+///
+/// // After 100 swaps: 1 NFT instead of 100!
+/// transfer::public_transfer(option::extract(&mut balance), recipient);
 /// ```
 public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
@@ -93,10 +108,10 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
     asset_for_arb: Coin<AssetType>,
     min_profit: u64,
     recipient: address,
-    return_dust_balance: bool,
+    mut existing_balance_opt: option::Option<ConditionalMarketBalance<AssetType, StableType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Coin<StableType>, Coin<AssetType>, option::Option<ConditionalMarketBalance<AssetType, StableType>>) {
+): (Coin<StableType>, Coin<AssetType>, ConditionalMarketBalance<AssetType, StableType>) {
     // Validate market is live
     let market_state = coin_escrow::get_market_state(escrow);
     market_state::assert_trading_active(market_state);
@@ -111,7 +126,7 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
         coin::destroy_zero(asset_for_arb);
         execute_spot_arb_stable_to_asset_direction(
             spot_pool, escrow, session,
-            stable_for_arb, min_profit, recipient, return_dust_balance, clock, ctx
+            stable_for_arb, min_profit, recipient, existing_balance_opt, clock, ctx
         )
     } else if (asset_amt > 0 && stable_amt == 0) {
         // Asset→Stable→Conditionals→Asset arbitrage
@@ -119,13 +134,11 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
         coin::destroy_zero(stable_for_arb);
         execute_spot_arb_asset_to_stable_direction(
             spot_pool, escrow, session,
-            asset_for_arb, min_profit, recipient, return_dust_balance, clock, ctx
+            asset_for_arb, min_profit, recipient, existing_balance_opt, clock, ctx
         )
     } else {
-        // No coins or both coins provided - just destroy them and return zeros
-        // This shouldn't happen in normal usage, but we handle it for completeness
+        // No coins or both coins provided - just return them and empty/existing balance
         if (stable_amt > 0) {
-            // TODO: Could return the coins instead of destroying them
             transfer::public_transfer(stable_for_arb, recipient);
         } else {
             coin::destroy_zero(stable_for_arb);
@@ -135,7 +148,17 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
         } else {
             coin::destroy_zero(asset_for_arb);
         };
-        (coin::zero<StableType>(ctx), coin::zero<AssetType>(ctx), option::none())
+
+        // Return existing balance or create empty one
+        let balance = if (option::is_some(&existing_balance_opt)) {
+            option::extract(&mut existing_balance_opt)
+        } else {
+            let market_id = futarchy_markets_core::market_state::market_id(market_state);
+            let outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
+            conditional_balance::new<AssetType, StableType>(market_id, (outcome_count as u8), ctx)
+        };
+        option::destroy_none(existing_balance_opt);
+        (coin::zero<StableType>(ctx), coin::zero<AssetType>(ctx), balance)
     }
 }
 
@@ -149,10 +172,10 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
     stable_for_arb: Coin<StableType>,
     min_profit: u64,
     recipient: address,
-    return_dust_balance: bool,
+    mut existing_balance_opt: option::Option<ConditionalMarketBalance<AssetType, StableType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Coin<StableType>, Coin<AssetType>, option::Option<ConditionalMarketBalance<AssetType, StableType>>) {
+): (Coin<StableType>, Coin<AssetType>, ConditionalMarketBalance<AssetType, StableType>) {
     let stable_amt = stable_for_arb.value();
     assert!(stable_amt > 0, EZeroAmount);
 
@@ -226,22 +249,17 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
         profit_stable: net_profit_stable,
     });
 
-    // 8. Handle dust: return balance object OR destroy it
-    if (return_dust_balance) {
-        // Return balance object with dust to recipient
-        (profit_stable, coin::zero<AssetType>(ctx), option::some(arb_balance))
+    // 8. Merge dust into existing balance OR return new balance
+    let final_balance = if (option::is_some(&existing_balance_opt)) {
+        let mut existing = option::extract(&mut existing_balance_opt);
+        conditional_balance::merge(&mut existing, arb_balance);  // Merge new dust into existing
+        existing
     } else {
-        // Dust goes to registry (TODO: implement registry deposit)
-        // For now, clear all balances before destroying
-        let mut i = 0u8;
-        while ((i as u64) < outcome_count) {
-            conditional_balance::set_balance(&mut arb_balance, i, true, 0);
-            conditional_balance::set_balance(&mut arb_balance, i, false, 0);
-            i = i + 1;
-        };
-        conditional_balance::destroy_empty(arb_balance);
-        (profit_stable, coin::zero<AssetType>(ctx), option::none())
-    }
+        arb_balance  // Return new balance
+    };
+    option::destroy_none(existing_balance_opt);
+
+    (profit_stable, coin::zero<AssetType>(ctx), final_balance)
 }
 
 /// Execute: Asset → Spot Stable → Conditional Stables → Conditional Assets → Spot Asset (profit)
@@ -252,10 +270,10 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
     asset_for_arb: Coin<AssetType>,
     min_profit: u64,
     recipient: address,
-    return_dust_balance: bool,
+    mut existing_balance_opt: option::Option<ConditionalMarketBalance<AssetType, StableType>>,
     clock: &Clock,
     ctx: &mut TxContext,
-): (Coin<StableType>, Coin<AssetType>, option::Option<ConditionalMarketBalance<AssetType, StableType>>) {
+): (Coin<StableType>, Coin<AssetType>, ConditionalMarketBalance<AssetType, StableType>) {
     let asset_amt = asset_for_arb.value();
     assert!(asset_amt > 0, EZeroAmount);
 
@@ -329,22 +347,17 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
         profit_stable: 0,
     });
 
-    // 8. Handle dust: return balance object OR destroy it
-    if (return_dust_balance) {
-        // Return balance object with dust to recipient
-        (coin::zero<StableType>(ctx), profit_asset, option::some(arb_balance))
+    // 8. Merge dust into existing balance OR return new balance
+    let final_balance = if (option::is_some(&existing_balance_opt)) {
+        let mut existing = option::extract(&mut existing_balance_opt);
+        conditional_balance::merge(&mut existing, arb_balance);  // Merge new dust into existing
+        existing
     } else {
-        // Dust goes to registry (TODO: implement registry deposit)
-        // For now, clear all balances before destroying
-        let mut i = 0u8;
-        while ((i as u64) < outcome_count) {
-            conditional_balance::set_balance(&mut arb_balance, i, true, 0);
-            conditional_balance::set_balance(&mut arb_balance, i, false, 0);
-            i = i + 1;
-        };
-        conditional_balance::destroy_empty(arb_balance);
-        (coin::zero<StableType>(ctx), profit_asset, option::none())
-    }
+        arb_balance  // Return new balance
+    };
+    option::destroy_none(existing_balance_opt);
+
+    (coin::zero<StableType>(ctx), profit_asset, final_balance)
 }
 
 // === Helper Functions ===
@@ -402,23 +415,3 @@ public fun burn_complete_set_and_withdraw_asset<AssetType, StableType>(
     asset
 }
 
-/// Store excess balance as dust in registry
-///
-/// TODO: Implement when registry integration is needed
-/// For now, this is a placeholder for future dust collection
-#[allow(unused_variable)]
-fun store_dust_in_registry<AssetType, StableType>(
-    balance: &mut ConditionalMarketBalance<AssetType, StableType>,
-    registry: &mut SwapPositionRegistry<AssetType, StableType>,
-    outcome_idx: u8,
-    is_asset: bool,
-    amount: u64,
-    recipient: address,
-) {
-    // Subtract from balance
-    conditional_balance::sub_from_balance(balance, outcome_idx, is_asset, amount);
-    
-    // TODO: Store in registry
-    // This requires minting conditional coins and depositing to registry
-    // Will be implemented when dust collection is prioritized
-}
