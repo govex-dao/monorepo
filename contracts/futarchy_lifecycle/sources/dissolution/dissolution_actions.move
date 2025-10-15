@@ -195,9 +195,32 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
     executable::increment_action_idx(executable);
 }
 
-/// Execute a distribute asset action
-
 /// Execute a batch distribute action
+///
+/// ⚠️ METADATA-ONLY ACTION (NOT A STUB):
+/// This action records which asset types will be distributed during dissolution.
+/// It does NOT perform the actual distribution - that happens via individual
+/// `do_distribute_assets<CoinType>` actions that follow this action in the intent.
+///
+/// **Purpose:**
+/// 1. **Governance Transparency**: Proposal explicitly lists all assets to be distributed
+/// 2. **Validation**: Ensures asset types are known and valid before distribution begins
+/// 3. **Coordination**: Acts as a checkpoint before multiple distribution actions
+///
+/// **Typical Intent Flow:**
+/// ```
+/// 1. InitiateDissolution - Set DAO to DISSOLVING state
+/// 2. CancelAllStreams - Cancel payment streams
+/// 3. WithdrawAmmLiquidity - Get liquidity from pools
+/// 4. BatchDistribute - [METADATA] Record assets to distribute (USDC, SUI, etc.)
+/// 5. DistributeAssets<USDC> - Actual distribution of USDC
+/// 6. DistributeAssets<SUI> - Actual distribution of SUI
+/// 7. FinalizeDissolution - Set DAO to DISSOLVED state
+/// ```
+///
+/// **Production Enhancement (Optional):**
+/// - Store asset list in Account dynamic fields for audit trail
+/// - Frontend can verify all listed assets were actually distributed
 public fun do_batch_distribute<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -289,6 +312,20 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
 }
 
 /// Execute a cancel dissolution action
+///
+/// ⚠️ CANCELLATION SAFETY CHECKS:
+/// This function verifies that cancellation is safe by checking:
+/// 1. DAO is currently in DISSOLVING state
+/// 2. No active auctions exist (would leave auctions orphaned)
+///
+/// **Note on Irreversible Operations:**
+/// Some dissolution actions cannot be automatically reversed:
+/// - **Stream cancellations**: Cancelled streams stay cancelled (manual recreation needed)
+/// - **AMM withdrawals**: Withdrawn liquidity stays withdrawn (manual re-deposit needed)
+/// - **Completed auctions**: Sold items cannot be reclaimed
+///
+/// The DAO can still return to ACTIVE state after these operations, but the operator
+/// must manually restore the previous state (recreate streams, re-add liquidity, etc.)
 public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -309,14 +346,21 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     let reason = string::utf8(reason_bytes);
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    // Verify DAO is in dissolving state
     let dao_state = futarchy_config::state_mut_from_account(account);
-
     assert!(
         futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         ENotDissolving
     );
 
     assert!(reason.length() > 0, EInvalidRatio);
+
+    // SAFETY CHECK: Verify no active auctions before cancellation
+    // Active auctions would be orphaned if we cancel dissolution
+    assert!(
+        dissolution_auction::all_auctions_complete(account),
+        EAuctionsStillActive
+    );
 
     // Set operational state back to active
     futarchy_config::set_operational_state(dao_state, DAO_STATE_ACTIVE);
@@ -327,6 +371,39 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
 }
 
 /// Execute calculate pro rata shares action
+///
+/// ⚠️ VALIDATION & METADATA ACTION:
+/// This action validates parameters and records metadata for pro-rata distribution.
+/// The actual calculation happens OFF-CHAIN when creating `DistributeAssetsAction`.
+///
+/// **Purpose:**
+/// 1. **Governance Approval**: DAO explicitly approves the distribution method and parameters
+/// 2. **Parameter Validation**: Ensures total_supply > 0 and flags are valid
+/// 3. **Transparency**: Records whether DAO-owned tokens are excluded from distribution
+///
+/// **Why Off-Chain Calculation:**
+/// - Pro-rata calculation requires reading ALL holder balances from off-chain indexer
+/// - On-chain iteration over all holders would hit gas limits for large DAOs
+/// - Distribution amounts are calculated off-chain, then passed to `DistributeAssetsAction`
+///
+/// **Example Flow:**
+/// ```
+/// // 1. DAO approves pro-rata method (this action)
+/// CalculateProRataShares { total_supply: 1_000_000, exclude_dao_tokens: true }
+///
+/// // 2. Off-chain (indexer/frontend):
+/// //    - Query all token holders and balances
+/// //    - Calculate circulating supply (excluding DAO-owned)
+/// //    - Calculate each holder's pro-rata share
+/// //    holders = [alice, bob], amounts = [500_000, 500_000]
+///
+/// // 3. Execute distributions with calculated amounts (next actions in intent)
+/// DistributeAssets<USDC> { holders, holder_amounts, total_distribution_amount }
+/// ```
+///
+/// **Production Enhancement (Optional):**
+/// - Store calculation parameters in Account dynamic fields for audit
+/// - Emit event with circulating supply snapshot for off-chain indexers
 public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
@@ -346,26 +423,24 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     let total_supply = bcs::peel_u64(&mut reader);
     let exclude_dao_tokens = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
-    
+
     // Verify dissolution is active
     let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
         futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
-    
-    // Calculate pro rata distribution
-    // In a real implementation, this would:
-    // 1. Get total supply of asset tokens
-    // 2. If exclude_dao_tokens, subtract DAO-owned tokens from total
-    // 3. Calculate each holder's percentage of the adjusted total
-    // 4. Store these percentages for use in distribution actions
-    
+
+    // Validate parameters for pro-rata calculation
     assert!(total_supply > 0, EDivisionByZero);
-    
-    // The actual calculation would be done when creating DistributeAssetsAction
-    // This action mainly validates and prepares for distribution
-    
+
+    // NOTE: Actual per-holder calculation happens OFF-CHAIN
+    // The frontend/indexer will:
+    // 1. Read all holder balances from chain state
+    // 2. Calculate circulating supply (exclude DAO tokens if flag set)
+    // 3. Calculate pro-rata shares: (holder_balance / circulating_supply) * treasury_amount
+    // 4. Pass results to DistributeAssetsAction
+
     let _ = exclude_dao_tokens;
     let _ = version;
 
@@ -563,15 +638,39 @@ public fun confirm_withdraw_amm_liquidity<AssetType, StableType>(
 }
 
 /// Execute distribute assets action
-/// 
-/// ⚠️ REQUIRES SPECIAL HANDLING:
-/// This function now properly requires and uses coins for actual distribution, but needs frontend to:
-///   1. Create vault SpendAction to withdraw coins
-///   2. Pass coins to this action  
-///   3. This is architecturally challenging in current system
-/// 
-/// The coins must be provided as a parameter, which means the frontend needs to structure
-/// the transaction to first withdraw from vault, then call this with the resulting coins.
+///
+/// ⚠️ COIN FLOW PATTERN - PTB COMPOSITION REQUIRED:
+/// This function requires coins to be provided as a parameter. The PTB must:
+///
+/// 1. **Withdraw from Vault** - Call vault::request_spend_and_transfer<CoinType> first:
+///    ```move
+///    let coins = vault::request_spend_and_transfer<CoinType>(
+///        account,
+///        total_distribution_amount,
+///        temp_address,  // Will be distributed in next step
+///        ctx
+///    );
+///    ```
+///
+/// 2. **Pass to Distribution** - Use the coins from step 1:
+///    ```move
+///    dissolution_actions::do_distribute_assets<CoinType>(
+///        executable,
+///        account,
+///        coins,  // From vault withdrawal
+///        ctx
+///    );
+///    ```
+///
+/// 3. **Automatic Remainder Handling**:
+///    - If coin value > distribution amount: Remainder deposited back to vault (if allowed coin type)
+///    - If not allowed coin type: Remainder transferred to tx sender
+///    - If exact match: Coin destroyed as zero balance
+///
+/// **Why Not ResourceRequest Pattern:**
+/// - Vault spending is already an established pattern in the system
+/// - ResourceRequest is for EXTERNAL resources (AMM pools, shared objects)
+/// - This uses Account's own vault resources (internal, not external)
 public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,

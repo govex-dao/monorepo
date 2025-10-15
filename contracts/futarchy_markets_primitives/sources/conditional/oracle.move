@@ -1,34 +1,37 @@
 /// ============================================================================
-/// FUTARCHY ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS
+/// FUTARCHY ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS (INTERNAL)
 /// ============================================================================
-/// 
-/// PURPOSE: Core oracle for futarchy decision-making and proposal resolution
-/// 
+///
+/// PURPOSE: Internal oracle for futarchy decision-making and proposal resolution
+///
 /// USED BY:
 /// - Conditional AMMs during proposals (outcome evaluation)
 /// - Proposal resolution (determining winners based on TWAP)
 /// - SpotAMM for governance TWAP (base fair value)
-/// - NOT for lending protocols (use ring_buffer_oracle instead)
-/// 
+/// - NOT for external protocols (use spot_oracle_interface instead)
+///
 /// KEY FEATURES:
 /// - Write-through pattern (MUST update before reading)
 /// - Price capping to prevent manipulation
 /// - Complex window-based accumulation
 /// - Designed specifically for futarchy mechanics
-/// - Does NOT merge with ring buffer data (separate concerns)
-/// 
+/// - Internal use only (wrapped by spot_oracle_interface for external access)
+///
 /// BEHAVIOR:
 /// - During proposals: Each conditional AMM maintains its own oracle
 /// - After finalization: Winning outcome's TWAP fills gap in spot oracle
-/// - Ring buffer handles continuous feeds, this handles governance
-/// 
+/// - External protocols use spot_oracle_interface (pass-through wrapper)
+///
 /// WHY IT EXISTS:
 /// Futarchy needs precise, manipulation-resistant price discovery during
 /// proposals. This oracle enforces atomic write-then-read to ensure prices
 /// are always fresh and prevents time-based manipulation attacks.
-/// The separation from ring_buffer_oracle ensures governance decisions
-/// cannot be influenced by lending protocol requirements.
-/// 
+///
+/// FOR EXTERNAL INTEGRATIONS:
+/// Use spot_oracle_interface.move instead - it provides a standard Uniswap-like
+/// interface that automatically switches between spot and conditional oracles
+/// without requiring understanding of futarchy mechanics.
+///
 /// ============================================================================
 
 module futarchy_markets_primitives::oracle;

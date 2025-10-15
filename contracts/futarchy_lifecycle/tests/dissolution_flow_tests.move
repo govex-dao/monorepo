@@ -259,3 +259,79 @@ fun test_dissolution_happy_path() {
     clock::destroy_for_testing(clock);
     ts::end(scenario);
 }
+
+#[test]
+#[expected_failure(abort_code = 5)] // EDissolutionNotActive
+fun test_double_finalization_fails() {
+    let mut scenario = ts::begin(ADMIN);
+    let mut account = create_test_account(&mut scenario);
+    let mut clock = clock::create_for_testing(ts::ctx(&mut scenario));
+    futarchy_vault::init_vault(&mut account, version_witness::test_create(), ts::ctx(&mut scenario));
+
+    // Create simple dissolution intent with only initiate and finalize actions
+    let mut builder = intents::intent_builder(ts::ctx(&mut scenario));
+
+    let init_action = dissolution_actions::new_initiate_dissolution_action(
+        string::utf8(b"Test double finalization protection"),
+        0,
+        true,
+        86_400_000,
+    );
+    intents::add_action(
+        &mut builder,
+        action_types::initiate_dissolution(),
+        bcs::to_bytes(&init_action),
+    );
+
+    let finalize_action = dissolution_actions::new_finalize_dissolution_action(
+        ADMIN,
+        false,
+    );
+    intents::add_action(
+        &mut builder,
+        action_types::finalize_dissolution(),
+        bcs::to_bytes(&finalize_action),
+    );
+
+    let intent_spec = intents::build(builder);
+    let mut executable = executable::test_new<u8>(intent_spec, 0);
+
+    // Step 1: Initiate dissolution (state -> DISSOLVING)
+    dissolution_actions::do_initiate_dissolution<u8, bool>(
+        &mut executable,
+        &mut account,
+        version_witness::test_create(),
+        false,
+        ts::ctx(&mut scenario),
+    );
+    assert!(futarchy_config::operational_state(futarchy_config::state(&account)) == 1, 0);
+
+    // Initialize auction counter (required before finalization)
+    dissolution_auction::init_auction_counter(&mut account);
+
+    // Step 2: First finalization succeeds (state -> DISSOLVED)
+    dissolution_actions::do_finalize_dissolution<u8, bool>(
+        &mut executable,
+        &mut account,
+        version_witness::test_create(),
+        false,
+        ts::ctx(&mut scenario),
+    );
+    assert!(futarchy_config::operational_state(futarchy_config::state(&account)) == 3, 1);
+    assert!(executable::action_idx(&executable) == 2, 2);
+
+    // Step 3: Attempt second finalization - SHOULD FAIL
+    // State is DISSOLVED (3), but finalize checks for DISSOLVING (1)
+    // This will abort with EDissolutionNotActive (code 5)
+    dissolution_actions::do_finalize_dissolution<u8, bool>(
+        &mut executable,
+        &mut account,
+        version_witness::test_create(),
+        false,
+        ts::ctx(&mut scenario),
+    );
+
+    // Cleanup (never reached due to expected abort)
+    clock::destroy_for_testing(clock);
+    ts::end(scenario);
+}

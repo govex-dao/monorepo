@@ -258,7 +258,8 @@ public fun decode_withdraw_amm_liquidity_action<AssetType, StableType>(
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
     let pool_id = bcs::peel_address(&mut bcs_data);
-    let burn_lp_tokens = bcs::peel_bool(&mut bcs_data);
+    let dao_owned_lp_amount = bcs::peel_u64(&mut bcs_data);
+    let bypass_minimum = bcs::peel_bool(&mut bcs_data);
 
     // Security: ensure all bytes are consumed to prevent trailing data attacks
     bcs_validation::validate_all_bytes_consumed(bcs_data);
@@ -270,8 +271,13 @@ public fun decode_withdraw_amm_liquidity_action<AssetType, StableType>(
             b"ID".to_string(),
         ),
         schema::new_field(
-            b"burn_lp_tokens".to_string(),
-            if (burn_lp_tokens) { b"true" } else { b"false" }.to_string(),
+            b"dao_owned_lp_amount".to_string(),
+            dao_owned_lp_amount.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"bypass_minimum".to_string(),
+            if (bypass_minimum) { b"true" } else { b"false" }.to_string(),
             b"bool".to_string(),
         ),
     ]
