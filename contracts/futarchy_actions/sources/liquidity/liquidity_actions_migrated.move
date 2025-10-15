@@ -59,6 +59,7 @@ public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has s
     min_asset_amount: u64, // Slippage protection
     min_stable_amount: u64, // Slippage protection
     vault_name: Option<String>, // Vault to deposit returned assets (default: treasury)
+    bypass_minimum: bool,
 }
 
 /// Action to update pool parameters
@@ -108,6 +109,7 @@ public fun new_remove_liquidity<AssetType, StableType>(
     min_asset_amount: u64,
     min_stable_amount: u64,
     vault_name: Option<String>,
+    bypass_minimum: bool,
 ): RemoveLiquidityAction<AssetType, StableType> {
     RemoveLiquidityAction {
         pool_id,
@@ -116,6 +118,7 @@ public fun new_remove_liquidity<AssetType, StableType>(
         min_asset_amount,
         min_stable_amount,
         vault_name,
+        bypass_minimum,
     }
 }
 

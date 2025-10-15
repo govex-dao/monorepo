@@ -30,6 +30,7 @@ use futarchy_core::{
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
+use futarchy_vault::lp_token_custody;
 // AddLiquidityAction defined locally since futarchy_one_shot_utils module doesn't exist
 
 // === Friend Modules === (deprecated in 2024 edition, using public(package) instead)
@@ -39,6 +40,8 @@ const EInvalidAmount: u64 = 1;
 const EInvalidRatio: u64 = 2;
 const EEmptyPool: u64 = 4;
 const EInsufficientVaultBalance: u64 = 5;
+const EWrongToken: u64 = 6;
+const EBypassNotAllowed: u64 = 7;
 
 // === Constants ===
 const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
@@ -53,12 +56,20 @@ public struct AddLiquidityAction<phantom AssetType, phantom StableType> has stor
     min_lp_out: u64, // Slippage protection
 }
 
-/// Action to remove liquidity from a pool
-public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store, drop {
+/// Action to withdraw an LP token from custody
+public struct WithdrawLpTokenAction<phantom AssetType, phantom StableType> has store, drop, copy {
     pool_id: ID,
+    token_id: ID,
+}
+
+/// Action to remove liquidity from a pool
+public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
+    pool_id: ID,
+    token_id: ID,
     lp_amount: u64,
     min_asset_amount: u64, // Slippage protection
     min_stable_amount: u64, // Slippage protection
+    bypass_minimum: bool,
 }
 
 /// Action to perform a swap in the pool
@@ -263,19 +274,21 @@ public fun fulfill_create_pool<AssetType: drop, StableType: drop, IW: copy + dro
         0, // min_lp_out - 0 for initial liquidity
         ctx
     );
-    
-    // Store pool ID in account config
-    let config = account::config_mut(account, version::current(), witness);
+
+    // Get pool ID before sharing
     let pool_id = object::id(&pool);
-    // Pool ID setting no longer needed
-    
-    // Transfer LP token to the account address
-    // This ensures the DAO owns the initial liquidity
-    let account_address = object::id_address(account);
-    transfer::public_transfer(lp_token, account_address);
-    
-    // Share the pool so it can be accessed by anyone
+
+    // Share the pool so it can be accessed by anyone (must share before depositing LP)
     unified_spot_pool::share(pool);
+
+    // Deposit LP token to custody (using witness for auth)
+    lp_token_custody::deposit_lp_token(
+        account,
+        pool_id,
+        lp_token,
+        witness,
+        ctx
+    );
 
     // Return receipt and pool ID
     (resource_requests::fulfill(request), pool_id)
@@ -330,7 +343,7 @@ public fun do_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, I
 }
 
 /// Fulfill add liquidity request with vault coins and pool
-/// Uses the do_spend function from vault module to withdraw coins properly
+/// Deposits LP token to custody automatically
 public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     request: ResourceRequest<AddLiquidityAction<AssetType, StableType>>,
     executable: &mut Executable<Outcome>,
@@ -338,7 +351,7 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     witness: IW,
     ctx: &mut TxContext,
-): (ResourceReceipt<AddLiquidityAction<AssetType, StableType>>, LPToken<AssetType, StableType>) {
+): ResourceReceipt<AddLiquidityAction<AssetType, StableType>> {
     // Extract action from request (this consumes the request)
     let action: AddLiquidityAction<AssetType, StableType> =
         resource_requests::extract_action(request);
@@ -377,21 +390,87 @@ public fun fulfill_add_liquidity<AssetType: drop, StableType: drop, Outcome: sto
         ctx
     );
 
-    // Create receipt and return with LP token
-    let receipt = resource_requests::create_receipt(action);
-    (receipt, lp_token)
+    // Deposit LP token to custody (using witness for auth)
+    lp_token_custody::deposit_lp_token(
+        account,
+        pool_id,
+        lp_token,
+        witness,
+        ctx
+    );
+
+    // Create and return receipt
+    resource_requests::create_receipt(action)
 }
 
-/// Execute remove liquidity with type validation and return coins to caller
+/// Execute withdraw LP token action with type validation
+/// Returns a hot potato that must be fulfilled to obtain the LP token
+public fun do_withdraw_lp_token<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    _version: VersionWitness,
+    _witness: IW,
+    ctx: &mut TxContext,
+): resource_requests::ResourceRequest<WithdrawLpTokenAction<AssetType, StableType>> {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::WithdrawLpToken>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let token_id = object::id_from_address(bcs::peel_address(&mut reader));
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Create action struct
+    let action = WithdrawLpTokenAction<AssetType, StableType> {
+        pool_id,
+        token_id,
+    };
+
+    // Ensure the token exists in custody before fulfillment
+    let token_amount = lp_token_custody::get_token_amount(account, token_id);
+    assert!(token_amount > 0, EWrongToken);
+
+    // Execute and increment
+    executable::increment_action_idx(executable);
+
+    resource_requests::new_resource_request(action, ctx)
+}
+
+/// Fulfill withdraw LP token request by releasing the LP from custody
+public fun fulfill_withdraw_lp_token<AssetType: drop, StableType: drop, W: copy + drop>(
+    request: resource_requests::ResourceRequest<WithdrawLpTokenAction<AssetType, StableType>>,
+    account: &mut Account<FutarchyConfig>,
+    witness: W,
+    ctx: &mut TxContext,
+): (LPToken<AssetType, StableType>, resource_requests::ResourceReceipt<WithdrawLpTokenAction<AssetType, StableType>>) {
+    let action = resource_requests::extract_action(request);
+
+    let lp_token = lp_token_custody::withdraw_lp_token<AssetType, StableType, W>(
+        account,
+        action.pool_id,
+        action.token_id,
+        witness,
+        ctx
+    );
+
+    let receipt = resource_requests::create_receipt(action);
+    (lp_token, receipt)
+}
+
+/// Execute remove liquidity with type validation
+/// Returns a hot potato that must be fulfilled with the released LP token
 public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store, IW: copy + drop>(
     executable: &mut Executable<Outcome>,
-    _account: &mut Account<FutarchyConfig>,
+    account: &mut Account<FutarchyConfig>,
     _version: VersionWitness,
     witness: IW,
-    pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    lp_token: LPToken<AssetType, StableType>,
     ctx: &mut TxContext,
-): (Coin<AssetType>, Coin<StableType>) {
+): resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>> {
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
@@ -402,40 +481,88 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop, Outcome: store
     // Safe BCS deserialization
     let mut reader = bcs::new(*action_data);
     let pool_id = object::id_from_address(bcs::peel_address(&mut reader));
+    let token_id = object::id_from_address(bcs::peel_address(&mut reader));
     let lp_amount = bcs::peel_u64(&mut reader);
     let min_asset_amount = bcs::peel_u64(&mut reader);
     let min_stable_amount = bcs::peel_u64(&mut reader);
+    let bypass_minimum = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Create action struct
+    assert!(lp_amount > 0, EInvalidAmount);
+    assert!(!bypass_minimum, EBypassNotAllowed);
+
     let action = RemoveLiquidityAction<AssetType, StableType> {
         pool_id,
+        token_id,
         lp_amount,
         min_asset_amount,
         min_stable_amount,
+        bypass_minimum: false,
     };
-    
-    // Verify pool ID matches
-    assert!(action.pool_id == object::id(pool), EEmptyPool);
-    
-    // Verify LP token amount matches
-    assert!(unified_spot_pool::lp_token_amount(&lp_token) >= action.lp_amount, EInvalidAmount);
-    
-    // Remove liquidity from pool
-    let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity(
-        pool,
-        lp_token,
-        action.min_asset_amount,
-        action.min_stable_amount,
-        ctx
-    );
+
+    let _ = account;
+    let _ = witness;
 
     // Execute and increment
     executable::increment_action_idx(executable);
 
-    // Return coins to caller to deposit back to vault
-    // The caller (dispatcher) is responsible for depositing to vault
-    (asset_coin, stable_coin)
+    resource_requests::new_resource_request(action, ctx)
+}
+
+/// Fulfill remove liquidity request with released LP token and pool reference
+public fun fulfill_remove_liquidity<AssetType: drop, StableType: drop, W: copy + drop>(
+    request: resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
+    account: &mut Account<FutarchyConfig>,
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    lp_token: LPToken<AssetType, StableType>,
+    witness: W,
+    ctx: &mut TxContext,
+): (Coin<AssetType>, Coin<StableType>, resource_requests::ResourceReceipt<RemoveLiquidityAction<AssetType, StableType>>) {
+    let action = resource_requests::extract_action(request);
+
+    assert!(action.pool_id == object::id(pool), EEmptyPool);
+    assert!(action.token_id == object::id(&lp_token), EWrongToken);
+
+    // Verify the DAO authorization before burning the LP token
+    let auth = account::new_auth(account, version::current(), witness);
+    account::verify(account, auth);
+
+    let actual_lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
+    assert!(actual_lp_amount >= action.lp_amount, EInvalidAmount);
+
+    let (asset_coin, stable_coin) = if (action.bypass_minimum) {
+        {
+            let dao_state = futarchy_config::state_mut_from_account(account);
+            assert!(
+                futarchy_config::operational_state(dao_state) == futarchy_config::state_dissolving(),
+                EBypassNotAllowed
+            );
+        };
+
+        let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity_for_dissolution(
+            pool,
+            lp_token,
+            true,
+            ctx
+        );
+
+        assert!(coin::value(&asset_coin) >= action.min_asset_amount, EInvalidAmount);
+        assert!(coin::value(&stable_coin) >= action.min_stable_amount, EInvalidAmount);
+
+        (asset_coin, stable_coin)
+    } else {
+        unified_spot_pool::remove_liquidity(
+            pool,
+            lp_token,
+            action.min_asset_amount,
+            action.min_stable_amount,
+            ctx
+        )
+    };
+
+    let receipt = resource_requests::create_receipt(action);
+
+    (asset_coin, stable_coin, receipt)
 }
 
 /// Execute a swap action with type validation
@@ -563,6 +690,13 @@ public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
     // Expired intent is automatically destroyed when it goes out of scope
 }
 
+/// Delete a withdraw LP token action from an expired intent
+public fun delete_withdraw_lp_token<AssetType, StableType>(expired: &mut Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    // Action spec data will be dropped automatically
+    // Expired intent is automatically destroyed when it goes out of scope
+}
+
 /// Delete a remove liquidity action from an expired intent
 public fun delete_remove_liquidity<AssetType, StableType>(expired: &mut Expired) {
     let action_spec = intents::remove_action_spec(expired);
@@ -637,6 +771,7 @@ public fun new_add_liquidity_action<AssetType, StableType>(
 /// Create a new remove liquidity action with serialization
 public fun new_remove_liquidity_action<AssetType, StableType>(
     pool_id: ID,
+    token_id: ID,
     lp_amount: u64,
     min_asset_amount: u64,
     min_stable_amount: u64,
@@ -645,10 +780,65 @@ public fun new_remove_liquidity_action<AssetType, StableType>(
 
     RemoveLiquidityAction<AssetType, StableType> {
         pool_id,
+        token_id,
         lp_amount,
         min_asset_amount,
         min_stable_amount,
+        bypass_minimum: false,
     }
+}
+
+/// Create a new withdraw LP token action
+public fun new_withdraw_lp_token_action<AssetType, StableType>(
+    pool_id: ID,
+    token_id: ID,
+): WithdrawLpTokenAction<AssetType, StableType> {
+    WithdrawLpTokenAction<AssetType, StableType> {
+        pool_id,
+        token_id,
+    }
+}
+
+/// Enable bypass mode for a remove liquidity request (restricted to dissolution state)
+public fun enable_remove_liquidity_bypass<AssetType, StableType>(
+    request: &mut resource_requests::ResourceRequest<RemoveLiquidityAction<AssetType, StableType>>,
+    account: &mut Account<FutarchyConfig>,
+) {
+    {
+        let dao_state = futarchy_config::state_mut_from_account(account);
+        assert!(
+            futarchy_config::operational_state(dao_state) == futarchy_config::state_dissolving(),
+            EBypassNotAllowed
+        );
+    };
+
+    let key = string::utf8(b"action");
+    let action = resource_requests::take_context(request, key);
+
+    let RemoveLiquidityAction {
+        pool_id,
+        token_id,
+        lp_amount,
+        min_asset_amount,
+        min_stable_amount,
+        bypass_minimum,
+    } = action;
+    assert!(!bypass_minimum, EBypassNotAllowed);
+
+    let updated_action = RemoveLiquidityAction<AssetType, StableType> {
+        pool_id,
+        token_id,
+        lp_amount,
+        min_asset_amount,
+        min_stable_amount,
+        bypass_minimum: true,
+    };
+
+    resource_requests::add_context(
+        request,
+        string::utf8(b"action"),
+        updated_action,
+    );
 }
 
 /// Create a new create pool action with serialization
@@ -773,6 +963,11 @@ public fun get_remove_pool_id<AssetType, StableType>(action: &RemoveLiquidityAct
     action.pool_id
 }
 
+/// Get token ID from RemoveLiquidityAction
+public fun get_remove_token_id<AssetType, StableType>(action: &RemoveLiquidityAction<AssetType, StableType>): ID {
+    action.token_id
+}
+
 /// Get LP amount from RemoveLiquidityAction
 public fun get_lp_amount<AssetType, StableType>(action: &RemoveLiquidityAction<AssetType, StableType>): u64 {
     action.lp_amount
@@ -786,6 +981,21 @@ public fun get_min_asset_amount<AssetType, StableType>(action: &RemoveLiquidityA
 /// Get minimum stable amount from RemoveLiquidityAction
 public fun get_min_stable_amount<AssetType, StableType>(action: &RemoveLiquidityAction<AssetType, StableType>): u64 {
     action.min_stable_amount
+}
+
+/// Get bypass flag from RemoveLiquidityAction
+public fun get_bypass_minimum<AssetType, StableType>(action: &RemoveLiquidityAction<AssetType, StableType>): bool {
+    action.bypass_minimum
+}
+
+/// Get pool ID from WithdrawLpTokenAction
+public fun get_withdraw_pool_id<AssetType, StableType>(action: &WithdrawLpTokenAction<AssetType, StableType>): ID {
+    action.pool_id
+}
+
+/// Get token ID from WithdrawLpTokenAction
+public fun get_withdraw_token_id<AssetType, StableType>(action: &WithdrawLpTokenAction<AssetType, StableType>): ID {
+    action.token_id
 }
 
 /// Get initial asset amount from CreatePoolAction
@@ -869,9 +1079,19 @@ public fun destroy_add_liquidity_action<AssetType, StableType>(action: AddLiquid
 public fun destroy_remove_liquidity_action<AssetType, StableType>(action: RemoveLiquidityAction<AssetType, StableType>) {
     let RemoveLiquidityAction {
         pool_id: _,
+        token_id: _,
         lp_amount: _,
         min_asset_amount: _,
         min_stable_amount: _,
+        bypass_minimum: _,
+    } = action;
+}
+
+/// Destroy WithdrawLpTokenAction after use
+public fun destroy_withdraw_lp_token_action<AssetType, StableType>(action: WithdrawLpTokenAction<AssetType, StableType>) {
+    let WithdrawLpTokenAction {
+        pool_id: _,
+        token_id: _,
     } = action;
 }
 
@@ -939,9 +1159,20 @@ public(package) fun remove_liquidity_action_from_bytes<AssetType, StableType>(by
     let mut bcs = bcs::new(bytes);
     RemoveLiquidityAction {
         pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        token_id: object::id_from_address(bcs::peel_address(&mut bcs)),
         lp_amount: bcs::peel_u64(&mut bcs),
         min_asset_amount: bcs::peel_u64(&mut bcs),
         min_stable_amount: bcs::peel_u64(&mut bcs),
+        bypass_minimum: bcs::peel_bool(&mut bcs),
+    }
+}
+
+/// Deserialize WithdrawLpTokenAction from bytes
+public(package) fun withdraw_lp_token_action_from_bytes<AssetType, StableType>(bytes: vector<u8>): WithdrawLpTokenAction<AssetType, StableType> {
+    let mut bcs = bcs::new(bytes);
+    WithdrawLpTokenAction {
+        pool_id: object::id_from_address(bcs::peel_address(&mut bcs)),
+        token_id: object::id_from_address(bcs::peel_address(&mut bcs)),
     }
 }
 

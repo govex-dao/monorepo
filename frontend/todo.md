@@ -19,3 +19,4 @@ get in here
 - [ ] in trade UI outcome should be coloured like line!!!
 - [ ] alwasy show data on trading UI looks weird without ?
 - [ ] metrics on site home page
+- [ ] add 1.5 second delay to more places in front end so dont have recombine or redeem coin bug

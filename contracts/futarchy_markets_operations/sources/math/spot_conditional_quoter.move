@@ -30,7 +30,7 @@ const EInsufficientLiquidity: u64 = 3;
 public struct SpotQuote has copy, drop {
     /// The expected output amount
     amount_out: u64,
-    /// The effective price (amount_out / amount_in scaled by 1e9)
+    /// The effective price (amount_out / amount_in scaled by 1e12)
     effective_price: u64,
     /// The price impact percentage (scaled by 1e4, so 100 = 1%)
     price_impact_bps: u64,
@@ -87,9 +87,9 @@ public fun quote_spot_asset_to_stable<AssetType, StableType>(
     // Step 4: Complete set redemption would give us stable_out spot tokens
     // (other outcomes would have excess conditional tokens returned)
     
-    // Calculate effective price (scaled by 1e9 for precision)
+    // Calculate effective price (scaled by 1e12 for precision)
     let effective_price = if (amount_in > 0) {
-        (stable_out as u128) * 1_000_000_000 / (amount_in as u128)
+        (stable_out as u128) * 1_000_000_000_000 / (amount_in as u128)
     } else {
         0
     };
@@ -97,7 +97,7 @@ public fun quote_spot_asset_to_stable<AssetType, StableType>(
     // Calculate price impact
     let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(amm);
     let spot_price_before = if (asset_reserve > 0) {
-        (stable_reserve as u128) * 1_000_000_000 / (asset_reserve as u128)
+        (stable_reserve as u128) * 1_000_000_000_000 / (asset_reserve as u128)
     } else {
         0
     };
@@ -146,9 +146,9 @@ public fun quote_spot_stable_to_asset<AssetType, StableType>(
     
     // Step 4: Complete set redemption would give us asset_out spot tokens
     
-    // Calculate effective price (scaled by 1e9 for precision)
+    // Calculate effective price (scaled by 1e12 for precision)
     let effective_price = if (amount_in > 0) {
-        (asset_out as u128) * 1_000_000_000 / (amount_in as u128)
+        (asset_out as u128) * 1_000_000_000_000 / (amount_in as u128)
     } else {
         0
     };
@@ -156,7 +156,7 @@ public fun quote_spot_stable_to_asset<AssetType, StableType>(
     // Calculate price impact
     let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(amm);
     let spot_price_before = if (stable_reserve > 0) {
-        (asset_reserve as u128) * 1_000_000_000 / (stable_reserve as u128)
+        (asset_reserve as u128) * 1_000_000_000_000 / (stable_reserve as u128)
     } else {
         0
     };
@@ -202,13 +202,13 @@ public fun quote_spot_asset_to_stable_detailed<AssetType, StableType>(
     
     // Calculate spot prices
     let spot_price_before = if (asset_reserve_before > 0) {
-        (stable_reserve_before as u128) * 1_000_000_000 / (asset_reserve_before as u128)
+        (stable_reserve_before as u128) * 1_000_000_000_000 / (asset_reserve_before as u128)
     } else {
         0
     };
-    
+
     let spot_price_after = if (asset_reserve_after > 0) {
-        (stable_reserve_after as u128) * 1_000_000_000 / (asset_reserve_after as u128)
+        (stable_reserve_after as u128) * 1_000_000_000_000 / (asset_reserve_after as u128)
     } else {
         0
     };
@@ -253,13 +253,13 @@ public fun quote_spot_stable_to_asset_detailed<AssetType, StableType>(
     
     // Calculate spot prices
     let spot_price_before = if (stable_reserve_before > 0) {
-        (asset_reserve_before as u128) * 1_000_000_000 / (stable_reserve_before as u128)
+        (asset_reserve_before as u128) * 1_000_000_000_000 / (stable_reserve_before as u128)
     } else {
         0
     };
-    
+
     let spot_price_after = if (stable_reserve_after > 0) {
-        (asset_reserve_after as u128) * 1_000_000_000 / (stable_reserve_after as u128)
+        (asset_reserve_after as u128) * 1_000_000_000_000 / (stable_reserve_after as u128)
     } else {
         0
     };

@@ -139,6 +139,10 @@ public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
     liquidity_actions::delete_add_liquidity<AssetType, StableType>(expired);
 }
 
+public fun delete_withdraw_lp_token<AssetType, StableType>(expired: &mut Expired) {
+    liquidity_actions::delete_withdraw_lp_token<AssetType, StableType>(expired);
+}
+
 public fun delete_remove_liquidity<AssetType, StableType>(expired: &mut Expired) {
     liquidity_actions::delete_remove_liquidity<AssetType, StableType>(expired);
 }

@@ -60,11 +60,11 @@ fun create_test_detailed_quote(
 #[test]
 fun test_spot_quote_get_amount_out() {
     let quote = create_test_spot_quote(
-        1500u64,     // amount_out
-        950_000_000, // effective_price (0.95)
-        250,         // price_impact_bps (2.5%)
-        1,           // outcome
-        true         // is_asset_to_stable
+        1500u64,         // amount_out
+        950_000_000_000, // effective_price (0.95)
+        250,             // price_impact_bps (2.5%)
+        1,               // outcome
+        true             // is_asset_to_stable
     );
 
     assert!(spot_conditional_quoter::get_amount_out(&quote) == 1500, 0);
@@ -75,13 +75,13 @@ fun test_spot_quote_get_amount_out() {
 fun test_spot_quote_get_effective_price() {
     let quote = create_test_spot_quote(
         1000u64,
-        1_050_000_000, // effective_price (1.05)
+        1_050_000_000_000, // effective_price (1.05)
         100,
         0,
         false
     );
 
-    assert!(spot_conditional_quoter::get_effective_price(&quote) == 1_050_000_000, 0);
+    assert!(spot_conditional_quoter::get_effective_price(&quote) == 1_050_000_000_000, 0);
     test_utils::destroy(quote);
 }
 
@@ -89,7 +89,7 @@ fun test_spot_quote_get_effective_price() {
 fun test_spot_quote_get_price_impact_bps() {
     let quote = create_test_spot_quote(
         2000u64,
-        980_000_000,
+        980_000_000_000,
         500, // price_impact_bps (5%)
         2,
         true
@@ -103,7 +103,7 @@ fun test_spot_quote_get_price_impact_bps() {
 fun test_spot_quote_get_outcome() {
     let quote = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         50,
         3, // outcome
         false
@@ -117,7 +117,7 @@ fun test_spot_quote_get_outcome() {
 fun test_spot_quote_is_asset_to_stable() {
     let quote_asset_to_stable = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         50,
         0,
         true // is_asset_to_stable
@@ -125,7 +125,7 @@ fun test_spot_quote_is_asset_to_stable() {
 
     let quote_stable_to_asset = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         50,
         0,
         false // is_asset_to_stable
@@ -144,7 +144,7 @@ fun test_spot_quote_is_asset_to_stable() {
 fun test_detailed_quote_getters() {
     let base_quote = create_test_spot_quote(
         1500u64,
-        950_000_000,
+        950_000_000_000,
         250,
         1,
         true
@@ -154,14 +154,14 @@ fun test_detailed_quote_getters() {
         base_quote,
         3000u64, // conditional_tokens_created
         1500u64, // excess_conditional_tokens
-        1_000_000_000, // spot_price_before (1.0)
-        950_000_000    // spot_price_after (0.95)
+        1_000_000_000_000, // spot_price_before (1.0)
+        950_000_000_000    // spot_price_after (0.95)
     );
 
     assert!(spot_conditional_quoter::get_conditional_tokens_created(&detailed) == 3000, 0);
     assert!(spot_conditional_quoter::get_excess_conditional_tokens(&detailed) == 1500, 1);
-    assert!(spot_conditional_quoter::get_spot_price_before(&detailed) == 1_000_000_000, 2);
-    assert!(spot_conditional_quoter::get_spot_price_after(&detailed) == 950_000_000, 3);
+    assert!(spot_conditional_quoter::get_spot_price_before(&detailed) == 1_000_000_000_000, 2);
+    assert!(spot_conditional_quoter::get_spot_price_after(&detailed) == 950_000_000_000, 3);
 
     test_utils::destroy(detailed);
 }
@@ -170,7 +170,7 @@ fun test_detailed_quote_getters() {
 fun test_detailed_quote_with_zero_excess() {
     let base_quote = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         0,
         0,
         false
@@ -180,8 +180,8 @@ fun test_detailed_quote_with_zero_excess() {
         base_quote,
         1000u64, // conditional_tokens_created
         0u64,    // excess_conditional_tokens (none)
-        1_000_000_000,
-        1_000_000_000
+        1_000_000_000_000,
+        1_000_000_000_000
     );
 
     assert!(spot_conditional_quoter::get_excess_conditional_tokens(&detailed) == 0, 0);
@@ -192,8 +192,8 @@ fun test_detailed_quote_with_zero_excess() {
 
 #[test]
 fun test_check_price_threshold_above() {
-    let price = 1_100_000_000u128; // 1.1
-    let threshold = 1_000_000_000u128; // 1.0
+    let price = 1_100_000_000_000u128; // 1.1
+    let threshold = 1_000_000_000_000u128; // 1.0
 
     // Price is above threshold, should return true
     let result = spot_conditional_quoter::check_price_threshold(price, threshold, true);
@@ -206,8 +206,8 @@ fun test_check_price_threshold_above() {
 
 #[test]
 fun test_check_price_threshold_below() {
-    let price = 900_000_000u128; // 0.9
-    let threshold = 1_000_000_000u128; // 1.0
+    let price = 900_000_000_000u128; // 0.9
+    let threshold = 1_000_000_000_000u128; // 1.0
 
     // Price is below threshold, checking for below, should return true
     let result = spot_conditional_quoter::check_price_threshold(price, threshold, false);
@@ -220,8 +220,8 @@ fun test_check_price_threshold_below() {
 
 #[test]
 fun test_check_price_threshold_equal() {
-    let price = 1_000_000_000u128;
-    let threshold = 1_000_000_000u128;
+    let price = 1_000_000_000_000u128;
+    let threshold = 1_000_000_000_000u128;
 
     // Price equals threshold, checking for above (>=), should return true
     let result = spot_conditional_quoter::check_price_threshold(price, threshold, true);
@@ -235,7 +235,7 @@ fun test_check_price_threshold_equal() {
 #[test]
 fun test_check_price_threshold_zero() {
     let price = 0u128;
-    let threshold = 1_000_000_000u128;
+    let threshold = 1_000_000_000_000u128;
 
     // Zero price, checking for below, should return true
     let result = spot_conditional_quoter::check_price_threshold(price, threshold, false);
@@ -411,7 +411,7 @@ fun test_check_price_threshold_zero() {
 fun test_spot_quote_with_zero_price_impact() {
     let quote = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         0, // zero price impact
         0,
         true
@@ -425,14 +425,14 @@ fun test_spot_quote_with_zero_price_impact() {
 fun test_spot_quote_with_high_price_impact() {
     let quote = create_test_spot_quote(
         800u64,
-        700_000_000,
+        700_000_000_000,
         5000, // 50% price impact
         1,
         true
     );
 
     assert!(spot_conditional_quoter::get_price_impact_bps(&quote) == 5000, 0);
-    assert!(spot_conditional_quoter::get_effective_price(&quote) == 700_000_000, 1);
+    assert!(spot_conditional_quoter::get_effective_price(&quote) == 700_000_000_000, 1);
     test_utils::destroy(quote);
 }
 
@@ -440,7 +440,7 @@ fun test_spot_quote_with_high_price_impact() {
 fun test_detailed_quote_multiple_outcomes() {
     let base_quote = create_test_spot_quote(
         1000u64,
-        1_000_000_000,
+        1_000_000_000_000,
         100,
         2,
         false
@@ -451,8 +451,8 @@ fun test_detailed_quote_multiple_outcomes() {
         base_quote,
         5000u64, // conditional_tokens_created (5 outcomes * 1000)
         4000u64, // excess_conditional_tokens (4 unused outcomes)
-        1_000_000_000,
-        1_010_000_000
+        1_000_000_000_000,
+        1_010_000_000_000
     );
 
     assert!(spot_conditional_quoter::get_conditional_tokens_created(&detailed) == 5000, 0);

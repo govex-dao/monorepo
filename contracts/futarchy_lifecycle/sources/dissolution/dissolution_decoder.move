@@ -16,6 +16,7 @@ use futarchy_lifecycle::dissolution_actions::{
     CancelAllStreamsAction,
     WithdrawAmmLiquidityAction,
     DistributeAssetsAction,
+    CreateAuctionAction,
 };
 
 // === Decoder Objects ===

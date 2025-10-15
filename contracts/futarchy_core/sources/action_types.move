@@ -68,6 +68,7 @@ public struct EarlyResolveConfigUpdate has drop {}
 public struct CreatePool has drop {}
 public struct UpdatePoolParams has drop {}
 public struct AddLiquidity has drop {}
+public struct WithdrawLpToken has drop {}
 public struct RemoveLiquidity has drop {}
 public struct Swap has drop {}
 public struct CollectFees has drop {}
@@ -335,6 +336,7 @@ public fun early_resolve_config_update(): TypeName { type_name::with_defining_id
 public fun create_pool(): TypeName { type_name::with_defining_ids<CreatePool>() }
 public fun update_pool_params(): TypeName { type_name::with_defining_ids<UpdatePoolParams>() }
 public fun add_liquidity(): TypeName { type_name::with_defining_ids<AddLiquidity>() }
+public fun withdraw_lp_token(): TypeName { type_name::with_defining_ids<WithdrawLpToken>() }
 public fun remove_liquidity(): TypeName { type_name::with_defining_ids<RemoveLiquidity>() }
 public fun swap(): TypeName { type_name::with_defining_ids<Swap>() }
 public fun collect_fees(): TypeName { type_name::with_defining_ids<CollectFees>() }

@@ -2,6 +2,7 @@
 name = "futarchy_one_shot_utils"
 edition = "2024"
 license = "BSL"
+published-at = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
 
 [dependencies]
 

@@ -53,16 +53,27 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
 }
 
 /// Add a remove liquidity action to an existing intent
-public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, IW: drop>(
+public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, IW: copy + drop>(
     intent: &mut Intent<Outcome>,
     pool_id: ID,
+    token_id: ID,
     lp_amount: u64,
     min_asset_amount: u64,
     min_stable_amount: u64,
     intent_witness: IW,
 ) {
+    // Step 1: release the LP token from custody
+    withdraw_lp_token_from_intent<Outcome, AssetType, StableType, IW>(
+        intent,
+        pool_id,
+        token_id,
+        copy intent_witness
+    );
+
+    // Step 2: queue the actual remove liquidity action
     let action = liquidity_actions::new_remove_liquidity_action<AssetType, StableType>(
         pool_id,
+        token_id,
         lp_amount,
         min_asset_amount,
         min_stable_amount,
@@ -70,6 +81,26 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(
         action_types::remove_liquidity(),
+        action_data,
+        intent_witness
+    );
+    // Action struct has drop ability, will be automatically dropped
+}
+
+/// Add a withdraw LP token action to an existing intent
+public fun withdraw_lp_token_from_intent<Outcome: store, AssetType, StableType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    pool_id: ID,
+    token_id: ID,
+    intent_witness: IW,
+) {
+    let action = liquidity_actions::new_withdraw_lp_token_action<AssetType, StableType>(
+        pool_id,
+        token_id,
+    );
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::withdraw_lp_token(),
         action_data,
         intent_witness
     );

@@ -256,18 +256,3 @@ public fun quote_arb_profit_bps(quote: &SwapQuote): u64 {
         0
     }
 }
-
-// === Future: Execution Functions ===
-//
-// NOTE: Actual execution requires TokenEscrow integration.
-// These will be implemented in Phase 4 after testing.
-//
-// Future functions:
-// - execute_swap_with_arbitrage<AssetType, StableType>()
-// - execute_pure_arbitrage<AssetType, StableType>()
-//
-// Required components:
-// - coin_escrow::split_to_conditionals()
-// - coin_escrow::recombine_from_conditionals()
-// - swap_core::swap_asset_to_stable() for conditional markets
-//

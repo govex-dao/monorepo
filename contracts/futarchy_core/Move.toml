@@ -2,6 +2,7 @@
 name = "futarchy_core"
 edition = "2024"
 license = "BSL"
+published-at = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 
 [dependencies]
 futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }

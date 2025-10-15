@@ -1753,15 +1753,183 @@ fun test_deposit_mint_large_amounts() {
 }
 
 // === Stage 6: Complete Set Operations and Quantum Invariant Tests ===
-// Note: These test the entry functions that perform complete set splits/recombines
-// which transfer conditional coins to the sender automatically
+// Validates the PTB progress helpers for complete set splits/recombines that
+// frontends will chain together when constructing programmable transactions.
+
+fun split_asset_complete_set_2_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_asset: Coin<AssetType>,
+    ctx: &mut TxContext,
+): (Coin<Cond0>, Coin<Cond1>) {
+    let progress = coin_escrow::start_split_asset_progress(escrow, spot_asset);
+    let (progress, cond_0) = coin_escrow::split_asset_progress_step<AssetType, StableType, Cond0>(
+        progress,
+        escrow,
+        0,
+        ctx,
+    );
+    let (progress, cond_1) = coin_escrow::split_asset_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        ctx,
+    );
+    coin_escrow::finish_split_asset_progress(progress);
+    (cond_0, cond_1)
+}
+
+fun split_stable_complete_set_2_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_stable: Coin<StableType>,
+    ctx: &mut TxContext,
+): (Coin<Cond0>, Coin<Cond1>) {
+    let progress = coin_escrow::start_split_stable_progress(escrow, spot_stable);
+    let (progress, cond_0) = coin_escrow::split_stable_progress_step<AssetType, StableType, Cond0>(
+        progress,
+        escrow,
+        0,
+        ctx,
+    );
+    let (progress, cond_1) = coin_escrow::split_stable_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        ctx,
+    );
+    coin_escrow::finish_split_stable_progress(progress);
+    (cond_0, cond_1)
+}
+
+fun split_asset_complete_set_3_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1,
+    Cond2
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    spot_asset: Coin<AssetType>,
+    ctx: &mut TxContext,
+): (Coin<Cond0>, Coin<Cond1>, Coin<Cond2>) {
+    let progress = coin_escrow::start_split_asset_progress(escrow, spot_asset);
+    let (progress, cond_0) = coin_escrow::split_asset_progress_step<AssetType, StableType, Cond0>(
+        progress,
+        escrow,
+        0,
+        ctx,
+    );
+    let (progress, cond_1) = coin_escrow::split_asset_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        ctx,
+    );
+    let (progress, cond_2) = coin_escrow::split_asset_progress_step<AssetType, StableType, Cond2>(
+        progress,
+        escrow,
+        2,
+        ctx,
+    );
+    coin_escrow::finish_split_asset_progress(progress);
+    (cond_0, cond_1, cond_2)
+}
+
+fun recombine_asset_complete_set_2_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    ctx: &mut TxContext,
+): Coin<AssetType> {
+    let progress = coin_escrow::start_recombine_asset_progress<AssetType, StableType, Cond0>(
+        escrow,
+        0,
+        cond_0,
+    );
+    let progress = coin_escrow::recombine_asset_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        cond_1,
+    );
+    coin_escrow::finish_recombine_asset_progress(progress, escrow, ctx)
+}
+
+fun recombine_stable_complete_set_2_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    let progress = coin_escrow::start_recombine_stable_progress<AssetType, StableType, Cond0>(
+        escrow,
+        0,
+        cond_0,
+    );
+    let progress = coin_escrow::recombine_stable_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        cond_1,
+    );
+    coin_escrow::finish_recombine_stable_progress(progress, escrow, ctx)
+}
+
+fun recombine_asset_complete_set_3_for_testing<
+    AssetType,
+    StableType,
+    Cond0,
+    Cond1,
+    Cond2
+>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    cond_0: Coin<Cond0>,
+    cond_1: Coin<Cond1>,
+    cond_2: Coin<Cond2>,
+    ctx: &mut TxContext,
+): Coin<AssetType> {
+    let progress = coin_escrow::start_recombine_asset_progress<AssetType, StableType, Cond0>(
+        escrow,
+        0,
+        cond_0,
+    );
+    let progress = coin_escrow::recombine_asset_progress_step<AssetType, StableType, Cond1>(
+        progress,
+        escrow,
+        1,
+        cond_1,
+    );
+    let progress = coin_escrow::recombine_asset_progress_step<AssetType, StableType, Cond2>(
+        progress,
+        escrow,
+        2,
+        cond_2,
+    );
+    coin_escrow::finish_recombine_asset_progress(progress, escrow, ctx)
+}
 
 #[test]
 fun test_split_asset_complete_set_2_basic() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
-    // Setup 2-outcome market
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(2, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -1778,12 +1946,13 @@ fun test_split_asset_complete_set_2_basic() {
     // Create spot asset
     let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
     
-    // Split into complete set (transfers to sender)
-    coin_escrow::split_asset_into_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET>(
-        &mut escrow,
-        spot_asset,
-        ctx
-    );
+    // Split into complete set via PTB progress flow
+    let (cond_0, cond_1) = split_asset_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET
+    >(&mut escrow, spot_asset, ctx);
     
     // Verify escrow balance increased
     let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
@@ -1795,30 +1964,20 @@ fun test_split_asset_complete_set_2_basic() {
     assert!(supply_0 == 1000, 1);
     assert!(supply_1 == 1000, 2);
     
-    // Transfer shared escrow to avoid "unused value" error
-    transfer::public_share_object(escrow);
-    
-    // Next transaction: Receive the transferred coins
-    ts::next_tx(&mut scenario, sender);
-    {
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_ASSET>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_ASSET>>(&scenario);
-        
-        assert!(cond_0.value() == 1000, 3);
-        assert!(cond_1.value() == 1000, 4);
-        
-        ts::return_to_sender(&scenario, cond_0);
-        ts::return_to_sender(&scenario, cond_1);
-    };
+    assert!(cond_0.value() == 1000, 3);
+    assert!(cond_1.value() == 1000, 4);
+
+    coin::burn_for_testing(cond_0);
+    coin::burn_for_testing(cond_1);
+
+    test_utils::destroy(escrow);
     
     ts::end(scenario);
 }
 
 #[test]
 fun test_split_stable_complete_set_2_basic() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(2, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -1835,12 +1994,13 @@ fun test_split_stable_complete_set_2_basic() {
     // Create spot stable
     let spot_stable = coin::mint_for_testing<TEST_COIN_B>(2000, ctx);
     
-    // Split into complete set
-    coin_escrow::split_stable_into_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_STABLE, COND_1_STABLE>(
-        &mut escrow,
-        spot_stable,
-        ctx
-    );
+    // Split into complete set via progress helpers
+    let (cond_0, cond_1) = split_stable_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_STABLE,
+        COND_1_STABLE
+    >(&mut escrow, spot_stable, ctx);
     
     // Verify escrow balance
     let (_, bal_stable) = coin_escrow::get_spot_balances(&escrow);
@@ -1852,28 +2012,20 @@ fun test_split_stable_complete_set_2_basic() {
     assert!(supply_0 == 2000, 1);
     assert!(supply_1 == 2000, 2);
     
-    transfer::public_share_object(escrow);
-    
-    ts::next_tx(&mut scenario, sender);
-    {
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_STABLE>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_STABLE>>(&scenario);
-        
-        assert!(cond_0.value() == 2000, 3);
-        assert!(cond_1.value() == 2000, 4);
-        
-        ts::return_to_sender(&scenario, cond_0);
-        ts::return_to_sender(&scenario, cond_1);
-    };
+    assert!(cond_0.value() == 2000, 3);
+    assert!(cond_1.value() == 2000, 4);
+
+    coin::burn_for_testing(cond_0);
+    coin::burn_for_testing(cond_1);
+
+    test_utils::destroy(escrow);
     
     ts::end(scenario);
 }
 
 #[test]
 fun test_recombine_asset_complete_set_2_basic() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(2, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -1889,59 +2041,47 @@ fun test_recombine_asset_complete_set_2_basic() {
     
     // First, create complete set
     let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
-    coin_escrow::split_asset_into_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET>(
-        &mut escrow,
-        spot_asset,
-        ctx
-    );
-    
-    transfer::public_share_object(escrow);
-    
-    // Next transaction: Recombine the complete set
-    ts::next_tx(&mut scenario, sender);
-    {
-        let mut escrow = ts::take_shared<coin_escrow::TokenEscrow<TEST_COIN_A, TEST_COIN_B>>(&scenario);
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_ASSET>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_ASSET>>(&scenario);
-        let ctx = ts::ctx(&mut scenario);
-        
-        // Recombine (should transfer spot asset back to sender)
-        coin_escrow::recombine_asset_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET>(
-            &mut escrow,
-            cond_0,
-            cond_1,
-            ctx
-        );
-        
-        // Verify supplies reduced to zero
-        let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
-        let supply_1 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(&escrow, 1);
-        assert!(supply_0 == 0, 0);
-        assert!(supply_1 == 0, 1);
-        
-        // Verify escrow balance reduced
-        let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
-        assert!(bal_asset == 0, 2);
-        
-        ts::return_shared(escrow);
-    };
-    
-    // Verify spot asset was transferred back
-    ts::next_tx(&mut scenario, sender);
-    {
-        let spot = ts::take_from_sender<coin::Coin<TEST_COIN_A>>(&scenario);
-        assert!(spot.value() == 1000, 3);
-        ts::return_to_sender(&scenario, spot);
-    };
+    let (cond_0, cond_1) = split_asset_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET
+    >(&mut escrow, spot_asset, ctx);
+
+    // Verify supplies before recombination
+    let supply_0_before = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
+    let supply_1_before = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(&escrow, 1);
+    assert!(supply_0_before == 1000, 0);
+    assert!(supply_1_before == 1000, 1);
+
+    // Recombine and verify we receive spot asset
+    let spot_back = recombine_asset_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET
+    >(&mut escrow, cond_0, cond_1, ctx);
+
+    assert!(spot_back.value() == 1000, 2);
+    coin::burn_for_testing(spot_back);
+
+    // Supplies should now be zero and escrow balances restored
+    let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
+    let supply_1 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(&escrow, 1);
+    assert!(supply_0 == 0, 3);
+    assert!(supply_1 == 0, 4);
+
+    let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
+    assert!(bal_asset == 0, 5);
+
+    test_utils::destroy(escrow);
     
     ts::end(scenario);
 }
 
 #[test]
 fun test_split_recombine_cycle_maintains_balance() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(2, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -1957,52 +2097,35 @@ fun test_split_recombine_cycle_maintains_balance() {
     
     // Split
     let spot_asset = coin::mint_for_testing<TEST_COIN_A>(500, ctx);
-    coin_escrow::split_asset_into_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET>(
-        &mut escrow,
-        spot_asset,
-        ctx
-    );
+    let (cond_0, cond_1) = split_asset_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET
+    >(&mut escrow, spot_asset, ctx);
     
-    transfer::public_share_object(escrow);
+    // Immediately recombine
+    let spot_back = recombine_asset_complete_set_2_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET
+    >(&mut escrow, cond_0, cond_1, ctx);
     
-    // Recombine
-    ts::next_tx(&mut scenario, sender);
-    {
-        let mut escrow = ts::take_shared<coin_escrow::TokenEscrow<TEST_COIN_A, TEST_COIN_B>>(&scenario);
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_ASSET>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_ASSET>>(&scenario);
-        let ctx = ts::ctx(&mut scenario);
-        
-        coin_escrow::recombine_asset_complete_set_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET>(
-            &mut escrow,
-            cond_0,
-            cond_1,
-            ctx
-        );
-        
-        // Verify complete cycle: balance should be back to zero
-        let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
-        assert!(bal_asset == 0, 0);
-        
-        ts::return_shared(escrow);
-    };
+    // Verify complete cycle: balance should be back to zero
+    let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
+    assert!(bal_asset == 0, 0);
+    assert!(spot_back.value() == 500, 1);
     
-    // Verify we got our spot asset back
-    ts::next_tx(&mut scenario, sender);
-    {
-        let spot = ts::take_from_sender<coin::Coin<TEST_COIN_A>>(&scenario);
-        assert!(spot.value() == 500, 1);
-        ts::return_to_sender(&scenario, spot);
-    };
+    coin::burn_for_testing(spot_back);
+    test_utils::destroy(escrow);
     
     ts::end(scenario);
 }
 
 #[test]
 fun test_split_asset_complete_set_3_outcomes() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(3, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -2020,13 +2143,15 @@ fun test_split_asset_complete_set_3_outcomes() {
     let stable_cap_2 = create_blank_treasury_cap_for_testing<COND_2_STABLE>(ctx);
     coin_escrow::register_conditional_caps(&mut escrow, 2, asset_cap_2, stable_cap_2);
     
-    // Split into 3-outcome complete set
+   // Split into 3-outcome complete set
     let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1500, ctx);
-    coin_escrow::split_asset_into_complete_set_3<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_2_ASSET>(
-        &mut escrow,
-        spot_asset,
-        ctx
-    );
+    let (cond_0, cond_1, cond_2) = split_asset_complete_set_3_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET,
+        COND_2_ASSET
+    >(&mut escrow, spot_asset, ctx);
     
     // Verify all 3 outcomes have equal supply (quantum liquidity)
     let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
@@ -2036,31 +2161,22 @@ fun test_split_asset_complete_set_3_outcomes() {
     assert!(supply_1 == 1500, 1);
     assert!(supply_2 == 1500, 2);
     
-    transfer::public_share_object(escrow);
-    
-    ts::next_tx(&mut scenario, sender);
-    {
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_ASSET>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_ASSET>>(&scenario);
-        let cond_2 = ts::take_from_sender<coin::Coin<COND_2_ASSET>>(&scenario);
-        
-        assert!(cond_0.value() == 1500, 3);
-        assert!(cond_1.value() == 1500, 4);
-        assert!(cond_2.value() == 1500, 5);
-        
-        ts::return_to_sender(&scenario, cond_0);
-        ts::return_to_sender(&scenario, cond_1);
-        ts::return_to_sender(&scenario, cond_2);
-    };
+    assert!(cond_0.value() == 1500, 3);
+    assert!(cond_1.value() == 1500, 4);
+    assert!(cond_2.value() == 1500, 5);
+
+    coin::burn_for_testing(cond_0);
+    coin::burn_for_testing(cond_1);
+    coin::burn_for_testing(cond_2);
+
+    test_utils::destroy(escrow);
     
     ts::end(scenario);
 }
 
 #[test]
 fun test_recombine_asset_complete_set_3_outcomes() {
-    let sender = @0xBABE;
-    let mut scenario = ts::begin(sender);
-    
+    let mut scenario = ts::begin(@0xBABE);
     let ctx = ts::ctx(&mut scenario);
     let market_state = create_test_market_state(3, ctx);
     let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
@@ -2080,204 +2196,36 @@ fun test_recombine_asset_complete_set_3_outcomes() {
     
     // Split
     let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1500, ctx);
-    coin_escrow::split_asset_into_complete_set_3<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_2_ASSET>(
-        &mut escrow,
-        spot_asset,
-        ctx
-    );
+    let (cond_0, cond_1, cond_2) = split_asset_complete_set_3_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET,
+        COND_2_ASSET
+    >(&mut escrow, spot_asset, ctx);
     
-    transfer::public_share_object(escrow);
+    let spot = recombine_asset_complete_set_3_for_testing<
+        TEST_COIN_A,
+        TEST_COIN_B,
+        COND_0_ASSET,
+        COND_1_ASSET,
+        COND_2_ASSET
+    >(&mut escrow, cond_0, cond_1, cond_2, ctx);
     
-    // Recombine
-    ts::next_tx(&mut scenario, sender);
-    {
-        let mut escrow = ts::take_shared<coin_escrow::TokenEscrow<TEST_COIN_A, TEST_COIN_B>>(&scenario);
-        let cond_0 = ts::take_from_sender<coin::Coin<COND_0_ASSET>>(&scenario);
-        let cond_1 = ts::take_from_sender<coin::Coin<COND_1_ASSET>>(&scenario);
-        let cond_2 = ts::take_from_sender<coin::Coin<COND_2_ASSET>>(&scenario);
-        let ctx = ts::ctx(&mut scenario);
-        
-        coin_escrow::recombine_asset_complete_set_3<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_2_ASSET>(
-            &mut escrow,
-            cond_0,
-            cond_1,
-            cond_2,
-            ctx
-        );
-        
-        // Verify all supplies back to zero
-        let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
-        let supply_1 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(&escrow, 1);
-        let supply_2 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_2_ASSET>(&escrow, 2);
-        assert!(supply_0 == 0, 0);
-        assert!(supply_1 == 0, 1);
-        assert!(supply_2 == 0, 2);
-        
-        let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
-        assert!(bal_asset == 0, 3);
-        
-        ts::return_shared(escrow);
-    };
+    assert!(spot.value() == 1500, 0);
     
-    ts::next_tx(&mut scenario, sender);
-    {
-        let spot = ts::take_from_sender<coin::Coin<TEST_COIN_A>>(&scenario);
-        assert!(spot.value() == 1500, 4);
-        ts::return_to_sender(&scenario, spot);
-    };
+    let supply_0 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(&escrow, 0);
+    let supply_1 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(&escrow, 1);
+    let supply_2 = coin_escrow::get_asset_supply<TEST_COIN_A, TEST_COIN_B, COND_2_ASSET>(&escrow, 2);
+    assert!(supply_0 == 0, 1);
+    assert!(supply_1 == 0, 2);
+    assert!(supply_2 == 0, 3);
     
-    ts::end(scenario);
-}
+    let (bal_asset, _) = coin_escrow::get_spot_balances(&escrow);
+    assert!(bal_asset == 0, 4);
 
-#[test]
-fun test_quantum_invariant_validation_passes() {
-    let mut scenario = ts::begin(@0x1);
-    let ctx = ts::ctx(&mut scenario);
-    
-    let market_state = create_test_market_state(2, ctx);
-    let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
-    
-    // Register caps
-    let asset_cap_0 = create_blank_treasury_cap_for_testing<COND_0_ASSET>(ctx);
-    let stable_cap_0 = create_blank_treasury_cap_for_testing<COND_0_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 0, asset_cap_0, stable_cap_0);
-    
-    let asset_cap_1 = create_blank_treasury_cap_for_testing<COND_1_ASSET>(ctx);
-    let stable_cap_1 = create_blank_treasury_cap_for_testing<COND_1_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 1, asset_cap_1, stable_cap_1);
-    
-    // Create quantum state: deposit spot, mint conditionals for both outcomes
-    let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
-    let spot_stable = coin::mint_for_testing<TEST_COIN_B>(2000, ctx);
-    coin_escrow::deposit_spot_coins(&mut escrow, spot_asset, spot_stable);
-    
-    let cond_0_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(
-        &mut escrow, 0, 1000, ctx
-    );
-    let cond_1_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(
-        &mut escrow, 1, 1000, ctx
-    );
-    let cond_0_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_0_STABLE>(
-        &mut escrow, 0, 2000, ctx
-    );
-    let cond_1_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_1_STABLE>(
-        &mut escrow, 1, 2000, ctx
-    );
-    
-    // Quantum invariant: spot_asset (1000) == each outcome's asset supply (1000, 1000)
-    // Quantum invariant: spot_stable (2000) == each outcome's stable supply (2000, 2000)
-    
-    // This should pass - invariant is satisfied
-    coin_escrow::validate_quantum_invariant_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_0_STABLE, COND_1_STABLE>(
-        &escrow
-    );
-    
-    coin::burn_for_testing(cond_0_asset);
-    coin::burn_for_testing(cond_1_asset);
-    coin::burn_for_testing(cond_0_stable);
-    coin::burn_for_testing(cond_1_stable);
+    coin::burn_for_testing(spot);
     test_utils::destroy(escrow);
-    ts::end(scenario);
-}
-
-#[test]
-#[expected_failure(abort_code = coin_escrow::EInvariantViolation)]
-fun test_quantum_invariant_validation_fails_asset_mismatch() {
-    let mut scenario = ts::begin(@0x1);
-    let ctx = ts::ctx(&mut scenario);
     
-    let market_state = create_test_market_state(2, ctx);
-    let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
-    
-    // Register caps
-    let asset_cap_0 = create_blank_treasury_cap_for_testing<COND_0_ASSET>(ctx);
-    let stable_cap_0 = create_blank_treasury_cap_for_testing<COND_0_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 0, asset_cap_0, stable_cap_0);
-    
-    let asset_cap_1 = create_blank_treasury_cap_for_testing<COND_1_ASSET>(ctx);
-    let stable_cap_1 = create_blank_treasury_cap_for_testing<COND_1_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 1, asset_cap_1, stable_cap_1);
-    
-    // Create invalid state: spot balance doesn't match conditional supplies
-    let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
-    let spot_stable = coin::mint_for_testing<TEST_COIN_B>(2000, ctx);
-    coin_escrow::deposit_spot_coins(&mut escrow, spot_asset, spot_stable);
-    
-    // Mint conditionals but with mismatched amounts (violates invariant)
-    let cond_0_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(
-        &mut escrow, 0, 500, ctx  // Only 500, not 1000!
-    );
-    let cond_1_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(
-        &mut escrow, 1, 1000, ctx
-    );
-    let cond_0_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_0_STABLE>(
-        &mut escrow, 0, 2000, ctx
-    );
-    let cond_1_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_1_STABLE>(
-        &mut escrow, 1, 2000, ctx
-    );
-    
-    // This should fail - spot asset (1000) != outcome 0 supply (500)
-    coin_escrow::validate_quantum_invariant_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_0_STABLE, COND_1_STABLE>(
-        &escrow
-    );
-    
-    // Should not reach here
-    coin::burn_for_testing(cond_0_asset);
-    coin::burn_for_testing(cond_1_asset);
-    coin::burn_for_testing(cond_0_stable);
-    coin::burn_for_testing(cond_1_stable);
-    test_utils::destroy(escrow);
-    ts::end(scenario);
-}
-
-#[test]
-#[expected_failure(abort_code = coin_escrow::EInvariantViolation)]
-fun test_quantum_invariant_validation_fails_stable_mismatch() {
-    let mut scenario = ts::begin(@0x1);
-    let ctx = ts::ctx(&mut scenario);
-    
-    let market_state = create_test_market_state(2, ctx);
-    let mut escrow = coin_escrow::new<TEST_COIN_A, TEST_COIN_B>(market_state, ctx);
-    
-    // Register caps
-    let asset_cap_0 = create_blank_treasury_cap_for_testing<COND_0_ASSET>(ctx);
-    let stable_cap_0 = create_blank_treasury_cap_for_testing<COND_0_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 0, asset_cap_0, stable_cap_0);
-    
-    let asset_cap_1 = create_blank_treasury_cap_for_testing<COND_1_ASSET>(ctx);
-    let stable_cap_1 = create_blank_treasury_cap_for_testing<COND_1_STABLE>(ctx);
-    coin_escrow::register_conditional_caps(&mut escrow, 1, asset_cap_1, stable_cap_1);
-    
-    // Create invalid state: stable mismatch
-    let spot_asset = coin::mint_for_testing<TEST_COIN_A>(1000, ctx);
-    let spot_stable = coin::mint_for_testing<TEST_COIN_B>(2000, ctx);
-    coin_escrow::deposit_spot_coins(&mut escrow, spot_asset, spot_stable);
-    
-    let cond_0_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET>(
-        &mut escrow, 0, 1000, ctx
-    );
-    let cond_1_asset = coin_escrow::mint_conditional_asset<TEST_COIN_A, TEST_COIN_B, COND_1_ASSET>(
-        &mut escrow, 1, 1000, ctx
-    );
-    // Mismatched stable supplies
-    let cond_0_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_0_STABLE>(
-        &mut escrow, 0, 2000, ctx
-    );
-    let cond_1_stable = coin_escrow::mint_conditional_stable<TEST_COIN_A, TEST_COIN_B, COND_1_STABLE>(
-        &mut escrow, 1, 1500, ctx  // Only 1500, not 2000!
-    );
-    
-    // This should fail - spot stable (2000) != outcome 1 supply (1500)
-    coin_escrow::validate_quantum_invariant_2<TEST_COIN_A, TEST_COIN_B, COND_0_ASSET, COND_1_ASSET, COND_0_STABLE, COND_1_STABLE>(
-        &escrow
-    );
-    
-    // Should not reach here
-    coin::burn_for_testing(cond_0_asset);
-    coin::burn_for_testing(cond_1_asset);
-    coin::burn_for_testing(cond_0_stable);
-    coin::burn_for_testing(cond_1_stable);
-    test_utils::destroy(escrow);
     ts::end(scenario);
 }

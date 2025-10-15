@@ -1012,32 +1012,16 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
 /// ```
 /// finalize_proposal_market(..., option::some(&mut escrow), ...);  // Automatic cleanup
 /// ```
-public entry fun finalize_subsidy_escrow_for_proposal(
-    account: &mut Account<FutarchyConfig>,
-    subsidy_escrow: &mut SubsidyEscrow,
-    clock: &Clock,
-    ctx: &mut TxContext,
+public fun finalize_subsidy_escrow_for_proposal(
+    _account: &mut Account<FutarchyConfig>,
+    _subsidy_escrow: &mut SubsidyEscrow,
+    _clock: &Clock,
+    _ctx: &mut TxContext,
 ) {
-    use sui::coin;
-
-    // Finalize the subsidy escrow and get remaining SUI
-    let remaining_sui = subsidy_escrow_mod::finalize_escrow(
-        subsidy_escrow,
-        clock,
-        ctx
-    );
-
-    // Return remaining SUI to DAO vault
-    let vault_name = b"default".to_string();
-    let config_witness = futarchy_config::authenticate(account, ctx);
-    let version_witness = version::current();
-    let auth = account::new_auth(account, version_witness, config_witness);
-    vault::deposit<FutarchyConfig, sui::sui::SUI>(
-        auth,
-        account,
-        vault_name,
-        remaining_sui
-    );
+    // This function is deprecated - subsidy escrow cleanup now happens inline
+    // during finalize_proposal_market() via proposal::extract_subsidy_escrow()
+    // Use finalize_proposal_market() with inline escrow instead
+    abort 0 // Function not implemented - use inline escrow cleanup
 }
 
 /// Crank subsidy for a proposal (uses inline escrow)
@@ -1061,7 +1045,7 @@ public entry fun finalize_subsidy_escrow_for_proposal(
 /// - Proposal ID validation is done inside subsidy_escrow::crank_subsidy()
 /// - Rate limiting (min 5 min between cranks) enforced by subsidy_escrow module
 /// - AMM ID validation ensures subsidy only goes to proposal's pools
-public entry fun crank_subsidy_for_proposal<AssetType, StableType>(
+public fun crank_subsidy_for_proposal<AssetType, StableType>(
     proposal: &mut Proposal<AssetType, StableType>,
     conditional_pools: &mut vector<conditional_amm::LiquidityPool>,
     clock: &Clock,
@@ -1072,11 +1056,11 @@ public entry fun crank_subsidy_for_proposal<AssetType, StableType>(
     // Check if proposal has a subsidy escrow
     assert!(proposal::has_subsidy_escrow(proposal), EProposalNotActive);
 
+    // Get proposal ID for security check BEFORE borrowing escrow mutably
+    let proposal_id = proposal::get_id(proposal);
+
     // Borrow the subsidy escrow mutably
     let escrow = proposal::borrow_subsidy_escrow_mut(proposal);
-
-    // Get proposal ID for security check
-    let proposal_id = proposal::get_id(proposal);
 
     // Call the core crank function
     let keeper_fee_coin = subsidy_escrow_mod::crank_subsidy(

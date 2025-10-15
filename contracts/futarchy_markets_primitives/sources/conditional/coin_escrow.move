@@ -2,9 +2,7 @@ module futarchy_markets_primitives::coin_escrow;
 
 use futarchy_markets_primitives::market_state::MarketState;
 use sui::balance::{Self, Balance};
-use sui::clock::Clock;
 use sui::coin::{Self, Coin, TreasuryCap, CoinMetadata};
-use sui::event;
 use sui::dynamic_field;
 
 // === Introduction ===
@@ -46,7 +44,6 @@ const EBadWitness: u64 = 12; // Invalid one-time witness
 const EZeroAmount: u64 = 13; // Amount must be greater than zero
 const EInvalidAssetType: u64 = 14; // Asset type must be 0 (asset) or 1 (stable)
 const EOverflow: u64 = 15; // Arithmetic overflow protection
-const EInvariantViolation: u64 = 16; // Differential minting invariant violated
 
 // === Constants ===
 const TOKEN_TYPE_ASSET: u8 = 0;
@@ -492,234 +489,323 @@ public fun withdraw_stable_balance<AssetType, StableType>(
     coin::from_balance(balance, ctx)
 }
 
-// === Quantum Liquidity Invariant Checking ===
-
-/// Assert the quantum liquidity invariant: each outcome's supply equals spot balance
-/// CRITICAL: In quantum liquidity model, 100 spot tokens → 100 in EACH outcome simultaneously
-/// This is NOT proportional splitting - liquidity exists fully in all outcomes at once
-///
-/// The invariant must hold UNTIL proposal finalization:
-/// - spot_asset_balance == each_outcome_asset_supply (for all outcomes)
-/// - spot_stable_balance == each_outcome_stable_supply (for all outcomes)
-///
-/// After finalization, only the winning outcome's supply matters (others can be burned)
-public fun assert_quantum_invariant<AssetType, StableType>(
-    escrow: &TokenEscrow<AssetType, StableType>,
-) {
-    let spot_asset = escrow.escrowed_asset.value();
-    let spot_stable = escrow.escrowed_stable.value();
-    let outcome_count = escrow.outcome_count;
-
-    // Check each outcome has supply equal to spot balance
-    let mut i = 0;
-    while (i < outcome_count) {
-        // Get asset supply for this outcome
-        let asset_key = AssetCapKey { outcome_index: i };
-        let asset_cap_exists = dynamic_field::exists_(&escrow.id, asset_key);
-
-        if (asset_cap_exists) {
-            // We can't call get_asset_supply without the generic type parameter
-            // So we'll leave this as a framework for manual checking
-            // In practice, caller must provide the ConditionalCoinType to check
-        };
-
-        // Get stable supply for this outcome
-        let stable_key = StableCapKey { outcome_index: i };
-        let stable_cap_exists = dynamic_field::exists_(&escrow.id, stable_key);
-
-        if (stable_cap_exists) {
-            // Same limitation - need generic type to check supply
-        };
-
-        i = i + 1;
-    };
-
-    // NOTE: Full invariant check requires knowing all ConditionalCoinTypes at compile time
-    // This function serves as documentation of the invariant
-    // Actual enforcement happens in mint/burn operations that maintain the invariant
-}
+// === Quantum Liquidity Invariant ===
+//
+// INVARIANT (enforced by construction):
+// - spot_asset_balance == each_outcome_asset_supply (for ALL outcomes)
+// - spot_stable_balance == each_outcome_stable_supply (for ALL outcomes)
+//
+// This invariant is maintained by the mint/burn operations:
+// - deposit_and_mint: deposit X spot → mint X conditional (1:1)
+// - burn_and_withdraw: burn X conditional → withdraw X spot (1:1)
+// - split operations: deposit spot → mint conditional in all outcomes
+// - recombine operations: burn conditional from all outcomes → withdraw spot
+//
+// No validation function needed - operations enforce invariant by construction.
 
 // === Complete Set Operations (Split/Recombine) ===
+// Uses PTB hot potato pattern - see TYPE_PARAMETER_EXPLOSION_PROBLEM.md
 
-/// Split spot asset into complete set of conditional assets (all outcomes)
-/// Creates 1 conditional asset for EACH outcome (quantum liquidity)
-/// For 2-outcome markets
-public entry fun split_asset_into_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+/// Progress tracker for splitting a spot asset coin into a complete set of conditional asset coins.
+/// This struct MUST be fully consumed via `finish_split_asset_progress` to preserve the quantum invariant.
+public struct SplitAssetProgress<phantom AssetType, phantom StableType> has drop {
+    market_id: ID,
+    amount: u64,
+    outcome_count: u64,
+    next_outcome: u64,
+}
+
+public fun drop<AssetType, StableType>(progress: SplitAssetProgress<AssetType, StableType>) {
+    let SplitAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+}
+
+/// Progress tracker for splitting a spot stable coin into a complete set of conditional stable coins.
+public struct SplitStableProgress<phantom AssetType, phantom StableType> has drop {
+    market_id: ID,
+    amount: u64,
+    outcome_count: u64,
+    next_outcome: u64,
+}
+
+public fun drop<AssetType, StableType>(progress: SplitStableProgress<AssetType, StableType>) {
+    let SplitStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+}
+
+/// Progress tracker for recombining conditional asset coins back into a spot asset coin.
+/// All outcomes must be processed sequentially from 0 → outcome_count - 1.
+public struct RecombineAssetProgress<phantom AssetType, phantom StableType> has drop {
+    market_id: ID,
+    amount: u64,
+    outcome_count: u64,
+    next_outcome: u64,
+}
+
+public fun drop<AssetType, StableType>(progress: RecombineAssetProgress<AssetType, StableType>) {
+    let RecombineAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+}
+
+/// Progress tracker for recombining conditional stable coins back into a spot stable coin.
+public struct RecombineStableProgress<phantom AssetType, phantom StableType> has drop {
+    market_id: ID,
+    amount: u64,
+    outcome_count: u64,
+    next_outcome: u64,
+}
+
+public fun drop<AssetType, StableType>(progress: RecombineStableProgress<AssetType, StableType>) {
+    let RecombineStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+}
+
+/// Begin splitting a spot asset coin into a complete set of conditional assets.
+/// Returns a progress object that must be passed through `split_asset_progress_step`
+/// for each outcome, then finalized with `finish_split_asset_progress`.
+public entry fun start_split_asset_progress<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     spot_asset: Coin<AssetType>,
-    ctx: &mut TxContext,
-) {
+): SplitAssetProgress<AssetType, StableType> {
     let amount = spot_asset.value();
     assert!(amount > 0, EZeroAmount);
 
-    // Deposit spot asset to escrow
+    let outcome_count = caps_registered_count(escrow);
+    assert!(outcome_count > 0, ESuppliesNotInitialized);
+
     let asset_balance = coin::into_balance(spot_asset);
     escrow.escrowed_asset.join(asset_balance);
 
-    // Mint conditional asset for outcome 0
-    let cond_0 = mint_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
-
-    // Mint conditional asset for outcome 1
-    let cond_1 = mint_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
-
-    // Transfer to sender
-    transfer::public_transfer(cond_0, ctx.sender());
-    transfer::public_transfer(cond_1, ctx.sender());
+    SplitAssetProgress {
+        market_id: market_state_id(escrow),
+        amount,
+        outcome_count,
+        next_outcome: 0,
+    }
 }
 
-/// Split spot stable into complete set of conditional stables (all outcomes)
-/// For 2-outcome markets
-public entry fun split_stable_into_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+/// Mint the next conditional asset coin in the sequence.
+/// Caller is responsible for transferring or otherwise handling the returned coin.
+public entry fun split_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
+    mut progress: SplitAssetProgress<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u8,
+    ctx: &mut TxContext,
+): (SplitAssetProgress<AssetType, StableType>, Coin<ConditionalCoinType>) {
+    assert!(market_state_id(escrow) == progress.market_id, EWrongMarket);
+
+    let index = (outcome_index as u64);
+    assert!(progress.next_outcome < progress.outcome_count, EOutcomeOutOfBounds);
+    assert!(index == progress.next_outcome, EIncorrectSequence);
+
+    let coin = mint_conditional_asset<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        progress.amount,
+        ctx,
+    );
+
+    progress.next_outcome = progress.next_outcome + 1;
+
+    (progress, coin)
+}
+
+/// Ensure the split operation covered all outcomes. Must be called exactly once per progress object.
+public entry fun finish_split_asset_progress<AssetType, StableType>(
+    progress: SplitAssetProgress<AssetType, StableType>,
+) {
+    let SplitAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+}
+
+/// Begin splitting a spot stable coin into a complete set of conditional stables.
+public entry fun start_split_stable_progress<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     spot_stable: Coin<StableType>,
-    ctx: &mut TxContext,
-) {
+): SplitStableProgress<AssetType, StableType> {
     let amount = spot_stable.value();
     assert!(amount > 0, EZeroAmount);
 
-    // Deposit spot stable to escrow
+    let outcome_count = caps_registered_count(escrow);
+    assert!(outcome_count > 0, ESuppliesNotInitialized);
+
     let stable_balance = coin::into_balance(spot_stable);
     escrow.escrowed_stable.join(stable_balance);
 
-    // Mint conditional stable for outcome 0
-    let cond_0 = mint_conditional_stable<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
-
-    // Mint conditional stable for outcome 1
-    let cond_1 = mint_conditional_stable<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
-
-    // Transfer to sender
-    transfer::public_transfer(cond_0, ctx.sender());
-    transfer::public_transfer(cond_1, ctx.sender());
+    SplitStableProgress {
+        market_id: market_state_id(escrow),
+        amount,
+        outcome_count,
+        next_outcome: 0,
+    }
 }
 
-/// Recombine complete set of conditional assets back into spot asset
-/// Burns 1 conditional asset from EACH outcome, returns 1 spot asset (quantum liquidity)
-/// For 2-outcome markets
-public entry fun recombine_asset_complete_set_2<AssetType, StableType, Cond0, Cond1>(
+/// Mint the next conditional stable coin in the sequence.
+public entry fun split_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
+    mut progress: SplitStableProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    cond_0: Coin<Cond0>,
-    cond_1: Coin<Cond1>,
+    outcome_index: u8,
     ctx: &mut TxContext,
-) {
-    let amount_0 = cond_0.value();
-    let amount_1 = cond_1.value();
-    assert!(amount_0 == amount_1, EInsufficientBalance);
-    assert!(amount_0 > 0, EZeroAmount);
+): (SplitStableProgress<AssetType, StableType>, Coin<ConditionalCoinType>) {
+    assert!(market_state_id(escrow) == progress.market_id, EWrongMarket);
 
-    let amount = amount_0;
+    let index = (outcome_index as u64);
+    assert!(progress.next_outcome < progress.outcome_count, EOutcomeOutOfBounds);
+    assert!(index == progress.next_outcome, EIncorrectSequence);
 
-    // Burn conditional assets for each outcome
-    burn_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, cond_0);
-    burn_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, cond_1);
+    let coin = mint_conditional_stable<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        progress.amount,
+        ctx,
+    );
 
-    // Withdraw spot asset (1:1 due to quantum liquidity)
-    let spot_asset = withdraw_asset_balance(escrow, amount, ctx);
+    progress.next_outcome = progress.next_outcome + 1;
 
-    // Transfer to sender
-    transfer::public_transfer(spot_asset, ctx.sender());
+    (progress, coin)
 }
 
-/// Recombine complete set of conditional stables back into spot stable
-/// For 2-outcome markets
-public entry fun recombine_stable_complete_set_2<AssetType, StableType, Cond0, Cond1>(
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    cond_0: Coin<Cond0>,
-    cond_1: Coin<Cond1>,
-    ctx: &mut TxContext,
+/// Ensure the stable split operation covered all outcomes.
+public entry fun finish_split_stable_progress<AssetType, StableType>(
+    progress: SplitStableProgress<AssetType, StableType>,
 ) {
-    let amount_0 = cond_0.value();
-    let amount_1 = cond_1.value();
-    assert!(amount_0 == amount_1, EInsufficientBalance);
-    assert!(amount_0 > 0, EZeroAmount);
-
-    let amount = amount_0;
-
-    // Burn conditional stables for each outcome
-    burn_conditional_stable<AssetType, StableType, Cond0>(escrow, 0, cond_0);
-    burn_conditional_stable<AssetType, StableType, Cond1>(escrow, 1, cond_1);
-
-    // Withdraw spot stable
-    let spot_stable = withdraw_stable_balance(escrow, amount, ctx);
-
-    // Transfer to sender
-    transfer::public_transfer(spot_stable, ctx.sender());
+    let SplitStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
 
-/// For 3-outcome markets - split spot asset into complete set
-public entry fun split_asset_into_complete_set_3<AssetType, StableType, Cond0, Cond1, Cond2>(
+/// Begin recombining conditional asset coins into a spot asset coin.
+/// Consumes and burns the first coin (must be outcome index 0).
+public entry fun start_recombine_asset_progress<AssetType, StableType, ConditionalCoinType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    spot_asset: Coin<AssetType>,
-    ctx: &mut TxContext,
-) {
-    let amount = spot_asset.value();
+    outcome_index: u8,
+    coin: Coin<ConditionalCoinType>,
+): RecombineAssetProgress<AssetType, StableType> {
+    let index = (outcome_index as u64);
+    assert!(index == 0, EIncorrectSequence);
+
+    let outcome_count = caps_registered_count(escrow);
+    assert!(outcome_count > 0, ESuppliesNotInitialized);
+    assert!(index < outcome_count, EOutcomeOutOfBounds);
+
+    let amount = coin.value();
     assert!(amount > 0, EZeroAmount);
 
-    let asset_balance = coin::into_balance(spot_asset);
-    escrow.escrowed_asset.join(asset_balance);
+    burn_conditional_asset<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        coin,
+    );
 
-    let cond_0 = mint_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, amount, ctx);
-    let cond_1 = mint_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, amount, ctx);
-    let cond_2 = mint_conditional_asset<AssetType, StableType, Cond2>(escrow, 2, amount, ctx);
-
-    transfer::public_transfer(cond_0, ctx.sender());
-    transfer::public_transfer(cond_1, ctx.sender());
-    transfer::public_transfer(cond_2, ctx.sender());
+    RecombineAssetProgress {
+        market_id: market_state_id(escrow),
+        amount,
+        outcome_count,
+        next_outcome: 1,
+    }
 }
 
-/// For 3-outcome markets - recombine conditional assets into spot asset
-public entry fun recombine_asset_complete_set_3<AssetType, StableType, Cond0, Cond1, Cond2>(
+/// Burn the next conditional asset coin in the recombination sequence.
+public entry fun recombine_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
+    mut progress: RecombineAssetProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    cond_0: Coin<Cond0>,
-    cond_1: Coin<Cond1>,
-    cond_2: Coin<Cond2>,
-    ctx: &mut TxContext,
-) {
-    let amount_0 = cond_0.value();
-    let amount_1 = cond_1.value();
-    let amount_2 = cond_2.value();
-    assert!(amount_0 == amount_1 && amount_1 == amount_2, EInsufficientBalance);
-    assert!(amount_0 > 0, EZeroAmount);
+    outcome_index: u8,
+    coin: Coin<ConditionalCoinType>,
+): RecombineAssetProgress<AssetType, StableType> {
+    assert!(market_state_id(escrow) == progress.market_id, EWrongMarket);
 
-    let amount = amount_0;
+    let index = (outcome_index as u64);
+    assert!(progress.next_outcome < progress.outcome_count, EOutcomeOutOfBounds);
+    assert!(index == progress.next_outcome, EIncorrectSequence);
 
-    burn_conditional_asset<AssetType, StableType, Cond0>(escrow, 0, cond_0);
-    burn_conditional_asset<AssetType, StableType, Cond1>(escrow, 1, cond_1);
-    burn_conditional_asset<AssetType, StableType, Cond2>(escrow, 2, cond_2);
+    let amount = coin.value();
+    assert!(amount == progress.amount, EInsufficientBalance);
 
-    let spot_asset = withdraw_asset_balance(escrow, amount, ctx);
-    transfer::public_transfer(spot_asset, ctx.sender());
+    burn_conditional_asset<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        coin,
+    );
+
+    progress.next_outcome = progress.next_outcome + 1;
+    progress
 }
 
-// === Quantum Invariant Validation (For Arbitrage) ===
+/// Finish recombination and withdraw the corresponding spot asset coin.
+public entry fun finish_recombine_asset_progress<AssetType, StableType>(
+    progress: RecombineAssetProgress<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    ctx: &mut TxContext,
+): Coin<AssetType> {
+    let RecombineAssetProgress { market_id: _, amount, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+    withdraw_asset_balance(escrow, amount, ctx)
+}
 
-/// Validate quantum invariant at end of transaction (for 2-outcome markets)
-///
-/// This function checks that the quantum liquidity invariant holds:
-/// - spot_asset_balance == each_outcome_asset_supply (for ALL outcomes)
-/// - spot_stable_balance == each_outcome_stable_supply (for ALL outcomes)
-///
-/// This is designed to be called at the END of arbitrage operations, allowing
-/// temporary invariant violations during atomic operations but ensuring the
-/// invariant is restored before transaction completion.
-///
-/// For 2-outcome markets with outcomes 0 and 1.
-public fun validate_quantum_invariant_2<AssetType, StableType, Cond0Asset, Cond1Asset, Cond0Stable, Cond1Stable>(
-    escrow: &TokenEscrow<AssetType, StableType>,
-) {
-    let spot_asset = escrow.escrowed_asset.value();
-    let spot_stable = escrow.escrowed_stable.value();
+/// Begin recombining conditional stable coins into spot stable.
+public entry fun start_recombine_stable_progress<AssetType, StableType, ConditionalCoinType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u8,
+    coin: Coin<ConditionalCoinType>,
+): RecombineStableProgress<AssetType, StableType> {
+    let index = (outcome_index as u64);
+    assert!(index == 0, EIncorrectSequence);
 
-    // Check asset supplies match spot for both outcomes
-    let cond0_asset_supply = get_asset_supply<AssetType, StableType, Cond0Asset>(escrow, 0);
-    let cond1_asset_supply = get_asset_supply<AssetType, StableType, Cond1Asset>(escrow, 1);
-    assert!(cond0_asset_supply == spot_asset, EInvariantViolation);
-    assert!(cond1_asset_supply == spot_asset, EInvariantViolation);
+    let outcome_count = caps_registered_count(escrow);
+    assert!(outcome_count > 0, ESuppliesNotInitialized);
+    assert!(index < outcome_count, EOutcomeOutOfBounds);
 
-    // Check stable supplies match spot for both outcomes
-    let cond0_stable_supply = get_stable_supply<AssetType, StableType, Cond0Stable>(escrow, 0);
-    let cond1_stable_supply = get_stable_supply<AssetType, StableType, Cond1Stable>(escrow, 1);
-    assert!(cond0_stable_supply == spot_stable, EInvariantViolation);
-    assert!(cond1_stable_supply == spot_stable, EInvariantViolation);
+    let amount = coin.value();
+    assert!(amount > 0, EZeroAmount);
+
+    burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        coin,
+    );
+
+    RecombineStableProgress {
+        market_id: market_state_id(escrow),
+        amount,
+        outcome_count,
+        next_outcome: 1,
+    }
+}
+
+/// Burn the next conditional stable coin in the recombination sequence.
+public entry fun recombine_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
+    mut progress: RecombineStableProgress<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    outcome_index: u8,
+    coin: Coin<ConditionalCoinType>,
+): RecombineStableProgress<AssetType, StableType> {
+    assert!(market_state_id(escrow) == progress.market_id, EWrongMarket);
+
+    let index = (outcome_index as u64);
+    assert!(progress.next_outcome < progress.outcome_count, EOutcomeOutOfBounds);
+    assert!(index == progress.next_outcome, EIncorrectSequence);
+
+    let amount = coin.value();
+    assert!(amount == progress.amount, EInsufficientBalance);
+
+    burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
+        escrow,
+        index,
+        coin,
+    );
+
+    progress.next_outcome = progress.next_outcome + 1;
+    progress
+}
+
+/// Finish recombination and withdraw the corresponding spot stable coin.
+public entry fun finish_recombine_stable_progress<AssetType, StableType>(
+    progress: RecombineStableProgress<AssetType, StableType>,
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+    ctx: &mut TxContext,
+): Coin<StableType> {
+    let RecombineStableProgress { market_id: _, amount, outcome_count, next_outcome } = progress;
+    assert!(next_outcome == outcome_count, EIncorrectSequence);
+    withdraw_stable_balance(escrow, amount, ctx)
 }
 
 // === Test Helpers ===

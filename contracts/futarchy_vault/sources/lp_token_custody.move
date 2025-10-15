@@ -15,10 +15,9 @@ use sui::{
     object::{Self, ID},
     table::{Self, Table},
     event,
-    transfer,
 };
 use account_protocol::{
-    account::{Self, Account, Auth},
+    account::{Self, Account},
 };
 use futarchy_core::version;
 use futarchy_core::futarchy_config::FutarchyConfig;
@@ -106,13 +105,15 @@ public fun has_custody(account: &Account<FutarchyConfig>): bool {
 }
 
 /// Deposit an LP token into custody
-public fun deposit_lp_token<AssetType, StableType>(
-    auth: Auth,
+public fun deposit_lp_token<AssetType, StableType, W: drop>(
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,
     token: LPToken<AssetType, StableType>,
+    witness: W,
     ctx: &mut TxContext,
 ) {
+    // Create Auth from witness for account verification
+    let auth = account::new_auth(account, version::current(), witness);
     account::verify(account, auth);
     
     // Get account ID before mutable borrowing
@@ -181,17 +182,17 @@ public fun deposit_lp_token<AssetType, StableType>(
     });
 }
 
-/// Withdraw LP tokens from custody
+/// Withdraw LP token from custody and return it to caller
 /// The token_id identifies which LP token to withdraw from managed assets
-/// The LP token is transferred to the account as a child object for safety
-/// Users can then transfer it from the account in a separate transaction
-public fun withdraw_lp_token<AssetType, StableType>(
-    auth: Auth,
+public fun withdraw_lp_token<AssetType, StableType, W: drop>(
     account: &mut Account<FutarchyConfig>,
     pool_id: ID,
-    token_id: ID,  // Changed from passing the token to just the ID
+    token_id: ID,
+    witness: W,
     _ctx: &mut TxContext,
-) {
+): LPToken<AssetType, StableType> {
+    // Create Auth from witness for account verification
+    let auth = account::new_auth(account, version::current(), witness);
     account::verify(account, auth);
     
     // Get account ID before mutable borrowing
@@ -212,9 +213,12 @@ public fun withdraw_lp_token<AssetType, StableType>(
         version::current()
     );
     
-    // Verify token is in custody
+    // Verify token is in custody and mapped to the supplied pool
     assert!(custody.token_amounts.contains(token_id), ELPTokenNotFound);
     assert!(custody.token_amounts[token_id] == amount, EInsufficientBalance);
+    assert!(custody.token_to_pool.contains(token_id), ELPTokenNotFound);
+    let recorded_pool_id = custody.token_to_pool[token_id];
+    assert!(recorded_pool_id == pool_id, EUnauthorized);
     
     // Remove from tracking tables
     custody.token_amounts.remove(token_id);
@@ -244,15 +248,11 @@ public fun withdraw_lp_token<AssetType, StableType>(
         };
     };
     
-    // Get values for event before transfer
+    // Get values for event
     let new_pool_total = *custody.pool_totals.borrow(pool_id);
     let new_total_value_locked = custody.total_value_locked;
-    
-    // Transfer token to the account itself for safety
-    // Users can transfer it from the account in a separate transaction
     let account_address = object::id_address(account);
-    transfer::public_transfer(token, account_address);
-    
+
     event::emit(LPTokenWithdrawn {
         account_id,
         pool_id,
@@ -262,6 +262,9 @@ public fun withdraw_lp_token<AssetType, StableType>(
         new_pool_total,
         new_total_value_locked,
     });
+
+    // Return LP token to caller
+    token
 }
 
 /// Get total value locked in LP tokens

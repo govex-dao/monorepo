@@ -39,6 +39,9 @@ const ESlippageExceeded: u64 = 5;
 const EMinimumLiquidityNotMet: u64 = 6;
 const ENoActiveProposal: u64 = 7;
 const EAggregatorNotEnabled: u64 = 11;
+const EPoolMismatch: u64 = 12;
+const ELpStateMismatch: u64 = 13;
+const EInvalidSplitAmount: u64 = 14;
 
 // === Constants ===
 const MINIMUM_LIQUIDITY: u64 = 1000;
@@ -104,6 +107,8 @@ public struct LPToken<phantom AssetType, phantom StableType> has key, store {
     id: UID,
     /// Amount of LP tokens
     amount: u64,
+    /// Parent pool that minted this LP
+    pool_id: ID,
     /// Proposal lock - if Some(id), LP is locked in proposal {id}
     /// Liquidity is quantum-split to conditional markets during proposal
     /// None = LP is in spot pool and can be withdrawn freely
@@ -121,6 +126,13 @@ public fun lp_token_amount<AssetType, StableType>(
     lp_token: &LPToken<AssetType, StableType>
 ): u64 {
     lp_token.amount
+}
+
+/// Get the pool ID this LP belongs to
+public fun lp_token_pool_id<AssetType, StableType>(
+    lp_token: &LPToken<AssetType, StableType>
+): ID {
+    lp_token.pool_id
 }
 
 /// Check if LP is locked in a proposal
@@ -279,7 +291,7 @@ public fun enable_aggregator<AssetType, StableType>(
 /// Store active escrow ID when proposal starts trading
 /// Stores conditional types for external integrators (Aftermath SDK)
 /// NOTE: Takes ID (not TokenEscrow object) because shared objects can't be stored
-public(package) fun store_active_escrow<AssetType, StableType>(
+public fun store_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     escrow_id: ID,
     conditional_types: vector<TypeName>,  // Order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
@@ -293,7 +305,7 @@ public(package) fun store_active_escrow<AssetType, StableType>(
 
 /// Extract active escrow ID when proposal ends
 /// Returns the escrow ID to caller (to look up the shared object)
-public(package) fun extract_active_escrow<AssetType, StableType>(
+public fun extract_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
 ): ID {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
@@ -1113,56 +1125,59 @@ public fun simulate_swap_stable_to_asset<AssetType, StableType>(
 
 // === Dissolution Functions ===
 
-/// Remove ALL liquidity from pool for DAO dissolution
+/// Remove liquidity for dissolution using actual LP token object
 /// bypass_minimum: If true, allows emptying below MINIMUM_LIQUIDITY
 /// ✅ Public so dissolution actions can call from different package
 ///
-/// ⚠️ CRITICAL EDGE CASES:
-/// - Blocks if proposal is active (liquidity in conditional markets)
-/// - Disables trading by setting fee to 100%
+/// ⚠️ CRITICAL: Use this for dissolution instead of remove_liquidity()
+/// - Burns actual LP token object (not numeric amount)
 /// - Can bypass MINIMUM_LIQUIDITY check for complete emptying
-public fun remove_all_liquidity_for_dissolution<AssetType, StableType>(
+/// - Disables trading by setting fee to 100% when bypassing minimum
+public fun remove_liquidity_for_dissolution<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    dao_owned_lp_amount: u64,  // DAO's LP tokens (to calculate proportional share)
+    lp_token: LPToken<AssetType, StableType>,
     bypass_minimum: bool,
-) : (Balance<AssetType>, Balance<StableType>) {
-    // EDGE CASE: Block if proposal is active
-    // Liquidity is quantum-split to conditional markets - must wait for proposal to end
-    assert!(!has_active_escrow(pool), ENoActiveProposal);
+    ctx: &mut TxContext,
+): (Coin<AssetType>, Coin<StableType>) {
+    let lp_amount = lp_token.amount;
+    assert!(lp_amount > 0, EZeroAmount);
+    assert!(pool.lp_supply >= lp_amount, EInsufficientLPSupply);
 
-    // Calculate DAO's proportional share of reserves
-    let total_lp = pool.lp_supply;
-    assert!(dao_owned_lp_amount <= total_lp, EInsufficientLPSupply);
+    // CRITICAL: Check LP token state
+    assert!(!lp_token.withdraw_mode, EInsufficientLiquidity);
+    assert!(lp_token.locked_in_proposal.is_none(), ENoActiveProposal);
 
+    // Calculate proportional amounts from total reserves
     let asset_reserve = balance::value(&pool.asset_reserve);
     let stable_reserve = balance::value(&pool.stable_reserve);
 
-    // Calculate amounts proportional to DAO's LP
-    let asset_amount = if (total_lp > 0) {
-        (asset_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128)
-    } else {
-        0
-    };
-    let stable_amount = if (total_lp > 0) {
-        (stable_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128)
-    } else {
-        0
-    };
+    let asset_out = (asset_reserve as u128) * (lp_amount as u128) / (pool.lp_supply as u128);
+    let stable_out = (stable_reserve as u128) * (lp_amount as u128) / (pool.lp_supply as u128);
 
-    // Extract DAO's share from reserves
-    let asset_out = balance::split(&mut pool.asset_reserve, (asset_amount as u64));
-    let stable_out = balance::split(&mut pool.stable_reserve, (stable_amount as u64));
+    // Burn LP token
+    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    object::delete(id);
 
-    // Update LP supply (DAO's LP burned)
-    pool.lp_supply = pool.lp_supply - dao_owned_lp_amount;
+    // Update total supply
+    pool.lp_supply = pool.lp_supply - lp_amount;
 
-    // Update bucket tracking (subtract from LIVE bucket)
-    // Assumes DAO's LP is in LIVE bucket (not marked for withdrawal)
-    let asset_from_live = (pool.asset_live as u128) * (asset_amount as u128) / (asset_reserve as u128);
-    let stable_from_live = (pool.stable_live as u128) * (stable_amount as u128) / (stable_reserve as u128);
+    // Update bucket tracking (remove from LIVE bucket)
+    let asset_from_live = (lp_amount as u128) * (pool.asset_live as u128) / (pool.lp_live as u128);
+    let stable_from_live = (lp_amount as u128) * (pool.stable_live as u128) / (pool.lp_live as u128);
+
+    pool.lp_live = pool.lp_live - lp_amount;
     pool.asset_live = pool.asset_live - (asset_from_live as u64);
     pool.stable_live = pool.stable_live - (stable_from_live as u64);
-    pool.lp_live = pool.lp_live - dao_owned_lp_amount;
+
+    // Extract coins from reserves
+    let asset_coin = coin::from_balance(
+        balance::split(&mut pool.asset_reserve, (asset_out as u64)),
+        ctx
+    );
+    let stable_coin = coin::from_balance(
+        balance::split(&mut pool.stable_reserve, (stable_out as u64)),
+        ctx
+    );
 
     // Check minimum ONLY if bypass is false
     if (!bypass_minimum) {
@@ -1170,15 +1185,12 @@ public fun remove_all_liquidity_for_dissolution<AssetType, StableType>(
         let remaining_stable = balance::value(&pool.stable_reserve);
         let remaining_k = (remaining_asset as u128) * (remaining_stable as u128);
         assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), EMinimumLiquidityNotMet);
+    } else {
+        // SHUTDOWN: Disable trading by setting fee to 100%
+        pool.fee_bps = 10000;
     };
 
-    // SHUTDOWN: Disable trading by setting fee to 100%
-    // This prevents new swaps while dissolution is in progress
-    if (bypass_minimum) {
-        pool.fee_bps = 10000;  // 100% fee = trading disabled
-    };
-
-    (asset_out, stable_out)
+    (asset_coin, stable_coin)
 }
 
 /// Get DAO's proportional LP value without withdrawing

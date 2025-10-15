@@ -207,6 +207,7 @@ fun drain_stream_actions_for_coin<CoinType>(expired: &mut Expired) {
 /// Helper to drain liquidity actions for a specific pair
 fun drain_liquidity_actions_for_pair<AssetType, StableType>(expired: &mut Expired) {
     gc_registry::delete_add_liquidity<AssetType, StableType>(expired);
+    gc_registry::delete_withdraw_lp_token<AssetType, StableType>(expired);
     gc_registry::delete_remove_liquidity<AssetType, StableType>(expired);
     gc_registry::delete_create_pool<AssetType, StableType>(expired);
 }

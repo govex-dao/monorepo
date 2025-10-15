@@ -34,6 +34,11 @@ const DAO_STATE_DISSOLVING: u8 = 1;
 const DAO_STATE_PAUSED: u8 = 2;
 const DAO_STATE_DISSOLVED: u8 = 3;
 
+/// Public getter for the dissolving state code
+public fun state_dissolving(): u8 {
+    DAO_STATE_DISSOLVING
+}
+
 // === Errors ===
 
 const EInvalidSlashDistribution: u64 = 0;

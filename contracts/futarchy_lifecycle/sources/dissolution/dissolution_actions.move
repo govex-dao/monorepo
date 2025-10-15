@@ -7,7 +7,6 @@ use std::{string::{Self, String}, vector, type_name};
 use sui::{
     bcs::{Self, BCS},
     coin::{Self, Coin},
-    balance::{Self, Balance},
     object::{Self, ID},
     transfer,
     clock::Clock,
@@ -27,9 +26,8 @@ use futarchy_core::{
     action_types,
     resource_requests::{Self as resource_requests, ResourceReceipt, ResourceRequest},
 };
-use futarchy_vault::{
-    futarchy_vault,
-};
+use futarchy_vault::futarchy_vault;
+use futarchy_actions::liquidity_actions;
 use futarchy_streams::stream_actions;
 use futarchy_lifecycle::dissolution_auction;
 
@@ -98,8 +96,8 @@ public struct CancelAllStreamsAction has store, drop, copy {
 public struct WithdrawAmmLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
     /// Pool ID to withdraw from
     pool_id: ID,
-    /// DAO's LP token amount to withdraw
-    dao_owned_lp_amount: u64,
+    /// LP token ID to withdraw from custody
+    token_id: ID,
     /// Bypass MINIMUM_LIQUIDITY check (true = allow complete emptying)
     bypass_minimum: bool,
 }
@@ -131,11 +129,11 @@ public struct CreateAuctionAction has store, drop, copy {
 // === Hot Potato Structs ===
 
 /// Resource request for AMM liquidity withdrawal (hot potato)
-/// Must be fulfilled in same transaction by providing pool reference
+/// Must be fulfilled in same transaction by providing pool reference and account
 public struct WithdrawAmmLiquidityRequest<phantom AssetType, phantom StableType> has store, drop {
     pool_id: ID,
-   dao_owned_lp_amount: u64,
-   bypass_minimum: bool,
+    token_id: ID,
+    bypass_minimum: bool,
 }
 
 /// Receipt confirming AMM liquidity withdrawal completed
@@ -346,20 +344,20 @@ public fun do_cancel_dissolution<Outcome: store, IW: drop + copy>(
     let reason = string::utf8(reason_bytes);
     bcs_validation::validate_all_bytes_consumed(reader);
 
+    assert!(reason.length() > 0, EInvalidRatio);
+
+    // SAFETY CHECK: Verify no active auctions before cancellation (check BEFORE borrowing state mutably)
+    // Active auctions would be orphaned if we cancel dissolution
+    assert!(
+        dissolution_auction::all_auctions_complete(account),
+        EAuctionsStillActive
+    );
+
     // Verify DAO is in dissolving state
     let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
         futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         ENotDissolving
-    );
-
-    assert!(reason.length() > 0, EInvalidRatio);
-
-    // SAFETY CHECK: Verify no active auctions before cancellation
-    // Active auctions would be orphaned if we cancel dissolution
-    assert!(
-        dissolution_auction::all_auctions_complete(account),
-        EAuctionsStillActive
     );
 
     // Set operational state back to active
@@ -532,7 +530,7 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     // Safe BCS deserialization
     let mut reader = bcs::new(*action_data);
     let pool_id = bcs::peel_address(&mut reader).to_id();
-    let dao_owned_lp_amount = bcs::peel_u64(&mut reader);  // DAO's LP token amount
+    let token_id = bcs::peel_address(&mut reader).to_id();  // LP token ID in custody
     let bypass_minimum = bcs::peel_bool(&mut reader);  // Allow bypassing MINIMUM_LIQUIDITY
     bcs_validation::validate_all_bytes_consumed(reader);
 
@@ -543,8 +541,6 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
         EDissolutionNotActive
     );
 
-    assert!(dao_owned_lp_amount > 0, EInvalidAmount);
-
     let _ = version;
     let _ = intent_witness;
 
@@ -554,7 +550,7 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     // Return hot potato wrapped in resource request - MUST be fulfilled in same transaction
     let request_data = WithdrawAmmLiquidityRequest {
         pool_id,
-        dao_owned_lp_amount,
+        token_id,
         bypass_minimum,
     };
     resource_requests::new_resource_request(request_data, ctx)
@@ -571,11 +567,11 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
 /// // 1. Execute action (returns hot potato)
 /// let request = do_withdraw_amm_liquidity(...);
 ///
-/// // 2. Get pool reference (from shared object or dynamic field)
+/// // 2. Get pool and account references
 /// let pool = // ... get from DAO's dynamic fields or shared object
 ///
-/// // 3. Fulfill request (consumes hot potato)
-/// let (asset_coin, stable_coin, receipt) = fulfill_withdraw_amm_liquidity(request, pool, ctx);
+/// // 3. Fulfill request (consumes hot potato, withdraws LP from custody)
+/// let (asset_coin, stable_coin, receipt) = fulfill_withdraw_amm_liquidity(request, account, pool, witness, ctx);
 ///
 /// // 4. Deposit to vault or use in distribution
 /// vault::deposit(account, asset_coin);
@@ -584,32 +580,69 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
 /// // 5. Confirm completion
 /// confirm_withdraw_amm_liquidity(receipt);
 /// ```
-public fun fulfill_withdraw_amm_liquidity<AssetType, StableType>(
+public fun fulfill_withdraw_amm_liquidity<AssetType, StableType, W: copy + drop>(
     request: ResourceRequest<WithdrawAmmLiquidityRequest<AssetType, StableType>>,
+    account: &mut Account<FutarchyConfig>,
     pool: &mut unified_spot_pool::UnifiedSpotPool<AssetType, StableType>,
+    witness: W,
     ctx: &mut TxContext,
 ): (Coin<AssetType>, Coin<StableType>, WithdrawAmmLiquidityReceipt<AssetType, StableType>) {
     let WithdrawAmmLiquidityRequest {
         pool_id,
-        dao_owned_lp_amount,
+        token_id,
         bypass_minimum,
     } = resource_requests::extract_action(request);
 
     // Verify pool ID matches
     assert!(object::id(pool) == pool_id, EWrongAction);
 
-    // Remove liquidity from pool (bypasses MINIMUM_LIQUIDITY if flag set)
-    let (asset_balance, stable_balance) = unified_spot_pool::remove_all_liquidity_for_dissolution(
-        pool,
-        dao_owned_lp_amount,
-        bypass_minimum,
+    // Step 1: withdraw the LP token from custody using liquidity legos
+    let withdraw_action = liquidity_actions::new_withdraw_lp_token_action<AssetType, StableType>(
+        pool_id,
+        token_id,
+    );
+    let mut withdraw_request = resource_requests::new_resource_request(
+        withdraw_action,
+        ctx
+    );
+    let (lp_token, withdraw_receipt) = liquidity_actions::fulfill_withdraw_lp_token(
+        withdraw_request,
+        account,
+        copy witness,
+        ctx
+    );
+    let _ = withdraw_receipt;
+
+    let lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
+
+    // Step 2: build a remove liquidity request that burns the LP token
+    let mut remove_request = resource_requests::new_resource_request(
+        liquidity_actions::new_remove_liquidity_action<AssetType, StableType>(
+            pool_id,
+            token_id,
+            lp_amount,
+            0,
+            0,
+        ),
+        ctx
     );
 
-    // Convert balances to coins
-    let asset_amount = balance::value(&asset_balance);
-    let stable_amount = balance::value(&stable_balance);
-    let asset_coin = coin::from_balance(asset_balance, ctx);
-    let stable_coin = coin::from_balance(stable_balance, ctx);
+    if (bypass_minimum) {
+        liquidity_actions::enable_remove_liquidity_bypass(&mut remove_request, account);
+    };
+
+    let (asset_coin, stable_coin, remove_receipt) = liquidity_actions::fulfill_remove_liquidity(
+        remove_request,
+        account,
+        pool,
+        lp_token,
+        witness,
+        ctx
+    );
+    let _ = remove_receipt;
+
+    let asset_amount = coin::value(&asset_coin);
+    let stable_amount = coin::value(&stable_coin);
 
     // Create receipt
     let receipt = WithdrawAmmLiquidityReceipt {
@@ -671,11 +704,11 @@ public fun confirm_withdraw_amm_liquidity<AssetType, StableType>(
 /// - Vault spending is already an established pattern in the system
 /// - ResourceRequest is for EXTERNAL resources (AMM pools, shared objects)
 /// - This uses Account's own vault resources (internal, not external)
-public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
+public fun do_distribute_assets<Outcome: store, CoinType: drop, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
-    intent_witness: IW,
+    _intent_witness: IW,
     mut distribution_coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
@@ -1081,8 +1114,8 @@ public fun new_create_auction_action<T: key + store, BidCoin>(
 
     CreateAuctionAction {
         object_id,
-        object_type: string::from_ascii(type_name::into_string(type_name::get<T>())),
-        bid_coin_type: string::from_ascii(type_name::into_string(type_name::get<BidCoin>())),
+        object_type: string::from_ascii(type_name::into_string(type_name::with_defining_ids<T>())),
+        bid_coin_type: string::from_ascii(type_name::into_string(type_name::with_defining_ids<BidCoin>())),
         minimum_bid,
         duration_ms,
     }
@@ -1091,14 +1124,12 @@ public fun new_create_auction_action<T: key + store, BidCoin>(
 /// Create a new withdraw AMM liquidity action
 public fun new_withdraw_amm_liquidity_action<AssetType, StableType>(
     pool_id: ID,
-    dao_owned_lp_amount: u64,
+    token_id: ID,
     bypass_minimum: bool,
 ): WithdrawAmmLiquidityAction<AssetType, StableType> {
-    assert!(dao_owned_lp_amount > 0, EInvalidAmount);
-
     WithdrawAmmLiquidityAction {
         pool_id,
-        dao_owned_lp_amount,
+        token_id,
         bypass_minimum,
     }
 }
