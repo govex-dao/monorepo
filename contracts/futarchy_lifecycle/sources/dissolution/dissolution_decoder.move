@@ -60,6 +60,11 @@ public struct DistributeAssetsActionDecoder has key, store {
     id: UID,
 }
 
+/// Decoder for CreateAuctionAction
+public struct CreateAuctionActionDecoder has key, store {
+    id: UID,
+}
+
 /// Placeholder for generic registration
 public struct AssetPlaceholder has drop, store {}
 public struct StablePlaceholder has drop, store {}
@@ -318,6 +323,50 @@ public fun decode_distribute_assets_action<CoinType>(
     ]
 }
 
+/// Decode a CreateAuctionAction
+public fun decode_create_auction_action(
+    _decoder: &CreateAuctionActionDecoder,
+    action_data: vector<u8>,
+): vector<HumanReadableField> {
+    let mut bcs_data = bcs::new(action_data);
+    let object_id = bcs::peel_address(&mut bcs_data);
+    let object_type = bcs::peel_vec_u8(&mut bcs_data).to_string();
+    let bid_coin_type = bcs::peel_vec_u8(&mut bcs_data).to_string();
+    let minimum_bid = bcs::peel_u64(&mut bcs_data);
+    let duration_ms = bcs::peel_u64(&mut bcs_data);
+
+    // Security: ensure all bytes are consumed to prevent trailing data attacks
+    bcs_validation::validate_all_bytes_consumed(bcs_data);
+
+    vector[
+        schema::new_field(
+            b"object_id".to_string(),
+            object_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
+            b"object_type".to_string(),
+            object_type,
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"bid_coin_type".to_string(),
+            bid_coin_type,
+            b"String".to_string(),
+        ),
+        schema::new_field(
+            b"minimum_bid".to_string(),
+            minimum_bid.to_string(),
+            b"u64".to_string(),
+        ),
+        schema::new_field(
+            b"duration_ms".to_string(),
+            duration_ms.to_string(),
+            b"u64".to_string(),
+        ),
+    ]
+}
+
 // === Registration Functions ===
 
 /// Register all dissolution decoders
@@ -333,6 +382,7 @@ public fun register_decoders(
     register_cancel_all_streams_decoder(registry, ctx);
     register_withdraw_amm_liquidity_decoder(registry, ctx);
     register_distribute_assets_decoder(registry, ctx);
+    register_create_auction_decoder(registry, ctx);
 }
 
 fun register_initiate_dissolution_decoder(
@@ -404,5 +454,14 @@ fun register_distribute_assets_decoder(
 ) {
     let decoder = DistributeAssetsActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<DistributeAssetsAction<CoinPlaceholder>>();
+    dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
+}
+
+fun register_create_auction_decoder(
+    registry: &mut ActionDecoderRegistry,
+    ctx: &mut TxContext,
+) {
+    let decoder = CreateAuctionActionDecoder { id: object::new(ctx) };
+    let type_key = type_name::with_defining_ids<CreateAuctionAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

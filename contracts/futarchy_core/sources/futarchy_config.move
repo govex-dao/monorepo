@@ -96,9 +96,19 @@ public struct EarlyResolveConfig has store, copy, drop {
     min_proposal_duration_ms: u64,       // e.g., 43_200_000 (12 hours) - safety floor
     max_proposal_duration_ms: u64,       // e.g., 172_800_000 (48 hours) - max capital lock
 
-    // Winner stability thresholds
+    // Winner stability thresholds - TWAP-based
     min_winner_spread: u128,             // e.g., 50_000_000_000 (5% in 1e12 scale)
     min_time_since_last_flip_ms: u64,   // e.g., 14_400_000 (4 hours) - simple stability check
+
+    // NEW: Flip-based stability (window approach)
+    max_flips_in_window: u64,           // e.g., 1 (RECOMMENDED: 1 flip max)
+    flip_window_duration_ms: u64,       // e.g., 86_400_000 (24 hours)
+
+    // NEW: TWAP-scaled flip tolerance
+    // If enabled: Higher TWAP spread = more flip tolerance
+    // Formula: effective_max_flips = max_flips_in_window * (current_spread / min_winner_spread)
+    // Example: If spread is 30% and min is 5%, allow 6x more flips (1 → 6 flips)
+    enable_twap_scaling: bool,           // RECOMMENDED: false (use fixed flip limit)
 
     // Keeper incentives
     keeper_reward_bps: u64,              // e.g., 10 bps (0.1%) of protocol fees
@@ -111,6 +121,9 @@ public fun default_early_resolve_config(): EarlyResolveConfig {
         max_proposal_duration_ms: 86_400_000,      // 24 hours (same = disabled)
         min_winner_spread: 50_000_000_000,         // 0.05 (5%)
         min_time_since_last_flip_ms: 14_400_000,  // 4 hours
+        max_flips_in_window: 1,                    // RECOMMENDED: 1 flip max
+        flip_window_duration_ms: 86_400_000,      // 24 hours
+        enable_twap_scaling: false,                // RECOMMENDED: false (conservative)
         keeper_reward_bps: 10,                     // 0.1% of fees
     }
 }
@@ -121,6 +134,9 @@ public fun new_early_resolve_config(
     max_proposal_duration_ms: u64,
     min_winner_spread: u128,
     min_time_since_last_flip_ms: u64,
+    max_flips_in_window: u64,
+    flip_window_duration_ms: u64,
+    enable_twap_scaling: bool,
     keeper_reward_bps: u64,
 ): EarlyResolveConfig {
     EarlyResolveConfig {
@@ -128,6 +144,9 @@ public fun new_early_resolve_config(
         max_proposal_duration_ms,
         min_winner_spread,
         min_time_since_last_flip_ms,
+        max_flips_in_window,
+        flip_window_duration_ms,
+        enable_twap_scaling,
         keeper_reward_bps,
     }
 }
@@ -157,6 +176,18 @@ public fun early_resolve_min_time_since_flip(config: &EarlyResolveConfig): u64 {
 
 public fun early_resolve_keeper_reward_bps(config: &EarlyResolveConfig): u64 {
     config.keeper_reward_bps
+}
+
+public fun early_resolve_max_flips_in_window(config: &EarlyResolveConfig): u64 {
+    config.max_flips_in_window
+}
+
+public fun early_resolve_flip_window_duration(config: &EarlyResolveConfig): u64 {
+    config.flip_window_duration_ms
+}
+
+public fun early_resolve_twap_scaling_enabled(config: &EarlyResolveConfig): bool {
+    config.enable_twap_scaling
 }
 
 /// Pure Futarchy configuration struct

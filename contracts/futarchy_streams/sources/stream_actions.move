@@ -303,6 +303,8 @@ public struct PaymentConfig has store {
     payment_type: u8,
     /// Source of funds (direct treasury or isolated pool)
     source_mode: u8,
+    /// Type of coin used for this payment (for dissolution routing)
+    coin_type: TypeName,
     /// Authorized withdrawers who can claim from this payment
     authorized_withdrawers: Table<address, bool>,
     /// Number of withdrawers
@@ -681,6 +683,7 @@ public fun do_create_payment<Config: store, Outcome: store, CoinType: drop, IW: 
     let config = PaymentConfig {
         payment_type: action.payment_type,
         source_mode: action.source_mode,
+        coin_type: type_name::with_defining_ids<CoinType>(),
         authorized_withdrawers,
         withdrawer_count,
         vault_stream_id,  // Reference to vault stream
@@ -1791,6 +1794,36 @@ public fun get_all_payment_ids<Config: store>(
     );
     
     storage.payment_ids
+}
+
+/// List all unique coin types used by active payments (for PTB dissolution routing)
+public fun list_stream_coin_types<Config: store>(
+    account: &Account<Config>,
+): vector<String> {
+    let mut coin_types = vector::empty<String>();
+
+    if (!account::has_managed_data(account, PaymentStorageKey {})) {
+        return coin_types
+    };
+
+    let storage: &PaymentStorage = account::borrow_managed_data(
+        account,
+        PaymentStorageKey {},
+        version::current()
+    );
+
+    let mut i = 0;
+    while (i < storage.payment_ids.length()) {
+        let payment_id = *storage.payment_ids.borrow(i);
+        if (table::contains(&storage.payments, payment_id)) {
+            let config = table::borrow(&storage.payments, payment_id);
+            let type_str = string::from_ascii(type_name::into_string(config.coin_type));
+            coin_types.push_back(type_str);
+        };
+        i = i + 1;
+    };
+
+    coin_types
 }
 
 /// Cancel all payments for dissolution and return funds

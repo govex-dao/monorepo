@@ -3,7 +3,7 @@
 module futarchy_lifecycle::dissolution_actions;
 
 // === Imports ===
-use std::{string::{Self, String}, vector};
+use std::{string::{Self, String}, vector, type_name};
 use sui::{
     bcs::{Self, BCS},
     coin::{Self, Coin},
@@ -13,6 +13,7 @@ use sui::{
     clock::Clock,
     tx_context::TxContext,
 };
+use futarchy_markets_core::unified_spot_pool;
 use account_protocol::{
     account::{Self, Account},
     executable::{Self, Executable},
@@ -24,11 +25,13 @@ use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},
     action_validation,
     action_types,
+    resource_requests::{Self as resource_requests, ResourceReceipt, ResourceRequest},
 };
 use futarchy_vault::{
     futarchy_vault,
 };
 use futarchy_streams::stream_actions;
+use futarchy_lifecycle::dissolution_auction;
 
 // === Constants ===
 
@@ -48,6 +51,8 @@ const ENotDissolving: u64 = 6;
 const EInvalidAmount: u64 = 7;
 const EDivisionByZero: u64 = 8;
 const EOverflow: u64 = 9;
+const EWrongAction: u64 = 10;
+const EAuctionsStillActive: u64 = 11;
 
 // === Action Structs ===
 
@@ -93,8 +98,10 @@ public struct CancelAllStreamsAction has store, drop, copy {
 public struct WithdrawAmmLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
     /// Pool ID to withdraw from
     pool_id: ID,
-    /// Whether to burn LP tokens after withdrawal
-    burn_lp_tokens: bool,
+    /// DAO's LP token amount to withdraw
+    dao_owned_lp_amount: u64,
+    /// Bypass MINIMUM_LIQUIDITY check (true = allow complete emptying)
+    bypass_minimum: bool,
 }
 
 /// Action to distribute all treasury assets pro rata
@@ -105,6 +112,37 @@ public struct DistributeAssetsAction<phantom CoinType> has store, drop, copy {
     holder_amounts: vector<u64>,
     /// Total amount to distribute
     total_distribution_amount: u64,
+}
+
+/// Action to create dissolution auction for unique asset
+public struct CreateAuctionAction has store, drop, copy {
+    /// ID of the object being auctioned
+    object_id: ID,
+    /// Fully-qualified type name of the object being auctioned
+    object_type: String,
+    /// Fully-qualified type name of the bid coin
+    bid_coin_type: String,
+    /// Minimum bid amount in BidCoin
+    minimum_bid: u64,
+    /// Auction duration in milliseconds
+    duration_ms: u64,
+}
+
+// === Hot Potato Structs ===
+
+/// Resource request for AMM liquidity withdrawal (hot potato)
+/// Must be fulfilled in same transaction by providing pool reference
+public struct WithdrawAmmLiquidityRequest<phantom AssetType, phantom StableType> has store, drop {
+    pool_id: ID,
+   dao_owned_lp_amount: u64,
+   bypass_minimum: bool,
+}
+
+/// Receipt confirming AMM liquidity withdrawal completed
+public struct WithdrawAmmLiquidityReceipt<phantom AssetType, phantom StableType> has store, drop {
+    pool_id: ID,
+    asset_amount: u64,
+    stable_amount: u64,
 }
 
 // === Execution Functions ===
@@ -141,7 +179,10 @@ public fun do_initiate_dissolution<Outcome: store, IW: drop + copy>(
 
     // 2. Proposals are disabled automatically via operational state
 
-    // 3. Record dissolution parameters in config metadata
+    // 3. Initialize auction counter for dissolution auctions
+    dissolution_auction::init_auction_counter(account);
+
+    // 4. Record dissolution parameters in config metadata
     assert!(reason.length() > 0, EInvalidRatio);
     assert!(distribution_method <= 2, EInvalidRatio);
     assert!(final_operations_deadline > 0, EInvalidThreshold);
@@ -221,14 +262,20 @@ public fun do_finalize_dissolution<Outcome: store, IW: drop + copy>(
     let destroy_account = bcs::peel_bool(&mut reader);
     bcs_validation::validate_all_bytes_consumed(reader);
 
-    // Verify dissolution is active
+    assert!(final_recipient != @0x0, EInvalidRecipient);
+
+    // CRITICAL: All auctions must be complete before finalization (check BEFORE borrowing state mutably)
+    assert!(
+        dissolution_auction::all_auctions_complete(account),
+        EAuctionsStillActive
+    );
+
+    // Verify dissolution is active and set to dissolved
     let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
         futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
-
-    assert!(final_recipient != @0x0, EInvalidRecipient);
 
     // Set operational state to dissolved
     futarchy_config::set_operational_state(dao_state, DAO_STATE_DISSOLVED);
@@ -290,8 +337,7 @@ public fun do_calculate_pro_rata_shares<Outcome: store, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    // TODO: Add CalculateProRataShares to action_types module or use a different type
-    // action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
+    action_validation::assert_action_type<action_types::CalculateProRataShares>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -339,8 +385,7 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    // CancelAllStreams doesn't exist, using CancelStreamsInBag
-    action_validation::assert_action_type<action_types::CancelStreamsInBag>(spec);
+    action_validation::assert_action_type<action_types::CancelAllStreams>(spec);
 
     let action_data = intents::action_spec_data(spec);
 
@@ -385,18 +430,26 @@ public fun do_cancel_all_streams<Outcome: store, CoinType: drop, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
-/// Execute withdraw AMM liquidity action
+/// Execute withdraw AMM liquidity action - STEP 1: Create Resource Request
+///
+/// ⚠️ HOT POTATO PATTERN:
+/// Returns a ResourceRequest that MUST be fulfilled in same transaction
+/// PTB must call fulfill_withdraw_amm_liquidity() with pool reference
+///
+/// ⚠️ CRITICAL: This action withdraws DAO-owned LP from the AMM
+/// - Bypasses MINIMUM_LIQUIDITY check for complete dissolution
+/// - Blocks if proposal is active (liquidity in conditional markets)
+/// - Deposits withdrawn assets to vault for distribution
 public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: drop>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<FutarchyConfig>,
     version: VersionWitness,
     intent_witness: IW,
     ctx: &mut TxContext,
-) {
+): ResourceRequest<WithdrawAmmLiquidityRequest<AssetType, StableType>> {
     // Get spec and validate type BEFORE deserialization
     let specs = executable::intent(executable).action_specs();
     let spec = specs.borrow(executable::action_idx(executable));
-    // WithdrawAmmLiquidity doesn't exist, using WithdrawAllSpotLiquidity
     action_validation::assert_action_type<action_types::WithdrawAllSpotLiquidity>(spec);
 
     let action_data = intents::action_spec_data(spec);
@@ -404,34 +457,109 @@ public fun do_withdraw_amm_liquidity<Outcome: store, AssetType, StableType, IW: 
     // Safe BCS deserialization
     let mut reader = bcs::new(*action_data);
     let pool_id = bcs::peel_address(&mut reader).to_id();
-    let burn_lp_tokens = bcs::peel_bool(&mut reader);
+    let dao_owned_lp_amount = bcs::peel_u64(&mut reader);  // DAO's LP token amount
+    let bypass_minimum = bcs::peel_bool(&mut reader);  // Allow bypassing MINIMUM_LIQUIDITY
     bcs_validation::validate_all_bytes_consumed(reader);
-    
+
     // Verify dissolution is active
     let dao_state = futarchy_config::state_mut_from_account(account);
     assert!(
         futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
         EDissolutionNotActive
     );
-    
-    // Withdraw all liquidity from AMM
-    // In a real implementation, this would:
-    // 1. Get reference to the AccountSpotPool using pool_id
-    // 2. Remove all liquidity using remove_liquidity function
-    // 3. Receive back asset and stable tokens
-    // 4. Store these tokens in vault for distribution
-    // 5. Optionally burn the LP tokens
-    
-    // Since the AccountSpotPool operations require specific access patterns,
-    // the actual implementation would coordinate with the pool module
-    
-    let _ = pool_id;
-    let _ = burn_lp_tokens;
+
+    assert!(dao_owned_lp_amount > 0, EInvalidAmount);
+
     let _ = version;
-    let _ = ctx;
+    let _ = intent_witness;
 
     // Execute and increment
     executable::increment_action_idx(executable);
+
+    // Return hot potato wrapped in resource request - MUST be fulfilled in same transaction
+    let request_data = WithdrawAmmLiquidityRequest {
+        pool_id,
+        dao_owned_lp_amount,
+        bypass_minimum,
+    };
+    resource_requests::new_resource_request(request_data, ctx)
+}
+
+/// Fulfill AMM liquidity withdrawal - STEP 2: Execute with Pool Reference
+///
+/// ⚠️ HOT POTATO FULFILLMENT:
+/// Caller must provide actual pool reference to complete withdrawal
+/// Returns coins that can be deposited to vault or distributed
+///
+/// # PTB Flow Example:
+/// ```
+/// // 1. Execute action (returns hot potato)
+/// let request = do_withdraw_amm_liquidity(...);
+///
+/// // 2. Get pool reference (from shared object or dynamic field)
+/// let pool = // ... get from DAO's dynamic fields or shared object
+///
+/// // 3. Fulfill request (consumes hot potato)
+/// let (asset_coin, stable_coin, receipt) = fulfill_withdraw_amm_liquidity(request, pool, ctx);
+///
+/// // 4. Deposit to vault or use in distribution
+/// vault::deposit(account, asset_coin);
+/// vault::deposit(account, stable_coin);
+///
+/// // 5. Confirm completion
+/// confirm_withdraw_amm_liquidity(receipt);
+/// ```
+public fun fulfill_withdraw_amm_liquidity<AssetType, StableType>(
+    request: ResourceRequest<WithdrawAmmLiquidityRequest<AssetType, StableType>>,
+    pool: &mut unified_spot_pool::UnifiedSpotPool<AssetType, StableType>,
+    ctx: &mut TxContext,
+): (Coin<AssetType>, Coin<StableType>, WithdrawAmmLiquidityReceipt<AssetType, StableType>) {
+    let WithdrawAmmLiquidityRequest {
+        pool_id,
+        dao_owned_lp_amount,
+        bypass_minimum,
+    } = resource_requests::extract_action(request);
+
+    // Verify pool ID matches
+    assert!(object::id(pool) == pool_id, EWrongAction);
+
+    // Remove liquidity from pool (bypasses MINIMUM_LIQUIDITY if flag set)
+    let (asset_balance, stable_balance) = unified_spot_pool::remove_all_liquidity_for_dissolution(
+        pool,
+        dao_owned_lp_amount,
+        bypass_minimum,
+    );
+
+    // Convert balances to coins
+    let asset_amount = balance::value(&asset_balance);
+    let stable_amount = balance::value(&stable_balance);
+    let asset_coin = coin::from_balance(asset_balance, ctx);
+    let stable_coin = coin::from_balance(stable_balance, ctx);
+
+    // Create receipt
+    let receipt = WithdrawAmmLiquidityReceipt {
+        pool_id,
+        asset_amount,
+        stable_amount,
+    };
+
+    (asset_coin, stable_coin, receipt)
+}
+
+/// Confirm AMM liquidity withdrawal - STEP 3: Consume Receipt
+///
+/// Consumes the receipt to confirm withdrawal completed
+/// Can extract withdrawal amounts for accounting/events
+public fun confirm_withdraw_amm_liquidity<AssetType, StableType>(
+    receipt: WithdrawAmmLiquidityReceipt<AssetType, StableType>,
+): (ID, u64, u64) {
+    let WithdrawAmmLiquidityReceipt {
+        pool_id,
+        asset_amount,
+        stable_amount,
+    } = receipt;
+
+    (pool_id, asset_amount, stable_amount)
 }
 
 /// Execute distribute assets action
@@ -519,18 +647,135 @@ public fun do_distribute_assets<Outcome: store, CoinType, IW: drop>(
         j = j + 1;
     };
     
+    // CRITICAL: All auctions must be complete before distribution
+    assert!(
+        dissolution_auction::all_auctions_complete(account),
+        EAuctionsStillActive
+    );
+
     // Return any remainder back to sender or destroy if zero
     if (coin::value(&distribution_coin) > 0) {
-        transfer::public_transfer(distribution_coin, ctx.sender());
+        let vault_name = string::utf8(futarchy_vault::default_vault_name());
+        if (futarchy_vault::is_coin_type_allowed<FutarchyConfig, CoinType>(account)) {
+            futarchy_vault::deposit_existing_coin_type<CoinType>(
+                account,
+                distribution_coin,
+                vault_name,
+                ctx
+            );
+        } else {
+            transfer::public_transfer(distribution_coin, ctx.sender());
+        };
     } else {
         distribution_coin.destroy_zero();
     };
-    
+
     let _ = version;
     let _ = ctx;
 
     // Increment action index
     executable::increment_action_idx(executable);
+}
+
+/// Execute create auction action - STEP 1: Create Type-Erased Request
+///
+/// ⚠️ HOT POTATO PATTERN:
+/// Returns CreateAuctionRequest that MUST be fulfilled in same transaction
+/// PTB must call fulfill_create_auction() with actual object + type parameters
+///
+/// This uses TYPE ERASURE to avoid generic explosion:
+/// - Action data stores object_type and bid_coin_type as Strings
+/// - Request is non-generic (object_id: ID, not object: T)
+/// - Fulfillment is generic (validates types match at runtime)
+public fun do_create_auction<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    ctx: &mut TxContext,
+): ResourceRequest<dissolution_auction::CreateAuctionRequest> {
+    // Get spec and validate type BEFORE deserialization
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+    action_validation::assert_action_type<action_types::CreateAuction>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Safe BCS deserialization
+    let mut reader = bcs::new(*action_data);
+    let action = CreateAuctionAction {
+        object_id: bcs::peel_address(&mut reader).to_id(),
+        object_type: string::utf8(bcs::peel_vec_u8(&mut reader)),
+        bid_coin_type: string::utf8(bcs::peel_vec_u8(&mut reader)),
+        minimum_bid: bcs::peel_u64(&mut reader),
+        duration_ms: bcs::peel_u64(&mut reader),
+    };
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Verify dissolution is active
+    let dao_state = futarchy_config::state_mut_from_account(account);
+    assert!(
+        futarchy_config::operational_state(dao_state) == DAO_STATE_DISSOLVING,
+        EDissolutionNotActive
+    );
+
+    assert!(action.minimum_bid > 0, EInvalidAmount);
+    assert!(action.duration_ms > 0, EInvalidThreshold);
+
+    let _ = version;
+    let _ = intent_witness;
+
+    // Increment action index BEFORE returning hot potato
+    executable::increment_action_idx(executable);
+
+    // Return type-erased hot potato wrapped in resource request - MUST be fulfilled in same transaction
+    // Strings will be validated against actual TypeName at fulfillment
+    let request = dissolution_auction::create_auction_request(
+        account,
+        action.object_id,
+        action.object_type,
+        action.bid_coin_type,
+        action.minimum_bid,
+        action.duration_ms,
+        ctx,
+    );
+    resource_requests::new_resource_request(request, ctx)
+}
+
+/// Fulfill create auction - STEP 2: Execute with Actual Object
+///
+/// ⚠️ HOT POTATO FULFILLMENT:
+/// Caller must provide actual object and type parameters
+/// Creates shared auction object, stores object, increments counter
+///
+/// # PTB Flow Example:
+/// ```
+/// // 1. Execute action (returns type-erased request)
+/// let request = do_create_auction(...);
+///
+/// // 2. Get object to auction (from DAO's owned objects)
+/// let nft = // ... withdraw from Account or passed as parameter
+///
+/// // 3. Fulfill request (consumes hot potato, type parameters provided here)
+/// let auction_id = fulfill_create_auction<MyNFT, USDC>(request, account, nft, clock, ctx);
+///
+/// // 4. Auction is now live as shared object, anyone can bid
+/// ```
+public fun fulfill_create_auction<T: key + store, BidCoin>(
+    request: ResourceRequest<dissolution_auction::CreateAuctionRequest>,
+    account: &mut Account<FutarchyConfig>,
+    object: T,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): ID {
+    let request_data = resource_requests::extract_action(request);
+    dissolution_auction::fulfill_create_auction<T, BidCoin>(
+        request_data,
+        account,
+        object,
+        clock,
+        ctx,
+    )
 }
 
 // === Cleanup Functions ===
@@ -571,16 +816,14 @@ public fun delete_cancel_dissolution(expired: &mut Expired) {
 public fun delete_calculate_pro_rata_shares(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    // Action has drop, will be automatically cleaned up
-    let _ = spec;
+    action_validation::assert_action_type<action_types::CalculateProRataShares>(&spec);
 }
 
 /// Delete a cancel all streams action from an expired intent
 public fun delete_cancel_all_streams(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    // Action has drop, will be automatically cleaned up
-    let _ = spec;
+    action_validation::assert_action_type<action_types::CancelAllStreams>(&spec);
 }
 
 /// Delete a withdraw AMM liquidity action from an expired intent
@@ -595,8 +838,14 @@ public fun delete_withdraw_amm_liquidity<AssetType, StableType>(expired: &mut Ex
 public fun delete_distribute_assets<CoinType>(expired: &mut Expired) {
     // Remove the action spec from expired intent
     let spec = intents::remove_action_spec(expired);
-    // Action has drop, will be automatically cleaned up
-    let _ = spec;
+    action_validation::assert_action_type<action_types::DistributeAsset>(&spec);
+}
+
+/// Delete a create auction action from an expired intent
+public fun delete_create_auction<T: key + store, BidCoin>(expired: &mut Expired) {
+    // Remove the action spec from expired intent
+    let spec = intents::remove_action_spec(expired);
+    action_validation::assert_action_type<action_types::CreateAuction>(&spec);
 }
 
 // === Helper Functions ===
@@ -722,14 +971,36 @@ public fun new_cancel_all_streams_action(
     }
 }
 
+/// Create a new create auction action
+public fun new_create_auction_action<T: key + store, BidCoin>(
+    object_id: ID,
+    minimum_bid: u64,
+    duration_ms: u64,
+): CreateAuctionAction {
+    assert!(minimum_bid > 0, EInvalidAmount);
+    assert!(duration_ms > 0, EInvalidThreshold);
+
+    CreateAuctionAction {
+        object_id,
+        object_type: string::from_ascii(type_name::into_string(type_name::get<T>())),
+        bid_coin_type: string::from_ascii(type_name::into_string(type_name::get<BidCoin>())),
+        minimum_bid,
+        duration_ms,
+    }
+}
+
 /// Create a new withdraw AMM liquidity action
 public fun new_withdraw_amm_liquidity_action<AssetType, StableType>(
     pool_id: ID,
-    burn_lp_tokens: bool,
+    dao_owned_lp_amount: u64,
+    bypass_minimum: bool,
 ): WithdrawAmmLiquidityAction<AssetType, StableType> {
+    assert!(dao_owned_lp_amount > 0, EInvalidAmount);
+
     WithdrawAmmLiquidityAction {
         pool_id,
-        burn_lp_tokens,
+        dao_owned_lp_amount,
+        bypass_minimum,
     }
 }
 
@@ -742,7 +1013,7 @@ public fun new_distribute_assets_action<CoinType>(
     assert!(holders.length() > 0, EEmptyAssetList);
     assert!(holders.length() == holder_amounts.length(), EInvalidRatio);
     assert!(total_distribution_amount > 0, EInvalidRatio);
-    
+
     // Verify holder amounts sum is positive
     let mut sum = 0u64;
     let mut i = 0;
@@ -751,10 +1022,101 @@ public fun new_distribute_assets_action<CoinType>(
         i = i + 1;
     };
     assert!(sum > 0, EInvalidRatio);
-    
+
     DistributeAssetsAction {
         holders,
         holder_amounts,
         total_distribution_amount,
     }
+}
+
+// === Distribution Accounting Helpers ===
+
+/// Calculate circulating supply for pro-rata distribution
+/// Excludes DAO-owned LP tokens from circulating supply
+/// (DAO's LP value is included in treasury, but not in holder shares)
+///
+/// Example:
+/// - Total supply: 1,000,000 tokens
+/// - DAO owns: 100,000 tokens
+/// - Circulating supply: 900,000 tokens
+/// - Pro-rata distribution is based on 900,000, not 1,000,000
+public fun calculate_circulating_supply(
+    total_supply: u64,
+    dao_owned_tokens: u64,
+): u64 {
+    assert!(dao_owned_tokens <= total_supply, EInvalidRatio);
+    total_supply - dao_owned_tokens
+}
+
+/// Calculate pro-rata distribution amounts excluding DAO holdings
+/// Returns (holders, amounts) vectors for distribution
+///
+/// Example:
+/// - Treasury has: 1,000 USDC
+/// - Total supply: 1,000 tokens (900 circulating + 100 DAO-owned)
+/// - Alice holds: 450 tokens (50% of circulating)
+/// - Bob holds: 450 tokens (50% of circulating)
+/// - Alice gets: 500 USDC, Bob gets: 500 USDC
+public fun calculate_distribution_excluding_dao(
+    total_treasury_amount: u64,
+    total_token_supply: u64,
+    dao_owned_tokens: u64,
+    holders: vector<address>,
+    holder_balances: vector<u64>,
+): (vector<address>, vector<u64>, u64) {
+    assert!(holders.length() == holder_balances.length(), EInvalidRatio);
+
+    // Calculate circulating supply (excluding DAO)
+    let circulating_supply = calculate_circulating_supply(total_token_supply, dao_owned_tokens);
+    assert!(circulating_supply > 0, EDivisionByZero);
+
+    // Calculate total held by external holders
+    let mut total_held = 0u64;
+    let mut i = 0;
+    while (i < holder_balances.length()) {
+        total_held = total_held + *holder_balances.borrow(i);
+        i = i + 1;
+    };
+
+    // Verify total matches circulating supply
+    assert!(total_held <= circulating_supply, EInvalidRatio);
+
+    // Calculate pro-rata amounts
+    let mut distribution_holders = vector::empty<address>();
+    let mut distribution_amounts = vector::empty<u64>();
+
+    let mut j = 0;
+    while (j < holders.length()) {
+        let holder = *holders.borrow(j);
+        let holder_balance = *holder_balances.borrow(j);
+
+        // Skip zero balances and DAO address
+        if (holder_balance > 0 && holder != @0x0) {
+            // Calculate: (holder_balance / circulating_supply) * total_treasury_amount
+            let share = (holder_balance as u128) * (total_treasury_amount as u128) / (circulating_supply as u128);
+            assert!(share <= (std::u64::max_value!() as u128), EOverflow);
+
+            if ((share as u64) > 0) {
+                distribution_holders.push_back(holder);
+                distribution_amounts.push_back((share as u64));
+            };
+        };
+
+        j = j + 1;
+    };
+
+    (distribution_holders, distribution_amounts, circulating_supply)
+}
+
+// === Auction Integration ===
+
+/// Get active auction count (used by frontend to check if dissolution can proceed)
+public fun get_active_auction_count(account: &Account<FutarchyConfig>): u64 {
+    dissolution_auction::get_active_auction_count(account)
+}
+
+/// Check if all auctions are complete (required before distribution/finalization)
+public fun all_auctions_complete(account: &Account<FutarchyConfig>): bool {
+    dissolution_auction::all_auctions_complete(account)
 }

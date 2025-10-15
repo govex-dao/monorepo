@@ -3,6 +3,7 @@ module futarchy_markets_core::proposal;
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::liquidity_initialize;
+use futarchy_markets_core::subsidy_escrow::SubsidyEscrow;
 use futarchy_markets_primitives::market_state;
 use futarchy_one_shot_utils::coin_validation;
 use std::ascii::String as AsciiString;
@@ -138,6 +139,11 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     conditional_liquidity_ratio_percent: u64,  // Percentage of spot liquidity to move to conditional markets (1-99%, base 100)
     fee_escrow: Balance<StableType>,
     treasury_address: address,
+
+    // Subsidy escrow (owned object, auto-cleanup)
+    // Optional subsidy system that drip-feeds SUI to conditional AMM pools as LP rewards
+    // Stored inline for automatic cleanup when proposal is deleted/finalized
+    subsidy_escrow: Option<SubsidyEscrow>,
 
     // Policy enforcement fields (CRITICAL SECURITY)
     // One entry per outcome - each outcome's IntentSpec (batch of intents) can have different policy requirements
@@ -476,6 +482,8 @@ public fun initialize_market<AssetType, StableType>(
         conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
+        // Subsidy escrow (none initially, created separately via create_subsidy_escrow_for_proposal)
+        subsidy_escrow: option::none(),
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
         // For now, initialize with empty/default values (these MUST be set before market activation)
         policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
@@ -598,6 +606,8 @@ public fun new_premarket<AssetType, StableType>(
         conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
+        // Subsidy escrow (none initially, created separately if needed)
+        subsidy_escrow: option::none(),
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
         // For now, initialize with empty/default values (these MUST be set before market activation)
         policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
@@ -1870,6 +1880,7 @@ public fun new_for_testing<AssetType, StableType>(
         conditional_liquidity_ratio_percent: 50,  // 50% (base 100, not bps!)
         fee_escrow,
         treasury_address,
+        subsidy_escrow: option::none(),  // No subsidy for test proposals
         policy_modes: vector::tabulate!(outcome_count as u64, |_| 0u8),
         required_council_ids: vector::tabulate!(outcome_count as u64, |_| option::none()),
         council_approval_proofs: vector::tabulate!(outcome_count as u64, |_| option::none()),
@@ -2148,6 +2159,7 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
         conditional_liquidity_ratio_percent: _,
         fee_escrow,
         treasury_address: _,
+        subsidy_escrow,
         policy_modes: _,
         required_council_ids: _,
         council_approval_proofs: _,
@@ -2157,5 +2169,55 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
     bag::destroy_empty(conditional_treasury_caps);
     bag::destroy_empty(conditional_metadata);
     fee_escrow.destroy_zero();
+
+    // Destroy subsidy escrow if present
+    if (subsidy_escrow.is_some()) {
+        let escrow = subsidy_escrow.extract();
+        subsidy_escrow_destroy_for_testing(escrow);
+    } else {
+        subsidy_escrow.destroy_none();
+    };
+
     object::delete(id);
+}
+
+/// Store subsidy escrow inline in proposal (for automatic cleanup)
+/// This replaces the old pattern of sharing SubsidyEscrow as a separate object
+public fun store_subsidy_escrow<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: SubsidyEscrow,
+) {
+    // Ensure we don't already have a subsidy escrow
+    assert!(proposal.subsidy_escrow.is_none(), 0); // TODO: Add proper error code
+    option::fill(&mut proposal.subsidy_escrow, escrow);
+}
+
+/// Get mutable reference to subsidy escrow (if present)
+public fun borrow_subsidy_escrow_mut<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+): &mut SubsidyEscrow {
+    assert!(proposal.subsidy_escrow.is_some(), 0); // TODO: Add proper error code
+    proposal.subsidy_escrow.borrow_mut()
+}
+
+/// Extract subsidy escrow from proposal (consumes the escrow for finalization)
+public fun extract_subsidy_escrow<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+): SubsidyEscrow {
+    assert!(proposal.subsidy_escrow.is_some(), 0); // TODO: Add proper error code
+    proposal.subsidy_escrow.extract()
+}
+
+/// Check if proposal has a subsidy escrow
+public fun has_subsidy_escrow<AssetType, StableType>(
+    proposal: &Proposal<AssetType, StableType>,
+): bool {
+    proposal.subsidy_escrow.is_some()
+}
+
+/// Helper function to destroy SubsidyEscrow in tests
+#[test_only]
+fun subsidy_escrow_destroy_for_testing(escrow: SubsidyEscrow) {
+    use futarchy_markets_core::subsidy_escrow;
+    subsidy_escrow::destroy_test_escrow(escrow);
 }

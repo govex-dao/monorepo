@@ -42,6 +42,7 @@ use futarchy_markets_core::{
     unified_spot_pool::{Self, UnifiedSpotPool},
     conditional_amm,
     subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow},
+    quantum_lp_manager,
 };
 use futarchy_core::subsidy_config;
 use futarchy_vault::{
@@ -334,7 +335,13 @@ public fun finalize_proposal_market<AssetType, StableType>(
     );
 }
 
-/// Finalizes a proposal's market with subsidy escrow cleanup
+/// DEPRECATED: Finalizes a proposal's market with subsidy escrow cleanup (OLD PATTERN)
+///
+/// This function is deprecated because SubsidyEscrow is now stored inline in Proposal.
+/// Use finalize_proposal_market() instead - it automatically handles inline escrow cleanup.
+///
+/// This function is kept for backward compatibility with old proposals that used the
+/// separate shared object pattern, but should not be used for new proposals.
 public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     registry: &mut ProposalReservationRegistry,
@@ -343,21 +350,12 @@ public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
-    subsidy_escrow: &mut subsidy_escrow_mod::SubsidyEscrow,
+    _subsidy_escrow: &mut subsidy_escrow_mod::SubsidyEscrow,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
-    // SECURITY: Validate escrow belongs to this proposal and DAO
-    let proposal_id = proposal::get_id(proposal);
-    let dao_id = proposal::get_dao_id(proposal);
-    let escrow_proposal_id = subsidy_escrow_mod::escrow_proposal_id(subsidy_escrow);
-    let escrow_dao_id = subsidy_escrow_mod::escrow_dao_id(subsidy_escrow);
-
-    assert!(proposal_id == escrow_proposal_id, EEscrowProposalMismatch);
-    assert!(dao_id == escrow_dao_id, EEscrowDaoMismatch);
-
-    // Finalize proposal market
-    finalize_proposal_market_internal(
+    // Just call the standard finalization function which handles inline escrow
+    finalize_proposal_market(
         account,
         registry,
         proposal,
@@ -365,28 +363,8 @@ public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
         market_state,
         spot_pool,
         fee_manager,
-        true,
         clock,
         ctx
-    );
-
-    // Finalize escrow and extract remaining funds
-    let remaining_sui_coin = subsidy_escrow_mod::finalize_escrow(
-        subsidy_escrow,
-        clock,
-        ctx
-    );
-
-    // Return remaining SUI to DAO vault
-    let vault_name = b"default".to_string();
-    let config_witness = futarchy_config::authenticate(account, ctx);
-    let version_witness = version::current();
-    let auth = account::new_auth(account, version_witness, config_witness);
-    vault::deposit<FutarchyConfig, sui::sui::SUI>(
-        auth,
-        account,
-        vault_name,
-        remaining_sui_coin
     );
 }
 
@@ -415,11 +393,25 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
     
-    // If this proposal used DAO liquidity, integrate the winning conditional TWAP
+    // If this proposal used DAO liquidity, recombine winning liquidity and integrate its oracle data
     if (proposal::uses_dao_liquidity(proposal)) {
-        // Get the winning pool's SimpleTWAP oracle
-        let winning_pool = proposal::get_pool_mut_by_outcome(proposal, escrow, winning_outcome as u8);
-        let winning_conditional_oracle = conditional_amm::get_simple_twap(winning_pool);
+        // Return quantum-split liquidity back to the spot pool
+        quantum_lp_manager::auto_redeem_on_proposal_end(
+            winning_outcome,
+            spot_pool,
+            escrow,
+            market_state,
+            clock,
+            ctx,
+        );
+
+        // CRITICAL FIX (Issue 3): Extract and clear escrow ID from spot pool
+        // This clears the active escrow flag so has_active_escrow() returns false
+        let _escrow_id = unified_spot_pool::extract_active_escrow(spot_pool);
+
+        // Reborrow winning pool to read oracle after recombination
+        let winning_pool_view = proposal::get_pool_by_outcome(proposal, escrow, winning_outcome as u8);
+        let winning_conditional_oracle = conditional_amm::get_simple_twap(winning_pool_view);
 
         // Backfill spot's SimpleTWAP with winning conditional's oracle data
         unified_spot_pool::backfill_from_winning_conditional(
@@ -427,8 +419,12 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
             winning_conditional_oracle,
             clock
         );
+
+        // Crank: Transition TRANSITIONING bucket to WITHDRAW_ONLY
+        // This allows LPs who marked for withdrawal to claim their coins
+        futarchy_markets_operations::liquidity_interact::crank_recombine_and_transition<AssetType, StableType>(spot_pool);
     };
-    
+
     // NEW: Cancel losing outcome intents in the hot path using a scoped witness.
     // This ensures per-proposal isolation and prevents cross-proposal cancellation
     let num_outcomes = proposal::get_num_outcomes(proposal);
@@ -527,6 +523,34 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     // If outcome 0 wins, DAO keeps all fees - no refunds or rewards
     // --- END OUTCOME CREATOR FEE REFUNDS & REWARDS ---
 
+    // --- BEGIN INLINE SUBSIDY ESCROW CLEANUP ---
+    // If proposal has an inline subsidy escrow, extract and finalize it
+    // This auto-cleanup pattern eliminates orphan escrows
+    if (proposal::has_subsidy_escrow(proposal)) {
+        // Extract the escrow (consumes it from the proposal)
+        let escrow_to_finalize = proposal::extract_subsidy_escrow(proposal);
+
+        // Finalize and get remaining SUI
+        let remaining_sui_coin = subsidy_escrow_mod::finalize_escrow(
+            escrow_to_finalize,
+            clock,
+            ctx
+        );
+
+        // Return remaining SUI to DAO vault
+        let vault_name = b"default".to_string();
+        let config_witness = futarchy_config::authenticate(account, ctx);
+        let version_witness = version::current();
+        let auth = account::new_auth(account, version_witness, config_witness);
+        vault::deposit<FutarchyConfig, sui::sui::SUI>(
+            auth,
+            account,
+            vault_name,
+            remaining_sui_coin
+        );
+    };
+    // --- END INLINE SUBSIDY ESCROW CLEANUP ---
+
     // Emit finalization event
     event::emit(ProposalMarketFinalized {
         proposal_id: proposal::get_id(proposal),
@@ -570,6 +594,36 @@ public entry fun try_early_resolve<AssetType, StableType>(
     // Calculate current winner and check spread requirement
     let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(proposal, escrow, clock);
     assert!(spread >= min_spread, EInsufficientSpread);
+
+    // NEW: Additional flip count check with TWAP scaling
+    let max_flips = futarchy_config::early_resolve_max_flips_in_window(early_resolve_config);
+    let flip_window = futarchy_config::early_resolve_flip_window_duration(early_resolve_config);
+    let twap_scaling_enabled = futarchy_config::early_resolve_twap_scaling_enabled(early_resolve_config);
+
+    let current_time = clock.timestamp_ms();
+    let cutoff_time = if (current_time > flip_window) {
+        current_time - flip_window
+    } else {
+        0
+    };
+    let flips_in_window = market_state::count_flips_in_window(market_state, cutoff_time);
+
+    // Calculate effective max flips with TWAP scaling if enabled
+    let effective_max_flips = if (twap_scaling_enabled && min_spread > 0) {
+        // Scale flip tolerance based on current spread
+        // Formula: base + (base * scale_factor) = base * (1 + scale_factor)
+        // Example at 4% spread (min_spread = 4%):
+        //   scale_factor = 1, effective = 1 + 1 = 2 flips
+        // Example at 8% spread:
+        //   scale_factor = 2, effective = 1 + 2 = 3 flips
+        let scale_factor = (spread / min_spread) as u64;
+        max_flips + (max_flips * scale_factor)
+    } else {
+        max_flips
+    };
+
+    // Check if flips exceed effective maximum
+    assert!(flips_in_window <= effective_max_flips, ENotEligibleForEarlyResolve);
 
     // Get proposal age for event
     let start_time = if (proposal::get_market_initialized_at(proposal) > 0) {
@@ -794,6 +848,57 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
     priority_queue::clear_reserved(auth, queue);
 }
 
+// === Proposal State Transitions with Quantum Split ===
+
+/// Advances proposal state and handles quantum liquidity operations
+/// Call this periodically to transition proposals through their lifecycle
+///
+/// CRITICAL: Respects withdraw_only_mode flag to prevent auto-reinvestment
+/// If previous proposal has withdraw_only_mode=true, its liquidity will NOT be quantum-split
+public entry fun advance_proposal_state<AssetType, StableType>(
+    account: &mut Account<FutarchyConfig>,
+    proposal: &mut Proposal<AssetType, StableType>,
+    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
+    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): bool {
+    // Try to advance the proposal state
+    let state_changed = proposal::advance_state(proposal, escrow, clock, ctx);
+
+    // If state just changed to TRADING and proposal uses DAO liquidity
+    if (state_changed && proposal::is_live(proposal) && proposal::uses_dao_liquidity(proposal)) {
+        // CRITICAL: Check withdraw_only_mode flag before quantum split
+        // If liquidity provider wants to withdraw after this proposal ends,
+        // we should NOT quantum-split their liquidity for trading
+        if (!proposal::is_withdraw_only(proposal)) {
+            // Get conditional liquidity ratio from DAO config
+            let config = account::config(account);
+            let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(config);
+
+            // Perform quantum split: move liquidity from spot to conditional markets
+            quantum_lp_manager::auto_quantum_split_on_proposal_start(
+                spot_pool,
+                escrow,
+                conditional_liquidity_ratio_percent,
+                clock,
+                ctx,
+            );
+
+            // CRITICAL FIX (Issue 3): Store escrow ID in spot pool
+            // This enables has_active_escrow() to return true, which routes LPs to TRANSITIONING bucket
+            // TODO: Populate conditional_types vector with actual TypeNames from market_state
+            let escrow_id = object::id(escrow);
+            let conditional_types = vector::empty(); // TODO: Extract from market_state when needed
+            unified_spot_pool::store_active_escrow(spot_pool, escrow_id, conditional_types);
+        };
+        // If withdraw_only_mode = true, skip quantum split
+        // Liquidity will be returned to provider when proposal finalizes
+    };
+
+    state_changed
+}
+
 // === Liquidity Subsidy Integration ===
 
 /// Create subsidy escrow for a proposal after activation (called in PTB)
@@ -804,7 +909,7 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
 /// 2. Checks if the DAO vault has sufficient SUI balance
 /// 3. Withdraws SUI from the DAO vault using vault::spend()
 /// 4. Gets AMM pool IDs from the proposal
-/// 5. Creates and shares a SubsidyEscrow object
+/// 5. Creates SubsidyEscrow and stores it INLINE in the Proposal (auto-cleanup!)
 ///
 /// Example PTB flow:
 /// ```
@@ -813,13 +918,12 @@ public entry fun finalize_premarket_initialization<AssetType, StableType>(
 /// ```
 public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    proposal: &Proposal<AssetType, StableType>,
+    proposal: &mut Proposal<AssetType, StableType>,
     escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
     use sui::coin;
-    use sui::transfer;
     use futarchy_core::dao_config;
 
     // Get DAO config and subsidy config, extract values before using mutable account
@@ -883,8 +987,9 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
         ctx
     );
 
-    // Share the escrow object (SubsidyEscrow has store, so use public_share_object)
-    transfer::public_share_object(subsidy_escrow);
+    // CRITICAL CHANGE: Store escrow INLINE in Proposal (automatic cleanup!)
+    // This eliminates the orphan problem - escrow is deleted when proposal is deleted
+    proposal::store_subsidy_escrow(proposal, subsidy_escrow);
 }
 
 /// Finalize subsidy escrow for a proposal (DEPRECATED - use finalize_proposal_market with escrow param)
@@ -933,6 +1038,57 @@ public entry fun finalize_subsidy_escrow_for_proposal(
         vault_name,
         remaining_sui
     );
+}
+
+/// Crank subsidy for a proposal (uses inline escrow)
+///
+/// This function cranks the subsidy escrow stored inside the proposal.
+/// It should be called periodically during an active proposal to distribute
+/// subsidy rewards to conditional AMM pools.
+///
+/// ## Flow:
+/// 1. Check if proposal has a subsidy escrow
+/// 2. Borrow the subsidy escrow mutably from the proposal
+/// 3. Call the core crank_subsidy() function
+/// 4. Transfer keeper fee to caller
+///
+/// ## Example PTB:
+/// ```
+/// crank_subsidy_for_proposal(proposal, conditional_pools, clock, ctx);
+/// ```
+///
+/// ## Security:
+/// - Proposal ID validation is done inside subsidy_escrow::crank_subsidy()
+/// - Rate limiting (min 5 min between cranks) enforced by subsidy_escrow module
+/// - AMM ID validation ensures subsidy only goes to proposal's pools
+public entry fun crank_subsidy_for_proposal<AssetType, StableType>(
+    proposal: &mut Proposal<AssetType, StableType>,
+    conditional_pools: &mut vector<conditional_amm::LiquidityPool>,
+    clock: &Clock,
+    ctx: &mut TxContext,
+) {
+    use sui::transfer;
+
+    // Check if proposal has a subsidy escrow
+    assert!(proposal::has_subsidy_escrow(proposal), EProposalNotActive);
+
+    // Borrow the subsidy escrow mutably
+    let escrow = proposal::borrow_subsidy_escrow_mut(proposal);
+
+    // Get proposal ID for security check
+    let proposal_id = proposal::get_id(proposal);
+
+    // Call the core crank function
+    let keeper_fee_coin = subsidy_escrow_mod::crank_subsidy(
+        escrow,
+        proposal_id,
+        conditional_pools,
+        clock,
+        ctx
+    );
+
+    // Transfer keeper fee to caller
+    transfer::public_transfer(keeper_fee_coin, ctx.sender());
 }
 
 /// Complete lifecycle: Activate proposal, run market, finalize, and execute if approved

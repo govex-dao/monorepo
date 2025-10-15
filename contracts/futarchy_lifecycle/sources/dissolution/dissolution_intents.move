@@ -8,6 +8,7 @@ use std::string::String;
 use sui::{
     clock::Clock,
     bcs,
+    object::{Self, ID},
 };
 use account_protocol::{
     intents::{Self, Intent},
@@ -110,6 +111,108 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
         intent_witness
     );
     // dissolution_actions::destroy_cancel_dissolution(action);
+}
+
+/// Add a calculate pro rata shares action to an existing intent
+public fun calculate_pro_rata_shares_in_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    total_supply: u64,
+    exclude_dao_tokens: bool,
+    intent_witness: IW,
+) {
+    let action = dissolution_actions::new_calculate_pro_rata_shares_action(
+        total_supply,
+        exclude_dao_tokens,
+    );
+    let action_data = bcs::to_bytes(&action);
+    intents::add_typed_action(
+        intent,
+        action_types::calculate_pro_rata_shares(),
+        action_data,
+        intent_witness
+    );
+}
+
+/// Add a cancel all streams action to an existing intent
+public fun cancel_all_streams_in_intent<Outcome: store, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    return_to_treasury: bool,
+    intent_witness: IW,
+) {
+    let action = dissolution_actions::new_cancel_all_streams_action(return_to_treasury);
+    let action_data = bcs::to_bytes(&action);
+    intents::add_typed_action(
+        intent,
+        action_types::cancel_all_streams(),
+        action_data,
+        intent_witness
+    );
+}
+
+/// Add a withdraw AMM liquidity action to an existing intent
+public fun withdraw_amm_liquidity_in_intent<Outcome: store, AssetType, StableType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    pool_id: ID,
+    dao_owned_lp_amount: u64,
+    bypass_minimum: bool,
+    intent_witness: IW,
+) {
+    let action = dissolution_actions::new_withdraw_amm_liquidity_action<AssetType, StableType>(
+        pool_id,
+        dao_owned_lp_amount,
+        bypass_minimum,
+    );
+    let action_data = bcs::to_bytes(&action);
+    intents::add_typed_action(
+        intent,
+        action_types::withdraw_all_spot_liquidity(),
+        action_data,
+        intent_witness
+    );
+}
+
+/// Add a distribute assets action to an existing intent
+public fun distribute_assets_in_intent<Outcome: store, CoinType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    holders: vector<address>,
+    holder_amounts: vector<u64>,
+    total_distribution_amount: u64,
+    intent_witness: IW,
+) {
+    let action = dissolution_actions::new_distribute_assets_action<CoinType>(
+        holders,
+        holder_amounts,
+        total_distribution_amount,
+    );
+    let action_data = bcs::to_bytes(&action);
+    intents::add_typed_action(
+        intent,
+        action_types::distribute_asset(),
+        action_data,
+        intent_witness
+    );
+}
+
+/// Add a create auction action to an existing intent
+public fun create_auction_in_intent<Outcome: store, T: key + store, BidCoin, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    object_id: ID,
+    minimum_bid: u64,
+    duration_ms: u64,
+    intent_witness: IW,
+) {
+    let action = dissolution_actions::new_create_auction_action<T, BidCoin>(
+        object_id,
+        minimum_bid,
+        duration_ms,
+    );
+    let action_data = bcs::to_bytes(&action);
+    intents::add_typed_action(
+        intent,
+        action_types::create_auction(),
+        action_data,
+        intent_witness
+    );
 }
 
 /// Create a unique key for a dissolution intent

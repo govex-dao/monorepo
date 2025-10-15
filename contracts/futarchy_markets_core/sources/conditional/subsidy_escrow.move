@@ -32,8 +32,9 @@ const MIN_CRANK_INTERVAL_MS: u64 = 300_000;  // 5 minutes minimum between cranks
 
 /// Escrow holding DAO treasury funds for gradual subsidy dripping
 /// Created when proposal enters trading state
-public struct SubsidyEscrow has key, store {
-    id: UID,
+/// NOTE: This is an OWNED object (store only), not a shared object.
+/// It lives inside the Proposal struct to ensure automatic cleanup.
+public struct SubsidyEscrow has store {
     proposal_id: ID,                            // Which proposal this subsidizes
     dao_id: ID,                                 // Which DAO this belongs to (for refund)
     amm_ids: vector<ID>,                        // Allowed AMM IDs (security check)
@@ -43,14 +44,12 @@ public struct SubsidyEscrow has key, store {
     total_cranks: u64,                          // Total cranks allowed
     keeper_fee_per_crank: u64,                  // Flat keeper fee
     last_crank_time: Option<u64>,              // Last crank timestamp (for rate limiting)
-    finalized: bool,                            // If true, no more cranks allowed
 }
 
 // === Events ===
 
 /// Emitted when subsidy escrow is created
 public struct SubsidyEscrowCreated has copy, drop {
-    escrow_id: ID,
     proposal_id: ID,
     dao_id: ID,
     total_subsidy: u64,
@@ -61,7 +60,6 @@ public struct SubsidyEscrowCreated has copy, drop {
 
 /// Emitted when keeper cranks subsidy into AMMs
 public struct SubsidyCranked has copy, drop {
-    escrow_id: ID,
     proposal_id: ID,
     crank_number: u64,
     total_cranks: u64,
@@ -75,7 +73,6 @@ public struct SubsidyCranked has copy, drop {
 
 /// Emitted when escrow is finalized (returns remainder to treasury)
 public struct SubsidyFinalized has copy, drop {
-    escrow_id: ID,
     proposal_id: ID,
     dao_id: ID,
     cranks_completed: u64,
@@ -90,7 +87,6 @@ public fun escrow_total_subsidy(escrow: &SubsidyEscrow): u64 { escrow.total_subs
 public fun escrow_cranks_completed(escrow: &SubsidyEscrow): u64 { escrow.cranks_completed }
 public fun escrow_total_cranks(escrow: &SubsidyEscrow): u64 { escrow.total_cranks }
 public fun escrow_remaining_balance(escrow: &SubsidyEscrow): u64 { escrow.subsidy_balance.value() }
-public fun escrow_is_finalized(escrow: &SubsidyEscrow): bool { escrow.finalized }
 
 // === Public Functions ===
 
@@ -116,7 +112,6 @@ public fun create_escrow(
     let total_subsidy = treasury_coins.value();
     assert!(total_subsidy > 0, EZeroSubsidy);
 
-    let escrow_id = object::new(ctx);
     let outcome_count = amm_ids.length();
 
     // Validate subsidy amount matches expected
@@ -125,7 +120,6 @@ public fun create_escrow(
 
     // Emit creation event
     event::emit(SubsidyEscrowCreated {
-        escrow_id: object::uid_to_inner(&escrow_id),
         proposal_id,
         dao_id,
         total_subsidy,
@@ -135,7 +129,6 @@ public fun create_escrow(
     });
 
     SubsidyEscrow {
-        id: escrow_id,
         proposal_id,
         dao_id,
         amm_ids,
@@ -145,7 +138,6 @@ public fun create_escrow(
         total_cranks: subsidy_config::crank_steps(config),
         keeper_fee_per_crank: subsidy_config::keeper_fee_per_crank(config),
         last_crank_time: option::none(),
-        finalized: false,
     }
 }
 
@@ -182,7 +174,6 @@ public fun crank_subsidy(
 ): Coin<SUI> {
     // Security checks
     assert!(escrow.proposal_id == proposal_id, EProposalMismatch);
-    assert!(!escrow.finalized, EProposalFinalized);
     assert!(escrow.cranks_completed < escrow.total_cranks, ESubsidyExhausted);
 
     // Rate limiting: ensure minimum interval between cranks
@@ -267,7 +258,6 @@ public fun crank_subsidy(
 
     // Emit crank event
     event::emit(SubsidyCranked {
-        escrow_id: object::uid_to_inner(&escrow.id),
         proposal_id: escrow.proposal_id,
         crank_number: escrow.cranks_completed,
         total_cranks: escrow.total_cranks,
@@ -285,124 +275,48 @@ public fun crank_subsidy(
 
 /// Finalize escrow and return remaining balance to DAO treasury
 /// Called after proposal ends (win or lose)
+/// NOTE: This now CONSUMES the escrow (automatic cleanup)
 public fun finalize_escrow(
-    escrow: &mut SubsidyEscrow,
+    escrow: SubsidyEscrow,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<SUI> {
-    assert!(!escrow.finalized, EProposalFinalized);
+    let SubsidyEscrow {
+        proposal_id,
+        dao_id,
+        amm_ids: _,
+        subsidy_balance,
+        total_subsidy: _,
+        cranks_completed,
+        total_cranks: _,
+        keeper_fee_per_crank: _,
+        last_crank_time: _,
+    } = escrow;
 
-    escrow.finalized = true;
-    let remaining = escrow.subsidy_balance.value();
+    let remaining = subsidy_balance.value();
 
     // Emit finalization event
     event::emit(SubsidyFinalized {
-        escrow_id: object::uid_to_inner(&escrow.id),
-        proposal_id: escrow.proposal_id,
-        dao_id: escrow.dao_id,
-        cranks_completed: escrow.cranks_completed,
+        proposal_id,
+        dao_id,
+        cranks_completed,
         remaining_balance: remaining,
         timestamp: clock.timestamp_ms(),
     });
 
     // Extract all remaining balance (return to DAO treasury)
-    let remaining_balance = escrow.subsidy_balance.withdraw_all();
-    coin::from_balance(remaining_balance, ctx)
-}
-
-/// Destroy escrow (only after finalization)
-public fun destroy_escrow(escrow: SubsidyEscrow) {
-    let SubsidyEscrow {
-        id,
-        proposal_id: _,
-        dao_id: _,
-        amm_ids: _,
-        subsidy_balance,
-        total_subsidy: _,
-        cranks_completed: _,
-        total_cranks: _,
-        keeper_fee_per_crank: _,
-        last_crank_time: _,
-        finalized,
-    } = escrow;
-
-    assert!(finalized, EProposalFinalized);
-    assert!(subsidy_balance.value() == 0, EInsufficientBalance);
-
-    subsidy_balance.destroy_zero();
-    object::delete(id);
+    coin::from_balance(subsidy_balance, ctx)
 }
 
 // === Internal Helper Functions ===
 // NOTE: inject_subsidy_proportional() has been REMOVED (phantom liquidity bug)
 // Subsidies are now accumulated as LP rewards via accumulate_subsidy_rewards()
-
-// === Entry Functions ===
-
-/// Entry function: Create subsidy escrow and share
-public entry fun create_and_share_escrow(
-    proposal_id: ID,
-    dao_id: ID,
-    amm_ids: vector<ID>,
-    treasury_coins: Coin<SUI>,
-    subsidy_per_outcome_per_crank: u64,
-    crank_steps: u64,
-    keeper_fee_per_crank: u64,
-    ctx: &mut TxContext,
-) {
-    let config = subsidy_config::new_protocol_config_custom(
-        true,
-        subsidy_per_outcome_per_crank,
-        crank_steps,
-        keeper_fee_per_crank,
-        MIN_CRANK_INTERVAL_MS,
-    );
-
-    let escrow = create_escrow(
-        proposal_id,
-        dao_id,
-        amm_ids,
-        treasury_coins,
-        &config,
-        ctx,
-    );
-
-    transfer::share_object(escrow);
-}
-
-/// Public function: Crank subsidy (keeper calls this from PTB)
-/// Note: Not an entry function because it takes &mut vector<LiquidityPool>
-public fun crank_subsidy_entry(
-    escrow: &mut SubsidyEscrow,
-    proposal_id: ID,
-    conditional_pools: &mut vector<LiquidityPool>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let keeper_fee_coin = crank_subsidy(
-        escrow,
-        proposal_id,
-        conditional_pools,
-        clock,
-        ctx,
-    );
-
-    // Transfer keeper fee to caller
-    transfer::public_transfer(keeper_fee_coin, tx_context::sender(ctx));
-}
-
-/// Entry function: Finalize and return remainder to DAO treasury
-public entry fun finalize_escrow_entry(
-    escrow: &mut SubsidyEscrow,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    let remaining_coin = finalize_escrow(escrow, clock, ctx);
-
-    // Transfer to DAO treasury (caller must be authorized)
-    // In production, verify caller has permission to receive DAO funds
-    transfer::public_transfer(remaining_coin, tx_context::sender(ctx));
-}
+//
+// NOTE: The following deprecated functions have been REMOVED:
+// - create_and_share_escrow() - Use proposal_lifecycle::create_subsidy_escrow_for_proposal()
+// - crank_subsidy_entry() - Use proposal_lifecycle::crank_subsidy_for_proposal()
+// - finalize_escrow_entry() - Auto-cleanup via proposal_lifecycle::finalize_proposal_market()
+// - destroy_escrow() - Auto-cleanup via finalize_escrow() which consumes the escrow
 
 // === Test-Only Functions ===
 
@@ -413,10 +327,9 @@ public fun create_test_escrow(
     amm_ids: vector<ID>,
     total_subsidy: u64,
     total_cranks: u64,
-    ctx: &mut TxContext,
+    _ctx: &mut TxContext,
 ): SubsidyEscrow {
     SubsidyEscrow {
-        id: object::new(ctx),
         proposal_id,
         dao_id,
         amm_ids,
@@ -426,14 +339,12 @@ public fun create_test_escrow(
         total_cranks,
         keeper_fee_per_crank: 100_000_000,  // 0.1 SUI default
         last_crank_time: option::none(),
-        finalized: false,
     }
 }
 
 #[test_only]
 public fun destroy_test_escrow(escrow: SubsidyEscrow) {
     let SubsidyEscrow {
-        id,
         proposal_id: _,
         dao_id: _,
         amm_ids: _,
@@ -443,15 +354,9 @@ public fun destroy_test_escrow(escrow: SubsidyEscrow) {
         total_cranks: _,
         keeper_fee_per_crank: _,
         last_crank_time: _,
-        finalized: _,
     } = escrow;
 
     balance::destroy_for_testing(subsidy_balance);
-    object::delete(id);
 }
 
-#[test_only]
-/// Mark escrow as finalized WITHOUT withdrawing balance (for testing error cases)
-public fun mark_finalized_for_testing(escrow: &mut SubsidyEscrow) {
-    escrow.finalized = true;
-}
+// NOTE: mark_finalized_for_testing() removed - no longer needed with owned object model

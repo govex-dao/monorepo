@@ -236,17 +236,35 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
 
     // Get the pool for this outcome from market_state
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
 
-    // Add liquidity through the AMM (updates virtual reserves)
-    let lp_amount = conditional_amm::add_liquidity_proportional(
-        pool,
-        asset_amount,
-        stable_amount,
-        min_lp_out,
-        clock,
-        ctx
-    );
+    // Add liquidity and get new price (within pool borrow scope)
+    let (lp_amount, new_price) = {
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+
+        // Add liquidity through the AMM (updates virtual reserves)
+        let lp = conditional_amm::add_liquidity_proportional(
+            pool,
+            asset_amount,
+            stable_amount,
+            min_lp_out,
+            clock,
+            ctx
+        );
+
+        // Get new price before pool borrow is released
+        let price = conditional_amm::get_current_price(pool);
+        (lp, price)
+    }; // pool borrow released here
+
+    // Update price leaderboard after liquidity change (if initialized)
+    // Price changes when liquidity is added, so we need to update the cache
+    if (futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_core::market_state::update_price_in_leaderboard(
+            market_state,
+            outcome_idx,
+            new_price
+        );
+    };
 
     // Mint LP tokens using TreasuryCap
     let lp_token = coin_escrow::mint_conditional_asset<AssetType, StableType, LPConditionalCoin>(
@@ -285,19 +303,37 @@ public entry fun remove_liquidity_entry<AssetType, StableType, AssetConditionalC
 
     // Get the pool for this outcome from market_state
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
 
-    // Remove liquidity through the AMM (updates virtual reserves)
-    let (asset_amount, stable_amount) = conditional_amm::remove_liquidity_proportional(
-        pool,
-        lp_amount,
-        clock,
-        ctx
-    );
+    // Remove liquidity and get new price (within pool borrow scope)
+    let (asset_amount, stable_amount, new_price) = {
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+
+        // Remove liquidity through the AMM (updates virtual reserves)
+        let (asset, stable) = conditional_amm::remove_liquidity_proportional(
+            pool,
+            lp_amount,
+            clock,
+            ctx
+        );
+
+        // Get new price before pool borrow is released
+        let price = conditional_amm::get_current_price(pool);
+        (asset, stable, price)
+    }; // pool borrow released here
 
     // Verify slippage protection
     assert!(asset_amount >= min_asset_out, EMinAmountNotMet);
     assert!(stable_amount >= min_stable_out, EMinAmountNotMet);
+
+    // Update price leaderboard after liquidity change (if initialized)
+    // Price changes when liquidity is removed, so we need to update the cache
+    if (futarchy_markets_core::market_state::has_price_leaderboard(market_state)) {
+        futarchy_markets_core::market_state::update_price_in_leaderboard(
+            market_state,
+            outcome_idx,
+            new_price
+        );
+    };
 
     // Mint the asset and stable conditional tokens using TreasuryCaps
     let asset_token = coin_escrow::mint_conditional_asset<AssetType, StableType, AssetConditionalCoin>(
@@ -365,6 +401,27 @@ public fun collect_protocol_fees<AssetType, StableType>(
             timestamp_ms: clock.timestamp_ms(),
         });
     }
+}
+
+// === LP Withdrawal Crank ===
+
+/// Crank function to transition TRANSITIONING bucket to WITHDRAW_ONLY
+/// Called after proposal finalizes and winning liquidity has been recombined to spot
+///
+/// This is the final step that allows LPs who marked for withdrawal to claim their coins.
+/// The recombination process moves conditional.TRANSITIONING → spot.WITHDRAW_ONLY directly,
+/// but this function handles any remaining TRANSITIONING that didn't go through a proposal.
+///
+/// Flow:
+/// 1. Proposal ends → auto_redeem_on_proposal_end() recombines liquidity (TRANSITIONING → WITHDRAW_ONLY)
+/// 2. This crank moves any remaining TRANSITIONING → WITHDRAW_ONLY (edge case: marked during no-proposal period)
+/// 3. Users can now call claim_withdrawal() to get their coins
+public entry fun crank_recombine_and_transition<AssetType, StableType>(
+    spot_pool: &mut futarchy_markets_core::unified_spot_pool::UnifiedSpotPool<AssetType, StableType>,
+) {
+    // Move all TRANSITIONING bucket amounts to WITHDRAW_ONLY
+    // This is an atomic batch operation that processes all pending withdrawals
+    futarchy_markets_core::unified_spot_pool::transition_to_withdraw_only(spot_pool);
 }
 
 // === Test Helpers ===

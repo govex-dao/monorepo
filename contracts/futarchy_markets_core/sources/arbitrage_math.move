@@ -310,8 +310,8 @@ public fun compute_optimal_conditional_to_spot<AssetType, StableType>(
     // OPTIMIZATION 1: Early exit check - compare derivatives at b=0
     // F'(0) = S'(0) - C'(0) where:
     // S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
-    // C'(0) = Σ_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
-    // Need F'(0) > 0 for profit to exist
+    // C'(0) = max_i(c'_i(0)) where c'_i(0) = (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
+    // Need F'(0) > 0 for profit to exist [quantum liquidity uses MAX not SUM]
     if (early_exit_check_cond_to_spot(spot_asset, spot_stable, beta, conditionals)) {
         return (0, 0)
     };
@@ -687,9 +687,9 @@ fun early_exit_check_spot_to_cond(ts: &vector<u128>, as_vals: &vector<u128>): bo
 ///
 /// Derivatives at b=0:
 /// S'(0) = (R_spot_stable * β) / (R_spot_asset * BPS_SCALE)
-/// C'(0) = max_i (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)  [max of derivatives]
+/// C'(0) = max_i(c'_i(0)) where c'_i(0) = (R_i_stable * BPS_SCALE) / (R_i_asset * α_i)
 ///
-/// For profit: F'(0) > 0 ⟺ S'(0) > C'(0) = max_i(c'_i(0))
+/// For profit: F'(0) > 0 ⟺ S'(0) > C'(0) = max_i(c'_i(0))  [quantum liquidity max semantics]
 /// Return true (exit early) if S'(0) ≤ C'(0)
 ///
 /// CONSERVATIVE CHECK: If S'(0) ≤ ANY c'_i(0), then S'(0) ≤ max_i(c'_i(0)) = C'(0).
@@ -711,8 +711,8 @@ fun early_exit_check_cond_to_spot(
     // S'(0) denominator: R_spot_asset * BPS_SCALE
     let s_prime_denom = spot_asset_u256 * bps_u256;
 
-    // Check: if S'(0) <= max_i(c'_i(0)), then S'(0) < C'(0) = Σ_i c'_i(0)
-    // This is conservative but catches obvious failures
+    // Check: if S'(0) <= ANY c'_i(0), then S'(0) <= max_i(c'_i(0)) = C'(0)
+    // Quantum liquidity uses MAX semantics, not sum!
 
     let n = vector::length(conditionals);
     let mut i = 0;

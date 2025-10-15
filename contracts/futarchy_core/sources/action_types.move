@@ -61,6 +61,7 @@ public struct StorageConfigUpdate has drop {}
 public struct SetQuotas has drop {}
 public struct UpdateConditionalMetadata has drop {}
 public struct SetOptimisticIntentChallengeEnabled has drop {}
+public struct EarlyResolveConfigUpdate has drop {}
 
 // === Liquidity Action Types ===
 
@@ -85,6 +86,9 @@ public struct PlatformFeeWithdraw has drop {}
 public struct InitiateDissolution has drop {}
 public struct CancelDissolution has drop {}
 public struct DistributeAsset has drop {}
+public struct CalculateProRataShares has drop {}
+public struct CancelAllStreams has drop {}
+public struct CreateAuction has drop {}
 public struct TransferStreamsToTreasury has drop {}
 public struct CancelStreamsInBag has drop {}
 public struct WithdrawAllCondLiquidity has drop {}
@@ -325,6 +329,7 @@ public fun slash_distribution_update(): TypeName { type_name::with_defining_ids<
 public fun queue_params_update(): TypeName { type_name::with_defining_ids<QueueParamsUpdate>() }
 public fun update_conditional_metadata(): TypeName { type_name::with_defining_ids<UpdateConditionalMetadata>() }
 public fun set_optimistic_intent_challenge_enabled(): TypeName { type_name::with_defining_ids<SetOptimisticIntentChallengeEnabled>() }
+public fun early_resolve_config_update(): TypeName { type_name::with_defining_ids<EarlyResolveConfigUpdate>() }
 
 // Liquidity actions
 public fun create_pool(): TypeName { type_name::with_defining_ids<CreatePool>() }
@@ -346,6 +351,9 @@ public fun platform_fee_withdraw(): TypeName { type_name::with_defining_ids<Plat
 public fun initiate_dissolution(): TypeName { type_name::with_defining_ids<InitiateDissolution>() }
 public fun cancel_dissolution(): TypeName { type_name::with_defining_ids<CancelDissolution>() }
 public fun distribute_asset(): TypeName { type_name::with_defining_ids<DistributeAsset>() }
+public fun calculate_pro_rata_shares(): TypeName { type_name::with_defining_ids<CalculateProRataShares>() }
+public fun cancel_all_streams(): TypeName { type_name::with_defining_ids<CancelAllStreams>() }
+public fun create_auction(): TypeName { type_name::with_defining_ids<CreateAuction>() }
 public fun transfer_streams_to_treasury(): TypeName { type_name::with_defining_ids<TransferStreamsToTreasury>() }
 public fun cancel_streams_in_bag(): TypeName { type_name::with_defining_ids<CancelStreamsInBag>() }
 public fun withdraw_all_cond_liquidity(): TypeName { type_name::with_defining_ids<WithdrawAllCondLiquidity>() }

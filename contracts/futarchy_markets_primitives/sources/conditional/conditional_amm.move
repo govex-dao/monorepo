@@ -71,6 +71,17 @@ public struct LiquidityPool has key, store {
     protocol_fees: u64, // Track accumulated stable fees
     lp_supply: u64, // Track total LP shares for this pool
 
+    // Bucket tracking for LP withdrawal system
+    // LIVE: Came from spot.LIVE via quantum split (will recombine to spot.LIVE)
+    // TRANSITIONING: Came from spot.TRANSITIONING via quantum split (will recombine to spot.WITHDRAW_ONLY)
+    // Note: Conditionals don't have WITHDRAW_ONLY - that only exists in spot after recombination
+    asset_live: u64,
+    asset_transitioning: u64,
+    stable_live: u64,
+    stable_transitioning: u64,
+    lp_live: u64,
+    lp_transitioning: u64,
+
     // LP Reward System (Subsidy Distribution)
     // NOTE: Only for CONDITIONAL pools (not spot pools)
     // Subsidies are distributed to LPs as SUI rewards (not added to reserves)
@@ -145,8 +156,8 @@ public fun new_pool(
     );
 
     // Initialize SimpleTWAP oracle (for external consumers)
-    // Uniswap V2 style - no capping
-    let simple_twap_oracle = simple_twap::new(
+    // Windowed TWAP with 1% per minute capping (default config)
+    let simple_twap_oracle = simple_twap::new_default(
         initial_price,
         clock,
     );
@@ -163,6 +174,14 @@ public fun new_pool(
         simple_twap: simple_twap_oracle,
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
+
+        // Initialize all liquidity in LIVE bucket (from quantum split)
+        asset_live: initial_asset,
+        asset_transitioning: 0,
+        stable_live: initial_stable,
+        stable_transitioning: 0,
+        lp_live: 0,  // Will be set when LP is added
+        lp_transitioning: 0,
 
         // LP Reward System (initialized empty)
         lp_rewards: balance::zero<SUI>(),
@@ -541,12 +560,22 @@ public fun empty_all_amm_liquidity(
     pool: &mut LiquidityPool,
     _ctx: &mut TxContext,
 ): (u64, u64) {
-    // This function is now only used in the final step of the old model and can be deprecated/removed.
-    // Or kept for admin/emergency purposes.
+    // Capture full reserves before zeroing them out
     let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
+
     pool.asset_reserve = 0;
     pool.stable_reserve = 0;
+
+    // Reset LP accounting so the next quantum split reboots cleanly
+    pool.lp_supply = 0;
+    pool.asset_live = 0;
+    pool.asset_transitioning = 0;
+    pool.stable_live = 0;
+    pool.stable_transitioning = 0;
+    pool.lp_live = 0;
+    pool.lp_transitioning = 0;
+
     (asset_amount_out, stable_amount_out)
 }
 
@@ -572,6 +601,19 @@ public fun get_reserves(pool: &LiquidityPool): (u64, u64) {
 
 public fun get_lp_supply(pool: &LiquidityPool): u64 {
     pool.lp_supply
+}
+
+/// Get bucket amounts for recombination
+/// Returns (asset_live, asset_transitioning, stable_live, stable_transitioning, lp_live, lp_transitioning)
+public fun get_bucket_amounts(pool: &LiquidityPool): (u64, u64, u64, u64, u64, u64) {
+    (
+        pool.asset_live,
+        pool.asset_transitioning,
+        pool.stable_live,
+        pool.stable_transitioning,
+        pool.lp_live,
+        pool.lp_transitioning,
+    )
 }
 
 /// Get pool fee in basis points
@@ -926,6 +968,43 @@ public fun extract_all_rewards(
 }
 
 // === Test Functions ===
+
+#[test_only]
+/// Test helper: wrapper for new_pool() with simplified signature
+public fun new<AssetType, StableType>(
+    fee_percent: u64,
+    twap_start_delay: u64,
+    twap_initial_observation: u128,
+    twap_step_max: u64,
+    clock: &Clock,
+    ctx: &mut TxContext,
+): LiquidityPool {
+    new_pool(
+        object::id_from_address(@0x0), // market_id
+        0, // outcome_idx
+        fee_percent,
+        1_000, // initial_asset
+        1_000, // initial_stable
+        twap_initial_observation,
+        twap_start_delay,
+        twap_step_max,
+        clock,
+        ctx,
+    )
+}
+
+#[test_only]
+/// Test helper: destroy a coin
+public fun burn_for_testing<T>(coin: sui::coin::Coin<T>) {
+    sui::test_utils::destroy(coin);
+}
+
+#[test_only]
+/// Test helper: alias for get_lp_supply()
+public fun lp_supply(pool: &LiquidityPool): u64 {
+    get_lp_supply(pool)
+}
+
 #[test_only]
 public fun create_test_pool(
     market_id: ID,
@@ -956,9 +1035,16 @@ public fun create_test_pool(
         stable_reserve,
         fee_percent,
         oracle: oracle_obj,
-        simple_twap: simple_twap::new(initial_price, clock),  // Uniswap V2 style
+        simple_twap: simple_twap::new_default(initial_price, clock),  // Windowed capped TWAP
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
+        // Initialize all liquidity in LIVE bucket for testing
+        asset_live: asset_reserve,
+        asset_transitioning: 0,
+        stable_live: stable_reserve,
+        stable_transitioning: 0,
+        lp_live: (MINIMUM_LIQUIDITY as u64),
+        lp_transitioning: 0,
         lp_rewards: balance::zero<SUI>(),
         rewards_per_lp_share_accumulator: 0,
     }
@@ -989,7 +1075,7 @@ public fun create_pool_for_testing(
         ctx
     );
 
-    let simple_twap = simple_twap::new(initial_price, &clock);
+    let simple_twap = simple_twap::new_default(initial_price, &clock);
     clock::destroy_for_testing(clock);
 
     LiquidityPool {
@@ -1003,6 +1089,13 @@ public fun create_pool_for_testing(
         simple_twap,
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
+        // Initialize all liquidity in LIVE bucket for testing
+        asset_live: asset_amount,
+        asset_transitioning: 0,
+        stable_live: stable_amount,
+        stable_transitioning: 0,
+        lp_live: (MINIMUM_LIQUIDITY as u64),
+        lp_transitioning: 0,
         lp_rewards: balance::zero<SUI>(),
         rewards_per_lp_share_accumulator: 0,
     }
@@ -1021,6 +1114,12 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         simple_twap,
         protocol_fees: _,
         lp_supply: _,
+        asset_live: _,
+        asset_transitioning: _,
+        stable_live: _,
+        stable_transitioning: _,
+        lp_live: _,
+        lp_transitioning: _,
         lp_rewards,
         rewards_per_lp_share_accumulator: _,
     } = pool;

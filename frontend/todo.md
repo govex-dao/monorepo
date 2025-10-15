@@ -17,3 +17,5 @@ get in here
 - [ ] figure out how to handle arbitrage if there is not spot market
 - [ ] for council related proposals allow users to click on council in UI. to bring up details, like formation time and past  proposals
 - [ ] in trade UI outcome should be coloured like line!!!
+- [ ] alwasy show data on trading UI looks weird without ?
+- [ ] metrics on site home page

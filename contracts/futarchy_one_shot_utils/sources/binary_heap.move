@@ -1,5 +1,5 @@
 /// Generic binary heap operations for vectors
-/// Extracted from futarchy launchpad for general use
+/// Extracted from conditional market price leader board
 module futarchy_one_shot_utils::binary_heap;
 
 use std::vector;

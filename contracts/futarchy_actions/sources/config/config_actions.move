@@ -122,6 +122,12 @@ public struct ConditionalMetadataChanged has copy, drop {
     timestamp: u64,
 }
 
+/// Emitted when early resolve config is updated
+public struct EarlyResolveConfigChanged has copy, drop {
+    account_id: ID,
+    timestamp: u64,
+}
+
 // === Basic Action Structs ===
 
 /// Action to enable or disable proposals
@@ -210,6 +216,18 @@ public struct ConditionalMetadataUpdateAction has store, drop, copy {
     // If Some(None), remove fallback metadata
     // If None, don't change fallback metadata
     conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
+}
+
+/// Early resolve configuration update action
+public struct EarlyResolveConfigUpdateAction has store, drop, copy {
+    min_proposal_duration_ms: u64,
+    max_proposal_duration_ms: u64,
+    min_winner_spread: u128,
+    min_time_since_last_flip_ms: u64,
+    max_flips_in_window: u64,
+    flip_window_duration_ms: u64,
+    enable_twap_scaling: bool,
+    keeper_reward_bps: u64,
 }
 
 /// Wrapper for different config action types (for batch operations)
@@ -1061,6 +1079,71 @@ public fun do_update_conditional_metadata<Outcome: store, IW: drop>(
     executable::increment_action_idx(executable);
 }
 
+/// Execute an early resolve config update action
+public fun do_update_early_resolve_config<Outcome: store, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<FutarchyConfig>,
+    version: VersionWitness,
+    intent_witness: IW,
+    clock: &Clock,
+    _ctx: &mut TxContext,
+) {
+    // Get action spec
+    let specs = executable::intent(executable).action_specs();
+    let spec = specs.borrow(executable::action_idx(executable));
+
+    // CRITICAL - Type check BEFORE deserialization
+    action_validation::assert_action_type<action_types::EarlyResolveConfigUpdate>(spec);
+
+    // Get action data
+    let action_data = protocol_intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = protocol_intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Safe deserialization with BCS reader
+    let mut reader = bcs::new(*action_data);
+    let min_proposal_duration_ms = reader.peel_u64();
+    let max_proposal_duration_ms = reader.peel_u64();
+    let min_winner_spread = reader.peel_u128();
+    let min_time_since_last_flip_ms = reader.peel_u64();
+    let max_flips_in_window = reader.peel_u64();
+    let flip_window_duration_ms = reader.peel_u64();
+    let enable_twap_scaling = reader.peel_bool();
+    let keeper_reward_bps = reader.peel_u64();
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    // Get mutable config through Account protocol with witness
+    let config = account::config_mut(account, version, ConfigActionsWitness {});
+
+    // Create new early resolve config
+    let early_resolve_config = futarchy_config::new_early_resolve_config(
+        min_proposal_duration_ms,
+        max_proposal_duration_ms,
+        min_winner_spread,
+        min_time_since_last_flip_ms,
+        max_flips_in_window,
+        flip_window_duration_ms,
+        enable_twap_scaling,
+        keeper_reward_bps
+    );
+
+    // Update the early resolve config
+    futarchy_config::set_early_resolve_config(config, early_resolve_config);
+
+    // Emit event
+    event::emit(EarlyResolveConfigChanged {
+        account_id: object::id(account),
+        timestamp: clock.timestamp_ms(),
+    });
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
 /// Execute a batch config action that can contain any type of config update
 /// This delegates to the appropriate handler based on config_type
 public fun do_batch_config<Outcome: store, IW: drop>(
@@ -1199,6 +1282,20 @@ public fun destroy_queue_params_update(action: QueueParamsUpdateAction) {
     } = action;
 }
 
+/// Destroy an EarlyResolveConfigUpdateAction
+public fun destroy_early_resolve_config_update(action: EarlyResolveConfigUpdateAction) {
+    let EarlyResolveConfigUpdateAction {
+        min_proposal_duration_ms: _,
+        max_proposal_duration_ms: _,
+        min_winner_spread: _,
+        min_time_since_last_flip_ms: _,
+        max_flips_in_window: _,
+        flip_window_duration_ms: _,
+        enable_twap_scaling: _,
+        keeper_reward_bps: _,
+    } = action;
+}
+
 // === Cleanup Functions ===
 
 /// Delete a set proposals enabled action from an expired intent
@@ -1330,6 +1427,22 @@ public fun delete_queue_params_update<Config>(expired: &mut Expired) {
     reader.peel_option_u64();
     reader.peel_option_u64();
     reader.peel_option_u64();
+    let _ = reader.into_remainder_bytes();
+}
+
+/// Delete an early resolve config update action from an expired intent
+public fun delete_early_resolve_config_update<Config>(expired: &mut Expired) {
+    let action_spec = intents::remove_action_spec(expired);
+    let action_data = intents::action_spec_action_data(action_spec);
+    let mut reader = bcs::new(action_data);
+    reader.peel_u64();
+    reader.peel_u64();
+    reader.peel_u128();
+    reader.peel_u64();
+    reader.peel_u64();
+    reader.peel_u64();
+    reader.peel_bool();
+    reader.peel_u64();
     let _ = reader.into_remainder_bytes();
 }
 
@@ -1719,6 +1832,38 @@ public fun new_queue_params_update<Outcome, IW: drop>(
         intent_witness
     );
     destroy_queue_params_update(action);
+}
+
+/// Add an EarlyResolveConfigUpdate action to an intent
+public fun new_early_resolve_config_update<Outcome, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    min_proposal_duration_ms: u64,
+    max_proposal_duration_ms: u64,
+    min_winner_spread: u128,
+    min_time_since_last_flip_ms: u64,
+    max_flips_in_window: u64,
+    flip_window_duration_ms: u64,
+    enable_twap_scaling: bool,
+    keeper_reward_bps: u64,
+    intent_witness: IW,
+) {
+    let action = EarlyResolveConfigUpdateAction {
+        min_proposal_duration_ms,
+        max_proposal_duration_ms,
+        min_winner_spread,
+        min_time_since_last_flip_ms,
+        max_flips_in_window,
+        flip_window_duration_ms,
+        enable_twap_scaling,
+        keeper_reward_bps,
+    };
+    let action_data = bcs::to_bytes(&action);
+    intent.add_typed_action(
+        action_types::early_resolve_config_update(),
+        action_data,
+        intent_witness
+    );
+    destroy_early_resolve_config_update(action);
 }
 
 // === Getter Functions ===
@@ -2146,6 +2291,21 @@ public(package) fun slash_distribution_update_action_from_bytes(bytes: vector<u8
         dao_treasury_bps: bcs.peel_u16(),
         protocol_bps: bcs.peel_u16(),
         burn_bps: bcs.peel_u16(),
+    }
+}
+
+/// Deserialize EarlyResolveConfigUpdateAction from bytes
+public(package) fun early_resolve_config_update_action_from_bytes(bytes: vector<u8>): EarlyResolveConfigUpdateAction {
+    let mut bcs = bcs::new(bytes);
+    EarlyResolveConfigUpdateAction {
+        min_proposal_duration_ms: bcs.peel_u64(),
+        max_proposal_duration_ms: bcs.peel_u64(),
+        min_winner_spread: bcs.peel_u128(),
+        min_time_since_last_flip_ms: bcs.peel_u64(),
+        max_flips_in_window: bcs.peel_u64(),
+        flip_window_duration_ms: bcs.peel_u64(),
+        enable_twap_scaling: bcs.peel_bool(),
+        keeper_reward_bps: bcs.peel_u64(),
     }
 }
 

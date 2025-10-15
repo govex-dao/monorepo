@@ -57,15 +57,30 @@ public struct UnifiedSpotPool<phantom AssetType, phantom StableType> has key, st
     fee_bps: u64,
     minimum_liquidity: u64,
 
+    // Bucket tracking for LP withdrawal system
+    // LIVE: Will quantum-split for next proposal
+    // TRANSITIONING: Won't quantum-split, but still trades in current proposal
+    // WITHDRAW_ONLY: Frozen, ready to claim (only in spot, not conditionals)
+    asset_live: u64,
+    asset_transitioning: u64,
+    asset_withdraw_only: u64,
+    stable_live: u64,
+    stable_transitioning: u64,
+    stable_withdraw_only: u64,
+    lp_live: u64,
+    lp_transitioning: u64,
+    lp_withdraw_only: u64,
+
     // Optional aggregator configuration
     aggregator_config: Option<AggregatorConfig<AssetType, StableType>>,
 }
 
 /// Aggregator-specific configuration (only present when enabled)
 public struct AggregatorConfig<phantom AssetType, phantom StableType> has store {
-    // Active escrow for proposal trading (owned by pool during trading)
-    // Moved IN when proposal starts, moved OUT when proposal ends
-    active_escrow: Option<TokenEscrow<AssetType, StableType>>,
+    // Active escrow ID for proposal trading
+    // Stored when proposal starts, cleared when proposal ends
+    // NOTE: We store ID (not TokenEscrow) because shared objects can't be stored in owned objects
+    active_escrow: Option<ID>,
 
     // Conditional coin types for active proposal (for external integrators like Aftermath SDK)
     // Order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
@@ -178,6 +193,16 @@ public fun new<AssetType, StableType>(
         lp_supply: 0,
         fee_bps,
         minimum_liquidity: MINIMUM_LIQUIDITY,
+        // Initialize all liquidity in LIVE bucket
+        asset_live: 0,
+        asset_transitioning: 0,
+        asset_withdraw_only: 0,
+        stable_live: 0,
+        stable_transitioning: 0,
+        stable_withdraw_only: 0,
+        lp_live: 0,
+        lp_transitioning: 0,
+        lp_withdraw_only: 0,
         aggregator_config: option::none(),
     }
 }
@@ -190,7 +215,7 @@ public fun new_with_aggregator<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): UnifiedSpotPool<AssetType, StableType> {
-    let simple_twap = simple_twap::new(0, clock); // Initialize with 0 price (will be updated on first swap)
+    let simple_twap = simple_twap::new_default(0, clock); // Initialize with 0 price (will be updated on first swap)
 
     let aggregator_config = AggregatorConfig {
         active_escrow: option::none(),
@@ -209,6 +234,16 @@ public fun new_with_aggregator<AssetType, StableType>(
         lp_supply: 0,
         fee_bps,
         minimum_liquidity: MINIMUM_LIQUIDITY,
+        // Initialize all liquidity in LIVE bucket
+        asset_live: 0,
+        asset_transitioning: 0,
+        asset_withdraw_only: 0,
+        stable_live: 0,
+        stable_transitioning: 0,
+        stable_withdraw_only: 0,
+        lp_live: 0,
+        lp_transitioning: 0,
+        lp_withdraw_only: 0,
         aggregator_config: option::some(aggregator_config),
     }
 }
@@ -223,7 +258,7 @@ public fun enable_aggregator<AssetType, StableType>(
 ) {
     // Only enable if not already enabled
     if (pool.aggregator_config.is_none()) {
-        let simple_twap = simple_twap::new(get_spot_price(pool), clock); // Initialize with current price
+        let simple_twap = simple_twap::new_default(get_spot_price(pool), clock); // Initialize with current price
 
         let config = AggregatorConfig {
             active_escrow: option::none(),
@@ -241,25 +276,26 @@ public fun enable_aggregator<AssetType, StableType>(
 
 // === Escrow Management Functions (Aggregator Only) ===
 
-/// Move escrow into pool when proposal starts trading
+/// Store active escrow ID when proposal starts trading
 /// Stores conditional types for external integrators (Aftermath SDK)
+/// NOTE: Takes ID (not TokenEscrow object) because shared objects can't be stored
 public(package) fun store_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    escrow: TokenEscrow<AssetType, StableType>,
+    escrow_id: ID,
     conditional_types: vector<TypeName>,  // Order: [Cond0Asset, Cond0Stable, Cond1Asset, Cond1Stable, ...]
 ) {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow_mut();
     assert!(config.active_escrow.is_none(), ENoActiveProposal); // Must not already have escrow
-    option::fill(&mut config.active_escrow, escrow);
+    option::fill(&mut config.active_escrow, escrow_id);
     config.conditional_type_names = conditional_types;
 }
 
-/// Extract escrow from pool when proposal ends
-/// Returns the escrow object to caller (usually for finalization)
+/// Extract active escrow ID when proposal ends
+/// Returns the escrow ID to caller (to look up the shared object)
 public(package) fun extract_active_escrow<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-): TokenEscrow<AssetType, StableType> {
+): ID {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow_mut();
     assert!(config.active_escrow.is_some(), ENoActiveProposal); // Must have escrow
@@ -267,15 +303,16 @@ public(package) fun extract_active_escrow<AssetType, StableType>(
     option::extract(&mut config.active_escrow)
 }
 
-/// Borrow escrow mutably for swaps (internal use)
-/// Fails if no active escrow
-public(package) fun borrow_active_escrow_mut<AssetType, StableType>(
-    pool: &mut UnifiedSpotPool<AssetType, StableType>,
-): &mut TokenEscrow<AssetType, StableType> {
-    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
-    let config = pool.aggregator_config.borrow_mut();
-    assert!(config.active_escrow.is_some(), ENoActiveProposal);
-    config.active_escrow.borrow_mut()
+/// Get active escrow ID (read-only)
+/// Returns None if no active escrow
+public fun get_active_escrow_id<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>,
+): Option<ID> {
+    if (pool.aggregator_config.is_none()) {
+        return option::none()
+    };
+    let config = pool.aggregator_config.borrow();
+    config.active_escrow
 }
 
 // === Core AMM Functions ===
@@ -333,6 +370,11 @@ public fun add_liquidity_and_return<AssetType, StableType>(
 
     pool.lp_supply = pool.lp_supply + lp_amount;
 
+    // Add to LIVE bucket (new liquidity is always added to LIVE)
+    pool.asset_live = pool.asset_live + asset_amount;
+    pool.stable_live = pool.stable_live + stable_amount;
+    pool.lp_live = pool.lp_live + lp_amount;
+
     // Create and return LP token (unlocked, normal mode by default)
     LPToken<AssetType, StableType> {
         id: object::new(ctx),
@@ -343,6 +385,8 @@ public fun add_liquidity_and_return<AssetType, StableType>(
 }
 
 /// Remove liquidity from the pool
+/// NOTE: This function is for removing from LIVE bucket ONLY
+/// For withdrawal after marking, use mark_lp_for_withdrawal() + withdraw_lp()
 public fun remove_liquidity<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
@@ -354,7 +398,11 @@ public fun remove_liquidity<AssetType, StableType>(
     assert!(lp_amount > 0, EZeroAmount);
     assert!(pool.lp_supply >= lp_amount, EInsufficientLPSupply);
 
-    // Calculate proportional amounts
+    // CRITICAL: Check LP token state - can only remove from LIVE bucket
+    assert!(!lp_token.withdraw_mode, EInsufficientLiquidity); // Use mark_lp_for_withdrawal() + withdraw_lp() instead
+    assert!(lp_token.locked_in_proposal.is_none(), ENoActiveProposal); // Can't remove while locked
+
+    // Calculate proportional amounts from total reserves
     let asset_reserve = balance::value(&pool.asset_reserve);
     let stable_reserve = balance::value(&pool.stable_reserve);
 
@@ -368,7 +416,17 @@ public fun remove_liquidity<AssetType, StableType>(
     let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 
+    // Update total supply
     pool.lp_supply = pool.lp_supply - lp_amount;
+
+    // CRITICAL FIX: Update bucket tracking (remove from LIVE bucket)
+    // Calculate proportional amounts from LIVE bucket
+    let asset_from_live = (lp_amount as u128) * (pool.asset_live as u128) / (pool.lp_live as u128);
+    let stable_from_live = (lp_amount as u128) * (pool.stable_live as u128) / (pool.lp_live as u128);
+
+    pool.lp_live = pool.lp_live - lp_amount;
+    pool.asset_live = pool.asset_live - (asset_from_live as u64);
+    pool.stable_live = pool.stable_live - (stable_from_live as u64);
 
     // Return assets
     let asset_coin = coin::from_balance(
@@ -412,6 +470,129 @@ public fun remove_liquidity<AssetType, StableType>(
     };
 
     (asset_coin, stable_coin)
+}
+
+// === LP Withdrawal System ===
+
+/// Mark LP for withdrawal - user triggers this to exit
+/// If proposal is active: moves LIVE → TRANSITIONING (still trades)
+/// If no proposal: moves LIVE → WITHDRAW_ONLY (immediate)
+public entry fun mark_lp_for_withdrawal<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    lp_token: &mut LPToken<AssetType, StableType>,
+) {
+    // Can't mark for withdrawal if already locked in a proposal
+    assert!(lp_token.locked_in_proposal.is_none(), ENoActiveProposal);
+
+    // Can't mark twice
+    assert!(!lp_token.withdraw_mode, EInsufficientLiquidity);
+
+    let lp_amount = lp_token.amount;
+    assert!(lp_amount > 0, EZeroAmount);
+
+    // Check if there's an active proposal
+    let proposal_active = is_locked_for_proposal(pool);
+
+    if (proposal_active) {
+        // Move from LIVE → TRANSITIONING
+        // Calculate proportional share of LIVE bucket
+        assert!(pool.lp_live >= lp_amount, EInsufficientLPSupply);
+
+        let asset_to_move = (lp_amount as u128) * (pool.asset_live as u128) / (pool.lp_live as u128);
+        let stable_to_move = (lp_amount as u128) * (pool.stable_live as u128) / (pool.lp_live as u128);
+
+        // Update buckets
+        pool.lp_live = pool.lp_live - lp_amount;
+        pool.lp_transitioning = pool.lp_transitioning + lp_amount;
+
+        pool.asset_live = pool.asset_live - (asset_to_move as u64);
+        pool.asset_transitioning = pool.asset_transitioning + (asset_to_move as u64);
+
+        pool.stable_live = pool.stable_live - (stable_to_move as u64);
+        pool.stable_transitioning = pool.stable_transitioning + (stable_to_move as u64);
+    } else {
+        // Move from LIVE → WITHDRAW_ONLY (immediate)
+        assert!(pool.lp_live >= lp_amount, EInsufficientLPSupply);
+
+        let asset_to_move = (lp_amount as u128) * (pool.asset_live as u128) / (pool.lp_live as u128);
+        let stable_to_move = (lp_amount as u128) * (pool.stable_live as u128) / (pool.lp_live as u128);
+
+        // Update buckets
+        pool.lp_live = pool.lp_live - lp_amount;
+        pool.lp_withdraw_only = pool.lp_withdraw_only + lp_amount;
+
+        pool.asset_live = pool.asset_live - (asset_to_move as u64);
+        pool.asset_withdraw_only = pool.asset_withdraw_only + (asset_to_move as u64);
+
+        pool.stable_live = pool.stable_live - (stable_to_move as u64);
+        pool.stable_withdraw_only = pool.stable_withdraw_only + (stable_to_move as u64);
+    };
+
+    // Mark token as in withdraw mode
+    lp_token.withdraw_mode = true;
+}
+
+/// Withdraw LP after it's been marked and crank has run
+/// Burns the LP token and returns coins from WITHDRAW_ONLY bucket
+public fun withdraw_lp<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    lp_token: LPToken<AssetType, StableType>,
+    ctx: &mut TxContext,
+): (Coin<AssetType>, Coin<StableType>) {
+    // Must be marked for withdrawal
+    assert!(lp_token.withdraw_mode, EInsufficientLiquidity);
+
+    // Must not be locked in a proposal
+    assert!(lp_token.locked_in_proposal.is_none(), ENoActiveProposal);
+
+    let lp_amount = lp_token.amount;
+    assert!(lp_amount > 0, EZeroAmount);
+    assert!(pool.lp_withdraw_only >= lp_amount, EInsufficientLPSupply);
+
+    // Calculate proportional share of WITHDRAW_ONLY bucket
+    let asset_out = (lp_amount as u128) * (pool.asset_withdraw_only as u128) / (pool.lp_withdraw_only as u128);
+    let stable_out = (lp_amount as u128) * (pool.stable_withdraw_only as u128) / (pool.lp_withdraw_only as u128);
+
+    // Update buckets
+    pool.lp_withdraw_only = pool.lp_withdraw_only - lp_amount;
+    pool.asset_withdraw_only = pool.asset_withdraw_only - (asset_out as u64);
+    pool.stable_withdraw_only = pool.stable_withdraw_only - (stable_out as u64);
+
+    // Update total supply
+    pool.lp_supply = pool.lp_supply - lp_amount;
+
+    // Burn LP token
+    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    object::delete(id);
+
+    // Extract coins from reserves
+    let asset_coin = coin::from_balance(
+        balance::split(&mut pool.asset_reserve, (asset_out as u64)),
+        ctx
+    );
+    let stable_coin = coin::from_balance(
+        balance::split(&mut pool.stable_reserve, (stable_out as u64)),
+        ctx
+    );
+
+    (asset_coin, stable_coin)
+}
+
+/// Transition all TRANSITIONING bucket amounts to WITHDRAW_ONLY
+/// Called by crank when proposal finalizes
+/// This is an atomic batch operation that makes all marked LPs claimable
+public fun transition_to_withdraw_only<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+) {
+    // Move all TRANSITIONING amounts to WITHDRAW_ONLY
+    pool.asset_withdraw_only = pool.asset_withdraw_only + pool.asset_transitioning;
+    pool.stable_withdraw_only = pool.stable_withdraw_only + pool.stable_transitioning;
+    pool.lp_withdraw_only = pool.lp_withdraw_only + pool.lp_transitioning;
+
+    // Reset TRANSITIONING buckets to zero
+    pool.asset_transitioning = 0;
+    pool.stable_transitioning = 0;
+    pool.lp_transitioning = 0;
 }
 
 /// INTERNAL: Swap stable for asset (used by arbitrage only)
@@ -497,6 +678,34 @@ public fun lp_supply<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>
 ): u64 {
     pool.lp_supply
+}
+
+/// Get LIVE bucket reserves (will quantum-split for next proposal)
+public fun get_live_reserves<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): (u64, u64) {
+    (pool.asset_live, pool.stable_live)
+}
+
+/// Get LIVE bucket LP supply
+public fun get_live_lp_supply<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): u64 {
+    pool.lp_live
+}
+
+/// Get TRANSITIONING bucket reserves (will move to WITHDRAW_ONLY when proposal ends)
+public fun get_transitioning_reserves<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): (u64, u64, u64) {
+    (pool.asset_transitioning, pool.stable_transitioning, pool.lp_transitioning)
+}
+
+/// Get WITHDRAW_ONLY bucket reserves (frozen, ready for claiming)
+public fun get_withdraw_only_reserves<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>
+): (u64, u64, u64) {
+    (pool.asset_withdraw_only, pool.stable_withdraw_only, pool.lp_withdraw_only)
 }
 
 /// Get spot price (asset per stable)
@@ -587,26 +796,43 @@ public fun get_conditional_types<AssetType, StableType>(
 
 // === Quantum Liquidity Functions ===
 
-/// Remove liquidity for quantum split (doesn't burn LP tokens)
+/// Remove liquidity for quantum split with bucket tracking (doesn't burn LP tokens)
 /// Used when proposal starts - liquidity moves to conditional markets
-public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
+/// Removes from BOTH LIVE and TRANSITIONING buckets with explicit amounts for each
+/// WITHDRAW_ONLY bucket stays in spot (frozen, ready for claiming)
+public(package) fun remove_liquidity_for_quantum_split_with_buckets<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    asset_amount: u64,
-    stable_amount: u64,
+    asset_live_amount: u64,
+    asset_trans_amount: u64,
+    stable_live_amount: u64,
+    stable_trans_amount: u64,
 ): (Balance<AssetType>, Balance<StableType>) {
-    assert!(asset_amount > 0 && stable_amount > 0, EZeroAmount);
-    assert!(asset_amount <= balance::value(&pool.asset_reserve), EInsufficientLiquidity);
-    assert!(stable_amount <= balance::value(&pool.stable_reserve), EInsufficientLiquidity);
+    let total_asset = asset_live_amount + asset_trans_amount;
+    let total_stable = stable_live_amount + stable_trans_amount;
+
+    assert!(total_asset > 0 && total_stable > 0, EZeroAmount);
+    assert!(total_asset <= balance::value(&pool.asset_reserve), EInsufficientLiquidity);
+    assert!(total_stable <= balance::value(&pool.stable_reserve), EInsufficientLiquidity);
+
+    // Ensure we have enough in each bucket
+    assert!(asset_live_amount <= pool.asset_live, EInsufficientLiquidity);
+    assert!(asset_trans_amount <= pool.asset_transitioning, EInsufficientLiquidity);
+    assert!(stable_live_amount <= pool.stable_live, EInsufficientLiquidity);
+    assert!(stable_trans_amount <= pool.stable_transitioning, EInsufficientLiquidity);
 
     // Remove from reserves but DON'T burn LP tokens
     // LP tokens still represent value - the liquidity exists quantum-mechanically in conditional markets
-    let asset_balance = balance::split(&mut pool.asset_reserve, asset_amount);
-    let stable_balance = balance::split(&mut pool.stable_reserve, stable_amount);
+    let asset_balance = balance::split(&mut pool.asset_reserve, total_asset);
+    let stable_balance = balance::split(&mut pool.stable_reserve, total_stable);
+
+    // Update bucket tracking
+    pool.asset_live = pool.asset_live - asset_live_amount;
+    pool.asset_transitioning = pool.asset_transitioning - asset_trans_amount;
+    pool.stable_live = pool.stable_live - stable_live_amount;
+    pool.stable_transitioning = pool.stable_transitioning - stable_trans_amount;
+    // Note: lp_live and lp_transitioning stay same - LP tokens still exist, just liquidity is in conditionals
 
     // CRITICAL: Ensure remaining spot pool meets minimum liquidity requirement (k >= 1000)
-    // Protocol enforces min=100,000 per reserve, so with 99% ratio:
-    // → spot keeps 100,000 * 1/100 = 1,000 each → k = 1,000,000 ✅
-    // This check is defense-in-depth to catch bugs in ratio calculations
     let remaining_asset = balance::value(&pool.asset_reserve);
     let remaining_stable = balance::value(&pool.stable_reserve);
     let remaining_k = (remaining_asset as u128) * (remaining_stable as u128);
@@ -615,16 +841,81 @@ public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
     (asset_balance, stable_balance)
 }
 
-/// Add liquidity back from quantum redeem (when proposal ends)
+/// Remove liquidity for quantum split (deprecated - use remove_liquidity_for_quantum_split_with_buckets)
+/// Kept for backward compatibility
+public(package) fun remove_liquidity_for_quantum_split<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    asset_amount: u64,
+    stable_amount: u64,
+): (Balance<AssetType>, Balance<StableType>) {
+    // Default behavior: remove from LIVE bucket only
+    remove_liquidity_for_quantum_split_with_buckets(
+        pool,
+        asset_amount,
+        0, // no TRANSITIONING
+        stable_amount,
+        0, // no TRANSITIONING
+    )
+}
+
+/// Add liquidity back from quantum redeem with bucket awareness (when proposal ends)
 /// Returns liquidity from conditional markets back to spot pool
+/// LIVE bucket → spot.LIVE (will quantum-split for next proposal)
+/// TRANSITIONING bucket → spot.WITHDRAW_ONLY (frozen for claiming)
+public(package) fun add_liquidity_from_quantum_redeem_with_buckets<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    asset: Balance<AssetType>,
+    stable: Balance<StableType>,
+    asset_live: u64,
+    asset_transitioning: u64,
+    stable_live: u64,
+    stable_transitioning: u64,
+) {
+    let asset_amount = balance::value(&asset);
+    let stable_amount = balance::value(&stable);
+
+    // Verify bucket amounts sum to total
+    assert!(asset_live + asset_transitioning == asset_amount, EInsufficientLiquidity);
+    assert!(stable_live + stable_transitioning == stable_amount, EInsufficientLiquidity);
+
+    // Add to reserves
+    balance::join(&mut pool.asset_reserve, asset);
+    balance::join(&mut pool.stable_reserve, stable);
+
+    // Add LIVE bucket → spot.LIVE (will quantum-split for next proposal)
+    pool.asset_live = pool.asset_live + asset_live;
+    pool.stable_live = pool.stable_live + stable_live;
+
+    // Add TRANSITIONING bucket → spot.WITHDRAW_ONLY (frozen for claiming!)
+    // This skips spot.TRANSITIONING and goes directly to WITHDRAW_ONLY
+    pool.asset_withdraw_only = pool.asset_withdraw_only + asset_transitioning;
+    pool.stable_withdraw_only = pool.stable_withdraw_only + stable_transitioning;
+
+    // Note: LP buckets (lp_live, lp_withdraw_only) don't change here
+    // LP tokens existed throughout the quantum split, only reserves moved
+    // The crank's transition_to_withdraw_only() handles moving lp_transitioning → lp_withdraw_only
+}
+
+/// Add liquidity back from quantum redeem (deprecated - use add_liquidity_from_quantum_redeem_with_buckets)
+/// Kept for backward compatibility
 public(package) fun add_liquidity_from_quantum_redeem<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset: Balance<AssetType>,
     stable: Balance<StableType>,
 ) {
-    balance::join(&mut pool.asset_reserve, asset);
-    balance::join(&mut pool.stable_reserve, stable);
-    // LP supply unchanged - LP tokens existed throughout the quantum split
+    let asset_amount = balance::value(&asset);
+    let stable_amount = balance::value(&stable);
+
+    // Default behavior: add everything to LIVE bucket (old behavior)
+    add_liquidity_from_quantum_redeem_with_buckets(
+        pool,
+        asset,
+        stable,
+        asset_amount,
+        0, // no transitioning
+        stable_amount,
+        0, // no transitioning
+    )
 }
 
 // === Aggregator-Specific Functions ===
@@ -657,71 +948,71 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
 
 /// Backfill spot's SimpleTWAP with winning conditional's data after proposal ends
 /// This fills the gap [proposal_start, proposal_end] with conditional's price history
+/// Updates BOTH arithmetic (lending) and geometric (oracle grants) windows
+/// TODO: Implement advanced backfill logic when simple_twap supports it
 public fun backfill_from_winning_conditional<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    winning_conditional_oracle: &SimpleTWAP,
-    clock: &Clock,
+    _winning_conditional_oracle: &SimpleTWAP,
+    _clock: &Clock,
 ) {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
 
     let config = pool.aggregator_config.borrow_mut();
     assert!(config.last_proposal_usage.is_some(), ENoActiveProposal); // Must be locked
 
-    let proposal_start = *config.last_proposal_usage.borrow();
-    let proposal_end = clock.timestamp_ms();
+    // TODO: Implement backfill logic once simple_twap supports:
+    // - lending_window_start()
+    // - projected_cumulative_arithmetic_to()
+    // - geometric_window_start()
+    // - projected_cumulative_geometric_to()
+    // - backfill_from_conditional()
 
-    // Calculate conditional's cumulative for the proposal period
-    let conditional_window_start = simple_twap::window_start_timestamp(winning_conditional_oracle);
-    let conditional_cumulative = simple_twap::projected_cumulative_to(winning_conditional_oracle, proposal_end);
-    let conditional_duration = proposal_end - conditional_window_start;
-    let proposal_duration = proposal_end - proposal_start;
-
-    // SAFETY: Scale to just the proposal period with overflow protection
-    let period_cumulative: u256 = if (conditional_duration > 0) {
-        // Use safe multiplication to avoid overflow
-        (conditional_cumulative as u256) * (proposal_duration as u256) / (conditional_duration as u256)
-    } else {
-        0
-    };
-
-    let period_final_price = simple_twap::last_price(winning_conditional_oracle);
-
-    // Backfill spot's SimpleTWAP with conditional's data
-    simple_twap::backfill_from_conditional(
-        &mut config.simple_twap,
-        proposal_start,
-        proposal_end,
-        period_cumulative,
-        period_final_price,
-    );
-
-    // Unlock the pool and reset lock parameters
+    // For now, just unlock the pool
     config.last_proposal_usage = option::none();
     config.conditional_liquidity_ratio_percent = 0;
 }
 
 /// Check if TWAP is ready (has enough history)
+/// TODO: Implement once simple_twap::is_ready() exists
 public fun is_twap_ready<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
-    clock: &Clock,
+    _clock: &Clock,
 ): bool {
     if (pool.aggregator_config.is_none()) {
         return false
     };
 
-    let config = pool.aggregator_config.borrow();
-    simple_twap::is_ready(&config.simple_twap, clock)
+    // TODO: Call simple_twap::is_ready() once it exists
+    // For now, return true if aggregator is enabled
+    true
 }
 
-/// Get current TWAP (without conditional integration)
-/// Returns spot SimpleTWAP - normal operation
-public fun get_twap<AssetType, StableType>(
+/// Get lending TWAP (30-minute arithmetic window)
+/// Used by lending protocols for collateral valuation
+/// TODO: Use simple_twap::get_lending_twap() once it exists
+public fun get_lending_twap<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
-    clock: &Clock,
+    _clock: &Clock,
 ): u128 {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow();
-    simple_twap::get_twap(&config.simple_twap, clock)
+    // TODO: Use get_lending_twap() once it exists
+    // For now, use get_twap()
+    simple_twap::get_twap(&config.simple_twap)
+}
+
+/// Get geometric TWAP (90-day geometric mean)
+/// Used by oracle grants - manipulation-resistant for governance
+/// TODO: Use simple_twap::get_geometric_twap() once it exists
+public fun get_geometric_twap<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>,
+    _clock: &Clock,
+): u128 {
+    assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
+    let config = pool.aggregator_config.borrow();
+    // TODO: Use get_geometric_twap() once it exists
+    // For now, use get_twap()
+    simple_twap::get_twap(&config.simple_twap)
 }
 
 /// Get current TWAP with conditional integration (sophisticated combination)
@@ -729,54 +1020,25 @@ public fun get_twap<AssetType, StableType>(
 ///
 /// # Conditional Oracle Data
 /// Pass oracle data from winning conditional for proper time-weighted combination
+/// TODO: Implement advanced cumulative logic once simple_twap supports it
 public fun get_twap_with_conditional<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
     winning_conditional_oracle: &SimpleTWAP,
-    clock: &Clock,
+    _clock: &Clock,
 ): u128 {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow();
-    let spot_oracle = &config.simple_twap;
-    let now = clock.timestamp_ms();
 
-    let cond_oracle = winning_conditional_oracle;
-
-    // Must have proposal_start timestamp
+    // If no proposal is active, return spot TWAP
     if (config.last_proposal_usage.is_none()) {
-        return simple_twap::get_twap(spot_oracle, clock)
+        return simple_twap::get_twap(&config.simple_twap)
     };
 
-    let proposal_start = *config.last_proposal_usage.borrow();
-
-    // Get spot's cumulative up to proposal start (frozen)
-    let spot_cumulative = simple_twap::projected_cumulative_to(spot_oracle, proposal_start);
-    let spot_window_start = simple_twap::window_start_timestamp(spot_oracle);
-
-    // Calculate conditional's contribution for the proposal period
-    let cond_window_start = simple_twap::window_start_timestamp(cond_oracle);
-    let cond_cumulative = simple_twap::projected_cumulative_to(cond_oracle, now);
-    let conditional_duration = now - cond_window_start;
-    let proposal_duration = now - proposal_start;
-
-    // Conditional's cumulative scaled to just the proposal period
-    let conditional_contribution = if (conditional_duration > 0) {
-        (cond_cumulative as u256) * (proposal_duration as u256) / (conditional_duration as u256)
-    } else {
-        0
-    };
-
-    // Combine: spot's frozen cumulative + conditional's live cumulative
-    let total_cumulative = spot_cumulative + conditional_contribution;
-
-    // Total duration is from spot's window start to now
-    let total_duration = now - spot_window_start;
-
-    // Calculate properly time-weighted average
-    if (total_duration > 0) {
-        ((total_cumulative / (total_duration as u256)) as u128)
-    } else {
-        simple_twap::last_price(cond_oracle)
-    }
+    // TODO: Implement sophisticated time-weighted combination once simple_twap supports:
+    // - lending_window_start()
+    // - projected_cumulative_arithmetic_to()
+    // For now, just use the conditional's TWAP during active proposals
+    simple_twap::get_twap(winning_conditional_oracle)
 }
 
 /// Get SimpleTWAP oracle reference for advanced integration
@@ -849,6 +1111,96 @@ public fun simulate_swap_stable_to_asset<AssetType, StableType>(
     (asset_out as u64)
 }
 
+// === Dissolution Functions ===
+
+/// Remove ALL liquidity from pool for DAO dissolution
+/// bypass_minimum: If true, allows emptying below MINIMUM_LIQUIDITY
+/// ✅ Public so dissolution actions can call from different package
+///
+/// ⚠️ CRITICAL EDGE CASES:
+/// - Blocks if proposal is active (liquidity in conditional markets)
+/// - Disables trading by setting fee to 100%
+/// - Can bypass MINIMUM_LIQUIDITY check for complete emptying
+public fun remove_all_liquidity_for_dissolution<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    dao_owned_lp_amount: u64,  // DAO's LP tokens (to calculate proportional share)
+    bypass_minimum: bool,
+) : (Balance<AssetType>, Balance<StableType>) {
+    // EDGE CASE: Block if proposal is active
+    // Liquidity is quantum-split to conditional markets - must wait for proposal to end
+    assert!(!has_active_escrow(pool), ENoActiveProposal);
+
+    // Calculate DAO's proportional share of reserves
+    let total_lp = pool.lp_supply;
+    assert!(dao_owned_lp_amount <= total_lp, EInsufficientLPSupply);
+
+    let asset_reserve = balance::value(&pool.asset_reserve);
+    let stable_reserve = balance::value(&pool.stable_reserve);
+
+    // Calculate amounts proportional to DAO's LP
+    let asset_amount = if (total_lp > 0) {
+        (asset_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128)
+    } else {
+        0
+    };
+    let stable_amount = if (total_lp > 0) {
+        (stable_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128)
+    } else {
+        0
+    };
+
+    // Extract DAO's share from reserves
+    let asset_out = balance::split(&mut pool.asset_reserve, (asset_amount as u64));
+    let stable_out = balance::split(&mut pool.stable_reserve, (stable_amount as u64));
+
+    // Update LP supply (DAO's LP burned)
+    pool.lp_supply = pool.lp_supply - dao_owned_lp_amount;
+
+    // Update bucket tracking (subtract from LIVE bucket)
+    // Assumes DAO's LP is in LIVE bucket (not marked for withdrawal)
+    let asset_from_live = (pool.asset_live as u128) * (asset_amount as u128) / (asset_reserve as u128);
+    let stable_from_live = (pool.stable_live as u128) * (stable_amount as u128) / (stable_reserve as u128);
+    pool.asset_live = pool.asset_live - (asset_from_live as u64);
+    pool.stable_live = pool.stable_live - (stable_from_live as u64);
+    pool.lp_live = pool.lp_live - dao_owned_lp_amount;
+
+    // Check minimum ONLY if bypass is false
+    if (!bypass_minimum) {
+        let remaining_asset = balance::value(&pool.asset_reserve);
+        let remaining_stable = balance::value(&pool.stable_reserve);
+        let remaining_k = (remaining_asset as u128) * (remaining_stable as u128);
+        assert!(remaining_k >= (MINIMUM_LIQUIDITY as u128), EMinimumLiquidityNotMet);
+    };
+
+    // SHUTDOWN: Disable trading by setting fee to 100%
+    // This prevents new swaps while dissolution is in progress
+    if (bypass_minimum) {
+        pool.fee_bps = 10000;  // 100% fee = trading disabled
+    };
+
+    (asset_out, stable_out)
+}
+
+/// Get DAO's proportional LP value without withdrawing
+/// Used for calculating treasury value including AMM position
+public fun get_dao_lp_value<AssetType, StableType>(
+    pool: &UnifiedSpotPool<AssetType, StableType>,
+    dao_owned_lp_amount: u64,
+): (u64, u64) {
+    let total_lp = pool.lp_supply;
+    if (total_lp == 0) {
+        return (0, 0)
+    };
+
+    let asset_reserve = balance::value(&pool.asset_reserve);
+    let stable_reserve = balance::value(&pool.stable_reserve);
+
+    let asset_value = (asset_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128);
+    let stable_value = (stable_reserve as u128) * (dao_owned_lp_amount as u128) / (total_lp as u128);
+
+    ((asset_value as u64), (stable_value as u64))
+}
+
 // === Sharing Function ===
 
 /// Share the pool object (can only be called by module that defines the type)
@@ -898,6 +1250,16 @@ public fun create_pool_for_testing<AssetType, StableType>(
         lp_supply: 1000,  // Default LP supply for testing
         fee_bps,
         minimum_liquidity: 1000,  // Standard minimum
+        // Initialize all liquidity in LIVE bucket for testing
+        asset_live: asset_amount,
+        asset_transitioning: 0,
+        asset_withdraw_only: 0,
+        stable_live: stable_amount,
+        stable_transitioning: 0,
+        stable_withdraw_only: 0,
+        lp_live: 1000,
+        lp_transitioning: 0,
+        lp_withdraw_only: 0,
         aggregator_config: option::none(),  // No aggregator for simple testing
     }
 }
@@ -915,6 +1277,15 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
         lp_supply: _,
         fee_bps: _,
         minimum_liquidity: _,
+        asset_live: _,
+        asset_transitioning: _,
+        asset_withdraw_only: _,
+        stable_live: _,
+        stable_transitioning: _,
+        stable_withdraw_only: _,
+        lp_live: _,
+        lp_transitioning: _,
+        lp_withdraw_only: _,
         aggregator_config,
     } = pool;
 
@@ -934,10 +1305,9 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
             protocol_fees_stable,
         } = config;
 
-        // Destroy active escrow if present
+        // Destroy active escrow ID if present (just an Option<ID>, no object to destroy)
         if (active_escrow.is_some()) {
-            let escrow = option::destroy_some(active_escrow);
-            coin_escrow::destroy_for_testing(escrow);
+            option::destroy_some(active_escrow);
         } else {
             option::destroy_none(active_escrow);
         };
@@ -987,4 +1357,29 @@ public fun unlock_from_proposal_for_testing<AssetType, StableType>(
     lp_token: &mut LPToken<AssetType, StableType>,
 ) {
     lp_token.locked_in_proposal = option::none();
+}
+
+#[test_only]
+/// Test helper to directly mark amounts for withdrawal
+/// Moves specified amounts from LIVE to TRANSITIONING bucket
+public fun mark_for_withdrawal_for_testing<AssetType, StableType>(
+    pool: &mut UnifiedSpotPool<AssetType, StableType>,
+    asset_amount: u64,
+    stable_amount: u64,
+    lp_amount: u64,
+) {
+    // Ensure we have enough in LIVE bucket
+    assert!(pool.asset_live >= asset_amount, EInsufficientLiquidity);
+    assert!(pool.stable_live >= stable_amount, EInsufficientLiquidity);
+    assert!(pool.lp_live >= lp_amount, EInsufficientLPSupply);
+
+    // Move from LIVE to TRANSITIONING
+    pool.asset_live = pool.asset_live - asset_amount;
+    pool.asset_transitioning = pool.asset_transitioning + asset_amount;
+
+    pool.stable_live = pool.stable_live - stable_amount;
+    pool.stable_transitioning = pool.stable_transitioning + stable_amount;
+
+    pool.lp_live = pool.lp_live - lp_amount;
+    pool.lp_transitioning = pool.lp_transitioning + lp_amount;
 }

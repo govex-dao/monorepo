@@ -1,35 +1,43 @@
 /// ============================================================================
-/// SIMPLE TWAP - UNISWAP V2 STYLE TIME-WEIGHTED AVERAGE PRICE
+/// WINDOWED TWAP WITH MULTI-STEP ARITHMETIC CAPPING
 /// ============================================================================
 ///
-/// PURPOSE: External price oracle for lending protocols and integrations
+/// PURPOSE: Provide manipulation-resistant TWAP for oracle grants
 ///
 /// KEY FEATURES:
-/// - Rolling 90-day window for time-weighted average (longer = safer)
-/// - Pure arithmetic mean (no price capping needed)
-/// - Uniswap V2 proven design with extended window
-/// - Manipulation cost scales with window size (90 days = extremely expensive)
+/// - Fixed-size windows (1 minute default)
+/// - TWAP movement capped as % of current window's TWAP
+/// - O(1) gas - just arithmetic, no loops or exponentiation
+/// - Cap recalculates between batches (grows with TWAP)
+///
+/// MANIPULATION RESISTANCE:
+/// - Attacker spikes price $100 → $200 for 10 minutes
+/// - Cap calculated ONCE: 1% of $100 = $1 per window
+/// - Take 10 steps of $1 each (ARITHMETIC within batch)
+/// - Result: $100 + ($1 × 10) = $110
+/// - Next batch: Cap recalculates as 1% of $110 = $1.10
+///
+/// GAS EFFICIENCY:
+/// - O(1) constant time - just multiplication and min()
+/// - No loops, no binary search, no exponentiation
+/// - Example: 10 missed windows = same cost as 1 window
+/// - 10x+ faster than geometric approach with binary search
+///
+/// SECURITY PROPERTY:
+/// - Cap grows with TWAP (percentage-based)
+/// - Allows legitimate price movements over time
+/// - Still prevents instant manipulation
+/// - Example: $100 → $200 instant = capped to $101
+/// - Example: $100 → $200 over 100 windows = reaches $200
 ///
 /// USED BY:
-/// - External lending protocols (Compound, Aave style)
-/// - Price aggregators
-/// - Any protocol needing standard TWAP
-///
-/// NOT USED FOR:
-/// - Governance decisions (use futarchy oracle)
-/// - Determining proposal winners (use futarchy oracle)
-///
-/// DESIGN:
-/// - Accumulates price × time over rolling 90-day window
-/// - NO price capping (like Uniswap V2)
-/// - Returns TWAP = cumulative / window_duration
-/// - Long window makes manipulation economically infeasible
+/// - Oracle grants: get_twap() → capped 1-minute windowed TWAP
+/// - External consumers: Choose based on use case
 ///
 /// ============================================================================
 
 module futarchy_markets_primitives::simple_twap;
 
-use futarchy_one_shot_utils::math;
 use sui::clock::Clock;
 use sui::event;
 
@@ -37,402 +45,278 @@ use sui::event;
 // Constants
 // ============================================================================
 
-const NINETY_DAYS_MS: u64 = 7_776_000_000; // 90 days in milliseconds
-const PRICE_SCALE: u128 = 1_000_000_000_000; // 10^12 for precision
-const PPM_DENOMINATOR: u64 = 1_000_000; // Parts per million
+const ONE_MINUTE_MS: u64 = 60_000;
+const PPM_DENOMINATOR: u64 = 1_000_000;         // Parts per million (1% = 10,000 PPM)
+const DEFAULT_MAX_MOVEMENT_PPM: u64 = 10_000;   // 1% default cap
 
+// ============================================================================
 // Errors
-const ENotInitialized: u64 = 1;
-const EInvalidCapPpm: u64 = 2;
-const ETwapNotReady: u64 = 3;
-const EBackfillMismatch: u64 = 5;
-const EInvalidPeriod: u64 = 6;
-const EOverflow: u64 = 7;
-const EPriceDeviationTooLarge: u64 = 8;
-const ECumulativeOverflow: u64 = 9;
-
-// Safety limits
-const MAX_PRICE_DEVIATION_RATIO: u64 = 100; // 100x max price change allowed
-
-// ============================================================================
-// Events
 // ============================================================================
 
-public struct TWAPUpdated has copy, drop {
-    old_price: u128,
-    new_price: u128,
-    raw_price: u128,
-    capped: bool,
-    timestamp: u64,
-    time_elapsed_ms: u64,
-}
-
-public struct WindowSlided has copy, drop {
-    old_start: u64,
-    new_start: u64,
-    removed_duration_ms: u64,
-}
-
-public struct BackfillApplied has copy, drop {
-    period_start: u64,
-    period_end: u64,
-    period_cumulative: u256,
-    period_final_price: u128,
-}
+const EOverflow: u64 = 0;
+const EInvalidConfig: u64 = 1;
+const ETimestampRegression: u64 = 2;
+const ENotInitialized: u64 = 3;
 
 // ============================================================================
 // Structs
 // ============================================================================
 
-/// Simple TWAP oracle - Uniswap V2 style (pure arithmetic mean)
+/// Simple TWAP with O(1) arithmetic percentage capping
 public struct SimpleTWAP has store {
-    // TWAP state
-    initialized_at: u64,           // When oracle was initialized
-    last_price: u128,              // Last recorded price
-    last_timestamp: u64,           // Last update timestamp
+    /// Last finalized window's TWAP (returned by get_twap())
+    last_window_twap: u128,
 
-    // Rolling window (90 days) - for simple consumers
-    window_start_timestamp: u64,   // Start of current 90-day window
-    window_cumulative_price: u256, // Cumulative price × time in current window
+    /// Cumulative price * time for current (incomplete) window
+    cumulative_price: u256,
 
-    // Infinite accumulation (Uniswap V2) - for advanced consumers
-    total_cumulative_price: u256,  // Total cumulative since initialization (never resets)
+    /// Start of current window (ms)
+    window_start: u64,
+
+    /// Last update timestamp (ms)
+    last_update: u64,
+
+    /// Window size (default: 1 minute)
+    window_size_ms: u64,
+
+    /// Maximum movement per window in PPM (default: 1% = 10,000 PPM)
+    max_movement_ppm: u64,
+
+    /// Whether at least one window has been finalized (TWAP is valid)
+    initialized: bool,
 }
 
 // ============================================================================
-// Core Functions
+// Events
 // ============================================================================
 
-/// Create new SimpleTWAP oracle - Uniswap V2 style (no capping)
-///
-/// # Arguments
-/// * `initial_price` - Starting price (e.g., stable_reserve / asset_reserve × PRICE_SCALE)
-/// * `clock` - Sui clock for timestamp
-///
-/// # Design
-/// - Simple consumers use get_twap() for 90-day TWAP
-/// - Advanced consumers use get_cumulative_and_timestamp() for custom windows (Uniswap V2)
+public struct WindowFinalized has copy, drop {
+    timestamp: u64,
+    raw_twap: u128,
+    capped_twap: u128,
+    num_windows: u64,
+}
+
+// ============================================================================
+// Creation
+// ============================================================================
+
+/// Create TWAP oracle with default 1-minute windows and 1% cap
+public fun new_default(initial_price: u128, clock: &Clock): SimpleTWAP {
+    new(initial_price, ONE_MINUTE_MS, DEFAULT_MAX_MOVEMENT_PPM, clock)
+}
+
+/// Create TWAP oracle with custom configuration
 public fun new(
     initial_price: u128,
+    window_size_ms: u64,
+    max_movement_ppm: u64,
     clock: &Clock,
 ): SimpleTWAP {
+    assert!(window_size_ms > 0, EInvalidConfig);
+    assert!(max_movement_ppm > 0 && max_movement_ppm < PPM_DENOMINATOR, EInvalidConfig);
+
     let now = clock.timestamp_ms();
 
     SimpleTWAP {
-        initialized_at: now,
-        last_price: initial_price,
-        last_timestamp: now,
-        window_start_timestamp: now,
-        window_cumulative_price: 0,
-        total_cumulative_price: 0,  // Infinite accumulation starts at 0
+        last_window_twap: initial_price,
+        cumulative_price: 0,
+        window_start: now,
+        last_update: now,
+        window_size_ms,
+        max_movement_ppm,
+        initialized: true,  // Initial price is valid TWAP (from AMM ratio or spot TWAP)
     }
 }
 
-/// Update oracle with new price - Uniswap V2 style (no capping)
-public fun update(
-    oracle: &mut SimpleTWAP,
-    new_price: u128,
-    clock: &Clock,
-) {
+// ============================================================================
+// Core Update Logic - Multi-Step Arithmetic Capping
+// ============================================================================
+
+/// Update oracle with new price observation
+///
+/// KEY ALGORITHM:
+/// 1. Accumulate price * time into current window
+/// 2. If window(s) completed:
+///    a. Calculate raw TWAP from accumulated data
+///    b. Calculate FIXED cap (% of current TWAP)
+///    c. Total movement = min(gap, cap × num_windows)
+/// 3. Reset window
+///
+/// CRITICAL INSIGHT:
+/// - Cap calculated ONCE per batch (fixed $ amount)
+/// - Total movement = cap × num_windows (arithmetic)
+/// - Cap recalculates BETWEEN batches (next update call)
+/// - Prevents instant manipulation, allows gradual tracking
+///
+/// EXAMPLE:
+/// - Price jumps $100 → $200, stays for 10 minutes (10 windows)
+/// - Batch 1: Cap = 1% of $100 = $1, movement = $1 × 10 = $10 → $110
+/// - Next update: Cap = 1% of $110 = $1.10, movement = $1.10 × 10 = $11 → $121
+/// - Cap grows between batches, enabling gradual price tracking
+///
+public fun update(oracle: &mut SimpleTWAP, price: u128, clock: &Clock) {
     let now = clock.timestamp_ms();
 
-    // Skip if no time passed
-    if (now == oracle.last_timestamp) return;
+    // Prevent timestamp regression
+    assert!(now >= oracle.last_update, ETimestampRegression);
 
-    let time_elapsed = now - oracle.last_timestamp;
+    let elapsed = now - oracle.last_update;
 
-    // Accumulate price × time for elapsed period
-    let price_time = (oracle.last_price as u256) * (time_elapsed as u256);
+    if (elapsed == 0) return;
 
-    // Update rolling window (90-day)
-    oracle.window_cumulative_price = oracle.window_cumulative_price + price_time;
+    // Accumulate price * time for current window
+    oracle.cumulative_price = oracle.cumulative_price +
+        (price as u256) * (elapsed as u256);
 
-    // Update infinite cumulative (Uniswap V2 - never resets)
-    oracle.total_cumulative_price = oracle.total_cumulative_price + price_time;
+    oracle.last_update = now;
 
-    // Update rolling window
-    update_rolling_window(oracle, now);
+    // Check if any window(s) completed
+    let time_since_window = now - oracle.window_start;
+    let num_windows = time_since_window / oracle.window_size_ms;
 
-    // Emit event
-    event::emit(TWAPUpdated {
-        old_price: oracle.last_price,
-        new_price,
-        raw_price: new_price,
-        capped: false,  // Never capped (Uniswap V2 style)
-        timestamp: now,
-        time_elapsed_ms: time_elapsed,
-    });
-
-    // Update state
-    oracle.last_price = new_price;
-    oracle.last_timestamp = now;
+    if (num_windows > 0) {
+        finalize_window(oracle, now, num_windows);
+    }
 }
 
-/// Get current TWAP over 90-day window with overflow protection
-public fun get_twap(oracle: &SimpleTWAP, clock: &Clock): u128 {
-    let now = clock.timestamp_ms();
-
-    // Require at least 90 days of history
-    assert!(now >= oracle.initialized_at + NINETY_DAYS_MS, ETwapNotReady);
-
-    // Project cumulative to now
-    let time_since_last = now - oracle.last_timestamp;
-    let projected_cumulative = oracle.window_cumulative_price +
-        ((oracle.last_price as u256) * (time_since_last as u256));
-
-    // Calculate window duration
-    let window_age = now - oracle.window_start_timestamp;
-    let effective_duration = if (window_age > NINETY_DAYS_MS) {
-        NINETY_DAYS_MS
-    } else {
-        window_age
-    };
-
-    if (effective_duration > 0) {
-        let twap_u256 = projected_cumulative / (effective_duration as u256);
-        // Protect against u128 overflow
+/// Finalize window - Take multiple capped steps with FIXED cap
+///
+/// ALGORITHM (matches oracle.move pattern):
+/// - Calculate raw TWAP from accumulated price * time
+/// - Calculate FIXED cap (% of current TWAP, stays constant for this batch)
+/// - Take num_windows steps using the FIXED cap
+/// - Cap gets recalculated next batch (grows between batches, not within)
+///
+/// KEY INSIGHT: Arithmetic steps within batch, geometric growth between batches
+/// - Batch 1: Cap = 1% of $100 = $1, take 10 steps → $110
+/// - Batch 2: Cap = 1% of $110 = $1.10, take 10 steps → $121
+/// Result: Cap grows with TWAP, but steps are arithmetic within each batch
+///
+fun finalize_window(oracle: &mut SimpleTWAP, now: u64, num_windows: u64) {
+    // Calculate raw TWAP from accumulated price * time
+    let total_duration = now - oracle.window_start;
+    let raw_twap = if (total_duration > 0) {
+        let twap_u256 = oracle.cumulative_price / (total_duration as u256);
         assert!(twap_u256 <= (std::u128::max_value!() as u256), EOverflow);
         (twap_u256 as u128)
     } else {
-        oracle.last_price
-    }
-}
-
-/// Get current spot price (last recorded price)
-public fun get_spot_price(oracle: &SimpleTWAP): u128 {
-    oracle.last_price
-}
-
-/// Check if TWAP is ready (has 90+ days of history)
-public fun is_ready(oracle: &SimpleTWAP, clock: &Clock): bool {
-    let now = clock.timestamp_ms();
-    now >= oracle.initialized_at + NINETY_DAYS_MS
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/// Update rolling 90-day window - Uniswap V2 style (simple estimation)
-fun update_rolling_window(oracle: &mut SimpleTWAP, now: u64) {
-    let window_age = now - oracle.window_start_timestamp;
-
-    if (window_age > NINETY_DAYS_MS) {
-        let old_start = oracle.window_start_timestamp;
-
-        // Slide window forward
-        let new_window_start = now - NINETY_DAYS_MS;
-        let time_to_remove = new_window_start - oracle.window_start_timestamp;
-
-        // Estimate old price using current price (Uniswap V2 approach)
-        // This is an approximation but becomes accurate as window ages
-        let current_twap = if (window_age > 0) {
-            ((oracle.window_cumulative_price / (window_age as u256)) as u128)
-        } else {
-            oracle.last_price
-        };
-
-        let price_to_remove = (current_twap as u256) * (time_to_remove as u256);
-
-        // Remove old data from accumulator
-        if (oracle.window_cumulative_price > price_to_remove) {
-            oracle.window_cumulative_price = oracle.window_cumulative_price - price_to_remove;
-        } else {
-            // Fallback: reset to current price × 90 days
-            oracle.window_cumulative_price = (oracle.last_price as u256) * (NINETY_DAYS_MS as u256);
-        };
-
-        oracle.window_start_timestamp = new_window_start;
-
-        // Emit event
-        event::emit(WindowSlided {
-            old_start,
-            new_start: new_window_start,
-            removed_duration_ms: time_to_remove,
-        });
+        oracle.last_window_twap
     };
-}
 
-// ============================================================================
-// Safety Helper Functions
-// ============================================================================
+    // Calculate FIXED cap for this entire batch (% of current TWAP)
+    let max_step_u256 = (oracle.last_window_twap as u256) *
+        (oracle.max_movement_ppm as u256) / (PPM_DENOMINATOR as u256);
+    assert!(max_step_u256 <= (std::u128::max_value!() as u256), EOverflow);
+    let max_step = (max_step_u256 as u128);
 
-/// Validate price is within reasonable bounds (prevents price oracle poisoning)
-/// Checks that new_price is within MAX_PRICE_DEVIATION_RATIO of old_price
-fun validate_price_deviation(old_price: u128, new_price: u128) {
-    // Allow any price if old price is zero (initialization case)
-    if (old_price == 0) return;
-
-    // Calculate max and min allowed prices
-    let max_allowed = (old_price as u256) * (MAX_PRICE_DEVIATION_RATIO as u256);
-    let min_allowed = (old_price as u256) / (MAX_PRICE_DEVIATION_RATIO as u256);
-
-    assert!(
-        (new_price as u256) <= max_allowed && (new_price as u256) >= min_allowed,
-        EPriceDeviationTooLarge
-    );
-}
-
-/// Safely add to cumulative with overflow check
-fun safe_add_to_cumulative(cumulative: u256, addition: u256): u256 {
-    // Check for overflow before adding
-    let max_u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-    assert!(cumulative <= max_u256 - addition, ECumulativeOverflow);
-    cumulative + addition
-}
-
-/// Safely multiply u256 values with overflow check
-public fun safe_mul_u256(a: u256, b: u256): u256 {
-    if (a == 0 || b == 0) return 0;
-
-    let max_u256 = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
-    assert!(a <= max_u256 / b, EOverflow);
-    a * b
-}
-
-// ============================================================================
-// Getter Functions
-// ============================================================================
-
-public fun last_price(oracle: &SimpleTWAP): u128 {
-    oracle.last_price
-}
-
-public fun last_timestamp(oracle: &SimpleTWAP): u64 {
-    oracle.last_timestamp
-}
-
-public fun initialized_at(oracle: &SimpleTWAP): u64 {
-    oracle.initialized_at
-}
-
-public fun window_start(oracle: &SimpleTWAP): u64 {
-    oracle.window_start_timestamp
-}
-
-/// Get window cumulative price (for combining with conditional TWAP)
-public fun window_cumulative_price(oracle: &SimpleTWAP): u256 {
-    oracle.window_cumulative_price
-}
-
-/// Get window start timestamp (for combining with conditional TWAP)
-public fun window_start_timestamp(oracle: &SimpleTWAP): u64 {
-    oracle.window_start_timestamp
-}
-
-/// Get cumulative and timestamp for Uniswap V2 style custom TWAP calculations
-///
-/// # Usage (Advanced Consumers - Lending Protocols)
-/// ```
-/// // Step 1: Store snapshot at desired window start
-/// let (snapshot_cumulative, snapshot_timestamp) = get_cumulative_and_timestamp(oracle);
-/// // Consumer stores these in their contract
-///
-/// // Step 2: Later, read current values
-/// let (current_cumulative, current_timestamp) = get_cumulative_and_timestamp(oracle);
-///
-/// // Step 3: Calculate custom TWAP
-/// let time_elapsed = current_timestamp - snapshot_timestamp;
-/// let cumulative_delta = current_cumulative - snapshot_cumulative;
-/// let custom_twap = cumulative_delta / time_elapsed;
-/// ```
-///
-/// # Returns
-/// * `cumulative_price` - Total cumulative price × time since initialization
-/// * `timestamp` - Last update timestamp in milliseconds
-///
-/// # Examples
-/// - 30-min TWAP: Store snapshot 30 min ago, read now
-/// - 1-hour TWAP: Store snapshot 1 hour ago, read now
-/// - 24-hour TWAP: Store snapshot 24 hours ago, read now
-public fun get_cumulative_and_timestamp(oracle: &SimpleTWAP): (u256, u64) {
-    (oracle.total_cumulative_price, oracle.last_timestamp)
-}
-
-/// Calculate projected cumulative to a specific timestamp
-/// Used for combining spot + conditional TWAPs
-public fun projected_cumulative_to(oracle: &SimpleTWAP, target_timestamp: u64): u256 {
-    let time_since_last = target_timestamp - oracle.last_timestamp;
-    oracle.window_cumulative_price + ((oracle.last_price as u256) * (time_since_last as u256))
-}
-
-/// Backfill cumulative data from conditional oracle after proposal ends
-/// This "fills the gap" in spot's oracle with winning conditional's data
-///
-/// # Arguments
-/// * `period_start` - When the proposal started (when spot froze)
-/// * `period_end` - When the proposal ended
-/// * `period_cumulative` - Conditional's cumulative price × time for this period
-/// * `period_final_price` - Conditional's final price at proposal end
-///
-/// # Safety
-/// * Validates period aligns with oracle's last timestamp (prevents duplicate backfills)
-/// * Validates period_end > period_start
-/// * Emits event for observability
-public fun backfill_from_conditional(
-    oracle: &mut SimpleTWAP,
-    period_start: u64,
-    period_end: u64,
-    period_cumulative: u256,
-    period_final_price: u128,
-) {
-    // CRITICAL: Validate period aligns with oracle state to prevent duplicate backfills
-    assert!(period_start == oracle.last_timestamp, EBackfillMismatch);
-    assert!(period_end > period_start, EInvalidPeriod);
-
-    // SAFETY: Validate price deviation to prevent oracle poisoning
-    validate_price_deviation(oracle.last_price, period_final_price);
-
-    // SAFETY: Add conditional's cumulative to spot's rolling window with overflow protection
-    oracle.window_cumulative_price = safe_add_to_cumulative(
-        oracle.window_cumulative_price,
-        period_cumulative
-    );
-
-    // SAFETY: Add to infinite cumulative (for Uniswap V2 style consumers) with overflow protection
-    oracle.total_cumulative_price = safe_add_to_cumulative(
-        oracle.total_cumulative_price,
-        period_cumulative
-    );
-
-    // Update state to resume from conditional's final state
-    oracle.last_price = period_final_price;
-    oracle.last_timestamp = period_end;
-
-    // Recalculate window TWAP with backfilled data
-    let window_age = period_end - oracle.window_start_timestamp;
-    let window_duration = if (window_age > NINETY_DAYS_MS) {
-        NINETY_DAYS_MS
+    // Calculate total gap
+    let (total_gap, going_up) = if (raw_twap > oracle.last_window_twap) {
+        (raw_twap - oracle.last_window_twap, true)
     } else {
-        window_age
+        (oracle.last_window_twap - raw_twap, false)
     };
 
-    if (window_duration > 0) {
-        // Note: We removed last_window_twap field, so this calculation is no longer needed
-        // The get_twap() function calculates TWAP on the fly from window_cumulative_price
+    // Calculate total movement (capped by num_windows × max_step)
+    // Protect against overflow: max_step × num_windows
+    let max_total_movement = if (max_step > 0 && num_windows > 0) {
+        let max_total_u256 = (max_step as u256) * (num_windows as u256);
+        if (max_total_u256 > (std::u128::max_value!() as u256)) {
+            std::u128::max_value!()
+        } else {
+            (max_total_u256 as u128)
+        }
+    } else {
+        0
+    };
+
+    let actual_movement = if (total_gap > max_total_movement) {
+        max_total_movement
+    } else {
+        total_gap
+    };
+
+    // Update TWAP with capped movement
+    let capped_twap = if (going_up) {
+        oracle.last_window_twap + actual_movement
+    } else {
+        oracle.last_window_twap - actual_movement
     };
 
     // Emit event
-    event::emit(BackfillApplied {
-        period_start,
-        period_end,
-        period_cumulative,
-        period_final_price,
+    event::emit(WindowFinalized {
+        timestamp: now,
+        raw_twap,
+        capped_twap,
+        num_windows,
     });
+
+    // Update state (cap will be recalculated next batch based on new capped_twap)
+    oracle.last_window_twap = capped_twap;
+    oracle.window_start = now;
+    oracle.cumulative_price = 0;
+    // Note: initialized already set to true in constructor (saves 1 SSTORE ~100 gas)
 }
 
 // ============================================================================
-// Test Functions
+// View Functions
+// ============================================================================
+
+/// Get current TWAP (last finalized window's capped TWAP)
+///
+/// NOTE: Oracle is initialized with valid TWAP from:
+/// - Spot AMM: Initial pool ratio (e.g., reserve1/reserve0)
+/// - Conditional AMM: Spot's TWAP at proposal creation time
+///
+/// This is O(1) - just returns a stored value
+public fun get_twap(oracle: &SimpleTWAP): u128 {
+    assert!(oracle.initialized, ENotInitialized);
+    oracle.last_window_twap
+}
+
+/// Get last finalized window's TWAP (same as get_twap, for compatibility)
+public fun last_finalized_twap(oracle: &SimpleTWAP): u128 {
+    oracle.last_window_twap
+}
+
+/// Get window configuration
+public fun window_size_ms(oracle: &SimpleTWAP): u64 {
+    oracle.window_size_ms
+}
+
+/// Get max movement in PPM
+public fun max_movement_ppm(oracle: &SimpleTWAP): u64 {
+    oracle.max_movement_ppm
+}
+
+// ============================================================================
+// Test Helpers
 // ============================================================================
 
 #[test_only]
 public fun destroy_for_testing(oracle: SimpleTWAP) {
     let SimpleTWAP {
-        initialized_at: _,
-        last_price: _,
-        last_timestamp: _,
-        window_start_timestamp: _,
-        window_cumulative_price: _,
-        total_cumulative_price: _,
+        last_window_twap: _,
+        cumulative_price: _,
+        window_start: _,
+        last_update: _,
+        window_size_ms: _,
+        max_movement_ppm: _,
+        initialized: _,
     } = oracle;
+}
+
+#[test_only]
+public fun get_cumulative_price(oracle: &SimpleTWAP): u256 {
+    oracle.cumulative_price
+}
+
+#[test_only]
+public fun get_window_start(oracle: &SimpleTWAP): u64 {
+    oracle.window_start
+}
+
+#[test_only]
+public fun get_last_update(oracle: &SimpleTWAP): u64 {
+    oracle.last_update
 }
