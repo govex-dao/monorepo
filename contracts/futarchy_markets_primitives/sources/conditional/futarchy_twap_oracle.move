@@ -1,5 +1,5 @@
 /// ============================================================================
-/// FUTARCHY ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS (INTERNAL)
+/// FUTARCHY TWAP ORACLE - WRITE-THROUGH TWAP FOR PREDICTION MARKETS (INTERNAL)
 /// ============================================================================
 ///
 /// PURPOSE: Internal oracle for futarchy decision-making and proposal resolution
@@ -8,19 +8,19 @@
 /// - Conditional AMMs during proposals (outcome evaluation)
 /// - Proposal resolution (determining winners based on TWAP)
 /// - SpotAMM for governance TWAP (base fair value)
-/// - NOT for external protocols (use spot_oracle_interface instead)
+/// - NOT for external protocols (use price_based_unlocks_oracle instead)
 ///
 /// KEY FEATURES:
 /// - Write-through pattern (MUST update before reading)
 /// - Price capping to prevent manipulation
 /// - Complex window-based accumulation
 /// - Designed specifically for futarchy mechanics
-/// - Internal use only (wrapped by spot_oracle_interface for external access)
+/// - Internal use only (wrapped by price_based_unlocks_oracle for external access)
 ///
 /// BEHAVIOR:
 /// - During proposals: Each conditional AMM maintains its own oracle
 /// - After finalization: Winning outcome's TWAP fills gap in spot oracle
-/// - External protocols use spot_oracle_interface (pass-through wrapper)
+/// - External protocols use price_based_unlocks_oracle (pass-through wrapper)
 ///
 /// WHY IT EXISTS:
 /// Futarchy needs precise, manipulation-resistant price discovery during
@@ -28,13 +28,13 @@
 /// are always fresh and prevents time-based manipulation attacks.
 ///
 /// FOR EXTERNAL INTEGRATIONS:
-/// Use spot_oracle_interface.move instead - it provides a standard Uniswap-like
+/// Use price_based_unlocks_oracle.move instead - it provides a standard Uniswap-like
 /// interface that automatically switches between spot and conditional oracles
 /// without requiring understanding of futarchy mechanics.
 ///
 /// ============================================================================
 
-module futarchy_markets_primitives::oracle;
+module futarchy_markets_primitives::futarchy_twap_oracle;
 
 use futarchy_one_shot_utils::math;
 use futarchy_one_shot_utils::constants;

@@ -153,13 +153,13 @@ public fun cancel_all_streams_in_intent<Outcome: store, IW: drop>(
 public fun withdraw_amm_liquidity_in_intent<Outcome: store, AssetType, StableType, IW: drop>(
     intent: &mut Intent<Outcome>,
     pool_id: ID,
-    dao_owned_lp_amount: u64,
+    token_id: ID,
     bypass_minimum: bool,
     intent_witness: IW,
 ) {
     let action = dissolution_actions::new_withdraw_amm_liquidity_action<AssetType, StableType>(
         pool_id,
-        dao_owned_lp_amount,
+        token_id,
         bypass_minimum,
     );
     let action_data = bcs::to_bytes(&action);

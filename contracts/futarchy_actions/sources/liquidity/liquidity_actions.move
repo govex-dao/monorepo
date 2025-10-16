@@ -813,7 +813,7 @@ public fun enable_remove_liquidity_bypass<AssetType, StableType>(
     };
 
     let key = string::utf8(b"action");
-    let action = resource_requests::take_context(request, key);
+    let action: RemoveLiquidityAction<AssetType, StableType> = resource_requests::take_context(request, key);
 
     let RemoveLiquidityAction {
         pool_id,

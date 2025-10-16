@@ -1,6 +1,6 @@
 /// ============================================================================
-/// WINDOWED TWAP WITH MULTI-STEP ARITHMETIC CAPPING
-/// ============================================================================
+/// PASS THROUGH PERCENT-CAPPED WINDOWED TWAP ORACLE
+/// ============================================================================ 
 ///
 /// PURPOSE: Provide manipulation-resistant TWAP for oracle grants
 ///
@@ -36,10 +36,12 @@
 ///
 /// ============================================================================
 
-module futarchy_markets_primitives::simple_twap;
+module futarchy_markets_primitives::pass_through_PCW_TWAP_oracle;
 
 use sui::clock::Clock;
 use sui::event;
+use std::option;
+use std::vector;
 
 // ============================================================================
 // Constants
@@ -49,6 +51,10 @@ const ONE_MINUTE_MS: u64 = 60_000;
 const PPM_DENOMINATOR: u64 = 1_000_000;         // Parts per million (1% = 10,000 PPM)
 const DEFAULT_MAX_MOVEMENT_PPM: u64 = 10_000;   // 1% default cap
 
+const NINETY_DAYS_MS: u64 = 7_776_000_000;      // 90 days
+const CHECKPOINT_INTERVAL_MS: u64 = 604_800_000; // 7 days
+const MAX_CHECKPOINTS: u64 = 20;
+
 // ============================================================================
 // Errors
 // ============================================================================
@@ -57,10 +63,18 @@ const EOverflow: u64 = 0;
 const EInvalidConfig: u64 = 1;
 const ETimestampRegression: u64 = 2;
 const ENotInitialized: u64 = 3;
+const EInvalidProjection: u64 = 4;
+const EInvalidBackfill: u64 = 5;
 
 // ============================================================================
 // Structs
 // ============================================================================
+
+/// Long-horizon checkpoint stored roughly once per week
+struct Checkpoint has copy, drop, store {
+    timestamp: u64,
+    cumulative: u256,
+}
 
 /// Simple TWAP with O(1) arithmetic percentage capping
 public struct SimpleTWAP has store {
@@ -84,6 +98,21 @@ public struct SimpleTWAP has store {
 
     /// Whether at least one window has been finalized (TWAP is valid)
     initialized: bool,
+
+    /// Total cumulative price × time since initialization (for backfill & blending)
+    cumulative_total: u256,
+
+    /// Last observed spot price (used for projection and backfill)
+    last_price: u128,
+
+    /// Oracle initialization timestamp
+    initialized_at: u64,
+
+    /// Rolling checkpoints used to approximate long windows
+    checkpoints: vector<Checkpoint>,
+
+    /// Timestamp of the most recent checkpoint
+    last_checkpoint_at: u64,
 }
 
 // ============================================================================
@@ -118,7 +147,7 @@ public fun new(
 
     let now = clock.timestamp_ms();
 
-    SimpleTWAP {
+    let mut oracle = SimpleTWAP {
         last_window_twap: initial_price,
         cumulative_price: 0,
         window_start: now,
@@ -126,7 +155,16 @@ public fun new(
         window_size_ms,
         max_movement_ppm,
         initialized: true,  // Initial price is valid TWAP (from AMM ratio or spot TWAP)
-    }
+        cumulative_total: 0,
+        last_price: initial_price,
+        initialized_at: now,
+        checkpoints: vector::empty(),
+        last_checkpoint_at: now,
+    };
+
+    record_checkpoint(&mut oracle, now);
+
+    oracle
 }
 
 // ============================================================================
@@ -163,13 +201,21 @@ public fun update(oracle: &mut SimpleTWAP, price: u128, clock: &Clock) {
 
     let elapsed = now - oracle.last_update;
 
-    if (elapsed == 0) return;
+    if (elapsed == 0) {
+        oracle.last_price = price;
+        return;
+    };
+
+    let price_time = (price as u256) * (elapsed as u256);
 
     // Accumulate price * time for current window
-    oracle.cumulative_price = oracle.cumulative_price +
-        (price as u256) * (elapsed as u256);
+    oracle.cumulative_price = oracle.cumulative_price + price_time;
+
+    // Track total cumulative for longer windows/backfill logic
+    oracle.cumulative_total = oracle.cumulative_total + price_time;
 
     oracle.last_update = now;
+    oracle.last_price = price;
 
     // Check if any window(s) completed
     let time_since_window = now - oracle.window_start;
@@ -178,6 +224,8 @@ public fun update(oracle: &mut SimpleTWAP, price: u128, clock: &Clock) {
     if (num_windows > 0) {
         finalize_window(oracle, now, num_windows);
     }
+
+    maybe_commit_checkpoint(oracle, now);
 }
 
 /// Finalize window - Take multiple capped steps with FIXED cap
@@ -289,6 +337,182 @@ public fun max_movement_ppm(oracle: &SimpleTWAP): u64 {
     oracle.max_movement_ppm
 }
 
+/// Get last observed price
+public fun last_price(oracle: &SimpleTWAP): u128 {
+    oracle.last_price
+}
+
+/// Get last update timestamp
+public fun last_update(oracle: &SimpleTWAP): u64 {
+    oracle.last_update
+}
+
+/// Get oracle initialization timestamp
+public fun initialized_at(oracle: &SimpleTWAP): u64 {
+    oracle.initialized_at
+}
+
+/// Total cumulative price × time since initialization
+public fun cumulative_total(oracle: &SimpleTWAP): u256 {
+    oracle.cumulative_total
+}
+
+/// Project cumulative price × time forward to target_timestamp (must be >= last_update)
+public fun projected_cumulative_arithmetic_to(
+    oracle: &SimpleTWAP,
+    target_timestamp: u64,
+): u256 {
+    assert!(target_timestamp >= oracle.last_update, EInvalidProjection);
+    let elapsed = target_timestamp - oracle.last_update;
+    oracle.cumulative_total + ((oracle.last_price as u256) * (elapsed as u256))
+}
+
+/// Backfill oracle with conditional-period cumulative after proposal ends
+public fun backfill_from_conditional(
+    oracle: &mut SimpleTWAP,
+    proposal_start: u64,
+    proposal_end: u64,
+    period_cumulative: u256,
+    period_final_price: u128,
+) {
+    assert!(proposal_end > proposal_start, EInvalidBackfill);
+    assert!(proposal_start == oracle.last_update, EInvalidBackfill);
+    assert!(period_final_price > 0, EInvalidBackfill);
+
+    oracle.cumulative_total = oracle.cumulative_total + period_cumulative;
+
+    // Reset window starting at proposal end
+    oracle.window_start = proposal_end;
+    oracle.cumulative_price = 0;
+    oracle.last_update = proposal_end;
+    oracle.last_price = period_final_price;
+    oracle.last_window_twap = period_final_price;
+
+    maybe_commit_checkpoint(oracle, proposal_end);
+}
+
+/// Attempt to commit a long-window checkpoint if interval elapsed
+public fun try_commit_checkpoint(oracle: &mut SimpleTWAP, clock: &Clock): bool {
+    let now = clock.timestamp_ms();
+    if (now >= oracle.last_checkpoint_at + CHECKPOINT_INTERVAL_MS) {
+        record_checkpoint(oracle, now);
+        true
+    } else {
+        false
+    }
+}
+
+/// Force a checkpoint regardless of interval (e.g., low-activity periods)
+public fun force_commit_checkpoint(oracle: &mut SimpleTWAP, clock: &Clock) {
+    let now = clock.timestamp_ms();
+    if (now > oracle.last_checkpoint_at) {
+        record_checkpoint(oracle, now);
+    }
+}
+
+/// Get long-window TWAP using checkpoints.
+/// Returns None if not enough history (no checkpoint older than window_ms)
+public fun get_window_twap(
+    oracle: &SimpleTWAP,
+    window_ms: u64,
+    clock: &Clock,
+): option::Option<u128> {
+    let now = clock.timestamp_ms();
+    if (now <= window_ms) {
+        return option::none()
+    };
+
+    let target = now - window_ms;
+    let len = vector::length(&oracle.checkpoints);
+    if (len == 0) {
+        return option::none()
+    };
+
+    let mut idx_opt = option::none();
+    let mut i = len;
+    while (i > 0) {
+        i = i - 1;
+        let cp = vector::borrow(&oracle.checkpoints, i);
+        if (cp.timestamp <= target) {
+            idx_opt = option::some(i);
+            break;
+        };
+    };
+
+    if (option::is_none(&idx_opt)) {
+        return option::none()
+    };
+
+    let idx = option::destroy_some(idx_opt);
+    let cp = vector::borrow(&oracle.checkpoints, idx);
+    let start_ts = cp.timestamp;
+    let start_cumulative = cp.cumulative;
+
+    let duration = now - start_ts;
+    if (duration == 0) {
+        return option::none()
+    };
+
+    let current_cumulative = projected_cumulative_arithmetic_to(oracle, now);
+    let diff = current_cumulative - start_cumulative;
+    let avg_u256 = diff / (duration as u256);
+    assert!(avg_u256 <= (std::u128::max_value!() as u256), EOverflow);
+
+    option::some(avg_u256 as u128)
+}
+
+/// Convenience wrapper for 90-day TWAP (returns None if insufficient history)
+public fun get_ninety_day_twap(
+    oracle: &SimpleTWAP,
+    clock: &Clock,
+): option::Option<u128> {
+    get_window_twap(oracle, NINETY_DAYS_MS, clock)
+}
+
+/// Find checkpoint at or before target timestamp.
+/// Returns None if no checkpoint exists before target.
+public fun checkpoint_at_or_before(
+    oracle: &SimpleTWAP,
+    target_timestamp: u64,
+): option::Option<(u64, u256)> {
+    let len = vector::length(&oracle.checkpoints);
+    if (len == 0) {
+        return option::none()
+    };
+
+    let mut i = len;
+    while (i > 0) {
+        i = i - 1;
+        let cp = vector::borrow(&oracle.checkpoints, i);
+        if (cp.timestamp <= target_timestamp) {
+            return option::some((cp.timestamp, cp.cumulative))
+        };
+    };
+
+    option::none()
+}
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
+fun maybe_commit_checkpoint(oracle: &mut SimpleTWAP, now: u64) {
+    if (now >= oracle.last_checkpoint_at + CHECKPOINT_INTERVAL_MS) {
+        record_checkpoint(oracle, now);
+    }
+}
+
+fun record_checkpoint(oracle: &mut SimpleTWAP, timestamp: u64) {
+    let checkpoint = Checkpoint { timestamp, cumulative: oracle.cumulative_total };
+
+    if (vector::length(&oracle.checkpoints) >= MAX_CHECKPOINTS) {
+        let _ = vector::remove(&mut oracle.checkpoints, 0);
+    };
+
+    vector::push_back(&mut oracle.checkpoints, checkpoint);
+    oracle.last_checkpoint_at = timestamp;
+}
+
 // ============================================================================
 // Test Helpers
 // ============================================================================
@@ -303,6 +527,11 @@ public fun destroy_for_testing(oracle: SimpleTWAP) {
         window_size_ms: _,
         max_movement_ppm: _,
         initialized: _,
+        cumulative_total: _,
+        last_price: _,
+        initialized_at: _,
+        checkpoints: _,
+        last_checkpoint_at: _,
     } = oracle;
 }
 
@@ -319,4 +548,14 @@ public fun get_window_start(oracle: &SimpleTWAP): u64 {
 #[test_only]
 public fun get_last_update(oracle: &SimpleTWAP): u64 {
     oracle.last_update
+}
+
+#[test_only]
+public fun get_cumulative_total(oracle: &SimpleTWAP): u256 {
+    oracle.cumulative_total
+}
+
+#[test_only]
+public fun get_initialized_at(oracle: &SimpleTWAP): u64 {
+    oracle.initialized_at
 }

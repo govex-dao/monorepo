@@ -1,5 +1,5 @@
 /// ============================================================================
-/// SPOT ORACLE INTERFACE - UNIFIED ACCESS POINT FOR ALL PRICE QUERIES
+/// PRICE-BASED UNLOCKS ORACLE - UNIFIED ACCESS POINT FOR ALL PRICE QUERIES
 /// ============================================================================
 ///
 /// PURPOSE: Single interface that abstracts away futarchy complexity
@@ -28,12 +28,12 @@
 ///
 /// ============================================================================
 
-module futarchy_markets_operations::spot_oracle_interface;
+module futarchy_markets_operations::price_based_unlocks_oracle;
 
 use sui::clock::Clock;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
 use std::vector;
 use std::option;
 
@@ -99,21 +99,20 @@ public fun get_spot_price<AssetType, StableType>(
 // Public Functions for Governance/Minting
 // ============================================================================
 
-/// Get geometric TWAP for oracle grants (90-day geometric mean, manipulation-resistant)
-/// This is the PRIMARY oracle for governance decisions and token minting
-/// Geometric mean has exponentially less impact from short-term price spikes
+/// Get 90-day TWAP for oracle grants (long-horizon governance window)
+/// Uses SimpleTWAP checkpoint ring to evaluate 90-day averages
 public fun get_geometric_governance_twap<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
-    // For governance, we want the 90-day geometric TWAP (manipulation-resistant)
+    // For governance, we want the 90-day checkpoint-based TWAP (manipulation-resistant)
     if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
         unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
         // Conditionals have >=50% (spot has <=50%) - read from conditionals
-        get_highest_conditional_geometric_twap(conditional_pools, clock)
+        get_highest_conditional_governance_twap(conditional_pools, clock)
     } else {
-        // Spot has >50% - use spot's geometric TWAP
+        // Spot has >50% - use spot's governance TWAP
         unified_spot_pool::get_geometric_twap(spot_pool, clock)
     }
 }
@@ -137,7 +136,7 @@ fun get_highest_conditional_lending_twap(
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
         // ✅ Using get_twap() - lending_twap not yet implemented
-        let twap = simple_twap::get_twap(pool_simple_twap);
+        let twap = pass_through_PCW_TWAP_oracle::get_twap(pool_simple_twap);
         if (twap > highest_twap) {
             highest_twap = twap;
         };
@@ -147,9 +146,9 @@ fun get_highest_conditional_lending_twap(
     highest_twap
 }
 
-/// Get highest geometric TWAP (90-day geometric mean) from conditional pools
+/// Get highest 90-day TWAP from conditional pools
 /// Used when spot has <50% liquidity during proposals
-fun get_highest_conditional_geometric_twap(
+fun get_highest_conditional_governance_twap(
     pools: &vector<LiquidityPool>,
     clock: &Clock,
 ): u128 {
@@ -161,8 +160,7 @@ fun get_highest_conditional_geometric_twap(
     while (i < pools.length()) {
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
-        // ✅ Using get_twap() - geometric_twap not yet implemented
-        let twap = simple_twap::get_twap(pool_simple_twap);
+        let twap = resolve_long_window(pool_simple_twap, clock);
         if (twap > highest_twap) {
             highest_twap = twap;
         };
@@ -170,6 +168,17 @@ fun get_highest_conditional_geometric_twap(
     };
 
     highest_twap
+}
+
+fun resolve_long_window(oracle: &SimpleTWAP, clock: &Clock): u128 {
+    let base = pass_through_PCW_TWAP_oracle::get_twap(oracle);
+    let opt = pass_through_PCW_TWAP_oracle::get_ninety_day_twap(oracle, clock);
+    if (option::is_some(&opt)) {
+        option::destroy_some(opt)
+    } else {
+        option::destroy_none(opt);
+        base
+    }
 }
 
 /// Get highest TWAP from conditional pools using SimpleTWAP
@@ -185,7 +194,7 @@ fun get_highest_conditional_twap(pools: &vector<LiquidityPool>): u128 {
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
         // SimpleTWAP only exposes TWAP, not instant prices
-        let twap = simple_twap::get_twap(pool_simple_twap);
+        let twap = pass_through_PCW_TWAP_oracle::get_twap(pool_simple_twap);
         if (twap > highest_twap) {
             highest_twap = twap;
         };

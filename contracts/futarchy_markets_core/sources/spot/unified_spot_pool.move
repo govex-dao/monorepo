@@ -28,7 +28,7 @@ use sui::transfer;
 use std::option::{Self, Option};
 use std::type_name::TypeName;
 use std::vector;
-use futarchy_markets_primitives::simple_twap::{Self, SimpleTWAP};
+use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 
 // === Errors ===
@@ -97,6 +97,7 @@ public struct AggregatorConfig<phantom AssetType, phantom StableType> has store 
     last_proposal_usage: Option<u64>,
     conditional_liquidity_ratio_percent: u64,  // 1-99 (base 100, enforced by DAO config)
     oracle_conditional_threshold_bps: u64, // When to use conditional vs spot oracle
+    spot_cumulative_at_lock: Option<u256>,
 
     // Protocol fees (separate from LP fees)
     protocol_fees_stable: Balance<StableType>,
@@ -185,7 +186,7 @@ public(package) fun set_withdraw_mode<AssetType, StableType>(
 public(package) fun destroy_lp_token<AssetType, StableType>(
     lp_token: LPToken<AssetType, StableType>,
 ): u64 {
-    let LPToken { id, amount, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    let LPToken { id, amount, pool_id: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
     amount
 }
@@ -227,7 +228,7 @@ public fun new_with_aggregator<AssetType, StableType>(
     clock: &Clock,
     ctx: &mut TxContext,
 ): UnifiedSpotPool<AssetType, StableType> {
-    let simple_twap = simple_twap::new_default(0, clock); // Initialize with 0 price (will be updated on first swap)
+    let simple_twap = pass_through_PCW_TWAP_oracle::new_default(0, clock); // Initialize with 0 price (will be updated on first swap)
 
     let aggregator_config = AggregatorConfig {
         active_escrow: option::none(),
@@ -236,6 +237,7 @@ public fun new_with_aggregator<AssetType, StableType>(
         last_proposal_usage: option::none(),
         conditional_liquidity_ratio_percent: 0,
         oracle_conditional_threshold_bps,
+        spot_cumulative_at_lock: option::none(),
         protocol_fees_stable: balance::zero(),
     };
 
@@ -270,7 +272,7 @@ public fun enable_aggregator<AssetType, StableType>(
 ) {
     // Only enable if not already enabled
     if (pool.aggregator_config.is_none()) {
-        let simple_twap = simple_twap::new_default(get_spot_price(pool), clock); // Initialize with current price
+        let simple_twap = pass_through_PCW_TWAP_oracle::new_default(get_spot_price(pool), clock); // Initialize with current price
 
         let config = AggregatorConfig {
             active_escrow: option::none(),
@@ -279,6 +281,7 @@ public fun enable_aggregator<AssetType, StableType>(
             last_proposal_usage: option::none(),
             conditional_liquidity_ratio_percent: 0,
             oracle_conditional_threshold_bps,
+            spot_cumulative_at_lock: option::none(),
             protocol_fees_stable: balance::zero(),
         };
 
@@ -391,6 +394,7 @@ public fun add_liquidity_and_return<AssetType, StableType>(
     LPToken<AssetType, StableType> {
         id: object::new(ctx),
         amount: lp_amount,
+        pool_id: object::uid_to_inner(&pool.id),
         locked_in_proposal: option::none(),
         withdraw_mode: false,
     }
@@ -425,7 +429,7 @@ public fun remove_liquidity<AssetType, StableType>(
     assert!((stable_out as u64) >= min_stable_out, ESlippageExceeded);
 
     // Burn LP token
-    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    let LPToken { id, amount: _, pool_id: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 
     // Update total supply
@@ -574,7 +578,7 @@ public fun withdraw_lp<AssetType, StableType>(
     pool.lp_supply = pool.lp_supply - lp_amount;
 
     // Burn LP token
-    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    let LPToken { id, amount: _, pool_id: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 
     // Extract coins from reserves
@@ -613,7 +617,7 @@ public fun swap_stable_for_asset<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     stable_in: Coin<StableType>,
     min_asset_out: u64,
-    _clock: &Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<AssetType> {
     let stable_amount = coin::value(&stable_in);
@@ -629,6 +633,13 @@ public fun swap_stable_for_asset<AssetType, StableType>(
 
     assert!((asset_out as u64) >= min_asset_out, ESlippageExceeded);
     assert!((asset_out as u64) < asset_reserve, EInsufficientLiquidity);
+
+    // Update spot TWAP (if aggregator enabled) using pre-swap reserves
+    if (pool.aggregator_config.is_some()) {
+        let price_before = get_spot_price(pool);
+        let config = pool.aggregator_config.borrow_mut();
+        pass_through_PCW_TWAP_oracle::update(&mut config.simple_twap, price_before, clock);
+    };
 
     // Update reserves
     balance::join(&mut pool.stable_reserve, coin::into_balance(stable_in));
@@ -646,7 +657,7 @@ public fun swap_asset_for_stable<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     asset_in: Coin<AssetType>,
     min_stable_out: u64,
-    _clock: &Clock,
+    clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<StableType> {
     let asset_amount = coin::value(&asset_in);
@@ -662,6 +673,13 @@ public fun swap_asset_for_stable<AssetType, StableType>(
 
     assert!((stable_out as u64) >= min_stable_out, ESlippageExceeded);
     assert!((stable_out as u64) < stable_reserve, EInsufficientLiquidity);
+
+    // Update spot TWAP (if aggregator enabled) using pre-swap reserves
+    if (pool.aggregator_config.is_some()) {
+        let price_before = get_spot_price(pool);
+        let config = pool.aggregator_config.borrow_mut();
+        pass_through_PCW_TWAP_oracle::update(&mut config.simple_twap, price_before, clock);
+    };
 
     // Update reserves
     balance::join(&mut pool.asset_reserve, coin::into_balance(asset_in));
@@ -932,6 +950,8 @@ public(package) fun add_liquidity_from_quantum_redeem<AssetType, StableType>(
 
 // === Aggregator-Specific Functions ===
 
+const LONG_WINDOW_MS: u64 = 7_776_000_000; // 90 days
+
 /// Mark liquidity as moving to proposal (for aggregator support)
 /// Updates tracking for liquidity-weighted oracle logic
 public fun mark_liquidity_to_proposal<AssetType, StableType>(
@@ -949,10 +969,15 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
     let config = pool.aggregator_config.borrow_mut();
 
     // Update SimpleTWAP one last time before liquidity moves to proposal
-    simple_twap::update(&mut config.simple_twap, current_price, clock);
+    pass_through_PCW_TWAP_oracle::update(&mut config.simple_twap, current_price, clock);
 
     // Record when liquidity moved to proposal (spot oracle freezes here)
-    config.last_proposal_usage = option::some(clock.timestamp_ms());
+    let proposal_start = clock.timestamp_ms();
+    config.last_proposal_usage = option::some(proposal_start);
+
+    // Snapshot cumulative at proposal lock for later blending/backfill
+    let cumulative_at_lock = pass_through_PCW_TWAP_oracle::cumulative_total(&config.simple_twap);
+    config.spot_cumulative_at_lock = option::some(cumulative_at_lock);
 
     // Store conditional liquidity ratio for liquidity-weighted oracle logic
     config.conditional_liquidity_ratio_percent = conditional_liquidity_ratio_percent;
@@ -964,28 +989,44 @@ public fun mark_liquidity_to_proposal<AssetType, StableType>(
 /// TODO: Implement advanced backfill logic when simple_twap supports it
 public fun backfill_from_winning_conditional<AssetType, StableType>(
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    _winning_conditional_oracle: &SimpleTWAP,
-    _clock: &Clock,
+    winning_conditional_oracle: &SimpleTWAP,
+    clock: &Clock,
 ) {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
 
     let config = pool.aggregator_config.borrow_mut();
     assert!(config.last_proposal_usage.is_some(), ENoActiveProposal); // Must be locked
+    assert!(config.spot_cumulative_at_lock.is_some(), ENoActiveProposal);
 
-    // TODO: Implement backfill logic once simple_twap supports:
-    // - lending_window_start()
-    // - projected_cumulative_arithmetic_to()
-    // - geometric_window_start()
-    // - projected_cumulative_geometric_to()
-    // - backfill_from_conditional()
+    let proposal_start = option::extract(&mut config.last_proposal_usage);
+    let _ = option::extract(&mut config.spot_cumulative_at_lock);
+    let proposal_end = clock.timestamp_ms();
 
-    // For now, just unlock the pool
-    config.last_proposal_usage = option::none();
+    // Calculate conditional cumulative over the proposal window
+    let period_cumulative = pass_through_PCW_TWAP_oracle::projected_cumulative_arithmetic_to(
+        winning_conditional_oracle,
+        proposal_end,
+    );
+    let period_final_price = pass_through_PCW_TWAP_oracle::last_price(winning_conditional_oracle);
+
+    // Backfill spot oracle with conditional data
+    pass_through_PCW_TWAP_oracle::backfill_from_conditional(
+        &mut config.simple_twap,
+        proposal_start,
+        proposal_end,
+        period_cumulative,
+        period_final_price,
+    );
+
+    // Reset liquidity tracking
     config.conditional_liquidity_ratio_percent = 0;
+
+    // Commit a checkpoint after backfill to anchor the long window
+    pass_through_PCW_TWAP_oracle::force_commit_checkpoint(&mut config.simple_twap, clock);
 }
 
 /// Check if TWAP is ready (has enough history)
-/// TODO: Implement once simple_twap::is_ready() exists
+/// TODO: Implement once pass_through_PCW_TWAP_oracle::is_ready() exists
 public fun is_twap_ready<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
     _clock: &Clock,
@@ -994,14 +1035,14 @@ public fun is_twap_ready<AssetType, StableType>(
         return false
     };
 
-    // TODO: Call simple_twap::is_ready() once it exists
+    // TODO: Call pass_through_PCW_TWAP_oracle::is_ready() once it exists
     // For now, return true if aggregator is enabled
     true
 }
 
 /// Get lending TWAP (30-minute arithmetic window)
 /// Used by lending protocols for collateral valuation
-/// TODO: Use simple_twap::get_lending_twap() once it exists
+/// TODO: Use pass_through_PCW_TWAP_oracle::get_lending_twap() once it exists
 public fun get_lending_twap<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
     _clock: &Clock,
@@ -1010,47 +1051,60 @@ public fun get_lending_twap<AssetType, StableType>(
     let config = pool.aggregator_config.borrow();
     // TODO: Use get_lending_twap() once it exists
     // For now, use get_twap()
-    simple_twap::get_twap(&config.simple_twap)
+    pass_through_PCW_TWAP_oracle::get_twap(&config.simple_twap)
 }
 
-/// Get geometric TWAP (90-day geometric mean)
-/// Used by oracle grants - manipulation-resistant for governance
-/// TODO: Use simple_twap::get_geometric_twap() once it exists
+/// Get governance TWAP (90-day arithmetic window)
+/// Uses SimpleTWAP's long-window checkpoints for 90-day averaging
 public fun get_geometric_twap<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
-    _clock: &Clock,
+    clock: &Clock,
 ): u128 {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow();
-    // TODO: Use get_geometric_twap() once it exists
-    // For now, use get_twap()
-    simple_twap::get_twap(&config.simple_twap)
+    let base_twap = pass_through_PCW_TWAP_oracle::get_twap(&config.simple_twap);
+    let long_opt = pass_through_PCW_TWAP_oracle::get_ninety_day_twap(&config.simple_twap, clock);
+    unwrap_option_with_default(long_opt, base_twap)
 }
 
-/// Get current TWAP with conditional integration (sophisticated combination)
-/// During proposals: combines spot's frozen cumulative + conditional's live cumulative
-///
-/// # Conditional Oracle Data
-/// Pass oracle data from winning conditional for proper time-weighted combination
-/// TODO: Implement advanced cumulative logic once simple_twap supports it
+/// Get current 90-day TWAP with conditional integration
+/// During proposals: uses conditional TWAP when conditional liquidity dominates, otherwise spot
 public fun get_twap_with_conditional<AssetType, StableType>(
     pool: &UnifiedSpotPool<AssetType, StableType>,
     winning_conditional_oracle: &SimpleTWAP,
-    _clock: &Clock,
+    clock: &Clock,
 ): u128 {
     assert!(pool.aggregator_config.is_some(), EAggregatorNotEnabled);
     let config = pool.aggregator_config.borrow();
 
+    let spot_base_twap = pass_through_PCW_TWAP_oracle::get_twap(&config.simple_twap);
+    let spot_long_opt = pass_through_PCW_TWAP_oracle::get_ninety_day_twap(&config.simple_twap, clock);
+    let spot_long_twap = unwrap_option_with_default(spot_long_opt, spot_base_twap);
+
     // If no proposal is active, return spot TWAP
     if (config.last_proposal_usage.is_none()) {
-        return simple_twap::get_twap(&config.simple_twap)
+        return spot_long_twap
     };
 
-    // TODO: Implement sophisticated time-weighted combination once simple_twap supports:
-    // - lending_window_start()
-    // - projected_cumulative_arithmetic_to()
-    // For now, just use the conditional's TWAP during active proposals
-    simple_twap::get_twap(winning_conditional_oracle)
+    // Only pivot to conditional if configuration says conditional market owns majority liquidity
+    let threshold_percent = config.oracle_conditional_threshold_bps / 100;
+    if (config.conditional_liquidity_ratio_percent < threshold_percent) {
+        return spot_long_twap
+    };
+
+    // Conditional market dominates: use its long-window TWAP
+    let conditional_base = pass_through_PCW_TWAP_oracle::get_twap(winning_conditional_oracle);
+    let conditional_opt = pass_through_PCW_TWAP_oracle::get_ninety_day_twap(winning_conditional_oracle, clock);
+    unwrap_option_with_default(conditional_opt, conditional_base)
+}
+
+fun unwrap_option_with_default(opt: option::Option<u128>, fallback: u128): u128 {
+    if (option::is_some(&opt)) {
+        option::destroy_some(opt)
+    } else {
+        option::destroy_none(opt);
+        fallback
+    }
 }
 
 /// Get SimpleTWAP oracle reference for advanced integration
@@ -1155,7 +1209,7 @@ public fun remove_liquidity_for_dissolution<AssetType, StableType>(
     let stable_out = (stable_reserve as u128) * (lp_amount as u128) / (pool.lp_supply as u128);
 
     // Burn LP token
-    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    let LPToken { id, amount: _, pool_id: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 
     // Update total supply
@@ -1324,7 +1378,7 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
             option::destroy_none(active_escrow);
         };
 
-        simple_twap::destroy_for_testing(simple_twap);
+        pass_through_PCW_TWAP_oracle::destroy_for_testing(simple_twap);
         balance::destroy_for_testing(protocol_fees_stable);
     } else {
         option::destroy_none(aggregator_config);
@@ -1334,7 +1388,7 @@ public fun destroy_for_testing<AssetType, StableType>(pool: UnifiedSpotPool<Asse
 #[test_only]
 /// Destroy LP token for testing
 public fun destroy_lp_token_for_testing<AssetType, StableType>(lp_token: LPToken<AssetType, StableType>) {
-    let LPToken { id, amount: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
+    let LPToken { id, amount: _, pool_id: _, locked_in_proposal: _, withdraw_mode: _ } = lp_token;
     object::delete(id);
 }
 
@@ -1349,6 +1403,7 @@ public fun create_lp_token_for_testing<AssetType, StableType>(
     LPToken {
         id: object::new(ctx),
         amount,
+        pool_id: object::id_from_address(@0x0), // Dummy pool ID for testing
         locked_in_proposal,
         withdraw_mode,
     }

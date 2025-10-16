@@ -515,7 +515,7 @@ public struct SplitAssetProgress<phantom AssetType, phantom StableType> has drop
     next_outcome: u64,
 }
 
-public fun drop<AssetType, StableType>(progress: SplitAssetProgress<AssetType, StableType>) {
+public fun drop_split_asset_progress<AssetType, StableType>(progress: SplitAssetProgress<AssetType, StableType>) {
     let SplitAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -528,7 +528,7 @@ public struct SplitStableProgress<phantom AssetType, phantom StableType> has dro
     next_outcome: u64,
 }
 
-public fun drop<AssetType, StableType>(progress: SplitStableProgress<AssetType, StableType>) {
+public fun drop_split_stable_progress<AssetType, StableType>(progress: SplitStableProgress<AssetType, StableType>) {
     let SplitStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -542,7 +542,7 @@ public struct RecombineAssetProgress<phantom AssetType, phantom StableType> has 
     next_outcome: u64,
 }
 
-public fun drop<AssetType, StableType>(progress: RecombineAssetProgress<AssetType, StableType>) {
+public fun drop_recombine_asset_progress<AssetType, StableType>(progress: RecombineAssetProgress<AssetType, StableType>) {
     let RecombineAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -555,7 +555,7 @@ public struct RecombineStableProgress<phantom AssetType, phantom StableType> has
     next_outcome: u64,
 }
 
-public fun drop<AssetType, StableType>(progress: RecombineStableProgress<AssetType, StableType>) {
+public fun drop_recombine_stable_progress<AssetType, StableType>(progress: RecombineStableProgress<AssetType, StableType>) {
     let RecombineStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -563,7 +563,7 @@ public fun drop<AssetType, StableType>(progress: RecombineStableProgress<AssetTy
 /// Begin splitting a spot asset coin into a complete set of conditional assets.
 /// Returns a progress object that must be passed through `split_asset_progress_step`
 /// for each outcome, then finalized with `finish_split_asset_progress`.
-public entry fun start_split_asset_progress<AssetType, StableType>(
+public fun start_split_asset_progress<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     spot_asset: Coin<AssetType>,
 ): SplitAssetProgress<AssetType, StableType> {
@@ -586,7 +586,7 @@ public entry fun start_split_asset_progress<AssetType, StableType>(
 
 /// Mint the next conditional asset coin in the sequence.
 /// Caller is responsible for transferring or otherwise handling the returned coin.
-public entry fun split_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
+public fun split_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
     mut progress: SplitAssetProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
@@ -611,7 +611,7 @@ public entry fun split_asset_progress_step<AssetType, StableType, ConditionalCoi
 }
 
 /// Ensure the split operation covered all outcomes. Must be called exactly once per progress object.
-public entry fun finish_split_asset_progress<AssetType, StableType>(
+public fun finish_split_asset_progress<AssetType, StableType>(
     progress: SplitAssetProgress<AssetType, StableType>,
 ) {
     let SplitAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
@@ -619,7 +619,7 @@ public entry fun finish_split_asset_progress<AssetType, StableType>(
 }
 
 /// Begin splitting a spot stable coin into a complete set of conditional stables.
-public entry fun start_split_stable_progress<AssetType, StableType>(
+public fun start_split_stable_progress<AssetType, StableType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     spot_stable: Coin<StableType>,
 ): SplitStableProgress<AssetType, StableType> {
@@ -641,7 +641,7 @@ public entry fun start_split_stable_progress<AssetType, StableType>(
 }
 
 /// Mint the next conditional stable coin in the sequence.
-public entry fun split_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
+public fun split_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
     mut progress: SplitStableProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
@@ -666,7 +666,7 @@ public entry fun split_stable_progress_step<AssetType, StableType, ConditionalCo
 }
 
 /// Ensure the stable split operation covered all outcomes.
-public entry fun finish_split_stable_progress<AssetType, StableType>(
+public fun finish_split_stable_progress<AssetType, StableType>(
     progress: SplitStableProgress<AssetType, StableType>,
 ) {
     let SplitStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
@@ -675,7 +675,7 @@ public entry fun finish_split_stable_progress<AssetType, StableType>(
 
 /// Begin recombining conditional asset coins into a spot asset coin.
 /// Consumes and burns the first coin (must be outcome index 0).
-public entry fun start_recombine_asset_progress<AssetType, StableType, ConditionalCoinType>(
+public fun start_recombine_asset_progress<AssetType, StableType, ConditionalCoinType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
     coin: Coin<ConditionalCoinType>,
@@ -705,7 +705,7 @@ public entry fun start_recombine_asset_progress<AssetType, StableType, Condition
 }
 
 /// Burn the next conditional asset coin in the recombination sequence.
-public entry fun recombine_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
+public fun recombine_asset_progress_step<AssetType, StableType, ConditionalCoinType>(
     mut progress: RecombineAssetProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
@@ -731,7 +731,7 @@ public entry fun recombine_asset_progress_step<AssetType, StableType, Conditiona
 }
 
 /// Finish recombination and withdraw the corresponding spot asset coin.
-public entry fun finish_recombine_asset_progress<AssetType, StableType>(
+public fun finish_recombine_asset_progress<AssetType, StableType>(
     progress: RecombineAssetProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     ctx: &mut TxContext,
@@ -742,7 +742,7 @@ public entry fun finish_recombine_asset_progress<AssetType, StableType>(
 }
 
 /// Begin recombining conditional stable coins into spot stable.
-public entry fun start_recombine_stable_progress<AssetType, StableType, ConditionalCoinType>(
+public fun start_recombine_stable_progress<AssetType, StableType, ConditionalCoinType>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
     coin: Coin<ConditionalCoinType>,
@@ -772,7 +772,7 @@ public entry fun start_recombine_stable_progress<AssetType, StableType, Conditio
 }
 
 /// Burn the next conditional stable coin in the recombination sequence.
-public entry fun recombine_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
+public fun recombine_stable_progress_step<AssetType, StableType, ConditionalCoinType>(
     mut progress: RecombineStableProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_index: u8,
@@ -798,7 +798,7 @@ public entry fun recombine_stable_progress_step<AssetType, StableType, Condition
 }
 
 /// Finish recombination and withdraw the corresponding spot stable coin.
-public entry fun finish_recombine_stable_progress<AssetType, StableType>(
+public fun finish_recombine_stable_progress<AssetType, StableType>(
     progress: RecombineStableProgress<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     ctx: &mut TxContext,

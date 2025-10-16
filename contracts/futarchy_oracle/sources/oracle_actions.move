@@ -44,10 +44,10 @@ use futarchy_core::{
     resource_requests,
 };
 use futarchy_markets_core::{
-    spot_oracle_interface,
     unified_spot_pool::UnifiedSpotPool,
     conditional_amm::LiquidityPool,
 };
+use futarchy_markets_operations::price_based_unlocks_oracle;
 
 // === Constants ===
 
@@ -1019,7 +1019,7 @@ public struct ClaimGrantAction has store, drop {
 /// EXECUTION MODEL: Participant calls this in PTB, then calls fulfill_claim_grant
 /// Returns a ResourceRequest hot potato that MUST be fulfilled in same transaction
 ///
-/// ORACLE: Uses 90-day geometric TWAP (manipulation-resistant) for price checks
+/// ORACLE: Uses 90-day governance TWAP (checkpoint-based) for price checks
 ///
 /// This function:
 /// - Validates all claim conditions (price, vesting, time bounds, etc.)
@@ -1065,8 +1065,8 @@ public fun claim_grant<AssetType, StableType>(
         assert!(now <= *latest, EGrantExpired);
     };
 
-    // Read 90-day geometric TWAP from oracle (manipulation-resistant)
-    let current_price = spot_oracle_interface::get_geometric_governance_twap(
+    // Read 90-day governance TWAP from oracle (checkpoint-based)
+    let current_price = price_based_unlocks_oracle::get_geometric_governance_twap(
         spot_pool,
         conditional_pools,
         clock
@@ -1355,7 +1355,7 @@ public fun dev_inspect_check_price_condition<AssetType, StableType>(
     clock: &Clock,
 ): PriceCheckResult {
     // Get current price from oracle (same as claim_grant does)
-    let current_price = spot_oracle_interface::get_geometric_governance_twap(
+    let current_price = price_based_unlocks_oracle::get_geometric_governance_twap(
         spot_pool,
         conditional_pools,
         clock

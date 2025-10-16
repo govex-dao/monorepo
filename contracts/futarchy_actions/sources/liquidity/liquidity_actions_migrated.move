@@ -265,6 +265,7 @@ public fun request_remove_liquidity<Config, AssetType, StableType, Outcome, IW: 
         min_asset_amount,
         min_stable_amount,
         vault_name,
+        bypass_minimum: false,
     };
 
     // Note: This would need to be added to the intent using the proper serialization

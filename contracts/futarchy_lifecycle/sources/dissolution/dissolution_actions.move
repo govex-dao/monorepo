@@ -26,8 +26,7 @@ use futarchy_core::{
     action_types,
     resource_requests::{Self as resource_requests, ResourceReceipt, ResourceRequest},
 };
-use futarchy_vault::futarchy_vault;
-use futarchy_actions::liquidity_actions;
+use futarchy_vault::{futarchy_vault, lp_token_custody};
 use futarchy_streams::stream_actions;
 use futarchy_lifecycle::dissolution_auction;
 
@@ -596,50 +595,34 @@ public fun fulfill_withdraw_amm_liquidity<AssetType, StableType, W: copy + drop>
     // Verify pool ID matches
     assert!(object::id(pool) == pool_id, EWrongAction);
 
-    // Step 1: withdraw the LP token from custody using liquidity legos
-    let withdraw_action = liquidity_actions::new_withdraw_lp_token_action<AssetType, StableType>(
+    // Step 1: Withdraw the LP token from custody
+    let lp_token = lp_token_custody::withdraw_lp_token<AssetType, StableType, W>(
+        account,
         pool_id,
         token_id,
-    );
-    let mut withdraw_request = resource_requests::new_resource_request(
-        withdraw_action,
-        ctx
-    );
-    let (lp_token, withdraw_receipt) = liquidity_actions::fulfill_withdraw_lp_token(
-        withdraw_request,
-        account,
         copy witness,
         ctx
     );
-    let _ = withdraw_receipt;
 
-    let lp_amount = unified_spot_pool::lp_token_amount(&lp_token);
-
-    // Step 2: build a remove liquidity request that burns the LP token
-    let mut remove_request = resource_requests::new_resource_request(
-        liquidity_actions::new_remove_liquidity_action<AssetType, StableType>(
-            pool_id,
-            token_id,
-            lp_amount,
-            0,
-            0,
-        ),
-        ctx
-    );
-
-    if (bypass_minimum) {
-        liquidity_actions::enable_remove_liquidity_bypass(&mut remove_request, account);
+    // Step 2: Remove liquidity from the pool using the special dissolution function
+    // This bypasses the MINIMUM_LIQUIDITY check if requested
+    let (asset_coin, stable_coin) = if (bypass_minimum) {
+        unified_spot_pool::remove_liquidity_for_dissolution<AssetType, StableType>(
+            pool,
+            lp_token,
+            bypass_minimum,
+            ctx
+        )
+    } else {
+        // Use regular remove_liquidity which enforces MINIMUM_LIQUIDITY
+        unified_spot_pool::remove_liquidity<AssetType, StableType>(
+            pool,
+            lp_token,
+            0,  // min_asset_out
+            0,  // min_stable_out
+            ctx
+        )
     };
-
-    let (asset_coin, stable_coin, remove_receipt) = liquidity_actions::fulfill_remove_liquidity(
-        remove_request,
-        account,
-        pool,
-        lp_token,
-        witness,
-        ctx
-    );
-    let _ = remove_receipt;
 
     let asset_amount = coin::value(&asset_coin);
     let stable_amount = coin::value(&stable_coin);
