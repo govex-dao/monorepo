@@ -7,7 +7,7 @@ use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::quota_actions;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;
 use std::bcs;

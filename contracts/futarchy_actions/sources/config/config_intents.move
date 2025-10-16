@@ -8,7 +8,7 @@ use account_protocol::intent_interface;
 use account_protocol::intents::{Self, Intent, Params};
 use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::config_actions;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use futarchy_core::dao_config;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::version;

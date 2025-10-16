@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "B8C6C3DC395B600A6A476A2A0BC013B47F1671257A520002AF396C2C0CE7EA78"
-deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
+manifest_digest = "5DDB0A213C895B529A7C1A781388831F9E98BFEF30D9CADD7687D68D9D083C38"
+deps_digest = "8ADDF07E60EF9ABEFEBFE3115F6D8E269A96EAED8060B41FE1C8B9AB5C34A73C"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -19,7 +19,6 @@ dependencies = [
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -123,7 +122,6 @@ dependencies = [
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -185,7 +183,6 @@ dependencies = [
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -201,7 +198,7 @@ dependencies = [
 
 [[move.package]]
 id = "futarchy_oracle"
-source = { local = "../futarchy_oracle" }
+source = { local = "../futarchy_oracle_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -217,7 +214,6 @@ dependencies = [
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -226,25 +222,6 @@ source = { local = "../futarchy_types" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "futarchy_vault"
-source = { local = "../futarchy_vault" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [move.toolchain-version]

@@ -12,8 +12,7 @@ futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_multisig = { local = "../futarchy_multisig" }
-futarchy_vault = { local = "../futarchy_vault" }
-# futarchy_lifecycle = { local = "../futarchy_lifecycle" } # Circular dependency removed
+# futarchy_lifecycle = { local = "../futarchy_dissolution_actions" } # Circular dependency removed
 futarchy_factory = { local = "../futarchy_factory" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
@@ -23,7 +22,6 @@ futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_vault = "0x6b87e5ab293c702984c61f31e2af1fa78ec4439e63caf6e0c8fc5e99be99d064"
 futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
 # futarchy_lifecycle  = "0x0" # Circular dependency removed
 futarchy_factory = "0x76b65095ea99b4dd4908b51c4649bf6c294141f21979587ae6b15c993d6daf8a"

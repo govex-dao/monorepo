@@ -15,7 +15,7 @@
 /// - Dissolution actions (use Account's resources)
 module futarchy_factory::init_resource_management;
 
-use futarchy_types::action_specs::ActionSpec;
+use futarchy_types::init_action_specs::ActionSpec;
 use std::type_name::{Self, TypeName};
 use sui::bcs;
 

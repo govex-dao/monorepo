@@ -17,7 +17,7 @@ use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::{Self, ProposalQueue};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_types::action_specs::{Self, ActionSpec, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self, ActionSpec, InitActionSpecs};
 use std::option::{Self, Option};
 use std::string::{Self, String};
 use sui::clock::Clock;

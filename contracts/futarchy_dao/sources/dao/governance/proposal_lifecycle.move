@@ -8,7 +8,6 @@ use account_protocol::intents::{Self, Intent};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::priority_queue::{Self, ProposalQueue, QueuedProposal};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
-use futarchy_core::subsidy_config;
 use futarchy_core::version;
 use futarchy_dao::gc_janitor;
 use futarchy_governance_actions::governance_intents;
@@ -18,10 +17,9 @@ use futarchy_markets_core::early_resolve;
 use futarchy_markets_core::market_state::{Self, MarketState};
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_markets_core::quantum_lp_manager;
-use futarchy_markets_core::subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_one_shot_utils::strategy;
-use futarchy_types::action_specs::InitActionSpecs;
+use futarchy_types::init_action_specs::InitActionSpecs;
 use futarchy_vault::futarchy_vault;
 use std::option;
 use std::string::String;
@@ -41,8 +39,6 @@ const EInvalidWinningOutcome: u64 = 5;
 const EIntentExpiryTooLong: u64 = 6;
 const ENotEligibleForEarlyResolve: u64 = 7;
 const EInsufficientSpread: u64 = 8;
-const EEscrowProposalMismatch: u64 = 9; // Subsidy escrow doesn't belong to this proposal
-const EEscrowDaoMismatch: u64 = 10; // Subsidy escrow doesn't belong to this DAO
 
 // === Constants ===
 const OUTCOME_ACCEPTED: u64 = 0;
@@ -240,31 +236,12 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         timestamp: clock.timestamp_ms(),
     });
 
-    // LIQUIDITY SUBSIDY INTEGRATION POINT #1 - ✅ IMPLEMENTED
-    // After market initialization, optionally create subsidy escrow if enabled in DAO config.
-    //
-    // In a PTB, call this after activate_proposal_from_queue() returns:
-    // ```
-    // let (proposal_id, market_state_id) = activate_proposal_from_queue(...);
-    // create_subsidy_escrow_for_proposal(account, proposal, escrow, clock, ctx);
-    // ```
-    //
-    // The create_subsidy_escrow_for_proposal() function will:
-    // 1. Check if subsidy is enabled in DAO config
-    // 2. Calculate required subsidy amount
-    // 3. Check if DAO vault has sufficient SUI balance
-    // 4. Withdraw SUI from DAO vault using vault::spend()
-    // 5. Get AMM pool IDs from the proposal
-    // 6. Create and share SubsidyEscrow object
-    //
-    // If subsidy is disabled or insufficient funds, it gracefully skips without error.
-
     // Return the proposal_id that was passed in
     // Note: proposal_id_returned is the on-chain object ID, which differs from the queued proposal_id
     (proposal_id, market_state_id)
 }
 
-/// Finalizes a proposal's market and determines the winning outcome (without subsidy escrow)
+/// Finalizes a proposal's market and determines the winning outcome
 /// This should be called after trading has ended and TWAP prices are calculated
 public fun finalize_proposal_market<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
@@ -297,7 +274,6 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     market_state: &mut MarketState,
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     fee_manager: &mut ProposalFeeManager,
-    _has_subsidy: bool,
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -446,34 +422,6 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     // If outcome 0 wins, DAO keeps all fees - no refunds or rewards
     // --- END OUTCOME CREATOR FEE REFUNDS & REWARDS ---
 
-    // --- BEGIN INLINE SUBSIDY ESCROW CLEANUP ---
-    // If proposal has an inline subsidy escrow, extract and finalize it
-    // This auto-cleanup pattern eliminates orphan escrows
-    if (proposal::has_subsidy_escrow(proposal)) {
-        // Extract the escrow (consumes it from the proposal)
-        let escrow_to_finalize = proposal::extract_subsidy_escrow(proposal);
-
-        // Finalize and get remaining SUI
-        let remaining_sui_coin = subsidy_escrow_mod::finalize_escrow(
-            escrow_to_finalize,
-            clock,
-            ctx,
-        );
-
-        // Return remaining SUI to DAO vault
-        let vault_name = b"default".to_string();
-        let config_witness = futarchy_config::authenticate(account, ctx);
-        let version_witness = version::current();
-        let auth = account::new_auth(account, version_witness, config_witness);
-        vault::deposit<FutarchyConfig, sui::sui::SUI>(
-            auth,
-            account,
-            vault_name,
-            remaining_sui_coin,
-        );
-    };
-    // --- END INLINE SUBSIDY ESCROW CLEANUP ---
-
     // Emit finalization event
     event::emit(ProposalMarketFinalized {
         proposal_id: proposal::get_id(proposal),
@@ -561,7 +509,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
     };
     let proposal_age_ms = clock.timestamp_ms() - start_time;
 
-    // Call standard finalization (without subsidy escrow)
+    // Call standard finalization
     finalize_proposal_market(
         account,
         proposal,
@@ -796,150 +744,6 @@ public entry fun advance_proposal_state<AssetType, StableType>(
     };
 
     state_changed
-}
-
-// === Liquidity Subsidy Integration ===
-
-/// Create subsidy escrow for a proposal after activation (called in PTB)
-///
-/// This function should be called in a PTB after activate_proposal_from_queue() returns.
-/// It checks if subsidy is enabled in the DAO config, and if so:
-/// 1. Calculates the required subsidy amount
-/// 2. Checks if the DAO vault has sufficient SUI balance
-/// 3. Withdraws SUI from the DAO vault using vault::spend()
-/// 4. Gets AMM pool IDs from the proposal
-/// 5. Creates SubsidyEscrow and stores it INLINE in the Proposal (auto-cleanup!)
-///
-/// Example PTB flow:
-/// ```
-/// let (proposal_id, market_state_id) = activate_proposal_from_queue(...);
-/// create_subsidy_escrow_for_proposal(account, proposal, escrow, clock, ctx);
-/// ```
-public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &coin_escrow::TokenEscrow<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    use sui::coin;
-    use futarchy_core::dao_config;
-
-    // Get DAO config and subsidy config, extract values before using mutable account
-    let config = account::config(account);
-    let dao_cfg = futarchy_config::dao_config(config);
-    let subsidy_config = dao_config::subsidy_config(dao_cfg);
-
-    // Check if subsidy is enabled
-    if (!subsidy_config::protocol_enabled(subsidy_config)) {
-        return // Subsidy disabled, skip
-    };
-
-    // Get proposal details
-    let proposal_id = proposal::get_id(proposal);
-    let dao_id = proposal::get_dao_id(proposal);
-    let outcome_count = proposal::get_num_outcomes(proposal);
-
-    // Calculate required subsidy amount and copy the config for later use
-    let total_subsidy = subsidy_config::calculate_total_subsidy(
-        subsidy_config,
-        outcome_count,
-    );
-
-    // Check if total_subsidy is 0 (config has 0 cranks)
-    if (total_subsidy == 0) {
-        return // No subsidy configured, skip
-    };
-
-    // Copy subsidy config for later use after we're done borrowing
-    let subsidy_config_copy = *subsidy_config;
-
-    // Check if DAO vault has sufficient SUI balance
-    let vault_name = b"default".to_string();
-    let vault_balance = vault::balance<FutarchyConfig, sui::sui::SUI>(account, vault_name);
-    if (vault_balance < total_subsidy) {
-        return // Insufficient balance, skip subsidy
-    };
-
-    // Withdraw SUI from DAO vault
-    let config_witness = futarchy_config::authenticate(account, ctx);
-    let version_witness = version::current();
-    let auth = account::new_auth(account, version_witness, config_witness);
-    let treasury_coins = vault::spend<FutarchyConfig, sui::sui::SUI>(
-        auth,
-        account,
-        vault_name,
-        total_subsidy,
-        ctx,
-    );
-
-    // Get AMM pool IDs from the proposal
-    let amm_ids = proposal::get_amm_pool_ids(proposal, escrow);
-
-    // Create subsidy escrow using the copied config
-    let subsidy_escrow = subsidy_escrow_mod::create_escrow(
-        proposal_id,
-        dao_id,
-        amm_ids,
-        treasury_coins,
-        &subsidy_config_copy,
-        ctx,
-    );
-
-    // CRITICAL CHANGE: Store escrow INLINE in Proposal (automatic cleanup!)
-    // This eliminates the orphan problem - escrow is deleted when proposal is deleted
-    proposal::store_subsidy_escrow(proposal, subsidy_escrow);
-}
-
-/// Crank subsidy for a proposal (uses inline escrow)
-///
-/// This function cranks the subsidy escrow stored inside the proposal.
-/// It should be called periodically during an active proposal to distribute
-/// subsidy rewards to conditional AMM pools.
-///
-/// ## Flow:
-/// 1. Check if proposal has a subsidy escrow
-/// 2. Borrow the subsidy escrow mutably from the proposal
-/// 3. Call the core crank_subsidy() function
-/// 4. Transfer keeper fee to caller
-///
-/// ## Example PTB:
-/// ```
-/// crank_subsidy_for_proposal(proposal, conditional_pools, clock, ctx);
-/// ```
-///
-/// ## Security:
-/// - Proposal ID validation is done inside subsidy_escrow::crank_subsidy()
-/// - Rate limiting (min 5 min between cranks) enforced by subsidy_escrow module
-/// - AMM ID validation ensures subsidy only goes to proposal's pools
-public fun crank_subsidy_for_proposal<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    conditional_pools: &mut vector<conditional_amm::LiquidityPool>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    use sui::transfer;
-
-    // Check if proposal has a subsidy escrow
-    assert!(proposal::has_subsidy_escrow(proposal), EProposalNotActive);
-
-    // Get proposal ID for security check BEFORE borrowing escrow mutably
-    let proposal_id = proposal::get_id(proposal);
-
-    // Borrow the subsidy escrow mutably
-    let escrow = proposal::borrow_subsidy_escrow_mut(proposal);
-
-    // Call the core crank function
-    let keeper_fee_coin = subsidy_escrow_mod::crank_subsidy(
-        escrow,
-        proposal_id,
-        conditional_pools,
-        clock,
-        ctx,
-    );
-
-    // Transfer keeper fee to caller
-    transfer::public_transfer(keeper_fee_coin, ctx.sender());
 }
 
 /// Complete lifecycle: Activate proposal, run market, finalize, and execute if approved

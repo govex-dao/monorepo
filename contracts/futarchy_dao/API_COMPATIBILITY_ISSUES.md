@@ -59,11 +59,9 @@ After the package split of `futarchy_markets` into `futarchy_markets_core` and `
   - `proposal::ProposalEarlyResolved` struct
 **Fix**: These need to be checked in the actual modules to find correct names/locations
 
-### 9. Move Language Issue: Option<&mut T>
-**File**: `proposal_lifecycle.move` line 326, 457-470
-**Issue**: Move doesn't allow mutable references in Option types
-**Current**: `Option<&mut SubsidyEscrow>`
-**Fix**: Change function signatures to not use Option with mutable references
+### 9. Move Language Issue: Option<&mut T> (RESOLVED)
+**Status**: Fixed - SubsidyEscrow system has been completely removed
+**Previous Issue**: Move doesn't allow mutable references in Option types
 
 ## Recommended Approach
 

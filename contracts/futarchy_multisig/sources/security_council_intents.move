@@ -31,7 +31,7 @@ use futarchy_multisig::{
 use futarchy_multisig::policy_registry;
 use account_actions::package_upgrade;
 use account_extensions::extensions::Extensions;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;

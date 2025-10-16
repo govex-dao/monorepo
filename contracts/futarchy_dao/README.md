@@ -81,11 +81,11 @@ find \
     contracts/futarchy_markets_operations/sources \
     contracts/futarchy_markets_primitives/sources \
     contracts/futarchy_multisig/sources \
-    contracts/futarchy_payments/sources \
-    contracts/futarchy_streams/sources \
-    contracts/futarchy_oracle/sources \
+    contracts/futarchy_dividend_actions/sources \
+    contracts/futarchy_stream_actions/sources \
+    contracts/futarchy_oracle_actions/sources \
     contracts/futarchy_factory/sources \
-    contracts/futarchy_lifecycle/sources \
+    contracts/futarchy_dissolution_actions/sources \
     contracts/futarchy_legal_actions/sources \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \

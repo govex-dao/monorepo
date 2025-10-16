@@ -17,7 +17,7 @@ use account_protocol::{
     intents::{Self, Intent, Params},
     intent_interface,
 };
-use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use futarchy_core::version;
 use futarchy_core::{
     futarchy_config::{Self, FutarchyConfig},

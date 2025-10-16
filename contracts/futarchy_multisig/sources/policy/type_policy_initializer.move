@@ -2,7 +2,7 @@
 module futarchy_multisig::type_policy_initializer;
 
 use account_extensions::framework_action_types;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
 use std::option::{Self, Option};
 use sui::object::ID;

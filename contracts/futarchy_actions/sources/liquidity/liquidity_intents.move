@@ -2,7 +2,7 @@ module futarchy_actions::liquidity_intents;
 
 use account_protocol::intents::{Self, Intent};
 use futarchy_actions::liquidity_actions;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use std::option;
 use std::string::String;
 use std::type_name;

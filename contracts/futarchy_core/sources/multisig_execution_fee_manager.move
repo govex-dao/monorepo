@@ -9,20 +9,15 @@ use sui::sui::SUI;
 // === Errors ===
 const EInvalidFeeAmount: u64 = 0;
 
-// === Constants ===
-const FIXED_EXECUTOR_REWARD: u64 = 1_000_000; // 0.001 SUI fixed reward for executors
-
 // === Structs ===
 
 /// Manages execution fees for multisig intent batches
 /// Unlike ProposalFeeManager which holds fees during queue waiting,
-/// this collects fees at execution time and immediately distributes them
+/// this collects fees at execution time and all fees go to protocol revenue
 public struct MultisigExecutionFeeManager has key, store {
     id: UID,
     /// Total fees collected by the protocol from intent executions
     protocol_revenue: Balance<SUI>,
-    /// Accumulated rewards pool for executors
-    executor_rewards: Balance<SUI>,
 }
 
 // === Events ===
@@ -31,7 +26,6 @@ public struct ExecutionFeeCollected has copy, drop {
     multisig_id: ID,
     intent_count: u64,
     total_fee: u64,
-    executor_reward: u64,
     protocol_share: u64,
     timestamp: u64,
 }
@@ -43,78 +37,41 @@ public fun new(ctx: &mut TxContext): MultisigExecutionFeeManager {
     MultisigExecutionFeeManager {
         id: object::new(ctx),
         protocol_revenue: balance::zero(),
-        executor_rewards: balance::zero(),
     }
 }
 
 /// Called when a multisig intent batch is executed
-/// Collects fee and splits it between executor reward and protocol revenue
+/// Collects fee and sends it all to protocol revenue
 /// Fee structure:
 /// - Base fee per intent in the batch
-/// - Executor gets fixed reward (FIXED_EXECUTOR_REWARD)
-/// - Protocol gets the rest
+/// - All fees go to protocol revenue
 public fun collect_execution_fee(
     manager: &mut MultisigExecutionFeeManager,
     multisig_id: ID,
     intent_count: u64,
     fee_coin: Coin<SUI>,
     clock: &Clock,
-    ctx: &TxContext,
 ) {
     let total_fee = fee_coin.value();
     assert!(total_fee > 0, EInvalidFeeAmount);
 
-    let mut fee_balance = fee_coin.into_balance();
+    let fee_balance = fee_coin.into_balance();
 
-    // Give fixed reward to executor, rest goes to protocol
-    let executor_reward = if (total_fee >= FIXED_EXECUTOR_REWARD) {
-        FIXED_EXECUTOR_REWARD
-    } else {
-        total_fee // If fee is less than fixed reward, give entire fee to executor
-    };
-
-    let protocol_share = total_fee - executor_reward;
-
-    // Split the fee
-    if (executor_reward > 0) {
-        manager.executor_rewards.join(fee_balance.split(executor_reward));
-    };
-
-    if (protocol_share > 0) {
-        manager.protocol_revenue.join(fee_balance);
-    } else {
-        fee_balance.destroy_zero();
-    };
+    // All fees go to protocol revenue
+    manager.protocol_revenue.join(fee_balance);
 
     event::emit(ExecutionFeeCollected {
         multisig_id,
         intent_count,
         total_fee,
-        executor_reward,
-        protocol_share,
+        protocol_share: total_fee,
         timestamp: clock.timestamp_ms(),
     });
-}
-
-/// Called by executor to claim their accumulated rewards
-public fun claim_executor_rewards(
-    manager: &mut MultisigExecutionFeeManager,
-    amount: u64,
-    ctx: &mut TxContext,
-): Coin<SUI> {
-    assert!(amount > 0, EInvalidFeeAmount);
-    assert!(manager.executor_rewards.value() >= amount, EInvalidFeeAmount);
-    coin::from_balance(manager.executor_rewards.split(amount), ctx)
 }
 
 /// Gets the current protocol revenue
 public fun protocol_revenue(manager: &MultisigExecutionFeeManager): u64 {
     manager.protocol_revenue.value()
-}
-
-/// Gets the current executor rewards pool
-public fun executor_rewards(manager: &MultisigExecutionFeeManager): u64 {
-    manager.executor_rewards.value()
 }
 
 /// Withdraws accumulated protocol revenue

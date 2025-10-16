@@ -22,8 +22,8 @@ use futarchy_lifecycle::dissolution_actions;
 use futarchy_multisig::policy_actions;
 use futarchy_multisig::security_council_actions;
 use futarchy_oracle::oracle_actions;
-use futarchy_payments::dividend_actions;
-use futarchy_streams::stream_actions;
+use futarchy_dividend_actions::dividend_actions;
+use futarchy_stream_actions::stream_actions;
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.

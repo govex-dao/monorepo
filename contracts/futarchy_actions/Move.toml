@@ -13,9 +13,6 @@ futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_multisig = { local = "../futarchy_multisig" }
-futarchy_lifecycle = { local = "../futarchy_lifecycle" }
-futarchy_legal_actions = { local = "../futarchy_legal_actions" }
-futarchy_governance_actions = { local = "../futarchy_governance_actions" }
 Walrus = { local = "../walrus_walrus" }
 WAL = { local = "../walrus_wal" }
 [addresses]
@@ -27,9 +24,6 @@ futarchy_markets_primitives = "0x0"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
 futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
-futarchy_lifecycle = "0x8f72dd124237359d6117977c13933f6c93581d381ed6d43713b35aa14b1b6275"
-futarchy_legal_actions = "0xb594670af6dd19b1d7bfd8606e8b0e5c0c403dc4688d9ee316a2c7ec5f07741f"
-futarchy_governance_actions = "0xb099b96ba26f0facde45dae7947e7d0144282b7a2923c2b4c4f0e942ae608865"
 account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
 account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"
 account_actions = "0x6cfb759426af38215d70d49467ca5b9829a23bd8aad53aeb408a777e6db33784"

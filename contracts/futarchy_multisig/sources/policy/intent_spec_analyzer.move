@@ -16,9 +16,9 @@ use std::string::String;
 use std::type_name::TypeName;
 use std::vector;
 use sui::{object::{Self, ID}, bcs};
-use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use account_extensions::framework_action_types;
 
 /// Approval requirement result (same as descriptor_analyzer)
@@ -447,7 +447,7 @@ fun try_extract_object_id(spec: &action_specs::ActionSpec): Option<ID> {
 /// - `SetFileImmutable`: Make entire document immutable
 ///
 /// # Important
-/// If adding new file action types to futarchy_core::action_types, they MUST be
+/// If adding new file action types to futarchy_core::action_type_markers, they MUST be
 /// added to this function's type checks to ensure policies are enforced.
 fun try_extract_file_id(spec: &action_specs::ActionSpec): Option<ID> {
     let action_type = action_specs::action_type(spec);
@@ -509,7 +509,7 @@ fun try_extract_file_id(spec: &action_specs::ActionSpec): Option<ID> {
 /// - `sui::coin::TreasuryCap<CoinType>`
 /// - Custom capability types
 fun try_extract_cap_type(spec: &action_specs::ActionSpec): Option<TypeName> {
-    use futarchy_vault::custody_actions;
+    // custody_actions removed
 
     let action_type = action_specs::action_type(spec);
     let type_str = std::type_name::into_string(action_type);

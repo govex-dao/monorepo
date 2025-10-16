@@ -16,7 +16,7 @@ use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap, CoinMetadata};
 use sui::event;
 use sui::bag::{Self, Bag};
-use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use futarchy_core::dao_config::{Self, ConditionalCoinConfig};
 
 // === Introduction ===

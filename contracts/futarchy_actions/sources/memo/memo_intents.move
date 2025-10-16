@@ -4,7 +4,7 @@ use account_protocol::account::Account;
 use account_protocol::intent_interface;
 use account_protocol::intents::{Intent, Params};
 use futarchy_actions::memo_actions;
-use futarchy_core::action_types;
+use futarchy_core::action_type_markers;
 use futarchy_core::version;
 use std::option::Option;
 use std::string::String;

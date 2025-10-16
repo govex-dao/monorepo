@@ -61,7 +61,7 @@ public fun verify_council_ownership(
 /// DAOs can override this with their own policies
 public fun is_typically_critical<T>(): bool {
     use std::type_name;
-    use futarchy_core::action_types;
+    use futarchy_core::action_type_markers;
 
     // Common critical actions that typically require extra governance
     let type_name = type_name::get<T>();

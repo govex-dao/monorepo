@@ -133,7 +133,7 @@ public struct CouncilCancelOptimisticIntentAction has store {
 /// Action for council to approve an IntentSpec for proposal creation
 /// Creates a shared ApprovedIntentSpec object that users can reference
 public struct CouncilApproveIntentSpecAction has store, drop {
-    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    intent_spec: futarchy_types::init_action_specs::InitActionSpecs,
     dao_id: ID,
     expiration_period_ms: u64,
     metadata: String,
@@ -851,7 +851,7 @@ public fun new_council_cancel_optimistic_intent<Outcome, IW: drop>(
 /// This creates a shared ApprovedIntentSpec object that users can reference
 public fun new_council_approve_intent_spec<Outcome, IW: drop>(
     intent: &mut Intent<Outcome>,
-    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    intent_spec: futarchy_types::init_action_specs::InitActionSpecs,
     dao_id: ID,
     expiration_period_ms: u64,
     metadata: String,
@@ -934,7 +934,7 @@ public fun delete_council_cancel_optimistic_intent(expired: &mut Expired) {
 }
 
 public fun new_council_approve_intent_spec_action(
-    intent_spec: futarchy_types::action_specs::InitActionSpecs,
+    intent_spec: futarchy_types::init_action_specs::InitActionSpecs,
     dao_id: ID,
     expiration_period_ms: u64,
     metadata: String,
@@ -944,7 +944,7 @@ public fun new_council_approve_intent_spec_action(
 
 public fun get_council_approve_intent_spec_params(
     action: &CouncilApproveIntentSpecAction
-): (&futarchy_types::action_specs::InitActionSpecs, ID, u64, &String) {
+): (&futarchy_types::init_action_specs::InitActionSpecs, ID, u64, &String) {
     (&action.intent_spec, action.dao_id, action.expiration_period_ms, &action.metadata)
 }
 

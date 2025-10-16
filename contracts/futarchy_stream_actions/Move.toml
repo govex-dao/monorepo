@@ -1,0 +1,25 @@
+[package]
+name = "futarchy_stream_actions"
+edition = "2024.beta"
+published-at  = "0x0"
+
+[dependencies]
+AccountExtensions = { local = "../move-framework/packages/extensions" }
+AccountActions = { local = "../move-framework/packages/actions" }
+futarchy_one_shot_utils = { local = "../futarchy_one_shot_utils" }
+futarchy_types = { local = "../futarchy_types" }
+futarchy_core = { local = "../futarchy_core" }
+futarchy_markets_core = { local = "../futarchy_markets_core" }
+futarchy_markets_operations = { local = "../futarchy_markets_operations" }
+futarchy_multisig = { local = "../futarchy_multisig" }
+AccountProtocol = { local = "../move-framework/packages/protocol" }
+[addresses]
+futarchy_stream_actions = "0x8e2848ba3f7102ad614266040f7c4d83cec193dbf91c907365e523b63090915b"
+futarchy_types = "0x022500182f96f1aa94c126fdf35c8063c7e9be368dbbfb065faefef401b8eb25"
+futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e86804238ec66047f508"
+futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
+futarchy_markets_core = "0x0"
+futarchy_markets_operations = "0x0"
+futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
+account_protocol = "0xaa8cdc1c3fc33ad6076270c79d626923fb21cd71a7881d4564ee1c4f22e7ba0a"
+account_extensions = "0xa9ca20a7a38f897b021b35147070b3997e236c8b6791d6f115e264f3bb67ccd4"

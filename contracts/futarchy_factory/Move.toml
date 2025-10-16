@@ -13,7 +13,7 @@ futarchy_markets_primitives = { local = "../futarchy_markets_primitives" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
 futarchy_multisig = { local = "../futarchy_multisig" }
-futarchy_oracle = { local = "../futarchy_oracle" }
+futarchy_oracle = { local = "../futarchy_oracle_actions" }
 AccountProtocol = { local = "../move-framework/packages/protocol" }
 [addresses]
 futarchy_factory = "0x76b65095ea99b4dd4908b51c4649bf6c294141f21979587ae6b15c993d6daf8a"

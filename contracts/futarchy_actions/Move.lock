@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "FFF90EF009A882C65A864AB10C7E39444CADC953A5460621CF5835DCDAA46C9E"
-deps_digest = "A37FF78F7B0CA9C18B30361A5DB661FF64D9B8FB6E6FE30E76ECC6F94D8787DB"
+manifest_digest = "A609BFBB5F63671FB84634BD66D39DF6D16B30037BC0D27AE647E383D886CAA4"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -14,16 +14,12 @@ dependencies = [
   { id = "WAL", name = "WAL" },
   { id = "Walrus", name = "Walrus" },
   { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_governance_actions", name = "futarchy_governance_actions" },
-  { id = "futarchy_legal_actions", name = "futarchy_legal_actions" },
-  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
   { id = "futarchy_markets_core", name = "futarchy_markets_core" },
   { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
   { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -125,96 +121,6 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "futarchy_factory"
-source = { local = "../futarchy_factory" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_oracle", name = "futarchy_oracle" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
-id = "futarchy_governance_actions"
-source = { local = "../futarchy_governance_actions" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_factory", name = "futarchy_factory" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
-id = "futarchy_legal_actions"
-source = { local = "../futarchy_legal_actions" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "WAL", name = "WAL" },
-  { id = "Walrus", name = "Walrus" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_lifecycle", name = "futarchy_lifecycle" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
-id = "futarchy_lifecycle"
-source = { local = "../futarchy_lifecycle" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_streams", name = "futarchy_streams" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
 id = "futarchy_markets_core"
 source = { local = "../futarchy_markets_core" }
 
@@ -273,7 +179,6 @@ dependencies = [
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -288,72 +193,11 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "futarchy_oracle"
-source = { local = "../futarchy_oracle" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
-id = "futarchy_streams"
-source = { local = "../futarchy_streams" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "AccountProtocol", name = "AccountProtocol" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_multisig", name = "futarchy_multisig" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
-]
-
-[[move.package]]
 id = "futarchy_types"
 source = { local = "../futarchy_types" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "futarchy_vault"
-source = { local = "../futarchy_vault" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [move.toolchain-version]

@@ -2,8 +2,8 @@
 
 [move]
 version = 3
-manifest_digest = "E06188401B4B7A514D8E5952145814437E16FC66349A259272D5ED33D6FEBDE3"
-deps_digest = "8F9BD4D43B441329BCE386405F5CE4BBCEE357C855F8BA61CBE667926E5A11A2"
+manifest_digest = "8D415A66C2C553BDFF9664B1C62B0F28FC0F18B6E24F15F38669043F181175DB"
+deps_digest = "6D210678E7B9B4E83C17FF0E0EC8DB9C0E7C31AB2A9B1587A9F3F210AA7C1213"
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
   { id = "AccountExtensions", name = "AccountExtensions" },
@@ -20,7 +20,6 @@ dependencies = [
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_oracle", name = "futarchy_oracle" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -163,7 +162,6 @@ dependencies = [
   { id = "futarchy_core", name = "futarchy_core" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -179,7 +177,7 @@ dependencies = [
 
 [[move.package]]
 id = "futarchy_oracle"
-source = { local = "../futarchy_oracle" }
+source = { local = "../futarchy_oracle_actions" }
 
 dependencies = [
   { id = "AccountActions", name = "AccountActions" },
@@ -195,7 +193,6 @@ dependencies = [
   { id = "futarchy_multisig", name = "futarchy_multisig" },
   { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
   { id = "futarchy_types", name = "futarchy_types" },
-  { id = "futarchy_vault", name = "futarchy_vault" },
 ]
 
 [[move.package]]
@@ -204,25 +201,6 @@ source = { local = "../futarchy_types" }
 
 dependencies = [
   { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "futarchy_vault"
-source = { local = "../futarchy_vault" }
-
-dependencies = [
-  { id = "AccountActions", name = "AccountActions" },
-  { id = "AccountExtensions", name = "AccountExtensions" },
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-  { id = "futarchy_core", name = "futarchy_core" },
-  { id = "futarchy_markets_core", name = "futarchy_markets_core" },
-  { id = "futarchy_markets_operations", name = "futarchy_markets_operations" },
-  { id = "futarchy_markets_primitives", name = "futarchy_markets_primitives" },
-  { id = "futarchy_one_shot_utils", name = "futarchy_one_shot_utils" },
-  { id = "futarchy_types", name = "futarchy_types" },
 ]
 
 [move.toolchain-version]

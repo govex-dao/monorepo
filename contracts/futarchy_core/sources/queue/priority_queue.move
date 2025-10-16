@@ -5,7 +5,7 @@ module futarchy_core::priority_queue;
 use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, SlashDistribution};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
-use futarchy_types::action_specs::{Self, InitActionSpecs};
+use futarchy_types::init_action_specs::{Self, InitActionSpecs};
 use std::option::{Self, Option};
 use std::string::String;
 use std::u128;

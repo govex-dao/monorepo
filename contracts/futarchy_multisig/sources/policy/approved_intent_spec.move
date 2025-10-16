@@ -6,7 +6,7 @@
 /// 3. System validates object exists, matches DAO, not expired
 module futarchy_multisig::approved_intent_spec;
 
-use futarchy_types::action_specs::InitActionSpecs;
+use futarchy_types::init_action_specs::InitActionSpecs;
 use std::string::String;
 use sui::clock::Clock;
 use sui::event;

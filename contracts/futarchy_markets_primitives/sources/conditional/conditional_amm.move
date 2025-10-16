@@ -80,11 +80,6 @@ public struct LiquidityPool has key, store {
     stable_transitioning: u64,
     lp_live: u64,
     lp_transitioning: u64,
-    // LP Reward System (Subsidy Distribution)
-    // NOTE: Only for CONDITIONAL pools (not spot pools)
-    // Subsidies are distributed to LPs as SUI rewards (not added to reserves)
-    lp_rewards: Balance<SUI>, // Accumulated SUI rewards from subsidies
-    rewards_per_lp_share_accumulator: u128, // Fixed-point accumulator (scaled by 1e9)
 }
 
 // === Events ===
@@ -179,9 +174,6 @@ public fun new_pool(
         stable_transitioning: 0,
         lp_live: 0, // Will be set when LP is added
         lp_transitioning: 0,
-        // LP Reward System (initialized empty)
-        lp_rewards: balance::zero<SUI>(),
-        rewards_per_lp_share_accumulator: 0,
     };
 
     pool
@@ -874,80 +866,6 @@ public fun reset_protocol_fees(pool: &mut LiquidityPool) {
     pool.protocol_fees = 0;
 }
 
-/// Add subsidy as LP rewards (CORRECT IMPLEMENTATION)
-/// Accumulates SUI rewards for LPs to claim later
-/// Does NOT manipulate pool reserves or price
-///
-/// ## Reward Accumulation Formula
-/// rewards_per_lp_share += (subsidy_amount * 1e9) / lp_supply
-///
-/// ## Security
-/// - No price manipulation (reserves unchanged)
-/// - Fair distribution (proportional to LP ownership)
-/// - Hard-backed (actual SUI tokens deposited)
-///
-/// CRITICAL: Only callable by subsidy_escrow module
-public fun accumulate_subsidy_rewards(pool: &mut LiquidityPool, subsidy: Balance<SUI>) {
-    let subsidy_amount = subsidy.value();
-    assert!(subsidy_amount > 0, EZeroAmount);
-    assert!(pool.lp_supply > 0, EZeroLiquidity); // Prevent division by zero
-
-    // Calculate reward per LP share (fixed-point math, scaled by 1e9)
-    let reward_per_share = (subsidy_amount as u128) * 1_000_000_000 / (pool.lp_supply as u128);
-
-    // Update accumulator
-    pool.rewards_per_lp_share_accumulator =
-        pool.rewards_per_lp_share_accumulator + reward_per_share;
-
-    // Add subsidy to reward pool (actual tokens!)
-    pool.lp_rewards.join(subsidy);
-}
-
-/// Get accumulated rewards for an LP amount (view function)
-/// Returns claimable SUI amount
-public fun get_claimable_rewards(pool: &LiquidityPool, lp_amount: u64, already_claimed: u128): u64 {
-    if (lp_amount == 0) { return 0 };
-
-    // Calculate total earned: lp_amount * accumulator / 1e9
-    let total_earned = (lp_amount as u128) * pool.rewards_per_lp_share_accumulator / 1_000_000_000;
-
-    // Claimable = total_earned - already_claimed
-    if (total_earned > already_claimed) {
-        ((total_earned - already_claimed) as u64)
-    } else {
-        0
-    }
-}
-
-/// Get rewards per LP share accumulator (view function)
-public fun get_rewards_accumulator(pool: &LiquidityPool): u128 {
-    pool.rewards_per_lp_share_accumulator
-}
-
-/// Get total accumulated rewards in pool (view function)
-public fun get_total_rewards(pool: &LiquidityPool): u64 {
-    pool.lp_rewards.value()
-}
-
-/// Get LP rewards balance (view function) - alias for get_total_rewards
-public fun get_lp_rewards(pool: &LiquidityPool): u64 {
-    pool.lp_rewards.value()
-}
-
-/// Extract all accumulated rewards from pool
-/// Only callable from futarchy_markets_core (for claim operations)
-/// Leaves pool in clean state with zero rewards
-///
-/// ## Security
-/// - Caller must verify LP ownership and DAO check
-/// - All tokens are extracted (hard backing proof)
-public fun extract_all_rewards(pool: &mut LiquidityPool): Balance<SUI> {
-    let reward_amount = pool.lp_rewards.value();
-
-    // Extract all rewards, leaving pool with zero balance
-    pool.lp_rewards.withdraw_all()
-}
-
 // === Test Functions ===
 
 #[test_only]
@@ -1026,8 +944,6 @@ public fun create_test_pool(
         stable_transitioning: 0,
         lp_live: (MINIMUM_LIQUIDITY as u64),
         lp_transitioning: 0,
-        lp_rewards: balance::zero<SUI>(),
-        rewards_per_lp_share_accumulator: 0,
     }
 }
 
@@ -1077,8 +993,6 @@ public fun create_pool_for_testing(
         stable_transitioning: 0,
         lp_live: (MINIMUM_LIQUIDITY as u64),
         lp_transitioning: 0,
-        lp_rewards: balance::zero<SUI>(),
-        rewards_per_lp_share_accumulator: 0,
     }
 }
 
@@ -1101,13 +1015,10 @@ public fun destroy_for_testing(pool: LiquidityPool) {
         stable_transitioning: _,
         lp_live: _,
         lp_transitioning: _,
-        lp_rewards,
-        rewards_per_lp_share_accumulator: _,
     } = pool;
     id.delete();
     oracle.destroy_for_testing();
     simple_twap.destroy_for_testing();
-    balance::destroy_for_testing(lp_rewards);
 }
 
 #[test_only]
