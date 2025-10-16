@@ -1,18 +1,18 @@
 #[test_only]
 module futarchy_markets_core::early_resolve_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::object::{Self, ID};
+use futarchy_core::futarchy_config::{Self, EarlyResolveConfig};
 use futarchy_markets_core::early_resolve;
-use futarchy_markets_primitives::market_state::{Self, MarketState};
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_core::futarchy_config::{Self, EarlyResolveConfig};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
 use std::string;
+use sui::clock::{Self, Clock};
+use sui::object::{Self, ID};
+use sui::test_scenario as ts;
 
 // === Constants ===
 const SECONDS_IN_DAY: u64 = 86400000; // milliseconds
@@ -120,7 +120,11 @@ fun test_check_eligibility_disabled_config() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Initialize metrics
@@ -151,10 +155,15 @@ fun test_check_eligibility_disabled_config() {
         sui::balance::zero(), // fee_escrow
         @0xC, // treasury_address
         vector[option::none(), option::none()], // intent_specs
-        ctx
+        ctx,
     );
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0);
     assert!(reason == string::utf8(b"Early resolution not enabled"), 1);
@@ -176,24 +185,47 @@ fun test_check_eligibility_no_metrics() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Create proposal
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Check eligibility without metrics initialized
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0);
     assert!(reason == string::utf8(b"Early resolve metrics not initialized"), 1);
@@ -218,7 +250,11 @@ fun test_check_eligibility_too_young() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Initialize metrics at start time
@@ -226,21 +262,40 @@ fun test_check_eligibility_too_young() {
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance time but not enough (only 1 day, need 7 days)
     clock::set_for_testing(&mut clock, SECONDS_IN_DAY);
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0);
     assert!(reason == string::utf8(b"Proposal too young for early resolution"), 1);
@@ -264,28 +319,51 @@ fun test_check_eligibility_exceeded_max_duration() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance time beyond max duration (31 days)
     clock::set_for_testing(&mut clock, MAX_DURATION + SECONDS_IN_DAY);
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0);
     assert!(reason == string::utf8(b"Proposal exceeded max duration"), 1);
@@ -309,7 +387,11 @@ fun test_check_eligibility_winner_changed_recently() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Initialize metrics with recent flip
@@ -318,21 +400,40 @@ fun test_check_eligibility_winner_changed_recently() {
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance to just past min duration, but flip was recent
     clock::set_for_testing(&mut clock, MIN_DURATION + 200000);
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0);
     assert!(reason == string::utf8(b"Winner changed too recently"), 1);
@@ -356,7 +457,11 @@ fun test_check_eligibility_passes_all_checks() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Initialize metrics with old flip time
@@ -365,22 +470,41 @@ fun test_check_eligibility_passes_all_checks() {
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance time: past min duration and min time since flip, but before max duration
     let eligible_time = MIN_DURATION + MIN_TIME_SINCE_FLIP + SECONDS_IN_DAY;
     clock::set_for_testing(&mut clock, eligible_time);
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(eligible, 0);
     assert!(reason == string::utf8(b"Eligible for early resolution"), 1);
@@ -404,19 +528,37 @@ fun test_time_until_eligible_disabled() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     let time_until = early_resolve::time_until_eligible(&proposal, &market_state, &config, &clock);
@@ -442,22 +584,40 @@ fun test_time_until_eligible_needs_min_duration() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance time by 3 days (need 7 days minimum)
@@ -489,7 +649,11 @@ fun test_time_until_eligible_needs_time_since_flip() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Flip happened recently
@@ -498,15 +662,29 @@ fun test_time_until_eligible_needs_time_since_flip() {
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance past min duration, but not enough time since flip
@@ -539,22 +717,40 @@ fun test_time_until_eligible_already_eligible() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Advance well past both requirements
@@ -582,7 +778,11 @@ fun test_current_winner_from_state() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     // Initialize with winner index 1
@@ -606,7 +806,11 @@ fun test_last_flip_time_from_state() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let flip_time = 123456789u64;
@@ -636,28 +840,51 @@ fun test_check_eligibility_at_exact_min_duration() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Set time to exactly min duration + min time since flip
     clock::set_for_testing(&mut clock, MIN_DURATION + MIN_TIME_SINCE_FLIP);
 
-    let (eligible, _reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, _reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(eligible, 0); // Should be eligible at exact boundary
 
@@ -680,28 +907,51 @@ fun test_check_eligibility_at_exact_max_duration() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     // Set time to exactly max duration
     clock::set_for_testing(&mut clock, MAX_DURATION);
 
-    let (eligible, reason) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible, reason) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
 
     assert!(!eligible, 0); // Should NOT be eligible at exact max (exceeded)
     assert!(reason == string::utf8(b"Proposal exceeded max duration"), 1);
@@ -723,19 +973,37 @@ fun test_time_until_eligible_zero_when_no_metrics() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 2, &clock, ctx
+        proposal_id,
+        dao_id,
+        2,
+        &clock,
+        ctx,
     );
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2")],
-        vector[@0x1, @0x1], 2,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none()], ctx
+        vector[@0x1, @0x1],
+        2,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none()],
+        ctx,
     );
 
     let time_until = early_resolve::time_until_eligible(&proposal, &market_state, &config, &clock);
@@ -763,27 +1031,50 @@ fun test_complete_eligibility_workflow() {
     let proposal_id = object::id_from_address(@0xA);
     let dao_id = object::id_from_address(@0xB);
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 3, &clock, ctx
+        proposal_id,
+        dao_id,
+        3,
+        &clock,
+        ctx,
     );
 
     let metrics = early_resolve::new_metrics(0, start_time);
     market_state::set_early_resolve_metrics(&mut market_state, metrics);
 
     let mut proposal = proposal::new_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        @0xB, @0x1, option::none(),
-        string::utf8(b"Test"), string::utf8(b"metadata"),
+        @0xB,
+        @0x1,
+        option::none(),
+        string::utf8(b"Test"),
+        string::utf8(b"metadata"),
         vector[string::utf8(b"Accept"), string::utf8(b"Reject"), string::utf8(b"Abstain")],
         vector[string::utf8(b"Detail 1"), string::utf8(b"Detail 2"), string::utf8(b"Detail 3")],
-        vector[@0x1, @0x1, @0x1], 3,
-        86400000, 604800000, 1000000, 1000000, 0,
-        500000, 100000, 500000, 30,
-        option::none(), sui::balance::zero(), @0xC,
-        vector[option::none(), option::none(), option::none()], ctx
+        vector[@0x1, @0x1, @0x1],
+        3,
+        86400000,
+        604800000,
+        1000000,
+        1000000,
+        0,
+        500000,
+        100000,
+        500000,
+        30,
+        option::none(),
+        sui::balance::zero(),
+        @0xC,
+        vector[option::none(), option::none(), option::none()],
+        ctx,
     );
 
     // Phase 1: Too young
     clock::set_for_testing(&mut clock, SECONDS_IN_DAY);
-    let (eligible1, _) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible1, _) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
     assert!(!eligible1, 0);
 
     let time_until1 = early_resolve::time_until_eligible(&proposal, &market_state, &config, &clock);
@@ -793,13 +1084,23 @@ fun test_complete_eligibility_workflow() {
     clock::set_for_testing(&mut clock, MIN_DURATION + 100000);
     market_state::update_last_flip_time_for_testing(&mut market_state, MIN_DURATION + 50000);
 
-    let (eligible2, _) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible2, _) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
     assert!(!eligible2, 2);
 
     // Phase 3: Now eligible
     clock::set_for_testing(&mut clock, MIN_DURATION + MIN_TIME_SINCE_FLIP + SECONDS_IN_DAY);
 
-    let (eligible3, reason3) = early_resolve::check_eligibility(&proposal, &market_state, &config, &clock);
+    let (eligible3, reason3) = early_resolve::check_eligibility(
+        &proposal,
+        &market_state,
+        &config,
+        &clock,
+    );
     assert!(eligible3, 3);
     assert!(reason3 == string::utf8(b"Eligible for early resolution"), 4);
 
@@ -823,7 +1124,11 @@ fun test_multiple_outcomes_different_winners() {
 
     // Test with 5 outcomes
     let mut market_state = create_test_market_state_with_pools(
-        proposal_id, dao_id, 5, &clock, ctx
+        proposal_id,
+        dao_id,
+        5,
+        &clock,
+        ctx,
     );
 
     // Test with different winner indices - set metrics and read them back from market state

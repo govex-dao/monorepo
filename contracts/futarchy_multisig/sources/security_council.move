@@ -1,22 +1,18 @@
 module futarchy_multisig::security_council;
 
-// === Imports ===
-
+use account_extensions::extensions::Extensions;
+use account_protocol::account::{Self, Account, Auth};
+use account_protocol::deps;
+use account_protocol::executable::Executable;
+use account_protocol::user::User;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::version;
+use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
 use std::string::String;
 use sui::clock::Clock;
 use sui::tx_context::TxContext;
 
-use account_extensions::extensions::Extensions;
-
-use account_protocol::{
-    account::{Self, Account, Auth},
-    deps,
-    executable::Executable,
-    user::User,
-};
-
-use futarchy_core::{version, futarchy_config::{Self, FutarchyConfig}};
-use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
+// === Imports ===
 
 // === Errors ===
 
@@ -51,7 +47,7 @@ fun create_multisig_account(
     let mut account = account_protocol::account_interface::create_account!(
         config,
         version::current(),
-        Witness{},
+        Witness {},
         ctx,
         || deps::new_latest_extensions(
             extensions,
@@ -59,8 +55,8 @@ fun create_multisig_account(
                 b"AccountProtocol".to_string(),
                 b"Futarchy".to_string(),
                 b"AccountActions".to_string(),
-            ]
-        )
+            ],
+        ),
     );
 
     account
@@ -74,7 +70,7 @@ fun create_multisig_account(
 /// - clock: Clock for timestamp initialization
 public fun new_dao_council(
     extensions: &Extensions,
-    dao_id: ID,  // REQUIRED, not Option
+    dao_id: ID, // REQUIRED, not Option
     members: vector<address>,
     weights: vector<u64>,
     threshold: u64,
@@ -124,17 +120,13 @@ public fun new(
     new_standalone(extensions, members, weights, threshold, clock, ctx)
 }
 
-
 /// Authenticate a sender as a council member. Returns an Auth usable for gated calls.
-public fun authenticate(
-    account: &Account<WeightedMultisig>,
-    ctx: &TxContext
-): Auth {
+public fun authenticate(account: &Account<WeightedMultisig>, ctx: &TxContext): Auth {
     account_protocol::account_interface::create_auth!(
         account,
         version::current(),
-        Witness{},
-        || weighted_multisig::assert_is_member(account.config(), ctx.sender())
+        Witness {},
+        || weighted_multisig::assert_is_member(account.config(), ctx.sender()),
     )
 }
 
@@ -159,15 +151,15 @@ public fun approve_intent(
         account,
         key,
         version::current(),
-        Witness{},
+        Witness {},
         |outcome_mut: &mut Approvals| {
             // Insert approver without borrowing config in this closure
             weighted_multisig::approve_sender_verified(outcome_mut, ctx.sender());
-        }
+        },
     );
 
     // Bump activity after successful approval
-    let config = account::config_mut(account, version::current(), Witness{});
+    let config = account::config_mut(account, version::current(), Witness {});
     weighted_multisig::bump_last_activity(config, clock);
 }
 
@@ -193,14 +185,18 @@ public fun approve_intent_with_dao(
     assert!(object::id(dao_account) == expected_dao_id, EDaoMismatch);
 
     // Check DAO operational state via dynamic field
-    let dao_state = account_protocol::account::borrow_managed_data<FutarchyConfig, futarchy_config::DaoStateKey, futarchy_config::DaoState>(
+    let dao_state = account_protocol::account::borrow_managed_data<
+        FutarchyConfig,
+        futarchy_config::DaoStateKey,
+        futarchy_config::DaoState,
+    >(
         dao_account,
         futarchy_config::new_dao_state_key(),
-        version::current()
+        version::current(),
     );
     assert!(
         futarchy_config::operational_state(dao_state) != futarchy_config::state_paused(),
-        EDaoPaused
+        EDaoPaused,
     );
 
     // Verify membership before the macro (this borrow ends at return)
@@ -210,15 +206,15 @@ public fun approve_intent_with_dao(
         account,
         key,
         version::current(),
-        Witness{},
+        Witness {},
         |outcome_mut: &mut Approvals| {
             // Insert approver without borrowing config in this closure
             weighted_multisig::approve_sender_verified(outcome_mut, ctx.sender());
-        }
+        },
     );
 
     // Bump activity after successful approval
-    let config = account::config_mut(account, version::current(), Witness{});
+    let config = account::config_mut(account, version::current(), Witness {});
     weighted_multisig::bump_last_activity(config, clock);
 }
 
@@ -241,16 +237,16 @@ public fun execute_intent(
         key,
         clock,
         version::current(),
-        Witness{},
+        Witness {},
         ctx,
         |outcome: Approvals| {
             // final check before allowing execution
             weighted_multisig::validate_outcome(outcome, account.config(), b"".to_string(), clock);
-        }
+        },
     );
 
     // Bump activity after successful execution
-    let config = account::config_mut(account, version::current(), Witness{});
+    let config = account::config_mut(account, version::current(), Witness {});
     weighted_multisig::bump_last_activity(config, clock);
 
     executable
@@ -277,14 +273,18 @@ public fun execute_intent_with_dao(
     assert!(object::id(dao_account) == expected_dao_id, EDaoMismatch);
 
     // Check DAO operational state via dynamic field
-    let dao_state = account_protocol::account::borrow_managed_data<FutarchyConfig, futarchy_config::DaoStateKey, futarchy_config::DaoState>(
+    let dao_state = account_protocol::account::borrow_managed_data<
+        FutarchyConfig,
+        futarchy_config::DaoStateKey,
+        futarchy_config::DaoState,
+    >(
         dao_account,
         futarchy_config::new_dao_state_key(),
-        version::current()
+        version::current(),
     );
     assert!(
         futarchy_config::operational_state(dao_state) != futarchy_config::state_paused(),
-        EDaoPaused
+        EDaoPaused,
     );
 
     let executable = account_protocol::account_interface::execute_intent!(
@@ -292,16 +292,16 @@ public fun execute_intent_with_dao(
         key,
         clock,
         version::current(),
-        Witness{},
+        Witness {},
         ctx,
         |outcome: Approvals| {
             // final check before allowing execution
             weighted_multisig::validate_outcome(outcome, account.config(), b"".to_string(), clock);
-        }
+        },
     );
 
     // Bump activity after successful execution
-    let config = account::config_mut(account, version::current(), Witness{});
+    let config = account::config_mut(account, version::current(), Witness {});
     weighted_multisig::bump_last_activity(config, clock);
 
     executable
@@ -317,7 +317,7 @@ public entry fun heartbeat(
     weighted_multisig::assert_is_member(account.config(), ctx.sender());
 
     // Bump activity
-    let config = account::config_mut(account, version::current(), Witness{});
+    let config = account::config_mut(account, version::current(), Witness {});
     weighted_multisig::bump_last_activity(config, clock);
 }
 
@@ -343,7 +343,7 @@ public entry fun send_invite(
     weighted_multisig::assert_is_member(account.config(), recipient);
 
     // Send invite through Account Protocol's user module
-    account_protocol::user::send_invite(account, recipient, Witness{}, ctx);
+    account_protocol::user::send_invite(account, recipient, Witness {}, ctx);
 }
 
 /// User accepts an invitation and joins the security council.
@@ -353,16 +353,12 @@ public entry fun send_invite(
 /// - User's wallet shows all councils they belong to
 /// - Single source of truth for "which councils am I a member of?"
 /// - Explicit opt-in creates accountability
-public entry fun join(
-    user: &mut User,
-    account: &Account<WeightedMultisig>,
-    ctx: &TxContext,
-) {
+public entry fun join(user: &mut User, account: &Account<WeightedMultisig>, ctx: &TxContext) {
     // Verify the user is actually a council member
     weighted_multisig::assert_is_member(account.config(), ctx.sender());
 
     // Add council to user's tracked accounts
-    user.add_account(account, Witness{});
+    user.add_account(account, Witness {});
 }
 
 /// User leaves the security council tracking.
@@ -371,10 +367,7 @@ public entry fun join(
 /// Note: This doesn't remove their actual council membership - only removes
 /// the council from their personal account tracking. They remain a member
 /// with voting power until removed via update_membership().
-public entry fun leave(
-    user: &mut User,
-    account: &Account<WeightedMultisig>,
-) {
+public entry fun leave(user: &mut User, account: &Account<WeightedMultisig>) {
     // Remove council from user's tracked accounts
-    user.remove_account(account, Witness{});
+    user.remove_account(account, Witness {});
 }

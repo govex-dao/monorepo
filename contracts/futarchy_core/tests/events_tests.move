@@ -148,7 +148,9 @@ fun test_emit_multiple_events_sequence() {
 
 #[test]
 fun test_emit_created_long_key() {
-    let key = string::utf8(b"this_is_a_very_long_key_name_that_might_be_used_in_production_environments_to_identify_complex_actions");
+    let key = string::utf8(
+        b"this_is_a_very_long_key_name_that_might_be_used_in_production_environments_to_identify_complex_actions",
+    );
     let proposal = @0xBEEF;
     let outcome_index = 42;
     let when_ms = 123456789;
@@ -164,7 +166,12 @@ fun test_emit_events_with_special_addresses() {
     events::emit_created(key, @0x0, 0, 1000);
 
     // All FFs
-    events::emit_executed(key, @0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF, 0, 2000);
+    events::emit_executed(
+        key,
+        @0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF,
+        0,
+        2000,
+    );
 }
 
 #[test]

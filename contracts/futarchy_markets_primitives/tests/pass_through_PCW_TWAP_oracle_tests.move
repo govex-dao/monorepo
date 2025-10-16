@@ -6,7 +6,7 @@ use sui::clock::{Self, Clock};
 use sui::test_scenario;
 
 // === Constants ===
-const SCALE: u128 = 1_000_000_000_000;  // 1e12
+const SCALE: u128 = 1_000_000_000_000; // 1e12
 const ONE_MINUTE_MS: u64 = 60_000;
 const TEN_MINUTES_MS: u64 = 600_000;
 const ONE_HOUR_MS: u64 = 3_600_000;
@@ -21,7 +21,7 @@ fun test_initialization_default() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 1000_000);
 
-    let initial_price = 5 * SCALE;  // $5
+    let initial_price = 5 * SCALE; // $5
     let oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Verify initialization
@@ -46,9 +46,9 @@ fun test_custom_config() {
     let initial_price = 100 * SCALE;
     let oracle = pass_through_PCW_TWAP_oracle::new(
         initial_price,
-        120_000,  // 2 minutes
-        20_000,   // 2% cap
-        &clock
+        120_000, // 2 minutes
+        20_000, // 2% cap
+        &clock,
     );
 
     assert!(pass_through_PCW_TWAP_oracle::window_size_ms(&oracle) == 120_000, 0);
@@ -69,7 +69,7 @@ fun test_single_window_no_cap() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let initial_price = 100 * SCALE;  // $100
+    let initial_price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Update with stable price for 1 minute
@@ -92,7 +92,7 @@ fun test_single_window_with_cap_upward() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let initial_price = 100 * SCALE;  // $100
+    let initial_price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Price spikes to $200 and stays there for 1 minute
@@ -117,7 +117,7 @@ fun test_single_window_with_cap_downward() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let initial_price = 100 * SCALE;  // $100
+    let initial_price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Price drops to $50 and stays there for 1 minute
@@ -142,11 +142,11 @@ fun test_single_window_small_move_no_cap() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let initial_price = 100 * SCALE;  // $100
+    let initial_price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Price moves to $100.50 (0.5% move - below cap)
-    let new_price = 100_500_000_000_000;  // $100.50
+    let new_price = 100_500_000_000_000; // $100.50
     clock::set_for_testing(&mut clock, ONE_MINUTE_MS);
     pass_through_PCW_TWAP_oracle::update(&mut oracle, new_price, &clock);
 
@@ -168,7 +168,7 @@ fun test_multi_window_single_step() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let initial_price = 100 * SCALE;  // $100
+    let initial_price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
 
     // Price spikes to $200 and attacker holds it for 100 minutes (100 windows!)
@@ -195,7 +195,7 @@ fun test_multi_window_gradual_approach() {
     let mut clock = clock::create_for_testing(ctx);
     clock::set_for_testing(&mut clock, 0);
 
-    let mut price = 100 * SCALE;  // $100
+    let mut price = 100 * SCALE; // $100
     let mut oracle = pass_through_PCW_TWAP_oracle::new_default(price, &clock);
 
     // Simulate legitimate price increase over time
@@ -387,7 +387,7 @@ fun test_very_large_time_gap() {
 
     // CRITICAL: Still takes just ONE step (O(1) gas!)
     // Not 1000 steps like a naive loop would
-    let expected = 101 * SCALE;  // $100 → $101
+    let expected = 101 * SCALE; // $100 → $101
     assert!(pass_through_PCW_TWAP_oracle::get_twap(&oracle) == expected, 0);
 
     pass_through_PCW_TWAP_oracle::destroy_for_testing(oracle);
@@ -412,14 +412,15 @@ fun test_realistic_oracle_usage() {
     // Simulate 1 hour of normal trading with updates every 10 seconds
     let mut time = 0u64;
     let mut i = 0;
-    while (i < 360) {  // 360 updates = 1 hour
-        time = time + 10_000;  // 10 seconds
+    while (i < 360) {
+        // 360 updates = 1 hour
+        time = time + 10_000; // 10 seconds
 
         // Price drifts slightly (±0.1% per update)
         if (i % 2 == 0) {
-            price = price + (price / 1000);  // +0.1%
+            price = price + (price / 1000); // +0.1%
         } else {
-            price = price - (price / 1000);  // -0.1%
+            price = price - (price / 1000); // -0.1%
         };
 
         clock::set_for_testing(&mut clock, time);
@@ -433,7 +434,7 @@ fun test_realistic_oracle_usage() {
     let final_twap = pass_through_PCW_TWAP_oracle::get_twap(&oracle);
 
     // TWAP should have moved, but be reasonably close
-    assert!(final_twap > 95 * SCALE, 0);  // Not too far down
+    assert!(final_twap > 95 * SCALE, 0); // Not too far down
     assert!(final_twap < 105 * SCALE, 1); // Not too far up
 
     pass_through_PCW_TWAP_oracle::destroy_for_testing(oracle);

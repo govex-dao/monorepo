@@ -1,10 +1,6 @@
 /// Decoder for protocol admin actions in futarchy DAOs
 module futarchy_governance_actions::protocol_admin_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name::{Self, TypeName}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_governance_actions::protocol_admin_actions::{
@@ -21,8 +17,15 @@ use futarchy_governance_actions::protocol_admin_actions::{
     RejectVerificationAction,
     SetLaunchpadTrustScoreAction,
     UpdateRecoveryFeeAction,
-    WithdrawFeesToTreasuryAction,
+    WithdrawFeesToTreasuryAction
 };
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -433,10 +436,7 @@ public fun decode_withdraw_fees_to_treasury_action(
 // === Registration Functions ===
 
 /// Register all protocol admin decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_set_factory_paused_decoder(registry, ctx);
     register_add_stable_type_decoder(registry, ctx);
     register_remove_stable_type_decoder(registry, ctx);
@@ -453,28 +453,19 @@ public fun register_decoders(
     register_withdraw_fees_to_treasury_decoder(registry, ctx);
 }
 
-fun register_set_factory_paused_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_set_factory_paused_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SetFactoryPausedActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SetFactoryPausedAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_add_stable_type_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_add_stable_type_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AddStableTypeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<AddStableTypeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_remove_stable_type_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_remove_stable_type_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RemoveStableTypeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RemoveStableTypeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

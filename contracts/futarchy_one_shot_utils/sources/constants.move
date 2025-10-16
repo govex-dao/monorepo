@@ -97,7 +97,7 @@ public fun min_outcomes(): u64 { 2 }
 /// Minimum review period in milliseconds
 public fun min_review_period_ms(): u64 { 1000 } // 1 second for testing
 
-/// Minimum trading period in milliseconds  
+/// Minimum trading period in milliseconds
 public fun min_trading_period_ms(): u64 { 1000 } // 1 second for testing
 
 /// Minimum grace period for eviction in milliseconds
@@ -142,7 +142,9 @@ public fun binary_outcomes(): u64 { 2 }
 
 /// Token type constants
 public fun token_type_asset(): u8 { 0 }
+
 public fun token_type_stable(): u8 { 1 }
+
 public fun token_type_lp(): u8 { 2 }
 
 // === Liquidity Constants ===

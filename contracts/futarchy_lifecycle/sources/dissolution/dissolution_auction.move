@@ -6,22 +6,20 @@
 /// - 5% minimum bid increment
 module futarchy_lifecycle::dissolution_auction;
 
-use std::{string::String, option::Option};
-use sui::{
-    coin::{Self, Coin},
-    object::{Self, UID, ID},
-    transfer,
-    clock::Clock,
-    tx_context::TxContext,
-    dynamic_field as df,
-    event,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::version_witness::VersionWitness;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
+use std::option::Option;
+use std::string::String;
 use std::type_name::{Self, TypeName};
-use account_protocol::{
-    account::{Self, Account},
-    version_witness::VersionWitness,
-};
-use futarchy_core::{futarchy_config::FutarchyConfig, version};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::dynamic_field as df;
+use sui::event;
+use sui::object::{Self, UID, ID};
+use sui::transfer;
+use sui::tx_context::TxContext;
 
 // === Errors ===
 const EAuctionNotFound: u64 = 1;
@@ -123,7 +121,7 @@ public struct DissolutionAuction<phantom BidCoin> has key {
 /// Request to create auction (hot potato)
 /// Uses String for type names (can be BCS-deserialized)
 /// Converted to TypeName at fulfillment for type-safe validation
-public struct CreateAuctionRequest has store, drop {
+public struct CreateAuctionRequest has drop, store {
     dao_account_id: ID,
     object_id: ID,
     object_type: String,
@@ -152,7 +150,9 @@ public struct FinalizeReceipt<phantom BidCoin> {
 /// Initialize counter in Account (called once during dissolution)
 public fun init_auction_counter(account: &mut Account<FutarchyConfig>) {
     // Check if counter already exists using has_managed_data
-    if (!account::has_managed_data<FutarchyConfig, AuctionCounterKey>(account, AuctionCounterKey {})) {
+    if (
+        !account::has_managed_data<FutarchyConfig, AuctionCounterKey>(account, AuctionCounterKey {})
+    ) {
         let counter = AuctionCounter { active_count: 0 };
         account::add_managed_data(account, AuctionCounterKey {}, counter, version::current());
     }
@@ -160,14 +160,16 @@ public fun init_auction_counter(account: &mut Account<FutarchyConfig>) {
 
 /// Get active auction count
 public fun get_active_auction_count(account: &Account<FutarchyConfig>): u64 {
-    if (!account::has_managed_data<FutarchyConfig, AuctionCounterKey>(account, AuctionCounterKey {})) {
+    if (
+        !account::has_managed_data<FutarchyConfig, AuctionCounterKey>(account, AuctionCounterKey {})
+    ) {
         return 0
     };
 
     let counter = account::borrow_managed_data<FutarchyConfig, AuctionCounterKey, AuctionCounter>(
         account,
         AuctionCounterKey {},
-        version::current()
+        version::current(),
     );
     counter.active_count
 }
@@ -179,20 +181,28 @@ public fun all_auctions_complete(account: &Account<FutarchyConfig>): bool {
 
 /// Increment counter (package-visible)
 fun increment_auction_count(account: &mut Account<FutarchyConfig>) {
-    let counter = account::borrow_managed_data_mut<FutarchyConfig, AuctionCounterKey, AuctionCounter>(
+    let counter = account::borrow_managed_data_mut<
+        FutarchyConfig,
+        AuctionCounterKey,
+        AuctionCounter,
+    >(
         account,
         AuctionCounterKey {},
-        version::current()
+        version::current(),
     );
     counter.active_count = counter.active_count + 1;
 }
 
 /// Decrement counter (package-visible)
 fun decrement_auction_count(account: &mut Account<FutarchyConfig>) {
-    let counter = account::borrow_managed_data_mut<FutarchyConfig, AuctionCounterKey, AuctionCounter>(
+    let counter = account::borrow_managed_data_mut<
+        FutarchyConfig,
+        AuctionCounterKey,
+        AuctionCounter,
+    >(
         account,
         AuctionCounterKey {},
-        version::current()
+        version::current(),
     );
     // ✅ Prevent underflow - critical for dissolution safety
     assert!(counter.active_count > 0, ECounterUnderflow);
@@ -270,12 +280,12 @@ public fun fulfill_create_auction<T: key + store, BidCoin>(
     let mut auction = DissolutionAuction<BidCoin> {
         id: object::new(ctx),
         dao_account_id,
-        object_type: actual_type,  // ✅ Store TypeName (not String)
+        object_type: actual_type, // ✅ Store TypeName (not String)
         minimum_bid,
         highest_bid: 0,
         highest_bidder: option::none(),
         end_time,
-        has_been_extended: false,  // ← ONE-OFF extension flag
+        has_been_extended: false, // ← ONE-OFF extension flag
         finalized: false,
         creator,
     };
@@ -336,7 +346,7 @@ public fun place_bid<BidCoin>(
         let time_remaining = auction.end_time - clock.timestamp_ms();
         if (time_remaining < BID_EXTENSION_WINDOW_MS) {
             auction.end_time = clock.timestamp_ms() + BID_EXTENSION_WINDOW_MS;
-            auction.has_been_extended = true;  // ← Mark as extended
+            auction.has_been_extended = true; // ← Mark as extended
             extended = true;
         };
     };
@@ -347,7 +357,7 @@ public fun place_bid<BidCoin>(
         // ✅ Use typed key for dynamic field access
         let refund_coin = df::remove<AuctionBidKey, Coin<BidCoin>>(
             &mut auction.id,
-            AuctionBidKey {}
+            AuctionBidKey {},
         );
         transfer::public_transfer(refund_coin, previous_bidder);
     };
@@ -434,9 +444,7 @@ public fun finalize_auction<T: key + store, BidCoin>(
 }
 
 /// Confirm finalization (consumes receipt)
-public fun confirm_finalization<BidCoin>(
-    receipt: FinalizeReceipt<BidCoin>
-): (ID, address, u64) {
+public fun confirm_finalization<BidCoin>(receipt: FinalizeReceipt<BidCoin>): (ID, address, u64) {
     let FinalizeReceipt { auction_id, winner, winning_bid } = receipt;
     (auction_id, winner, winning_bid)
 }
@@ -445,7 +453,7 @@ public fun confirm_finalization<BidCoin>(
 
 /// Get auction info
 public fun get_auction_info<BidCoin>(
-    auction: &DissolutionAuction<BidCoin>
+    auction: &DissolutionAuction<BidCoin>,
 ): (u64, u64, Option<address>, u64, bool, bool) {
     (
         auction.minimum_bid,
@@ -458,22 +466,16 @@ public fun get_auction_info<BidCoin>(
 }
 
 /// Get DAO account ID
-public fun get_dao_account_id<BidCoin>(
-    auction: &DissolutionAuction<BidCoin>
-): ID {
+public fun get_dao_account_id<BidCoin>(auction: &DissolutionAuction<BidCoin>): ID {
     auction.dao_account_id
 }
 
 /// Get object type
-public fun get_object_type<BidCoin>(
-    auction: &DissolutionAuction<BidCoin>
-): TypeName {
+public fun get_object_type<BidCoin>(auction: &DissolutionAuction<BidCoin>): TypeName {
     auction.object_type
 }
 
 /// Check if auction has been extended
-public fun has_been_extended<BidCoin>(
-    auction: &DissolutionAuction<BidCoin>
-): bool {
+public fun has_been_extended<BidCoin>(auction: &DissolutionAuction<BidCoin>): bool {
     auction.has_been_extended
 }

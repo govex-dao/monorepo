@@ -2,26 +2,23 @@
 /// This module defines action structs using direct IDs instead of placeholders
 module futarchy_actions::liquidity_actions_migrated;
 
-// === Imports ===
-use std::string::{Self, String};
-use std::option::{Self, Option};
-use sui::{
-    coin::{Self, Coin},
-    object::{Self, ID},
-    clock::Clock,
-    tx_context::TxContext,
-    balance::{Self, Balance},
-    transfer,
-};
-use account_protocol::{
-    account::{Self, Account},
-    executable::{Self, Executable},
-    intents::Expired,
-    version_witness::VersionWitness,
-};
 use account_actions::vault;
-use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, version};
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::Expired;
+use account_protocol::version_witness::VersionWitness;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::version;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
+use futarchy_vault::futarchy_vault;
+use std::option::{Self, Option};
+use std::string::{Self, String};
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::object::{Self, ID};
+use sui::transfer;
+use sui::tx_context::TxContext;
 
 // === Errors ===
 const EInvalidAmount: u64 = 1;
@@ -35,7 +32,7 @@ const DEFAULT_VAULT_NAME: vector<u8> = b"treasury";
 // === MIGRATED Action Structs ===
 
 /// Action to create a new liquidity pool
-public struct CreatePoolAction<phantom AssetType, phantom StableType> has store, drop, copy {
+public struct CreatePoolAction<phantom AssetType, phantom StableType> has copy, drop, store {
     initial_asset_amount: u64,
     initial_stable_amount: u64,
     fee_bps: u64,
@@ -43,7 +40,7 @@ public struct CreatePoolAction<phantom AssetType, phantom StableType> has store,
 }
 
 /// Action to add liquidity to an existing pool
-public struct AddLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
+public struct AddLiquidityAction<phantom AssetType, phantom StableType> has copy, drop, store {
     pool_id: ID, // Direct pool ID
     asset_amount: u64,
     stable_amount: u64,
@@ -52,7 +49,7 @@ public struct AddLiquidityAction<phantom AssetType, phantom StableType> has stor
 
 /// Action to remove liquidity from a pool
 /// NOTE: This action should be preceded by a WithdrawAction to get the LP tokens
-public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has store, drop, copy {
+public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has copy, drop, store {
     pool_id: ID, // Direct pool ID
     lp_token_id: ID, // ID of the LP token to withdraw (used with WithdrawAction)
     lp_amount: u64, // Amount of LP tokens to remove
@@ -63,7 +60,7 @@ public struct RemoveLiquidityAction<phantom AssetType, phantom StableType> has s
 }
 
 /// Action to update pool parameters
-public struct UpdatePoolParamsAction has store, drop, copy {
+public struct UpdatePoolParamsAction has copy, drop, store {
     pool_id: ID, // Direct pool ID
     new_fee_bps: u64,
     new_minimum_liquidity: u64,
@@ -132,7 +129,8 @@ public fun do_create_pool<AssetType: drop, StableType: drop>(
     stable_coin: Coin<StableType>,
     clock: &Clock,
     ctx: &mut TxContext,
-): ID { // Returns pool ID for flexibility
+): ID {
+    // Returns pool ID for flexibility
     // Validate parameters
     assert!(params.initial_asset_amount > 0, EInvalidAmount);
     assert!(params.initial_stable_amount > 0, EInvalidAmount);
@@ -207,12 +205,20 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop>(
     account: &mut Account<FutarchyConfig>,
     pool: &mut UnifiedSpotPool<AssetType, StableType>,
     lp_token: LPToken<AssetType, StableType>,
-    vault_name: String,
+    _vault_name: String,
     ctx: &mut TxContext,
 ) {
-    // Direct pool ID access
-    let pool_id = params.pool_id;
+    let RemoveLiquidityAction {
+        pool_id,
+        lp_token_id: _,
+        lp_amount: _,
+        min_asset_amount,
+        min_stable_amount,
+        vault_name: action_vault_name,
+        bypass_minimum: _,
+    } = params;
 
+    // Direct pool ID access
     // Verify pool ID matches
     assert!(object::id(pool) == pool_id, 0);
 
@@ -220,17 +226,56 @@ public fun do_remove_liquidity<AssetType: drop, StableType: drop>(
     let (asset_coin, stable_coin) = unified_spot_pool::remove_liquidity(
         pool,
         lp_token,
-        params.min_asset_amount,
-        params.min_stable_amount,
+        min_asset_amount,
+        min_stable_amount,
         ctx,
     );
 
     // Deposit the returned assets to the specified vault
     // Using the vault module to deposit the coins back to the account
-    // TODO: Use correct vault functions when available
-    // For now, just transfer to account
-    transfer::public_transfer(asset_coin, object::id_to_address(&object::id(account)));
-    transfer::public_transfer(stable_coin, object::id_to_address(&object::id(account)));
+    let mut vault_name_opt = action_vault_name;
+    let target_vault_name = if (option::is_some(&vault_name_opt)) {
+        option::extract(&mut vault_name_opt)
+    } else {
+        string::utf8(DEFAULT_VAULT_NAME)
+    };
+
+    // Attempt to deposit into the DAO vault; fall back to direct transfer if vault is unavailable
+    if (vault::has_vault(account, string::clone(&target_vault_name))) {
+        let can_deposit_asset = {
+            let vault_ref = vault::borrow_vault(account, string::clone(&target_vault_name));
+            vault::coin_type_exists<AssetType>(vault_ref)
+        };
+        let can_deposit_stable = {
+            let vault_ref = vault::borrow_vault(account, string::clone(&target_vault_name));
+            vault::coin_type_exists<StableType>(vault_ref)
+        };
+
+        if (can_deposit_asset) {
+            futarchy_vault::deposit_existing_coin_type<AssetType>(
+                account,
+                asset_coin,
+                string::clone(&target_vault_name),
+                ctx,
+            );
+        } else {
+            transfer::public_transfer(asset_coin, object::id_to_address(&object::id(account)));
+        };
+
+        if (can_deposit_stable) {
+            futarchy_vault::deposit_existing_coin_type<StableType>(
+                account,
+                stable_coin,
+                target_vault_name,
+                ctx,
+            );
+        } else {
+            transfer::public_transfer(stable_coin, object::id_to_address(&object::id(account)));
+        };
+    } else {
+        transfer::public_transfer(asset_coin, object::id_to_address(&object::id(account)));
+        transfer::public_transfer(stable_coin, object::id_to_address(&object::id(account)));
+    };
 }
 
 // === Intent Builder Functions ===

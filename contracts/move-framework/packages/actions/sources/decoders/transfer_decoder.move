@@ -17,12 +17,16 @@
 /// Decoder for transfer actions - tightly coupled with transfer action definitions
 module account_actions::transfer_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
-use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
 use account_actions::transfer::{TransferAction, TransferToSenderAction};
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -55,7 +59,7 @@ public fun decode_transfer_action(
             b"recipient".to_string(),
             recipient.to_string(),
             b"address".to_string(),
-        )
+        ),
     ]
 }
 
@@ -73,34 +77,25 @@ public fun decode_transfer_to_sender_action(
             b"action_type".to_string(),
             b"TransferToSenderAction".to_string(),
             b"String".to_string(),
-        )
+        ),
     ]
 }
 
 // === Registration Functions ===
 
 /// Register all transfer decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_transfer_decoder(registry, ctx);
     register_transfer_to_sender_decoder(registry, ctx);
 }
 
-fun register_transfer_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_transfer_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = TransferActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<TransferAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_transfer_to_sender_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_transfer_to_sender_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = TransferToSenderActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<TransferToSenderAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

@@ -1,27 +1,21 @@
 #[test_only]
 module account_actions::currency_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin, TreasuryCap},
-    sui::SUI,
-};
-use std::option;
+use account_actions::currency;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-    deps,
-    intent_interface,
-};
-use account_actions::{
-    currency,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intent_interface;
+use account_protocol::intents;
+use std::option;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Macros ===
 
@@ -55,7 +49,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -136,7 +133,7 @@ fun test_mint_and_burn_basic() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -148,7 +145,7 @@ fun test_mint_and_burn_basic() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_mint<_, SUI, _>(intent, 100, iw);
-        }
+        },
     );
 
     // Execute mint
@@ -157,7 +154,7 @@ fun test_mint_and_burn_basic() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let minted_coin = currency::do_mint<Config, Outcome, SUI, _>(
@@ -165,7 +162,7 @@ fun test_mint_and_burn_basic() {
         &mut account,
         version::current(),
         CurrencyIntent(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(minted_coin.value() == 100, 0);
@@ -184,7 +181,7 @@ fun test_mint_and_burn_basic() {
         vector[0],
         2000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -196,7 +193,7 @@ fun test_mint_and_burn_basic() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_burn<_, SUI, _>(intent, 100, iw);
-        }
+        },
     );
 
     let (_, mut executable2) = account.create_executable<_, Outcome, _>(
@@ -204,7 +201,7 @@ fun test_mint_and_burn_basic() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     currency::do_burn<Config, Outcome, SUI, _>(
@@ -212,7 +209,7 @@ fun test_mint_and_burn_basic() {
         &mut account,
         minted_coin,
         version::current(),
-        CurrencyIntent()
+        CurrencyIntent(),
     );
 
     account.confirm_execution(executable2);
@@ -243,7 +240,7 @@ fun test_mint_exceeds_max_supply() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -255,7 +252,7 @@ fun test_mint_exceeds_max_supply() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_mint<_, SUI, _>(intent, 100, iw);
-        }
+        },
     );
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(
@@ -263,7 +260,7 @@ fun test_mint_exceeds_max_supply() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // This should abort with EMaxSupply
@@ -272,7 +269,7 @@ fun test_mint_exceeds_max_supply() {
         &mut account,
         version::current(),
         CurrencyIntent(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(coin);
@@ -298,7 +295,7 @@ fun test_disable_permissions() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -311,15 +308,15 @@ fun test_disable_permissions() {
         |intent, iw| {
             currency::new_disable<_, SUI, _>(
                 intent,
-                true,  // mint
-                true,  // burn
+                true, // mint
+                true, // burn
                 false, // update_symbol
                 false, // update_name
                 false, // update_description
                 false, // update_icon
-                iw
+                iw,
             );
-        }
+        },
     );
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(
@@ -327,14 +324,14 @@ fun test_disable_permissions() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     currency::do_disable<Config, Outcome, SUI, _>(
         &mut executable,
         &mut account,
         version::current(),
-        CurrencyIntent()
+        CurrencyIntent(),
     );
 
     account.confirm_execution(executable);
@@ -361,7 +358,14 @@ fun test_mint_when_disabled() {
 
     let key1 = b"disable".to_string();
     let outcome = Outcome {};
-    let params1 = intents::new_params(key1, b"Disable".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params1 = intents::new_params(
+        key1,
+        b"Disable".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     account.build_intent!(
         params1,
@@ -372,16 +376,34 @@ fun test_mint_when_disabled() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_disable<_, SUI, _>(intent, true, false, false, false, false, false, iw);
-        }
+        },
     );
 
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(key1, &clock, version::current(), Witness(), scenario.ctx());
-    currency::do_disable<Config, Outcome, SUI, _>(&mut exec1, &mut account, version::current(), CurrencyIntent());
+    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+        key1,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    currency::do_disable<Config, Outcome, SUI, _>(
+        &mut exec1,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+    );
     account.confirm_execution(exec1);
 
     // Now try to mint (should fail)
     let key2 = b"mint".to_string();
-    let params2 = intents::new_params(key2, b"Mint".to_string(), vector[0], 2000, &clock, scenario.ctx());
+    let params2 = intents::new_params(
+        key2,
+        b"Mint".to_string(),
+        vector[0],
+        2000,
+        &clock,
+        scenario.ctx(),
+    );
 
     account.build_intent!(
         params2,
@@ -392,13 +414,25 @@ fun test_mint_when_disabled() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_mint<_, SUI, _>(intent, 50, iw);
-        }
+        },
     );
 
-    let (_, mut exec2) = account.create_executable<_, Outcome, _>(key2, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut exec2) = account.create_executable<_, Outcome, _>(
+        key2,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
 
     // This should abort with EMintDisabled
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(&mut exec2, &mut account, version::current(), CurrencyIntent(), scenario.ctx());
+    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+        &mut exec2,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+    );
 
     destroy(coin);
     account.confirm_execution(exec2);
@@ -417,7 +451,14 @@ fun test_public_burn() {
     // Mint a coin first
     let key = b"mint".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Mint".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Mint".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     account.build_intent!(
         params,
@@ -428,11 +469,23 @@ fun test_public_burn() {
         scenario.ctx(),
         |intent, iw| {
             currency::new_mint<_, SUI, _>(intent, 200, iw);
-        }
+        },
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(&mut executable, &mut account, version::current(), CurrencyIntent(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+        &mut executable,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
     // Now anyone can burn it using public_burn
@@ -526,24 +579,78 @@ fun test_burn_wrong_value() {
     // Mint a coin
     let key1 = b"mint".to_string();
     let outcome = Outcome {};
-    let params1 = intents::new_params(key1, b"Mint".to_string(), vector[0], 1000, &clock, scenario.ctx());
-    account.build_intent!(params1, outcome, b"".to_string(), version::current(), CurrencyIntent(), scenario.ctx(), |intent, iw| {
-        currency::new_mint<_, SUI, _>(intent, 100, iw);
-    });
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(key1, &clock, version::current(), Witness(), scenario.ctx());
-    let coin = currency::do_mint<Config, Outcome, SUI, _>(&mut exec1, &mut account, version::current(), CurrencyIntent(), scenario.ctx());
+    let params1 = intents::new_params(
+        key1,
+        b"Mint".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
+    account.build_intent!(
+        params1,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            currency::new_mint<_, SUI, _>(intent, 100, iw);
+        },
+    );
+    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+        key1,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    let coin = currency::do_mint<Config, Outcome, SUI, _>(
+        &mut exec1,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(exec1);
 
     // Try to burn with wrong amount (50 instead of 100)
     let key2 = b"burn".to_string();
-    let params2 = intents::new_params(key2, b"Burn".to_string(), vector[0], 2000, &clock, scenario.ctx());
-    account.build_intent!(params2, outcome, b"".to_string(), version::current(), CurrencyIntent(), scenario.ctx(), |intent, iw| {
-        currency::new_burn<_, SUI, _>(intent, 50, iw);
-    });
-    let (_, mut exec2) = account.create_executable<_, Outcome, _>(key2, &clock, version::current(), Witness(), scenario.ctx());
+    let params2 = intents::new_params(
+        key2,
+        b"Burn".to_string(),
+        vector[0],
+        2000,
+        &clock,
+        scenario.ctx(),
+    );
+    account.build_intent!(
+        params2,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            currency::new_burn<_, SUI, _>(intent, 50, iw);
+        },
+    );
+    let (_, mut exec2) = account.create_executable<_, Outcome, _>(
+        key2,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
 
     // This should abort with EWrongValue
-    currency::do_burn<Config, Outcome, SUI, _>(&mut exec2, &mut account, coin, version::current(), CurrencyIntent());
+    currency::do_burn<Config, Outcome, SUI, _>(
+        &mut exec2,
+        &mut account,
+        coin,
+        version::current(),
+        CurrencyIntent(),
+    );
 
     account.confirm_execution(exec2);
     end(scenario, extensions, account, clock);
@@ -562,35 +669,115 @@ fun test_delete_actions() {
 
     // Create multiple intents to test all delete functions
     let key1 = b"disable".to_string();
-    let params1 = intents::new_params(key1, b"".to_string(), vector[0], clock.timestamp_ms() + 100, &clock, scenario.ctx());
-    account.build_intent!(params1, outcome, b"".to_string(), version::current(), CurrencyIntent(), scenario.ctx(), |intent, iw| {
-        currency::new_disable<_, SUI, _>(intent, true, false, false, false, false, false, iw);
-    });
+    let params1 = intents::new_params(
+        key1,
+        b"".to_string(),
+        vector[0],
+        clock.timestamp_ms() + 100,
+        &clock,
+        scenario.ctx(),
+    );
+    account.build_intent!(
+        params1,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            currency::new_disable<_, SUI, _>(intent, true, false, false, false, false, false, iw);
+        },
+    );
 
     let key2 = b"mint".to_string();
-    let params2 = intents::new_params(key2, b"".to_string(), vector[0], clock.timestamp_ms() + 100, &clock, scenario.ctx());
-    account.build_intent!(params2, outcome, b"".to_string(), version::current(), CurrencyIntent(), scenario.ctx(), |intent, iw| {
-        currency::new_mint<_, SUI, _>(intent, 10, iw);
-    });
+    let params2 = intents::new_params(
+        key2,
+        b"".to_string(),
+        vector[0],
+        clock.timestamp_ms() + 100,
+        &clock,
+        scenario.ctx(),
+    );
+    account.build_intent!(
+        params2,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            currency::new_mint<_, SUI, _>(intent, 10, iw);
+        },
+    );
 
     let key3 = b"burn".to_string();
-    let params3 = intents::new_params(key3, b"".to_string(), vector[0], clock.timestamp_ms() + 100, &clock, scenario.ctx());
-    account.build_intent!(params3, outcome, b"".to_string(), version::current(), CurrencyIntent(), scenario.ctx(), |intent, iw| {
-        currency::new_burn<_, SUI, _>(intent, 10, iw);
-    });
+    let params3 = intents::new_params(
+        key3,
+        b"".to_string(),
+        vector[0],
+        clock.timestamp_ms() + 100,
+        &clock,
+        scenario.ctx(),
+    );
+    account.build_intent!(
+        params3,
+        outcome,
+        b"".to_string(),
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+        |intent, iw| {
+            currency::new_burn<_, SUI, _>(intent, 10, iw);
+        },
+    );
 
     // Execute each to consume execution time
     // Execute mint first before disable
-    let (_, mut e2) = account.create_executable<_, Outcome, _>(key2, &clock, version::current(), Witness(), scenario.ctx());
-    let c = currency::do_mint<Config, Outcome, SUI, _>(&mut e2, &mut account, version::current(), CurrencyIntent(), scenario.ctx());
+    let (_, mut e2) = account.create_executable<_, Outcome, _>(
+        key2,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    let c = currency::do_mint<Config, Outcome, SUI, _>(
+        &mut e2,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+        scenario.ctx(),
+    );
     account.confirm_execution(e2);
 
-    let (_, mut e3) = account.create_executable<_, Outcome, _>(key3, &clock, version::current(), Witness(), scenario.ctx());
-    currency::do_burn<Config, Outcome, SUI, _>(&mut e3, &mut account, c, version::current(), CurrencyIntent());
+    let (_, mut e3) = account.create_executable<_, Outcome, _>(
+        key3,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    currency::do_burn<Config, Outcome, SUI, _>(
+        &mut e3,
+        &mut account,
+        c,
+        version::current(),
+        CurrencyIntent(),
+    );
     account.confirm_execution(e3);
 
-    let (_, mut e1) = account.create_executable<_, Outcome, _>(key1, &clock, version::current(), Witness(), scenario.ctx());
-    currency::do_disable<Config, Outcome, SUI, _>(&mut e1, &mut account, version::current(), CurrencyIntent());
+    let (_, mut e1) = account.create_executable<_, Outcome, _>(
+        key1,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    currency::do_disable<Config, Outcome, SUI, _>(
+        &mut e1,
+        &mut account,
+        version::current(),
+        CurrencyIntent(),
+    );
     account.confirm_execution(e1);
 
     // Now delete all expired intents

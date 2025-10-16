@@ -1,28 +1,26 @@
 #[test_only]
 module futarchy_lifecycle::dissolution_flow_tests;
 
-use std::{vector, string};
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self as clock, Clock};
-use sui::object::{Self as object, UID, ID};
-use sui::coin::{Self as coin};
-use sui::sui::SUI;
-use sui::tx_context::TxContext;
-use std::bcs;
-use account_protocol::{
-    account::{Self, Account},
-    executable::{Self, Executable},
-    intents,
-    version_witness,
-};
-use account_extensions::extensions::{Self as extensions};
-use futarchy_core::{
-    action_types,
-    futarchy_config::{Self, FutarchyConfig},
-};
-use futarchy_lifecycle::{dissolution_actions, dissolution_auction};
+use account_extensions::extensions as extensions;
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents;
+use account_protocol::version_witness;
+use futarchy_core::action_types;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_lifecycle::dissolution_actions;
+use futarchy_lifecycle::dissolution_auction;
 use futarchy_markets_core::unified_spot_pool;
 use futarchy_vault::futarchy_vault;
+use std::bcs;
+use std::string;
+use std::vector;
+use sui::clock::{Self as clock, Clock};
+use sui::coin as coin;
+use sui::object::{Self as object, UID, ID};
+use sui::sui::SUI;
+use sui::test_scenario as ts;
+use sui::tx_context::TxContext;
 
 const ADMIN: address = @0xA;
 const ALICE: address = @0xA11CE;
@@ -62,7 +60,11 @@ fun test_dissolution_happy_path() {
     let mut account = create_test_account(&mut scenario);
     let mut clock = clock::create_for_testing(ts::ctx(&mut scenario));
     // Initialize vault storage for completeness
-    futarchy_vault::init_vault(&mut account, version_witness::test_create(), ts::ctx(&mut scenario));
+    futarchy_vault::init_vault(
+        &mut account,
+        version_witness::test_create(),
+        ts::ctx(&mut scenario),
+    );
 
     // Prepare AMM pool that we will withdraw during dissolution
     let mut pool = unified_spot_pool::create_pool_for_testing<TEST_ASSET, TEST_STABLE>(
@@ -107,7 +109,10 @@ fun test_dissolution_happy_path() {
         bcs::to_bytes(&pro_rata_action),
     );
 
-    let withdraw_action = dissolution_actions::new_withdraw_amm_liquidity_action<TEST_ASSET, TEST_STABLE>(
+    let withdraw_action = dissolution_actions::new_withdraw_amm_liquidity_action<
+        TEST_ASSET,
+        TEST_STABLE,
+    >(
         pool_id,
         lp_supply,
         true,
@@ -118,7 +123,10 @@ fun test_dissolution_happy_path() {
         bcs::to_bytes(&withdraw_action),
     );
 
-    let create_auction_action = dissolution_actions::new_create_auction_action<TestCollectible, SUI>(
+    let create_auction_action = dissolution_actions::new_create_auction_action<
+        TestCollectible,
+        SUI,
+    >(
         collectible_id,
         10,
         86_400_000,
@@ -183,14 +191,23 @@ fun test_dissolution_happy_path() {
     );
 
     // Step 4: withdraw AMM liquidity via resource request pattern
-    let withdraw_request = dissolution_actions::do_withdraw_amm_liquidity<u8, TEST_ASSET, TEST_STABLE, bool>(
+    let withdraw_request = dissolution_actions::do_withdraw_amm_liquidity<
+        u8,
+        TEST_ASSET,
+        TEST_STABLE,
+        bool,
+    >(
         &mut executable,
         &mut account,
         version_witness::test_create(),
         false,
         ts::ctx(&mut scenario),
     );
-    let (asset_coin, stable_coin, withdraw_receipt) = dissolution_actions::fulfill_withdraw_amm_liquidity<TEST_ASSET, TEST_STABLE>(
+    let (
+        asset_coin,
+        stable_coin,
+        withdraw_receipt,
+    ) = dissolution_actions::fulfill_withdraw_amm_liquidity<TEST_ASSET, TEST_STABLE>(
         withdraw_request,
         &mut pool,
         ts::ctx(&mut scenario),
@@ -219,7 +236,11 @@ fun test_dissolution_happy_path() {
     clock::increment_for_testing(&mut clock, 86_400_001);
     {
         let mut auction = ts::take_shared<dissolution_auction::DissolutionAuction<SUI>>(&scenario);
-        let (collectible_back, winning_coin, finalize_receipt) = dissolution_auction::finalize_auction<TestCollectible, SUI>(
+        let (
+            collectible_back,
+            winning_coin,
+            finalize_receipt,
+        ) = dissolution_auction::finalize_auction<TestCollectible, SUI>(
             &mut auction,
             &mut account,
             &clock,
@@ -227,9 +248,11 @@ fun test_dissolution_happy_path() {
         );
         destroy_collectible(collectible_back);
         coin::burn_for_testing(winning_coin);
-        let (_finalized_id, _winner, _amount) = dissolution_auction::confirm_finalization(finalize_receipt);
+        let (_finalized_id, _winner, _amount) = dissolution_auction::confirm_finalization(
+            finalize_receipt,
+        );
         ts::return_shared(auction);
-    }
+    };
     assert!(dissolution_auction::all_auctions_complete(&account), 2);
 
     // Step 6: distribute assets (exact split, no remainder)
@@ -266,7 +289,11 @@ fun test_double_finalization_fails() {
     let mut scenario = ts::begin(ADMIN);
     let mut account = create_test_account(&mut scenario);
     let mut clock = clock::create_for_testing(ts::ctx(&mut scenario));
-    futarchy_vault::init_vault(&mut account, version_witness::test_create(), ts::ctx(&mut scenario));
+    futarchy_vault::init_vault(
+        &mut account,
+        version_witness::test_create(),
+        ts::ctx(&mut scenario),
+    );
 
     // Create simple dissolution intent with only initiate and finalize actions
     let mut builder = intents::intent_builder(ts::ctx(&mut scenario));

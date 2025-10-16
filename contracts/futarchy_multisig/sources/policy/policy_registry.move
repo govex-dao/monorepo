@@ -3,18 +3,18 @@
 /// to determine which actions require security council approval.
 module futarchy_multisig::policy_registry;
 
-use std::option::{Self, Option};
+use account_protocol::account::{Self, Account};
+use account_protocol::version_witness::VersionWitness;
 use std::ascii::{Self, String};
-use std::vector;
+use std::option::{Self, Option};
 use std::type_name::{Self, TypeName};
+use std::vector;
+use sui::clock::Clock;
+use sui::event;
 use sui::object::{ID, UID};
 use sui::package::UpgradeCap;
 use sui::table::{Self, Table};
-use sui::event;
-use sui::clock::Clock;
 use sui::tx_context::TxContext;
-use account_protocol::account::{Self, Account};
-use account_protocol::version_witness::VersionWitness;
 
 // === Errors ===
 const EPolicyNotFound: u64 = 1;
@@ -26,10 +26,13 @@ const EPendingChangeNotFound: u64 = 6;
 const EDelayNotElapsed: u64 = 7;
 
 // === Constants for Approval Modes ===
-public fun MODE_DAO_ONLY(): u8 { 0 }           // Just DAO vote
-public fun MODE_COUNCIL_ONLY(): u8 { 1 }       // Just council (no DAO)
-public fun MODE_DAO_OR_COUNCIL(): u8 { 2 }     // Either DAO or council
-public fun MODE_DAO_AND_COUNCIL(): u8 { 3 }    // Both DAO and council
+public fun MODE_DAO_ONLY(): u8 { 0 } // Just DAO vote
+
+public fun MODE_COUNCIL_ONLY(): u8 { 1 } // Just council (no DAO)
+
+public fun MODE_DAO_OR_COUNCIL(): u8 { 2 } // Either DAO or council
+
+public fun MODE_DAO_AND_COUNCIL(): u8 { 3 } // Both DAO and council
 
 // === Storage Limits (DOS Protection) ===
 // These limits prevent unbounded storage growth that could DOS the DAO with costs
@@ -64,34 +67,28 @@ public struct PolicyRegistry has store {
     /// Maps type name string to PolicyRule (council ID + mode)
     /// Using String instead of TypeName to enable on-chain change permission enforcement
     type_policies: Table<String, PolicyRule>,
-
     /// Object-specific policies (e.g., specific UpgradeCap, specific File ID)
     /// Maps object ID to PolicyRule (council ID + mode)
     /// Note: This now includes file policies - files are objects with IDs
     object_policies: Table<ID, PolicyRule>,
-
     /// Pending type policy changes awaiting delay expiration
     pending_type_changes: Table<String, PendingChange>,
-
     /// Pending object policy changes awaiting delay expiration
     pending_object_changes: Table<ID, PendingChange>,
-
     /// Registered security councils for this DAO
     registered_councils: vector<ID>,
 }
 
 /// Policy rule for descriptor-based policies with metacontrol and time delays
-public struct PolicyRule has store, copy, drop {
+public struct PolicyRule has copy, drop, store {
     /// The security council ID for action execution (None = DAO only)
     execution_council_id: Option<ID>,
     /// Execution mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
     execution_mode: u8,
-
     /// The security council ID for changing this policy (None = DAO only)
     change_council_id: Option<ID>,
     /// Change mode: 0=DAO_ONLY, 1=COUNCIL_ONLY, 2=DAO_OR_COUNCIL, 3=DAO_AND_COUNCIL
     change_mode: u8,
-
     /// Minimum delay before policy changes take effect (milliseconds)
     /// 0 = immediate, 86400000 = 24 hours, 172800000 = 48 hours
     /// This delay protects against malicious policy changes by giving DAO time to react
@@ -99,11 +96,11 @@ public struct PolicyRule has store, copy, drop {
 }
 
 /// Pending policy change awaiting delay expiration
-public struct PendingChange has store, drop {
+public struct PendingChange has drop, store {
     new_rule: PolicyRule,
-    effective_at_ms: u64,  // Timestamp when change becomes active
-    proposer_id: ID,       // Who proposed the change (for accountability)
-    proposed_at_ms: u64,   // Timestamp when change was proposed (for cleanup)
+    effective_at_ms: u64, // Timestamp when change becomes active
+    proposer_id: ID, // Who proposed the change (for accountability)
+    proposed_at_ms: u64, // Timestamp when change was proposed (for cleanup)
 }
 
 // === Helper Functions ===
@@ -249,7 +246,6 @@ public fun policy_rule_change_mode(rule: &PolicyRule): u8 {
     rule.change_mode
 }
 
-
 // === Events ===
 public struct TypePolicySet has copy, drop {
     dao_id: ID,
@@ -274,14 +270,13 @@ public struct CouncilRegistered has copy, drop {
     council_id: ID,
 }
 
-
 // === Public Functions ===
 
 /// Initializes the policy registry for an Account.
 public fun initialize<Config>(
     account: &mut Account<Config>,
     version_witness: VersionWitness,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     if (!account::has_managed_data(account, PolicyRegistryKey {})) {
         account::add_managed_data(
@@ -294,15 +289,10 @@ public fun initialize<Config>(
                 pending_object_changes: table::new(ctx),
                 registered_councils: vector::empty(),
             },
-            version_witness
+            version_witness,
         );
     }
 }
-
-
-
-
-
 
 /// Check if account has a policy registry
 public fun has_registry<Config>(account: &Account<Config>): bool {
@@ -312,7 +302,7 @@ public fun has_registry<Config>(account: &Account<Config>): bool {
 /// Helper function to get a mutable reference to the PolicyRegistry from an Account
 public fun borrow_registry_mut<Config>(
     account: &mut Account<Config>,
-    version_witness: VersionWitness
+    version_witness: VersionWitness,
 ): &mut PolicyRegistry {
     account::borrow_managed_data_mut(account, PolicyRegistryKey {}, version_witness)
 }
@@ -320,7 +310,7 @@ public fun borrow_registry_mut<Config>(
 /// Helper function to get an immutable reference to the PolicyRegistry from an Account
 public fun borrow_registry<Config>(
     account: &Account<Config>,
-    version_witness: VersionWitness
+    version_witness: VersionWitness,
 ): &PolicyRegistry {
     account::borrow_managed_data(account, PolicyRegistryKey {}, version_witness)
 }
@@ -415,7 +405,10 @@ public fun get_type_policy_rule(registry: &PolicyRegistry, action_type: TypeName
 
 /// Get the complete policy rule for a type by string (for change permission validation)
 /// Uses fallback: specific type -> generic type -> aborts if neither exist
-public fun get_type_policy_rule_by_string(registry: &PolicyRegistry, type_str: String): &PolicyRule {
+public fun get_type_policy_rule_by_string(
+    registry: &PolicyRegistry,
+    type_str: String,
+): &PolicyRule {
     // 1. Try exact match
     if (table::contains(&registry.type_policies, type_str)) {
         return table::borrow(&registry.type_policies, type_str)
@@ -655,7 +648,10 @@ public fun set_object_policy(
         *existing_mut = rule;
     } else {
         // New policy - apply immediately (no existing delay to respect)
-        assert!(table::length(&registry.object_policies) < MAX_OBJECT_POLICIES(), ETooManyObjectPolicies);
+        assert!(
+            table::length(&registry.object_policies) < MAX_OBJECT_POLICIES(),
+            ETooManyObjectPolicies,
+        );
         table::add(&mut registry.object_policies, object_id, rule);
     };
 
@@ -670,11 +666,7 @@ public fun set_object_policy(
 }
 
 /// Register a security council with the DAO
-public fun register_council(
-    registry: &mut PolicyRegistry,
-    dao_id: ID,
-    council_id: ID,
-) {
+public fun register_council(registry: &mut PolicyRegistry, dao_id: ID, council_id: ID) {
     if (!vector::contains(&registry.registered_councils, &council_id)) {
         assert!(vector::length(&registry.registered_councils) < MAX_COUNCILS(), ETooManyCouncils);
         vector::push_back(&mut registry.registered_councils, council_id);
@@ -779,27 +771,24 @@ public fun finalize_pending_object_policy(
         let existing = table::borrow_mut(&mut registry.object_policies, object_id);
         *existing = pending.new_rule;
     } else {
-        assert!(table::length(&registry.object_policies) < MAX_OBJECT_POLICIES(), ETooManyObjectPolicies);
+        assert!(
+            table::length(&registry.object_policies) < MAX_OBJECT_POLICIES(),
+            ETooManyObjectPolicies,
+        );
         table::add(&mut registry.object_policies, object_id, pending.new_rule);
     };
 }
 
 /// Cancel a pending type policy change
 /// Only the DAO or authorized council can cancel
-public fun cancel_pending_type_policy(
-    registry: &mut PolicyRegistry,
-    type_name_str: String,
-) {
+public fun cancel_pending_type_policy(registry: &mut PolicyRegistry, type_name_str: String) {
     assert!(table::contains(&registry.pending_type_changes, type_name_str), EPendingChangeNotFound);
     table::remove(&mut registry.pending_type_changes, type_name_str);
 }
 
 /// Cancel a pending object policy change
 /// Only the DAO or authorized council can cancel
-public fun cancel_pending_object_policy(
-    registry: &mut PolicyRegistry,
-    object_id: ID,
-) {
+public fun cancel_pending_object_policy(registry: &mut PolicyRegistry, object_id: ID) {
     assert!(table::contains(&registry.pending_object_changes, object_id), EPendingChangeNotFound);
     table::remove(&mut registry.pending_object_changes, object_id);
 }
@@ -870,10 +859,7 @@ public fun cleanup_abandoned_object_policies(
 }
 
 /// Check if a pending change is eligible for cleanup (older than MAX_PENDING_CHANGE_AGE_MS)
-public fun is_pending_change_abandonded(
-    pending_proposed_at_ms: u64,
-    clock: &Clock,
-): bool {
+public fun is_pending_change_abandonded(pending_proposed_at_ms: u64, clock: &Clock): bool {
     let current_time = sui::clock::timestamp_ms(clock);
     let cutoff_time = if (current_time > MAX_PENDING_CHANGE_AGE_MS()) {
         current_time - MAX_PENDING_CHANGE_AGE_MS()

@@ -7,10 +7,7 @@ use futarchy_vault::futarchy_vault_init;
 // === Basic Module Tests ===
 
 #[test]
-fun test_module_exists() {
-    // This test just verifies the module compiles and can be imported
-    // More comprehensive tests will be added once test utilities are stable
-}
+fun test_module_exists() {}
 
 // Note: Full test coverage blocked pending:
 // - Stable test utilities for Account<FutarchyConfig> creation

@@ -3,11 +3,9 @@ module futarchy_markets_primitives::futarchy_twap_oracle_tests;
 
 use futarchy_markets_primitives::futarchy_twap_oracle::{Self, Oracle};
 use futarchy_one_shot_utils::constants;
-use sui::{
-    test_scenario as ts,
-    clock::{Self, Clock},
-    test_utils::destroy,
-};
+use sui::clock::{Self, Clock};
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
 const ADMIN: address = @0xAD;
 
@@ -31,10 +29,10 @@ fun test_new_oracle_valid_params() {
     let (mut scenario, clock) = start();
 
     let oracle = futarchy_twap_oracle::new_oracle(
-        10000,  // initialization price
+        10000, // initialization price
         60_000, // twap_start_delay (1 minute)
-        1000,   // twap_cap_ppm (0.1%)
-        ts::ctx(&mut scenario)
+        1000, // twap_cap_ppm (0.1%)
+        ts::ctx(&mut scenario),
     );
 
     // Verify initialization
@@ -57,10 +55,10 @@ fun test_new_oracle_zero_initialization_price_fails() {
     let (mut scenario, clock) = start();
 
     let oracle = futarchy_twap_oracle::new_oracle(
-        0,      // zero price - should fail
+        0, // zero price - should fail
         60_000,
         1000,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
@@ -75,8 +73,8 @@ fun test_new_oracle_zero_cap_ppm_fails() {
     let oracle = futarchy_twap_oracle::new_oracle(
         10000,
         60_000,
-        0,      // zero cap ppm - should fail
-        ts::ctx(&mut scenario)
+        0, // zero cap ppm - should fail
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
@@ -92,7 +90,7 @@ fun test_new_oracle_invalid_cap_ppm_fails() {
         10000,
         60_000,
         1_000_001, // > PPM_DENOMINATOR - should fail
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
@@ -108,7 +106,7 @@ fun test_new_oracle_long_delay_fails() {
         10000,
         constants::one_week_ms(), // >= 1 week - should fail
         1000,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
@@ -124,7 +122,7 @@ fun test_new_oracle_misaligned_delay_fails() {
         10000,
         60_001, // Not multiple of TWAP_PRICE_CAP_WINDOW - should fail
         1000,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
@@ -140,7 +138,7 @@ fun test_new_oracle_step_calculation_small_ppm() {
         100_000,
         60_000,
         100, // 0.01%
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (_, cap_step) = futarchy_twap_oracle::config(&oracle);
@@ -159,7 +157,7 @@ fun test_new_oracle_step_calculation_large_ppm() {
         100_000,
         60_000,
         100_000, // 10%
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (_, cap_step) = futarchy_twap_oracle::config(&oracle);
@@ -347,7 +345,7 @@ fun test_write_observation_price_cap_upward() {
         10000,
         60_000,
         10_000, // 1% cap -> cap_step = 100
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -376,7 +374,7 @@ fun test_write_observation_price_cap_downward() {
         10000,
         60_000,
         10_000, // 1% cap -> cap_step = 100
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -404,7 +402,7 @@ fun test_write_observation_price_within_cap() {
         10000,
         60_000,
         10_000, // 1% cap -> cap_step = 100
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -574,10 +572,10 @@ fun test_full_oracle_workflow() {
 
     // 1. Create oracle with realistic params
     let mut oracle = futarchy_twap_oracle::new_oracle(
-        1_000_000,  // $1.00 (6 decimals)
-        300_000,    // 5 minute delay
-        50_000,     // 5% cap
-        ts::ctx(&mut scenario)
+        1_000_000, // $1.00 (6 decimals)
+        300_000, // 5 minute delay
+        50_000, // 5% cap
+        ts::ctx(&mut scenario),
     );
 
     // 2. Start market
@@ -617,10 +615,10 @@ fun test_realistic_price_discovery_scenario() {
     let (mut scenario, mut clock) = start();
 
     let mut oracle = futarchy_twap_oracle::new_oracle(
-        500_000,    // $0.50 initialization
-        60_000,     // 1 minute delay
-        100_000,    // 10% cap
-        ts::ctx(&mut scenario)
+        500_000, // $0.50 initialization
+        60_000, // 1 minute delay
+        100_000, // 10% cap
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(0);
@@ -671,8 +669,8 @@ fun test_intra_window_accumulation_direct() {
     futarchy_twap_oracle::call_intra_window_accumulation_for_testing(
         &mut oracle,
         10500, // price
-        5000,  // duration
-        6000   // timestamp
+        5000, // duration
+        6000, // timestamp
     );
 
     // Verify accumulation happened
@@ -703,7 +701,7 @@ fun test_intra_window_accumulation_hits_boundary() {
         &mut oracle,
         10500,
         window_size,
-        1000 + window_size
+        1000 + window_size,
     );
 
     // Window should advance
@@ -737,13 +735,16 @@ fun test_multi_full_window_accumulation_single_window() {
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle,
         10500, // price
-        1,     // num_windows
-        1000 + window_size
+        1, // num_windows
+        1000 + window_size,
     );
 
     // Verify state updated
     assert!(futarchy_twap_oracle::last_timestamp(&oracle) == 1000 + window_size, 0);
-    assert!(futarchy_twap_oracle::get_last_window_end_for_testing(&oracle) == 1000 + window_size, 1);
+    assert!(
+        futarchy_twap_oracle::get_last_window_end_for_testing(&oracle) == 1000 + window_size,
+        1,
+    );
 
     futarchy_twap_oracle::destroy_for_testing(oracle);
     end(scenario, clock);
@@ -768,13 +769,16 @@ fun test_multi_full_window_accumulation_multiple_windows() {
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle,
         11000, // price significantly higher
-        10,    // num_windows
-        1000 + (window_size * 10)
+        10, // num_windows
+        1000 + (window_size * 10),
     );
 
     // Verify state updated
     assert!(futarchy_twap_oracle::last_timestamp(&oracle) == 1000 + (window_size * 10), 0);
-    assert!(futarchy_twap_oracle::get_last_window_end_for_testing(&oracle) == 1000 + (window_size * 10), 1);
+    assert!(
+        futarchy_twap_oracle::get_last_window_end_for_testing(&oracle) == 1000 + (window_size * 10),
+        1,
+    );
 
     // Last price should be capped progression toward target
     let last_price = futarchy_twap_oracle::last_price(&oracle);
@@ -792,7 +796,7 @@ fun test_multi_full_window_price_ramping() {
         10000,
         60_000,
         10_000, // 1% cap -> cap_step = 100
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::set_oracle_start_time(&mut oracle, 1000);
@@ -808,8 +812,8 @@ fun test_multi_full_window_price_ramping() {
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle,
         15000, // 50% increase (should be capped)
-        5,     // 5 windows
-        1000 + (window_size * 5)
+        5, // 5 windows
+        1000 + (window_size * 5),
     );
 
     // Price should ramp up gradually, not jump to 15000
@@ -831,7 +835,7 @@ fun test_multi_full_window_price_ramping_downward() {
         10000,
         60_000,
         10_000, // 1% cap -> cap_step = 100
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::set_oracle_start_time(&mut oracle, 1000);
@@ -846,9 +850,9 @@ fun test_multi_full_window_price_ramping_downward() {
     // Try to drop to much lower price
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle,
-        5000,  // 50% decrease (should be capped)
-        5,     // 5 windows
-        1000 + (window_size * 5)
+        5000, // 50% decrease (should be capped)
+        5, // 5 windows
+        1000 + (window_size * 5),
     );
 
     // Price should ramp down gradually, not drop to 5000
@@ -882,7 +886,7 @@ fun test_twap_accumulate_all_three_stages() {
     futarchy_twap_oracle::call_twap_accumulate_for_testing(
         &mut oracle,
         target_time,
-        10500
+        10500,
     );
 
     // Should process all three stages
@@ -905,7 +909,7 @@ fun test_very_large_price() {
         large_price,
         60_000,
         1000,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -961,10 +965,10 @@ fun test_minimum_cap_step() {
     // Very small initialization price with very small PPM
     // This should result in cap_step = 1 (minimum)
     let mut oracle = futarchy_twap_oracle::new_oracle(
-        100,    // Small price
+        100, // Small price
         60_000,
-        1,      // Minimum PPM that would result in cap_step < 1
-        ts::ctx(&mut scenario)
+        1, // Minimum PPM that would result in cap_step < 1
+        ts::ctx(&mut scenario),
     );
 
     let (_, cap_step) = futarchy_twap_oracle::config(&oracle);
@@ -1002,8 +1006,8 @@ fun test_price_exactly_at_base() {
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle,
         10000, // Same as base
-        5,     // 5 windows
-        1000 + (window_size * 5)
+        5, // 5 windows
+        1000 + (window_size * 5),
     );
 
     // Should handle zero deviation case
@@ -1030,13 +1034,17 @@ fun test_cumulative_price_consistency() {
     futarchy_twap_oracle::write_observation(&mut oracle, 70_000, 10000);
 
     let cumulative_1 = futarchy_twap_oracle::total_cumulative_price(&oracle);
-    let window_cumulative_1 = futarchy_twap_oracle::get_last_window_end_cumulative_price_for_testing(&oracle);
+    let window_cumulative_1 = futarchy_twap_oracle::get_last_window_end_cumulative_price_for_testing(
+        &oracle,
+    );
 
     clock.set_for_testing(130_000);
     futarchy_twap_oracle::write_observation(&mut oracle, 130_000, 10500);
 
     let cumulative_2 = futarchy_twap_oracle::total_cumulative_price(&oracle);
-    let window_cumulative_2 = futarchy_twap_oracle::get_last_window_end_cumulative_price_for_testing(&oracle);
+    let window_cumulative_2 = futarchy_twap_oracle::get_last_window_end_cumulative_price_for_testing(
+        &oracle,
+    );
 
     // Cumulative should only increase
     assert!(cumulative_2 >= cumulative_1, 0);
@@ -1090,14 +1098,14 @@ fun test_price_cap_symmetry() {
         10000,
         60_000,
         10_000, // 1% cap
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut oracle_down = futarchy_twap_oracle::new_oracle(
         10000,
         60_000,
         10_000, // 1% cap
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::set_oracle_start_time(&mut oracle_up, 1000);
@@ -1118,14 +1126,14 @@ fun test_price_cap_symmetry() {
         &mut oracle_up,
         10500, // +500
         5,
-        1000 + (window_size * 5)
+        1000 + (window_size * 5),
     );
 
     futarchy_twap_oracle::call_multi_full_window_accumulation_for_testing(
         &mut oracle_down,
-        9500,  // -500
+        9500, // -500
         5,
-        1000 + (window_size * 5)
+        1000 + (window_size * 5),
     );
 
     let price_up = futarchy_twap_oracle::last_price(&mut oracle_up);
@@ -1149,7 +1157,7 @@ fun test_multiple_small_steps_vs_one_large() {
         10000,
         60_000,
         10_000, // 1% cap = 100 step
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     futarchy_twap_oracle::set_oracle_start_time(&mut oracle, 1000);
@@ -1165,7 +1173,7 @@ fun test_multiple_small_steps_vs_one_large() {
         &mut oracle,
         10500,
         5,
-        1000 + (window_size * 5)
+        1000 + (window_size * 5),
     );
 
     let price_5_windows = futarchy_twap_oracle::last_price(&oracle);
@@ -1181,7 +1189,7 @@ fun test_multiple_small_steps_vs_one_large() {
         &mut oracle,
         10500,
         1,
-        1000 + window_size
+        1000 + window_size,
     );
 
     let price_1_window = futarchy_twap_oracle::last_price(&oracle);
@@ -1203,7 +1211,7 @@ fun test_rapid_price_manipulation_resistance() {
         10000,
         60_000,
         10_000, // 1% cap
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -1241,7 +1249,7 @@ fun test_gradual_manipulation_over_time() {
         10000,
         60_000,
         10_000, // 1% cap = 100 per window
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     clock.set_for_testing(1000);
@@ -1294,7 +1302,7 @@ fun test_observation_just_before_window_boundary() {
         &mut oracle,
         10500,
         window_size - 1,
-        1000 + window_size - 1
+        1000 + window_size - 1,
     );
 
     // Window should NOT advance yet
@@ -1306,7 +1314,7 @@ fun test_observation_just_before_window_boundary() {
         &mut oracle,
         10500,
         1,
-        1000 + window_size
+        1000 + window_size,
     );
 
     // Now window should advance
@@ -1335,7 +1343,7 @@ fun test_observation_just_after_window_boundary() {
         &mut oracle,
         10500,
         window_size,
-        1000 + window_size
+        1000 + window_size,
     );
 
     let window_end_1 = futarchy_twap_oracle::get_last_window_end_for_testing(&oracle);
@@ -1346,7 +1354,7 @@ fun test_observation_just_after_window_boundary() {
         &mut oracle,
         10500,
         1,
-        1000 + window_size + 1
+        1000 + window_size + 1,
     );
 
     // Should still be in new window (not advanced again)

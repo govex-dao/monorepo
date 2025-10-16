@@ -1,17 +1,19 @@
 /// Quota intent creation module - for managing proposal quotas
 module futarchy_actions::quota_intents;
 
-use std::{type_name, bcs};
-use sui::{clock::Clock, tx_context::TxContext};
-use account_protocol::{
-    account::Account,
-    executable::Executable,
-    intents::{Self, Intent, Params},
-    intent_interface,
-    schema::{Self, ActionDecoderRegistry},
-};
-use futarchy_core::{version, action_types, futarchy_config::FutarchyConfig};
+use account_protocol::account::Account;
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::quota_actions;
+use futarchy_core::action_types;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
+use std::bcs;
+use std::type_name;
+use sui::clock::Clock;
+use sui::tx_context::TxContext;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -33,12 +35,12 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
     quota_amount: u64,
     quota_period_ms: u64,
     reduced_fee: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     // Enforce decoder exists for this action type
     schema::assert_decoder_exists(
         registry,
-        type_name::with_defining_ids<quota_actions::SetQuotasAction>()
+        type_name::with_defining_ids<quota_actions::SetQuotasAction>(),
     );
 
     account.build_intent!(
@@ -59,9 +61,9 @@ public fun create_set_quotas_intent<Outcome: store + drop + copy>(
             intent.add_typed_action(
                 action_types::set_quotas(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -75,7 +77,7 @@ public fun create_grant_quotas_intent<Outcome: store + drop + copy>(
     quota_amount: u64,
     quota_period_ms: u64,
     reduced_fee: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     create_set_quotas_intent(
         account,
@@ -86,7 +88,7 @@ public fun create_grant_quotas_intent<Outcome: store + drop + copy>(
         quota_amount,
         quota_period_ms,
         reduced_fee,
-        ctx
+        ctx,
     )
 }
 
@@ -97,7 +99,7 @@ public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
     params: Params,
     outcome: Outcome,
     users: vector<address>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     create_set_quotas_intent(
         account,
@@ -105,9 +107,9 @@ public fun create_remove_quotas_intent<Outcome: store + drop + copy>(
         params,
         outcome,
         users,
-        0,  // 0 quota_amount = remove
-        0,  // ignored
-        0,  // ignored
-        ctx
+        0, // 0 quota_amount = remove
+        0, // ignored
+        0, // ignored
+        ctx,
     )
 }

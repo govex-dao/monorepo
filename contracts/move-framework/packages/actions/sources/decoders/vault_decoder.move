@@ -19,18 +19,21 @@
 /// This module knows exactly how to decode SpendAction and DepositAction
 module account_actions::vault_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
-use account_protocol::bcs_validation;
-use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use account_actions::vault::{
     SpendAction,
     DepositAction,
     ToggleStreamPauseAction,
-    ToggleStreamFreezeAction,
+    ToggleStreamFreezeAction
 };
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -77,17 +80,21 @@ public fun decode_spend_action<CoinType>(
     let mut fields = vector::empty();
 
     // Extract and convert each field
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"amount".to_string(),
-        amount.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"amount".to_string(),
+            amount.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
     fields
 }
@@ -107,17 +114,21 @@ public fun decode_deposit_action<CoinType>(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"amount".to_string(),
-        amount.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"amount".to_string(),
+            amount.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
     fields
 }
@@ -198,10 +209,7 @@ public fun decode_toggle_stream_freeze_action(
 
 /// Register all vault decoders in the registry
 /// Called once during protocol initialization
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_spend_decoder(registry, ctx);
     register_deposit_decoder(registry, ctx);
     register_toggle_stream_pause_decoder(registry, ctx);
@@ -209,10 +217,7 @@ public fun register_decoders(
 }
 
 /// Register the SpendAction decoder
-fun register_spend_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_spend_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SpendActionDecoder {
         id: object::new(ctx),
     };
@@ -229,10 +234,7 @@ fun register_spend_decoder(
 }
 
 /// Register the DepositAction decoder
-fun register_deposit_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_deposit_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = DepositActionDecoder {
         id: object::new(ctx),
     };

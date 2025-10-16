@@ -1,29 +1,21 @@
 module account_actions::owned_intents;
 
-// === Imports ===
+use account_actions::transfer as acc_transfer;
+use account_actions::vault;
+use account_actions::version;
+use account_actions::vesting;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
+use account_protocol::owned;
+use std::string::String;
+use std::type_name;
+use sui::clock::Clock;
+use sui::coin::Coin;
+use sui::transfer::Receiving;
 
-use std::{
-    string::String,
-    type_name,
-};
-use sui::{
-    transfer::Receiving,
-    coin::Coin,
-    clock::Clock,
-};
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    owned,
-    intents::Params,
-    intent_interface,
-};
-use account_actions::{
-    transfer as acc_transfer,
-    vesting,
-    vault,
-    version,
-};
+// === Imports ===
 
 // === Aliases ===
 
@@ -56,7 +48,7 @@ public fun request_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
     outcome: Outcome,
     coin_amount: u64,
     vault_name: String,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
@@ -71,9 +63,15 @@ public fun request_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
         WithdrawAndTransferToVaultIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw_coin(intent, account, type_name_to_string<CoinType>(), coin_amount, iw);
+            owned::new_withdraw_coin(
+                intent,
+                account,
+                type_name_to_string<CoinType>(),
+                coin_amount,
+                iw,
+            );
             vault::new_deposit<_, CoinType, _>(intent, vault_name, coin_amount, iw);
-        }
+        },
     );
 }
 
@@ -89,8 +87,14 @@ public fun execute_withdraw_and_transfer_to_vault<Config, Outcome: store, CoinTy
         WithdrawAndTransferToVaultIntent(),
         |executable, iw| {
             let object = owned::do_withdraw_coin(executable, account, receiving, iw);
-            vault::do_deposit<_, _, CoinType, _>(executable, account, object, version::current(), iw);
-        }
+            vault::do_deposit<_, _, CoinType, _>(
+                executable,
+                account,
+                object,
+                version::current(),
+                iw,
+            );
+        },
     );
 }
 
@@ -102,7 +106,7 @@ public fun request_withdraw_objects_and_transfer<Config, Outcome: store>(
     outcome: Outcome,
     object_ids: vector<ID>,
     recipients: vector<address>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
@@ -119,7 +123,7 @@ public fun request_withdraw_objects_and_transfer<Config, Outcome: store>(
         |intent, iw| object_ids.zip_do!(recipients, |object_id, recipient| {
             owned::new_withdraw_object(intent, account, object_id, iw);
             acc_transfer::new_transfer(intent, recipient, iw);
-        })
+        }),
     );
 }
 
@@ -136,7 +140,7 @@ public fun execute_withdraw_object_and_transfer<Config, Outcome: store, T: key +
         |executable, iw| {
             let object = owned::do_withdraw_object(executable, account, receiving, iw);
             acc_transfer::do_transfer(executable, object, iw);
-        }
+        },
     );
 }
 
@@ -149,13 +153,13 @@ public fun request_withdraw_coins_and_transfer<Config, Outcome: store>(
     coin_types: vector<String>,
     coin_amounts: vector<u64>,
     mut recipients: vector<address>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
     assert!(
         coin_types.length() == coin_amounts.length() && coin_types.length() == recipients.length(),
-        ECoinsRecipientsNotSameLength
+        ECoinsRecipientsNotSameLength,
     );
 
     intent_interface::build_intent!(
@@ -170,7 +174,7 @@ public fun request_withdraw_coins_and_transfer<Config, Outcome: store>(
             let recipient = recipients.remove(0);
             owned::new_withdraw_coin(intent, account, coin_type, coin_amount, iw);
             acc_transfer::new_transfer(intent, recipient, iw);
-        })
+        }),
     );
 }
 
@@ -187,7 +191,7 @@ public fun execute_withdraw_coin_and_transfer<Config, Outcome: store, CoinType>(
         |executable, iw| {
             let object = owned::do_withdraw_coin(executable, account, receiving, iw);
             acc_transfer::do_transfer(executable, object, iw);
-        }
+        },
     );
 }
 
@@ -201,7 +205,7 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
     amounts: vector<u64>,
     start_timestamp: u64,
     end_timestamp: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
@@ -224,9 +228,30 @@ public fun request_withdraw_and_vest<Config, Outcome: store, CoinType>(
         WithdrawAndVestIntent(),
         ctx,
         |intent, iw| {
-            owned::new_withdraw_coin<_, _, _>(intent, account, type_name_to_string<CoinType>(), total_amount, iw);
-            vesting::new_vesting<_, _, CoinType, _>(intent, account, recipients, amounts, start_timestamp, end_timestamp, option::none(), 1, total_amount, 0, false, false, option::none(), iw);
-        }
+            owned::new_withdraw_coin<_, _, _>(
+                intent,
+                account,
+                type_name_to_string<CoinType>(),
+                total_amount,
+                iw,
+            );
+            vesting::new_vesting<_, _, CoinType, _>(
+                intent,
+                account,
+                recipients,
+                amounts,
+                start_timestamp,
+                end_timestamp,
+                option::none(),
+                1,
+                total_amount,
+                0,
+                false,
+                false,
+                option::none(),
+                iw,
+            );
+        },
     );
 }
 
@@ -236,16 +261,21 @@ public fun execute_withdraw_and_vest<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     receiving: Receiving<Coin<CoinType>>,
     clock: &Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         WithdrawAndVestIntent(),
         |executable, iw| {
-            let coin = owned::do_withdraw_coin<_, _, CoinType, _>(executable, account, receiving, iw);
+            let coin = owned::do_withdraw_coin<_, _, CoinType, _>(
+                executable,
+                account,
+                receiving,
+                iw,
+            );
             vesting::do_vesting<_, _, CoinType, _>(executable, account, coin, clock, iw, ctx);
-        }
+        },
     );
 }
 

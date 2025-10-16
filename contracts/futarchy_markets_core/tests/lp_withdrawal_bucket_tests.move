@@ -1,15 +1,15 @@
 #[test_only]
 module futarchy_markets_core::lp_withdrawal_bucket_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::coin;
-use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::quantum_lp_manager;
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use sui::clock::{Self, Clock};
+use sui::coin;
+use sui::test_scenario as ts;
 
 // === Test Helpers ===
 
@@ -35,12 +35,18 @@ fun test_conditional_pool_bucket_fields() {
         100000, // twap_initial_observation
         1000, // twap_step_max
         &clock,
-        ctx
+        ctx,
     );
 
     // Initially buckets should be zero
-    let (asset_live, asset_transitioning, stable_live, stable_transitioning, lp_live, lp_transitioning) =
-        conditional_amm::get_bucket_amounts(&pool);
+    let (
+        asset_live,
+        asset_transitioning,
+        stable_live,
+        stable_transitioning,
+        lp_live,
+        lp_transitioning,
+    ) = conditional_amm::get_bucket_amounts(&pool);
 
     assert!(asset_live == 0, 0);
     assert!(asset_transitioning == 0, 1);
@@ -68,7 +74,7 @@ fun test_bucket_setter_with_invariant_check() {
         100000, // twap_initial_observation
         1000, // twap_step_max
         &clock,
-        ctx
+        ctx,
     );
 
     // Add liquidity
@@ -80,7 +86,7 @@ fun test_bucket_setter_with_invariant_check() {
         100_000,
         0,
         &clock,
-        ctx
+        ctx,
     );
 
     // Consume the liquidity (would normally go into escrow)
@@ -99,12 +105,18 @@ fun test_bucket_setter_with_invariant_check() {
         stable_reserve / 2,
         stable_reserve / 2,
         lp_supply / 2,
-        lp_supply / 2
+        lp_supply / 2,
     );
 
     // Verify buckets were set correctly
-    let (asset_live, asset_trans, stable_live, stable_trans, lp_live, lp_trans) =
-        conditional_amm::get_bucket_amounts(&pool);
+    let (
+        asset_live,
+        asset_trans,
+        stable_live,
+        stable_trans,
+        lp_live,
+        lp_trans,
+    ) = conditional_amm::get_bucket_amounts(&pool);
 
     assert!(asset_live + asset_trans == asset_reserve, 0);
     assert!(stable_live + stable_trans == stable_reserve, 1);
@@ -124,14 +136,24 @@ fun test_bucket_setter_invalid_amounts() {
     let clock = create_test_clock(1000000, ctx);
 
     let mut pool = conditional_amm::new<TEST_COIN_A, TEST_COIN_B>(
-        30, 8000, 100000, 1000, &clock, ctx
+        30,
+        8000,
+        100000,
+        1000,
+        &clock,
+        ctx,
     );
 
     // Add liquidity
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(100_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(100_000, ctx);
     let _lp_amount = conditional_amm::add_liquidity_proportional(
-        &mut pool, 100_000, 100_000, 0, &clock, ctx
+        &mut pool,
+        100_000,
+        100_000,
+        0,
+        &clock,
+        ctx,
     );
     conditional_amm::burn_for_testing(asset_coin);
     conditional_amm::burn_for_testing(stable_coin);
@@ -147,7 +169,7 @@ fun test_bucket_setter_invalid_amounts() {
         stable_reserve / 2,
         stable_reserve / 2,
         lp_supply / 2,
-        lp_supply / 2
+        lp_supply / 2,
     );
 
     // Should fail before reaching here
@@ -168,14 +190,22 @@ fun test_quantum_split_bucket_calculation() {
     let mut spot_pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(30, ctx);
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(1_000_000, ctx);
-    let lp_token = unified_spot_pool::add_liquidity(&mut spot_pool, asset_coin, stable_coin, 0, ctx);
+    let lp_token = unified_spot_pool::add_liquidity(
+        &mut spot_pool,
+        asset_coin,
+        stable_coin,
+        0,
+        ctx,
+    );
 
     // Mark 40% of liquidity for withdrawal (goes to TRANSITIONING)
     unified_spot_pool::mark_for_withdrawal_for_testing(&mut spot_pool, 400_000, 400_000, 0);
 
     // Verify bucket amounts before split
     let (spot_asset_live, spot_stable_live) = unified_spot_pool::get_live_reserves(&spot_pool);
-    let (spot_asset_trans, spot_stable_trans, _) = unified_spot_pool::get_transitioning_reserves(&spot_pool);
+    let (spot_asset_trans, spot_stable_trans, _) = unified_spot_pool::get_transitioning_reserves(
+        &spot_pool,
+    );
 
     assert!(spot_asset_live == 600_000, 0);
     assert!(spot_stable_live == 600_000, 1);
@@ -193,7 +223,7 @@ fun test_quantum_split_bucket_calculation() {
         &mut escrow,
         50, // 50% DAO ratio
         &clock,
-        ctx
+        ctx,
     );
 
     // Verify conditional pool buckets were set correctly
@@ -243,7 +273,9 @@ fun test_bucket_aware_recombination() {
 
     // Verify buckets were populated correctly
     let (asset_live, stable_live) = unified_spot_pool::get_live_reserves(&spot_pool);
-    let (asset_withdraw, stable_withdraw, _) = unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
+    let (asset_withdraw, stable_withdraw, _) = unified_spot_pool::get_withdraw_only_reserves(
+        &spot_pool,
+    );
 
     assert!(asset_live == 200_000, 0);
     assert!(stable_live == 200_000, 1);
@@ -272,7 +304,7 @@ fun test_bucket_aware_recombination_invalid_amounts() {
         coin::into_balance(asset_coin),
         coin::into_balance(stable_coin),
         200_000, // asset_live
-        50_000,  // asset_transitioning (WRONG: should be 100k)
+        50_000, // asset_transitioning (WRONG: should be 100k)
         200_000, // stable_live
         100_000, // stable_transitioning
     );
@@ -294,14 +326,23 @@ fun test_transition_to_withdraw_only() {
     // Add liquidity to LIVE and TRANSITIONING buckets
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(500_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(500_000, ctx);
-    let lp_token = unified_spot_pool::add_liquidity(&mut spot_pool, asset_coin, stable_coin, 0, ctx);
+    let lp_token = unified_spot_pool::add_liquidity(
+        &mut spot_pool,
+        asset_coin,
+        stable_coin,
+        0,
+        ctx,
+    );
 
     // Mark some for withdrawal (goes to TRANSITIONING)
     unified_spot_pool::mark_for_withdrawal_for_testing(&mut spot_pool, 200_000, 200_000, 0);
 
     // Verify TRANSITIONING bucket has amounts
-    let (asset_trans_before, stable_trans_before, lp_trans_before) =
-        unified_spot_pool::get_transitioning_reserves(&spot_pool);
+    let (
+        asset_trans_before,
+        stable_trans_before,
+        lp_trans_before,
+    ) = unified_spot_pool::get_transitioning_reserves(&spot_pool);
     assert!(asset_trans_before == 200_000, 0);
     assert!(stable_trans_before == 200_000, 1);
 
@@ -309,15 +350,21 @@ fun test_transition_to_withdraw_only() {
     unified_spot_pool::transition_to_withdraw_only(&mut spot_pool);
 
     // Verify TRANSITIONING is now zero
-    let (asset_trans_after, stable_trans_after, lp_trans_after) =
-        unified_spot_pool::get_transitioning_reserves(&spot_pool);
+    let (
+        asset_trans_after,
+        stable_trans_after,
+        lp_trans_after,
+    ) = unified_spot_pool::get_transitioning_reserves(&spot_pool);
     assert!(asset_trans_after == 0, 2);
     assert!(stable_trans_after == 0, 3);
     assert!(lp_trans_after == 0, 4);
 
     // Verify WITHDRAW_ONLY has the amounts
-    let (asset_withdraw, stable_withdraw, lp_withdraw) =
-        unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
+    let (
+        asset_withdraw,
+        stable_withdraw,
+        lp_withdraw,
+    ) = unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
     assert!(asset_withdraw == 200_000, 5);
     assert!(stable_withdraw == 200_000, 6);
 
@@ -339,12 +386,20 @@ fun test_complete_lp_withdrawal_flow() {
     let mut spot_pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(30, ctx);
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(1_000_000, ctx);
-    let lp_token = unified_spot_pool::add_liquidity(&mut spot_pool, asset_coin, stable_coin, 0, ctx);
+    let lp_token = unified_spot_pool::add_liquidity(
+        &mut spot_pool,
+        asset_coin,
+        stable_coin,
+        0,
+        ctx,
+    );
 
     // 2. LP marks 400k for withdrawal during active proposal
     unified_spot_pool::mark_for_withdrawal_for_testing(&mut spot_pool, 400_000, 400_000, 0);
     let (spot_asset_live, spot_stable_live) = unified_spot_pool::get_live_reserves(&spot_pool);
-    let (spot_asset_trans, spot_stable_trans, _) = unified_spot_pool::get_transitioning_reserves(&spot_pool);
+    let (spot_asset_trans, spot_stable_trans, _) = unified_spot_pool::get_transitioning_reserves(
+        &spot_pool,
+    );
     assert!(spot_asset_live == 600_000, 0);
     assert!(spot_asset_trans == 400_000, 1);
 
@@ -357,7 +412,7 @@ fun test_complete_lp_withdrawal_flow() {
         &mut escrow,
         50, // 50% DAO ratio
         &clock,
-        ctx
+        ctx,
     );
 
     // Verify spot pool has reduced reserves
@@ -381,7 +436,9 @@ fun test_complete_lp_withdrawal_flow() {
 
     // Verify buckets after recombination
     let (asset_live3, stable_live3) = unified_spot_pool::get_live_reserves(&spot_pool);
-    let (asset_withdraw, stable_withdraw, _) = unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
+    let (asset_withdraw, stable_withdraw, _) = unified_spot_pool::get_withdraw_only_reserves(
+        &spot_pool,
+    );
     assert!(asset_live3 == 600_000, 3); // 300k original + 300k recombined
     assert!(asset_withdraw == 400_000, 4); // conditional.TRANSITIONING → spot.WITHDRAW_ONLY
 
@@ -390,8 +447,11 @@ fun test_complete_lp_withdrawal_flow() {
     unified_spot_pool::transition_to_withdraw_only(&mut spot_pool);
 
     // 6. Verify final state: LP can now claim from WITHDRAW_ONLY bucket
-    let (final_withdraw_asset, final_withdraw_stable, _) =
-        unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
+    let (
+        final_withdraw_asset,
+        final_withdraw_stable,
+        _,
+    ) = unified_spot_pool::get_withdraw_only_reserves(&spot_pool);
     assert!(final_withdraw_asset == 400_000, 5);
     assert!(final_withdraw_stable == 400_000, 6);
 
@@ -415,7 +475,13 @@ fun test_all_liquidity_transitioning() {
     let mut spot_pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(30, ctx);
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(1_000_000, ctx);
-    let lp_token = unified_spot_pool::add_liquidity(&mut spot_pool, asset_coin, stable_coin, 0, ctx);
+    let lp_token = unified_spot_pool::add_liquidity(
+        &mut spot_pool,
+        asset_coin,
+        stable_coin,
+        0,
+        ctx,
+    );
 
     // Mark ALL liquidity for withdrawal
     unified_spot_pool::mark_for_withdrawal_for_testing(&mut spot_pool, 1_000_000, 1_000_000, 0);
@@ -443,7 +509,13 @@ fun test_no_liquidity_transitioning() {
     let mut spot_pool = unified_spot_pool::new<TEST_COIN_A, TEST_COIN_B>(30, ctx);
     let asset_coin = coin::mint_for_testing<TEST_COIN_A>(1_000_000, ctx);
     let stable_coin = coin::mint_for_testing<TEST_COIN_B>(1_000_000, ctx);
-    let lp_token = unified_spot_pool::add_liquidity(&mut spot_pool, asset_coin, stable_coin, 0, ctx);
+    let lp_token = unified_spot_pool::add_liquidity(
+        &mut spot_pool,
+        asset_coin,
+        stable_coin,
+        0,
+        ctx,
+    );
 
     // Don't mark any liquidity for withdrawal
     let (spot_asset_live, _) = unified_spot_pool::get_live_reserves(&spot_pool);

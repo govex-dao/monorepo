@@ -1,14 +1,12 @@
 #[test_only]
 module futarchy::vectors_additional_tests;
 
-use std::string;
-use sui::{
-    test_scenario::{Self as test, ctx},
-    coin::{Self, Coin},
-    sui::SUI,
-    transfer,
-};
 use futarchy::vectors;
+use std::string;
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as test, ctx};
+use sui::transfer;
 
 const ADMIN: address = @0xA;
 
@@ -80,25 +78,17 @@ fun test_validate_outcome_detail_multiline() {
 
 #[test]
 fun test_is_duplicate_message_found() {
-    let messages = vector[
-        b"First".to_string(),
-        b"Second".to_string(),
-        b"Third".to_string()
-    ];
+    let messages = vector[b"First".to_string(), b"Second".to_string(), b"Third".to_string()];
     let new_message = b"Second".to_string();
-    
+
     assert!(vectors::is_duplicate_message(&messages, &new_message), 0);
 }
 
 #[test]
 fun test_is_duplicate_message_not_found() {
-    let messages = vector[
-        b"First".to_string(),
-        b"Second".to_string(),
-        b"Third".to_string()
-    ];
+    let messages = vector[b"First".to_string(), b"Second".to_string(), b"Third".to_string()];
     let new_message = b"Fourth".to_string();
-    
+
     assert!(!vectors::is_duplicate_message(&messages, &new_message), 0);
 }
 
@@ -106,19 +96,16 @@ fun test_is_duplicate_message_not_found() {
 fun test_is_duplicate_message_empty_vector() {
     let messages = vector<string::String>[];
     let new_message = b"Any".to_string();
-    
+
     assert!(!vectors::is_duplicate_message(&messages, &new_message), 0);
 }
 
 #[test]
 fun test_is_duplicate_case_sensitive() {
-    let messages = vector[
-        b"Yes".to_string(),
-        b"No".to_string()
-    ];
+    let messages = vector[b"Yes".to_string(), b"No".to_string()];
     let new_message1 = b"YES".to_string();
     let new_message2 = b"Yes".to_string();
-    
+
     // Case sensitive - YES != Yes
     assert!(!vectors::is_duplicate_message(&messages, &new_message1), 0);
     // Exact match
@@ -127,25 +114,17 @@ fun test_is_duplicate_case_sensitive() {
 
 #[test]
 fun test_is_duplicate_first_element() {
-    let messages = vector[
-        b"First".to_string(),
-        b"Second".to_string(),
-        b"Third".to_string()
-    ];
+    let messages = vector[b"First".to_string(), b"Second".to_string(), b"Third".to_string()];
     let new_message = b"First".to_string();
-    
+
     assert!(vectors::is_duplicate_message(&messages, &new_message), 0);
 }
 
 #[test]
 fun test_is_duplicate_last_element() {
-    let messages = vector[
-        b"First".to_string(),
-        b"Second".to_string(),
-        b"Third".to_string()
-    ];
+    let messages = vector[b"First".to_string(), b"Second".to_string(), b"Third".to_string()];
     let new_message = b"Third".to_string();
-    
+
     assert!(vectors::is_duplicate_message(&messages, &new_message), 0);
 }
 
@@ -154,44 +133,44 @@ fun test_is_duplicate_last_element() {
 #[test]
 fun test_merge_single_coin() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coin = coin::mint_for_testing<SUI>(1000, ctx(&mut scenario));
         let coins = vector[coin];
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == 1000, 0);
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
 #[test]
 fun test_merge_two_coins() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coin1 = coin::mint_for_testing<SUI>(1000, ctx(&mut scenario));
         let coin2 = coin::mint_for_testing<SUI>(2000, ctx(&mut scenario));
         let coins = vector[coin1, coin2];
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == 3000, 0);
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
 #[test]
 fun test_merge_multiple_coins() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coin1 = coin::mint_for_testing<SUI>(1000, ctx(&mut scenario));
@@ -199,25 +178,25 @@ fun test_merge_multiple_coins() {
         let coin3 = coin::mint_for_testing<SUI>(3000, ctx(&mut scenario));
         let coin4 = coin::mint_for_testing<SUI>(4000, ctx(&mut scenario));
         let coins = vector[coin1, coin2, coin3, coin4];
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == 10000, 0);
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
 #[test]
 fun test_merge_many_coins() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let mut coins = vector<Coin<SUI>>[];
         let mut expected_total = 0;
-        
+
         // Create 10 coins with different values
         let mut i = 0;
         while (i < 10) {
@@ -226,41 +205,41 @@ fun test_merge_many_coins() {
             expected_total = expected_total + value;
             i = i + 1;
         };
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == expected_total, 0);
         assert!(expected_total == 5500, 1); // 100+200+300+...+1000 = 5500
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
 #[test]
 fun test_merge_zero_value_coins() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coin1 = coin::mint_for_testing<SUI>(0, ctx(&mut scenario));
         let coin2 = coin::mint_for_testing<SUI>(1000, ctx(&mut scenario));
         let coin3 = coin::mint_for_testing<SUI>(0, ctx(&mut scenario));
         let coins = vector[coin1, coin2, coin3];
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == 1000, 0);
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
 #[test, expected_failure(abort_code = 0)]
 fun test_merge_empty_vector() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coins = vector<Coin<SUI>>[];
@@ -269,7 +248,7 @@ fun test_merge_empty_vector() {
         // This line should never be reached due to abort
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
@@ -279,20 +258,20 @@ public struct TEST_COIN has drop {}
 #[test]
 fun test_merge_coins_generic_type() {
     let mut scenario = test::begin(ADMIN);
-    
+
     test::next_tx(&mut scenario, ADMIN);
     {
         let coin1 = coin::mint_for_testing<TEST_COIN>(100, ctx(&mut scenario));
         let coin2 = coin::mint_for_testing<TEST_COIN>(200, ctx(&mut scenario));
         let coin3 = coin::mint_for_testing<TEST_COIN>(300, ctx(&mut scenario));
         let coins = vector[coin1, coin2, coin3];
-        
+
         let merged = vectors::merge_coins(coins, ctx(&mut scenario));
         assert!(coin::value(&merged) == 600, 0);
-        
+
         transfer::public_transfer(merged, ADMIN);
     };
-    
+
     test::end(scenario);
 }
 
@@ -309,7 +288,7 @@ fun test_check_valid_outcomes_boundary_cases() {
         b"E".to_string(),
     ];
     assert!(vectors::check_valid_outcomes(outcomes1, 1), 0);
-    
+
     // Test with maximum allowed strings of maximum length
     let long_string = b"12345678901234567890".to_string(); // 20 chars
     let outcomes2 = vector[
@@ -325,10 +304,10 @@ fun test_validate_functions_with_special_chars() {
     // Test with various special characters
     let message1 = b"Message with @#$%^&*()".to_string();
     assert!(vectors::validate_outcome_message(&message1, 100), 0);
-    
+
     let detail1 = b"Detail: {key: \"value\"}".to_string();
     assert!(vectors::validate_outcome_detail(&detail1, 100), 1);
-    
+
     // Test with control characters
     let message2 = b"Tab\there".to_string();
     assert!(vectors::validate_outcome_message(&message2, 100), 2);
@@ -342,7 +321,7 @@ fun test_is_duplicate_with_similar_strings() {
         b" test".to_string(), // With leading space
         b"test1".to_string(),
     ];
-    
+
     // Exact match only
     assert!(vectors::is_duplicate_message(&messages, &b"test".to_string()), 0);
     assert!(!vectors::is_duplicate_message(&messages, &b"TEST".to_string()), 1);

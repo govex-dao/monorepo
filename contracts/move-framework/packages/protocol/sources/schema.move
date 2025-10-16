@@ -29,18 +29,20 @@
 /// Each action module provides its own decoder that knows how to decode its actions
 module account_protocol::schema;
 
-// === Imports ===
+use std::string::String;
+use std::type_name::TypeName;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
 
-use std::{string::String, type_name::TypeName};
-use sui::{object::{Self, UID}, dynamic_object_field};
+// === Imports ===
 
 // === Structs ===
 
 /// A standard, human-readable representation of a single decoded field
-public struct HumanReadableField has drop, store, copy {
-    name: String,   // Field name, e.g., "recipient"
-    value: String,  // String representation of value, e.g., "0xabc..."
-    type_name: String,   // Type description, e.g., "address"
+public struct HumanReadableField has copy, drop, store {
+    name: String, // Field name, e.g., "recipient"
+    value: String, // String representation of value, e.g., "0xabc..."
+    type_name: String, // Type description, e.g., "address"
 }
 
 /// The registry that holds all decoder objects
@@ -59,11 +61,7 @@ public fun init_registry(ctx: &mut TxContext): ActionDecoderRegistry {
 }
 
 /// Create a human-readable field
-public fun new_field(
-    name: String,
-    value: String,
-    type_name: String,
-): HumanReadableField {
+public fun new_field(name: String, value: String, type_name: String): HumanReadableField {
     HumanReadableField { name, value, type_name }
 }
 
@@ -95,19 +93,13 @@ public fun field_type(field: &HumanReadableField): &String {
 }
 
 /// Check if a decoder exists for the given action type in the registry
-public fun has_decoder(
-    registry: &ActionDecoderRegistry,
-    action_type: TypeName,
-): bool {
+public fun has_decoder(registry: &ActionDecoderRegistry, action_type: TypeName): bool {
     dynamic_object_field::exists_(registry_id(registry), action_type)
 }
 
 /// Assert that a decoder exists for the given action type
 /// Aborts with EDecoderNotFound if the decoder is not registered
-public fun assert_decoder_exists(
-    registry: &ActionDecoderRegistry,
-    action_type: TypeName,
-) {
+public fun assert_decoder_exists(registry: &ActionDecoderRegistry, action_type: TypeName) {
     assert!(has_decoder(registry, action_type), EDecoderNotFound);
 }
 

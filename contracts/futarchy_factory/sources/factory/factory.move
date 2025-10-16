@@ -2,43 +2,38 @@
 /// This is the main entry point for creating DAOs in the Futarchy protocol
 module futarchy_factory::factory;
 
-// === Imports ===
-use std::{
-    string::{String as UTF8String},
-    ascii::String as AsciiString,
-    type_name::{Self, TypeName},
-    option::Option,
-};
-use sui::{
-    clock::Clock,
-    coin::{Self, Coin, TreasuryCap},
-    event,
-    object::{Self, ID, UID},
-    sui::SUI,
-    vec_set::{Self, VecSet},
-    transfer,
-    url,
-    tx_context::TxContext,
-};
-use account_protocol::{
-    account::{Self, Account},
-};
-use account_extensions::extensions::Extensions;
 use account_actions::currency;
-use futarchy_core::version;
-use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig},
-    dao_config::{Self, DaoConfig, TradingParams, TwapConfig, GovernanceConfig, MetadataConfig, SecurityConfig},
+use account_extensions::extensions::Extensions;
+use account_protocol::account::{Self, Account};
+use futarchy_core::dao_config::{
+    Self,
+    DaoConfig,
+    TradingParams,
+    TwapConfig,
+    GovernanceConfig,
+    MetadataConfig,
+    SecurityConfig
 };
-use futarchy_vault::{
-    futarchy_vault_init,
-};
-use futarchy_multisig::policy_registry;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::priority_queue::{Self, ProposalQueue};
-use futarchy_markets_core::{
-    fee::{Self, FeeManager},
-    unified_spot_pool::{Self, UnifiedSpotPool},
-};
+use futarchy_core::version;
+use futarchy_markets_core::fee::{Self, FeeManager};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_multisig::policy_registry;
+use futarchy_vault::futarchy_vault_init;
+use std::ascii::String as AsciiString;
+use std::option::Option;
+use std::string::String as UTF8String;
+use std::type_name::{Self, TypeName};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::event;
+use sui::object::{Self, ID, UID};
+use sui::sui::SUI;
+use sui::transfer;
+use sui::tx_context::TxContext;
+use sui::url;
+use sui::vec_set::{Self, VecSet};
 
 // === Errors ===
 const EPaused: u64 = 1;
@@ -118,11 +113,11 @@ public struct StableCoinTypeRemoved has copy, drop {
 
 fun init(witness: FACTORY, ctx: &mut TxContext) {
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
-    
+
     let owner_cap = FactoryOwnerCap {
         id: object::new(ctx),
     };
-    
+
     let factory = Factory {
         id: object::new(ctx),
         dao_count: 0,
@@ -130,11 +125,11 @@ fun init(witness: FACTORY, ctx: &mut TxContext) {
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
     };
-    
+
     let validator_cap = ValidatorAdminCap {
         id: object::new(ctx),
     };
-    
+
     transfer::share_object(factory);
     transfer::public_transfer(owner_cap, ctx.sender());
     transfer::public_transfer(validator_cap, ctx.sender());
@@ -151,7 +146,7 @@ public entry fun create_dao<AssetType: drop, StableType: drop>(
     extensions: &Extensions,
     fee_manager: &mut FeeManager,
     payment: Coin<SUI>,
-    affiliate_id: UTF8String,   // Partner identifier (UUID from subclient, empty string if none)
+    affiliate_id: UTF8String, // Partner identifier (UUID from subclient, empty string if none)
     min_asset_amount: u64,
     min_stable_amount: u64,
     dao_name: AsciiString,
@@ -233,11 +228,11 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 ) {
     // Check factory is active
     assert!(!factory.paused, EPaused);
-    
+
     // Check if StableType is allowed
     let stable_type_name = type_name::with_defining_ids<StableType>();
     assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
-    
+
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
@@ -255,7 +250,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
         ETwapInitialTooLarge,
     );
-    
+
     // Create config parameters using the structured approach
     let trading_params = dao_config::new_trading_params(
         min_asset_amount,
@@ -328,7 +323,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         2000, // protocol_bps (20%)
         3000, // burn_bps (30%)
     );
-    
+
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
     // Create fee manager for this DAO
@@ -337,10 +332,10 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Create the unified spot pool with aggregator support enabled
     // This provides TWAP oracle, registry, and full aggregator features
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
-        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
-        8000,  // oracle_conditional_threshold_bps (80% threshold from trading params)
+        amm_total_fee_bps, // Factory uses same fee for both conditional and spot
+        8000, // oracle_conditional_threshold_bps (80% threshold from trading params)
         clock,
-        ctx
+        ctx,
     );
     let spot_pool_id = object::id(&spot_pool);
 
@@ -352,15 +347,16 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     // Apply builder pattern if custom challenge setting provided
     if (optimistic_intent_challenge_enabled.is_some()) {
-        config = futarchy_config::with_optimistic_intent_challenge_enabled(
-            config,
-            *optimistic_intent_challenge_enabled.borrow()
-        );
+        config =
+            futarchy_config::with_optimistic_intent_challenge_enabled(
+                config,
+                *optimistic_intent_challenge_enabled.borrow(),
+            );
     };
 
     // Create the account with Extensions registry validation for security
     let mut account = futarchy_config::new_with_extensions(extensions, config, ctx);
-    
+
     // Get queue parameters from governance config
     let account_config = account::config<FutarchyConfig>(&account);
     let dao_config = futarchy_config::dao_config(account_config);
@@ -372,7 +368,7 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         object::id(&account), // dao_id
         DEFAULT_MAX_PROPOSER_FUNDED,
         eviction_grace_period_ms,
-        ctx
+        ctx,
     );
     let priority_queue_id = object::id(&queue);
 
@@ -391,33 +387,37 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
 
     // Initialize the vault
     futarchy_vault_init::initialize(&mut account, version::current(), ctx);
-    
+
     // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
         // Use Move framework's currency::lock_cap for proper treasury cap storage
         // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth(&account, version::current(), futarchy_config::authenticate(&account, ctx));
+        let auth = account::new_auth(
+            &account,
+            version::current(),
+            futarchy_config::authenticate(&account, ctx),
+        );
         currency::lock_cap(
             auth,
             &mut account,
             cap,
-            option::none() // No max supply limit for now
+            option::none(), // No max supply limit for now
         );
     };
     // Destroy the empty option
     treasury_cap.destroy_none();
-    
+
     // Get account ID before sharing
     let account_id = object::id_address(&account);
-    
+
     // --- Phase 3: Final Atomic Sharing ---
     // All objects are shared at the end of the function. If any step above failed,
     // the transaction would abort and no objects would be created.
     transfer::public_share_object(account);
     unified_spot_pool::share(spot_pool);
     transfer::public_share_object(queue);
-    
+
     // --- Phase 4: Update Factory State and Emit Event ---
 
     // Update factory state
@@ -462,11 +462,11 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 ) {
     // Check factory is active
     assert!(!factory.paused, EPaused);
-    
+
     // Check if StableType is allowed
     let stable_type_name = type_name::with_defining_ids<StableType>();
     assert!(factory.allowed_stable_types.contains(&stable_type_name), EStableTypeNotAllowed);
-    
+
     // Process payment
     fee::deposit_dao_creation_payment(fee_manager, payment, clock, ctx);
 
@@ -484,7 +484,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         twap_initial_observation <= (18446744073709551615u128) * 1_000_000_000_000,
         ETwapInitialTooLarge,
     );
-    
+
     // Create config parameters using the structured approach
     let trading_params = dao_config::new_trading_params(
         min_asset_amount,
@@ -557,18 +557,18 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         2000, // protocol_bps (20%)
         3000, // burn_bps (30%)
     );
-    
+
     // --- Phase 1: Create all objects in memory (no sharing) ---
 
     // Create fee manager for this DAO
     let _dao_fee_manager_id = object::id(fee_manager); // Use factory fee manager for now
-    
+
     // Create the unified spot pool with aggregator support enabled
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
-        amm_total_fee_bps,  // Factory uses same fee for both conditional and spot
-        8000,  // oracle_conditional_threshold_bps (80% threshold)
+        amm_total_fee_bps, // Factory uses same fee for both conditional and spot
+        8000, // oracle_conditional_threshold_bps (80% threshold)
         clock,
-        ctx
+        ctx,
     );
     let spot_pool_id = object::id(&spot_pool);
 
@@ -580,7 +580,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 
     // Create the account using test function
     let mut account = futarchy_config::new_account_test(config, ctx);
-    
+
     // Get queue parameters from governance config
     let account_config = account::config<FutarchyConfig>(&account);
     let dao_config = futarchy_config::dao_config(account_config);
@@ -592,7 +592,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         object::id(&account), // dao_id
         DEFAULT_MAX_PROPOSER_FUNDED,
         eviction_grace_period_ms,
-        ctx
+        ctx,
     );
     let priority_queue_id = object::id(&queue);
 
@@ -609,29 +609,33 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         futarchy_vault_init::initialize(
             &mut account,
             version_witness::new_for_testing(@account_protocol),
-            ctx
+            ctx,
         );
     };
-    
+
     // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
         // Use Move framework's currency::lock_cap for proper treasury cap storage
         // This ensures atomic borrowing and proper permissions management
-        let auth = account::new_auth(&account, version::current(), futarchy_config::authenticate(&account, ctx));
+        let auth = account::new_auth(
+            &account,
+            version::current(),
+            futarchy_config::authenticate(&account, ctx),
+        );
         currency::lock_cap(
             auth,
             &mut account,
             cap,
-            option::none() // No max supply limit for now
+            option::none(), // No max supply limit for now
         );
     };
     // Destroy the empty option
     treasury_cap.destroy_none();
-    
+
     // Get account ID before sharing
     let account_id = object::id_address(&account);
-    
+
     // --- Phase 3: Final Atomic Sharing ---
     // All objects are shared at the end of the function. If any step above failed,
     // the transaction would abort and no objects would be created.
@@ -651,7 +655,7 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
-        affiliate_id: b"".to_string(),  // Test function uses empty string
+        affiliate_id: b"".to_string(), // Test function uses empty string
         timestamp: clock.timestamp_ms(),
     });
 }
@@ -748,10 +752,11 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
 
     // Apply builder pattern if custom challenge setting provided
     if (optimistic_intent_challenge_enabled.is_some()) {
-        config = futarchy_config::with_optimistic_intent_challenge_enabled(
-            config,
-            *optimistic_intent_challenge_enabled.borrow()
-        );
+        config =
+            futarchy_config::with_optimistic_intent_challenge_enabled(
+                config,
+                *optimistic_intent_challenge_enabled.borrow(),
+            );
     };
 
     // Create account with config
@@ -759,15 +764,15 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
 
     // Create unified spot pool with aggregator support enabled
     let spot_pool = unified_spot_pool::new_with_aggregator<AssetType, StableType>(
-        30,  // 0.3% default fee (init actions can configure via governance)
-        8000,  // oracle_conditional_threshold_bps (80% threshold)
+        30, // 0.3% default fee (init actions can configure via governance)
+        8000, // oracle_conditional_threshold_bps (80% threshold)
         clock,
-        ctx
+        ctx,
     );
 
     // Get eviction grace period from config for the queue
     let eviction_grace_period_ms = dao_config::eviction_grace_period_ms(
-        dao_config::governance_config(&dao_config)
+        dao_config::governance_config(&dao_config),
     );
 
     // Create queue with defaults
@@ -775,18 +780,22 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         object::id(&account), // dao_id
         30, // max_proposer_funded (init actions can update)
         eviction_grace_period_ms,
-        ctx
+        ctx,
     );
 
     // Setup treasury cap if provided
     if (treasury_cap.is_some()) {
         let cap = treasury_cap.extract();
-        let auth = account::new_auth(&account, version::current(), futarchy_config::authenticate(&account, ctx));
+        let auth = account::new_auth(
+            &account,
+            version::current(),
+            futarchy_config::authenticate(&account, ctx),
+        );
         currency::lock_cap(
             auth,
             &mut account,
             cap,
-            option::none() // max_supply
+            option::none(), // max_supply
         );
     };
     // Destroy the empty option
@@ -803,7 +812,7 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         asset_type: get_type_string<AssetType>(),
         stable_type: get_type_string<StableType>(),
         creator: ctx.sender(),
-        affiliate_id: b"".to_string(),  // Unshared DAO creation uses empty string (set via init actions)
+        affiliate_id: b"".to_string(), // Unshared DAO creation uses empty string (set via init actions)
         timestamp: clock.timestamp_ms(),
     });
 
@@ -840,10 +849,10 @@ public entry fun add_allowed_stable_type<StableType>(
 ) {
     assert!(object::id(owner_cap) == factory.owner_cap_id, EBadWitness);
     let type_name_val = type_name::with_defining_ids<StableType>();
-    
+
     if (!factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.insert(type_name_val);
-        
+
         event::emit(StableCoinTypeAdded {
             type_str: get_type_string<StableType>(),
             admin: ctx.sender(),
@@ -863,7 +872,7 @@ public entry fun remove_allowed_stable_type<StableType>(
     let type_name_val = type_name::with_defining_ids<StableType>();
     if (factory.allowed_stable_types.contains(&type_name_val)) {
         factory.allowed_stable_types.remove(&type_name_val);
-        
+
         event::emit(StableCoinTypeRemoved {
             type_str: get_type_string<StableType>(),
             admin: ctx.sender(),
@@ -914,7 +923,7 @@ public fun create_factory(ctx: &mut TxContext) {
     let owner_cap = FactoryOwnerCap {
         id: object::new(ctx),
     };
-    
+
     let factory = Factory {
         id: object::new(ctx),
         dao_count: 0,
@@ -922,11 +931,11 @@ public fun create_factory(ctx: &mut TxContext) {
         owner_cap_id: object::id(&owner_cap),
         allowed_stable_types: vec_set::empty(),
     };
-    
+
     let validator_cap = ValidatorAdminCap {
         id: object::new(ctx),
     };
-    
+
     transfer::share_object(factory);
     transfer::public_transfer(owner_cap, ctx.sender());
     transfer::public_transfer(validator_cap, ctx.sender());

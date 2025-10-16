@@ -1,11 +1,11 @@
 #[test_only]
 module futarchy_one_shot_utils::vectors_comprehensive_tests;
 
+use futarchy_one_shot_utils::vectors;
 use std::string::{Self, String};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
-use sui::test_scenario::{Self as ts};
-use futarchy_one_shot_utils::vectors;
+use sui::test_scenario as ts;
 
 // ========================================================================
 // check_valid_outcomes - Comprehensive Tests
@@ -40,8 +40,8 @@ fun test_check_valid_outcomes_many_outcomes() {
 #[test]
 fun test_check_valid_outcomes_unicode_strings() {
     let mut outcomes = vector::empty<String>();
-    outcomes.push_back(string::utf8(b"Yes \xE2\x9C\x93"));  // Yes ✓
-    outcomes.push_back(string::utf8(b"No \xE2\x9C\x97"));   // No ✗
+    outcomes.push_back(string::utf8(b"Yes \xE2\x9C\x93")); // Yes ✓
+    outcomes.push_back(string::utf8(b"No \xE2\x9C\x97")); // No ✗
     assert!(vectors::check_valid_outcomes(outcomes, 100) == true, 0);
 }
 
@@ -153,7 +153,9 @@ fun test_validate_outcome_message_valid_short() {
 
 #[test]
 fun test_validate_outcome_message_valid_long() {
-    let msg = string::utf8(b"This is a very long message that is still valid because it's under the limit");
+    let msg = string::utf8(
+        b"This is a very long message that is still valid because it's under the limit",
+    );
     assert!(vectors::validate_outcome_message(&msg, 100) == true, 0);
 }
 
@@ -171,7 +173,7 @@ fun test_validate_outcome_message_single_char() {
 
 #[test]
 fun test_validate_outcome_message_unicode() {
-    let msg = string::utf8(b"\xE2\x9C\x93");  // ✓
+    let msg = string::utf8(b"\xE2\x9C\x93"); // ✓
     assert!(vectors::validate_outcome_message(&msg, 10) == true, 0);
 }
 

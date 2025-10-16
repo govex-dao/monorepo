@@ -2,14 +2,14 @@ module futarchy_markets_core::fee;
 
 use std::ascii::String as AsciiString;
 use std::type_name::{Self, TypeName};
-use sui::bcs;
+use std::u64;
 use sui::balance::{Self, Balance};
+use sui::bcs;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
 use sui::dynamic_field;
 use sui::event;
 use sui::sui::SUI;
-use std::u64;
 use sui::table::{Self, Table};
 use sui::transfer::{public_share_object, public_transfer};
 
@@ -55,8 +55,8 @@ public struct FeeManager has key, store {
     proposal_creation_fee_per_outcome: u64,
     verification_fees: Table<u8, u64>, // Dynamic table mapping level -> fee
     sui_balance: Balance<SUI>,
-    recovery_fee: u64,  // Fee for dead-man switch recovery
-    launchpad_creation_fee: u64,  // Fee for creating a launchpad
+    recovery_fee: u64, // Fee for dead-man switch recovery
+    launchpad_creation_fee: u64, // Fee for creating a launchpad
 }
 
 public struct FeeAdminCap has key, store {
@@ -70,7 +70,7 @@ public struct CoinFeeConfig has store {
     dao_creation_fee: u64,
     proposal_creation_fee_per_outcome: u64,
     recovery_fee: u64,
-    multisig_creation_fee: u64,  // One-time fee when creating a multisig
+    multisig_creation_fee: u64, // One-time fee when creating a multisig
     verification_fees: Table<u8, u64>,
     // Pending updates with 6-month delay
     pending_creation_fee: Option<u64>,
@@ -167,7 +167,6 @@ public struct StableFeesWithdrawn has copy, drop {
     timestamp: u64,
 }
 
-
 public struct RecoveryFeeUpdated has copy, drop {
     old_fee: u64,
     new_fee: u64,
@@ -198,7 +197,6 @@ public struct MultisigCreationFeeCollected has copy, drop {
     timestamp: u64,
 }
 
-
 // === Public Functions ===
 fun init(witness: FEE, ctx: &mut TxContext) {
     // Verify that the witness is valid and one-time only.
@@ -207,11 +205,11 @@ fun init(witness: FEE, ctx: &mut TxContext) {
     let fee_admin_cap = FeeAdminCap {
         id: object::new(ctx),
     };
-    
+
     let mut verification_fees = table::new<u8, u64>(ctx);
     // Start with just level 1 by default
     table::add(&mut verification_fees, 1, DEFAULT_VERIFICATION_FEE);
-    
+
     let fee_manager = FeeManager {
         id: object::new(ctx),
         admin_cap_id: object::id(&fee_admin_cap),
@@ -282,7 +280,6 @@ public fun deposit_launchpad_creation_payment(
     });
 }
 
-
 // Function to collect proposal creation fee
 public fun deposit_proposal_creation_payment(
     fee_manager: &mut FeeManager,
@@ -292,8 +289,9 @@ public fun deposit_proposal_creation_payment(
     ctx: &TxContext,
 ) {
     // Use u128 arithmetic to prevent overflow
-    let fee_amount_u128 = (fee_manager.proposal_creation_fee_per_outcome as u128) * (outcome_count as u128);
-    
+    let fee_amount_u128 =
+        (fee_manager.proposal_creation_fee_per_outcome as u128) * (outcome_count as u128);
+
     // Check that result fits in u64
     assert!(fee_amount_u128 <= (u64::max_value!() as u128), EArithmeticOverflow); // u64::max_value()
     let fee_amount = (fee_amount_u128 as u64);
@@ -308,7 +306,6 @@ public fun deposit_proposal_creation_payment(
         timestamp: clock.timestamp_ms(),
     });
 }
-
 
 // Function to collect recovery fee for dead-man switch
 public fun deposit_recovery_payment(
@@ -428,9 +425,9 @@ public entry fun add_verification_level(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(!table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
-    
+
     table::add(&mut fee_manager.verification_fees, level, fee);
-    
+
     event::emit(VerificationLevelAdded {
         level,
         fee,
@@ -449,9 +446,9 @@ public entry fun remove_verification_level(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
-    
+
     table::remove(&mut fee_manager.verification_fees, level);
-    
+
     event::emit(VerificationLevelRemoved {
         level,
         admin: ctx.sender(),
@@ -470,7 +467,7 @@ public entry fun update_verification_fee(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(table::contains(&fee_manager.verification_fees, level), EInvalidPayment);
-    
+
     let old_fee = *table::borrow(&fee_manager.verification_fees, level);
     *table::borrow_mut(&mut fee_manager.verification_fees, level) = new_fee;
 
@@ -564,9 +561,10 @@ public entry fun withdraw_stable_fees<StableType>(
 ) {
     // Verify the admin cap belongs to this fee manager
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
-    
+
     // Check if the stable type exists in the registry
-    if (!dynamic_field::exists_with_type<
+    if (
+        !dynamic_field::exists_with_type<
             StableFeeRegistry<StableType>,
             StableCoinBalance<StableType>,
         >(
@@ -693,7 +691,6 @@ public fun add_coin_fee_config(
     dynamic_field::add(&mut fee_manager.id, coin_type, config);
 }
 
-
 /// Update creation fee for a specific coin type (with 6-month delay and 10x cap)
 public fun update_coin_creation_fee(
     fee_manager: &mut FeeManager,
@@ -705,22 +702,19 @@ public fun update_coin_creation_fee(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
-    
+
     let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
     let current_time = clock.timestamp_ms();
-    
+
     // Check if 6 months have passed since baseline was set - if so, reset baseline
     if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
         config.creation_fee_baseline = config.dao_creation_fee;
         config.baseline_reset_timestamp = current_time;
     };
-    
+
     // Enforce 10x cap from baseline
-    assert!(
-        new_fee <= config.creation_fee_baseline * MAX_FEE_MULTIPLIER,
-        EFeeExceedsTenXCap
-    );
-    
+    assert!(new_fee <= config.creation_fee_baseline * MAX_FEE_MULTIPLIER, EFeeExceedsTenXCap);
+
     // Allow immediate decrease, delayed increase
     if (new_fee <= config.dao_creation_fee) {
         // Fee decrease - apply immediately
@@ -744,22 +738,22 @@ public fun update_coin_proposal_fee(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
-    
+
     let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
     let current_time = clock.timestamp_ms();
-    
+
     // Check if 6 months have passed since baseline was set - if so, reset baseline
     if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
         config.proposal_fee_baseline = config.proposal_creation_fee_per_outcome;
         config.baseline_reset_timestamp = current_time;
     };
-    
+
     // Enforce 10x cap from baseline
     assert!(
         new_fee_per_outcome <= config.proposal_fee_baseline * MAX_FEE_MULTIPLIER,
-        EFeeExceedsTenXCap
+        EFeeExceedsTenXCap,
     );
-    
+
     // Allow immediate decrease, delayed increase
     if (new_fee_per_outcome <= config.proposal_creation_fee_per_outcome) {
         // Fee decrease - apply immediately
@@ -783,22 +777,19 @@ public fun update_coin_recovery_fee(
 ) {
     assert!(object::id(admin_cap) == fee_manager.admin_cap_id, EInvalidAdminCap);
     assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
-    
+
     let config: &mut CoinFeeConfig = dynamic_field::borrow_mut(&mut fee_manager.id, coin_type);
     let current_time = clock.timestamp_ms();
-    
+
     // Check if 6 months have passed since baseline was set - if so, reset baseline
     if (current_time >= config.baseline_reset_timestamp + FEE_BASELINE_RESET_PERIOD_MS) {
         config.recovery_fee_baseline = config.recovery_fee;
         config.baseline_reset_timestamp = current_time;
     };
-    
+
     // Enforce 10x cap from baseline
-    assert!(
-        new_fee <= config.recovery_fee_baseline * MAX_FEE_MULTIPLIER,
-        EFeeExceedsTenXCap
-    );
-    
+    assert!(new_fee <= config.recovery_fee_baseline * MAX_FEE_MULTIPLIER, EFeeExceedsTenXCap);
+
     // Allow immediate decrease, delayed increase
     if (new_fee <= config.recovery_fee) {
         // Fee decrease - apply immediately
@@ -854,10 +845,7 @@ public fun apply_pending_coin_fees(
 }
 
 /// Get fee config for a specific coin type
-public fun get_coin_fee_config(
-    fee_manager: &FeeManager,
-    coin_type: TypeName,
-): &CoinFeeConfig {
+public fun get_coin_fee_config(fee_manager: &FeeManager, coin_type: TypeName): &CoinFeeConfig {
     assert!(dynamic_field::exists_(&fee_manager.id, coin_type), EStableTypeNotFound);
     dynamic_field::borrow(&fee_manager.id, coin_type)
 }
@@ -888,7 +876,7 @@ public fun update_coin_multisig_creation_fee(
     // Enforce 10x cap from baseline
     assert!(
         new_fee <= config.multisig_creation_fee_baseline * MAX_FEE_MULTIPLIER,
-        EFeeExceedsTenXCap
+        EFeeExceedsTenXCap,
     );
 
     // Allow immediate decrease, delayed increase
@@ -904,10 +892,7 @@ public fun update_coin_multisig_creation_fee(
 }
 
 /// Get multisig creation fee for a specific coin type
-public fun get_coin_multisig_creation_fee(
-    fee_manager: &FeeManager,
-    coin_type: TypeName,
-): u64 {
+public fun get_coin_multisig_creation_fee(fee_manager: &FeeManager, coin_type: TypeName): u64 {
     get_coin_fee_config(fee_manager, coin_type).multisig_creation_fee
 }
 
@@ -924,10 +909,7 @@ public fun collect_multisig_creation_fee<StableType>(
     ctx: &mut TxContext,
 ): Coin<StableType> {
     // CRITICAL: Verify type safety
-    assert!(
-        type_name::get<StableType>() == coin_type,
-        EWrongStableCoinType
-    );
+    assert!(type_name::get<StableType>() == coin_type, EWrongStableCoinType);
 
     // Apply any pending fee updates
     apply_pending_coin_fees(fee_manager, coin_type, clock);

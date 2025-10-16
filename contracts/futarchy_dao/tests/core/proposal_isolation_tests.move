@@ -1,24 +1,20 @@
 #[test_only]
 module futarchy::proposal_isolation_tests;
 
-use std::{option, string, type_name};
-use sui::{
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self as sui_clock, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-    object,
-    test_utils,
-};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-};
-use futarchy::{
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
-    proposal::{Self, Proposal, CancelWitness},
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::intents;
+use futarchy::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
+use futarchy::proposal::{Self, Proposal, CancelWitness};
+use futarchy::version;
+use std::option;
+use std::string;
+use std::type_name;
+use sui::clock::{Self as sui_clock, Clock};
+use sui::coin::{Self, Coin};
+use sui::object;
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils;
 
 /// Test that a cancel witness is properly scoped to a specific proposal/outcome
 #[test]
@@ -31,15 +27,15 @@ fun test_witness_is_bounded_to_proposal_slot() {
     let cfg = futarchy_config::default_config_params();
     let mut acct = futarchy_config::new_account_test(
         futarchy_config::new<SUI, SUI>(cfg, ctx),
-        ctx
+        ctx,
     );
 
     // Create a test proposal with 2 outcomes
     let mut proposal = create_test_proposal_with_keys(
         vector[b"accept_key".to_string(), b"reject_key".to_string()],
-        ctx
+        ctx,
     );
-    
+
     // Mint witness for outcome 0: consumes the slot
     let mut cw_opt = proposal::make_cancel_witness(&mut proposal, 0);
     assert!(option::is_some(&cw_opt), 0);
@@ -55,13 +51,13 @@ fun test_witness_is_bounded_to_proposal_slot() {
     // Slot is now empty; a second mint attempt returns None
     let cw2 = proposal::make_cancel_witness(&mut proposal, 0);
     assert!(!option::is_some(&cw2), 3);
-    
+
     // But we can still mint a witness for outcome 1
     let mut cw3_opt = proposal::make_cancel_witness(&mut proposal, 1);
     assert!(option::is_some(&cw3_opt), 4);
     let cw3 = option::extract(&mut cw3_opt);
     assert!(proposal::cancel_witness_outcome_index(&cw3) == 1, 5);
-    
+
     // The second witness was verified above and consumed
 
     // Clean up
@@ -82,20 +78,19 @@ fun test_cross_proposal_isolation() {
     let cfg = futarchy_config::default_config_params();
     let mut acct = futarchy_config::new_account_test(
         futarchy_config::new<SUI, SUI>(cfg, ctx),
-        ctx
+        ctx,
     );
 
     // Create two different proposals
     let mut proposal1 = create_test_proposal_with_keys(
         vector[b"p1_accept".to_string(), b"p1_reject".to_string()],
-        ctx
+        ctx,
     );
-    
+
     let mut proposal2 = create_test_proposal_with_keys(
         vector[b"p2_accept".to_string(), b"p2_reject".to_string()],
-        ctx
+        ctx,
     );
-    
 
     // Get addresses for verification
     let p1_addr = object::id_address(&proposal1);
@@ -105,19 +100,19 @@ fun test_cross_proposal_isolation() {
     // Mint witnesses from each proposal
     let mut cw1_opt = proposal::make_cancel_witness(&mut proposal1, 0);
     let mut cw2_opt = proposal::make_cancel_witness(&mut proposal2, 0);
-    
+
     assert!(option::is_some(&cw1_opt), 1);
     assert!(option::is_some(&cw2_opt), 2);
-    
+
     let cw1 = option::extract(&mut cw1_opt);
     let cw2 = option::extract(&mut cw2_opt);
-    
+
     // Verify witnesses are properly scoped to their proposals
     assert!(proposal::cancel_witness_proposal(&cw1) == p1_addr, 3);
     assert!(proposal::cancel_witness_proposal(&cw2) == p2_addr, 4);
     assert!(proposal::cancel_witness_outcome_index(&cw1) == 0, 5);
     assert!(proposal::cancel_witness_outcome_index(&cw2) == 0, 6);
-    
+
     // Witnesses are verified above - each witness only works for its own proposal
 
     // Clean up
@@ -139,27 +134,26 @@ fun test_cannot_forge_witness() {
     let cfg = futarchy_config::default_config_params();
     let mut acct = futarchy_config::new_account_test(
         futarchy_config::new<SUI, SUI>(cfg, ctx),
-        ctx
+        ctx,
     );
 
     // Create a proposal with an intent key
     let mut proposal = create_test_proposal_with_keys(
         vector[b"test_key".to_string()],
-        ctx
+        ctx,
     );
-    
 
     // Mint the witness - this consumes the slot
     let mut cw_opt = proposal::make_cancel_witness(&mut proposal, 0);
     assert!(option::is_some(&cw_opt), 0);
     let cw = option::extract(&mut cw_opt);
-    
+
     // The witness was verified above and consumed
-    
+
     // Try to mint another witness for the same slot - should return None
     let cw2_opt = proposal::make_cancel_witness(&mut proposal, 0);
     assert!(!option::is_some(&cw2_opt), 1);
-    
+
     // Clean up
     test_utils::destroy(proposal);
     test_utils::destroy(acct);
@@ -172,7 +166,7 @@ fun test_cannot_forge_witness() {
 /// Create a minimal test proposal with the given intent keys
 fun create_test_proposal_with_keys(
     intent_keys: vector<string::String>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Proposal<SUI, SUI> {
     let num_outcomes = intent_keys.length();
     let mut outcome_messages = vector[];
@@ -185,7 +179,7 @@ fun create_test_proposal_with_keys(
         outcome_creators.push_back(@0xC0FFEE);
         i = i + 1;
     };
-    
+
     // Convert intent keys to Option<String>
     let mut intent_key_opts = vector[];
     let mut j = 0;
@@ -193,32 +187,32 @@ fun create_test_proposal_with_keys(
         intent_key_opts.push_back(option::some(*vector::borrow(&intent_keys, j)));
         j = j + 1;
     };
-    
+
     // Create a minimal proposal struct
     // Note: This is simplified - in production, use proper initialization
     proposal::new_for_testing(
-        @0xDADADA,         // dao_id  
-        @0xC0FFEE,         // proposer
-        option::none(),    // liquidity_provider
-        b"Test Proposal".to_string(),  // title
-        b"Test metadata".to_string(),  // metadata
+        @0xDADADA, // dao_id
+        @0xC0FFEE, // proposer
+        option::none(), // liquidity_provider
+        b"Test Proposal".to_string(), // title
+        b"Test metadata".to_string(), // metadata
         outcome_messages,
         outcome_details,
         outcome_creators,
         (num_outcomes as u8),
-        0,                 // review_period_ms
-        86400000,          // trading_period_ms
-        100,               // min_asset_liquidity
-        100,               // min_stable_liquidity
-        0,                 // twap_start_delay
-        0,                 // twap_initial_observation
-        100,               // twap_step_max
-        500,               // twap_threshold
-        30,                // amm_total_fee_bps
-        option::none(),    // winning_outcome
-        sui::balance::zero<SUI>(),  // fee_escrow
-        @0x123456,         // treasury_address
-        intent_key_opts,   // intent_keys
-        ctx
+        0, // review_period_ms
+        86400000, // trading_period_ms
+        100, // min_asset_liquidity
+        100, // min_stable_liquidity
+        0, // twap_start_delay
+        0, // twap_initial_observation
+        100, // twap_step_max
+        500, // twap_threshold
+        30, // amm_total_fee_bps
+        option::none(), // winning_outcome
+        sui::balance::zero<SUI>(), // fee_escrow
+        @0x123456, // treasury_address
+        intent_key_opts, // intent_keys
+        ctx,
     )
 }

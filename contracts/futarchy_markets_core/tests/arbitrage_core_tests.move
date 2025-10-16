@@ -1,11 +1,11 @@
 #[test_only]
 module futarchy_markets_core::arbitrage_core_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin};
 use futarchy_markets_core::arbitrage_core;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::test_scenario as ts;
 
 // === Test Helpers ===
 
@@ -340,9 +340,18 @@ fun test_find_min_value_realistic_arbitrage_scenario() {
 
     // Simulate finding minimum conditional token balance across 3 outcomes
     let mut conditional_balances = vector::empty<Coin<TEST_COIN_A>>();
-    vector::push_back(&mut conditional_balances, coin::mint_for_testing<TEST_COIN_A>(150_000_000, ctx)); // Outcome 0
-    vector::push_back(&mut conditional_balances, coin::mint_for_testing<TEST_COIN_A>(145_000_000, ctx)); // Outcome 1 (min - bottleneck)
-    vector::push_back(&mut conditional_balances, coin::mint_for_testing<TEST_COIN_A>(148_000_000, ctx)); // Outcome 2
+    vector::push_back(
+        &mut conditional_balances,
+        coin::mint_for_testing<TEST_COIN_A>(150_000_000, ctx),
+    ); // Outcome 0
+    vector::push_back(
+        &mut conditional_balances,
+        coin::mint_for_testing<TEST_COIN_A>(145_000_000, ctx),
+    ); // Outcome 1 (min - bottleneck)
+    vector::push_back(
+        &mut conditional_balances,
+        coin::mint_for_testing<TEST_COIN_A>(148_000_000, ctx),
+    ); // Outcome 2
 
     // Find the bottleneck amount for complete set burning
     let complete_set_amount = arbitrage_core::find_min_value(&conditional_balances);

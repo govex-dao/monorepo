@@ -1,6 +1,6 @@
-  TODO Comments by Package (32 Total)
+  TODO Comments by Package (30 Total)
 
-  futarchy_actions (9 TODOs)
+  futarchy_actions (7 TODOs)
 
   Intent Lifecycle:
   - intent_janitor.move:278 - Implement proper outcome type checking
@@ -8,13 +8,11 @@
 
   Governance:
   - platform_fee_actions.move:105 - Implement new arb-loop-based fee collection
-  - platform_fee_decoder.move:13 - Implement when platform_fee_actions module is available
   - governance_actions.move:842 - Integrate quota system to track if admin budget was used
   - governance_actions.move:877 - Integrate quota system to track if admin budget was used
   - governance_actions.move:914 - Integrate quota system to track if admin budget was used
 
   Liquidity:
-  - liquidity_actions_migrated.move:230 - Use correct vault functions when available
   - liquidity_actions_migrated.move:252 - Replace with correct withdraw function when
   available
 

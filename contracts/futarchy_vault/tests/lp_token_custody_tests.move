@@ -2,17 +2,18 @@
 #[test_only]
 module futarchy_vault::lp_token_custody_tests;
 
-use std::option;
-use sui::test_scenario::{Self as ts, Scenario};
-use sui::object::{Self, ID};
-use sui::coin::{Self, Coin};
-use sui::sui::SUI;
 use account_protocol::account::{Self, Account};
-use futarchy_core::{futarchy_config::{Self, FutarchyConfig}, dao_config};
+use futarchy_core::dao_config;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
 use futarchy_core::version;
 use futarchy_markets::account_spot_pool::{Self, LPToken};
 use futarchy_vault::lp_token_custody;
+use std::option;
 use std::string;
+use sui::coin::{Self, Coin};
+use sui::object::{Self, ID};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
 
 // Test coin types - must have drop for futarchy_config::new
 public struct ASSET has drop {}
@@ -34,13 +35,16 @@ fun create_test_config<AssetType: drop, StableType: drop>(): FutarchyConfig {
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
-        1000000,      // min_proposal_bond
-        259200000,    // proposal_timeout_ms
-        500000,       // review_period_proposal_fee
+        1000000, // min_proposal_bond
+        259200000, // proposal_timeout_ms
+        500000, // review_period_proposal_fee
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(
-        2500, 2500, 2500, 2500  // 25% each
+        2500,
+        2500,
+        2500,
+        2500, // 25% each
     );
 
     futarchy_config::new<AssetType, StableType>(
@@ -61,7 +65,7 @@ fun create_test_account(scenario: &mut Scenario, owner: address): ID {
         let config = create_test_config<ASSET, STABLE>();
         let account = futarchy_config::new_account_test(
             config,
-            ts::ctx(scenario)
+            ts::ctx(scenario),
         );
         let account_id = object::id(&account);
         transfer::public_share_object(account);
@@ -76,7 +80,7 @@ fun create_mock_lp_token<AssetType, StableType>(
 ): LPToken<AssetType, StableType> {
     account_spot_pool::new_lp_token_for_testing<AssetType, StableType>(
         amount,
-        ts::ctx(scenario)
+        ts::ctx(scenario),
     )
 }
 
@@ -116,7 +120,9 @@ fun test_deposit_lp_token_basic() {
 
     let account_id = create_test_account(&mut scenario, owner);
     // Use a valid hex address instead of @0xPOOL
-    let pool_id = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
+    let pool_id = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -133,7 +139,7 @@ fun test_deposit_lp_token_basic() {
             &mut account,
             pool_id,
             lp_token,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify custody was initialized
@@ -168,7 +174,9 @@ fun test_multiple_deposits_same_pool() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
+    let pool_id = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -183,7 +191,7 @@ fun test_multiple_deposits_same_pool() {
             &mut account,
             pool_id,
             lp_token1,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Deposit second token to same pool
@@ -195,7 +203,7 @@ fun test_multiple_deposits_same_pool() {
             &mut account,
             pool_id,
             lp_token2,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify totals
@@ -218,8 +226,12 @@ fun test_multiple_pools() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id1 = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
-    let pool_id2 = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
+    let pool_id1 = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
+    let pool_id2 = object::id_from_address(
+        @0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -233,7 +245,7 @@ fun test_multiple_pools() {
             &mut account,
             pool_id1,
             lp_token1,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Deposit to pool 2
@@ -244,7 +256,7 @@ fun test_multiple_pools() {
             &mut account,
             pool_id2,
             lp_token2,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify totals
@@ -268,7 +280,9 @@ fun test_withdraw_lp_token() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
+    let pool_id = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
 
     // Deposit token
     ts::next_tx(&mut scenario, owner);
@@ -282,7 +296,7 @@ fun test_withdraw_lp_token() {
             &mut account,
             pool_id,
             lp_token,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         ts::return_shared(account);
@@ -305,7 +319,7 @@ fun test_withdraw_lp_token() {
             &mut account,
             pool_id,
             token_id,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify custody updated
@@ -325,9 +339,15 @@ fun test_get_active_pools() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id1 = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
-    let pool_id2 = object::id_from_address(@0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF);
-    let pool_id3 = object::id_from_address(@0xFEDCBA0987654321FEDCBA0987654321FEDCBA0987654321FEDCBA0987654321);
+    let pool_id1 = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
+    let pool_id2 = object::id_from_address(
+        @0x1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF,
+    );
+    let pool_id3 = object::id_from_address(
+        @0xFEDCBA0987654321FEDCBA0987654321FEDCBA0987654321FEDCBA0987654321,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -345,7 +365,7 @@ fun test_get_active_pools() {
             &mut account,
             pool_id1,
             create_mock_lp_token<ASSET, STABLE>(100, &mut scenario),
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let auth2 = futarchy_config::new_auth_for_testing(&account);
@@ -354,7 +374,7 @@ fun test_get_active_pools() {
             &mut account,
             pool_id2,
             create_mock_lp_token<ASSET, STABLE>(200, &mut scenario),
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let auth3 = futarchy_config::new_auth_for_testing(&account);
@@ -363,7 +383,7 @@ fun test_get_active_pools() {
             &mut account,
             pool_id3,
             create_mock_lp_token<ASSET, STABLE>(300, &mut scenario),
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify 3 active pools
@@ -383,8 +403,12 @@ fun test_withdraw_nonexistent_token() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let fake_pool_id = object::id_from_address(@0xBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBAD);
-    let fake_token_id = object::id_from_address(@0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF);
+    let fake_pool_id = object::id_from_address(
+        @0xBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBADBAD,
+    );
+    let fake_token_id = object::id_from_address(
+        @0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -399,7 +423,7 @@ fun test_withdraw_nonexistent_token() {
             &mut account,
             fake_pool_id,
             fake_token_id,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         ts::return_shared(account);
@@ -414,7 +438,9 @@ fun test_partial_pool_withdrawal() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
+    let pool_id = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
 
     // Deposit 2 tokens to same pool
     ts::next_tx(&mut scenario, owner);
@@ -427,7 +453,7 @@ fun test_partial_pool_withdrawal() {
             &mut account,
             pool_id,
             create_mock_lp_token<ASSET, STABLE>(1000, &mut scenario),
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let auth2 = futarchy_config::new_auth_for_testing(&account);
@@ -436,7 +462,7 @@ fun test_partial_pool_withdrawal() {
             &mut account,
             pool_id,
             create_mock_lp_token<ASSET, STABLE>(500, &mut scenario),
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         ts::return_shared(account);
@@ -457,7 +483,7 @@ fun test_partial_pool_withdrawal() {
             &mut account,
             pool_id,
             token_ids[0],
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Pool should still have tokens
@@ -479,7 +505,9 @@ fun test_query_functions() {
     let mut scenario = ts::begin(owner);
 
     let account_id = create_test_account(&mut scenario, owner);
-    let pool_id = object::id_from_address(@0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890);
+    let pool_id = object::id_from_address(
+        @0xABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890,
+    );
 
     ts::next_tx(&mut scenario, owner);
     {
@@ -494,7 +522,7 @@ fun test_query_functions() {
             &mut account,
             pool_id,
             lp_token,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Test get_pool_tokens

@@ -1,17 +1,13 @@
 #[test_only]
 module futarchy_core::priority_queue_helpers_tests;
 
-use futarchy_core::{
-    priority_queue_helpers,
-    priority_queue::{Self, ProposalQueue, QueueMutationAuth},
-};
+use futarchy_core::priority_queue::{Self, ProposalQueue, QueueMutationAuth};
+use futarchy_core::priority_queue_helpers;
 use std::string;
-use sui::{
-    test_scenario as ts,
-    clock::{Self, Clock},
-    test_utils::destroy,
-    sui::SUI,
-};
+use sui::clock::{Self, Clock};
+use sui::sui::SUI;
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
 const ADMIN: address = @0xAD;
 const PROPOSER: address = @0xBEEF;
@@ -37,10 +33,7 @@ fun test_new_proposal_data() {
 
     let title = string::utf8(b"Test Proposal");
     let metadata = string::utf8(b"Some metadata");
-    let outcome_messages = vector[
-        string::utf8(b"Approve"),
-        string::utf8(b"Reject"),
-    ];
+    let outcome_messages = vector[string::utf8(b"Approve"), string::utf8(b"Reject")];
     let outcome_details = vector[
         string::utf8(b"Details for approve"),
         string::utf8(b"Details for reject"),
@@ -126,7 +119,7 @@ fun test_queued_proposal_getters() {
         PROPOSER,
         5000, // fee
         title,
-        &clock
+        &clock,
     );
 
     // Test getters
@@ -177,7 +170,7 @@ fun test_extract_max_single_proposal() {
         PROPOSER,
         5000,
         string::utf8(b"Proposal 1"),
-        &clock
+        &clock,
     );
 
     let _ = priority_queue::insert(&mut queue, proposal, &clock, ts::ctx(&mut scenario));
@@ -210,21 +203,21 @@ fun test_extract_max_multiple_proposals() {
         @0x1,
         1000,
         string::utf8(b"Low fee"),
-        &clock
+        &clock,
     );
     let p2 = priority_queue::new_test_queued_proposal<SUI>(
         dao_id,
         @0x2,
         5000,
         string::utf8(b"High fee"),
-        &clock
+        &clock,
     );
     let p3 = priority_queue::new_test_queued_proposal<SUI>(
         dao_id,
         @0x3,
         3000,
         string::utf8(b"Mid fee"),
-        &clock
+        &clock,
     );
 
     let _ = priority_queue::insert(&mut queue, p1, &clock, ts::ctx(&mut scenario));
@@ -257,7 +250,7 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         @0x1,
         5000,
         string::utf8(b"First"),
-        &clock
+        &clock,
     );
     // Insert p1 while clock is at 1000
     let _ = priority_queue::insert(&mut queue, p1, &clock, ts::ctx(&mut scenario));
@@ -269,7 +262,7 @@ fun test_extract_max_tie_breaking_by_timestamp() {
         @0x2,
         5000,
         string::utf8(b"Second"),
-        &clock
+        &clock,
     );
     // Insert p2 while clock is at 2000
     let _ = priority_queue::insert(&mut queue, p2, &clock, ts::ctx(&mut scenario));
@@ -295,14 +288,8 @@ fun test_full_workflow() {
     // 1. Create proposal data
     let title = string::utf8(b"Funding Proposal");
     let metadata = string::utf8(b"Request for 10k funding");
-    let outcome_messages = vector[
-        string::utf8(b"Approve"),
-        string::utf8(b"Reject"),
-    ];
-    let outcome_details = vector[
-        string::utf8(b"Approve funding"),
-        string::utf8(b"Reject funding"),
-    ];
+    let outcome_messages = vector[string::utf8(b"Approve"), string::utf8(b"Reject")];
+    let outcome_details = vector[string::utf8(b"Approve funding"), string::utf8(b"Reject funding")];
     let initial_asset_amounts = vector[10000, 0];
     let initial_stable_amounts = vector[0, 0];
 
@@ -317,7 +304,10 @@ fun test_full_workflow() {
 
     // 2. Verify data
     assert!(priority_queue_helpers::get_title(&data) == &string::utf8(b"Funding Proposal"), 0);
-    assert!(priority_queue_helpers::get_metadata(&data) == &string::utf8(b"Request for 10k funding"), 1);
+    assert!(
+        priority_queue_helpers::get_metadata(&data) == &string::utf8(b"Request for 10k funding"),
+        1,
+    );
 
     // Verify outcome messages
     let messages = priority_queue_helpers::get_outcome_messages(&data);

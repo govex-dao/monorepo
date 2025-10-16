@@ -1,21 +1,15 @@
 #[test_only]
 module account_protocol::intents_tests;
 
-// === Imports ===
+use account_protocol::intents;
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::clock;
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
-use std::{
-    string::String,
-    type_name,
-};
-use sui::{
-    test_utils::destroy,
-    test_scenario as ts,
-    clock,
-    bcs,
-};
-use account_protocol::{
-    intents,
-};
+// === Imports ===
 
 // === Constants ===
 
@@ -42,14 +36,14 @@ fun full_role(): String {
 fun test_params() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
-    
+
     let params = intents::new_params(
         b"one".to_string(),
         b"".to_string(),
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(params.key() == b"one".to_string());
@@ -67,13 +61,13 @@ fun test_params() {
 fun test_params_rand() {
     let mut scenario = ts::begin(OWNER);
     let clock = clock::create_for_testing(scenario.ctx());
-    
+
     let (params, key) = intents::new_params_with_rand_key(
         b"".to_string(),
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(params.key() == key);
@@ -101,7 +95,7 @@ fun test_getters() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -117,7 +111,7 @@ fun test_getters() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -179,7 +173,7 @@ fun test_add_remove_action() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -206,14 +200,14 @@ fun test_pop_front_execution_time() {
     let mut scenario = ts::begin(OWNER);
     let mut clock = clock::create_for_testing(scenario.ctx());
     clock.increment_for_testing(1);
-    
+
     let mut intent = intents::new_params(
         b"one".to_string(),
         b"".to_string(),
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -247,7 +241,7 @@ fun test_add_destroy_intent() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -304,7 +298,7 @@ fun test_error_not_account() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -333,7 +327,7 @@ fun test_error_wrong_witness() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -362,7 +356,7 @@ fun test_error_delete_intent_actions_not_empty() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -394,7 +388,7 @@ fun test_error_add_intent_key_already_exists() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -409,7 +403,7 @@ fun test_error_add_intent_key_already_exists() {
         vector[0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     ).new_intent(
         true,
         b"Degen".to_string(),
@@ -435,7 +429,7 @@ fun test_error_no_execution_time() {
         vector[],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(clock);
@@ -454,7 +448,7 @@ fun test_error_execution_times_not_ascending() {
         vector[1, 0],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(clock);

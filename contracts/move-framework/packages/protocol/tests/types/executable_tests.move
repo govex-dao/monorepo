@@ -1,18 +1,14 @@
 #[test_only]
 module account_protocol::executable_tests;
 
-// === Imports ===
+use account_protocol::executable;
+use account_protocol::intents;
+use sui::bcs;
+use sui::clock;
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
-use sui::{
-    test_utils::destroy,
-    test_scenario as ts,
-    clock,
-    bcs,
-};
-use account_protocol::{
-    executable,
-    intents,
-};
+// === Imports ===
 
 // === Constants ===
 
@@ -40,7 +36,7 @@ fun test_executable_flow() {
         vector[1],
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let mut intent = intents::new_intent(

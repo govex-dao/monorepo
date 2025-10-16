@@ -2,15 +2,15 @@
 #[test_only]
 module futarchy_oracle::oracle_intents_tests;
 
-use std::string;
-use sui::test_scenario::{Self as ts, Scenario};
-use sui::clock::{Self, Clock};
-use sui::object;
-use sui::test_utils;
 use account_protocol::intents::{Self, Intent};
 use account_protocol::version_witness;
-use futarchy_oracle::oracle_intents;
 use futarchy_core::action_types;
+use futarchy_oracle::oracle_intents;
+use std::string;
+use sui::clock::{Self, Clock};
+use sui::object;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils;
 
 // Test addresses
 const ADMIN: address = @0xAD;
@@ -22,7 +22,7 @@ public struct ASSET has drop {}
 public struct STABLE has drop {}
 
 // Test outcome type
-public struct TestOutcome has store, drop {}
+public struct TestOutcome has drop, store {}
 
 // Helper to create test intent
 fun create_test_intent(ctx: &mut TxContext): Intent<TestOutcome> {
@@ -83,7 +83,20 @@ fun test_create_grant_in_intent_multiple_recipients() {
         &mut intent,
         vector[RECIPIENT1, RECIPIENT2],
         vector[100_000, 200_000],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b"Multi recipient"),
         witness,
     );
@@ -106,7 +119,20 @@ fun test_create_grant_in_intent_empty_recipients_fails() {
         &mut intent,
         vector[], // Empty recipients - should fail
         vector[],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b"Empty"),
         witness,
     );
@@ -127,7 +153,20 @@ fun test_create_grant_in_intent_mismatched_lengths_fails() {
         &mut intent,
         vector[RECIPIENT1, RECIPIENT2],
         vector[100_000], // Mismatched length - should fail
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b"Mismatched"),
         witness,
     );
@@ -142,7 +181,9 @@ fun test_cancel_grant_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     oracle_intents::cancel_grant_in_intent<TestOutcome, TestOutcome>(
         &mut intent,
@@ -162,7 +203,9 @@ fun test_pause_grant_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     oracle_intents::pause_grant_in_intent<TestOutcome, TestOutcome>(
         &mut intent,
@@ -183,7 +226,9 @@ fun test_unpause_grant_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     oracle_intents::unpause_grant_in_intent<TestOutcome, TestOutcome>(
         &mut intent,
@@ -203,7 +248,9 @@ fun test_emergency_freeze_grant_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     oracle_intents::emergency_freeze_grant_in_intent<TestOutcome, TestOutcome>(
         &mut intent,
@@ -223,7 +270,9 @@ fun test_emergency_unfreeze_grant_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     oracle_intents::emergency_unfreeze_grant_in_intent<TestOutcome, TestOutcome>(
         &mut intent,
@@ -299,14 +348,29 @@ fun test_multiple_actions_in_same_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     // Add create grant action
     oracle_intents::create_grant_in_intent<TestOutcome, ASSET, STABLE, TestOutcome>(
         &mut intent,
         vector[RECIPIENT1],
         vector[100_000],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b"Grant"),
         witness,
     );

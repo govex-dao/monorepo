@@ -19,7 +19,7 @@ module futarchy_markets_core::arbitrage_quantum_liquidity_tests;
 use futarchy_markets_core::arbitrage_math;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use sui::test_scenario::{Self as ts};
+use sui::test_scenario as ts;
 use sui::test_utils;
 
 // === Test Coins ===
@@ -54,7 +54,7 @@ fun test_quantum_cost_max_not_sum_two_pools() {
         500_000,
         1_500_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Pool 0: 100k asset, 15k stable → expensive (costs more per asset)
@@ -62,7 +62,7 @@ fun test_quantum_cost_max_not_sum_two_pools() {
         100_000,
         15_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Pool 1: 100k asset, 12k stable → cheaper (costs less per asset)
@@ -70,7 +70,7 @@ fun test_quantum_cost_max_not_sum_two_pools() {
         100_000,
         12_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut conditionals = vector::empty<LiquidityPool>();
@@ -121,26 +121,29 @@ fun test_quantum_cost_max_of_three() {
         300_000,
         900_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create 3 pools with intentionally different costs
     let pool_0 = conditional_amm::create_pool_for_testing(
-        150_000, 75_000,  // Medium cost
+        150_000,
+        75_000, // Medium cost
         20,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let pool_1 = conditional_amm::create_pool_for_testing(
-        120_000, 90_000,  // Highest cost (less asset, more stable)
+        120_000,
+        90_000, // Highest cost (less asset, more stable)
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let pool_2 = conditional_amm::create_pool_for_testing(
-        180_000, 60_000,  // Lowest cost (more asset, less stable)
+        180_000,
+        60_000, // Lowest cost (more asset, less stable)
         20,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut conditionals = vector::empty<LiquidityPool>();
@@ -186,7 +189,7 @@ fun test_quantum_cost_max_with_ten_pools() {
         200_000,
         800_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create 10 conditional pools where asset is cheaper
@@ -203,7 +206,7 @@ fun test_quantum_cost_max_with_ten_pools() {
             asset_reserve,
             stable_reserve,
             25,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         vector::push_back(&mut conditionals, pool);
         i = i + 1;
@@ -249,7 +252,7 @@ fun test_simulate_profit_uses_max_cost() {
         400_000,
         1_600_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Two conditionals: cheap
@@ -257,13 +260,13 @@ fun test_simulate_profit_uses_max_cost() {
         1_200_000,
         300_000,
         20,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     let pool_1 = conditional_amm::create_pool_for_testing(
         1_100_000,
         350_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut conditionals = vector::empty<LiquidityPool>();
@@ -315,7 +318,7 @@ fun test_quantum_cost_max_with_fifty_pools() {
         500_000,
         2_000_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create 50 conditional pools with cheap asset
@@ -331,7 +334,7 @@ fun test_quantum_cost_max_with_fifty_pools() {
             asset_reserve,
             stable_reserve,
             25,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         vector::push_back(&mut conditionals, pool);
         i = i + 1;
@@ -376,7 +379,7 @@ fun test_quantum_cost_all_equal() {
         500_000,
         1_500_000,
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create 3 identical pools
@@ -384,19 +387,19 @@ fun test_quantum_cost_all_equal() {
         1_000_000,
         500_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     let pool_1 = conditional_amm::create_pool_for_testing(
         1_000_000,
         500_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     let pool_2 = conditional_amm::create_pool_for_testing(
         1_000_000,
         500_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut conditionals = vector::empty<LiquidityPool>();
@@ -446,7 +449,7 @@ fun test_max_finds_more_opportunities_than_sum_would() {
         600_000,
         1_800_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Conditionals: cheaper (more asset, less stable)
@@ -454,19 +457,19 @@ fun test_max_finds_more_opportunities_than_sum_would() {
         1_100_000,
         550_000,
         20,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     let pool_1 = conditional_amm::create_pool_for_testing(
         1_050_000,
         600_000,
         25,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     let pool_2 = conditional_amm::create_pool_for_testing(
         1_150_000,
         500_000,
         20,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let mut conditionals = vector::empty<LiquidityPool>();
@@ -521,10 +524,10 @@ fun test_worst_case_massive_search_space() {
     // Spot pool: MAXIMUM reserves (U64::MAX - 1)
     let max_reserve = std::u64::max_value!() - 1;
     let spot_pool = unified_spot_pool::create_pool_for_testing<ASSET, STABLE>(
-        max_reserve,     // MAX assets
-        max_reserve,     // MAX stable
+        max_reserve, // MAX assets
+        max_reserve, // MAX stable
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create 50 conditional pools (protocol MAX) mixing extreme and mid-range reserves
@@ -535,13 +538,13 @@ fun test_worst_case_massive_search_space() {
     while (i < 50) {
         // Pools 20-24: Mid-range reserves (creates irregular profit landscape)
         let asset_reserve = if (i >= 20 && i <= 24) {
-            max_reserve / 2  // Mid-range: ~9.2e18
+            max_reserve / 2 // Mid-range: ~9.2e18
         } else {
-            max_reserve      // Most pools: U64::MAX - 1
+            max_reserve // Most pools: U64::MAX - 1
         };
 
         let stable_reserve = if (i >= 22 && i <= 26) {
-            max_reserve / 3  // Different mid-range pattern
+            max_reserve / 3 // Different mid-range pattern
         } else {
             max_reserve
         };
@@ -553,7 +556,7 @@ fun test_worst_case_massive_search_space() {
             asset_reserve,
             stable_reserve,
             fee_bps,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         vector::push_back(&mut conditionals, pool);
         i = i + 1;
@@ -569,7 +572,7 @@ fun test_worst_case_massive_search_space() {
     let (initial_amount, initial_profit) = arbitrage_math::compute_optimal_conditional_to_spot(
         &spot_pool,
         &conditionals,
-        0,  // No user swap hint - global search
+        0, // No user swap hint - global search
         0,
     );
 
@@ -596,7 +599,7 @@ fun test_worst_case_massive_search_space() {
     let (amount, profit) = arbitrage_math::compute_optimal_conditional_to_spot(
         &spot_pool,
         &conditionals,
-        massive_user_swap,  // Hint: search near max
+        massive_user_swap, // Hint: search near max
         0,
     );
 
@@ -604,7 +607,7 @@ fun test_worst_case_massive_search_space() {
     // If profit found, verify it's consistent with the trade
     if (profit > 0) {
         assert!(amount > 0, 1);
-        assert!(amount <= max_reserve, 2);  // Can't exceed pool capacity
+        assert!(amount <= max_reserve, 2); // Can't exceed pool capacity
 
         // Simulate the trade to verify profit is correct
         let simulated_profit = arbitrage_math::simulate_conditional_to_spot_profit(
@@ -678,7 +681,7 @@ fun test_ternary_search_stability() {
             search_space * 100,
             search_space * 300,
             30,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Two conditionals with reserves that create search space of `search_space`
@@ -686,13 +689,13 @@ fun test_ternary_search_stability() {
             search_space * 100,
             search_space * 250,
             25,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         let pool_1 = conditional_amm::create_pool_for_testing(
             search_space * 100,
             search_space * 260,
             20,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let mut conditionals = vector::empty<LiquidityPool>();
@@ -747,23 +750,23 @@ fun test_ternary_search_stability_spot_to_cond() {
         // Spot pool: cheaper (for spot→conditional arbitrage)
         let spot_pool = unified_spot_pool::create_pool_for_testing<ASSET, STABLE>(
             search_space * 100,
-            search_space * 200,  // Lower price than conditionals
+            search_space * 200, // Lower price than conditionals
             30,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Conditionals: more expensive
         let pool_0 = conditional_amm::create_pool_for_testing(
             search_space * 100,
-            search_space * 300,  // Higher price
+            search_space * 300, // Higher price
             25,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         let pool_1 = conditional_amm::create_pool_for_testing(
             search_space * 100,
             search_space * 310,
             20,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let mut conditionals = vector::empty<LiquidityPool>();
@@ -812,10 +815,10 @@ fun test_worst_case_tiny_search_space() {
 
     // Spot pool: Small reserves, creating small search space
     let spot_pool = unified_spot_pool::create_pool_for_testing<ASSET, STABLE>(
-        1_000,   // Small pool
-        3_000,   // 3:1 ratio
+        1_000, // Small pool
+        3_000, // 3:1 ratio
         30,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // 10 conditional pools with small, varying reserves
@@ -832,7 +835,7 @@ fun test_worst_case_tiny_search_space() {
             asset_reserve,
             stable_reserve,
             25,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         vector::push_back(&mut conditionals, pool);
         i = i + 1;

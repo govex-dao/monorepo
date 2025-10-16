@@ -3,9 +3,9 @@
 
 module account_actions::version;
 
-// === Imports ===
-
 use account_protocol::version_witness::{Self, VersionWitness};
+
+// === Imports ===
 
 // === Constants ===
 

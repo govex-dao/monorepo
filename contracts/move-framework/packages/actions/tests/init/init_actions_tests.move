@@ -1,28 +1,22 @@
 #[test_only]
 module account_actions::init_actions_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    package,
-    object::{Self, UID},
-};
-use sui::sui::SUI;
+use account_actions::currency;
+use account_actions::init_actions;
+use account_actions::vault;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-};
-use account_actions::{
-    init_actions,
-    vault,
-    currency,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::object::{Self, UID};
+use sui::package;
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -76,7 +70,10 @@ fun end(scenario: Scenario, extensions: Extensions, clock: Clock) {
 }
 
 fun create_unshared_account(extensions: &Extensions, scenario: &mut Scenario): Account<Config> {
-    let deps = deps::new_latest_extensions(extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     account::new(Config {}, deps, version::current(), Witness(), scenario.ctx())
 }
 
@@ -97,7 +94,7 @@ fun test_init_vault_deposit() {
         &mut account,
         coin,
         b"treasury",
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify vault was created
@@ -118,7 +115,7 @@ fun test_init_vault_deposit_default() {
     init_actions::init_vault_deposit_default<Config, SUI>(
         &mut account,
         coin,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify default vault exists
@@ -170,7 +167,7 @@ fun test_init_mint() {
         &mut account,
         500,
         RECIPIENT,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify mint occurred (coin would be transferred to RECIPIENT)
@@ -201,7 +198,7 @@ fun test_init_mint_and_deposit() {
         &mut account,
         1000,
         b"treasury",
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify vault exists
@@ -235,7 +232,7 @@ fun test_init_create_vesting() {
         duration_ms,
         cliff_ms,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify vesting was created (vesting ID returned)
@@ -261,7 +258,7 @@ fun test_init_create_founder_vesting() {
         RECIPIENT,
         cliff_ms,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(object::id_to_address(&vesting_id) != @0x0, 0);
@@ -288,7 +285,7 @@ fun test_init_create_team_vesting() {
         duration_ms,
         cliff_ms,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(object::id_to_address(&vesting_id) != @0x0, 0);
@@ -317,12 +314,15 @@ fun test_init_lock_upgrade_cap() {
         &mut account,
         upgrade_cap,
         b"test_package",
-        delay_ms
+        delay_ms,
     );
 
     // Verify cap is locked
     assert!(account_actions::package_upgrade::has_cap(&account, b"test_package".to_string()), 0);
-    assert!(account_actions::package_upgrade::get_time_delay(&account, b"test_package".to_string()) == delay_ms, 1);
+    assert!(
+        account_actions::package_upgrade::get_time_delay(&account, b"test_package".to_string()) == delay_ms,
+        1,
+    );
 
     destroy(account);
     end(scenario, extensions, clock);
@@ -339,7 +339,7 @@ fun test_init_open_kiosk() {
     // Open kiosk during init
     let kiosk_id = init_actions::init_open_kiosk<Config>(
         &mut account,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify kiosk was created
@@ -460,7 +460,7 @@ fun test_init_create_vault_stream() {
         &mut account,
         coin,
         b"treasury",
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let current_time = clock.timestamp_ms();
@@ -480,7 +480,7 @@ fun test_init_create_vault_stream() {
         500, // max per withdrawal
         30 * 24 * 60 * 60 * 1000, // monthly interval
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify stream was created
@@ -501,7 +501,7 @@ fun test_init_create_salary_stream() {
     init_actions::init_vault_deposit_default<Config, SUI>(
         &mut account,
         coin,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Create 12-month salary stream
@@ -509,9 +509,9 @@ fun test_init_create_salary_stream() {
         &mut account,
         RECIPIENT,
         1000, // monthly amount
-        12,   // num months
+        12, // num months
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify stream was created
@@ -566,7 +566,7 @@ fun test_complete_dao_initialization() {
         &mut account,
         10000,
         b"treasury",
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // 3. Create SUI vault for salary stream (uses default "Main Vault")
@@ -574,7 +574,7 @@ fun test_complete_dao_initialization() {
     init_actions::init_vault_deposit_default<Config, SUI>(
         &mut account,
         sui_coin,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // 4. Create founder vesting
@@ -585,7 +585,7 @@ fun test_complete_dao_initialization() {
         @0x123,
         365 * 24 * 60 * 60 * 1000, // 1 year cliff
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // 5. Create salary stream
@@ -595,7 +595,7 @@ fun test_complete_dao_initialization() {
         5000,
         12,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // 6. Open kiosk

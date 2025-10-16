@@ -14,9 +14,9 @@
 module futarchy_markets_operations::market_init_helpers;
 
 use futarchy_markets_core::market_init_strategies::{
+    Self as strategies,
     ConditionalRaiseConfig,
-    ConditionalBuybackConfig,
-    Self as strategies
+    ConditionalBuybackConfig
 };
 
 // === Helper Functions for Conditional Raise ===
@@ -105,7 +105,7 @@ public fun new_buyback_config(
 /// Returns true if the target outcome is valid for the given outcome count.
 public fun validate_raise_config(config: &ConditionalRaiseConfig, outcome_count: u64): bool {
     let target = (strategies::raise_target_outcome(config) as u64);
-    target < outcome_count && target >= 1  // Outcome 0 is REJECT
+    target < outcome_count && target >= 1 // Outcome 0 is REJECT
 }
 
 /// Validate that a buyback config is compatible with outcome count

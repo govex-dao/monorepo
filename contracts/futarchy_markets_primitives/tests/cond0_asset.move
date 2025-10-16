@@ -10,12 +10,12 @@ public struct COND0_ASSET has drop {}
 fun init(witness: COND0_ASSET, ctx: &mut TxContext) {
     let (treasury_cap, metadata) = coin::create_currency(
         witness,
-        0,  // decimals
-        b"",  // empty symbol
-        b"",  // empty name
-        b"",  // empty description
-        option::none(),  // no icon url
-        ctx
+        0, // decimals
+        b"", // empty symbol
+        b"", // empty name
+        b"", // empty description
+        option::none(), // no icon url
+        ctx,
     );
 
     // Transfer both to sender for use in tests

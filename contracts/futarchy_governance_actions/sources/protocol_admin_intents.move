@@ -1,30 +1,21 @@
 module futarchy_governance_actions::protocol_admin_intents;
 
-// === Imports ===
-use std::{
-    string::String,
-    type_name::TypeName,
-    bcs,
-};
-use sui::{
-    transfer::Receiving,
-    object::ID,
-};
-use account_protocol::{
-    account::{Self, Account, Auth},
-    executable::Executable,
-    owned,
-    intents::{Self, Intent, Params},
-    intent_interface,
-};
-use futarchy_core::{
-    version,
-    action_types,
-};
+use account_protocol::account::{Self, Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::owned;
+use futarchy_core::action_types;
 use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
 use futarchy_factory::factory::{FactoryOwnerCap, ValidatorAdminCap};
-use futarchy_markets_core::fee::FeeAdminCap;
 use futarchy_governance_actions::protocol_admin_actions;
+use futarchy_markets_core::fee::FeeAdminCap;
+use std::bcs;
+use std::string::String;
+use std::type_name::TypeName;
+use sui::object::ID;
+use sui::transfer::Receiving;
 
 // === Aliases ===
 use fun intent_interface::process_intent as Account.process_intent;
@@ -34,7 +25,7 @@ use fun intent_interface::process_intent as Account.process_intent;
 /// Intent to accept the FactoryOwnerCap into the DAO's custody
 public struct AcceptFactoryOwnerCapIntent() has copy, drop;
 
-/// Intent to accept the FeeAdminCap into the DAO's custody  
+/// Intent to accept the FeeAdminCap into the DAO's custody
 public struct AcceptFeeAdminCapIntent() has copy, drop;
 
 /// Intent to accept the ValidatorAdminCap into the DAO's custody
@@ -53,7 +44,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    
+
     intent_interface::build_intent!(
         account,
         params,
@@ -64,7 +55,7 @@ public fun request_accept_factory_owner_cap<Outcome: store>(
         ctx,
         |intent, iw| {
             owned::new_withdraw_object(intent, account, cap_id, iw);
-        }
+        },
     );
 }
 
@@ -79,7 +70,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    
+
     intent_interface::build_intent!(
         account,
         params,
@@ -90,7 +81,7 @@ public fun request_accept_fee_admin_cap<Outcome: store>(
         ctx,
         |intent, iw| {
             owned::new_withdraw_object(intent, account, cap_id, iw);
-        }
+        },
     );
 }
 
@@ -105,7 +96,7 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
 ) {
     account.verify(auth);
     params.assert_single_execution();
-    
+
     intent_interface::build_intent!(
         account,
         params,
@@ -116,7 +107,7 @@ public fun request_accept_validator_admin_cap<Outcome: store>(
         ctx,
         |intent, iw| {
             owned::new_withdraw_object(intent, account, cap_id, iw);
-        }
+        },
     );
 }
 
@@ -134,15 +125,15 @@ public fun execute_accept_factory_owner_cap<Outcome: store>(
         AcceptFactoryOwnerCapIntent(),
         |executable, iw| {
             let cap = owned::do_withdraw_object(executable, account, receiving, iw);
-            
+
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
                 b"protocol:factory_owner_cap".to_string(),
                 cap,
-                version::current()
+                version::current(),
             );
-        }
+        },
     );
 }
 
@@ -158,15 +149,15 @@ public fun execute_accept_fee_admin_cap<Outcome: store>(
         AcceptFeeAdminCapIntent(),
         |executable, iw| {
             let cap = owned::do_withdraw_object(executable, account, receiving, iw);
-            
+
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
                 b"protocol:fee_admin_cap".to_string(),
                 cap,
-                version::current()
+                version::current(),
             );
-        }
+        },
     );
 }
 
@@ -182,15 +173,15 @@ public fun execute_accept_validator_admin_cap<Outcome: store>(
         AcceptValidatorAdminCapIntent(),
         |executable, iw| {
             let cap = owned::do_withdraw_object(executable, account, receiving, iw);
-            
+
             // Store the cap in the account's managed assets
             account::add_managed_asset(
                 account,
                 b"protocol:validator_admin_cap".to_string(),
                 cap,
-                version::current()
+                version::current(),
             );
-        }
+        },
     );
 }
 
@@ -210,21 +201,21 @@ public entry fun migrate_admin_caps_to_dao(
         account,
         b"protocol:factory_owner_cap".to_string(),
         factory_cap,
-        version::current()
+        version::current(),
     );
-    
+
     account::add_managed_asset(
         account,
         b"protocol:fee_admin_cap".to_string(),
         fee_cap,
-        version::current()
+        version::current(),
     );
-    
+
     account::add_managed_asset(
         account,
         b"protocol:validator_admin_cap".to_string(),
         validator_cap,
-        version::current()
+        version::current(),
     );
 }
 
@@ -238,7 +229,7 @@ public entry fun migrate_factory_cap_to_dao(
         account,
         b"protocol:factory_owner_cap".to_string(),
         cap,
-        version::current()
+        version::current(),
     );
 }
 
@@ -251,7 +242,7 @@ public entry fun migrate_fee_cap_to_dao(
         account,
         b"protocol:fee_admin_cap".to_string(),
         cap,
-        version::current()
+        version::current(),
     );
 }
 
@@ -264,7 +255,7 @@ public entry fun migrate_validator_cap_to_dao(
         account,
         b"protocol:validator_admin_cap".to_string(),
         cap,
-        version::current()
+        version::current(),
     );
 }
 
@@ -409,7 +400,12 @@ public fun add_approve_verification_to_intent<Outcome: store, IW: drop>(
     attestation_url: String,
     intent_witness: IW,
 ) {
-    let action = protocol_admin_actions::new_approve_verification(dao_id, verification_id, level, attestation_url);
+    let action = protocol_admin_actions::new_approve_verification(
+        dao_id,
+        verification_id,
+        level,
+        attestation_url,
+    );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::approve_verification(), action_data, intent_witness);
 }
@@ -524,7 +520,11 @@ public fun add_set_launchpad_trust_score_to_intent<Outcome: store, IW: drop>(
     review_text: String,
     intent_witness: IW,
 ) {
-    let action = protocol_admin_actions::new_set_launchpad_trust_score(raise_id, trust_score, review_text);
+    let action = protocol_admin_actions::new_set_launchpad_trust_score(
+        raise_id,
+        trust_score,
+        review_text,
+    );
     let action_data = bcs::to_bytes(&action);
     intent.add_typed_action(action_types::set_launchpad_trust_score(), action_data, intent_witness);
 }

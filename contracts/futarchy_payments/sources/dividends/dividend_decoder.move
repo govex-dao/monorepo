@@ -1,11 +1,12 @@
 /// Decoder for dividend actions in futarchy DAOs
 module futarchy_payments::dividend_decoder;
 
-// === Imports ===
-use std::type_name;
-use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID, ID};
 
 // === Decoder Objects ===
 
@@ -50,18 +51,14 @@ public fun decode_create_dividend_action<CoinType>(
 // === Registration Functions ===
 
 /// Register dividend decoder
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_create_dividend_decoder(registry, ctx);
 }
 
-fun register_create_dividend_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_dividend_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreateDividendActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<futarchy_payments::dividend_actions::CreateDividendAction<CoinPlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        futarchy_payments::dividend_actions::CreateDividendAction<CoinPlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }

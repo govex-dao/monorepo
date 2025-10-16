@@ -1,6 +1,6 @@
 /// LP Token Custody Module
 /// Manages LP tokens owned by DAOs from liquidity operations
-/// 
+///
 /// This module provides secure custody of LP tokens using Account's managed assets feature.
 /// Benefits of using managed assets over direct transfers:
 /// 1. Enforces custody under Account's policy engine
@@ -10,18 +10,15 @@
 /// 5. Provides better tracking and audit capabilities
 module futarchy_vault::lp_token_custody;
 
-use std::{string::String, option};
-use sui::{
-    object::{Self, ID},
-    table::{Self, Table},
-    event,
-};
-use account_protocol::{
-    account::{Self, Account},
-};
-use futarchy_core::version;
+use account_protocol::account::{Self, Account};
 use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
 use futarchy_markets_core::unified_spot_pool::{Self, LPToken, UnifiedSpotPool};
+use std::option;
+use std::string::String;
+use sui::event;
+use sui::object::{Self, ID};
+use sui::table::{Self, Table};
 
 // === Errors ===
 const ELPTokenNotFound: u64 = 1;
@@ -78,10 +75,7 @@ public struct LPTokenWithdrawn has copy, drop {
 // === Public Functions ===
 
 /// Initialize LP token custody for an account
-public fun init_custody(
-    account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext,
-) {
+public fun init_custody(account: &mut Account<FutarchyConfig>, ctx: &mut TxContext) {
     if (!has_custody(account)) {
         account::add_managed_data(
             account,
@@ -94,7 +88,7 @@ public fun init_custody(
                 total_value_locked: 0,
                 active_pools: vector::empty(),
             },
-            version::current()
+            version::current(),
         );
     }
 }
@@ -115,25 +109,25 @@ public fun deposit_lp_token<AssetType, StableType, W: drop>(
     // Create Auth from witness for account verification
     let auth = account::new_auth(account, version::current(), witness);
     account::verify(account, auth);
-    
+
     // Get account ID before mutable borrowing
     let account_id = object::id(account);
     let account_address = object::id_address(account);
-    
+
     // Initialize custody if needed
     if (!has_custody(account)) {
         init_custody(account, ctx);
     };
-    
+
     let custody: &mut LPTokenCustody = account::borrow_managed_data_mut(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     let token_id = object::id(&token);
     let amount = unified_spot_pool::lp_token_amount(&token);
-    
+
     // Update tokens by pool
     if (!custody.tokens_by_pool.contains(pool_id)) {
         custody.tokens_by_pool.add(pool_id, vector::empty());
@@ -146,22 +140,22 @@ public fun deposit_lp_token<AssetType, StableType, W: drop>(
     };
     let pool_tokens = custody.tokens_by_pool.borrow_mut(pool_id);
     pool_tokens.push_back(token_id);
-    
+
     // Update token tracking tables
     custody.token_amounts.add(token_id, amount);
     custody.token_to_pool.add(token_id, pool_id);
-    
+
     // Update pool total
     let pool_total = custody.pool_totals.borrow_mut(pool_id);
     *pool_total = *pool_total + amount;
-    
+
     // Update global total
     custody.total_value_locked = custody.total_value_locked + amount;
-    
+
     // Get values for event before transfer
     let new_pool_total = *custody.pool_totals.borrow(pool_id);
     let new_total_value_locked = custody.total_value_locked;
-    
+
     // Store LP token as a managed asset in the Account
     // This ensures proper custody under Account's policy engine and prevents accidental outflows
     // The LPKey with token_id is used as the key for retrieval
@@ -169,9 +163,9 @@ public fun deposit_lp_token<AssetType, StableType, W: drop>(
         account,
         LPKey { token_id },
         token,
-        version::current()
+        version::current(),
     );
-    
+
     event::emit(LPTokenDeposited {
         account_id,
         pool_id,
@@ -194,50 +188,50 @@ public fun withdraw_lp_token<AssetType, StableType, W: drop>(
     // Create Auth from witness for account verification
     let auth = account::new_auth(account, version::current(), witness);
     account::verify(account, auth);
-    
+
     // Get account ID before mutable borrowing
     let account_id = object::id(account);
-    
+
     // Retrieve the LP token from managed assets
     let token: LPToken<AssetType, StableType> = account::remove_managed_asset(
         account,
         LPKey { token_id },
-        version::current()
+        version::current(),
     );
 
     let amount = unified_spot_pool::lp_token_amount(&token);
-    
+
     let custody: &mut LPTokenCustody = account::borrow_managed_data_mut(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     // Verify token is in custody and mapped to the supplied pool
     assert!(custody.token_amounts.contains(token_id), ELPTokenNotFound);
     assert!(custody.token_amounts[token_id] == amount, EInsufficientBalance);
     assert!(custody.token_to_pool.contains(token_id), ELPTokenNotFound);
     let recorded_pool_id = custody.token_to_pool[token_id];
     assert!(recorded_pool_id == pool_id, EUnauthorized);
-    
+
     // Remove from tracking tables
     custody.token_amounts.remove(token_id);
     custody.token_to_pool.remove(token_id);
-    
+
     // Update pool total
     let pool_total = custody.pool_totals.borrow_mut(pool_id);
     *pool_total = *pool_total - amount;
-    
+
     // Update global total
     custody.total_value_locked = custody.total_value_locked - amount;
-    
+
     // Remove from pool tokens list
     if (custody.tokens_by_pool.contains(pool_id)) {
         let pool_tokens = custody.tokens_by_pool.borrow_mut(pool_id);
         let (found, index) = pool_tokens.index_of(&token_id);
         if (found) {
             pool_tokens.remove(index);
-            
+
             // If no more tokens for this pool, remove from active pools
             if (pool_tokens.is_empty()) {
                 let (pool_found, pool_index) = custody.active_pools.index_of(&pool_id);
@@ -247,7 +241,7 @@ public fun withdraw_lp_token<AssetType, StableType, W: drop>(
             };
         };
     };
-    
+
     // Get values for event
     let new_pool_total = *custody.pool_totals.borrow(pool_id);
     let new_total_value_locked = custody.total_value_locked;
@@ -272,31 +266,28 @@ public fun get_total_value_locked(account: &Account<FutarchyConfig>): u64 {
     if (!has_custody(account)) {
         return 0
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     custody.total_value_locked
 }
 
 /// Get LP token IDs for a specific pool
-public fun get_pool_tokens(
-    account: &Account<FutarchyConfig>,
-    pool_id: ID,
-): vector<ID> {
+public fun get_pool_tokens(account: &Account<FutarchyConfig>, pool_id: ID): vector<ID> {
     if (!has_custody(account)) {
         return vector::empty()
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     if (custody.tokens_by_pool.contains(pool_id)) {
         *custody.tokens_by_pool.borrow(pool_id)
     } else {
@@ -305,20 +296,17 @@ public fun get_pool_tokens(
 }
 
 /// Get amount for a specific LP token
-public fun get_token_amount(
-    account: &Account<FutarchyConfig>,
-    token_id: ID,
-): u64 {
+public fun get_token_amount(account: &Account<FutarchyConfig>, token_id: ID): u64 {
     if (!has_custody(account)) {
         return 0
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     if (custody.token_amounts.contains(token_id)) {
         custody.token_amounts[token_id]
     } else {
@@ -327,20 +315,17 @@ public fun get_token_amount(
 }
 
 /// Get the pool ID that contains a specific LP token
-public fun get_token_pool(
-    account: &Account<FutarchyConfig>,
-    token_id: ID,
-): Option<ID> {
+public fun get_token_pool(account: &Account<FutarchyConfig>, token_id: ID): Option<ID> {
     if (!has_custody(account)) {
         return option::none()
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     if (custody.token_to_pool.contains(token_id)) {
         option::some(custody.token_to_pool[token_id])
     } else {
@@ -349,20 +334,17 @@ public fun get_token_pool(
 }
 
 /// Get total LP token amount for a specific pool
-public fun get_pool_total(
-    account: &Account<FutarchyConfig>,
-    pool_id: ID,
-): u64 {
+public fun get_pool_total(account: &Account<FutarchyConfig>, pool_id: ID): u64 {
     if (!has_custody(account)) {
         return 0
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     if (custody.pool_totals.contains(pool_id)) {
         custody.pool_totals[pool_id]
     } else {
@@ -371,57 +353,46 @@ public fun get_pool_total(
 }
 
 /// Get all active pool IDs (pools that have LP tokens)
-public fun get_active_pools(
-    account: &Account<FutarchyConfig>,
-): vector<ID> {
+public fun get_active_pools(account: &Account<FutarchyConfig>): vector<ID> {
     if (!has_custody(account)) {
         return vector::empty()
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     custody.active_pools
 }
 
 /// Check if account has any LP tokens for a specific pool
-public fun has_tokens_for_pool(
-    account: &Account<FutarchyConfig>,
-    pool_id: ID,
-): bool {
+public fun has_tokens_for_pool(account: &Account<FutarchyConfig>, pool_id: ID): bool {
     if (!has_custody(account)) {
         return false
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
+
     custody.tokens_by_pool.contains(pool_id) && !custody.tokens_by_pool[pool_id].is_empty()
 }
 
 /// Get summary statistics for all LP token holdings
-public fun get_custody_summary(
-    account: &Account<FutarchyConfig>,
-): (u64, u64, vector<ID>) {
+public fun get_custody_summary(account: &Account<FutarchyConfig>): (u64, u64, vector<ID>) {
     if (!has_custody(account)) {
         return (0, 0, vector::empty())
     };
-    
+
     let custody: &LPTokenCustody = account::borrow_managed_data(
         account,
         LPCustodyKey {},
-        version::current()
+        version::current(),
     );
-    
-    (
-        custody.total_value_locked,
-        custody.active_pools.length(),
-        custody.active_pools
-    )
+
+    (custody.total_value_locked, custody.active_pools.length(), custody.active_pools)
 }

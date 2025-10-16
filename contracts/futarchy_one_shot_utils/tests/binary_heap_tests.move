@@ -7,9 +7,9 @@ use futarchy_one_shot_utils::binary_heap;
 
 #[test]
 fun test_parent_index() {
-    assert!(binary_heap::parent(0) == 0, 0);  // Root has no parent, returns 0
-    assert!(binary_heap::parent(1) == 0, 1);  // Left child of root
-    assert!(binary_heap::parent(2) == 0, 2);  // Right child of root
+    assert!(binary_heap::parent(0) == 0, 0); // Root has no parent, returns 0
+    assert!(binary_heap::parent(1) == 0, 1); // Left child of root
+    assert!(binary_heap::parent(2) == 0, 2); // Right child of root
     assert!(binary_heap::parent(3) == 1, 3);
     assert!(binary_heap::parent(4) == 1, 4);
     assert!(binary_heap::parent(5) == 2, 5);
@@ -223,7 +223,7 @@ fun test_heap_push_sequential_descending() {
 
 #[test]
 fun test_heapify_down_basic() {
-    let mut v = vector[1, 5, 3, 4, 2];  // Violates heap at root
+    let mut v = vector[1, 5, 3, 4, 2]; // Violates heap at root
 
     binary_heap::heapify_down(&mut v, 0, 5);
 

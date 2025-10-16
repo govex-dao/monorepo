@@ -16,7 +16,7 @@ const DAVE: address = @0xDA4E;
 fun test_new_creates_valid_list() {
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     assert_eq(weighted_list::total_weight(&list), 100);
@@ -32,7 +32,7 @@ fun test_new_creates_valid_list() {
 fun test_new_immutable_creates_immutable_list() {
     let list = weighted_list::new_immutable(
         vector[ALICE, BOB],
-        vector[50, 50]
+        vector[50, 50],
     );
 
     assert!(weighted_list::is_immutable(&list));
@@ -62,7 +62,7 @@ fun test_large_weights() {
     let max_weight = weighted_list::max_member_weight();
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[max_weight, max_weight]
+        vector[max_weight, max_weight],
     );
 
     assert_eq(weighted_list::get_weight(&list, &ALICE), max_weight);
@@ -74,7 +74,7 @@ fun test_large_weights() {
 fun test_new_fails_with_mismatched_lengths() {
     let _list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[100] // Only one weight for two addresses
+        vector[100], // Only one weight for two addresses
     );
 }
 
@@ -83,7 +83,7 @@ fun test_new_fails_with_mismatched_lengths() {
 fun test_new_fails_with_empty_vectors() {
     let _list = weighted_list::new(
         vector[],
-        vector[]
+        vector[],
     );
 }
 
@@ -92,7 +92,7 @@ fun test_new_fails_with_empty_vectors() {
 fun test_new_fails_with_duplicate_members() {
     let _list = weighted_list::new(
         vector[ALICE, ALICE], // Duplicate!
-        vector[50, 50]
+        vector[50, 50],
     );
 }
 
@@ -101,7 +101,7 @@ fun test_new_fails_with_duplicate_members() {
 fun test_new_fails_with_zero_weight() {
     let _list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[100, 0] // Zero weight!
+        vector[100, 0], // Zero weight!
     );
 }
 
@@ -111,7 +111,7 @@ fun test_new_fails_with_weight_too_large() {
     let max_weight = weighted_list::max_member_weight();
     let _list = weighted_list::new(
         vector[ALICE],
-        vector[max_weight + 1] // Exceeds maximum!
+        vector[max_weight + 1], // Exceeds maximum!
     );
 }
 
@@ -125,7 +125,8 @@ fun test_new_fails_with_total_overflow() {
     let mut addresses = vector[];
     let mut weights = vector[];
     let mut i = 0;
-    while (i < 2000) { // 2000 * 1M = 2B > 1B max
+    while (i < 2000) {
+        // 2000 * 1M = 2B > 1B max
         addresses.push_back(@0x1);
         weights.push_back(max_weight);
         i = i + 1;
@@ -140,7 +141,7 @@ fun test_new_fails_with_total_overflow() {
 fun test_contains() {
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[40, 60]
+        vector[40, 60],
     );
 
     assert!(weighted_list::contains(&list, &ALICE));
@@ -152,7 +153,7 @@ fun test_contains() {
 fun test_get_weight() {
     let list = weighted_list::new(
         vector[ALICE, BOB, CAROL],
-        vector[20, 30, 50]
+        vector[20, 30, 50],
     );
 
     assert_eq(weighted_list::get_weight(&list, &ALICE), 20);
@@ -165,7 +166,7 @@ fun test_get_weight() {
 fun test_get_weight_fails_for_non_member() {
     let list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     let _ = weighted_list::get_weight(&list, &BOB);
@@ -175,7 +176,7 @@ fun test_get_weight_fails_for_non_member() {
 fun test_get_weight_or_zero() {
     let list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     assert_eq(weighted_list::get_weight_or_zero(&list, &ALICE), 100);
@@ -186,7 +187,7 @@ fun test_get_weight_or_zero() {
 fun test_size_and_is_empty() {
     let list = weighted_list::new(
         vector[ALICE, BOB, CAROL],
-        vector[10, 20, 30]
+        vector[10, 20, 30],
     );
 
     assert_eq(weighted_list::size(&list), 3);
@@ -197,7 +198,7 @@ fun test_size_and_is_empty() {
 fun test_get_members_and_weights() {
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[40, 60]
+        vector[40, 60],
     );
 
     let (addresses, weights) = weighted_list::get_members_and_weights(&list);
@@ -213,7 +214,7 @@ fun test_get_members_and_weights() {
 fun test_calculate_share() {
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     // Total amount to distribute: 1000
@@ -232,7 +233,7 @@ fun test_calculate_share() {
 fun test_calculate_member_share() {
     let list = weighted_list::new(
         vector[ALICE, BOB, CAROL],
-        vector[10, 20, 70]
+        vector[10, 20, 70],
     );
 
     let total = 10000u64;
@@ -251,7 +252,7 @@ fun test_calculate_member_share() {
 fun test_calculate_share_with_large_amounts() {
     let list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[1, 1]
+        vector[1, 1],
     );
 
     // Test with very large total amount
@@ -266,7 +267,7 @@ fun test_calculate_share_with_large_amounts() {
 fun test_calculate_share_rounds_down() {
     let list = weighted_list::new(
         vector[ALICE, BOB, CAROL],
-        vector[1, 1, 1]
+        vector[1, 1, 1],
     );
 
     // 100 / 3 = 33.333... should round down to 33
@@ -280,12 +281,12 @@ fun test_calculate_share_rounds_down() {
 fun test_equals_same_lists() {
     let list1 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     let list2 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     assert!(weighted_list::equals(&list1, &list2));
@@ -295,12 +296,12 @@ fun test_equals_same_lists() {
 fun test_equals_different_weights() {
     let list1 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     let list2 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[40, 60]
+        vector[40, 60],
     );
 
     assert!(!weighted_list::equals(&list1, &list2));
@@ -310,12 +311,12 @@ fun test_equals_different_weights() {
 fun test_equals_different_members() {
     let list1 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[50, 50]
+        vector[50, 50],
     );
 
     let list2 = weighted_list::new(
         vector[ALICE, CAROL],
-        vector[50, 50]
+        vector[50, 50],
     );
 
     assert!(!weighted_list::equals(&list1, &list2));
@@ -325,12 +326,12 @@ fun test_equals_different_members() {
 fun test_equals_different_sizes() {
     let list1 = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     let list2 = weighted_list::new(
         vector[ALICE, BOB],
-        vector[50, 50]
+        vector[50, 50],
     );
 
     assert!(!weighted_list::equals(&list1, &list2));
@@ -342,13 +343,13 @@ fun test_equals_different_sizes() {
 fun test_update_replaces_entire_list() {
     let mut list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     weighted_list::update(
         &mut list,
         vector[CAROL, DAVE],
-        vector[40, 60]
+        vector[40, 60],
     );
 
     assert_eq(weighted_list::size(&list), 2);
@@ -365,13 +366,13 @@ fun test_update_replaces_entire_list() {
 fun test_update_fails_on_immutable() {
     let mut list = weighted_list::new_immutable(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::update(
         &mut list,
         vector[BOB],
-        vector[100]
+        vector[100],
     );
 }
 
@@ -379,7 +380,7 @@ fun test_update_fails_on_immutable() {
 fun test_set_member_weight_updates_existing() {
     let mut list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     weighted_list::set_member_weight(&mut list, ALICE, 50);
@@ -392,7 +393,7 @@ fun test_set_member_weight_updates_existing() {
 fun test_set_member_weight_adds_new_member() {
     let mut list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::set_member_weight(&mut list, BOB, 50);
@@ -408,7 +409,7 @@ fun test_set_member_weight_adds_new_member() {
 fun test_set_member_weight_fails_on_immutable() {
     let mut list = weighted_list::new_immutable(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::set_member_weight(&mut list, ALICE, 50);
@@ -419,7 +420,7 @@ fun test_set_member_weight_fails_on_immutable() {
 fun test_set_member_weight_fails_with_zero() {
     let mut list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::set_member_weight(&mut list, ALICE, 0);
@@ -430,7 +431,7 @@ fun test_set_member_weight_fails_with_zero() {
 fun test_set_member_weight_fails_with_too_large() {
     let mut list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     let max_weight = weighted_list::max_member_weight();
@@ -441,7 +442,7 @@ fun test_set_member_weight_fails_with_too_large() {
 fun test_remove_member() {
     let mut list = weighted_list::new(
         vector[ALICE, BOB, CAROL],
-        vector[20, 30, 50]
+        vector[20, 30, 50],
     );
 
     weighted_list::remove_member(&mut list, BOB);
@@ -456,7 +457,7 @@ fun test_remove_member() {
 fun test_remove_member_fails_for_non_member() {
     let mut list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::remove_member(&mut list, BOB);
@@ -467,7 +468,7 @@ fun test_remove_member_fails_for_non_member() {
 fun test_remove_member_fails_on_last_member() {
     let mut list = weighted_list::new(
         vector[ALICE],
-        vector[100]
+        vector[100],
     );
 
     weighted_list::remove_member(&mut list, ALICE);
@@ -478,7 +479,7 @@ fun test_remove_member_fails_on_last_member() {
 fun test_remove_member_fails_on_immutable() {
     let mut list = weighted_list::new_immutable(
         vector[ALICE, BOB],
-        vector[50, 50]
+        vector[50, 50],
     );
 
     weighted_list::remove_member(&mut list, ALICE);
@@ -490,7 +491,7 @@ fun test_remove_member_fails_on_immutable() {
 fun test_invariants_hold_after_mutations() {
     let mut list = weighted_list::new(
         vector[ALICE, BOB],
-        vector[30, 70]
+        vector[30, 70],
     );
 
     // All mutations should maintain invariants
@@ -512,7 +513,7 @@ fun test_complex_scenario() {
     // Create a multisig with 4 members
     let mut list = weighted_list::new(
         vector[ALICE, BOB, CAROL, DAVE],
-        vector[10, 20, 30, 40]
+        vector[10, 20, 30, 40],
     );
 
     // Total: 100

@@ -13,10 +13,10 @@
 /// TWAP is used for final resolution to prevent manipulation.
 module futarchy_markets_core::early_resolve;
 
+use futarchy_core::futarchy_config::{Self, EarlyResolveConfig};
 use futarchy_markets_core::proposal::{Self, Proposal};
 use futarchy_markets_primitives::conditional_amm;
 use futarchy_markets_primitives::market_state::{Self, MarketState};
-use futarchy_core::futarchy_config::{Self, EarlyResolveConfig};
 use std::string::{Self, String};
 use sui::clock::Clock;
 use sui::event;
@@ -37,7 +37,7 @@ public struct WinnerFlipped has copy, drop {
     old_winner: u64,
     new_winner: u64,
     spread: u128,
-    winning_price: u128,  // Actually instant price, not TWAP
+    winning_price: u128, // Actually instant price, not TWAP
     timestamp: u64,
 }
 
@@ -124,10 +124,10 @@ public fun update_metrics<AssetType, StableType>(
     event::emit(MetricsUpdated {
         proposal_id,
         current_winner: market_state::get_current_winner_index(market_state),
-        flip_count: 0,  // Removed exponential decay tracking
-        total_trades: 0,  // Removed trade tracking
-        total_fees: 0,  // Removed revenue tracking
-        eligible_for_early_resolve: false,  // Computed in check_eligibility
+        flip_count: 0, // Removed exponential decay tracking
+        total_trades: 0, // Removed trade tracking
+        total_fees: 0, // Removed revenue tracking
+        eligible_for_early_resolve: false, // Computed in check_eligibility
         timestamp: current_time_ms,
     });
 }
@@ -217,7 +217,9 @@ public fun time_until_eligible<AssetType, StableType>(
     clock: &Clock,
 ): u64 {
     // If not enabled or no metrics, return 0
-    if (!futarchy_config::early_resolve_enabled(config) || !market_state::has_early_resolve_metrics(market_state)) {
+    if (
+        !futarchy_config::early_resolve_enabled(config) || !market_state::has_early_resolve_metrics(market_state)
+    ) {
         return 0
     };
 
@@ -272,9 +274,7 @@ public fun last_flip_time_from_state(market_state: &MarketState): u64 {
 ///
 /// FALLBACK: If leaderboard not initialized (shouldn't happen after first swap),
 /// falls back to O(N) iteration. This is a defensive measure.
-fun calculate_current_winner_by_price(
-    market_state: &mut MarketState,
-): (u64, u128, u128) {
+fun calculate_current_winner_by_price(market_state: &mut MarketState): (u64, u128, u128) {
     // Try O(1) leaderboard lookup first (fast path)
     if (market_state::has_price_leaderboard(market_state)) {
         return market_state::get_winner_from_leaderboard(market_state)

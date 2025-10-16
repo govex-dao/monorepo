@@ -2,14 +2,14 @@
 #[test_only]
 module futarchy_payments::dividend_intents_tests;
 
-use std::string;
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::object;
-use sui::test_utils;
 use account_protocol::intents::{Self, Intent};
 use account_protocol::version_witness;
 use futarchy_payments::dividend_intents;
+use std::string;
+use sui::clock::{Self, Clock};
+use sui::object;
+use sui::test_scenario as ts;
+use sui::test_utils;
 
 const ADMIN: address = @0xAD;
 
@@ -17,7 +17,7 @@ const ADMIN: address = @0xAD;
 public struct USDC has drop {}
 
 // Test outcome type
-public struct TestOutcome has store, drop {}
+public struct TestOutcome has drop, store {}
 
 // Helper to create test intent
 fun create_test_intent(ctx: &mut TxContext): Intent<TestOutcome> {
@@ -31,7 +31,9 @@ fun test_create_dividend_in_intent() {
 
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
-    let tree_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let tree_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
 
     dividend_intents::create_dividend_in_intent<TestOutcome, USDC, TestOutcome>(
         &mut intent,
@@ -109,8 +111,12 @@ fun test_multiple_dividend_actions_in_intent() {
     let mut intent = create_test_intent(ts::ctx(&mut scenario));
     let witness = TestOutcome {};
 
-    let tree_id1 = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001111);
-    let tree_id2 = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000002222);
+    let tree_id1 = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001111,
+    );
+    let tree_id2 = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000002222,
+    );
 
     // Add multiple dividend actions
     dividend_intents::create_dividend_in_intent<TestOutcome, USDC, TestOutcome>(

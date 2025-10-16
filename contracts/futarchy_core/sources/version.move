@@ -1,7 +1,6 @@
 /// Version tracking for the futarchy package
 module futarchy_core::version;
 
-// === Imports ===
 use account_protocol::version_witness::{Self, VersionWitness};
 
 // === Constants ===

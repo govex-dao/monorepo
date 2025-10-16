@@ -1,15 +1,15 @@
 #[test_only]
 module futarchy_markets_core::unified_spot_pool_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin};
-use sui::balance;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
 use std::option;
+use sui::balance;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::test_scenario as ts;
 
 // === Constants ===
 const INITIAL_LIQUIDITY: u64 = 100_000_000; // 100 tokens
@@ -355,13 +355,19 @@ fun test_remove_liquidity_zero_amount() {
 
     // Create LP token with zero amount (not locked in proposal, not in withdraw mode)
     let lp_token = unified_spot_pool::create_lp_token_for_testing<TEST_COIN_A, TEST_COIN_B>(
-        0,              // amount
+        0, // amount
         option::none(), // locked_in_proposal
-        false,          // withdraw_mode
-        ctx
+        false, // withdraw_mode
+        ctx,
     );
 
-    let (asset_out, stable_out) = unified_spot_pool::remove_liquidity(&mut pool, lp_token, 0, 0, ctx);
+    let (asset_out, stable_out) = unified_spot_pool::remove_liquidity(
+        &mut pool,
+        lp_token,
+        0,
+        0,
+        ctx,
+    );
 
     coin::burn_for_testing(asset_out);
     coin::burn_for_testing(stable_out);
@@ -633,7 +639,13 @@ fun test_multiple_swaps_same_direction() {
     let mut i = 0;
     while (i < 5) {
         let asset_in = coin::mint_for_testing<TEST_COIN_A>(1_000, ctx);
-        let stable_out = unified_spot_pool::swap_asset_for_stable(&mut pool, asset_in, 0, &clock, ctx);
+        let stable_out = unified_spot_pool::swap_asset_for_stable(
+            &mut pool,
+            asset_in,
+            0,
+            &clock,
+            ctx,
+        );
         coin::burn_for_testing(stable_out);
         i = i + 1;
     };

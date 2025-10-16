@@ -2,13 +2,11 @@
 /// Provides centralized configuration structs and validation for futarchy DAOs
 module futarchy_core::dao_config;
 
-use std::{
-    string::{Self, String},
-    ascii::{Self, String as AsciiString},
-};
-use sui::url::{Self, Url};
-use futarchy_one_shot_utils::constants;
 use futarchy_core::subsidy_config::{Self as liquidity_subsidy_protocol, ProtocolSubsidyConfig};
+use futarchy_one_shot_utils::constants;
+use std::ascii::{Self, String as AsciiString};
+use std::string::{Self, String};
+use sui::url::{Self, Url};
 
 // === Errors ===
 const EInvalidMinAmount: u64 = 0; // Minimum amount must be positive
@@ -48,13 +46,13 @@ const PROTOCOL_MIN_LIQUIDITY_AMOUNT: u64 = 100000;
 // === Structs ===
 
 /// Trading parameters configuration
-public struct TradingParams has store, drop, copy {
+public struct TradingParams has copy, drop, store {
     min_asset_amount: u64,
     min_stable_amount: u64,
     review_period_ms: u64,
     trading_period_ms: u64,
-    conditional_amm_fee_bps: u64,  // Fee for conditional AMMs (prediction markets)
-    spot_amm_fee_bps: u64,          // Fee for spot AMM (base pool)
+    conditional_amm_fee_bps: u64, // Fee for conditional AMMs (prediction markets)
+    spot_amm_fee_bps: u64, // Fee for spot AMM (base pool)
     // Market operation review period (for conditional raise/buyback)
     // Can be 0 to skip review and start trading immediately after market init
     market_op_review_period_ms: u64,
@@ -69,7 +67,7 @@ public struct TradingParams has store, drop, copy {
 }
 
 /// TWAP (Time-Weighted Average Price) configuration
-public struct TwapConfig has store, drop, copy {
+public struct TwapConfig has copy, drop, store {
     start_delay: u64,
     step_max: u64,
     initial_observation: u128,
@@ -77,7 +75,7 @@ public struct TwapConfig has store, drop, copy {
 }
 
 /// Governance parameters configuration
-public struct GovernanceConfig has store, drop, copy {
+public struct GovernanceConfig has copy, drop, store {
     max_outcomes: u64,
     max_actions_per_outcome: u64, // Maximum actions allowed per single outcome
     proposal_fee_per_outcome: u64,
@@ -97,54 +95,54 @@ public struct GovernanceConfig has store, drop, copy {
 }
 
 /// Metadata configuration
-public struct MetadataConfig has store, drop, copy {
+public struct MetadataConfig has copy, drop, store {
     dao_name: AsciiString,
     icon_url: Url,
     description: String,
 }
 
 /// Security configuration for dead-man switch
-public struct SecurityConfig has store, drop, copy {
-    deadman_enabled: bool,               // If true, dead-man switch recovery is enabled
-    recovery_liveness_ms: u64,           // Inactivity threshold for dead-man switch (e.g., 30 days)
-    require_deadman_council: bool,       // If true, all councils must support dead-man switch
+public struct SecurityConfig has copy, drop, store {
+    deadman_enabled: bool, // If true, dead-man switch recovery is enabled
+    recovery_liveness_ms: u64, // Inactivity threshold for dead-man switch (e.g., 30 days)
+    require_deadman_council: bool, // If true, all councils must support dead-man switch
 }
 
 /// Multisig configuration (currently empty, reserved for future features)
-public struct MultisigConfig has store, drop, copy {
-    _reserved: u64,  // Reserved for future use
+public struct MultisigConfig has copy, drop, store {
+    _reserved: u64, // Reserved for future use
 }
 
 /// Storage configuration for DAO files
-public struct StorageConfig has store, drop, copy {
-    allow_walrus_blobs: bool,            // If true, allow Walrus blob storage; if false, string-only
+public struct StorageConfig has copy, drop, store {
+    allow_walrus_blobs: bool, // If true, allow Walrus blob storage; if false, string-only
 }
 
 /// Conditional coin metadata configuration for proposals
-public struct ConditionalCoinConfig has store, drop, copy {
-    use_outcome_index: bool,             // If true, append outcome index to name
+public struct ConditionalCoinConfig has copy, drop, store {
+    use_outcome_index: bool, // If true, append outcome index to name
     // If Some(), use these hardcoded values for conditional tokens
     // If None(), derive conditional token names from base DAO token CoinMetadata
     conditional_metadata: Option<ConditionalMetadata>,
 }
 
 /// Metadata for conditional tokens (fallback if CoinMetadata can't be read)
-public struct ConditionalMetadata has store, drop, copy {
-    decimals: u8,                        // Decimals for conditional coins
-    coin_name_prefix: AsciiString,       // Prefix for coin names (e.g., "MyDAO_")
-    coin_icon_url: Url,                  // Icon URL for conditional coins
+public struct ConditionalMetadata has copy, drop, store {
+    decimals: u8, // Decimals for conditional coins
+    coin_name_prefix: AsciiString, // Prefix for coin names (e.g., "MyDAO_")
+    coin_icon_url: Url, // Icon URL for conditional coins
 }
 
 /// Quota system configuration
-public struct QuotaConfig has store, drop, copy {
-    enabled: bool,                       // If true, quota system is active
-    default_quota_amount: u64,           // Default proposals per period for new allowlist members
-    default_quota_period_ms: u64,        // Default period for quotas (e.g., 30 days)
-    default_reduced_fee: u64,            // Default reduced fee (0 for free)
+public struct QuotaConfig has copy, drop, store {
+    enabled: bool, // If true, quota system is active
+    default_quota_amount: u64, // Default proposals per period for new allowlist members
+    default_quota_period_ms: u64, // Default period for quotas (e.g., 30 days)
+    default_reduced_fee: u64, // Default reduced fee (0 for free)
 }
 
 /// Complete DAO configuration
-public struct DaoConfig has store, drop, copy {
+public struct DaoConfig has copy, drop, store {
     trading_params: TradingParams,
     twap_config: TwapConfig,
     governance_config: GovernanceConfig,
@@ -154,7 +152,7 @@ public struct DaoConfig has store, drop, copy {
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     multisig_config: MultisigConfig,
-    subsidy_config: ProtocolSubsidyConfig,  // Liquidity subsidy configuration
+    subsidy_config: ProtocolSubsidyConfig, // Liquidity subsidy configuration
     optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
     optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
     challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
@@ -196,7 +194,7 @@ public fun new_trading_params(
     assert!(
         conditional_liquidity_ratio_percent >= constants::min_conditional_liquidity_percent() &&
         conditional_liquidity_ratio_percent <= constants::max_conditional_liquidity_percent(),
-        EInvalidFee
+        EInvalidFee,
     );
 
     TradingParams {
@@ -224,7 +222,7 @@ public fun new_twap_config(
     assert!(step_max > 0, EInvalidTwapParams);
     assert!(initial_observation > 0, EInvalidTwapParams);
     assert!(threshold > 0, EInvalidTwapThreshold);
-    
+
     TwapConfig {
         start_delay,
         step_max,
@@ -253,13 +251,19 @@ public fun new_governance_config(
     // Validate inputs
     assert!(max_outcomes >= constants::min_outcomes(), EInvalidMaxOutcomes);
     assert!(max_outcomes <= constants::protocol_max_outcomes(), EMaxOutcomesExceedsProtocol);
-    assert!(max_actions_per_outcome > 0 && max_actions_per_outcome <= constants::protocol_max_actions_per_outcome(), EMaxActionsExceedsProtocol);
+    assert!(
+        max_actions_per_outcome > 0 && max_actions_per_outcome <= constants::protocol_max_actions_per_outcome(),
+        EMaxActionsExceedsProtocol,
+    );
     assert!(proposal_fee_per_outcome > 0, EInvalidProposalFee);
     assert!(required_bond_amount > 0, EInvalidBondAmount);
     assert!(max_concurrent_proposals > 0, EInvalidMaxConcurrentProposals);
     assert!(fee_escalation_basis_points <= constants::max_fee_bps(), EInvalidFee);
     assert!(max_intents_per_outcome > 0, EInvalidMaxOutcomes);
-    assert!(eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(), EInvalidGracePeriod);
+    assert!(
+        eviction_grace_period_ms >= constants::min_eviction_grace_period_ms(),
+        EInvalidGracePeriod,
+    );
 
     GovernanceConfig {
         max_outcomes,
@@ -306,9 +310,7 @@ public fun new_security_config(
 }
 
 /// Create a new storage configuration
-public fun new_storage_config(
-    allow_walrus_blobs: bool,
-): StorageConfig {
+public fun new_storage_config(allow_walrus_blobs: bool): StorageConfig {
     StorageConfig {
         allow_walrus_blobs,
     }
@@ -340,7 +342,11 @@ public fun new_conditional_metadata(
 
 /// Getters for ConditionalMetadata fields
 public fun conditional_metadata_decimals(meta: &ConditionalMetadata): u8 { meta.decimals }
-public fun conditional_metadata_prefix(meta: &ConditionalMetadata): AsciiString { meta.coin_name_prefix }
+
+public fun conditional_metadata_prefix(meta: &ConditionalMetadata): AsciiString {
+    meta.coin_name_prefix
+}
+
 public fun conditional_metadata_icon(meta: &ConditionalMetadata): Url { meta.coin_icon_url }
 
 /// Create a new quota configuration
@@ -411,67 +417,140 @@ public fun new_dao_config(
 
 // Trading params getters
 public fun trading_params(config: &DaoConfig): &TradingParams { &config.trading_params }
-public(package) fun trading_params_mut(config: &mut DaoConfig): &mut TradingParams { &mut config.trading_params }
+
+public(package) fun trading_params_mut(config: &mut DaoConfig): &mut TradingParams {
+    &mut config.trading_params
+}
+
 public fun min_asset_amount(params: &TradingParams): u64 { params.min_asset_amount }
+
 public fun min_stable_amount(params: &TradingParams): u64 { params.min_stable_amount }
+
 public fun review_period_ms(params: &TradingParams): u64 { params.review_period_ms }
+
 public fun trading_period_ms(params: &TradingParams): u64 { params.trading_period_ms }
+
 public fun conditional_amm_fee_bps(params: &TradingParams): u64 { params.conditional_amm_fee_bps }
+
 public fun spot_amm_fee_bps(params: &TradingParams): u64 { params.spot_amm_fee_bps }
-public fun market_op_review_period_ms(params: &TradingParams): u64 { params.market_op_review_period_ms }
+
+public fun market_op_review_period_ms(params: &TradingParams): u64 {
+    params.market_op_review_period_ms
+}
+
 public fun max_amm_swap_percent_bps(params: &TradingParams): u64 { params.max_amm_swap_percent_bps }
-public fun conditional_liquidity_ratio_percent(params: &TradingParams): u64 { params.conditional_liquidity_ratio_percent }
+
+public fun conditional_liquidity_ratio_percent(params: &TradingParams): u64 {
+    params.conditional_liquidity_ratio_percent
+}
 
 // TWAP config getters
 public fun twap_config(config: &DaoConfig): &TwapConfig { &config.twap_config }
-public(package) fun twap_config_mut(config: &mut DaoConfig): &mut TwapConfig { &mut config.twap_config }
+
+public(package) fun twap_config_mut(config: &mut DaoConfig): &mut TwapConfig {
+    &mut config.twap_config
+}
+
 public fun start_delay(twap: &TwapConfig): u64 { twap.start_delay }
+
 public fun step_max(twap: &TwapConfig): u64 { twap.step_max }
+
 public fun initial_observation(twap: &TwapConfig): u128 { twap.initial_observation }
+
 public fun threshold(twap: &TwapConfig): u64 { twap.threshold }
 
 // Governance config getters
 public fun governance_config(config: &DaoConfig): &GovernanceConfig { &config.governance_config }
-public(package) fun governance_config_mut(config: &mut DaoConfig): &mut GovernanceConfig { &mut config.governance_config }
+
+public(package) fun governance_config_mut(config: &mut DaoConfig): &mut GovernanceConfig {
+    &mut config.governance_config
+}
+
 public fun max_outcomes(gov: &GovernanceConfig): u64 { gov.max_outcomes }
+
 public fun max_actions_per_outcome(gov: &GovernanceConfig): u64 { gov.max_actions_per_outcome }
+
 public fun proposal_fee_per_outcome(gov: &GovernanceConfig): u64 { gov.proposal_fee_per_outcome }
+
 public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond_amount }
+
 public fun max_concurrent_proposals(gov: &GovernanceConfig): u64 { gov.max_concurrent_proposals }
-public fun proposal_recreation_window_ms(gov: &GovernanceConfig): u64 { gov.proposal_recreation_window_ms }
+
+public fun proposal_recreation_window_ms(gov: &GovernanceConfig): u64 {
+    gov.proposal_recreation_window_ms
+}
+
 public fun max_proposal_chain_depth(gov: &GovernanceConfig): u64 { gov.max_proposal_chain_depth }
-public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 { gov.fee_escalation_basis_points }
+
+public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 {
+    gov.fee_escalation_basis_points
+}
+
 public fun proposal_creation_enabled(gov: &GovernanceConfig): bool { gov.proposal_creation_enabled }
+
 public fun accept_new_proposals(gov: &GovernanceConfig): bool { gov.accept_new_proposals }
+
 public fun max_intents_per_outcome(gov: &GovernanceConfig): u64 { gov.max_intents_per_outcome }
+
 public fun eviction_grace_period_ms(gov: &GovernanceConfig): u64 { gov.eviction_grace_period_ms }
+
 public fun proposal_intent_expiry_ms(gov: &GovernanceConfig): u64 { gov.proposal_intent_expiry_ms }
-public fun enable_premarket_reservation_lock(gov: &GovernanceConfig): bool { gov.enable_premarket_reservation_lock }
+
+public fun enable_premarket_reservation_lock(gov: &GovernanceConfig): bool {
+    gov.enable_premarket_reservation_lock
+}
 
 // Metadata config getters
 public fun metadata_config(config: &DaoConfig): &MetadataConfig { &config.metadata_config }
-public(package) fun metadata_config_mut(config: &mut DaoConfig): &mut MetadataConfig { &mut config.metadata_config }
+
+public(package) fun metadata_config_mut(config: &mut DaoConfig): &mut MetadataConfig {
+    &mut config.metadata_config
+}
+
 public fun dao_name(meta: &MetadataConfig): &AsciiString { &meta.dao_name }
+
 public fun icon_url(meta: &MetadataConfig): &Url { &meta.icon_url }
+
 public fun description(meta: &MetadataConfig): &String { &meta.description }
 
 // Security config getters
 public fun security_config(config: &DaoConfig): &SecurityConfig { &config.security_config }
-public(package) fun security_config_mut(config: &mut DaoConfig): &mut SecurityConfig { &mut config.security_config }
+
+public(package) fun security_config_mut(config: &mut DaoConfig): &mut SecurityConfig {
+    &mut config.security_config
+}
+
 public fun deadman_enabled(sec: &SecurityConfig): bool { sec.deadman_enabled }
+
 public fun recovery_liveness_ms(sec: &SecurityConfig): u64 { sec.recovery_liveness_ms }
+
 public fun require_deadman_council(sec: &SecurityConfig): bool { sec.require_deadman_council }
 
 // Storage config getters
 public fun storage_config(config: &DaoConfig): &StorageConfig { &config.storage_config }
-public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig { &mut config.storage_config }
+
+public fun storage_config_mut(config: &mut DaoConfig): &mut StorageConfig {
+    &mut config.storage_config
+}
+
 public fun allow_walrus_blobs(storage: &StorageConfig): bool { storage.allow_walrus_blobs }
 
 // Conditional coin config getters
-public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig { &config.conditional_coin_config }
-public(package) fun conditional_coin_config_mut(config: &mut DaoConfig): &mut ConditionalCoinConfig { &mut config.conditional_coin_config }
-public fun use_outcome_index(coin_config: &ConditionalCoinConfig): bool { coin_config.use_outcome_index }
-public fun conditional_metadata(coin_config: &ConditionalCoinConfig): &Option<ConditionalMetadata> { &coin_config.conditional_metadata }
+public fun conditional_coin_config(config: &DaoConfig): &ConditionalCoinConfig {
+    &config.conditional_coin_config
+}
+
+public(package) fun conditional_coin_config_mut(
+    config: &mut DaoConfig,
+): &mut ConditionalCoinConfig { &mut config.conditional_coin_config }
+
+public fun use_outcome_index(coin_config: &ConditionalCoinConfig): bool {
+    coin_config.use_outcome_index
+}
+
+public fun conditional_metadata(coin_config: &ConditionalCoinConfig): &Option<ConditionalMetadata> {
+    &coin_config.conditional_metadata
+}
 
 /// Get the coin name prefix from conditional metadata (if available)
 /// Returns None if no conditional metadata is set
@@ -485,7 +564,11 @@ public fun coin_name_prefix(coin_config: &ConditionalCoinConfig): Option<AsciiSt
 
 // ConditionalMetadata getters
 public fun conditional_decimals(meta: &ConditionalMetadata): u8 { meta.decimals }
-public fun conditional_coin_name_prefix(meta: &ConditionalMetadata): &AsciiString { &meta.coin_name_prefix }
+
+public fun conditional_coin_name_prefix(meta: &ConditionalMetadata): &AsciiString {
+    &meta.coin_name_prefix
+}
+
 public fun conditional_coin_icon_url(meta: &ConditionalMetadata): &Url { &meta.coin_icon_url }
 
 /// Derive conditional token metadata from base token's CoinMetadata (PREFERRED)
@@ -527,23 +610,40 @@ public fun get_conditional_metadata_from_config(
 
 // Quota config getters
 public fun quota_config(config: &DaoConfig): &QuotaConfig { &config.quota_config }
-public(package) fun quota_config_mut(config: &mut DaoConfig): &mut QuotaConfig { &mut config.quota_config }
+
+public(package) fun quota_config_mut(config: &mut DaoConfig): &mut QuotaConfig {
+    &mut config.quota_config
+}
+
 public fun quota_enabled(quota: &QuotaConfig): bool { quota.enabled }
+
 public fun default_quota_amount(quota: &QuotaConfig): u64 { quota.default_quota_amount }
+
 public fun default_quota_period_ms(quota: &QuotaConfig): u64 { quota.default_quota_period_ms }
+
 public fun default_reduced_fee(quota: &QuotaConfig): u64 { quota.default_reduced_fee }
 
 // Multisig config getters
 public fun multisig_config(config: &DaoConfig): &MultisigConfig { &config.multisig_config }
-public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig { &mut config.multisig_config }
+
+public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig {
+    &mut config.multisig_config
+}
 
 // Subsidy config getters
 public fun subsidy_config(config: &DaoConfig): &ProtocolSubsidyConfig { &config.subsidy_config }
-public(package) fun subsidy_config_mut(config: &mut DaoConfig): &mut ProtocolSubsidyConfig { &mut config.subsidy_config }
+
+public(package) fun subsidy_config_mut(config: &mut DaoConfig): &mut ProtocolSubsidyConfig {
+    &mut config.subsidy_config
+}
 
 // Challenge config getters (DAO-level)
 public fun optimistic_challenge_fee(config: &DaoConfig): u64 { config.optimistic_challenge_fee }
-public fun optimistic_challenge_period_ms(config: &DaoConfig): u64 { config.optimistic_challenge_period_ms }
+
+public fun optimistic_challenge_period_ms(config: &DaoConfig): u64 {
+    config.optimistic_challenge_period_ms
+}
+
 public fun challenge_bounty(config: &DaoConfig): u64 { config.challenge_bounty }
 
 // === Update Functions ===
@@ -559,38 +659,38 @@ public fun validate_config_update(
 ): bool {
     let current_gov = governance_config(current_config);
     let new_gov = governance_config(new_config);
-    
+
     // Check 1: Can't reduce max_concurrent_proposals below active count
     if (max_concurrent_proposals(new_gov) < active_proposals) {
         return false
     };
-    
+
     // Check 2: Can't reduce max_outcomes below what existing proposals might have
     // This is a conservative check - in production you'd check actual proposals
     if (max_outcomes(new_gov) < max_outcomes(current_gov)) {
         if (active_proposals > 0) {
-            return false  // Unsafe to reduce when proposals are active
+            return false // Unsafe to reduce when proposals are active
         }
     };
-    
+
     // Check 3: Can't reduce max_actions_per_outcome if proposals are active
     if (max_actions_per_outcome(new_gov) < max_actions_per_outcome(current_gov)) {
         if (active_proposals > 0) {
-            return false  // Unsafe to reduce when proposals are active
+            return false // Unsafe to reduce when proposals are active
         }
     };
-    
+
     // Check 4: Grace periods can't be reduced to zero
     if (eviction_grace_period_ms(new_gov) == 0) {
         return false
     };
-    
+
     // Check 5: Trading periods must be reasonable
     let new_trading = trading_params(new_config);
     if (review_period_ms(new_trading) == 0 || trading_period_ms(new_trading) == 0) {
         return false
     };
-    
+
     true
 }
 
@@ -642,12 +742,15 @@ public(package) fun set_max_amm_swap_percent_bps(params: &mut TradingParams, per
     params.max_amm_swap_percent_bps = percent_bps;
 }
 
-public(package) fun set_conditional_liquidity_ratio_percent(params: &mut TradingParams, ratio_percent: u64) {
+public(package) fun set_conditional_liquidity_ratio_percent(
+    params: &mut TradingParams,
+    ratio_percent: u64,
+) {
     // Enforce valid range using configurable constants (base 100: 1-99%)
     assert!(
         ratio_percent >= constants::min_conditional_liquidity_percent() &&
         ratio_percent <= constants::max_conditional_liquidity_percent(),
-        EInvalidFee
+        EInvalidFee,
     );
     params.conditional_liquidity_ratio_percent = ratio_percent;
 }
@@ -682,7 +785,10 @@ public(package) fun set_max_outcomes(gov: &mut GovernanceConfig, max: u64) {
 }
 
 public(package) fun set_max_actions_per_outcome(gov: &mut GovernanceConfig, max: u64) {
-    assert!(max > 0 && max <= constants::protocol_max_actions_per_outcome(), EMaxActionsExceedsProtocol);
+    assert!(
+        max > 0 && max <= constants::protocol_max_actions_per_outcome(),
+        EMaxActionsExceedsProtocol,
+    );
     // Note: Caller must ensure no active proposals exceed this limit
     gov.max_actions_per_outcome = max;
 }
@@ -739,7 +845,10 @@ public(package) fun set_proposal_intent_expiry_ms(gov: &mut GovernanceConfig, pe
     gov.proposal_intent_expiry_ms = period;
 }
 
-public(package) fun set_enable_premarket_reservation_lock(gov: &mut GovernanceConfig, enabled: bool) {
+public(package) fun set_enable_premarket_reservation_lock(
+    gov: &mut GovernanceConfig,
+    enabled: bool,
+) {
     gov.enable_premarket_reservation_lock = enabled;
 }
 
@@ -780,12 +889,15 @@ public fun set_allow_walrus_blobs(storage: &mut StorageConfig, val: bool) {
 
 public(package) fun set_conditional_metadata(
     coin_config: &mut ConditionalCoinConfig,
-    metadata: Option<ConditionalMetadata>
+    metadata: Option<ConditionalMetadata>,
 ) {
     coin_config.conditional_metadata = metadata;
 }
 
-public(package) fun set_use_outcome_index(coin_config: &mut ConditionalCoinConfig, use_index: bool) {
+public(package) fun set_use_outcome_index(
+    coin_config: &mut ConditionalCoinConfig,
+    use_index: bool,
+) {
     coin_config.use_outcome_index = use_index;
 }
 
@@ -818,7 +930,10 @@ public(package) fun set_subsidy_enabled(subsidy: &mut ProtocolSubsidyConfig, ena
     liquidity_subsidy_protocol::set_enabled(subsidy, enabled);
 }
 
-public(package) fun set_subsidy_per_outcome_per_crank(subsidy: &mut ProtocolSubsidyConfig, amount: u64) {
+public(package) fun set_subsidy_per_outcome_per_crank(
+    subsidy: &mut ProtocolSubsidyConfig,
+    amount: u64,
+) {
     liquidity_subsidy_protocol::set_subsidy_per_outcome_per_crank(subsidy, amount);
 }
 
@@ -826,11 +941,17 @@ public(package) fun set_subsidy_crank_steps(subsidy: &mut ProtocolSubsidyConfig,
     liquidity_subsidy_protocol::set_crank_steps(subsidy, steps);
 }
 
-public(package) fun set_subsidy_keeper_fee_per_crank(subsidy: &mut ProtocolSubsidyConfig, fee: u64) {
+public(package) fun set_subsidy_keeper_fee_per_crank(
+    subsidy: &mut ProtocolSubsidyConfig,
+    fee: u64,
+) {
     liquidity_subsidy_protocol::set_keeper_fee_per_crank(subsidy, fee);
 }
 
-public(package) fun set_subsidy_min_crank_interval_ms(subsidy: &mut ProtocolSubsidyConfig, interval: u64) {
+public(package) fun set_subsidy_min_crank_interval_ms(
+    subsidy: &mut ProtocolSubsidyConfig,
+    interval: u64,
+) {
     liquidity_subsidy_protocol::set_min_crank_interval_ms(subsidy, interval);
 }
 
@@ -978,7 +1099,10 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
 }
 
 /// Update conditional coin configuration (returns new config)
-public fun update_conditional_coin_config(config: &DaoConfig, new_coin_config: ConditionalCoinConfig): DaoConfig {
+public fun update_conditional_coin_config(
+    config: &DaoConfig,
+    new_coin_config: ConditionalCoinConfig,
+): DaoConfig {
     DaoConfig {
         trading_params: config.trading_params,
         twap_config: config.twap_config,
@@ -1016,7 +1140,10 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
 }
 
 /// Update subsidy configuration (returns new config)
-public fun update_subsidy_config(config: &DaoConfig, new_subsidy: ProtocolSubsidyConfig): DaoConfig {
+public fun update_subsidy_config(
+    config: &DaoConfig,
+    new_subsidy: ProtocolSubsidyConfig,
+): DaoConfig {
     DaoConfig {
         trading_params: config.trading_params,
         twap_config: config.twap_config,
@@ -1084,16 +1211,16 @@ public fun default_governance_config(): GovernanceConfig {
 /// Get default security configuration
 public fun default_security_config(): SecurityConfig {
     SecurityConfig {
-        deadman_enabled: false,          // Opt-in feature
+        deadman_enabled: false, // Opt-in feature
         recovery_liveness_ms: 2_592_000_000, // 30 days default
-        require_deadman_council: false,  // Optional
+        require_deadman_council: false, // Optional
     }
 }
 
 /// Get default storage configuration
 public fun default_storage_config(): StorageConfig {
     StorageConfig {
-        allow_walrus_blobs: true,        // Allow Walrus blobs by default
+        allow_walrus_blobs: true, // Allow Walrus blobs by default
     }
 }
 
@@ -1101,17 +1228,17 @@ public fun default_storage_config(): StorageConfig {
 public fun default_conditional_coin_config(): ConditionalCoinConfig {
     ConditionalCoinConfig {
         use_outcome_index: true,
-        conditional_metadata: option::none(),  // Derive from base DAO token
+        conditional_metadata: option::none(), // Derive from base DAO token
     }
 }
 
 /// Get default quota configuration
 public fun default_quota_config(): QuotaConfig {
     QuotaConfig {
-        enabled: false,                  // Opt-in feature
-        default_quota_amount: 1,         // 1 proposal per period by default
+        enabled: false, // Opt-in feature
+        default_quota_amount: 1, // 1 proposal per period by default
         default_quota_period_ms: 2_592_000_000, // 30 days
-        default_reduced_fee: 0,          // Free by default
+        default_reduced_fee: 0, // Free by default
     }
 }
 
@@ -1125,10 +1252,10 @@ public fun default_multisig_config(): MultisigConfig {
 /// Get default subsidy configuration (disabled by default)
 public fun default_subsidy_config(): ProtocolSubsidyConfig {
     liquidity_subsidy_protocol::new_protocol_config_custom(
-        false,                           // disabled by default
-        100_000_000,                     // 0.1 SUI per outcome per crank
-        100,                             // 100 cranks default
-        100_000_000,                     // 0.1 SUI keeper fee per crank
-        300_000,                         // 5 minutes minimum between cranks
+        false, // disabled by default
+        100_000_000, // 0.1 SUI per outcome per crank
+        100, // 100 cranks default
+        100_000_000, // 0.1 SUI keeper fee per crank
+        300_000, // 5 minutes minimum between cranks
     )
 }

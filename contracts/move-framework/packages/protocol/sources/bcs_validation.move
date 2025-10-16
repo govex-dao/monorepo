@@ -25,9 +25,9 @@
 /// BCS validation helpers to ensure complete consumption of serialized data
 module account_protocol::bcs_validation;
 
-// === Imports ===
-
 use sui::bcs::BCS;
+
+// === Imports ===
 
 // === Errors ===
 

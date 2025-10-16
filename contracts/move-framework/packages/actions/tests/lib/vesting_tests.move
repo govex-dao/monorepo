@@ -4,21 +4,18 @@
 #[test_only]
 module account_actions::vesting_tests;
 
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-};
+use account_actions::version;
+use account_actions::vesting;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-    deps,
-    intent_interface,
-};
-use account_actions::{vesting, version};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intent_interface;
+use account_protocol::intents;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
 
 // === Macros ===
 
@@ -52,7 +49,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -87,7 +87,7 @@ fun test_vesting_basic() {
         vector[0], // execute immediately
         10000, // expiration
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Build the intent using the intent interface
@@ -116,7 +116,7 @@ fun test_vesting_basic() {
                 option::none(), // no metadata
                 iw,
             );
-        }
+        },
     );
 
     // Execute the vesting action
@@ -126,7 +126,7 @@ fun test_vesting_basic() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify outcome
@@ -164,7 +164,7 @@ fun test_vesting_with_cliff() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -192,7 +192,7 @@ fun test_vesting_with_cliff() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     // Execute the vesting action
@@ -202,7 +202,7 @@ fun test_vesting_with_cliff() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -256,7 +256,7 @@ fun test_vesting_claim() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -284,7 +284,7 @@ fun test_vesting_claim() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -293,7 +293,7 @@ fun test_vesting_claim() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -365,7 +365,7 @@ fun test_vesting_pause_resume() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -393,7 +393,7 @@ fun test_vesting_pause_resume() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -402,7 +402,7 @@ fun test_vesting_pause_resume() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -461,7 +461,7 @@ fun test_vesting_cancel() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -489,7 +489,7 @@ fun test_vesting_cancel() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -498,7 +498,7 @@ fun test_vesting_cancel() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -527,7 +527,7 @@ fun test_vesting_cancel() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref2 = &account;
@@ -545,7 +545,7 @@ fun test_vesting_cancel() {
                 vesting_id,
                 iw,
             );
-        }
+        },
     );
 
     // Execute cancellation at 50% through vesting period
@@ -555,7 +555,7 @@ fun test_vesting_cancel() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(cancel_outcome == outcome);
@@ -601,7 +601,7 @@ fun test_vesting_multiple_beneficiaries() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -629,7 +629,7 @@ fun test_vesting_multiple_beneficiaries() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -638,7 +638,7 @@ fun test_vesting_multiple_beneficiaries() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -707,7 +707,7 @@ fun test_vesting_transfer_ownership() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -735,7 +735,7 @@ fun test_vesting_transfer_ownership() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -744,7 +744,7 @@ fun test_vesting_transfer_ownership() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);
@@ -805,7 +805,7 @@ fun test_vesting_emergency_freeze() {
         vector[0],
         10000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let account_ref = &account;
@@ -833,7 +833,7 @@ fun test_vesting_emergency_freeze() {
                 option::none(),
                 iw,
             );
-        }
+        },
     );
 
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
@@ -842,7 +842,7 @@ fun test_vesting_emergency_freeze() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(outcome_result == outcome);

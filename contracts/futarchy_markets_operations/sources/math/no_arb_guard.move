@@ -45,9 +45,9 @@ public fun compute_noarb_band<AssetType, StableType>(
     let n = pools.length();
     assert!(n > 0, ENoPoolsProvided);
 
-    let bps = constants::basis_points();           // 10000
-    let f_s = unified_spot_pool::get_fee_bps(spot_pool);   // spot fee in bps
-    let one_minus_fs = bps - f_s;                  // (1 - f_s)*bps
+    let bps = constants::basis_points(); // 10000
+    let f_s = unified_spot_pool::get_fee_bps(spot_pool); // spot fee in bps
+    let one_minus_fs = bps - f_s; // (1 - f_s)*bps
 
     // floor = (1 - f_s) * min_i [ (1 - f_i) * p_i ]
     // ceiling = (1 / (1 - f_s)) * sum_i [ p_i / (1 - f_i) ]

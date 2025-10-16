@@ -1,21 +1,15 @@
 module account_actions::access_control_intents;
 
-// === Imports ===
+use account_actions::access_control as ac;
+use account_actions::version;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
+use std::string::String;
+use std::type_name;
 
-use std::{
-    string::String,
-    type_name,
-};
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    intents::Params,
-    intent_interface,
-};
-use account_actions::{
-    access_control as ac,
-    version,
-};
+// === Imports ===
 
 // === Aliases ===
 
@@ -26,7 +20,7 @@ use fun intent_interface::process_intent as Account.process_intent;
 
 const ENoLock: u64 = 0;
 
-// === Structs ===    
+// === Structs ===
 
 /// Intent Witness defining the intent to borrow an access cap.
 public struct BorrowCapIntent() has copy, drop;
@@ -39,14 +33,14 @@ public fun request_borrow_cap<Config, Outcome: store, Cap>(
     account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     assert!(ac::has_lock<_, Cap>(account), ENoLock);
 
     account.build_intent!(
         params,
-        outcome, 
+        outcome,
         type_name_to_string<Cap>(),
         version::current(),
         BorrowCapIntent(),
@@ -64,9 +58,9 @@ public fun execute_borrow_cap<Config, Outcome: store, Cap: key + store>(
     account: &mut Account<Config>,
 ): Cap {
     account.process_intent!(
-        executable, 
-        version::current(), 
-        BorrowCapIntent(), 
+        executable,
+        version::current(),
+        BorrowCapIntent(),
         |executable, iw| ac::do_borrow(executable, account, version::current(), iw),
     )
 }
@@ -78,9 +72,9 @@ public fun execute_return_cap<Config, Outcome: store, Cap: key + store>(
     cap: Cap,
 ) {
     account.process_intent!(
-        executable, 
-        version::current(), 
-        BorrowCapIntent(), 
+        executable,
+        version::current(),
+        BorrowCapIntent(),
         |executable, iw| ac::do_return(executable, account, cap, version::current(), iw),
     )
 }

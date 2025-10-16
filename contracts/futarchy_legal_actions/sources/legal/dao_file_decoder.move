@@ -2,11 +2,13 @@
 /// Provides BCS deserialization and human-readable field extraction
 module futarchy_legal_actions::dao_file_decoder;
 
-// === Imports ===
-use std::{string::String, type_name};
-use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs::{Self, BCS}};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs::{Self, BCS};
+use sui::dynamic_object_field;
+use sui::object::{Self, UID, ID};
 
 // === Decoder Objects ===
 
@@ -270,25 +272,34 @@ public fun decode_add_chunk(
 
     // Add optional fields if present
     if (option::is_some(&expires_at)) {
-        vector::push_back(&mut fields, schema::new_field(
-            b"expires_at".to_string(),
-            (*option::borrow(&expires_at)).to_string(),
-            b"Option<u64>".to_string(),
-        ));
+        vector::push_back(
+            &mut fields,
+            schema::new_field(
+                b"expires_at".to_string(),
+                (*option::borrow(&expires_at)).to_string(),
+                b"Option<u64>".to_string(),
+            ),
+        );
     };
     if (option::is_some(&effective_from)) {
-        vector::push_back(&mut fields, schema::new_field(
-            b"effective_from".to_string(),
-            (*option::borrow(&effective_from)).to_string(),
-            b"Option<u64>".to_string(),
-        ));
+        vector::push_back(
+            &mut fields,
+            schema::new_field(
+                b"effective_from".to_string(),
+                (*option::borrow(&effective_from)).to_string(),
+                b"Option<u64>".to_string(),
+            ),
+        );
     };
     if (option::is_some(&immutable_from)) {
-        vector::push_back(&mut fields, schema::new_field(
-            b"immutable_from".to_string(),
-            (*option::borrow(&immutable_from)).to_string(),
-            b"Option<u64>".to_string(),
-        ));
+        vector::push_back(
+            &mut fields,
+            schema::new_field(
+                b"immutable_from".to_string(),
+                (*option::borrow(&immutable_from)).to_string(),
+                b"Option<u64>".to_string(),
+            ),
+        );
     };
 
     fields
@@ -663,10 +674,7 @@ public fun decode_set_document_remove_allowed(
 /// Register all DAO document decoders (placeholder types)
 /// Note: These use placeholder type names since the actual action types
 /// are defined inline in dao_doc_actions.move
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     // Registry management
     register_create_registry_decoder(registry, ctx);
     register_set_registry_immutable_decoder(registry, ctx);
@@ -698,10 +706,7 @@ public fun register_decoders(
 
 // === Individual Registration Functions ===
 
-fun register_create_registry_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_registry_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreateRegistryDecoder { id: object::new(ctx) };
     let type_key = type_name::get<CreateRegistryDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -743,19 +748,13 @@ fun register_create_document_version_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_delete_document_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_delete_document_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = DeleteDocumentDecoder { id: object::new(ctx) };
     let type_key = type_name::get<DeleteDocumentDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_add_chunk_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_add_chunk_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AddChunkDecoder { id: object::new(ctx) };
     let type_key = type_name::get<AddChunkDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -770,19 +769,13 @@ fun register_add_chunk_with_text_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_add_sunset_chunk_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_add_sunset_chunk_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AddSunsetChunkDecoder { id: object::new(ctx) };
     let type_key = type_name::get<AddSunsetChunkDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_add_sunrise_chunk_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_add_sunrise_chunk_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AddSunriseChunkDecoder { id: object::new(ctx) };
     let type_key = type_name::get<AddSunriseChunkDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -806,19 +799,13 @@ fun register_add_chunk_with_scheduled_immutability_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_update_chunk_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_update_chunk_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = UpdateChunkDecoder { id: object::new(ctx) };
     let type_key = type_name::get<UpdateChunkDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_remove_chunk_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_remove_chunk_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RemoveChunkDecoder { id: object::new(ctx) };
     let type_key = type_name::get<RemoveChunkDecoder>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

@@ -2,8 +2,8 @@
 /// Provides centralized type checking before BCS deserialization
 module futarchy_core::action_validation;
 
-use std::type_name::{Self, TypeName};
 use account_protocol::intents::{Self, ActionSpec};
+use std::type_name::{Self, TypeName};
 
 // === Errors ===
 const EWrongActionType: u64 = 1;
@@ -14,10 +14,7 @@ const EWrongActionType: u64 = 1;
 /// This MUST be called before deserializing action data to prevent type confusion
 public fun assert_action_type<T: drop>(spec: &ActionSpec) {
     let expected_type = type_name::with_defining_ids<T>();
-    assert!(
-        intents::action_spec_type(spec) == expected_type,
-        EWrongActionType
-    );
+    assert!(intents::action_spec_type(spec) == expected_type, EWrongActionType);
 }
 
 /// Get the TypeName for a given action type
@@ -67,5 +64,5 @@ fun test_wrong_action_type() {
 
     // This test would fail with EWrongActionType if we had a way to create
     // an ActionSpec with WrongAction type but tried to assert TestAction type
-    abort EWrongActionType  // Placeholder to show expected failure
+    abort EWrongActionType // Placeholder to show expected failure
 }

@@ -1,20 +1,16 @@
 #[test_only]
 module futarchy_core::proposal_fee_manager_tests;
 
-// === Imports ===
+use futarchy_core::futarchy_config::{Self, SlashDistribution};
+use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
+use futarchy_core::proposal_quota_registry::{Self, ProposalQuotaRegistry};
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
 
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-};
-use futarchy_core::{
-    proposal_fee_manager::{Self, ProposalFeeManager},
-    futarchy_config::{Self, SlashDistribution},
-    proposal_quota_registry::{Self, ProposalQuotaRegistry},
-};
+// === Imports ===
 
 // === Constants ===
 
@@ -155,7 +151,11 @@ fun test_take_activator_reward_full_fee() {
     proposal_fee_manager::deposit_proposal_fee(&mut manager, proposal_id, fee_coin);
 
     // Take activator reward
-    let reward = proposal_fee_manager::take_activator_reward(&mut manager, proposal_id, scenario.ctx());
+    let reward = proposal_fee_manager::take_activator_reward(
+        &mut manager,
+        proposal_id,
+        scenario.ctx(),
+    );
 
     // Should get fixed reward of 1M
     assert!(reward.value() == 1_000_000, 0);
@@ -176,7 +176,11 @@ fun test_take_activator_reward_small_fee() {
     proposal_fee_manager::deposit_proposal_fee(&mut manager, proposal_id, fee_coin);
 
     // Take activator reward
-    let reward = proposal_fee_manager::take_activator_reward(&mut manager, proposal_id, scenario.ctx());
+    let reward = proposal_fee_manager::take_activator_reward(
+        &mut manager,
+        proposal_id,
+        scenario.ctx(),
+    );
 
     // Should get entire fee (500K)
     assert!(reward.value() == 500_000, 0);
@@ -203,7 +207,7 @@ fun test_slash_proposal_fee_with_distribution() {
         &mut manager,
         proposal_id,
         &slash_config,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify distributions
@@ -233,7 +237,7 @@ fun test_slash_proposal_fee_minimal_amount() {
         &mut manager,
         proposal_id,
         &slash_config,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // All should round to zero except protocol (gets the dust)
@@ -256,7 +260,11 @@ fun test_refund_proposal_fee() {
     proposal_fee_manager::deposit_proposal_fee(&mut manager, proposal_id, fee_coin);
 
     // Refund the fee
-    let refund = proposal_fee_manager::refund_proposal_fee(&mut manager, proposal_id, scenario.ctx());
+    let refund = proposal_fee_manager::refund_proposal_fee(
+        &mut manager,
+        proposal_id,
+        scenario.ctx(),
+    );
 
     assert!(refund.value() == 1000, 0);
     assert!(!proposal_fee_manager::has_proposal_fee(&manager, proposal_id), 1);
@@ -273,7 +281,11 @@ fun test_refund_nonexistent_proposal_fee_fails() {
     let proposal_id = object::id_from_address(@0x1);
 
     // Should abort - proposal doesn't exist
-    let refund = proposal_fee_manager::refund_proposal_fee(&mut manager, proposal_id, scenario.ctx());
+    let refund = proposal_fee_manager::refund_proposal_fee(
+        &mut manager,
+        proposal_id,
+        scenario.ctx(),
+    );
 
     destroy(refund);
     end(scenario, manager, clock);
@@ -291,7 +303,11 @@ fun test_withdraw_protocol_revenue() {
     assert!(initial_revenue == 200, 0); // 20% of 1000
 
     // Withdraw half
-    let withdrawal = proposal_fee_manager::withdraw_protocol_revenue(&mut manager, 100, scenario.ctx());
+    let withdrawal = proposal_fee_manager::withdraw_protocol_revenue(
+        &mut manager,
+        100,
+        scenario.ctx(),
+    );
 
     assert!(withdrawal.value() == 100, 1);
     assert!(proposal_fee_manager::protocol_revenue(&manager) == 100, 2);
@@ -309,7 +325,11 @@ fun test_pay_proposal_creator_reward() {
     proposal_fee_manager::deposit_queue_fee(&mut manager, fee_coin, &clock, scenario.ctx());
 
     // Pay reward
-    let reward = proposal_fee_manager::pay_proposal_creator_reward(&mut manager, 500, scenario.ctx());
+    let reward = proposal_fee_manager::pay_proposal_creator_reward(
+        &mut manager,
+        500,
+        scenario.ctx(),
+    );
 
     assert!(reward.value() == 500, 0);
 
@@ -328,7 +348,11 @@ fun test_pay_proposal_creator_reward_insufficient_funds() {
     let available = proposal_fee_manager::protocol_revenue(&manager);
 
     // Try to pay 500 but only 100 available (20% of 500)
-    let reward = proposal_fee_manager::pay_proposal_creator_reward(&mut manager, 500, scenario.ctx());
+    let reward = proposal_fee_manager::pay_proposal_creator_reward(
+        &mut manager,
+        500,
+        scenario.ctx(),
+    );
 
     // Should get whatever is available
     assert!(reward.value() == available, 0);
@@ -347,7 +371,11 @@ fun test_pay_outcome_creator_reward() {
     proposal_fee_manager::deposit_queue_fee(&mut manager, fee_coin, &clock, scenario.ctx());
 
     // Pay reward
-    let reward = proposal_fee_manager::pay_outcome_creator_reward(&mut manager, 300, scenario.ctx());
+    let reward = proposal_fee_manager::pay_outcome_creator_reward(
+        &mut manager,
+        300,
+        scenario.ctx(),
+    );
 
     assert!(reward.value() == 300, 0);
 
@@ -398,10 +426,10 @@ fun test_calculate_fee_with_quota_available() {
         &mut quota_registry,
         dao_id,
         users,
-        3,                    // quota_amount
-        2_592_000_000,        // 30 days in ms
-        100,                  // reduced_fee
-        &clock
+        3, // quota_amount
+        2_592_000_000, // 30 days in ms
+        100, // reduced_fee
+        &clock,
     );
 
     // Calculate fee with quota
@@ -411,7 +439,7 @@ fun test_calculate_fee_with_quota_available() {
         dao_id,
         @0xBEEF,
         base_fee,
-        &clock
+        &clock,
     );
 
     // Should use reduced fee
@@ -438,7 +466,7 @@ fun test_calculate_fee_with_quota_unavailable() {
         dao_id,
         @0xBEEF,
         base_fee,
-        &clock
+        &clock,
     );
 
     // Should use full base fee
@@ -462,17 +490,17 @@ fun test_use_quota_for_proposal() {
         &mut quota_registry,
         dao_id,
         users,
-        3,                    // quota_amount
-        2_592_000_000,        // 30 days in ms
-        100,                  // reduced_fee
-        &clock
+        3, // quota_amount
+        2_592_000_000, // 30 days in ms
+        100, // reduced_fee
+        &clock,
     );
 
     // Check initial quota status
     let (has_quota, remaining, _reduced_fee) = proposal_quota_registry::get_quota_status(
         &quota_registry,
         @0xBEEF,
-        &clock
+        &clock,
     );
     assert!(has_quota == true, 0);
     assert!(remaining == 3, 1);
@@ -484,7 +512,7 @@ fun test_use_quota_for_proposal() {
     let (has_quota2, remaining2, _) = proposal_quota_registry::get_quota_status(
         &quota_registry,
         @0xBEEF,
-        &clock
+        &clock,
     );
     assert!(has_quota2 == true, 2);
     assert!(remaining2 == 2, 3); // Down to 2
@@ -497,7 +525,7 @@ fun test_use_quota_for_proposal() {
     let (has_quota3, remaining3, _) = proposal_quota_registry::get_quota_status(
         &quota_registry,
         @0xBEEF,
-        &clock
+        &clock,
     );
     assert!(has_quota3 == false, 4);
     assert!(remaining3 == 0, 5); // All used up

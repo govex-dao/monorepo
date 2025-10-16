@@ -7,31 +7,22 @@
 /// - Three-tier policy enforcement (registry/document/chunk)
 module futarchy_legal_actions::dao_file_registry;
 
-// === Imports ===
-use std::{
-    string::{Self, String},
-    option::{Self, Option},
-    vector,
-    hash,
-};
-use sui::{
-    clock::{Self, Clock},
-    event,
-    table::{Self, Table},
-    bag::{Self, Bag},
-    object::{Self, ID, UID},
-    tx_context::TxContext,
-    bcs,
-};
-use account_protocol::{
-    account::{Self, Account},
-    version_witness::VersionWitness,
-};
-use futarchy_core::{
-    version,
-    futarchy_config::FutarchyConfig,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::version_witness::VersionWitness;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
 use futarchy_one_shot_utils::constants;
+use std::hash;
+use std::option::{Self, Option};
+use std::string::{Self, String};
+use std::vector;
+use sui::bag::{Self, Bag};
+use sui::bcs;
+use sui::clock::{Self, Clock};
+use sui::event;
+use sui::object::{Self, ID, UID};
+use sui::table::{Self, Table};
+use sui::tx_context::TxContext;
 use walrus::blob;
 
 // === Constants ===
@@ -55,13 +46,13 @@ const MIN_WALRUS_BLOB_EXPIRY_EPOCHS: u64 = 365;
 
 // Chunk types (preserved from original operating_agreement.move)
 const CHUNK_TYPE_PERMANENT: u8 = 0;
-const CHUNK_TYPE_SUNSET: u8 = 1;     // Auto-deactivates after expiry
-const CHUNK_TYPE_SUNRISE: u8 = 2;    // Activates after effective_from
-const CHUNK_TYPE_TEMPORARY: u8 = 3;  // Active only between effective_from and expires_at
+const CHUNK_TYPE_SUNSET: u8 = 1; // Auto-deactivates after expiry
+const CHUNK_TYPE_SUNRISE: u8 = 2; // Activates after effective_from
+const CHUNK_TYPE_TEMPORARY: u8 = 3; // Active only between effective_from and expires_at
 
 // Storage types (XOR enforcement: exactly one must be used)
-const STORAGE_TYPE_TEXT: u8 = 0;     // On-chain text storage
-const STORAGE_TYPE_WALRUS: u8 = 1;   // Off-chain Walrus blob storage
+const STORAGE_TYPE_TEXT: u8 = 0; // On-chain text storage
+const STORAGE_TYPE_WALRUS: u8 = 1; // Off-chain Walrus blob storage
 
 // === Errors ===
 const EInvalidStorageType: u64 = 22; // Storage type must be 0 (text) or 1 (walrus)
@@ -108,17 +99,13 @@ public fun new_registry_key(): RegistryKey {
 /// Simple flat list of documents (max 1000 per DAO)
 public struct DaoFileRegistry has store {
     dao_id: ID,
-
     // Document storage (owned File objects)
-    documents: bag::Bag,                    // ID → File (owned storage)
-
+    documents: bag::Bag, // ID → File (owned storage)
     // Simple document lookup
-    docs_by_name: Table<String, ID>,        // "bylaws" → doc_id
-    docs_by_index: Table<u64, ID>,          // Ordered display (0, 1, 2, ...)
-    doc_names: vector<String>,              // ["bylaws", "code-of-conduct", ...]
-
+    docs_by_name: Table<String, ID>, // "bylaws" → doc_id
+    docs_by_index: Table<u64, ID>, // Ordered display (0, 1, 2, ...)
+    doc_names: vector<String>, // ["bylaws", "code-of-conduct", ...]
     next_index: u64,
-
     // Global immutability (locks entire registry - nuclear option)
     immutable: bool,
 }
@@ -128,26 +115,22 @@ public struct DaoFileRegistry has store {
 public struct File has store {
     id: UID,
     dao_id: ID,
-
     // Identity
-    name: String,                           // "bylaws", "code-of-conduct"
-    index: u64,                             // Position in registry
+    name: String, // "bylaws", "code-of-conduct"
+    index: u64, // Position in registry
     creation_time: u64,
-
     // Content (Walrus-backed chunks in linked list)
-    chunks: Table<ID, ChunkPointer>,       // chunk_id → ChunkPointer
+    chunks: Table<ID, ChunkPointer>, // chunk_id → ChunkPointer
     chunk_count: u64,
-    head_chunk: Option<ID>,                // First chunk ID (None when empty)
-    tail_chunk: Option<ID>,                // Last chunk ID for O(1) append
-
+    head_chunk: Option<ID>, // First chunk ID (None when empty)
+    tail_chunk: Option<ID>, // Last chunk ID for O(1) append
     // Document-level controls (one-way locks)
-    allow_insert: bool,                     // Can add new chunks
-    allow_remove: bool,                     // Can remove chunks
-    immutable: bool,                        // Document-level immutability
-
+    allow_insert: bool, // Can add new chunks
+    allow_remove: bool, // Can remove chunks
+    immutable: bool, // Document-level immutability
     // Concurrency control (optimistic locking via edit sequence)
     // Replaced content_hash with edit_sequence for 99% gas reduction
-    edit_sequence: u64,                     // Increments on every mutation (add/update/remove/policy change)
+    edit_sequence: u64, // Increments on every mutation (add/update/remove/policy change)
 }
 
 /// Chunk pointer to Walrus blob (content stored off-chain)
@@ -165,34 +148,27 @@ public struct File has store {
 /// - Supports insertion between chunks (insert Article 1.5 between 1 and 2)
 /// - None = final/first chunk in document
 public struct ChunkPointer has store {
-    id: UID,                                // Unique chunk identifier
-
+    id: UID, // Unique chunk identifier
     // DOUBLY-LINKED LIST: Document ordering (O(1) insert/remove)
-    prev_chunk: Option<ID>,                 // Previous chunk ID, None = first
-    next_chunk: Option<ID>,                 // Next chunk ID, None = final
-
+    prev_chunk: Option<ID>, // Previous chunk ID, None = first
+    next_chunk: Option<ID>, // Next chunk ID, None = final
     // STORAGE: Exactly one must be populated
-    storage_type: u8,                       // 0 = Text, 1 = Walrus Blob
-
+    storage_type: u8, // 0 = Text, 1 = Walrus Blob
     // Option 1: Text storage (when storage_type == 0)
-    text: Option<String>,                   // On-chain text content
-
+    text: Option<String>, // On-chain text content
     // Option 2: Walrus storage (when storage_type == 1)
     walrus_blob: Option<walrus::blob::Blob>, // Off-chain Walrus blob
-    walrus_storage_object_id: Option<ID>,   // Storage object ID for renewal
-    walrus_expiry_epoch: Option<u64>,       // Cached expiry epoch for quick lookup
-
+    walrus_storage_object_id: Option<ID>, // Storage object ID for renewal
+    walrus_expiry_epoch: Option<u64>, // Cached expiry epoch for quick lookup
     // Walrus renewal policy (per-chunk)
     max_renewal_advance_epochs: Option<u64>, // Max epochs ahead this chunk can be renewed (None = no limit)
-
     // Immutability controls
-    immutable: bool,                        // Permanent immutability (one-way: false → true)
-    immutable_from: Option<u64>,           // Scheduled immutability (timestamp in ms)
-
+    immutable: bool, // Permanent immutability (one-way: false → true)
+    immutable_from: Option<u64>, // Scheduled immutability (timestamp in ms)
     // Time-based provisions (PRESERVED FROM OPERATING AGREEMENT)
-    chunk_type: u8,                         // 0=permanent, 1=sunset, 2=sunrise, 3=temporary
-    expires_at: Option<u64>,               // When this chunk becomes inactive (document-level)
-    effective_from: Option<u64>,           // When this chunk becomes active (document-level)
+    chunk_type: u8, // 0=permanent, 1=sunset, 2=sunrise, 3=temporary
+    expires_at: Option<u64>, // When this chunk becomes inactive (document-level)
+    effective_from: Option<u64>, // When this chunk becomes active (document-level)
 }
 
 // === Three-Tier Immutability System ===
@@ -218,16 +194,13 @@ public struct ChunkPointer has store {
 ///
 /// NOTE: No UPDATE action - always use remove + add pattern for replacements
 /// This is simpler and works for both text and Walrus blob chunks
-public struct ChunkAction has store, drop, copy {
-    action_type: u8,  // 0=add, 2=remove, 3=set_immutable, 4=insert_after
-
+public struct ChunkAction has copy, drop, store {
+    action_type: u8, // 0=add, 2=remove, 3=set_immutable, 4=insert_after
     // Common fields
     doc_id: ID,
-    chunk_id: Option<ID>,  // None for add operations
-
+    chunk_id: Option<ID>, // None for add operations
     // For insert_after
-    prev_chunk_id: Option<ID>,  // Which chunk to insert after
-
+    prev_chunk_id: Option<ID>, // Which chunk to insert after
     // For add/insert operations
     text: Option<String>,
     chunk_type: Option<u8>,
@@ -246,8 +219,8 @@ const ACTION_INSERT_AFTER: u8 = 4;
 
 /// Batch action for multiple document operations
 /// Enables atomic multi-step edits (e.g., remove old article, insert new one)
-public struct BatchDocAction has store, drop, copy {
-    batch_id: ID,  // Unique ID for this batch
+public struct BatchDocAction has copy, drop, store {
+    batch_id: ID, // Unique ID for this batch
     actions: vector<ChunkAction>,
 }
 
@@ -269,12 +242,12 @@ public struct ChunkAdded has copy, drop {
     dao_id: ID,
     doc_id: ID,
     chunk_id: ID,
-    walrus_blob_id: vector<u8>,  // For events, emit the ID as bytes
+    walrus_blob_id: vector<u8>, // For events, emit the ID as bytes
     chunk_type: u8,
     expires_at: Option<u64>,
     effective_from: Option<u64>,
     immutable_from: Option<u64>,
-    position_after: Option<ID>,  // Which chunk this was inserted after (None = head/append)
+    position_after: Option<ID>, // Which chunk this was inserted after (None = head/append)
     timestamp_ms: u64,
 }
 
@@ -337,24 +310,21 @@ public struct DocumentReadWithStatus has copy, drop {
     dao_id: ID,
     doc_id: ID,
     name: String,
-
     // Chunk details in document order
-    chunk_ids: vector<ID>,                  // Ordered chunk IDs
-    chunk_texts: vector<Option<String>>,    // On-chain text (when storage_type == TEXT)
-    chunk_blob_ids: vector<vector<u8>>,     // Walrus blob IDs (when storage_type == WALRUS)
-    chunk_storage_types: vector<u8>,        // 0 = text, 1 = walrus
-    chunk_immutables: vector<bool>,         // Permanent immutability flags
+    chunk_ids: vector<ID>, // Ordered chunk IDs
+    chunk_texts: vector<Option<String>>, // On-chain text (when storage_type == TEXT)
+    chunk_blob_ids: vector<vector<u8>>, // Walrus blob IDs (when storage_type == WALRUS)
+    chunk_storage_types: vector<u8>, // 0 = text, 1 = walrus
+    chunk_immutables: vector<bool>, // Permanent immutability flags
     chunk_immutable_froms: vector<Option<u64>>, // Scheduled immutability timestamps
-    chunk_types: vector<u8>,                // 0=permanent, 1=sunset, 2=sunrise, 3=temporary
+    chunk_types: vector<u8>, // 0=permanent, 1=sunset, 2=sunrise, 3=temporary
     chunk_expires_ats: vector<Option<u64>>, // Expiry timestamps
     chunk_effective_froms: vector<Option<u64>>, // Activation timestamps
-    chunk_active_statuses: vector<bool>,    // Active at current time based on time constraints
-
+    chunk_active_statuses: vector<bool>, // Active at current time based on time constraints
     // Document-level policy
     allow_insert: bool,
     allow_remove: bool,
     immutable: bool,
-
     timestamp_ms: u64,
 }
 
@@ -380,11 +350,7 @@ public struct WalrusStorageBound has copy, drop {
 // === Registry Management ===
 
 /// Create new registry for a DAO
-public fun create_registry(
-    dao_id: ID,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): DaoFileRegistry {
+public fun create_registry(dao_id: ID, clock: &Clock, ctx: &mut TxContext): DaoFileRegistry {
     event::emit(RegistryCreated {
         dao_id,
         timestamp_ms: clock.timestamp_ms(),
@@ -427,9 +393,7 @@ public fun get_registry_mut<Config: store>(
 }
 
 /// Check if account has a registry
-public fun has_registry<Config: store>(
-    account: &Account<Config>,
-): bool {
+public fun has_registry<Config: store>(account: &Account<Config>): bool {
     account::has_managed_data<Config, RegistryKey>(account, RegistryKey {})
 }
 
@@ -523,7 +487,7 @@ public fun create_root_document(
     let name_for_doc = copy name;
     let name_for_vec = copy name;
     let name_for_map = copy name;
-    let name_for_event = name;  // Move original into event
+    let name_for_event = name; // Move original into event
 
     let doc = File {
         id: doc_uid,
@@ -533,12 +497,12 @@ public fun create_root_document(
         creation_time: clock.timestamp_ms(),
         chunks: table::new(ctx),
         chunk_count: 0,
-        head_chunk: option::none(),      // No chunks yet
+        head_chunk: option::none(), // No chunks yet
         tail_chunk: option::none(),
         allow_insert: true,
         allow_remove: true,
         immutable: false,
-        edit_sequence: 0,  // Initialize sequence counter
+        edit_sequence: 0, // Initialize sequence counter
     };
 
     // Update registry indexes
@@ -598,7 +562,10 @@ fun assert_storage_xor(storage_type: u8, has_text: bool, has_blob: bool) {
     let blob_mode = storage_type == STORAGE_TYPE_WALRUS;
     assert!(text_mode || blob_mode, EInvalidStorageType);
     // Exactly one of (text, blob) must be present
-    assert!((text_mode && has_text && !has_blob) || (blob_mode && !has_text && has_blob), EInvalidStorageType);
+    assert!(
+        (text_mode && has_text && !has_blob) || (blob_mode && !has_text && has_blob),
+        EInvalidStorageType,
+    );
 }
 
 /// Helper function to append chunk to doubly-linked list
@@ -705,7 +672,15 @@ public fun add_chunk(
     expect_sequence_and_increment(doc, expected_sequence);
 
     // Common validation (DRY)
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     // Create UID for chunk
     let chunk_uid = object::new(ctx);
@@ -716,7 +691,10 @@ public fun add_chunk(
 
     // Validate blob expiry (minimum 1 year to prevent immediate expiration attacks)
     let current_epoch = ctx.epoch();
-    assert!(expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS, EWalrusBlobExpiryTooSoon);
+    assert!(
+        expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS,
+        EWalrusBlobExpiryTooSoon,
+    );
 
     // Validate storage XOR invariant BEFORE construction (to avoid ownership issues)
     assert_storage_xor(STORAGE_TYPE_WALRUS, false, true);
@@ -782,7 +760,15 @@ public fun add_chunk_with_text(
     expect_sequence_and_increment(doc, expected_sequence);
 
     // Common validation (DRY)
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     // Create UID for chunk
     let chunk_uid = object::new(ctx);
@@ -852,7 +838,15 @@ public fun insert_chunk_after(
     expect_sequence_and_increment(doc, expected_sequence);
 
     // Validate chunk insertion using helper function
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     // Additional validation specific to insert_after
     assert!(table::contains(&doc.chunks, prev_chunk_id), EChunkNotFound);
@@ -864,7 +858,10 @@ public fun insert_chunk_after(
 
     // Validate blob expiry (minimum 1 year to prevent immediate expiration attacks)
     let current_epoch = ctx.epoch();
-    assert!(expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS, EWalrusBlobExpiryTooSoon);
+    assert!(
+        expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS,
+        EWalrusBlobExpiryTooSoon,
+    );
 
     // Get the previous chunk's next pointer
     let prev_chunk = table::borrow_mut(&mut doc.chunks, prev_chunk_id);
@@ -889,8 +886,8 @@ public fun insert_chunk_after(
     // Create new chunk with both prev and next pointers
     let new_chunk = ChunkPointer {
         id: new_chunk_uid,
-        prev_chunk: option::some(prev_chunk_id),  // Link to previous
-        next_chunk: old_next,                      // Link to next (or none)
+        prev_chunk: option::some(prev_chunk_id), // Link to previous
+        next_chunk: old_next, // Link to next (or none)
         storage_type: STORAGE_TYPE_WALRUS,
         text: option::none(),
         walrus_blob: option::some(walrus_blob),
@@ -945,7 +942,15 @@ public fun insert_chunk_with_text_after(
     expect_sequence_and_increment(doc, expected_sequence);
 
     // Validate chunk insertion using helper function
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     // Additional validation specific to insert_after
     assert!(table::contains(&doc.chunks, prev_chunk_id), EChunkNotFound);
@@ -1030,11 +1035,22 @@ public fun insert_chunk_at_beginning(
     let expiry_epoch = blob::end_epoch(&walrus_blob) as u64;
 
     // Validate chunk insertion using helper function
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     // Validate blob expiry (minimum 1 year to prevent immediate expiration attacks)
     let current_epoch = ctx.epoch();
-    assert!(expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS, EWalrusBlobExpiryTooSoon);
+    assert!(
+        expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS,
+        EWalrusBlobExpiryTooSoon,
+    );
 
     let new_chunk_uid = object::new(ctx);
     let new_chunk_id = object::uid_to_inner(&new_chunk_uid);
@@ -1064,8 +1080,8 @@ public fun insert_chunk_at_beginning(
     // Create new chunk at beginning
     let chunk = ChunkPointer {
         id: new_chunk_uid,
-        prev_chunk: option::none(),  // First chunk, no previous
-        next_chunk: old_head,         // Link to old head (or none)
+        prev_chunk: option::none(), // First chunk, no previous
+        next_chunk: old_head, // Link to old head (or none)
         storage_type: STORAGE_TYPE_WALRUS,
         text: option::none(),
         walrus_blob: option::some(walrus_blob),
@@ -1094,7 +1110,7 @@ public fun insert_chunk_at_beginning(
         expires_at,
         effective_from,
         immutable_from,
-        position_after: option::none(),  // At beginning, no previous chunk
+        position_after: option::none(), // At beginning, no previous chunk
         timestamp_ms: clock.timestamp_ms(),
     });
 
@@ -1120,7 +1136,15 @@ public fun insert_text_chunk_at_beginning(
     expect_sequence_and_increment(doc, expected_sequence);
 
     // Validate chunk insertion using helper function
-    validate_chunk_insertion(doc, chunk_type, &expires_at, &effective_from, immutable, &immutable_from, clock);
+    validate_chunk_insertion(
+        doc,
+        chunk_type,
+        &expires_at,
+        &effective_from,
+        immutable,
+        &immutable_from,
+        clock,
+    );
 
     let new_chunk_uid = object::new(ctx);
     let new_chunk_id = object::uid_to_inner(&new_chunk_uid);
@@ -1147,8 +1171,8 @@ public fun insert_text_chunk_at_beginning(
     // Create new chunk at beginning with text
     let chunk = ChunkPointer {
         id: new_chunk_uid,
-        prev_chunk: option::none(),  // First chunk, no previous
-        next_chunk: old_head,         // Link to old head (or none)
+        prev_chunk: option::none(), // First chunk, no previous
+        next_chunk: old_head, // Link to old head (or none)
         storage_type: STORAGE_TYPE_TEXT,
         text: option::some(text),
         walrus_blob: option::none(),
@@ -1177,7 +1201,7 @@ public fun insert_text_chunk_at_beginning(
         expires_at,
         effective_from,
         immutable_from,
-        position_after: option::none(),  // At beginning, no previous chunk
+        position_after: option::none(), // At beginning, no previous chunk
         timestamp_ms: clock.timestamp_ms(),
     });
 
@@ -1312,7 +1336,10 @@ public fun update_chunk(
 
     // Validate blob expiry (minimum 1 year to prevent immediate expiration attacks)
     let current_epoch = ctx.epoch();
-    assert!(new_expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS, EWalrusBlobExpiryTooSoon);
+    assert!(
+        new_expiry_epoch >= current_epoch + MIN_WALRUS_BLOB_EXPIRY_EPOCHS,
+        EWalrusBlobExpiryTooSoon,
+    );
 
     // Validate storage XOR invariant BEFORE construction
     assert_storage_xor(STORAGE_TYPE_WALRUS, false, true);
@@ -1432,12 +1459,7 @@ public fun remove_chunk(
 
 /// Remove text chunk (only if not immutable and allow_remove = true)
 /// For text-based chunks that don't have Walrus blobs
-public fun remove_text_chunk(
-    doc: &mut File,
-    expected_sequence: u64,
-    chunk_id: ID,
-    clock: &Clock,
-) {
+public fun remove_text_chunk(doc: &mut File, expected_sequence: u64, chunk_id: ID, clock: &Clock) {
     // Validate hash
     expect_sequence_and_increment(doc, expected_sequence);
 
@@ -1709,11 +1731,7 @@ public fun set_chunk_immutable(
 }
 
 /// Set document as immutable (one-way lock)
-public fun set_document_immutable(
-    doc: &mut File,
-    expected_sequence: u64,
-    clock: &Clock,
-) {
+public fun set_document_immutable(doc: &mut File, expected_sequence: u64, clock: &Clock) {
     // Validate hash
     expect_sequence_and_increment(doc, expected_sequence);
 
@@ -1733,10 +1751,7 @@ public fun set_document_immutable(
 }
 
 /// Set entire registry as immutable (nuclear option)
-public fun set_registry_immutable(
-    registry: &mut DaoFileRegistry,
-    clock: &Clock,
-) {
+public fun set_registry_immutable(registry: &mut DaoFileRegistry, clock: &Clock) {
     assert!(!registry.immutable, EAlreadyGloballyImmutable);
 
     registry.immutable = true;
@@ -1813,10 +1828,7 @@ public fun set_remove_allowed(
 // === Query Functions ===
 
 /// Get document by name
-public fun get_document_by_name(
-    registry: &DaoFileRegistry,
-    name: String,
-): Option<ID> {
+public fun get_document_by_name(registry: &DaoFileRegistry, name: String): Option<ID> {
     if (table::contains(&registry.docs_by_name, name)) {
         option::some(*table::borrow(&registry.docs_by_name, name))
     } else {
@@ -1895,7 +1907,6 @@ public fun is_chunk_immediately_immutable(chunk: &ChunkPointer): bool {
     chunk.immutable
 }
 
-
 /// Read and emit full document state with complete chunk details
 /// This is the comprehensive version that provides all chunk information for indexers
 /// Note: File objects are owned by Account. For permissionless reads, use RPC object queries.
@@ -1945,7 +1956,9 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
             vector::push_back(&mut chunk_effective_froms, chunk.effective_from);
 
             // Get blob ID if Walrus storage
-            let blob_id_bytes = if (chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)) {
+            let blob_id_bytes = if (
+                chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)
+            ) {
                 let blob_ref = option::borrow(&chunk.walrus_blob);
                 let blob_id = blob::blob_id(blob_ref);
                 bcs::to_bytes(&blob_id)
@@ -1988,7 +2001,6 @@ public fun read_document_with_status(doc: &File, clock: &Clock) {
         timestamp_ms: clock.timestamp_ms(),
     });
 }
-
 
 // === Getters for Document Fields ===
 
@@ -2109,7 +2121,9 @@ public fun get_chunk_walrus_metadata(
     assert!(table::contains(&doc.chunks, chunk_id), EChunkNotFound);
     let chunk = table::borrow(&doc.chunks, chunk_id);
 
-    let blob_id_bytes = if (chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)) {
+    let blob_id_bytes = if (
+        chunk.storage_type == STORAGE_TYPE_WALRUS && option::is_some(&chunk.walrus_blob)
+    ) {
         let blob_ref = option::borrow(&chunk.walrus_blob);
         let blob_id = blob::blob_id(blob_ref);
         bcs::to_bytes(&blob_id)
@@ -2117,11 +2131,7 @@ public fun get_chunk_walrus_metadata(
         vector::empty()
     };
 
-    (
-        chunk.walrus_storage_object_id,
-        chunk.walrus_expiry_epoch,
-        blob_id_bytes,
-    )
+    (chunk.walrus_storage_object_id, chunk.walrus_expiry_epoch, blob_id_bytes)
 }
 
 /// Set chunk Walrus storage object ID (when first uploaded)
@@ -2184,18 +2194,14 @@ public fun new_add_text_chunk_action(
 }
 
 /// Create a ChunkAction for inserting after a specific chunk
-public fun new_insert_after_action(
-    doc_id: ID,
-    prev_chunk_id: ID,
-    text: String,
-    ): ChunkAction {
+public fun new_insert_after_action(doc_id: ID, prev_chunk_id: ID, text: String): ChunkAction {
     ChunkAction {
         action_type: ACTION_INSERT_AFTER,
         doc_id,
         chunk_id: option::none(),
         prev_chunk_id: option::some(prev_chunk_id),
         text: option::some(text),
-                chunk_type: option::some(CHUNK_TYPE_PERMANENT),
+        chunk_type: option::some(CHUNK_TYPE_PERMANENT),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::some(false),
@@ -2211,7 +2217,7 @@ public fun new_remove_chunk_action(doc_id: ID, chunk_id: ID): ChunkAction {
         chunk_id: option::some(chunk_id),
         prev_chunk_id: option::none(),
         text: option::none(),
-                chunk_type: option::none(),
+        chunk_type: option::none(),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::none(),
@@ -2227,7 +2233,7 @@ public fun new_set_immutable_action(doc_id: ID, chunk_id: ID): ChunkAction {
         chunk_id: option::some(chunk_id),
         prev_chunk_id: option::none(),
         text: option::none(),
-                chunk_type: option::none(),
+        chunk_type: option::none(),
         expires_at: option::none(),
         effective_from: option::none(),
         immutable: option::none(),
@@ -2390,6 +2396,4 @@ public fun get_document_full_policy(doc: &File): (bool, bool, bool) {
     (doc.allow_insert, doc.allow_remove, doc.immutable)
 }
 
-
-
-// I do need is hash of each document and any changes must check hash was as expected  or cant make changes 
+// I do need is hash of each document and any changes must check hash was as expected  or cant make changes

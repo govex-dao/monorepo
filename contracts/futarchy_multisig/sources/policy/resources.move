@@ -1,6 +1,6 @@
 /// Resource and Role Key System for Policy Engine
 /// Provides standardized, type-safe keys for granular governance control
-/// 
+///
 /// This module defines a hierarchical namespace for resources that can be
 /// governed by policies in the DAO platform. Keys follow the pattern:
 /// resource:/[category]/[action]/[specific_resource]
@@ -14,11 +14,9 @@
 /// - security: Security council and emergency actions
 module futarchy_multisig::resources;
 
-use std::{
-    string::{Self, String},
-    type_name::{Self, TypeName},
-    ascii,
-};
+use std::ascii;
+use std::string::{Self, String};
+use std::type_name::{Self, TypeName};
 
 // === Constants for Resource Categories ===
 const RESOURCE_PREFIX: vector<u8> = b"resource:/";
@@ -433,22 +431,25 @@ public fun get_category(key: &String): String {
 #[test]
 fun test_resource_keys() {
     use sui::test_utils::assert_eq;
-    
+
     // Test package keys
     let pkg_key = package_upgrade(@0x123, b"my_package".to_string());
-    assert_eq(pkg_key, b"resource:/package/upgrade/0000000000000000000000000000000000000000000000000000000000000123::my_package".to_string());
-    
+    assert_eq(
+        pkg_key,
+        b"resource:/package/upgrade/0000000000000000000000000000000000000000000000000000000000000123::my_package".to_string(),
+    );
+
     // Test vault keys
     let vault_key = vault_spend_by_type(type_name::with_defining_ids<sui::sui::SUI>());
     assert!(vault_key.length() > 0);
-    
+
     // Test role-based keys
     let admin_vault = for_role(
         b"admin".to_string(),
-        b"resource:/vault/spend/0x2::sui::SUI".to_string()
+        b"resource:/vault/spend/0x2::sui::SUI".to_string(),
     );
     assert_eq(admin_vault, b"resource:/role/admin/vault/spend/0x2::sui::SUI".to_string());
-    
+
     // Test critical resource detection
     let emergency_key = governance_emergency();
     assert!(is_critical_resource(&emergency_key));
@@ -457,11 +458,11 @@ fun test_resource_keys() {
 #[test]
 fun test_category_extraction() {
     use sui::test_utils::assert_eq;
-    
+
     let pkg_key = package_upgrade(@0x123, b"test".to_string());
     let category = get_category(&pkg_key);
     assert_eq(category, b"package".to_string());
-    
+
     let vault_key = vault_config();
     let vault_cat = get_category(&vault_key);
     assert_eq(vault_cat, b"vault".to_string());

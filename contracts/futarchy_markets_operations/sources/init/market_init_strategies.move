@@ -8,12 +8,12 @@
 /// 4. Strategy performs conditional swaps to create asymmetric markets
 module futarchy_markets_operations::market_init_strategies;
 
+use futarchy_markets_core::proposal::Proposal;
 use futarchy_markets_core::swap_core;
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::proposal::Proposal;
-use sui::coin::{Self, Coin};
 use sui::balance;
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 use sui::object::ID;
 
 // === Errors ===
@@ -27,16 +27,16 @@ const EInvalidConfig: u64 = 4;
 
 /// Configuration for conditional raise market initialization
 /// Mints tokens and sells them in one outcome's AMM to simulate raising capital
-public struct ConditionalRaiseConfig has store, drop, copy {
-    target_outcome: u8,        // Which outcome gets the mint+swap (usually 1 for YES)
-    mint_amount: u64,          // How much to mint
-    min_stable_out: u64,       // Minimum STABLE received (slippage protection)
+public struct ConditionalRaiseConfig has copy, drop, store {
+    target_outcome: u8, // Which outcome gets the mint+swap (usually 1 for YES)
+    mint_amount: u64, // How much to mint
+    min_stable_out: u64, // Minimum STABLE received (slippage protection)
 }
 
 /// Configuration for conditional buyback market initialization
 /// Withdraws treasury and buys tokens across multiple outcome AMMs
 /// Allows customized buyback amounts per outcome to create asymmetric markets
-public struct ConditionalBuybackConfig has store, drop, copy {
+public struct ConditionalBuybackConfig has copy, drop, store {
     // Per-outcome buyback amounts (index = outcome, value = STABLE to spend)
     // Example: [0, 1000, 500] means:
     //   - Outcome 0: no buyback
@@ -146,7 +146,12 @@ public fun buyback_total_withdraw_amount(config: &ConditionalBuybackConfig): u64
 ///
 /// ## Returns
 /// - Spot stable coins (to be deposited to DAO vault by caller)
-public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun execute_conditional_raise<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     minted_coins: Coin<AssetType>,
@@ -161,7 +166,11 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
     assert!(minted_coins.value() == config.mint_amount, EAmountMismatch);
 
     // Step 1: Deposit spot asset to escrow → mint conditional asset for target outcome
-    let conditional_asset = coin_escrow::deposit_asset_and_mint_conditional<AssetType, StableType, AssetConditionalCoin>(
+    let conditional_asset = coin_escrow::deposit_asset_and_mint_conditional<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+    >(
         escrow,
         (config.target_outcome as u64),
         minted_coins,
@@ -174,7 +183,12 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
     // - Updates AMM reserves (sell asset, making it cheaper)
     // - Mints conditional stable coins (output)
     let session = swap_core::begin_swap_session(escrow);
-    let conditional_stable = swap_core::swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    let conditional_stable = swap_core::swap_asset_to_stable<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+        StableConditionalCoin,
+    >(
         &session,
         proposal,
         escrow,
@@ -231,7 +245,12 @@ public fun execute_conditional_raise<AssetType, StableType, AssetConditionalCoin
 /// ## Returns
 /// - Vector of spot asset coins (one per outcome, some may be zero-value)
 /// - Caller can burn these or deposit to vault
-public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun execute_conditional_buyback<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     withdrawn_stable: Coin<StableType>,
@@ -265,7 +284,11 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
             let outcome_stable_coin = coin::from_balance(outcome_stable_balance, ctx);
 
             // Step 2: Deposit spot stable → mint conditional stable for this outcome
-            let conditional_stable = coin_escrow::deposit_stable_and_mint_conditional<AssetType, StableType, StableConditionalCoin>(
+            let conditional_stable = coin_escrow::deposit_stable_and_mint_conditional<
+                AssetType,
+                StableType,
+                StableConditionalCoin,
+            >(
                 escrow,
                 outcome_idx,
                 outcome_stable_coin,
@@ -273,7 +296,12 @@ public fun execute_conditional_buyback<AssetType, StableType, AssetConditionalCo
             );
 
             // Step 3: Swap conditional stable → conditional asset in AMM
-            let conditional_asset = swap_core::swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+            let conditional_asset = swap_core::swap_stable_to_asset<
+                AssetType,
+                StableType,
+                AssetConditionalCoin,
+                StableConditionalCoin,
+            >(
                 &session,
                 proposal,
                 escrow,

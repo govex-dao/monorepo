@@ -54,12 +54,12 @@ const MARKET_EXPIRY_PERIOD_MS: u64 = 2_592_000_000; // 30 days in ms
 
 // === Key Structures for TreasuryCap Storage ===
 /// Key for asset conditional coin TreasuryCaps (indexed by outcome)
-public struct AssetCapKey has store, copy, drop {
+public struct AssetCapKey has copy, drop, store {
     outcome_index: u64,
 }
 
 /// Key for stable conditional coin TreasuryCaps (indexed by outcome)
-public struct StableCapKey has store, copy, drop {
+public struct StableCapKey has copy, drop, store {
     outcome_index: u64,
 }
 
@@ -70,12 +70,11 @@ public struct TokenEscrow<phantom AssetType, phantom StableType> has key, store 
     // Central balances used for tokens and liquidity
     escrowed_asset: Balance<AssetType>,
     escrowed_stable: Balance<StableType>,
-
     // TreasuryCaps stored as dynamic fields on UID (vector-like access by index)
     // Asset caps: dynamic_field with AssetCapKey { outcome_index } -> TreasuryCap<T>
     // Stable caps: dynamic_field with StableCapKey { outcome_index } -> TreasuryCap<T>
     // Each outcome's TreasuryCap has a unique generic type T
-    outcome_count: u64,  // Track how many outcomes have registered caps
+    outcome_count: u64, // Track how many outcomes have registered caps
 }
 
 public struct COIN_ESCROW has drop {}
@@ -110,14 +109,19 @@ public fun new<AssetType, StableType>(
         market_state,
         escrowed_asset: balance::zero(),
         escrowed_stable: balance::zero(),
-        outcome_count: 0,  // Will be incremented as caps are registered
+        outcome_count: 0, // Will be incremented as caps are registered
     }
 }
 
 /// NEW: Register conditional coin TreasuryCaps for an outcome
 /// Must be called once per outcome with both asset and stable caps
 /// Caps are stored as dynamic fields with vector-like indexing semantics
-public fun register_conditional_caps<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun register_conditional_caps<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
     asset_treasury_cap: TreasuryCap<AssetConditionalCoin>,
@@ -155,8 +159,10 @@ public fun mint_conditional_asset<AssetType, StableType, ConditionalCoinType>(
 
     // Borrow the TreasuryCap from dynamic field
     let asset_key = AssetCapKey { outcome_index };
-    let cap: &mut TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow_mut(&mut escrow.id, asset_key);
+    let cap: &mut TreasuryCap<ConditionalCoinType> = dynamic_field::borrow_mut(
+        &mut escrow.id,
+        asset_key,
+    );
 
     // Mint and return
     coin::mint(cap, amount, ctx)
@@ -174,8 +180,10 @@ public fun mint_conditional_stable<AssetType, StableType, ConditionalCoinType>(
 
     // Borrow the TreasuryCap from dynamic field
     let stable_key = StableCapKey { outcome_index };
-    let cap: &mut TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow_mut(&mut escrow.id, stable_key);
+    let cap: &mut TreasuryCap<ConditionalCoinType> = dynamic_field::borrow_mut(
+        &mut escrow.id,
+        stable_key,
+    );
 
     // Mint and return
     coin::mint(cap, amount, ctx)
@@ -192,8 +200,10 @@ public fun burn_conditional_asset<AssetType, StableType, ConditionalCoinType>(
 
     // Borrow the TreasuryCap from dynamic field
     let asset_key = AssetCapKey { outcome_index };
-    let cap: &mut TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow_mut(&mut escrow.id, asset_key);
+    let cap: &mut TreasuryCap<ConditionalCoinType> = dynamic_field::borrow_mut(
+        &mut escrow.id,
+        asset_key,
+    );
 
     // Burn
     coin::burn(cap, coin);
@@ -210,8 +220,10 @@ public fun burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
 
     // Borrow the TreasuryCap from dynamic field
     let stable_key = StableCapKey { outcome_index };
-    let cap: &mut TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow_mut(&mut escrow.id, stable_key);
+    let cap: &mut TreasuryCap<ConditionalCoinType> = dynamic_field::borrow_mut(
+        &mut escrow.id,
+        stable_key,
+    );
 
     // Burn
     coin::burn(cap, coin);
@@ -233,14 +245,14 @@ public(package) fun mint_conditional<AssetType, StableType, ConditionalCoinType>
             escrow,
             outcome_index,
             amount,
-            ctx
+            ctx,
         )
     } else {
         mint_conditional_stable<AssetType, StableType, ConditionalCoinType>(
             escrow,
             outcome_index,
             amount,
-            ctx
+            ctx,
         )
     }
 }
@@ -256,13 +268,13 @@ public(package) fun burn_conditional<AssetType, StableType, ConditionalCoinType>
         burn_conditional_asset<AssetType, StableType, ConditionalCoinType>(
             escrow,
             outcome_index,
-            coin
+            coin,
         )
     } else {
         burn_conditional_stable<AssetType, StableType, ConditionalCoinType>(
             escrow,
             outcome_index,
-            coin
+            coin,
         )
     }
 }
@@ -309,8 +321,7 @@ public fun get_asset_supply<AssetType, StableType, ConditionalCoinType>(
     outcome_index: u64,
 ): u64 {
     let asset_key = AssetCapKey { outcome_index };
-    let cap: &TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow(&escrow.id, asset_key);
+    let cap: &TreasuryCap<ConditionalCoinType> = dynamic_field::borrow(&escrow.id, asset_key);
     coin::total_supply(cap)
 }
 
@@ -320,20 +331,23 @@ public fun get_stable_supply<AssetType, StableType, ConditionalCoinType>(
     outcome_index: u64,
 ): u64 {
     let stable_key = StableCapKey { outcome_index };
-    let cap: &TreasuryCap<ConditionalCoinType> =
-        dynamic_field::borrow(&escrow.id, stable_key);
+    let cap: &TreasuryCap<ConditionalCoinType> = dynamic_field::borrow(&escrow.id, stable_key);
     coin::total_supply(cap)
 }
 
 // === Getters ===
 
 /// Get the market state from escrow
-public fun get_market_state<AssetType, StableType>(escrow: &TokenEscrow<AssetType, StableType>): &MarketState {
+public fun get_market_state<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+): &MarketState {
     &escrow.market_state
 }
 
 /// Get mutable market state from escrow
-public fun get_market_state_mut<AssetType, StableType>(escrow: &mut TokenEscrow<AssetType, StableType>): &mut MarketState {
+public fun get_market_state_mut<AssetType, StableType>(
+    escrow: &mut TokenEscrow<AssetType, StableType>,
+): &mut MarketState {
     &mut escrow.market_state
 }
 
@@ -343,7 +357,9 @@ public fun market_state_id<AssetType, StableType>(escrow: &TokenEscrow<AssetType
 }
 
 /// Get the number of outcomes that have registered TreasuryCaps
-public fun caps_registered_count<AssetType, StableType>(escrow: &TokenEscrow<AssetType, StableType>): u64 {
+public fun caps_registered_count<AssetType, StableType>(
+    escrow: &TokenEscrow<AssetType, StableType>,
+): u64 {
     escrow.outcome_count
 }
 
@@ -515,7 +531,9 @@ public struct SplitAssetProgress<phantom AssetType, phantom StableType> has drop
     next_outcome: u64,
 }
 
-public fun drop_split_asset_progress<AssetType, StableType>(progress: SplitAssetProgress<AssetType, StableType>) {
+public fun drop_split_asset_progress<AssetType, StableType>(
+    progress: SplitAssetProgress<AssetType, StableType>,
+) {
     let SplitAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -528,7 +546,9 @@ public struct SplitStableProgress<phantom AssetType, phantom StableType> has dro
     next_outcome: u64,
 }
 
-public fun drop_split_stable_progress<AssetType, StableType>(progress: SplitStableProgress<AssetType, StableType>) {
+public fun drop_split_stable_progress<AssetType, StableType>(
+    progress: SplitStableProgress<AssetType, StableType>,
+) {
     let SplitStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -542,7 +562,9 @@ public struct RecombineAssetProgress<phantom AssetType, phantom StableType> has 
     next_outcome: u64,
 }
 
-public fun drop_recombine_asset_progress<AssetType, StableType>(progress: RecombineAssetProgress<AssetType, StableType>) {
+public fun drop_recombine_asset_progress<AssetType, StableType>(
+    progress: RecombineAssetProgress<AssetType, StableType>,
+) {
     let RecombineAssetProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -555,7 +577,9 @@ public struct RecombineStableProgress<phantom AssetType, phantom StableType> has
     next_outcome: u64,
 }
 
-public fun drop_recombine_stable_progress<AssetType, StableType>(progress: RecombineStableProgress<AssetType, StableType>) {
+public fun drop_recombine_stable_progress<AssetType, StableType>(
+    progress: RecombineStableProgress<AssetType, StableType>,
+) {
     let RecombineStableProgress { market_id: _, amount: _, outcome_count, next_outcome } = progress;
     assert!(next_outcome == outcome_count, EIncorrectSequence);
 }
@@ -815,17 +839,17 @@ public fun finish_recombine_stable_progress<AssetType, StableType>(
 /// This simulates getting a blank coin from the registry
 public fun create_test_treasury_cap<CoinType: drop>(
     otw: CoinType,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): (TreasuryCap<CoinType>, CoinMetadata<CoinType>) {
     // Create coin with blank metadata
     let (treasury_cap, metadata) = coin::create_currency(
         otw,
-        0,      // decimals
-        b"",    // symbol (empty)
-        b"",    // name (empty)
-        b"",    // description (empty)
-        option::none(),  // icon_url (empty)
-        ctx
+        0, // decimals
+        b"", // symbol (empty)
+        b"", // name (empty)
+        b"", // description (empty)
+        option::none(), // icon_url (empty)
+        ctx,
     );
 
     (treasury_cap, metadata)
@@ -841,7 +865,7 @@ public fun create_test_escrow<AssetType, StableType>(
     // Create a real MarketState using existing test infrastructure
     let market_state = futarchy_markets_primitives::market_state::create_for_testing(
         outcome_count,
-        ctx
+        ctx,
     );
 
     // Create and return the TokenEscrow with the real MarketState
@@ -852,7 +876,7 @@ public fun create_test_escrow<AssetType, StableType>(
 /// Create a test escrow with a provided MarketState
 /// Useful when you need to customize the market state before creating the escrow
 public fun create_test_escrow_with_market_state<AssetType, StableType>(
-    _outcome_count: u64,  // Not used, but kept for API compatibility
+    _outcome_count: u64, // Not used, but kept for API compatibility
     market_state: MarketState,
     ctx: &mut TxContext,
 ): TokenEscrow<AssetType, StableType> {
@@ -862,9 +886,7 @@ public fun create_test_escrow_with_market_state<AssetType, StableType>(
 #[test_only]
 /// Destroy escrow for testing (with remaining balances)
 /// Useful for cleaning up test state
-public fun destroy_for_testing<AssetType, StableType>(
-    escrow: TokenEscrow<AssetType, StableType>
-) {
+public fun destroy_for_testing<AssetType, StableType>(escrow: TokenEscrow<AssetType, StableType>) {
     let TokenEscrow {
         id,
         market_state,

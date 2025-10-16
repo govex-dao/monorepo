@@ -15,10 +15,9 @@
 /// - Dissolution actions (use Account's resources)
 module futarchy_factory::init_resource_management;
 
-// === Imports ===
+use futarchy_types::action_specs::ActionSpec;
 use std::type_name::{Self, TypeName};
 use sui::bcs;
-use futarchy_types::action_specs::ActionSpec;
 
 // === Resource Request Pattern ===
 // Clear resource request pattern for actions needing external resources
@@ -27,15 +26,15 @@ use futarchy_types::action_specs::ActionSpec;
 public struct InitResourceRequest<T> has drop {
     spec: ActionSpec,
     resource_type: TypeName,
-    required_amount: u64,  // For coins
-    additional_info: vector<u8>,  // For complex requirements
+    required_amount: u64, // For coins
+    additional_info: vector<u8>, // For complex requirements
 }
 
 /// Resource receipt confirming resources were provided
 public struct ResourceReceipt<T> has drop {
     action_type: TypeName,
     resources_provided: bool,
-    execution_status: u8,  // 0=pending, 1=success, 2=failed
+    execution_status: u8, // 0=pending, 1=success, 2=failed
 }
 
 // === Constants for Execution Status ===
@@ -77,7 +76,7 @@ public fun request_liquidity_resources<ActionType: drop, AssetType, StableType>(
     InitResourceRequest {
         spec,
         resource_type: type_name::get<ActionType>(),
-        required_amount: 0,  // Using additional_info for amounts
+        required_amount: 0, // Using additional_info for amounts
         additional_info: info,
     }
 }
@@ -138,7 +137,8 @@ public fun pending_receipt<T>(): ResourceReceipt<T> {
 // === Getters ===
 
 public fun request_spec<T>(request: &InitResourceRequest<T>): &ActionSpec {
-    &request.spec
+    &request
+    ERROR
 }
 
 public fun request_resource_type<T>(request: &InitResourceRequest<T>): TypeName {

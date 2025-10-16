@@ -1,8 +1,8 @@
 #[test_only]
 module account_protocol::bcs_validation_tests;
 
-use sui::bcs;
 use account_protocol::bcs_validation;
+use sui::bcs;
 
 // === Error Constants ===
 // NOTE: Error code must match the one in bcs_validation.move

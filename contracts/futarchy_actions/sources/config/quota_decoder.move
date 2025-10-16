@@ -1,13 +1,16 @@
 /// Decoder for quota management actions in futarchy DAOs
 module futarchy_actions::quota_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs::{Self, BCS}};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_actions::quota_actions::SetQuotasAction;
+use std::string::String;
+use std::type_name;
+use sui::bcs::{Self, BCS};
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Object ===
 
@@ -69,17 +72,11 @@ public fun decode_set_quotas_action(
 // === Registration Functions ===
 
 /// Register quota decoder
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_set_quotas_decoder(registry, ctx);
 }
 
-fun register_set_quotas_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_set_quotas_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SetQuotasActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SetQuotasAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

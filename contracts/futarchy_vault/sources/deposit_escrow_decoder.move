@@ -1,11 +1,14 @@
 /// Decoder for deposit escrow actions
 module futarchy_vault::deposit_escrow_decoder;
 
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_vault::deposit_escrow_actions::AcceptDepositAction;
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
 
 // === Decoder Object ===
 
@@ -44,10 +47,7 @@ public fun decode_accept_deposit_action(
 // === Registration ===
 
 /// Register decoder
-public fun register_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AcceptDepositActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<AcceptDepositAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

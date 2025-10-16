@@ -1,58 +1,37 @@
 /// Handles the complete lifecycle of proposals from queue activation to intent execution
 module futarchy_dao::proposal_lifecycle;
 
-// === Imports ===
-use std::{
-    string::String,
-    option,
-    vector,
-};
-use sui::{
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    balance::{Self, Balance},
-    event,
-    object,
-};
-use account_protocol::{
-    account::{Self, Account},
-    executable::{Self, Executable},
-    intents::{Self, Intent},
-};
-use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
-    priority_queue::{Self, ProposalQueue, QueuedProposal},
-    proposal_fee_manager::{Self, ProposalFeeManager},
-    version,
-};
-use futarchy_types::action_specs::InitActionSpecs;
-use futarchy_markets_core::{
-    proposal::{Self, Proposal},
-    market_state::{Self, MarketState},
-    coin_escrow,
-    early_resolve,
-};
-use futarchy_actions::{
-    governance_actions::{Self, ProposalReservationRegistry},
-};
-use futarchy_governance_actions::{
-    governance_intents,
-};
-use futarchy_markets_core::{
-    unified_spot_pool::{Self, UnifiedSpotPool},
-    conditional_amm,
-    subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow},
-    quantum_lp_manager,
-};
-use futarchy_core::subsidy_config;
-use futarchy_vault::{
-    futarchy_vault,
-};
-use futarchy_dao::{
-    gc_janitor,
-};
-use futarchy_one_shot_utils::strategy;
 use account_actions::vault;
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intent};
+use futarchy_actions::governance_actions::{Self, ProposalReservationRegistry};
+use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
+use futarchy_core::priority_queue::{Self, ProposalQueue, QueuedProposal};
+use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
+use futarchy_core::subsidy_config;
+use futarchy_core::version;
+use futarchy_dao::gc_janitor;
+use futarchy_governance_actions::governance_intents;
+use futarchy_markets_core::coin_escrow;
+use futarchy_markets_core::conditional_amm;
+use futarchy_markets_core::early_resolve;
+use futarchy_markets_core::market_state::{Self, MarketState};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_core::quantum_lp_manager;
+use futarchy_markets_core::subsidy_escrow::{Self as subsidy_escrow_mod, SubsidyEscrow};
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_one_shot_utils::strategy;
+use futarchy_types::action_specs::InitActionSpecs;
+use futarchy_vault::futarchy_vault;
+use std::option;
+use std::string::String;
+use std::vector;
+use sui::balance::{Self, Balance};
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::object;
 
 // === Errors ===
 const EProposalNotActive: u64 = 1;
@@ -63,8 +42,8 @@ const EInvalidWinningOutcome: u64 = 5;
 const EIntentExpiryTooLong: u64 = 6;
 const ENotEligibleForEarlyResolve: u64 = 7;
 const EInsufficientSpread: u64 = 8;
-const EEscrowProposalMismatch: u64 = 9;  // Subsidy escrow doesn't belong to this proposal
-const EEscrowDaoMismatch: u64 = 10;      // Subsidy escrow doesn't belong to this DAO
+const EEscrowProposalMismatch: u64 = 9; // Subsidy escrow doesn't belong to this proposal
+const EEscrowDaoMismatch: u64 = 10; // Subsidy escrow doesn't belong to this DAO
 
 // === Constants ===
 const OUTCOME_ACCEPTED: u64 = 0;
@@ -131,26 +110,30 @@ public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: c
     proposal_fee_manager::deposit_proposal_fee(
         fee_manager,
         proposal::get_id(proposal),
-        fee_coin
+        fee_coin,
     );
 
     // Create the outcome object (using existing FutarchyOutcome structure)
     let outcome = futarchy_config::new_futarchy_outcome(
         b"jit_execution".to_string(), // Temporary key for just-in-time execution
-        clock.timestamp_ms() // min_execution_time
+        clock.timestamp_ms(), // min_execution_time
     );
 
     // Execute the proposal intent with IntentSpec
-    let executable = governance_intents::execute_proposal_intent<AssetType, StableType, FutarchyOutcome>(
+    let executable = governance_intents::execute_proposal_intent<
+        AssetType,
+        StableType,
+        FutarchyOutcome,
+    >(
         account,
         proposal,
         market,
         winning_outcome,
         outcome,
         clock,
-        ctx
+        ctx,
     );
-    
+
     // This function is deprecated - execution now happens via PTB pattern
     // Use ptb_executor module for execution instead
     abort 0 // Function not implemented - use PTB-based execution
@@ -202,16 +185,16 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     // Extract bond (mutable borrow needed)
     let auth3 = priority_queue::create_mutation_auth();
     let mut bond = priority_queue::extract_bond(auth3, &mut queued_proposal);
-    
+
     // Get config values from account
     let config = account.config();
-    
+
     // Extract proposal data fields
     let title = *priority_queue::get_title(&data);
     let metadata = *priority_queue::get_metadata(&data);
     let outcome_messages = *priority_queue::get_outcome_messages(&data);
     let details = *priority_queue::get_outcome_details(&data);
-    
+
     // Create fee escrow (bond or empty)
     let fee_escrow = if (bond.is_some()) {
         bond.extract().into_balance()
@@ -225,20 +208,25 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
     // Intent specs are now stored in proposals, no need to check intent keys
 
     // Read conditional liquidity ratio from DAO config
-    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(config);
+    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(
+        config,
+    );
 
     // If this proposal uses DAO liquidity, mark the spot pool with lock parameters
     if (uses_dao_liquidity) {
         unified_spot_pool::mark_liquidity_to_proposal(
             spot_pool,
             conditional_liquidity_ratio_percent,
-            clock
+            clock,
         );
     };
 
     // Initialize the market with the ratio from DAO config
-    let (_proposal_id, market_state_id, _state) = proposal::initialize_market<AssetType, StableType>(
-        proposal_id,  // Pass the proposal_id from the queue
+    let (_proposal_id, market_state_id, _state) = proposal::initialize_market<
+        AssetType,
+        StableType,
+    >(
+        proposal_id, // Pass the proposal_id from the queue
         dao_id,
         futarchy_config::review_period_ms(config),
         futarchy_config::trading_period_ms(config),
@@ -267,15 +255,15 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
         clock,
         ctx,
     );
-    
+
     // IntentSpecs are stored directly in proposals now, no need for separate registration
-    
+
     // Destroy the remaining bond option (should be none after extraction)
     bond.destroy_none();
-    
+
     // Destroy the queued proposal (we've extracted everything we need)
     priority_queue::destroy_proposal(queued_proposal);
-    
+
     // Emit activation event
     event::emit(ProposalActivated {
         proposal_id,
@@ -331,7 +319,7 @@ public fun finalize_proposal_market<AssetType, StableType>(
         fee_manager,
         false,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -364,7 +352,7 @@ public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
         spot_pool,
         fee_manager,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -382,17 +370,21 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     // Calculate winning outcome and get TWAPs in single computation
-    let (winning_outcome, twap_prices) = calculate_winning_outcome_with_twaps(proposal, escrow, clock);
-    
+    let (winning_outcome, twap_prices) = calculate_winning_outcome_with_twaps(
+        proposal,
+        escrow,
+        clock,
+    );
+
     // Store the final TWAPs for third-party access
     proposal::set_twap_prices(proposal, twap_prices);
-    
+
     // Set the winning outcome on the proposal
     proposal::set_winning_outcome(proposal, winning_outcome);
-    
+
     // Finalize the market state
     market_state::finalize(market_state, winning_outcome, clock);
-    
+
     // If this proposal used DAO liquidity, recombine winning liquidity and integrate its oracle data
     if (proposal::uses_dao_liquidity(proposal)) {
         // Return quantum-split liquidity back to the spot pool
@@ -410,19 +402,26 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
         let _escrow_id = unified_spot_pool::extract_active_escrow(spot_pool);
 
         // Reborrow winning pool to read oracle after recombination
-        let winning_pool_view = proposal::get_pool_by_outcome(proposal, escrow, winning_outcome as u8);
+        let winning_pool_view = proposal::get_pool_by_outcome(
+            proposal,
+            escrow,
+            winning_outcome as u8,
+        );
         let winning_conditional_oracle = conditional_amm::get_simple_twap(winning_pool_view);
 
         // Backfill spot's SimpleTWAP with winning conditional's oracle data
         unified_spot_pool::backfill_from_winning_conditional(
             spot_pool,
             winning_conditional_oracle,
-            clock
+            clock,
         );
 
         // Crank: Transition TRANSITIONING bucket to WITHDRAW_ONLY
         // This allows LPs who marked for withdrawal to claim their coins
-        futarchy_markets_operations::liquidity_interact::crank_recombine_and_transition<AssetType, StableType>(spot_pool);
+        futarchy_markets_operations::liquidity_interact::crank_recombine_and_transition<
+            AssetType,
+            StableType,
+        >(spot_pool);
     };
 
     // NEW: Cancel losing outcome intents in the hot path using a scoped witness.
@@ -445,10 +444,10 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
         };
         i = i + 1;
     };
-    
+
     // Also cleanup any other expired intents during finalization
     gc_janitor::cleanup_all_expired_intents(account, clock, ctx);
-    
+
     // --- BEGIN REGISTRY PRUNING ---
     // Prune expired proposal reservations from the registry to prevent state bloat.
     // This is done at the end of finalization when we have time to do cleanup.
@@ -511,7 +510,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
             let reward_coin = proposal_fee_manager::pay_outcome_creator_reward(
                 fee_manager,
                 win_reward,
-                ctx
+                ctx,
             );
             if (reward_coin.value() > 0) {
                 transfer::public_transfer(reward_coin, winner);
@@ -534,7 +533,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
         let remaining_sui_coin = subsidy_escrow_mod::finalize_escrow(
             escrow_to_finalize,
             clock,
-            ctx
+            ctx,
         );
 
         // Return remaining SUI to DAO vault
@@ -546,7 +545,7 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
             auth,
             account,
             vault_name,
-            remaining_sui_coin
+            remaining_sui_coin,
         );
     };
     // --- END INLINE SUBSIDY ESCROW CLEANUP ---
@@ -585,20 +584,26 @@ public entry fun try_early_resolve<AssetType, StableType>(
         proposal,
         market_state,
         early_resolve_config,
-        clock
+        clock,
     );
 
     // Abort if not eligible
     assert!(is_eligible, ENotEligibleForEarlyResolve);
 
     // Calculate current winner and check spread requirement
-    let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(proposal, escrow, clock);
+    let (winner_idx, _winner_twap, spread) = proposal::calculate_current_winner(
+        proposal,
+        escrow,
+        clock,
+    );
     assert!(spread >= min_spread, EInsufficientSpread);
 
     // NEW: Additional flip count check with TWAP scaling
     let max_flips = futarchy_config::early_resolve_max_flips_in_window(early_resolve_config);
     let flip_window = futarchy_config::early_resolve_flip_window_duration(early_resolve_config);
-    let twap_scaling_enabled = futarchy_config::early_resolve_twap_scaling_enabled(early_resolve_config);
+    let twap_scaling_enabled = futarchy_config::early_resolve_twap_scaling_enabled(
+        early_resolve_config,
+    );
 
     let current_time = clock.timestamp_ms();
     let cutoff_time = if (current_time > flip_window) {
@@ -643,7 +648,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
         spot_pool,
         fee_manager,
         clock,
-        ctx
+        ctx,
     );
 
     // Keeper reward payment: Use outcome creator reward mechanism
@@ -654,7 +659,7 @@ public entry fun try_early_resolve<AssetType, StableType>(
         let reward_coin = proposal_fee_manager::pay_outcome_creator_reward(
             fee_manager,
             reward_amount,
-            ctx
+            ctx,
         );
         let actual_reward = reward_coin.value();
         transfer::public_transfer(reward_coin, ctx.sender());
@@ -691,7 +696,11 @@ public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
 
 /// Executes an approved proposal's intent with known asset types
 /// NOTE: This function is deprecated - use PTB-based execution via ptb_executor module
-public fun execute_approved_proposal_typed<AssetType: drop + store, StableType: drop + store, IW: copy + drop>(
+public fun execute_approved_proposal_typed<
+    AssetType: drop + store,
+    StableType: drop + store,
+    IW: copy + drop,
+>(
     _account: &mut Account<FutarchyConfig>,
     _proposal: &mut Proposal<AssetType, StableType>,
     _market: &MarketState,
@@ -716,10 +725,10 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     ctx: &mut TxContext,
 ) {
     use futarchy_markets_core::proposal as proposal_mod;
-    
+
     // Prevent double reservation
     assert!(!priority_queue::has_reserved(queue), EProposalNotActive);
-    
+
     // Compute time remaining for the active trading market
     let end_opt = market_state::get_trading_end_time(current_market);
     assert!(end_opt.is_some(), EMarketNotFinalized);
@@ -728,7 +737,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     assert!(now <= end_ts, EMarketNotFinalized);
     let remaining = end_ts - now;
     assert!(remaining <= premarket_threshold_ms, EInvalidWinningOutcome);
-    
+
     // Pop top of queue
     let auth = priority_queue::create_mutation_auth();
     let mut qp_opt = priority_queue::try_activate_next(auth, queue);
@@ -757,7 +766,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         balance::zero<StableType>()
     };
     bond.destroy_none();
-    
+
     // Config from account
     let cfg = account.config();
 
@@ -768,14 +777,16 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
     let amm_total_fee_bps = futarchy_config::amm_total_fee_bps(cfg);
 
     // Read conditional liquidity ratio from DAO config (same as activate_proposal)
-    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(cfg);
+    let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(
+        cfg,
+    );
     let max_outcomes = futarchy_config::max_outcomes(cfg); // DAO's configured max outcomes
 
     // Build PREMARKET proposal (no liquidity)
     let premarket_id = proposal::new_premarket<AssetType, StableType>(
         queued_id,
         dao_id,
-        futarchy_config::market_op_review_period_ms(cfg),  // Use market op period for fast/atomic execution
+        futarchy_config::market_op_review_period_ms(cfg), // Use market op period for fast/atomic execution
         futarchy_config::trading_period_ms(cfg),
         futarchy_config::min_asset_amount(cfg),
         futarchy_config::min_stable_amount(cfg),
@@ -797,7 +808,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         fee_escrow,
         intent_spec, // Pass intent spec instead of intent key
         clock,
-        ctx
+        ctx,
     );
 
     // Mark queue reserved only if enabled in config
@@ -806,7 +817,7 @@ public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
         priority_queue::set_reserved(auth4, queue, premarket_id);
     };
     priority_queue::destroy_proposal(qp);
-    
+
     event::emit(ProposalReserved {
         queued_proposal_id: queued_id,
         premarket_proposal_id: premarket_id,
@@ -874,7 +885,9 @@ public entry fun advance_proposal_state<AssetType, StableType>(
         if (!proposal::is_withdraw_only(proposal)) {
             // Get conditional liquidity ratio from DAO config
             let config = account::config(account);
-            let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(config);
+            let conditional_liquidity_ratio_percent = futarchy_config::conditional_liquidity_ratio_percent(
+                config,
+            );
 
             // Perform quantum split: move liquidity from spot to conditional markets
             quantum_lp_manager::auto_quantum_split_on_proposal_start(
@@ -944,7 +957,7 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     // Calculate required subsidy amount and copy the config for later use
     let total_subsidy = subsidy_config::calculate_total_subsidy(
         subsidy_config,
-        outcome_count
+        outcome_count,
     );
 
     // Check if total_subsidy is 0 (config has 0 cranks)
@@ -971,7 +984,7 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
         account,
         vault_name,
         total_subsidy,
-        ctx
+        ctx,
     );
 
     // Get AMM pool IDs from the proposal
@@ -984,7 +997,7 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
         amm_ids,
         treasury_coins,
         &subsidy_config_copy,
-        ctx
+        ctx,
     );
 
     // CRITICAL CHANGE: Store escrow INLINE in Proposal (automatic cleanup!)
@@ -1068,7 +1081,7 @@ public fun crank_subsidy_for_proposal<AssetType, StableType>(
         proposal_id,
         conditional_pools,
         clock,
-        ctx
+        ctx,
     );
 
     // Transfer keeper fee to caller
@@ -1098,20 +1111,23 @@ public fun run_complete_proposal_lifecycle<AssetType, StableType>(
         asset_liquidity,
         stable_liquidity,
         clock,
-        ctx
+        ctx,
     );
-    
+
     // Step 2: Fast forward through review and trading periods
     let config = account.config();
-    sui::clock::increment_for_testing(clock, futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config) + 1000);
-    
+    sui::clock::increment_for_testing(
+        clock,
+        futarchy_config::review_period_ms(config) + futarchy_config::trading_period_ms(config) + 1000,
+    );
+
     // Step 3: Get proposal and market state (would be shared objects in production)
     // For testing, we'll assume they're available
-    
+
     // Step 4: Finalize market
     // This would normally be done through the proper market finalization flow
     // Note: Updated to pass account parameter for intent cleanup
-    
+
     // Step 5: Execute if approved
     // This would normally check the winning outcome and execute if YES
 }
@@ -1127,20 +1143,20 @@ public fun can_execute_proposal<AssetType, StableType>(
     if (!market_state::is_finalized(market)) {
         return false
     };
-    
+
     // Proposal must have been approved (YES outcome)
     let winning_outcome = market_state::get_winning_outcome(market);
     if (winning_outcome != OUTCOME_ACCEPTED) {
         return false
     };
-    
+
     // TODO: Update this check for new InitActionSpecs design
     // For now, just check if there are action specs
     // let intent_key = proposal::get_intent_key_for_outcome(proposal, OUTCOME_ACCEPTED);
     // if (!intent_key.is_some()) {
     //     return false
     // };
-    
+
     true
 }
 

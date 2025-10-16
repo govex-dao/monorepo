@@ -2,23 +2,18 @@
 /// Provides high-level API for building document management intents
 module futarchy_legal_actions::dao_file_intents;
 
-// === Imports ===
-use std::string::String;
-use sui::{
-    clock::Clock,
-    object::{Self, ID},
-    tx_context::TxContext,
-    bcs,
-};
-use account_protocol::{
-    account::Account,
-    executable::Executable,
-    intents::{Self, Intent, Params},
-    intent_interface,
-};
-use futarchy_legal_actions::dao_file_actions;
-use futarchy_core::version;
+use account_protocol::account::Account;
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::{Self, Intent, Params};
 use futarchy_core::action_types;
+use futarchy_core::version;
+use futarchy_legal_actions::dao_file_actions;
+use std::string::String;
+use sui::bcs;
+use sui::clock::Clock;
+use sui::object::{Self, ID};
+use sui::tx_context::TxContext;
 use walrus::blob::Blob;
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -37,7 +32,7 @@ public fun create_registry_intent<Config, Outcome: store>(
     account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -51,9 +46,9 @@ public fun create_registry_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::create_dao_file_registry(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -62,7 +57,7 @@ public fun set_registry_immutable_intent<Config, Outcome: store>(
     account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -76,9 +71,9 @@ public fun set_registry_immutable_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::set_registry_immutable(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -90,7 +85,7 @@ public fun create_root_document_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     name: String,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -104,9 +99,9 @@ public fun create_root_document_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::create_root_file(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -121,8 +116,7 @@ public fun add_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -136,9 +130,9 @@ public fun add_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -149,8 +143,7 @@ public fun add_chunk_with_text_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     text: String,
-    
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -165,9 +158,9 @@ public fun add_chunk_with_text_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -177,10 +170,9 @@ public fun add_sunset_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    
     expires_at_ms: u64,
     immutable: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -196,9 +188,9 @@ public fun add_sunset_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_sunset_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -208,10 +200,9 @@ public fun add_sunrise_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    
     effective_from_ms: u64,
     immutable: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -227,9 +218,9 @@ public fun add_sunrise_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_sunrise_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -239,11 +230,10 @@ public fun add_temporary_chunk_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    
     effective_from_ms: u64,
     expires_at_ms: u64,
     immutable: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -260,9 +250,9 @@ public fun add_temporary_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_temporary_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -272,9 +262,8 @@ public fun add_chunk_with_scheduled_immutability_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    
     immutable_from_ms: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -289,9 +278,9 @@ public fun add_chunk_with_scheduled_immutability_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::add_chunk_with_scheduled_immutability(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -302,7 +291,7 @@ public fun update_chunk_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     chunk_id: ID,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -317,9 +306,9 @@ public fun update_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::update_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -330,7 +319,7 @@ public fun remove_chunk_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     chunk_id: ID,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -345,9 +334,9 @@ public fun remove_chunk_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::remove_chunk(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -360,7 +349,7 @@ public fun set_chunk_immutable_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     chunk_id: ID,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -375,9 +364,9 @@ public fun set_chunk_immutable_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::set_chunk_immutable(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -387,7 +376,7 @@ public fun set_document_immutable_intent<Config, Outcome: store>(
     params: Params,
     outcome: Outcome,
     doc_id: ID,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -401,9 +390,9 @@ public fun set_document_immutable_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::set_file_immutable(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -416,7 +405,7 @@ public fun set_document_insert_allowed_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     allowed: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -431,9 +420,9 @@ public fun set_document_insert_allowed_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::set_file_insert_allowed(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -444,7 +433,7 @@ public fun set_document_remove_allowed_intent<Config, Outcome: store>(
     outcome: Outcome,
     doc_id: ID,
     allowed: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -459,9 +448,9 @@ public fun set_document_remove_allowed_intent<Config, Outcome: store>(
             intent.add_typed_action(
                 action_types::set_file_remove_allowed(),
                 action_data,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 

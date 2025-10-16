@@ -1,9 +1,8 @@
 #[test_only]
 module futarchy::fee_tests;
 
-use futarchy::fee::{Self, FeeManager, FeeAdminCap};
-// Vault is initialized in factory, no direct import needed
 use futarchy::factory::{Self, Factory, FactoryOwnerCap};
+use futarchy::fee::{Self, FeeManager, FeeAdminCap};
 use std::ascii;
 use std::string;
 use std::vector;
@@ -68,10 +67,16 @@ fun test_fee_manager_initialization() {
 
         // Verify initial fees
         assert!(fee::get_dao_creation_fee(&fee_manager) == DEFAULT_DAO_CREATION_FEE, 0);
-        assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME, 0);
+        assert!(
+            fee::get_proposal_creation_fee_per_outcome(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME,
+            0,
+        );
         // Check default verification level 1 exists
         assert!(fee::has_verification_level(&fee_manager, 1), 0);
-        assert!(fee::get_verification_fee_for_level(&fee_manager, 1) == DEFAULT_VERIFICATION_FEE, 0);
+        assert!(
+            fee::get_verification_fee_for_level(&fee_manager, 1) == DEFAULT_VERIFICATION_FEE,
+            0,
+        );
         assert!(fee::get_sui_balance(&fee_manager) == 0, 0);
 
         test_scenario::return_shared(fee_manager);
@@ -122,7 +127,13 @@ fun test_deposit_proposal_creation_payment() {
             ctx,
         );
 
-        fee::deposit_proposal_creation_payment(&mut fee_manager, payment, outcome_count, &clock, ctx);
+        fee::deposit_proposal_creation_payment(
+            &mut fee_manager,
+            payment,
+            outcome_count,
+            &clock,
+            ctx,
+        );
         assert!(
             fee::get_sui_balance(&fee_manager) == DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME * outcome_count,
             0,
@@ -211,7 +222,12 @@ fun test_withdraw_fees() {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
         let admin_cap = test_scenario::take_from_address<FeeAdminCap>(&scenario, admin);
 
-        fee::withdraw_all_fees(&mut fee_manager, &admin_cap, &clock, test_scenario::ctx(&mut scenario));
+        fee::withdraw_all_fees(
+            &mut fee_manager,
+            &admin_cap,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
         assert!(fee::get_sui_balance(&fee_manager) == 0, 0);
 
         test_scenario::return_shared(fee_manager);
@@ -264,7 +280,12 @@ fun test_admin_cap_holder_can_withdraw() {
         let admin_cap = test_scenario::take_from_address<FeeAdminCap>(&scenario, USER);
 
         // This should work since they have the cap
-        fee::withdraw_all_fees(&mut fee_manager, &admin_cap, &clock, test_scenario::ctx(&mut scenario));
+        fee::withdraw_all_fees(
+            &mut fee_manager,
+            &admin_cap,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
 
         test_scenario::return_shared(fee_manager);
         test_scenario::return_to_address(USER, admin_cap);
@@ -293,13 +314,35 @@ fun test_update_fees() {
         let new_verification_fee = 15_000u64;
         let verification_level = 1u8;
 
-        fee::update_dao_creation_fee(&mut fee_manager, &admin_cap, new_dao_fee, &clock, test_scenario::ctx(&mut scenario));
-        fee::update_proposal_creation_fee(&mut fee_manager, &admin_cap, new_proposal_fee, &clock, test_scenario::ctx(&mut scenario));
-        fee::update_verification_fee(&mut fee_manager, &admin_cap, verification_level, new_verification_fee, &clock, test_scenario::ctx(&mut scenario));
+        fee::update_dao_creation_fee(
+            &mut fee_manager,
+            &admin_cap,
+            new_dao_fee,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
+        fee::update_proposal_creation_fee(
+            &mut fee_manager,
+            &admin_cap,
+            new_proposal_fee,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
+        fee::update_verification_fee(
+            &mut fee_manager,
+            &admin_cap,
+            verification_level,
+            new_verification_fee,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
 
         assert!(fee::get_dao_creation_fee(&fee_manager) == new_dao_fee, 0);
         assert!(fee::get_proposal_creation_fee_per_outcome(&fee_manager) == new_proposal_fee, 0);
-        assert!(fee::get_verification_fee_for_level(&fee_manager, verification_level) == new_verification_fee, 0);
+        assert!(
+            fee::get_verification_fee_for_level(&fee_manager, verification_level) == new_verification_fee,
+            0,
+        );
 
         test_scenario::return_shared(fee_manager);
         test_scenario::return_to_address(admin, admin_cap);
@@ -495,7 +538,13 @@ fun test_multiple_operations() {
         let outcome_count = 2; // Binary proposal
         let proposal_fee = DEFAULT_PROPOSAL_CREATION_FEE_PER_OUTCOME * outcome_count;
         let payment2 = mint_sui(proposal_fee, ctx);
-        fee::deposit_proposal_creation_payment(&mut fee_manager, payment2, outcome_count, &clock, ctx);
+        fee::deposit_proposal_creation_payment(
+            &mut fee_manager,
+            payment2,
+            outcome_count,
+            &clock,
+            ctx,
+        );
 
         // Verify total balance
         assert!(
@@ -570,7 +619,12 @@ fun test_multiple_operations() {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
         let admin_cap = test_scenario::take_from_address<FeeAdminCap>(&scenario, admin);
 
-        fee::withdraw_all_fees(&mut fee_manager, &admin_cap, &clock, test_scenario::ctx(&mut scenario));
+        fee::withdraw_all_fees(
+            &mut fee_manager,
+            &admin_cap,
+            &clock,
+            test_scenario::ctx(&mut scenario),
+        );
         assert!(fee::get_sui_balance(&fee_manager) == 0, 0);
 
         test_scenario::return_shared(fee_manager);
@@ -589,22 +643,22 @@ fun test_multiple_operations() {
 fun test_dao_monthly_fee_update_with_delay() {
     let (mut scenario, admin) = test_init();
     let mut clock = create_clock(&mut scenario);
-    
+
     // Constants
     let six_months_ms: u64 = 15_552_000_000; // 6 months in milliseconds
     let initial_fee = 10_000_000; // Default monthly fee
     let new_fee = 20_000_000; // New monthly fee
-    
+
     // First, update the monthly fee
     test_scenario::next_tx(&mut scenario, admin);
     {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
         let admin_cap = test_scenario::take_from_address<FeeAdminCap>(&scenario, admin);
-        
+
         // Verify initial fee
         assert!(fee::get_dao_monthly_fee(&fee_manager) == initial_fee, 0);
         assert!(fee::get_pending_dao_monthly_fee(&fee_manager).is_none(), 0);
-        
+
         // Update the fee (sets pending fee with 6-month delay)
         fee::update_dao_monthly_fee(
             &mut fee_manager,
@@ -613,52 +667,52 @@ fun test_dao_monthly_fee_update_with_delay() {
             &clock,
             test_scenario::ctx(&mut scenario),
         );
-        
+
         // Verify pending fee is set
         assert!(fee::get_dao_monthly_fee(&fee_manager) == initial_fee, 1); // Current fee unchanged
         assert!(fee::get_pending_dao_monthly_fee(&fee_manager).is_some(), 2);
         assert!(*fee::get_pending_dao_monthly_fee(&fee_manager).borrow() == new_fee, 3);
-        
+
         test_scenario::return_shared(fee_manager);
         test_scenario::return_to_address(admin, admin_cap);
     };
-    
+
     // Try to collect fee before 6 months - should use old fee
     test_scenario::next_tx(&mut scenario, admin);
     {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
-        
+
         // Apply pending fee (should not apply yet)
         fee::apply_pending_fee_if_due(&mut fee_manager, &clock);
-        
+
         // Verify old fee is still active
         assert!(fee::get_dao_monthly_fee(&fee_manager) == initial_fee, 4);
         assert!(fee::get_pending_dao_monthly_fee(&fee_manager).is_some(), 5);
-        
+
         test_scenario::return_shared(fee_manager);
     };
-    
+
     // Advance clock by 6 months
     clock::increment_for_testing(&mut clock, six_months_ms);
-    
+
     // Now collect fee after 6 months - should use new fee
     test_scenario::next_tx(&mut scenario, admin);
     {
         let mut fee_manager = test_scenario::take_shared<FeeManager>(&scenario);
-        
+
         // Apply pending fee (should apply now)
         fee::apply_pending_fee_if_due(&mut fee_manager, &clock);
-        
+
         // Verify new fee is active and pending is cleared
         assert!(fee::get_dao_monthly_fee(&fee_manager) == new_fee, 6);
         assert!(fee::get_pending_dao_monthly_fee(&fee_manager).is_none(), 7);
-        
+
         test_scenario::return_shared(fee_manager);
     };
-    
+
     // Clean up
     test_scenario::next_tx(&mut scenario, ADMIN);
     clock::destroy_for_testing(clock);
-    
+
     test_scenario::end(scenario);
 }

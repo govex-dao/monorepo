@@ -1,24 +1,18 @@
 #[test_only]
 module account_actions::access_control_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-};
+use account_actions::access_control;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-    deps,
-    intent_interface,
-};
-use account_actions::{
-    access_control,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intent_interface;
+use account_protocol::intents;
+use sui::clock::{Self, Clock};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Macros ===
 
@@ -57,7 +51,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -115,7 +112,7 @@ fun test_borrow_and_return_cap() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -128,7 +125,7 @@ fun test_borrow_and_return_cap() {
         |intent, iw| {
             access_control::new_borrow<_, TestCap, _>(intent, iw);
             access_control::new_return<_, TestCap, _>(intent, iw);
-        }
+        },
     );
 
     // Create executable
@@ -137,7 +134,7 @@ fun test_borrow_and_return_cap() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Borrow the capability
@@ -145,7 +142,7 @@ fun test_borrow_and_return_cap() {
         &mut executable,
         &mut account,
         version::current(),
-        AccessControlIntent()
+        AccessControlIntent(),
     );
 
     // Verify the capability was borrowed (has the expected value)
@@ -157,7 +154,7 @@ fun test_borrow_and_return_cap() {
         &mut account,
         borrowed_cap,
         version::current(),
-        AccessControlIntent()
+        AccessControlIntent(),
     );
 
     // Confirm execution
@@ -191,7 +188,7 @@ fun test_borrow_without_return_fails() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -204,7 +201,7 @@ fun test_borrow_without_return_fails() {
         |intent, iw| {
             access_control::new_borrow<_, TestCap, _>(intent, iw);
             // Missing new_return - should fail at execution
-        }
+        },
     );
 
     // Create executable
@@ -213,7 +210,7 @@ fun test_borrow_without_return_fails() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // This should abort with ENoReturn
@@ -221,7 +218,7 @@ fun test_borrow_without_return_fails() {
         &mut executable,
         &mut account,
         version::current(),
-        AccessControlIntent()
+        AccessControlIntent(),
     );
 
     // Cleanup (won't reach here)
@@ -263,7 +260,7 @@ fun test_delete_borrow_action() {
         vector[0],
         clock.timestamp_ms() + 1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -276,7 +273,7 @@ fun test_delete_borrow_action() {
         |intent, iw| {
             access_control::new_borrow<_, TestCap, _>(intent, iw);
             access_control::new_return<_, TestCap, _>(intent, iw);
-        }
+        },
     );
 
     // Execute the intent first
@@ -292,21 +289,21 @@ fun test_delete_borrow_action() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let borrowed = access_control::do_borrow<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
         version::current(),
-        AccessControlIntent()
+        AccessControlIntent(),
     );
     access_control::do_return<Config, Outcome, TestCap, _>(
         &mut executable,
         &mut account,
         borrowed,
         version::current(),
-        AccessControlIntent()
+        AccessControlIntent(),
     );
     account.confirm_execution(executable);
 

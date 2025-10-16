@@ -10,12 +10,12 @@ public struct TEST_COIN_B has drop {}
 fun init(witness: TEST_COIN_B, ctx: &mut TxContext) {
     let (treasury_cap, metadata) = coin::create_currency(
         witness,
-        6,  // decimals
-        b"",  // empty symbol
-        b"",  // empty name
-        b"",  // empty description
-        option::none(),  // no icon url
-        ctx
+        6, // decimals
+        b"", // empty symbol
+        b"", // empty name
+        b"", // empty description
+        option::none(), // no icon url
+        ctx,
     );
 
     // Transfer both to sender for use in tests
@@ -38,7 +38,7 @@ public fun create_with_name(ctx: &mut TxContext) {
         b"Test Coin Name",
         b"",
         option::none(),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());
@@ -53,7 +53,7 @@ public fun create_with_description(ctx: &mut TxContext) {
         b"",
         b"Test description",
         option::none(),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());
@@ -68,7 +68,7 @@ public fun create_with_symbol(ctx: &mut TxContext) {
         b"",
         b"",
         option::none(),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());
@@ -84,7 +84,7 @@ public fun create_with_icon(ctx: &mut TxContext) {
         b"",
         b"",
         option::some(url::new_unsafe_from_bytes(b"https://example.com/icon.png")),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());
@@ -100,7 +100,7 @@ public fun create_with_all_metadata(ctx: &mut TxContext) {
         b"Test Coin",
         b"A test coin",
         option::some(url::new_unsafe_from_bytes(b"https://example.com/icon.png")),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());

@@ -1,23 +1,17 @@
 #[test_only]
 module account_actions::package_upgrade_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    package::{Self, UpgradeCap},
-};
+use account_actions::package_upgrade as pkg_upgrade;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-};
-use account_actions::{
-    package_upgrade as pkg_upgrade,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use sui::clock::{Self, Clock};
+use sui::package::{Self, UpgradeCap};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -45,7 +39,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world

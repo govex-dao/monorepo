@@ -1,14 +1,14 @@
 #[test_only]
 module futarchy_markets_core::subsidy_escrow_tests;
 
-use sui::test_scenario::{Self as ts};
+use futarchy_core::subsidy_config;
+use futarchy_markets_core::subsidy_escrow;
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_one_shot_utils::math;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
-use futarchy_markets_core::subsidy_escrow;
-use futarchy_core::subsidy_config;
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_one_shot_utils::math;
+use sui::test_scenario as ts;
 
 // === Constants ===
 const MIN_CRANK_INTERVAL_MS: u64 = 300_000; // 5 minutes
@@ -404,7 +404,13 @@ fun test_crank_subsidy_exhausted() {
     };
 
     // Try to crank one more time (should fail)
-    let fee_extra = subsidy_escrow::crank_subsidy(&mut escrow, proposal_id, &mut pools, &clock, ctx);
+    let fee_extra = subsidy_escrow::crank_subsidy(
+        &mut escrow,
+        proposal_id,
+        &mut pools,
+        &clock,
+        ctx,
+    );
 
     coin::burn_for_testing(fee_extra);
     subsidy_escrow::destroy_test_escrow(escrow);
@@ -443,7 +449,13 @@ fun test_crank_proposal_mismatch() {
     );
 
     // Try to crank with wrong proposal ID (should fail)
-    let fee = subsidy_escrow::crank_subsidy(&mut escrow, wrong_proposal_id, &mut pools, &clock, ctx);
+    let fee = subsidy_escrow::crank_subsidy(
+        &mut escrow,
+        wrong_proposal_id,
+        &mut pools,
+        &clock,
+        ctx,
+    );
 
     coin::burn_for_testing(fee);
     subsidy_escrow::destroy_test_escrow(escrow);

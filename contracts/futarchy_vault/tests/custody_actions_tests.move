@@ -3,10 +3,10 @@
 #[test_only]
 module futarchy_vault::custody_actions_tests;
 
+use futarchy_vault::custody_actions;
 use std::string;
 use sui::object;
 use sui::test_utils::assert_eq;
-use futarchy_vault::custody_actions;
 
 // Test resource type - phantom marker only
 public struct TestResource has drop {}
@@ -26,11 +26,16 @@ fun test_create_approve_custody_basic() {
         obj_id,
         key,
         context,
-        expires_at
+        expires_at,
     );
 
-    let (act_dao_id, act_obj_id, act_key, act_context, act_expires) =
-        custody_actions::get_approve_custody_params(&action);
+    let (
+        act_dao_id,
+        act_obj_id,
+        act_key,
+        act_context,
+        act_expires,
+    ) = custody_actions::get_approve_custody_params(&action);
     assert_eq(act_dao_id, dao_id);
     assert_eq(act_obj_id, obj_id);
     assert_eq(*act_key, key);
@@ -52,7 +57,7 @@ fun test_approve_custody_copy_ability() {
         obj_id,
         key,
         context,
-        1000
+        1000,
     );
 
     let action2 = action1; // Test copy
@@ -83,11 +88,12 @@ fun test_approve_custody_empty_strings() {
         obj_id,
         empty,
         empty,
-        0
+        0,
     );
 
-    let (_, _, act_key, act_context, act_expires) =
-        custody_actions::get_approve_custody_params(&action);
+    let (_, _, act_key, act_context, act_expires) = custody_actions::get_approve_custody_params(
+        &action,
+    );
     assert_eq(act_key.length(), 0);
     assert_eq(act_context.length(), 0);
     assert_eq(act_expires, 0);
@@ -107,11 +113,10 @@ fun test_approve_custody_unicode() {
         obj_id,
         unicode_key,
         unicode_context,
-        5000
+        5000,
     );
 
-    let (_, _, act_key, act_context, _) =
-        custody_actions::get_approve_custody_params(&action);
+    let (_, _, act_key, act_context, _) = custody_actions::get_approve_custody_params(&action);
     assert_eq(*act_key, unicode_key);
     assert_eq(*act_context, unicode_context);
 
@@ -131,11 +136,10 @@ fun test_approve_custody_max_timestamp() {
         obj_id,
         key,
         context,
-        max_time
+        max_time,
     );
 
-    let (_, _, _, _, act_expires) =
-        custody_actions::get_approve_custody_params(&action);
+    let (_, _, _, _, act_expires) = custody_actions::get_approve_custody_params(&action);
     assert_eq(act_expires, max_time);
 
     custody_actions::destroy_approve_custody(action);
@@ -152,11 +156,10 @@ fun test_create_accept_into_custody_basic() {
     let action = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         key,
-        context
+        context,
     );
 
-    let (act_obj_id, act_key, act_context) =
-        custody_actions::get_accept_params(&action);
+    let (act_obj_id, act_key, act_context) = custody_actions::get_accept_params(&action);
     assert_eq(act_obj_id, obj_id);
     assert_eq(*act_key, key);
     assert_eq(*act_context, context);
@@ -173,7 +176,7 @@ fun test_accept_into_custody_copy_ability() {
     let action1 = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         key,
-        context
+        context,
     );
 
     let action2 = action1; // Copy
@@ -195,17 +198,20 @@ fun test_accept_into_custody_copy_ability() {
 #[test]
 fun test_accept_into_custody_long_strings() {
     let obj_id = object::id_from_address(@0x3);
-    let long_key = string::utf8(b"very_long_resource_key_with_lots_of_characters_for_testing_edge_cases_1234567890");
-    let long_context = string::utf8(b"very_long_context_string_with_detailed_information_about_custody_acceptance_process");
+    let long_key = string::utf8(
+        b"very_long_resource_key_with_lots_of_characters_for_testing_edge_cases_1234567890",
+    );
+    let long_context = string::utf8(
+        b"very_long_context_string_with_detailed_information_about_custody_acceptance_process",
+    );
 
     let action = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         long_key,
-        long_context
+        long_context,
     );
 
-    let (_, act_key, act_context) =
-        custody_actions::get_accept_params(&action);
+    let (_, act_key, act_context) = custody_actions::get_accept_params(&action);
     assert!(act_key.length() > 50, 0);
     assert!(act_context.length() > 50, 1);
 
@@ -228,12 +234,13 @@ fun test_custody_workflow_simulation() {
         resource_id,
         key,
         approve_context,
-        1000000
+        1000000,
     );
 
     // Verify approval
-    let (act_dao_id, act_obj_id, _, _, _) =
-        custody_actions::get_approve_custody_params(&approve_action);
+    let (act_dao_id, act_obj_id, _, _, _) = custody_actions::get_approve_custody_params(
+        &approve_action,
+    );
     assert_eq(act_dao_id, dao_id);
     assert_eq(act_obj_id, resource_id);
 
@@ -241,17 +248,15 @@ fun test_custody_workflow_simulation() {
     let accept_action = custody_actions::create_accept_into_custody<TestResource>(
         resource_id,
         key,
-        accept_context
+        accept_context,
     );
 
     // Verify acceptance
-    let (accept_obj_id, accept_key, _) =
-        custody_actions::get_accept_params(&accept_action);
+    let (accept_obj_id, accept_key, _) = custody_actions::get_accept_params(&accept_action);
     assert_eq(accept_obj_id, resource_id);
 
     // Verify both actions use same key
-    let (_, _, approve_key, _, _) =
-        custody_actions::get_approve_custody_params(&approve_action);
+    let (_, _, approve_key, _, _) = custody_actions::get_approve_custody_params(&approve_action);
     assert_eq(*approve_key, *accept_key);
 
     custody_actions::destroy_approve_custody(approve_action);

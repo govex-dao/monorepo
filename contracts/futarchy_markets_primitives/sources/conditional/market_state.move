@@ -1,10 +1,10 @@
 module futarchy_markets_primitives::market_state;
 
+use futarchy_markets_primitives::conditional_amm::LiquidityPool;
+use futarchy_markets_primitives::price_leaderboard::{Self, PriceLeaderboard};
 use std::string::String;
 use sui::clock::Clock;
 use sui::event;
-use futarchy_markets_primitives::conditional_amm::LiquidityPool;
-use futarchy_markets_primitives::price_leaderboard::{Self, PriceLeaderboard};
 
 // === Introduction ===
 // This module tracks proposal life cycle and acts as a source of truth for proposal state
@@ -30,18 +30,18 @@ public struct MarketStatus has copy, drop, store {
 }
 
 /// Records a single flip event for analysis
-public struct FlipEvent has store, copy, drop {
+public struct FlipEvent has copy, drop, store {
     timestamp_ms: u64,
     old_winner: u64,
     new_winner: u64,
-    instant_price_spread: u128,  // Spread at flip time (for analysis)
+    instant_price_spread: u128, // Spread at flip time (for analysis)
 }
 
 /// Early resolution metrics for tracking proposal stability
 /// Tracks flip history across ALL N markets
-public struct EarlyResolveMetrics has store, copy, drop {
-    current_winner_index: u64,      // Which outcome is currently winning
-    last_flip_time_ms: u64,         // When did winner last change
+public struct EarlyResolveMetrics has copy, drop, store {
+    current_winner_index: u64, // Which outcome is currently winning
+    last_flip_time_ms: u64, // When did winner last change
     recent_flips: vector<FlipEvent>, // Last N flips (for window-based checks)
 }
 
@@ -51,10 +51,8 @@ public struct MarketState has key, store {
     dao_id: ID,
     outcome_count: u64,
     outcome_messages: vector<String>,
-
     // Market infrastructure - AMM pools for price discovery
     amm_pools: Option<vector<LiquidityPool>>,
-
     // Lifecycle state
     status: MarketStatus,
     winning_outcome: Option<u64>,
@@ -62,10 +60,8 @@ public struct MarketState has key, store {
     trading_start: u64,
     trading_end: Option<u64>,
     finalization_time: Option<u64>,
-
     // Early resolution metrics (optional)
     early_resolve_metrics: Option<EarlyResolveMetrics>,
-
     // Price leaderboard cache for O(1) winner lookups and O(log N) updates
     // Initialized lazily on first swap (after init actions complete)
     price_leaderboard: Option<PriceLeaderboard>,
@@ -105,7 +101,7 @@ public fun new(
         dao_id,
         outcome_count,
         outcome_messages,
-        amm_pools: option::none(),  // Pools added later during market initialization
+        amm_pools: option::none(), // Pools added later during market initialization
         status: MarketStatus {
             trading_started: false,
             trading_ended: false,
@@ -116,8 +112,8 @@ public fun new(
         trading_start: 0,
         trading_end: option::none(),
         finalization_time: option::none(),
-        early_resolve_metrics: option::none(),  // Initialized when trading starts
-        price_leaderboard: option::none(),  // Initialized lazily on first swap (after init actions)
+        early_resolve_metrics: option::none(), // Initialized when trading starts
+        price_leaderboard: option::none(), // Initialized lazily on first swap (after init actions)
     }
 }
 
@@ -294,7 +290,7 @@ public fun new_early_resolve_metrics(
     EarlyResolveMetrics {
         current_winner_index: initial_winner_index,
         last_flip_time_ms: current_time_ms,
-        recent_flips: vector::empty(),  // Start with no flip history
+        recent_flips: vector::empty(), // Start with no flip history
     }
 }
 
@@ -324,7 +320,9 @@ public fun borrow_early_resolve_metrics(state: &MarketState): &EarlyResolveMetri
 }
 
 /// Borrow early resolve metrics mutably
-public(package) fun borrow_early_resolve_metrics_mut(state: &mut MarketState): &mut EarlyResolveMetrics {
+public(package) fun borrow_early_resolve_metrics_mut(
+    state: &mut MarketState,
+): &mut EarlyResolveMetrics {
     state.early_resolve_metrics.borrow_mut()
 }
 
@@ -346,7 +344,7 @@ public fun update_winner_metrics(
     state: &mut MarketState,
     new_winner_index: u64,
     current_time_ms: u64,
-    instant_price_spread: u128,  // Spread at time of flip
+    instant_price_spread: u128, // Spread at time of flip
 ) {
     let metrics = state.early_resolve_metrics.borrow_mut();
 
@@ -377,10 +375,7 @@ public fun get_flip_history(state: &MarketState): &vector<FlipEvent> {
 
 /// Count flips within a time window
 /// Returns number of flips that occurred after cutoff_time_ms
-public fun count_flips_in_window(
-    state: &MarketState,
-    cutoff_time_ms: u64,
-): u64 {
+public fun count_flips_in_window(state: &MarketState, cutoff_time_ms: u64): u64 {
     let metrics = state.early_resolve_metrics.borrow();
     let flips = &metrics.recent_flips;
     let mut count = 0u64;
@@ -407,10 +402,7 @@ public fun has_price_leaderboard(state: &MarketState): bool {
 /// Initialize price leaderboard from current pool prices
 /// Called lazily on first swap (after init actions complete)
 /// Complexity: O(N) using Floyd's heapify algorithm
-public fun init_price_leaderboard(
-    state: &mut MarketState,
-    ctx: &mut TxContext,
-) {
+public fun init_price_leaderboard(state: &mut MarketState, ctx: &mut TxContext) {
     assert!(state.price_leaderboard.is_none(), 0); // Can only init once
     assert!(state.amm_pools.is_some(), 1); // Need pools to get prices
 

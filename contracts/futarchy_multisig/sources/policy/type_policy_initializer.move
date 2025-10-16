@@ -1,13 +1,11 @@
 /// Initialize type-based policies for a DAO
 module futarchy_multisig::type_policy_initializer;
 
+use account_extensions::framework_action_types;
+use futarchy_core::action_types;
+use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
 use std::option::{Self, Option};
 use sui::object::ID;
-use futarchy_multisig::policy_registry::{Self, PolicyRegistry};
-
-// Import action types
-use futarchy_core::action_types;
-use account_extensions::framework_action_types;
 
 // === Constants ===
 // Note: These are functions, not constants, so we'll call them directly
@@ -29,9 +27,9 @@ public fun init_treasury_policies(
         dao_id,
         option::some(treasury_council),
         policy_registry::MODE_COUNCIL_ONLY(),
-        option::none(),  // DAO controls policy changes
+        option::none(), // DAO controls policy changes
         policy_registry::MODE_DAO_ONLY(),
-        vault_spend_delay_ms
+        vault_spend_delay_ms,
     );
 
     // Treasury deposits are DAO-only
@@ -42,7 +40,7 @@ public fun init_treasury_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        vault_deposit_delay_ms
+        vault_deposit_delay_ms,
     );
 
     // Currency operations require both DAO and council
@@ -53,7 +51,7 @@ public fun init_treasury_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        currency_mint_delay_ms
+        currency_mint_delay_ms,
     );
 
     policy_registry::set_type_policy<framework_action_types::CurrencyBurn>(
@@ -63,7 +61,7 @@ public fun init_treasury_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        currency_burn_delay_ms
+        currency_burn_delay_ms,
     );
 }
 
@@ -85,7 +83,7 @@ public fun init_governance_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        update_name_delay_ms
+        update_name_delay_ms,
     );
 
     policy_registry::set_type_policy<action_types::MetadataUpdate>(
@@ -95,7 +93,7 @@ public fun init_governance_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        metadata_update_delay_ms
+        metadata_update_delay_ms,
     );
 
     policy_registry::set_type_policy<action_types::TradingParamsUpdate>(
@@ -105,7 +103,7 @@ public fun init_governance_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        trading_params_delay_ms
+        trading_params_delay_ms,
     );
 
     policy_registry::set_type_policy<action_types::GovernanceUpdate>(
@@ -115,7 +113,7 @@ public fun init_governance_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        governance_update_delay_ms
+        governance_update_delay_ms,
     );
 
     // Proposal creation is DAO-only
@@ -126,7 +124,7 @@ public fun init_governance_policies(
         policy_registry::MODE_DAO_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        create_proposal_delay_ms
+        create_proposal_delay_ms,
     );
 }
 
@@ -153,9 +151,9 @@ public fun init_security_policies(
         dao_id,
         option::some(security_council),
         policy_registry::MODE_DAO_AND_COUNCIL(),
-        option::some(security_council),  // Both needed to change policy
+        option::some(security_council), // Both needed to change policy
         policy_registry::MODE_DAO_AND_COUNCIL(),
-        package_upgrade_delay_ms
+        package_upgrade_delay_ms,
     );
 
     policy_registry::set_type_policy<framework_action_types::PackageCommit>(
@@ -165,7 +163,7 @@ public fun init_security_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::some(security_council),
         policy_registry::MODE_DAO_AND_COUNCIL(),
-        package_commit_delay_ms
+        package_commit_delay_ms,
     );
 
     policy_registry::set_type_policy<framework_action_types::PackageRestrict>(
@@ -175,7 +173,7 @@ public fun init_security_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::some(security_council),
         policy_registry::MODE_DAO_AND_COUNCIL(),
-        package_restrict_delay_ms
+        package_restrict_delay_ms,
     );
 
     // Emergency dissolution requires both
@@ -186,7 +184,7 @@ public fun init_security_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::some(security_council),
         policy_registry::MODE_DAO_AND_COUNCIL(),
-        dissolution_delay_ms
+        dissolution_delay_ms,
     );
 }
 
@@ -208,7 +206,7 @@ public fun init_protocol_admin_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        factory_paused_delay_ms
+        factory_paused_delay_ms,
     );
 
     // Fee updates require both DAO and admin
@@ -219,7 +217,7 @@ public fun init_protocol_admin_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        dao_creation_fee_delay_ms
+        dao_creation_fee_delay_ms,
     );
 
     policy_registry::set_type_policy<action_types::UpdateProposalFee>(
@@ -229,7 +227,7 @@ public fun init_protocol_admin_policies(
         policy_registry::MODE_DAO_AND_COUNCIL(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        proposal_fee_delay_ms
+        proposal_fee_delay_ms,
     );
 }
 
@@ -250,7 +248,7 @@ public fun init_liquidity_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        create_pool_delay_ms
+        create_pool_delay_ms,
     );
 
     // Adding/removing liquidity requires treasury council
@@ -261,7 +259,7 @@ public fun init_liquidity_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        add_liquidity_delay_ms
+        add_liquidity_delay_ms,
     );
 
     policy_registry::set_type_policy<action_types::RemoveLiquidity>(
@@ -271,7 +269,7 @@ public fun init_liquidity_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        remove_liquidity_delay_ms
+        remove_liquidity_delay_ms,
     );
 }
 
@@ -316,7 +314,7 @@ public fun init_all_default_policies(
         vault_spend_delay_ms,
         vault_deposit_delay_ms,
         currency_mint_delay_ms,
-        currency_burn_delay_ms
+        currency_burn_delay_ms,
     );
 
     init_governance_policies(
@@ -326,7 +324,7 @@ public fun init_all_default_policies(
         metadata_update_delay_ms,
         trading_params_delay_ms,
         governance_update_delay_ms,
-        create_proposal_delay_ms
+        create_proposal_delay_ms,
     );
 
     init_security_policies(
@@ -336,7 +334,7 @@ public fun init_all_default_policies(
         package_upgrade_delay_ms,
         package_commit_delay_ms,
         package_restrict_delay_ms,
-        dissolution_delay_ms
+        dissolution_delay_ms,
     );
 
     if (option::is_some(&admin_council)) {
@@ -347,7 +345,7 @@ public fun init_all_default_policies(
             factory_paused_delay_ms,
             dao_creation_fee_delay_ms,
             proposal_fee_delay_ms,
-            monthly_dao_fee_delay_ms
+            monthly_dao_fee_delay_ms,
         );
     };
 
@@ -357,7 +355,7 @@ public fun init_all_default_policies(
         treasury_council,
         create_pool_delay_ms,
         add_liquidity_delay_ms,
-        remove_liquidity_delay_ms
+        remove_liquidity_delay_ms,
     );
 
     init_vesting_stream_policies(
@@ -369,7 +367,7 @@ public fun init_all_default_policies(
         toggle_vesting_pause_delay_ms,
         toggle_vesting_freeze_delay_ms,
         toggle_stream_pause_delay_ms,
-        toggle_stream_freeze_delay_ms
+        toggle_stream_freeze_delay_ms,
     );
 }
 
@@ -393,7 +391,7 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        vesting_create_delay_ms
+        vesting_create_delay_ms,
     );
 
     // Canceling vesting requires treasury council
@@ -404,7 +402,7 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        vesting_cancel_delay_ms
+        vesting_cancel_delay_ms,
     );
 
     // Pausing/resuming vesting requires treasury council
@@ -415,7 +413,7 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        toggle_vesting_pause_delay_ms
+        toggle_vesting_pause_delay_ms,
     );
 
     // Emergency freeze/unfreeze requires treasury council
@@ -426,7 +424,7 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        toggle_vesting_freeze_delay_ms
+        toggle_vesting_freeze_delay_ms,
     );
 
     // Pausing/resuming streams requires treasury council
@@ -437,7 +435,7 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        toggle_stream_pause_delay_ms
+        toggle_stream_pause_delay_ms,
     );
 
     // Emergency freeze/unfreeze streams requires treasury council
@@ -448,6 +446,6 @@ public fun init_vesting_stream_policies(
         policy_registry::MODE_COUNCIL_ONLY(),
         option::none(),
         policy_registry::MODE_DAO_ONLY(),
-        toggle_stream_freeze_delay_ms
+        toggle_stream_freeze_delay_ms,
     );
 }

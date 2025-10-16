@@ -2,21 +2,14 @@
 /// Replaces the monolithic dispatcher with direct PTB calls to action modules
 module futarchy_dao::ptb_executor;
 
-// === Imports ===
-use account_protocol::{
-    account::{Self, Account},
-    executable::Executable,
-};
-use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig, FutarchyOutcome},
-    version
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::Executable;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
+use futarchy_core::version;
 use futarchy_dao::proposal_lifecycle;
 use futarchy_markets_core::proposal::Proposal;
-use sui::{
-    clock::Clock,
-    tx_context::TxContext,
-};
+use sui::clock::Clock;
+use sui::tx_context::TxContext;
 
 // === Errors ===
 const EProposalNotPassed: u64 = 1;
@@ -50,7 +43,7 @@ public fun create_executable_from_proposal<AssetType, StableType>(
         clock,
         version::current(),
         futarchy_config::witness(),
-        ctx
+        ctx,
     );
 
     executable

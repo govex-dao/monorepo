@@ -1,8 +1,8 @@
 #[test_only]
 module futarchy_one_shot_utils::vectors_tests;
 
-use std::string::{Self, String};
 use futarchy_one_shot_utils::vectors;
+use std::string::{Self, String};
 
 // === Tests for check_valid_outcomes ===
 
@@ -47,7 +47,9 @@ fun test_check_valid_outcomes_empty_string() {
 fun test_check_valid_outcomes_exceeds_max_length() {
     let mut outcomes = vector::empty<String>();
     outcomes.push_back(string::utf8(b"Short"));
-    outcomes.push_back(string::utf8(b"This is a very long string that exceeds the maximum allowed length"));
+    outcomes.push_back(
+        string::utf8(b"This is a very long string that exceeds the maximum allowed length"),
+    );
 
     let result = vectors::check_valid_outcomes(outcomes, 10);
     assert!(result == false, 0);

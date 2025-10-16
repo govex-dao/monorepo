@@ -7,19 +7,16 @@
 /// - Atomic through PTB composition
 module futarchy_factory::init_framework_actions;
 
-// === Imports ===
-use std::option;
-use sui::{
-    coin::{Coin, TreasuryCap},
-    clock::Clock,
-    package::UpgradeCap,
-    object::ID,
-    tx_context::TxContext,
-};
-use account_protocol::account::Account;
 use account_actions::init_actions;
+use account_protocol::account::Account;
 use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_vault::futarchy_vault;
+use std::option;
+use sui::clock::Clock;
+use sui::coin::{Coin, TreasuryCap};
+use sui::object::ID;
+use sui::package::UpgradeCap;
+use sui::tx_context::TxContext;
 
 // === Vault Actions ===
 
@@ -34,7 +31,7 @@ public entry fun init_vault_deposit<CoinType: drop>(
         account,
         coin,
         futarchy_vault::default_vault_name(),
-        ctx
+        ctx,
     );
 }
 
@@ -49,7 +46,7 @@ public entry fun init_vault_deposit_named<CoinType: drop>(
         account,
         coin,
         vault_name,
-        ctx
+        ctx,
     );
 }
 
@@ -104,7 +101,7 @@ public entry fun init_create_vesting<CoinType>(
         duration_ms,
         cliff_ms,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -123,7 +120,7 @@ public entry fun init_create_founder_vesting<CoinType>(
         founder,
         cliff_ms,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -144,7 +141,7 @@ public entry fun init_create_team_vesting<CoinType>(
         duration_ms,
         cliff_ms,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -164,10 +161,7 @@ public entry fun init_lock_upgrade_cap(
 
 /// Open NFT kiosk during DAO creation
 /// Returns the kiosk ID for subsequent NFT operations
-public fun init_open_kiosk(
-    account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext,
-): ID {
+public fun init_open_kiosk(account: &mut Account<FutarchyConfig>, ctx: &mut TxContext): ID {
     init_actions::init_open_kiosk(account, ctx)
 }
 
@@ -196,10 +190,7 @@ public entry fun init_store_object<Key: copy + drop + store, T: key + store>(
 // === Transfer Actions ===
 
 /// Transfer object during DAO initialization
-public entry fun init_transfer_object<T: key + store>(
-    object: T,
-    recipient: address,
-) {
+public entry fun init_transfer_object<T: key + store>(object: T, recipient: address) {
     init_actions::init_transfer_object(object, recipient);
 }
 
@@ -245,7 +236,7 @@ public entry fun init_create_vault_stream<CoinType: drop>(
         max_per_withdrawal,
         min_interval_ms,
         clock,
-        ctx
+        ctx,
     );
 }
 
@@ -264,7 +255,7 @@ public entry fun init_create_salary_stream<CoinType: drop>(
         monthly_amount,
         num_months,
         clock,
-        ctx
+        ctx,
     );
 }
 

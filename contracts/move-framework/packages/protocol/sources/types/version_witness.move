@@ -3,13 +3,11 @@
 
 module account_protocol::version_witness;
 
-// === Imports ===
-
 use std::type_name;
-use sui::{
-    address, 
-    hex,
-};
+use sui::address;
+use sui::hex;
+
+// === Imports ===
 
 // === Structs ===
 

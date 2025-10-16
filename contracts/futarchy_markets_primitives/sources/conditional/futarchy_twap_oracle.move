@@ -36,8 +36,8 @@
 
 module futarchy_markets_primitives::futarchy_twap_oracle;
 
-use futarchy_one_shot_utils::math;
 use futarchy_one_shot_utils::constants;
+use futarchy_one_shot_utils::math;
 use std::u128;
 use std::u64;
 use sui::clock::Clock;
@@ -111,10 +111,12 @@ public fun new_oracle(
     assert!(twap_cap_ppm <= constants::ppm_denominator(), EInvalidCapPpm);
     assert!(twap_start_delay < constants::one_week_ms(), ELongDelay); // One week in milliseconds
     assert!((twap_start_delay % constants::twap_price_cap_window()) == 0, ENoneFullWindowTwapDelay);
-    
+
     // Calculate the absolute step from PPM and initialization price
     // Use checked multiplication to avoid overflow
-    let step_u128 = if (twap_cap_ppm > 0 && twap_initialization_price > (u128::max_value!() / (twap_cap_ppm as u128))) {
+    let step_u128 = if (
+        twap_cap_ppm > 0 && twap_initialization_price > (u128::max_value!() / (twap_cap_ppm as u128))
+    ) {
         // Would overflow, use max u64 as step
         (u64::max_value!() as u128)
     } else {
@@ -252,7 +254,8 @@ fun twap_accumulate(oracle: &mut Oracle, timestamp: u64, price: u128) {
 
         // Calculate the end timestamp after processing these full windows.
         // Start from the *current* oracle.last_timestamp (end of Stage 1 segment).
-        let end_timestamp_stage2 = oracle.last_timestamp + num_full_windows * constants::twap_price_cap_window();
+        let end_timestamp_stage2 =
+            oracle.last_timestamp + num_full_windows * constants::twap_price_cap_window();
 
         multi_full_window_accumulation(
             oracle, // Passes mutable reference, state will be updated
@@ -458,7 +461,8 @@ fun multi_full_window_accumulation(
 
     oracle.last_timestamp = timestamp;
     oracle.last_window_end = timestamp;
-    let cumulative_price_contribution = (v_sum_prices as u256) * (constants::twap_price_cap_window() as u256);
+    let cumulative_price_contribution =
+        (v_sum_prices as u256) * (constants::twap_price_cap_window() as u256);
     oracle.last_window_end_cumulative_price =
         oracle.total_cumulative_price + cumulative_price_contribution;
     oracle.total_cumulative_price = oracle.total_cumulative_price + cumulative_price_contribution;
@@ -472,25 +476,25 @@ fun multi_full_window_accumulation(
 }
 
 /// ARCHITECTURAL DECISION: Mutation-Required TWAP Oracle
-/// 
+///
 /// This oracle REQUIRES write_observation() before get_twap() in the same transaction.
 /// The assertion `current_time == oracle.last_timestamp` is INTENTIONAL.
-/// 
+///
 /// Why this differs from read-only TWAP patterns:
 /// - Stale prices are attack vectors, not features
-/// - Interpolation adds complexity and manipulation surface  
+/// - Interpolation adds complexity and manipulation surface
 /// - The AMM determines prices; the oracle just tracks them
 /// - Every TWAP read MUST reflect current AMM state
-/// 
+///
 /// This design makes it IMPOSSIBLE to:
 /// ✗ Read stale/manipulated TWAPs
 /// ✗ Forget to update before critical operations
 /// ✗ Have price inconsistency within a transaction
-/// 
+///
 /// This pattern differs from typical read-only oracles by design.
 /// Serving stale TWAPs for "cleaner interfaces" is how protocols get exploited.
-/// 
-/// The AMM's get_twap() handles the update + read atomically. 
+///
+/// The AMM's get_twap() handles the update + read atomically.
 /// The oracle just validates freshness. This is correct.
 public fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
     assert!(oracle.market_start_time.is_some(), EMarketNotStarted);
@@ -511,7 +515,7 @@ public fun get_twap(oracle: &Oracle, clock: &Clock): u128 {
     assert!(period > 0, EZeroPeriod);
 
     // Calculate TWAP - dividing cumulative price by period gives average price
-    // Safe cast: For reasonable token prices over max 7-day proposals, 
+    // Safe cast: For reasonable token prices over max 7-day proposals,
     // TWAP will be far below u128::MAX (even 10^18 price × 7 days / period ≈ 10^15)
     let twap = (oracle.total_cumulative_price) / (period as u256);
 

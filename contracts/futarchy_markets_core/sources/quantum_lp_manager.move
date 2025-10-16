@@ -8,11 +8,11 @@
 module futarchy_markets_core::quantum_lp_manager;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::market_state::{Self, MarketState};
-use std::option;
 use futarchy_one_shot_utils::math;
+use std::option;
 use sui::clock::Clock;
 use sui::coin::{Self as coin, Coin};
 use sui::object::{Self, ID};
@@ -64,8 +64,10 @@ public fun would_violate_minimum_liquidity<AssetType, StableType>(
             let remaining_asset = asset_reserve - asset_out;
             let remaining_stable = stable_reserve - stable_out;
 
-            if (remaining_asset < MINIMUM_LIQUIDITY_BUFFER ||
-                remaining_stable < MINIMUM_LIQUIDITY_BUFFER) {
+            if (
+                remaining_asset < MINIMUM_LIQUIDITY_BUFFER ||
+                remaining_stable < MINIMUM_LIQUIDITY_BUFFER
+            ) {
                 return (false, option::some((i as u8)))
             };
         };
@@ -123,7 +125,7 @@ public fun check_and_lock_if_needed<AssetType, StableType>(
 public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
-    conditional_liquidity_ratio_percent: u64,  // DAO-configured ratio (base 100: 1-99)
+    conditional_liquidity_ratio_percent: u64, // DAO-configured ratio (base 100: 1-99)
     clock: &Clock,
     ctx: &mut TxContext,
 ) {
@@ -136,7 +138,11 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     let spot_lp_live = unified_spot_pool::get_live_lp_supply(spot_pool);
 
     // Get TRANSITIONING bucket reserves
-    let (spot_asset_trans, spot_stable_trans, spot_lp_trans) = unified_spot_pool::get_transitioning_reserves(spot_pool);
+    let (
+        spot_asset_trans,
+        spot_stable_trans,
+        spot_lp_trans,
+    ) = unified_spot_pool::get_transitioning_reserves(spot_pool);
 
     // Total LP supply across both buckets
     let total_lp = spot_lp_live + spot_lp_trans;
@@ -166,7 +172,10 @@ public fun auto_quantum_split_on_proposal_start<AssetType, StableType>(
     };
 
     // Remove liquidity from spot pool (without burning LP tokens)
-    let (asset_balance, stable_balance) = unified_spot_pool::remove_liquidity_for_quantum_split_with_buckets(
+    let (
+        asset_balance,
+        stable_balance,
+    ) = unified_spot_pool::remove_liquidity_for_quantum_split_with_buckets(
         spot_pool,
         asset_live_split,
         asset_trans_split,
@@ -256,7 +265,9 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType>(
     ) = conditional_amm::get_bucket_amounts(pool);
 
     let total_lp_bucket = lp_live_bucket + lp_transition_bucket;
-    let (asset_live, asset_transitioning, stable_live, stable_transitioning) = if (total_lp_bucket == 0) {
+    let (asset_live, asset_transitioning, stable_live, stable_transitioning) = if (
+        total_lp_bucket == 0
+    ) {
         (total_asset, 0, total_stable, 0)
     } else {
         let asset_live_calc = math::mul_div_to_64(total_asset, lp_live_bucket, total_lp_bucket);
@@ -283,7 +294,7 @@ public fun auto_redeem_on_proposal_end<AssetType, StableType>(
         spot_pool,
         coin::into_balance(asset_coin),
         coin::into_balance(stable_coin),
-        asset_live,          // ← DERIVED from ratios, not stale counters!
+        asset_live, // ← DERIVED from ratios, not stale counters!
         asset_transitioning,
         stable_live,
         stable_transitioning,

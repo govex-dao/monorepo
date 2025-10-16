@@ -5,25 +5,23 @@
 
 module account_protocol::intent_interface;
 
-// === Imports ===
-
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::Executable;
+use account_protocol::intents::{Intent, Params};
+use account_protocol::version_witness::VersionWitness;
 use std::string::String;
-use account_protocol::{
-    account::{Self, Account},
-    intents::{Intent, Params},
-    version_witness::VersionWitness,
-    executable::Executable,
-};
+
+// === Imports ===
 
 // === Public functions ===
 
 /// Example implementation:
-/// 
+///
 /// ```move
-/// 
+///
 /// public fun request_intent_name<Config, Outcome: store>(
 ///     auth: Auth,
-///     account: &mut Account<Config>, 
+///     account: &mut Account<Config>,
 ///     params: Params,
 ///     outcome: Outcome,
 ///     action1: Action1,
@@ -32,13 +30,13 @@ use account_protocol::{
 /// ) {
 ///     account.verify(auth);
 ///     params.assert_single_execution(); // if not a recurring intent
-/// 
+///
 ///     account.build_intent!(
 ///         params,
-///         outcome, 
+///         outcome,
 ///         b"".to_string(),
 ///         version::current(),
-///         IntentWitness(),   
+///         IntentWitness(),
 ///         ctx,
 ///         |intent, iw| {
 ///             intent.add_action(action1, iw);
@@ -46,7 +44,7 @@ use account_protocol::{
 ///         }
 ///     );
 /// }
-/// 
+///
 /// ```
 
 /// Creates an intent with actions and adds it to the account.
@@ -65,9 +63,9 @@ public macro fun build_intent<$Config, $Outcome, $IW: drop>(
         $params,
         $outcome,
         $managed_name,
-        $version_witness, 
+        $version_witness,
         $intent_witness,
-        $ctx 
+        $ctx,
     );
 
     $new_actions(&mut intent, $intent_witness);
@@ -76,33 +74,33 @@ public macro fun build_intent<$Config, $Outcome, $IW: drop>(
 }
 
 /// Example implementation:
-/// 
+///
 /// ```move
-/// 
+///
 /// public fun execute_intent_name<Config, Outcome: store>(
 ///     executable: &mut Executable<Outcome>,
-///     account: &mut Account<Config>,  
+///     account: &mut Account<Config>,
 /// ) {
 ///     account.process_intent!(
-///         executable, 
-///         version::current(),   
-///         ConfigDepsIntent(), 
+///         executable,
+///         version::current(),
+///         ConfigDepsIntent(),
 ///         |executable, iw| {
 ///             do_action(executable, iw, <ADDITIONAL_ARG>)
 ///             do_other_action(executable, iw)
 ///         }
-///     ); 
-/// } 
-/// 
+///     );
+/// }
+///
 /// ```
 
 /// Executes the actions from the executable intent.
 public macro fun process_intent<$Config, $Outcome: store, $IW: drop>(
-    $account: &Account<$Config>, 
+    $account: &Account<$Config>,
     $executable: &mut Executable<$Outcome>,
     $version_witness: VersionWitness,
     $intent_witness: $IW,
-    $do_actions: |&mut Executable<$Outcome>, $IW| -> _
+    $do_actions: |&mut Executable<$Outcome>, $IW| -> _,
 ): _ {
     let account = $account;
     let executable = $executable;

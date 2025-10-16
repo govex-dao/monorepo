@@ -2,9 +2,9 @@
 /// Used by both coin_registry and proposal modules to enforce invariants
 module futarchy_one_shot_utils::coin_validation;
 
-use sui::coin::{TreasuryCap, CoinMetadata};
-use std::string;
 use std::ascii;
+use std::string;
+use sui::coin::{TreasuryCap, CoinMetadata};
 
 // === Errors ===
 const ESupplyNotZero: u64 = 0;
@@ -23,10 +23,7 @@ public fun assert_zero_supply<T>(treasury_cap: &TreasuryCap<T>) {
 }
 
 /// Validates that metadata and treasury cap match the same coin type
-public fun assert_caps_match<T>(
-    treasury_cap: &TreasuryCap<T>,
-    metadata: &CoinMetadata<T>,
-) {
+public fun assert_caps_match<T>(treasury_cap: &TreasuryCap<T>, metadata: &CoinMetadata<T>) {
     // Type safety ensures they match at compile time
     // This function exists for explicit validation calls
     let _ = treasury_cap;
@@ -57,10 +54,7 @@ public fun assert_empty_metadata<T>(metadata: &CoinMetadata<T>) {
 }
 
 /// Complete validation - checks all requirements
-public fun validate_conditional_coin<T>(
-    treasury_cap: &TreasuryCap<T>,
-    metadata: &CoinMetadata<T>,
-) {
+public fun validate_conditional_coin<T>(treasury_cap: &TreasuryCap<T>, metadata: &CoinMetadata<T>) {
     assert_zero_supply(treasury_cap);
     assert_caps_match(treasury_cap, metadata);
     assert_empty_name(metadata);

@@ -1,24 +1,20 @@
 /// DAO-side helper to approve accepting/locking an UpgradeCap (2-of-2 flow).
 module futarchy_multisig::upgrade_cap_intents;
 
-use account_protocol::{
-    account::{Self, Account},
-    intents::{Intent, Params},
-    intent_interface,
-};
-use fun intent_interface::build_intent as Account.build_intent;
-use sui::{
-    object::{Self, ID},
-    tx_context::TxContext,
-};
-use std::string::{Self, String};
-use sui::package::UpgradeCap;
-use futarchy_core::version;
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_vault::custody_actions;
+use account_protocol::account::{Self, Account};
+use account_protocol::intent_interface;
+use account_protocol::intents::{Intent, Params};
 use futarchy_core::action_types;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::version;
+use futarchy_vault::custody_actions;
+use std::string::{Self, String};
 use std::type_name;
+use sui::object::{Self, ID};
+use sui::package::UpgradeCap;
+use sui::tx_context::TxContext;
 
+use fun intent_interface::build_intent as Account.build_intent;
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -33,7 +29,7 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
     cap_id: ID,
     package_name: String, // resource_key
     expires_at: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     let dao_id = object::id(dao); // Get ID before the macro
 
@@ -42,7 +38,7 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
         outcome,
         b"approve_accept_upgrade_cap".to_string(),
         version::current(),
-        UpgradeCapIntent{},
+        UpgradeCapIntent {},
         ctx,
         |intent, iw| {
             // Typed DAO-side approve custody for UpgradeCap
@@ -53,8 +49,8 @@ public fun create_approve_accept_upgrade_cap_intent<Outcome: store + drop + copy
                 package_name,
                 b"".to_string(),
                 expires_at,
-                iw
+                iw,
             );
-        }
+        },
     );
 }

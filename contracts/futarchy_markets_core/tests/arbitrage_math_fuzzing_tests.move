@@ -26,12 +26,12 @@
 #[test_only]
 module futarchy_markets_core::arbitrage_math_fuzzing_tests;
 
-use std::vector;
 use futarchy_markets_core::arbitrage_math;
+use futarchy_markets_core::rng;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_core::rng;
-use sui::test_scenario::{Self as ts};
+use std::vector;
+use sui::test_scenario as ts;
 use sui::test_utils;
 
 // === Test Coins ===
@@ -99,8 +99,8 @@ fun test_fuzzing_high_dimensional_markets() {
     let mut rng = rng::seed(0xCAFEBABE, 0xDEADBEEF); // Different seed
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 25u64;  // Balanced: thorough testing without timeout
-    let n = 10u64;          // 10 conditionals = high dimensional
+    let num_cases = 25u64; // Balanced: thorough testing without timeout
+    let n = 10u64; // 10 conditionals = high dimensional
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -134,7 +134,10 @@ fun test_fuzzing_high_dimensional_markets() {
         };
 
         // Run optimizer (should complete without gas issues due to pruning)
-        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<ASSET, STABLE>(
+        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
+            ASSET,
+            STABLE,
+        >(
             &spot_pool,
             &cond_pools,
             0,
@@ -174,8 +177,8 @@ fun test_fuzzing_max_dimensional_markets() {
     let mut rng = rng::seed(0xDEADC0DE, 0xBADC0FFE); // Unique seed for adversarial
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 10u64;  // Reduced: adversarial cases are 10x slower
-    let n = 50u64;          // MAX_CONDITIONALS = absolute worst case
+    let num_cases = 10u64; // Reduced: adversarial cases are 10x slower
+    let n = 50u64; // MAX_CONDITIONALS = absolute worst case
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -199,10 +202,7 @@ fun test_fuzzing_max_dimensional_markets() {
             // Alternate between extremes to maximize price differences
             let (cond_asset, cond_stable) = if (i % 2 == 0) {
                 // Tiny reserves (like spot) - creates huge price impact
-                (
-                    100 + rng::next_range(&mut rng, 0, 400),
-                    100 + rng::next_range(&mut rng, 0, 400),
-                )
+                (100 + rng::next_range(&mut rng, 0, 400), 100 + rng::next_range(&mut rng, 0, 400))
             } else {
                 // Massive reserves (1M-5M) - creates large search spaces
                 (
@@ -224,7 +224,10 @@ fun test_fuzzing_max_dimensional_markets() {
 
         // Run optimizer on WORST possible market configuration
         // This forces maximum ternary search iterations across all 50 pools
-        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<ASSET, STABLE>(
+        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
+            ASSET,
+            STABLE,
+        >(
             &spot_pool,
             &cond_pools,
             0,
@@ -258,8 +261,8 @@ fun test_fuzzing_max_conditionals() {
     let mut rng = rng::seed(0xDEADC0DE, 0xBEEFF00D);
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 5u64;   // Minimal for N=50 (O(N²) = O(2500) per case, still validates max capacity)
-    let n = 50u64;          // MAX_CONDITIONALS
+    let num_cases = 5u64; // Minimal for N=50 (O(N²) = O(2500) per case, still validates max capacity)
+    let n = 50u64; // MAX_CONDITIONALS
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -293,7 +296,10 @@ fun test_fuzzing_max_conditionals() {
         };
 
         // Run optimizer (pruning should handle this efficiently)
-        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<ASSET, STABLE>(
+        let (x_star, p_star, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
+            ASSET,
+            STABLE,
+        >(
             &spot_pool,
             &cond_pools,
             0,
@@ -327,7 +333,7 @@ fun test_fuzzing_extreme_values() {
     let mut rng = rng::seed(0xFEEDFACE, 0xBAADF00D);
     let mut scenario = ts::begin(ADMIN);
 
-    let num_cases = 50;  // Reduced from 50 to avoid timeouts with large reserves
+    let num_cases = 50; // Reduced from 50 to avoid timeouts with large reserves
 
     let mut case = 0u64;
     while (case < num_cases) {
@@ -342,10 +348,7 @@ fun test_fuzzing_extreme_values() {
             )
         } else {
             // Small reserves
-            (
-                100 + rng::next_range(&mut rng, 0, 10_000),
-                100 + rng::next_range(&mut rng, 0, 10_000),
-            )
+            (100 + rng::next_range(&mut rng, 0, 10_000), 100 + rng::next_range(&mut rng, 0, 10_000))
         };
 
         let spot_pool = create_spot_pool(
@@ -384,7 +387,10 @@ fun test_fuzzing_extreme_values() {
         };
 
         // PROPERTY: Should not abort on overflow (saturates gracefully)
-        let (x_star, p_star, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<ASSET, STABLE>(
+        let (x_star, p_star, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes<
+            ASSET,
+            STABLE,
+        >(
             &spot_pool,
             &cond_pools,
             0,

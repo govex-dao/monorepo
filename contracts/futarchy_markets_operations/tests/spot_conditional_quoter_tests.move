@@ -4,14 +4,14 @@
 #[test_only]
 module futarchy_markets_operations::spot_conditional_quoter_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use sui::test_utils;
-use futarchy_markets_operations::spot_conditional_quoter::{Self, SpotQuote, DetailedSpotQuote};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_operations::spot_conditional_quoter::{Self, SpotQuote, DetailedSpotQuote};
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use sui::clock::{Self, Clock};
 use sui::coin;
+use sui::test_scenario as ts;
+use sui::test_utils;
 
 // === Test Helpers ===
 
@@ -34,7 +34,7 @@ fun create_test_spot_quote(
         effective_price,
         price_impact_bps,
         outcome,
-        is_asset_to_stable
+        is_asset_to_stable,
     )
 }
 
@@ -51,7 +51,7 @@ fun create_test_detailed_quote(
         conditional_tokens_created,
         excess_conditional_tokens,
         spot_price_before,
-        spot_price_after
+        spot_price_after,
     )
 }
 
@@ -60,11 +60,11 @@ fun create_test_detailed_quote(
 #[test]
 fun test_spot_quote_get_amount_out() {
     let quote = create_test_spot_quote(
-        1500u64,         // amount_out
+        1500u64, // amount_out
         950_000_000_000, // effective_price (0.95)
-        250,             // price_impact_bps (2.5%)
-        1,               // outcome
-        true             // is_asset_to_stable
+        250, // price_impact_bps (2.5%)
+        1, // outcome
+        true, // is_asset_to_stable
     );
 
     assert!(spot_conditional_quoter::get_amount_out(&quote) == 1500, 0);
@@ -78,7 +78,7 @@ fun test_spot_quote_get_effective_price() {
         1_050_000_000_000, // effective_price (1.05)
         100,
         0,
-        false
+        false,
     );
 
     assert!(spot_conditional_quoter::get_effective_price(&quote) == 1_050_000_000_000, 0);
@@ -92,7 +92,7 @@ fun test_spot_quote_get_price_impact_bps() {
         980_000_000_000,
         500, // price_impact_bps (5%)
         2,
-        true
+        true,
     );
 
     assert!(spot_conditional_quoter::get_price_impact_bps(&quote) == 500, 0);
@@ -106,7 +106,7 @@ fun test_spot_quote_get_outcome() {
         1_000_000_000_000,
         50,
         3, // outcome
-        false
+        false,
     );
 
     assert!(spot_conditional_quoter::get_outcome(&quote) == 3, 0);
@@ -120,7 +120,7 @@ fun test_spot_quote_is_asset_to_stable() {
         1_000_000_000_000,
         50,
         0,
-        true // is_asset_to_stable
+        true, // is_asset_to_stable
     );
 
     let quote_stable_to_asset = create_test_spot_quote(
@@ -128,7 +128,7 @@ fun test_spot_quote_is_asset_to_stable() {
         1_000_000_000_000,
         50,
         0,
-        false // is_asset_to_stable
+        false, // is_asset_to_stable
     );
 
     assert!(spot_conditional_quoter::is_asset_to_stable(&quote_asset_to_stable) == true, 0);
@@ -147,7 +147,7 @@ fun test_detailed_quote_getters() {
         950_000_000_000,
         250,
         1,
-        true
+        true,
     );
 
     let detailed = create_test_detailed_quote(
@@ -155,7 +155,7 @@ fun test_detailed_quote_getters() {
         3000u64, // conditional_tokens_created
         1500u64, // excess_conditional_tokens
         1_000_000_000_000, // spot_price_before (1.0)
-        950_000_000_000    // spot_price_after (0.95)
+        950_000_000_000, // spot_price_after (0.95)
     );
 
     assert!(spot_conditional_quoter::get_conditional_tokens_created(&detailed) == 3000, 0);
@@ -173,15 +173,15 @@ fun test_detailed_quote_with_zero_excess() {
         1_000_000_000_000,
         0,
         0,
-        false
+        false,
     );
 
     let detailed = create_test_detailed_quote(
         base_quote,
         1000u64, // conditional_tokens_created
-        0u64,    // excess_conditional_tokens (none)
+        0u64, // excess_conditional_tokens (none)
         1_000_000_000_000,
-        1_000_000_000_000
+        1_000_000_000_000,
     );
 
     assert!(spot_conditional_quoter::get_excess_conditional_tokens(&detailed) == 0, 0);
@@ -414,7 +414,7 @@ fun test_spot_quote_with_zero_price_impact() {
         1_000_000_000_000,
         0, // zero price impact
         0,
-        true
+        true,
     );
 
     assert!(spot_conditional_quoter::get_price_impact_bps(&quote) == 0, 0);
@@ -428,7 +428,7 @@ fun test_spot_quote_with_high_price_impact() {
         700_000_000_000,
         5000, // 50% price impact
         1,
-        true
+        true,
     );
 
     assert!(spot_conditional_quoter::get_price_impact_bps(&quote) == 5000, 0);
@@ -443,7 +443,7 @@ fun test_detailed_quote_multiple_outcomes() {
         1_000_000_000_000,
         100,
         2,
-        false
+        false,
     );
 
     // Scenario: 5 outcomes, 1000 tokens each = 5000 total created, 4000 excess
@@ -452,7 +452,7 @@ fun test_detailed_quote_multiple_outcomes() {
         5000u64, // conditional_tokens_created (5 outcomes * 1000)
         4000u64, // excess_conditional_tokens (4 unused outcomes)
         1_000_000_000_000,
-        1_010_000_000_000
+        1_010_000_000_000,
     );
 
     assert!(spot_conditional_quoter::get_conditional_tokens_created(&detailed) == 5000, 0);

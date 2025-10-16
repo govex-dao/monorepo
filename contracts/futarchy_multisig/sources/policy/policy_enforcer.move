@@ -1,12 +1,12 @@
 /// Enforces critical policies and validates council ownership
 module futarchy_multisig::policy_enforcer;
 
-use std::vector;
-use std::option::{Self, Option};
-use sui::object::{Self, ID, UID};
-use sui::tx_context::TxContext;
 use account_protocol::account::Account;
 use futarchy_multisig::weighted_multisig::WeightedMultisig;
+use std::option::{Self, Option};
+use std::vector;
+use sui::object::{Self, ID, UID};
+use sui::tx_context::TxContext;
 
 // === Council Registry ===
 
@@ -14,9 +14,9 @@ use futarchy_multisig::weighted_multisig::WeightedMultisig;
 /// Created when DAO creates/registers a council
 public struct CouncilRegistration has key, store {
     id: UID,
-    dao_id: ID,                    // The DAO that owns this council
-    council_id: ID,                 // The security council Account ID
-    council_type: vector<u8>,       // b"treasury", b"technical", b"legal", etc.
+    dao_id: ID, // The DAO that owns this council
+    council_id: ID, // The security council Account ID
+    council_type: vector<u8>, // b"treasury", b"technical", b"legal", etc.
     created_at_ms: u64,
 }
 

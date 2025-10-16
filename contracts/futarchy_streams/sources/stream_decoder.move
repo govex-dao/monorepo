@@ -1,10 +1,6 @@
 /// Decoder for stream/payment actions in futarchy DAOs
 module futarchy_streams::stream_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name, option::{Self, Option}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_streams::stream_actions::{
@@ -13,8 +9,16 @@ use futarchy_streams::stream_actions::{
     WithdrawStreamAction,
     UpdateStreamAction,
     PauseStreamAction,
-    ResumeStreamAction,
+    ResumeStreamAction
 };
+use std::option::{Self, Option};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -106,21 +110,25 @@ public fun decode_create_stream_action<CoinType>(
     ];
 
     if (end_time.is_some()) {
-        fields.push_back(schema::new_field(
-            b"end_time".to_string(),
-            end_time.destroy_some().to_string(),
-            b"u64".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"end_time".to_string(),
+                end_time.destroy_some().to_string(),
+                b"u64".to_string(),
+            ),
+        );
     } else {
         end_time.destroy_none();
     };
 
     if (cliff_time.is_some()) {
-        fields.push_back(schema::new_field(
-            b"cliff_time".to_string(),
-            cliff_time.destroy_some().to_string(),
-            b"u64".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"cliff_time".to_string(),
+                cliff_time.destroy_some().to_string(),
+                b"u64".to_string(),
+            ),
+        );
     } else {
         cliff_time.destroy_none();
     };
@@ -169,10 +177,7 @@ fun peel_option_u64(bcs_data: &mut bcs::BCS): Option<u64> {
 // === Registration Functions ===
 
 /// Register all stream decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_create_stream_decoder(registry, ctx);
     register_cancel_stream_decoder(registry, ctx);
     register_withdraw_stream_decoder(registry, ctx);
@@ -181,55 +186,37 @@ public fun register_decoders(
     register_resume_stream_decoder(registry, ctx);
 }
 
-fun register_create_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreateStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CreateStreamAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_cancel_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_cancel_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CancelStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CancelStreamAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_withdraw_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_withdraw_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = WithdrawStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<WithdrawStreamAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_update_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_update_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = UpdateStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<UpdateStreamAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_pause_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_pause_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = PauseStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<PauseStreamAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_resume_stream_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_resume_stream_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = ResumeStreamActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ResumeStreamAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

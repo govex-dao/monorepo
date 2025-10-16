@@ -3,19 +3,14 @@
 /// The actual intent creation must be done by the governance system that provides the Outcome
 module futarchy_lifecycle::dissolution_intents;
 
-// === Imports ===
-use std::string::String;
-use sui::{
-    clock::Clock,
-    bcs,
-    object::{Self, ID},
-};
-use account_protocol::{
-    intents::{Self, Intent},
-    metadata,
-};
-use futarchy_lifecycle::dissolution_actions;
+use account_protocol::intents::{Self, Intent};
+use account_protocol::metadata;
 use futarchy_core::action_types;
+use futarchy_lifecycle::dissolution_actions;
+use std::string::String;
+use sui::bcs;
+use sui::clock::Clock;
+use sui::object::{Self, ID};
 
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 
@@ -53,7 +48,7 @@ public fun initiate_dissolution_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::initiate_dissolution(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // dissolution_actions::destroy_initiate_dissolution(action);
 }
@@ -70,7 +65,7 @@ public fun batch_distribute_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::distribute_asset(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // dissolution_actions::destroy_batch_distribute(action);
 }
@@ -91,7 +86,7 @@ public fun finalize_dissolution_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::finalize_dissolution(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // dissolution_actions::destroy_finalize_dissolution(action);
 }
@@ -108,7 +103,7 @@ public fun cancel_dissolution_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::cancel_dissolution(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // dissolution_actions::destroy_cancel_dissolution(action);
 }
@@ -129,7 +124,7 @@ public fun calculate_pro_rata_shares_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::calculate_pro_rata_shares(),
         action_data,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -145,7 +140,7 @@ public fun cancel_all_streams_in_intent<Outcome: store, IW: drop>(
         intent,
         action_types::cancel_all_streams(),
         action_data,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -167,7 +162,7 @@ public fun withdraw_amm_liquidity_in_intent<Outcome: store, AssetType, StableTyp
         intent,
         action_types::withdraw_all_spot_liquidity(),
         action_data,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -189,7 +184,7 @@ public fun distribute_assets_in_intent<Outcome: store, CoinType, IW: drop>(
         intent,
         action_types::distribute_asset(),
         action_data,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -211,15 +206,12 @@ public fun create_auction_in_intent<Outcome: store, T: key + store, BidCoin, IW:
         intent,
         action_types::create_auction(),
         action_data,
-        intent_witness
+        intent_witness,
     );
 }
 
 /// Create a unique key for a dissolution intent
-public fun create_dissolution_key(
-    operation: String,
-    clock: &Clock,
-): String {
+public fun create_dissolution_key(operation: String, clock: &Clock): String {
     let mut key = b"dissolution_".to_string();
     key.append(operation);
     key.append(b"_".to_string());
@@ -265,10 +257,7 @@ public fun create_prorata_distribution<CoinType>(
 }
 
 /// Helper to create an equal distribution plan
-public fun create_equal_distribution(
-    total_amount: u64,
-    recipients: vector<address>,
-): vector<u64> {
+public fun create_equal_distribution(total_amount: u64, recipients: vector<address>): vector<u64> {
     let count = recipients.length();
     let amount_per_recipient = total_amount / count;
 

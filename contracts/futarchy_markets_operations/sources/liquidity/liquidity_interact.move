@@ -1,9 +1,9 @@
 module futarchy_markets_operations::liquidity_interact;
 
-use futarchy_markets_primitives::conditional_amm;
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::fee::FeeManager;
 use futarchy_markets_core::proposal::Proposal;
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
@@ -41,7 +41,12 @@ public struct ProtocolFeesCollected has copy, drop {
 /// 2. Burns those conditional coins using TreasuryCaps
 /// 3. Withdraws equivalent spot tokens from escrow
 /// 4. Transfers spot tokens to liquidity provider
-public fun empty_amm_and_return_to_provider<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun empty_amm_and_return_to_provider<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     ctx: &mut TxContext,
@@ -55,17 +60,28 @@ public fun empty_amm_and_return_to_provider<AssetType, StableType, AssetConditio
 
     // Get winning pool from market_state and empty its liquidity (returns conditional coin amounts)
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
+    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        market_state,
+        (winning_outcome as u8),
+    );
     let (conditional_asset_amt, conditional_stable_amt) = pool.empty_all_amm_liquidity(ctx);
 
     // Burn the conditional coins (1:1 with spot due to quantum liquidity)
-    let asset_coin = escrow.burn_conditional_asset_and_withdraw<AssetType, StableType, AssetConditionalCoin>(
+    let asset_coin = escrow.burn_conditional_asset_and_withdraw<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+    >(
         winning_outcome,
         conditional_asset_amt,
         ctx,
     );
 
-    let stable_coin = escrow.burn_conditional_stable_and_withdraw<AssetType, StableType, StableConditionalCoin>(
+    let stable_coin = escrow.burn_conditional_stable_and_withdraw<
+        AssetType,
+        StableType,
+        StableConditionalCoin,
+    >(
         winning_outcome,
         conditional_stable_amt,
         ctx,
@@ -80,7 +96,12 @@ public fun empty_amm_and_return_to_provider<AssetType, StableType, AssetConditio
 /// Empties the winning AMM pool and returns the liquidity.
 /// Called internally by `advance_stage` when a DAO-funded proposal finalizes.
 /// Returns the asset and stable coins for the DAO to handle (e.g., deposit to vault).
-public fun empty_amm_and_return_to_dao<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun empty_amm_and_return_to_dao<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     ctx: &mut TxContext,
@@ -94,17 +115,28 @@ public fun empty_amm_and_return_to_dao<AssetType, StableType, AssetConditionalCo
     let winning_outcome = proposal.get_winning_outcome();
     // Get winning pool from market_state
     let market_state = escrow.get_market_state_mut();
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
+    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        market_state,
+        (winning_outcome as u8),
+    );
     let (conditional_asset_amt, conditional_stable_amt) = pool.empty_all_amm_liquidity(ctx);
 
     // Burn conditional coins and withdraw spot tokens
-    let asset_coin = escrow.burn_conditional_asset_and_withdraw<AssetType, StableType, AssetConditionalCoin>(
+    let asset_coin = escrow.burn_conditional_asset_and_withdraw<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+    >(
         winning_outcome,
         conditional_asset_amt,
         ctx,
     );
 
-    let stable_coin = escrow.burn_conditional_stable_and_withdraw<AssetType, StableType, StableConditionalCoin>(
+    let stable_coin = escrow.burn_conditional_stable_and_withdraw<
+        AssetType,
+        StableType,
+        StableConditionalCoin,
+    >(
         winning_outcome,
         conditional_stable_amt,
         ctx,
@@ -206,7 +238,13 @@ public fun redeem_conditional_stable<AssetType, StableType, ConditionalCoinType>
 /// Add liquidity to an AMM pool for a specific outcome
 /// Takes asset and stable conditional coins and mints LP tokens
 /// Uses TreasuryCap-based conditional coins
-public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin, LPConditionalCoin>(
+public entry fun add_liquidity_entry<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+    LPConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -239,7 +277,10 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
 
     // Add liquidity and get new price (within pool borrow scope)
     let (lp_amount, new_price) = {
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (outcome_idx as u8),
+        );
 
         // Add liquidity through the AMM (updates virtual reserves)
         let lp = conditional_amm::add_liquidity_proportional(
@@ -248,7 +289,7 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
             stable_amount,
             min_lp_out,
             clock,
-            ctx
+            ctx,
         );
 
         // Get new price before pool borrow is released
@@ -262,7 +303,7 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
         futarchy_markets_core::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
-            new_price
+            new_price,
         );
     };
 
@@ -271,7 +312,7 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
         escrow,
         outcome_idx,
         lp_amount,
-        ctx
+        ctx,
     );
 
     // Transfer LP token to the sender
@@ -280,7 +321,13 @@ public entry fun add_liquidity_entry<AssetType, StableType, AssetConditionalCoin
 
 /// Remove liquidity from an AMM pool proportionally
 /// Burns LP tokens and returns asset and stable conditional coins
-public entry fun remove_liquidity_entry<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin, LPConditionalCoin>(
+public entry fun remove_liquidity_entry<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+    LPConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     outcome_idx: u64,
@@ -306,14 +353,17 @@ public entry fun remove_liquidity_entry<AssetType, StableType, AssetConditionalC
 
     // Remove liquidity and get new price (within pool borrow scope)
     let (asset_amount, stable_amount, new_price) = {
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (outcome_idx as u8),
+        );
 
         // Remove liquidity through the AMM (updates virtual reserves)
         let (asset, stable) = conditional_amm::remove_liquidity_proportional(
             pool,
             lp_amount,
             clock,
-            ctx
+            ctx,
         );
 
         // Get new price before pool borrow is released
@@ -331,23 +381,31 @@ public entry fun remove_liquidity_entry<AssetType, StableType, AssetConditionalC
         futarchy_markets_core::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
-            new_price
+            new_price,
         );
     };
 
     // Mint the asset and stable conditional tokens using TreasuryCaps
-    let asset_token = coin_escrow::mint_conditional_asset<AssetType, StableType, AssetConditionalCoin>(
+    let asset_token = coin_escrow::mint_conditional_asset<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+    >(
         escrow,
         outcome_idx,
         asset_amount,
-        ctx
+        ctx,
     );
 
-    let stable_token = coin_escrow::mint_conditional_stable<AssetType, StableType, StableConditionalCoin>(
+    let stable_token = coin_escrow::mint_conditional_stable<
+        AssetType,
+        StableType,
+        StableConditionalCoin,
+    >(
         escrow,
         outcome_idx,
         stable_amount,
-        ctx
+        ctx,
     );
 
     // Transfer tokens to the sender
@@ -372,7 +430,10 @@ public fun collect_protocol_fees<AssetType, StableType>(
     let winning_outcome = proposal.get_winning_outcome();
     // Get winning pool from market_state
     let market_state = escrow.get_market_state_mut();
-    let winning_pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (winning_outcome as u8));
+    let winning_pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        market_state,
+        (winning_outcome as u8),
+    );
     let protocol_fee_amount = winning_pool.get_protocol_fees();
 
     if (protocol_fee_amount > 0) {
@@ -383,7 +444,11 @@ public fun collect_protocol_fees<AssetType, StableType>(
         let (spot_asset, spot_stable) = coin_escrow::get_spot_balances(escrow);
         assert!(spot_stable >= protocol_fee_amount, EInsufficientAmount);
 
-        let fee_balance_coin = coin_escrow::withdraw_stable_balance(escrow, protocol_fee_amount, ctx);
+        let fee_balance_coin = coin_escrow::withdraw_stable_balance(
+            escrow,
+            protocol_fee_amount,
+            ctx,
+        );
         let fee_balance = coin::into_balance(fee_balance_coin);
 
         // Deposit to fee manager
@@ -417,7 +482,10 @@ public fun collect_protocol_fees<AssetType, StableType>(
 /// 2. This crank moves any remaining TRANSITIONING → WITHDRAW_ONLY (edge case: marked during no-proposal period)
 /// 3. Users can now call claim_withdrawal() to get their coins
 public entry fun crank_recombine_and_transition<AssetType, StableType>(
-    spot_pool: &mut futarchy_markets_core::unified_spot_pool::UnifiedSpotPool<AssetType, StableType>,
+    spot_pool: &mut futarchy_markets_core::unified_spot_pool::UnifiedSpotPool<
+        AssetType,
+        StableType,
+    >,
 ) {
     // Move all TRANSITIONING bucket amounts to WITHDRAW_ONLY
     // This is an atomic batch operation that processes all pending withdrawals

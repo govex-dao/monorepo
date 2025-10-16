@@ -1,14 +1,12 @@
 #[test_only]
 module futarchy_core::proposal_quota_registry_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-};
 use futarchy_core::proposal_quota_registry::{Self, ProposalQuotaRegistry};
+use sui::clock::{Self, Clock};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -62,13 +60,17 @@ fun test_set_quota_single_user() {
         5,
         THIRTY_DAYS_MS,
         100,
-        &clock
+        &clock,
     );
 
     // Verify quota was set
     assert!(proposal_quota_registry::has_quota(&registry, USER1), 0);
 
-    let (has_quota, remaining, reduced_fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, reduced_fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(has_quota, 1);
     assert!(remaining == 5, 2);
     assert!(reduced_fee == 100, 3);
@@ -88,7 +90,7 @@ fun test_set_quota_multiple_users() {
         10,
         THIRTY_DAYS_MS,
         50,
-        &clock
+        &clock,
     );
 
     // Verify all have quotas
@@ -104,13 +106,33 @@ fun test_update_existing_quota() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set initial quota
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 5, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        5,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Update quota
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 10, THIRTY_DAYS_MS, 50, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        10,
+        THIRTY_DAYS_MS,
+        50,
+        &clock,
+    );
 
     // Verify updated values
-    let (has_quota, remaining, reduced_fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, reduced_fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(has_quota, 0);
     assert!(remaining == 10, 1); // New amount
     assert!(reduced_fee == 50, 2); // New fee
@@ -123,7 +145,15 @@ fun test_remove_quota() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 5, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        5,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
     assert!(proposal_quota_registry::has_quota(&registry, USER1), 0);
 
     // Remove quota by setting amount to 0
@@ -143,7 +173,15 @@ fun test_set_quota_wrong_dao_fails() {
     let wrong_dao = object::id_from_address(@0xBAD);
 
     // Should abort - wrong DAO
-    proposal_quota_registry::set_quotas(&mut registry, wrong_dao, vector[USER1], 5, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        wrong_dao,
+        vector[USER1],
+        5,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     end(scenario, registry, clock);
 }
@@ -164,10 +202,23 @@ fun test_check_quota_available() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 5, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        5,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Check availability
-    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(&registry, dao_id, USER1, &clock);
+    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(
+        &registry,
+        dao_id,
+        USER1,
+        &clock,
+    );
 
     assert!(has_quota, 0);
     assert!(reduced_fee == 100, 1);
@@ -180,7 +231,12 @@ fun test_check_quota_available_no_quota() {
     let (scenario, registry, mut clock, dao_id) = start();
 
     // Check availability for user without quota
-    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(&registry, dao_id, USER1, &clock);
+    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(
+        &registry,
+        dao_id,
+        USER1,
+        &clock,
+    );
 
     assert!(!has_quota, 0);
     assert!(reduced_fee == 0, 1);
@@ -193,13 +249,25 @@ fun test_use_quota() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota of 3
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 3, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        3,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Use one quota
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Verify remaining
-    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(has_quota, 0);
     assert!(remaining == 2, 1);
 
@@ -211,7 +279,15 @@ fun test_use_quota_multiple_times() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota of 3
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 3, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        3,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Use all 3 quotas
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
@@ -219,7 +295,11 @@ fun test_use_quota_multiple_times() {
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Verify all used
-    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(!has_quota, 0); // No quota left
     assert!(remaining == 0, 1);
 
@@ -231,7 +311,15 @@ fun test_use_quota_beyond_limit_safe() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota of 2
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 2, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        2,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Try to use 3 times (should safely handle)
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
@@ -239,7 +327,11 @@ fun test_use_quota_beyond_limit_safe() {
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock); // Over limit, but safe
 
     // Should still be at limit, not overflow
-    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(!has_quota, 0);
     assert!(remaining == 0, 1);
 
@@ -252,7 +344,15 @@ fun test_quota_period_reset() {
 
     // Set quota of 3 with 1-day period
     clock.set_for_testing(1000);
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 3, ONE_DAY_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        3,
+        ONE_DAY_MS,
+        100,
+        &clock,
+    );
 
     // Use all 3
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
@@ -260,7 +360,11 @@ fun test_quota_period_reset() {
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Verify all used
-    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(!has_quota, 0);
     assert!(remaining == 0, 1);
 
@@ -268,7 +372,11 @@ fun test_quota_period_reset() {
     clock.set_for_testing(1000 + ONE_DAY_MS + 1);
 
     // Check quota - should be reset
-    let (has_quota2, remaining2, _fee2) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (has_quota2, remaining2, _fee2) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(has_quota2, 2);
     assert!(remaining2 == 3, 3); // Fully reset
 
@@ -281,7 +389,15 @@ fun test_quota_period_reset_on_use() {
 
     // Set quota
     clock.set_for_testing(1000);
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 3, ONE_DAY_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        3,
+        ONE_DAY_MS,
+        100,
+        &clock,
+    );
 
     // Use one
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
@@ -293,7 +409,11 @@ fun test_quota_period_reset_on_use() {
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Should have 2 remaining in new period
-    let (_has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (_has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(remaining == 2, 0);
 
     end(scenario, registry, clock);
@@ -305,7 +425,15 @@ fun test_quota_period_alignment() {
 
     // Set quota starting at time 1000
     clock.set_for_testing(1000);
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 5, ONE_DAY_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        5,
+        ONE_DAY_MS,
+        100,
+        &clock,
+    );
 
     // Advance time by 2.5 days (2 full periods + 0.5)
     clock.set_for_testing(1000 + (ONE_DAY_MS * 2) + (ONE_DAY_MS / 2));
@@ -314,7 +442,11 @@ fun test_quota_period_alignment() {
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Should have used 1 in the 3rd period
-    let (_has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (_has_quota, remaining, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(remaining == 4, 0);
 
     end(scenario, registry, clock);
@@ -339,21 +471,37 @@ fun test_get_quota_status_multiple_periods_elapsed() {
 
     // Set quota
     clock.set_for_testing(1000);
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 5, ONE_DAY_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        5,
+        ONE_DAY_MS,
+        100,
+        &clock,
+    );
 
     // Use 2 quotas
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock);
 
     // Verify 3 remaining
-    let (_has, remaining1, _fee) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (_has, remaining1, _fee) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(remaining1 == 3, 0);
 
     // Advance time by 10 days (multiple periods)
     clock.set_for_testing(1000 + (ONE_DAY_MS * 10));
 
     // Check status - should be fully reset regardless of multiple periods
-    let (_has2, remaining2, _fee2) = proposal_quota_registry::get_quota_status(&registry, USER1, &clock);
+    let (_has2, remaining2, _fee2) = proposal_quota_registry::get_quota_status(
+        &registry,
+        USER1,
+        &clock,
+    );
     assert!(remaining2 == 5, 1); // Fully reset
 
     end(scenario, registry, clock);
@@ -364,10 +512,23 @@ fun test_free_quota() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quota with 0 fee (free)
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1], 10, THIRTY_DAYS_MS, 0, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1],
+        10,
+        THIRTY_DAYS_MS,
+        0,
+        &clock,
+    );
 
     // Check fee is 0
-    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(&registry, dao_id, USER1, &clock);
+    let (has_quota, reduced_fee) = proposal_quota_registry::check_quota_available(
+        &registry,
+        dao_id,
+        USER1,
+        &clock,
+    );
     assert!(has_quota, 0);
     assert!(reduced_fee == 0, 1); // Free
 
@@ -379,7 +540,15 @@ fun test_batch_quota_operations() {
     let (scenario, mut registry, mut clock, dao_id) = start();
 
     // Set quotas for 3 users with different params
-    proposal_quota_registry::set_quotas(&mut registry, dao_id, vector[USER1, USER2, USER3], 5, THIRTY_DAYS_MS, 100, &clock);
+    proposal_quota_registry::set_quotas(
+        &mut registry,
+        dao_id,
+        vector[USER1, USER2, USER3],
+        5,
+        THIRTY_DAYS_MS,
+        100,
+        &clock,
+    );
 
     // Use different amounts for each
     proposal_quota_registry::use_quota(&mut registry, dao_id, USER1, &clock); // 1 used

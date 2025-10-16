@@ -2,8 +2,8 @@
 module futarchy_one_shot_utils::math_tests;
 
 use futarchy_one_shot_utils::math;
-use std::u64;
 use std::u128;
+use std::u64;
 
 // === mul_div_to_64 Tests ===
 
@@ -54,7 +54,7 @@ fun test_mul_div_up_rounding() {
     // Should round up
     assert!(math::mul_div_up(7, 3, 2) == 11, 0); // 7*3/2 = 10.5 -> 11
     assert!(math::mul_div_up(10, 3, 2) == 15, 1); // 10*3/2 = 15
-    assert!(math::mul_div_up(5, 3, 2) == 8, 2);   // 5*3/2 = 7.5 -> 8
+    assert!(math::mul_div_up(5, 3, 2) == 8, 2); // 5*3/2 = 7.5 -> 8
 
     // Exact division should not round up
     assert!(math::mul_div_up(10, 10, 5) == 20, 3);

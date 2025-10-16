@@ -1,6 +1,6 @@
 /// ============================================================================
 /// PASS THROUGH PERCENT-CAPPED WINDOWED TWAP ORACLE
-/// ============================================================================ 
+/// ============================================================================
 ///
 /// PURPOSE: Provide manipulation-resistant TWAP for oracle grants
 ///
@@ -38,20 +38,20 @@
 
 module futarchy_markets_primitives::pass_through_PCW_TWAP_oracle;
 
-use sui::clock::Clock;
-use sui::event;
 use std::option;
 use std::vector;
+use sui::clock::Clock;
+use sui::event;
 
 // ============================================================================
 // Constants
 // ============================================================================
 
 const ONE_MINUTE_MS: u64 = 60_000;
-const PPM_DENOMINATOR: u64 = 1_000_000;         // Parts per million (1% = 10,000 PPM)
-const DEFAULT_MAX_MOVEMENT_PPM: u64 = 10_000;   // 1% default cap
+const PPM_DENOMINATOR: u64 = 1_000_000; // Parts per million (1% = 10,000 PPM)
+const DEFAULT_MAX_MOVEMENT_PPM: u64 = 10_000; // 1% default cap
 
-const NINETY_DAYS_MS: u64 = 7_776_000_000;      // 90 days
+const NINETY_DAYS_MS: u64 = 7_776_000_000; // 90 days
 const CHECKPOINT_INTERVAL_MS: u64 = 604_800_000; // 7 days
 const MAX_CHECKPOINTS: u64 = 20;
 
@@ -80,37 +80,26 @@ struct Checkpoint has copy, drop, store {
 public struct SimpleTWAP has store {
     /// Last finalized window's TWAP (returned by get_twap())
     last_window_twap: u128,
-
     /// Cumulative price * time for current (incomplete) window
     cumulative_price: u256,
-
     /// Start of current window (ms)
     window_start: u64,
-
     /// Last update timestamp (ms)
     last_update: u64,
-
     /// Window size (default: 1 minute)
     window_size_ms: u64,
-
     /// Maximum movement per window in PPM (default: 1% = 10,000 PPM)
     max_movement_ppm: u64,
-
     /// Whether at least one window has been finalized (TWAP is valid)
     initialized: bool,
-
     /// Total cumulative price × time since initialization (for backfill & blending)
     cumulative_total: u256,
-
     /// Last observed spot price (used for projection and backfill)
     last_price: u128,
-
     /// Oracle initialization timestamp
     initialized_at: u64,
-
     /// Rolling checkpoints used to approximate long windows
     checkpoints: vector<Checkpoint>,
-
     /// Timestamp of the most recent checkpoint
     last_checkpoint_at: u64,
 }
@@ -154,7 +143,7 @@ public fun new(
         last_update: now,
         window_size_ms,
         max_movement_ppm,
-        initialized: true,  // Initial price is valid TWAP (from AMM ratio or spot TWAP)
+        initialized: true, // Initial price is valid TWAP (from AMM ratio or spot TWAP)
         cumulative_total: 0,
         last_price: initial_price,
         initialized_at: now,
@@ -223,8 +212,7 @@ public fun update(oracle: &mut SimpleTWAP, price: u128, clock: &Clock) {
 
     if (num_windows > 0) {
         finalize_window(oracle, now, num_windows);
-    }
-
+    };
     maybe_commit_checkpoint(oracle, now);
 }
 
@@ -253,7 +241,8 @@ fun finalize_window(oracle: &mut SimpleTWAP, now: u64, num_windows: u64) {
     };
 
     // Calculate FIXED cap for this entire batch (% of current TWAP)
-    let max_step_u256 = (oracle.last_window_twap as u256) *
+    let max_step_u256 =
+        (oracle.last_window_twap as u256) *
         (oracle.max_movement_ppm as u256) / (PPM_DENOMINATOR as u256);
     assert!(max_step_u256 <= (std::u128::max_value!() as u256), EOverflow);
     let max_step = (max_step_u256 as u128);
@@ -358,10 +347,7 @@ public fun cumulative_total(oracle: &SimpleTWAP): u256 {
 }
 
 /// Project cumulative price × time forward to target_timestamp (must be >= last_update)
-public fun projected_cumulative_arithmetic_to(
-    oracle: &SimpleTWAP,
-    target_timestamp: u64,
-): u256 {
+public fun projected_cumulative_arithmetic_to(oracle: &SimpleTWAP, target_timestamp: u64): u256 {
     assert!(target_timestamp >= oracle.last_update, EInvalidProjection);
     let elapsed = target_timestamp - oracle.last_update;
     oracle.cumulative_total + ((oracle.last_price as u256) * (elapsed as u256))
@@ -462,10 +448,7 @@ public fun get_window_twap(
 }
 
 /// Convenience wrapper for 90-day TWAP (returns None if insufficient history)
-public fun get_ninety_day_twap(
-    oracle: &SimpleTWAP,
-    clock: &Clock,
-): option::Option<u128> {
+public fun get_ninety_day_twap(oracle: &SimpleTWAP, clock: &Clock): option::Option<u128> {
     get_window_twap(oracle, NINETY_DAYS_MS, clock)
 }
 

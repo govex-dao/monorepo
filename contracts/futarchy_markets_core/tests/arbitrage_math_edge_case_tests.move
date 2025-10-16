@@ -30,7 +30,7 @@ module futarchy_markets_core::arbitrage_math_edge_case_tests;
 use futarchy_markets_core::arbitrage_math;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use sui::test_scenario::{Self as ts};
+use sui::test_scenario as ts;
 use sui::test_utils;
 
 // === Test Coins ===
@@ -56,10 +56,12 @@ fun test_spot_zero_asset_one_stable() {
 
     // Conditional: normal liquidity
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_000_000,
-        1_000_000, 1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -90,10 +92,12 @@ fun test_spot_one_asset_zero_stable() {
 
     // Conditional: normal liquidity
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_000_000,
-        1_000_000, 1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -124,10 +128,12 @@ fun test_spot_zero_zero() {
 
     // Conditional: normal liquidity
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_000_000,
-        1_000_000, 1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -159,10 +165,12 @@ fun test_spot_one_one() {
 
     // Conditional: normal liquidity with slight price difference
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_100_000, // Slightly more expensive
-        1_000_000, 1_100_000,
+        1_000_000,
+        1_100_000, // Slightly more expensive
+        1_000_000,
+        1_100_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -204,10 +212,12 @@ fun test_spot_one_two() {
 
     // Conditional: normal liquidity with price difference
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_000_000, // Price = 1.0 (cheaper than spot)
-        1_000_000, 1_000_000,
+        1_000_000,
+        1_000_000, // Price = 1.0 (cheaper than spot)
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -237,10 +247,12 @@ fun test_spot_two_one() {
 
     // Conditional: normal liquidity with price difference
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 2_000_000, // Price = 2.0 (more expensive than spot)
-        1_000_000, 2_000_000,
+        1_000_000,
+        2_000_000, // Price = 2.0 (more expensive than spot)
+        1_000_000,
+        2_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -275,10 +287,12 @@ fun test_conditional_zero_asset_one_stable() {
     // Conditional 0: (0, 1) - zero asset
     // Conditional 1: normal liquidity
     let conditional_pools = create_conditional_pools_2(
-        0, 1,             // Zero asset = no liquidity
-        1_000_000, 1_000_000,
+        0,
+        1, // Zero asset = no liquidity
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -309,10 +323,12 @@ fun test_conditional_one_asset_zero_stable() {
 
     // Conditional: (1, 0) - zero stable
     let conditional_pools = create_conditional_pools_2(
-        1, 0,             // Zero stable = no liquidity
-        1_000_000, 1_000_000,
+        1,
+        0, // Zero stable = no liquidity
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -343,10 +359,12 @@ fun test_conditional_zero_zero() {
 
     // Conditional: (0, 0) - no liquidity
     let conditional_pools = create_conditional_pools_2(
-        0, 0,             // No liquidity at all
-        1_000_000, 1_000_000,
+        0,
+        0, // No liquidity at all
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -377,10 +395,12 @@ fun test_conditional_one_one() {
 
     // Both conditionals: (1, 1) - minimal liquidity
     let conditional_pools = create_conditional_pools_2(
-        1, 1,
-        1, 1,
+        1,
+        1,
+        1,
+        1,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -416,10 +436,12 @@ fun test_conditional_one_two() {
 
     // Conditionals: (1, 2) - minimal asymmetric liquidity
     let conditional_pools = create_conditional_pools_2(
-        1, 2,
-        1, 2,
+        1,
+        2,
+        1,
+        2,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -449,10 +471,12 @@ fun test_conditional_two_one() {
 
     // Conditionals: (2, 1) - minimal asymmetric liquidity
     let conditional_pools = create_conditional_pools_2(
-        2, 1,
-        2, 1,
+        2,
+        1,
+        2,
+        1,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -486,10 +510,12 @@ fun test_both_one_one() {
 
     // Conditionals: (1, 1)
     let conditional_pools = create_conditional_pools_2(
-        1, 1,
-        1, 1,
+        1,
+        1,
+        1,
+        1,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -522,10 +548,12 @@ fun test_both_minimal_opposite_prices() {
     // Conditionals: (2, 1) - price = 0.5 stable per asset (cheap)
     // Theoretically has arbitrage: buy cheap from conditional, sell expensive to spot
     let conditional_pools = create_conditional_pools_2(
-        2, 1,
-        2, 1,
+        2,
+        1,
+        2,
+        1,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -557,10 +585,12 @@ fun test_spot_large_conditional_tiny() {
     // Conditional 0: (1, 1) - tiny
     // Conditional 1: normal
     let conditional_pools = create_conditional_pools_2(
-        1, 1,             // Tiny pool
-        1_000_000, 1_000_000, // Normal pool
+        1,
+        1, // Tiny pool
+        1_000_000,
+        1_000_000, // Normal pool
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -591,10 +621,12 @@ fun test_spot_tiny_conditional_large() {
 
     // Conditionals: normal 1M liquidity
     let conditional_pools = create_conditional_pools_2(
-        1_000_000, 1_000_000,
-        1_000_000, 1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -626,10 +658,12 @@ fun test_mixed_conditional_sizes() {
     // Conditional 0: (1, 1) - tiny (will likely be bottleneck)
     // Conditional 1: (1_000_000, 1_000_000) - large
     let conditional_pools = create_conditional_pools_2(
-        1, 1,
-        1_000_000, 1_000_000,
+        1,
+        1,
+        1_000_000,
+        1_000_000,
         FEE_BPS,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
@@ -679,17 +713,28 @@ fun test_comprehensive_edge_case_grid() {
             let cond_stable = *vector::borrow(&cond_stables, j);
 
             // Create pools
-            let spot_pool = create_spot_pool(spot_asset, spot_stable, FEE_BPS, ts::ctx(&mut scenario));
+            let spot_pool = create_spot_pool(
+                spot_asset,
+                spot_stable,
+                FEE_BPS,
+                ts::ctx(&mut scenario),
+            );
 
             let conditional_pools = create_conditional_pools_2(
-                cond_asset, cond_stable,
-                cond_asset, cond_stable,
+                cond_asset,
+                cond_stable,
+                cond_asset,
+                cond_stable,
                 FEE_BPS,
-                ts::ctx(&mut scenario)
+                ts::ctx(&mut scenario),
             );
 
             // Run optimizer - MUST NOT PANIC
-            let (amount, profit, _is_stc) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+            let (
+                amount,
+                profit,
+                _is_stc,
+            ) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
                 &spot_pool,
                 &conditional_pools,
                 0,

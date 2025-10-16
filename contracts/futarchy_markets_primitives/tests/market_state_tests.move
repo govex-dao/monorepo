@@ -2,12 +2,10 @@
 module futarchy_markets_primitives::market_state_tests;
 
 use futarchy_markets_primitives::market_state;
-use sui::{
-    clock::{Self, Clock},
-    test_utils::destroy,
-    test_scenario as ts,
-};
 use std::string;
+use sui::clock::{Self, Clock};
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
 // === Test Helpers ===
 
@@ -33,10 +31,7 @@ fun test_new_market_state() {
 
     let market_id = object::id_from_address(@0x1);
     let dao_id = object::id_from_address(@0x2);
-    let outcome_messages = vector[
-        string::utf8(b"Approve"),
-        string::utf8(b"Reject"),
-    ];
+    let outcome_messages = vector[string::utf8(b"Approve"), string::utf8(b"Reject")];
 
     let state = market_state::new(
         market_id,
@@ -44,7 +39,7 @@ fun test_new_market_state() {
         2,
         outcome_messages,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify initial state
@@ -76,7 +71,7 @@ fun test_start_trading() {
         2,
         outcome_messages,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Start trading with 7 days duration
@@ -107,7 +102,7 @@ fun test_start_trading_twice_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 1000, &clock);
@@ -129,7 +124,7 @@ fun test_start_trading_zero_duration_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 0, &clock); // Should fail
@@ -150,7 +145,7 @@ fun test_start_trading_excessive_duration_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Try to start with > 30 days
@@ -172,7 +167,7 @@ fun test_end_trading() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -201,7 +196,7 @@ fun test_end_trading_before_start_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::end_trading(&mut state, &clock); // Should fail
@@ -222,7 +217,7 @@ fun test_end_trading_twice_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -244,7 +239,7 @@ fun test_finalize() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -278,7 +273,7 @@ fun test_finalize_before_trading_ends_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -300,7 +295,7 @@ fun test_finalize_twice_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -324,7 +319,7 @@ fun test_finalize_invalid_outcome_fails() {
         2, // Only 2 outcomes (0 and 1)
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -346,13 +341,9 @@ fun test_complete_lifecycle() {
         object::id_from_address(@0x1),
         object::id_from_address(@0x2),
         3,
-        vector[
-            string::utf8(b"Outcome A"),
-            string::utf8(b"Outcome B"),
-            string::utf8(b"Outcome C"),
-        ],
+        vector[string::utf8(b"Outcome A"), string::utf8(b"Outcome B"), string::utf8(b"Outcome C")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Phase 1: Pre-trading
@@ -396,7 +387,7 @@ fun test_assert_trading_active() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -418,7 +409,7 @@ fun test_assert_trading_active_before_start_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::assert_trading_active(&state); // Should fail
@@ -439,7 +430,7 @@ fun test_assert_trading_active_after_end_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -461,7 +452,7 @@ fun test_assert_in_trading_or_pre_trading() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Should pass in pre-trading
@@ -487,7 +478,7 @@ fun test_assert_in_trading_or_pre_trading_after_end_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -509,7 +500,7 @@ fun test_assert_market_finalized() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::start_trading(&mut state, 10000, &clock);
@@ -534,7 +525,7 @@ fun test_assert_market_finalized_before_finalize_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::assert_market_finalized(&state); // Should fail
@@ -554,7 +545,7 @@ fun test_validate_outcome() {
         3, // 3 outcomes: 0, 1, 2
         vector[string::utf8(b"A"), string::utf8(b"B"), string::utf8(b"C")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::validate_outcome(&state, 0); // OK
@@ -577,7 +568,7 @@ fun test_validate_outcome_out_of_bounds_fails() {
         2, // Only outcomes 0 and 1
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     market_state::validate_outcome(&state, 2); // Should fail
@@ -597,13 +588,9 @@ fun test_get_outcome_message() {
         object::id_from_address(@0x1),
         object::id_from_address(@0x2),
         3,
-        vector[
-            string::utf8(b"Option A"),
-            string::utf8(b"Option B"),
-            string::utf8(b"Option C"),
-        ],
+        vector[string::utf8(b"Option A"), string::utf8(b"Option B"), string::utf8(b"Option C")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     assert!(market_state::get_outcome_message(&state, 0) == string::utf8(b"Option A"), 0);
@@ -626,7 +613,7 @@ fun test_get_outcome_message_out_of_bounds_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let _ = market_state::get_outcome_message(&state, 5); // Should fail
@@ -647,7 +634,7 @@ fun test_get_winning_outcome_before_finalize_fails() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let _ = market_state::get_winning_outcome(&state); // Should fail
@@ -676,7 +663,7 @@ fun test_init_early_resolve_metrics() {
         2,
         vector[string::utf8(b"A"), string::utf8(b"B")],
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     assert!(!market_state::has_early_resolve_metrics(&state), 0);

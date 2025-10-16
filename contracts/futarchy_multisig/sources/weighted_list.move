@@ -20,11 +20,11 @@ const EInvariantWeightTooLarge: u64 = 11;
 const EInvariantEmptyList: u64 = 12;
 
 // === Constants ===
-const MAX_MEMBER_WEIGHT: u64 = 1_000_000;      // 1 million max weight per member
-const MAX_TOTAL_WEIGHT: u64 = 1_000_000_000;   // 1 billion max total
+const MAX_MEMBER_WEIGHT: u64 = 1_000_000; // 1 million max weight per member
+const MAX_TOTAL_WEIGHT: u64 = 1_000_000_000; // 1 billion max total
 
 /// A generic, reusable struct for managing a list of addresses and their weights.
-public struct WeightedList has store, copy, drop {
+public struct WeightedList has copy, drop, store {
     /// Maps member addresses to their assigned weight.
     members: VecMap<address, u64>,
     /// The sum of all members' weights.
@@ -35,18 +35,12 @@ public struct WeightedList has store, copy, drop {
 
 /// Creates a new mutable WeightedList from parallel vectors of addresses and weights.
 /// Enforces validation rules for consistency and security.
-public fun new(
-    addresses: vector<address>,
-    weights: vector<u64>
-): WeightedList {
+public fun new(addresses: vector<address>, weights: vector<u64>): WeightedList {
     new_with_immutability(addresses, weights, false)
 }
 
 /// Creates a new immutable WeightedList that cannot be modified after creation.
-public fun new_immutable(
-    addresses: vector<address>,
-    weights: vector<u64>
-): WeightedList {
+public fun new_immutable(addresses: vector<address>, weights: vector<u64>): WeightedList {
     new_with_immutability(addresses, weights, true)
 }
 
@@ -55,7 +49,7 @@ public fun new_immutable(
 public fun new_with_immutability(
     addresses: vector<address>,
     weights: vector<u64>,
-    is_immutable: bool
+    is_immutable: bool,
 ): WeightedList {
     assert!(addresses.length() == weights.length(), EInvalidArguments);
     assert!(addresses.length() > 0, EEmptyMemberList);
@@ -83,7 +77,7 @@ public fun new_with_immutability(
         total_weight,
         is_immutable,
     };
-    
+
     // Verify invariants before returning
     check_invariants(&list);
     list
@@ -104,13 +98,13 @@ public fun singleton_immutable(addr: address): WeightedList {
 fun singleton_with_immutability(addr: address, is_immutable: bool): WeightedList {
     let mut member_map = vec_map::empty();
     member_map.insert(addr, 1);
-    
+
     let list = WeightedList {
         members: member_map,
         total_weight: 1,
         is_immutable,
     };
-    
+
     // Verify invariants before returning
     check_invariants(&list);
     list
@@ -168,15 +162,16 @@ public fun is_immutable(list: &WeightedList): bool {
 /// Useful for payment distributions.
 public fun calculate_share(list: &WeightedList, member_weight: u64, total_amount: u64): u64 {
     assert!(member_weight <= list.total_weight, EInvalidArguments);
-    
+
     // Prevent division by zero
     if (list.total_weight == 0) {
         return 0
     };
-    
+
     // Calculate proportional share: (member_weight * total_amount) / total_weight
     // Use u128 to prevent overflow during multiplication
-    let share_u128 = ((member_weight as u128) * (total_amount as u128)) / (list.total_weight as u128);
+    let share_u128 =
+        ((member_weight as u128) * (total_amount as u128)) / (list.total_weight as u128);
     (share_u128 as u64)
 }
 
@@ -197,11 +192,11 @@ public fun equals(list1: &WeightedList, list2: &WeightedList): bool {
     if (list1.total_weight != list2.total_weight) {
         return false
     };
-    
+
     if (list1.members.size() != list2.members.size()) {
         return false
     };
-    
+
     let (keys1, _) = list1.members.into_keys_values();
     let mut i = 0;
     while (i < keys1.length()) {
@@ -214,7 +209,7 @@ public fun equals(list1: &WeightedList, list2: &WeightedList): bool {
         };
         i = i + 1;
     };
-    
+
     true
 }
 
@@ -223,20 +218,16 @@ public fun equals(list1: &WeightedList, list2: &WeightedList): bool {
 /// Update the entire weighted list with new members and weights.
 /// This replaces the entire list atomically.
 /// Aborts if the list is immutable.
-public fun update(
-    list: &mut WeightedList,
-    addresses: vector<address>,
-    weights: vector<u64>
-) {
+public fun update(list: &mut WeightedList, addresses: vector<address>, weights: vector<u64>) {
     assert!(!list.is_immutable, EListIsImmutable);
-    
+
     // Create a new list with validation
     let new_list = new(addresses, weights);
-    
+
     // Replace the old list with the new one
     list.members = new_list.members;
     list.total_weight = new_list.total_weight;
-    
+
     // Verify invariants after modification
     check_invariants(list);
 }
@@ -244,15 +235,11 @@ public fun update(
 /// Add or update a single member's weight.
 /// If the member exists, their weight is updated. Otherwise, they are added.
 /// Aborts if the list is immutable.
-public fun set_member_weight(
-    list: &mut WeightedList,
-    addr: address,
-    new_weight: u64
-) {
+public fun set_member_weight(list: &mut WeightedList, addr: address, new_weight: u64) {
     assert!(!list.is_immutable, EListIsImmutable);
     assert!(new_weight > 0, EInvalidArguments);
     assert!(new_weight <= MAX_MEMBER_WEIGHT, EWeightTooLarge);
-    
+
     // Get the old weight if member exists
     let old_weight = if (list.members.contains(&addr)) {
         let weight = *list.members.get(&addr);
@@ -261,32 +248,29 @@ public fun set_member_weight(
     } else {
         0
     };
-    
+
     // Calculate new total weight
     let new_total = list.total_weight - old_weight + new_weight;
     assert!(new_total <= MAX_TOTAL_WEIGHT, EWeightOverflow);
-    
+
     // Update member and total
     list.members.insert(addr, new_weight);
     list.total_weight = new_total;
-    
+
     // Verify invariants after modification
     check_invariants(list);
 }
 
 /// Remove a member from the list.
 /// Aborts if the member doesn't exist, if removing would empty the list, or if the list is immutable.
-public fun remove_member(
-    list: &mut WeightedList,
-    addr: address
-) {
+public fun remove_member(list: &mut WeightedList, addr: address) {
     assert!(!list.is_immutable, EListIsImmutable);
     assert!(list.members.contains(&addr), ENotMember);
     assert!(list.members.size() > 1, EEmptyMemberList); // Don't allow empty list
-    
+
     let (_, weight) = list.members.remove(&addr);
     list.total_weight = list.total_weight - weight;
-    
+
     // Verify invariants after modification
     check_invariants(list);
 }
@@ -304,32 +288,32 @@ public fun remove_member(
 public fun check_invariants(list: &WeightedList) {
     // Invariant 1: List must not be empty
     assert!(!list.members.is_empty(), EInvariantEmptyList);
-    
+
     // Calculate actual total weight and verify individual weights
     let mut calculated_total = 0u64;
     let (addresses, weights) = list.members.into_keys_values();
-    
+
     let mut i = 0;
     while (i < weights.length()) {
         let weight = *vector::borrow(&weights, i);
-        
+
         // Invariant 2a: Each weight must be > 0
         assert!(weight > 0, EInvariantZeroWeight);
-        
+
         // Invariant 2b: Each weight must be <= MAX_MEMBER_WEIGHT
         assert!(weight <= MAX_MEMBER_WEIGHT, EInvariantWeightTooLarge);
-        
+
         // Sum up for total weight check
         calculated_total = calculated_total + weight;
         i = i + 1;
     };
-    
+
     // Invariant 3: Sum of weights must equal stored total_weight
     assert!(calculated_total == list.total_weight, EInvariantTotalWeightMismatch);
-    
+
     // Invariant 4: Total weight must be within bounds
     assert!(list.total_weight <= MAX_TOTAL_WEIGHT, EInvariantViolation);
-    
+
     // Invariant 5: No duplicate members is guaranteed by VecMap structure
     // VecMap inherently prevents duplicate keys
 }
@@ -342,23 +326,23 @@ public fun verify_invariants(list: &WeightedList): bool {
     if (list.members.is_empty()) {
         return false
     };
-    
+
     // Calculate and verify weights
     let mut calculated_total = 0u64;
     let (_, weights) = list.members.into_keys_values();
-    
+
     let mut i = 0;
     while (i < weights.length()) {
         let weight = *vector::borrow(&weights, i);
-        
+
         if (weight == 0 || weight > MAX_MEMBER_WEIGHT) {
             return false
         };
-        
+
         calculated_total = calculated_total + weight;
         i = i + 1;
     };
-    
+
     // Check totals match and are within bounds
     calculated_total == list.total_weight && list.total_weight <= MAX_TOTAL_WEIGHT
 }
@@ -370,7 +354,7 @@ public fun verify_invariants(list: &WeightedList): bool {
 public fun test_list(): WeightedList {
     new(
         vector[@0x1, @0x2],
-        vector[30, 70]
+        vector[30, 70],
     )
 }
 
@@ -379,7 +363,7 @@ public fun test_list(): WeightedList {
 public fun test_list_immutable(): WeightedList {
     new_immutable(
         vector[@0x1, @0x2],
-        vector[30, 70]
+        vector[30, 70],
     )
 }
 

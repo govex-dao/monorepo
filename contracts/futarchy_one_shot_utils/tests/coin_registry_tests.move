@@ -1,13 +1,13 @@
 #[test_only]
 module futarchy_one_shot_utils::coin_registry_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock;
-use sui::coin::{Self, TreasuryCap, CoinMetadata};
-use sui::sui::SUI;
 use futarchy_one_shot_utils::coin_registry;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use sui::clock;
+use sui::coin::{Self, TreasuryCap, CoinMetadata};
+use sui::sui::SUI;
+use sui::test_scenario as ts;
 
 // === Basic Tests ===
 
@@ -71,7 +71,7 @@ fun test_deposit_single_coin_set() {
         metadata,
         1_000_000, // 1 SUI fee
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify registry state
@@ -109,7 +109,7 @@ fun test_deposit_multiple_coin_sets() {
         metadata_a,
         1_000_000,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Deposit second coin set
@@ -119,7 +119,7 @@ fun test_deposit_multiple_coin_sets() {
         metadata_b,
         2_000_000,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify registry state
@@ -154,7 +154,7 @@ fun test_take_coin_set() {
         metadata,
         1_000_000,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     ts::next_tx(&mut scenario, @0x2);
@@ -166,7 +166,7 @@ fun test_take_coin_set() {
         cap_id,
         payment,
         &clock,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify registry updated
@@ -201,18 +201,46 @@ fun test_take_multiple_coin_sets_in_sequence() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Deposit two coin sets
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap_a, metadata_a, 500_000, &clock, ts::ctx(&mut scenario));
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap_b, metadata_b, 300_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap_a,
+        metadata_a,
+        500_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap_b,
+        metadata_b,
+        300_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     ts::next_tx(&mut scenario, @0x2);
 
     // Take both in sequence (simulating PTB)
     let mut payment = coin::mint_for_testing<SUI>(1_000_000, ts::ctx(&mut scenario));
 
-    payment = coin_registry::take_coin_set<TEST_COIN_A>(&mut registry, cap_id_a, payment, &clock, ts::ctx(&mut scenario));
+    payment =
+        coin_registry::take_coin_set<TEST_COIN_A>(
+            &mut registry,
+            cap_id_a,
+            payment,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
     assert!(coin::value(&payment) == 500_000, 0);
 
-    payment = coin_registry::take_coin_set<TEST_COIN_B>(&mut registry, cap_id_b, payment, &clock, ts::ctx(&mut scenario));
+    payment =
+        coin_registry::take_coin_set<TEST_COIN_B>(
+            &mut registry,
+            cap_id_b,
+            payment,
+            &clock,
+            ts::ctx(&mut scenario),
+        );
     assert!(coin::value(&payment) == 200_000, 1);
 
     // Registry should be empty
@@ -239,13 +267,26 @@ fun test_take_exact_fee_amount() {
     let clock = clock::create_for_testing(ts::ctx(&mut scenario));
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     ts::next_tx(&mut scenario, @0x2);
 
     // Pay exact fee
     let payment = coin::mint_for_testing<SUI>(1_000_000, ts::ctx(&mut scenario));
-    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(&mut registry, cap_id, payment, &clock, ts::ctx(&mut scenario));
+    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(
+        &mut registry,
+        cap_id,
+        payment,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     // Should have zero remaining
     assert!(coin::value(&remaining) == 0, 0);
@@ -279,7 +320,14 @@ fun test_view_functions() {
     let fee = 1_500_000;
     let owner = @0x1;
 
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, fee, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        fee,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     // Test view functions
     assert!(coin_registry::total_sets(&registry) == 1, 1);
@@ -311,7 +359,14 @@ fun test_cannot_destroy_non_empty_registry() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Deposit coin set
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     // Try to destroy non-empty registry (should fail)
     coin_registry::destroy_empty_registry(registry);
@@ -336,13 +391,26 @@ fun test_insufficient_fee() {
     let clock = clock::create_for_testing(ts::ctx(&mut scenario));
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     ts::next_tx(&mut scenario, @0x2);
 
     // Try to take with insufficient payment (should fail)
     let payment = coin::mint_for_testing<SUI>(500_000, ts::ctx(&mut scenario));
-    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(&mut registry, cap_id, payment, &clock, ts::ctx(&mut scenario));
+    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(
+        &mut registry,
+        cap_id,
+        payment,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     coin::burn_for_testing(remaining);
     sui::test_utils::destroy(registry);
@@ -363,7 +431,13 @@ fun test_take_nonexistent_coin_set() {
     // Try to take nonexistent coin set (should fail)
     let payment = coin::mint_for_testing<SUI>(1_000_000, ts::ctx(&mut scenario));
     let fake_id = object::id_from_address(@0x999);
-    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(&mut registry, fake_id, payment, &clock, ts::ctx(&mut scenario));
+    let remaining = coin_registry::take_coin_set<TEST_COIN_A>(
+        &mut registry,
+        fake_id,
+        payment,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     coin::burn_for_testing(remaining);
     coin_registry::destroy_empty_registry(registry);
@@ -393,7 +467,14 @@ fun test_deposit_coin_with_nonzero_supply() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit with non-zero supply (should fail)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);
@@ -418,7 +499,14 @@ fun test_reject_coin_with_name() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit coin with name (should fail)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);
@@ -441,7 +529,14 @@ fun test_reject_coin_with_description() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit coin with description (should fail)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);
@@ -464,7 +559,14 @@ fun test_reject_coin_with_symbol() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit coin with symbol (should fail)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);
@@ -487,7 +589,14 @@ fun test_reject_coin_with_icon() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit coin with icon (should fail)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);
@@ -510,7 +619,14 @@ fun test_reject_coin_with_all_metadata() {
     let mut registry = coin_registry::create_registry(ts::ctx(&mut scenario));
 
     // Try to deposit coin with all metadata (should fail on first check - name)
-    coin_registry::deposit_coin_set(&mut registry, treasury_cap, metadata, 1_000_000, &clock, ts::ctx(&mut scenario));
+    coin_registry::deposit_coin_set(
+        &mut registry,
+        treasury_cap,
+        metadata,
+        1_000_000,
+        &clock,
+        ts::ctx(&mut scenario),
+    );
 
     sui::test_utils::destroy(registry);
     clock::destroy_for_testing(clock);

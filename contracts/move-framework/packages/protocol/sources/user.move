@@ -14,17 +14,13 @@
 
 module account_protocol::user;
 
-// === Imports ===
-
-use std::{
-    string::String,
-    type_name,
-};
-use sui::{
-    vec_map::{Self, VecMap},
-    table::{Self, Table},
-};
 use account_protocol::account::{Self, Account};
+use std::string::String;
+use std::type_name;
+use sui::table::{Self, Table};
+use sui::vec_map::{Self, VecMap};
+
+// === Imports ===
 
 // === Errors ===
 
@@ -54,8 +50,8 @@ public struct User has key {
 }
 
 /// Invite object issued by an Account to a user
-public struct Invite has key { 
-    id: UID, 
+public struct Invite has key {
+    id: UID,
     // Account that issued the invite
     account_addr: address,
     // Account type
@@ -105,7 +101,7 @@ public fun destroy(registry: &mut Registry, user: User, ctx: &mut TxContext) {
 public fun accept_invite(user: &mut User, invite: Invite) {
     let Invite { id, account_addr, account_type } = invite;
     id.delete();
-    
+
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
         user.accounts.get_mut(&account_type).push_back(account_addr);
@@ -135,8 +131,8 @@ public fun reorder_accounts<Config>(user: &mut User, addrs: vector<address>) {
 // === Config-only functions ===
 
 public fun add_account<Config, CW: drop>(
-    user: &mut User, 
-    account: &Account<Config>, 
+    user: &mut User,
+    account: &Account<Config>,
     config_witness: CW,
 ) {
     account::assert_is_config_module(account, config_witness);
@@ -151,8 +147,8 @@ public fun add_account<Config, CW: drop>(
 }
 
 public fun remove_account<Config, CW: drop>(
-    user: &mut User, 
-    account: &Account<Config>, 
+    user: &mut User,
+    account: &Account<Config>,
     config_witness: CW,
 ) {
     account::assert_is_config_module(account, config_witness);
@@ -160,32 +156,34 @@ public fun remove_account<Config, CW: drop>(
 
     assert!(user.accounts.contains(&account_type), EAccountTypeDoesntExist);
     let (exists, idx) = user.accounts[&account_type].index_of(&account.addr());
-    
+
     assert!(exists, EAccountNotFound);
     user.accounts.get_mut(&account_type).swap_remove(idx);
 
-    if (user.accounts[&account_type].is_empty())
-        (_, _) = user.accounts.remove(&account_type);
+    if (user.accounts[&account_type].is_empty()) (_, _) = user.accounts.remove(&account_type);
 }
 
 /// Invites can be sent by an Account member (upon Account creation for instance)
 public fun send_invite<Config, CW: drop>(
-    account: &Account<Config>, 
-    recipient: address, 
+    account: &Account<Config>,
+    recipient: address,
     config_witness: CW,
     ctx: &mut TxContext,
 ) {
     account::assert_is_config_module(account, config_witness);
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
 
-    transfer::transfer(Invite { 
-        id: object::new(ctx), 
-        account_addr: account.addr(),
-        account_type,
-    }, recipient);
+    transfer::transfer(
+        Invite {
+            id: object::new(ctx),
+            account_addr: account.addr(),
+            account_type,
+        },
+        recipient,
+    );
 }
 
-// === View functions ===    
+// === View functions ===
 
 public fun users(registry: &Registry): &Table<address, ID> {
     &registry.users
@@ -228,10 +226,7 @@ public fun registry_for_testing(ctx: &mut TxContext): Registry {
 }
 
 #[test_only]
-public fun add_account_for_testing<Config>(
-    user: &mut User,
-    account_addr: address,
-) {
+public fun add_account_for_testing<Config>(user: &mut User, account_addr: address) {
     let account_type = type_name::with_defining_ids<Config>().into_string().to_string();
     if (user.accounts.contains(&account_type)) {
         assert!(!user.accounts[&account_type].contains(&account_addr), EAccountAlreadyRegistered);
@@ -334,9 +329,17 @@ fun test_accept_invite_already_registered() {
     };
 
     user.add_account_for_testing<DummyConfig>(@0xACC);
-    assert!(user.accounts.contains(&type_name::with_defining_ids<DummyConfig>().into_string().to_string()));
-    assert!(user.accounts[&type_name::with_defining_ids<DummyConfig>().into_string().to_string()].contains(&@0xACC));
-    
+    assert!(
+        user
+            .accounts
+            .contains(&type_name::with_defining_ids<DummyConfig>().into_string().to_string()),
+    );
+    assert!(
+        user
+            .accounts[&type_name::with_defining_ids<DummyConfig>().into_string().to_string()]
+            .contains(&@0xACC),
+    );
+
     accept_invite(&mut user, invite);
 
     tu::destroy(user);
@@ -365,7 +368,7 @@ fun test_refuse_invite() {
 fun test_reorder_accounts() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut user = new(scenario.ctx());
-    
+
     user.add_account_for_testing<DummyConfig>(@0x1);
     user.add_account_for_testing<DummyConfig>(@0x2);
     user.add_account_for_testing<DummyConfig>(@0x3);
@@ -424,7 +427,7 @@ fun test_error_add_already_existing_account() {
 
     user.add_account_for_testing<DummyConfig>(@0xACC);
     user.add_account_for_testing<DummyConfig>(@0xACC);
-    
+
     tu::destroy(user);
     scenario.end();
 }
@@ -443,7 +446,7 @@ fun test_reorder_accounts_empty() {
 #[test, expected_failure(abort_code = EWrongNumberOfAccounts)]
 fun test_reorder_accounts_different_length() {
     let mut scenario = ts::begin(@0xCAFE);
-    
+
     let mut user = new(scenario.ctx());
     user.add_account_for_testing<DummyConfig>(@0xACC);
     user.add_account_for_testing<DummyConfig>(@0xACC2);
@@ -458,7 +461,7 @@ fun test_reorder_accounts_different_length() {
 fun test_reorder_accounts_wrong_account() {
     let mut scenario = ts::begin(@0xCAFE);
     let mut user = new(scenario.ctx());
-    
+
     user.add_account_for_testing<DummyConfig>(@0x1);
     user.add_account_for_testing<DummyConfig>(@0x2);
 

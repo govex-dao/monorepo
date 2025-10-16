@@ -4,15 +4,14 @@
 #[test_only]
 module futarchy_markets_operations::position_nft_tests;
 
-use std::string::{Self};
-use std::option::{Self};
-use sui::test_scenario::{Self as ts, Scenario};
+use futarchy_markets_operations::position_nft::{Self, SpotLPPosition, ConditionalLPPosition};
+use std::option;
+use std::string;
 use sui::clock::{Self, Clock};
 use sui::object::{Self, ID};
+use sui::test_scenario::{Self as ts, Scenario};
 use sui::test_utils;
-use sui::tx_context::{Self};
-
-use futarchy_markets_operations::position_nft::{Self, SpotLPPosition, ConditionalLPPosition};
+use sui::tx_context;
 
 // Test coin types
 public struct TEST_ASSET has drop {}
@@ -48,12 +47,17 @@ fun test_mint_spot_position_basic() {
             lp_amount,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify position data
-        let (pos_pool_id, pos_lp_amount, _asset_type, _stable_type, pos_fee_bps) =
-            position_nft::get_spot_position_info(&position);
+        let (
+            pos_pool_id,
+            pos_lp_amount,
+            _asset_type,
+            _stable_type,
+            pos_fee_bps,
+        ) = position_nft::get_spot_position_info(&position);
 
         assert!(pos_pool_id == pool_id, 0);
         assert!(pos_lp_amount == lp_amount, 1);
@@ -85,7 +89,7 @@ fun test_burn_spot_position() {
             lp_amount,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Burn the position
@@ -113,12 +117,17 @@ fun test_spot_position_info_getters() {
             lp_amount,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Test get_spot_position_info
-        let (pos_pool_id, pos_lp_amount, pos_asset_type, pos_stable_type, pos_fee_bps) =
-            position_nft::get_spot_position_info(&position);
+        let (
+            pos_pool_id,
+            pos_lp_amount,
+            pos_asset_type,
+            pos_stable_type,
+            pos_fee_bps,
+        ) = position_nft::get_spot_position_info(&position);
 
         assert!(pos_pool_id == pool_id, 0);
         assert!(pos_lp_amount == lp_amount, 1);
@@ -157,7 +166,7 @@ fun test_increase_spot_position() {
             initial_lp,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Increase position
@@ -165,7 +174,7 @@ fun test_increase_spot_position() {
             &mut position,
             pool_id,
             additional_lp,
-            &clock
+            &clock,
         );
 
         // Verify LP amount increased
@@ -195,7 +204,7 @@ fun test_decrease_spot_position_partial() {
             initial_lp,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Decrease position
@@ -203,7 +212,7 @@ fun test_decrease_spot_position_partial() {
             &mut position,
             pool_id,
             remove_lp,
-            &clock
+            &clock,
         );
 
         // Verify remaining amount
@@ -233,7 +242,7 @@ fun test_decrease_spot_position_complete() {
             initial_lp,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Remove all LP
@@ -241,7 +250,7 @@ fun test_decrease_spot_position_complete() {
             &mut position,
             pool_id,
             initial_lp,
-            &clock
+            &clock,
         );
 
         // Verify zero remaining
@@ -270,7 +279,7 @@ fun test_multiple_increases() {
             100u64,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Multiple increases
@@ -305,7 +314,7 @@ fun test_set_and_get_spot_metadata() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Set metadata
@@ -338,7 +347,7 @@ fun test_update_spot_metadata() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         let key = string::utf8(b"status");
@@ -374,7 +383,7 @@ fun test_get_nonexistent_spot_metadata() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Try to get nonexistent key
@@ -402,13 +411,21 @@ fun test_multiple_spot_metadata_keys() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Set multiple metadata keys
-        position_nft::set_spot_metadata(&mut position, string::utf8(b"tier"), string::utf8(b"platinum"));
+        position_nft::set_spot_metadata(
+            &mut position,
+            string::utf8(b"tier"),
+            string::utf8(b"platinum"),
+        );
         position_nft::set_spot_metadata(&mut position, string::utf8(b"bonus"), string::utf8(b"10"));
-        position_nft::set_spot_metadata(&mut position, string::utf8(b"locked"), string::utf8(b"false"));
+        position_nft::set_spot_metadata(
+            &mut position,
+            string::utf8(b"locked"),
+            string::utf8(b"false"),
+        );
 
         // Verify all keys
         let tier = position_nft::get_spot_metadata(&position, &string::utf8(b"tier"));
@@ -455,12 +472,20 @@ fun test_mint_conditional_position_basic() {
             lp_amount,
             fee_bps,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Verify position data
-        let (pos_pool_id, pos_market_id, pos_outcome_idx, pos_lp_amount, _asset_type, _stable_type, pos_fee_bps, is_winner) =
-            position_nft::get_conditional_position_info(&position);
+        let (
+            pos_pool_id,
+            pos_market_id,
+            pos_outcome_idx,
+            pos_lp_amount,
+            _asset_type,
+            _stable_type,
+            pos_fee_bps,
+            is_winner,
+        ) = position_nft::get_conditional_position_info(&position);
 
         assert!(pos_pool_id == pool_id, 0);
         assert!(pos_market_id == market_id, 1);
@@ -498,7 +523,7 @@ fun test_burn_conditional_position() {
             1500u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Burn the position
@@ -529,19 +554,23 @@ fun test_mark_outcome_result() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Mark as winning outcome
         position_nft::mark_outcome_result(&mut position, true);
 
         // Verify is_winning_outcome field
-        let (_, _, _, _, _, _, _, is_winner) = position_nft::get_conditional_position_info(&position);
+        let (_, _, _, _, _, _, _, is_winner) = position_nft::get_conditional_position_info(
+            &position,
+        );
         assert!(is_winner == true, 0);
 
         // Mark as losing outcome
         position_nft::mark_outcome_result(&mut position, false);
-        let (_, _, _, _, _, _, _, is_winner2) = position_nft::get_conditional_position_info(&position);
+        let (_, _, _, _, _, _, _, is_winner2) = position_nft::get_conditional_position_info(
+            &position,
+        );
         assert!(is_winner2 == false, 1);
 
         position_nft::destroy_conditional_position_for_testing(position);
@@ -564,13 +593,34 @@ fun test_conditional_position_different_outcomes() {
 
         // Create positions for different outcomes
         let pos0 = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 0u8, 1000u64, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            0u8,
+            1000u64,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
         let pos1 = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 1u8, 2000u64, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            1u8,
+            2000u64,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
         let pos2 = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 2u8, 3000u64, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            2u8,
+            3000u64,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         // Verify outcome indices
@@ -609,14 +659,24 @@ fun test_increase_conditional_position() {
         let additional_lp = 750u64;
 
         let mut position = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 1u8, initial_lp, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            1u8,
+            initial_lp,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         // Increase position
         position_nft::increase_conditional_position(&mut position, pool_id, additional_lp, &clock);
 
         // Verify LP amount increased
-        assert!(position_nft::get_conditional_lp_amount(&position) == initial_lp + additional_lp, 0);
+        assert!(
+            position_nft::get_conditional_lp_amount(&position) == initial_lp + additional_lp,
+            0,
+        );
 
         position_nft::destroy_conditional_position_for_testing(position);
     };
@@ -639,11 +699,23 @@ fun test_decrease_conditional_position_partial() {
         let remove_lp = 800u64;
 
         let mut position = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 0u8, initial_lp, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            0u8,
+            initial_lp,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         // Decrease position
-        let remaining = position_nft::decrease_conditional_position(&mut position, pool_id, remove_lp, &clock);
+        let remaining = position_nft::decrease_conditional_position(
+            &mut position,
+            pool_id,
+            remove_lp,
+            &clock,
+        );
 
         // Verify remaining amount
         assert!(remaining == initial_lp - remove_lp, 0);
@@ -669,11 +741,23 @@ fun test_decrease_conditional_position_complete() {
         let initial_lp = 1000u64;
 
         let mut position = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 2u8, initial_lp, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            2u8,
+            initial_lp,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         // Remove all LP
-        let remaining = position_nft::decrease_conditional_position(&mut position, pool_id, initial_lp, &clock);
+        let remaining = position_nft::decrease_conditional_position(
+            &mut position,
+            pool_id,
+            initial_lp,
+            &clock,
+        );
 
         // Verify zero remaining
         assert!(remaining == 0, 0);
@@ -702,7 +786,14 @@ fun test_set_and_get_conditional_metadata() {
         let proposal_id = object::id_from_address(@0xDEAD);
 
         let mut position = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 1u8, 1000u64, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            1u8,
+            1000u64,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         // Set metadata
@@ -734,7 +825,14 @@ fun test_update_conditional_metadata() {
         let proposal_id = object::id_from_address(@0xDEAD);
 
         let mut position = position_nft::mint_conditional_position<TEST_ASSET, TEST_STABLE>(
-            pool_id, market_id, proposal_id, 0u8, 1000u64, 30u64, &clock, ts::ctx(&mut scenario)
+            pool_id,
+            market_id,
+            proposal_id,
+            0u8,
+            1000u64,
+            30u64,
+            &clock,
+            ts::ctx(&mut scenario),
         );
 
         let key = string::utf8(b"risk");
@@ -775,7 +873,7 @@ fun test_mint_spot_position_zero_amount() {
             0u64, // Zero amount should fail
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         position_nft::destroy_spot_position_for_testing(position);
     };
@@ -804,7 +902,7 @@ fun test_mint_conditional_position_zero_amount() {
             0u64, // Zero amount should fail
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
         position_nft::destroy_conditional_position_for_testing(position);
     };
@@ -829,7 +927,7 @@ fun test_increase_spot_position_wrong_pool() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Try to increase with wrong pool ID
@@ -857,7 +955,7 @@ fun test_decrease_spot_position_insufficient() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Try to remove more than available
@@ -885,7 +983,7 @@ fun test_increase_spot_position_zero() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Try to increase by zero
@@ -913,7 +1011,7 @@ fun test_decrease_spot_position_zero() {
             1000u64,
             30u64,
             &clock,
-            ts::ctx(&mut scenario)
+            ts::ctx(&mut scenario),
         );
 
         // Try to decrease by zero
@@ -925,4 +1023,3 @@ fun test_decrease_spot_position_zero() {
     test_utils::destroy(clock);
     ts::end(scenario);
 }
-

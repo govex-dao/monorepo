@@ -24,26 +24,26 @@
 
 module futarchy_markets_operations::swap_entry;
 
-use sui::coin::{Self, Coin};
-use sui::clock::Clock;
-use sui::object;
-use sui::transfer;
-use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::swap_core;
+use futarchy_markets_core::arbitrage;
 use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_core::swap_core;
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_operations::no_arb_guard;
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
 use futarchy_markets_primitives::market_state;
-use futarchy_markets_core::arbitrage;
-use futarchy_markets_operations::no_arb_guard;
 use std::option;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::object;
+use sui::transfer;
 
 // === Errors ===
 const EZeroAmount: u64 = 0;
 const EProposalNotLive: u64 = 1;
 
 // === Constants ===
-const STATE_TRADING: u8 = 2;  // Must match proposal.move
+const STATE_TRADING: u8 = 2; // Must match proposal.move
 
 // === Spot Swaps with Auto-Arb ===
 
@@ -111,18 +111,19 @@ public fun swap_spot_stable_to_asset<AssetType, StableType>(
         let session = swap_core::begin_swap_session(escrow);
 
         // Execute optimal arb bidirectionally with auto-merge support
-        let (stable_profit, mut asset_with_profit, final_balance) = arbitrage::execute_optimal_spot_arbitrage<
-            AssetType,
-            StableType,
-        >(
+        let (
+            stable_profit,
+            mut asset_with_profit,
+            final_balance,
+        ) = arbitrage::execute_optimal_spot_arbitrage<AssetType, StableType>(
             spot_pool,
             escrow,
             &session,
-            coin::zero<StableType>(ctx),  // Don't have stable
-            asset_out,                     // Have asset from swap
-            0,  // min_profit_threshold (any profit is good)
-            recipient,                     // Who owns dust and receives complete sets
-            existing_balance_opt,          // Pass existing balance for auto-merge
+            coin::zero<StableType>(ctx), // Don't have stable
+            asset_out, // Have asset from swap
+            0, // min_profit_threshold (any profit is good)
+            recipient, // Who owns dust and receives complete sets
+            existing_balance_opt, // Pass existing balance for auto-merge
             clock,
             ctx,
         );
@@ -141,7 +142,7 @@ public fun swap_spot_stable_to_asset<AssetType, StableType>(
             let extra_asset = unified_spot_pool::swap_stable_for_asset(
                 spot_pool,
                 stable_profit,
-                0,  // Accept any amount (already profitable from arb)
+                0, // Accept any amount (already profitable from arb)
                 clock,
                 ctx,
             );
@@ -240,18 +241,19 @@ public fun swap_spot_asset_to_stable<AssetType, StableType>(
         let session = swap_core::begin_swap_session(escrow);
 
         // Execute optimal arb bidirectionally with auto-merge support
-        let (mut stable_with_profit, asset_profit, final_balance) = arbitrage::execute_optimal_spot_arbitrage<
-            AssetType,
-            StableType,
-        >(
+        let (
+            mut stable_with_profit,
+            asset_profit,
+            final_balance,
+        ) = arbitrage::execute_optimal_spot_arbitrage<AssetType, StableType>(
             spot_pool,
             escrow,
             &session,
-            stable_out,                     // Have stable from swap
-            coin::zero<AssetType>(ctx),    // Don't have asset
-            0,  // min_profit_threshold
-            recipient,                      // Who owns dust
-            existing_balance_opt,           // Pass existing balance for auto-merge
+            stable_out, // Have stable from swap
+            coin::zero<AssetType>(ctx), // Don't have asset
+            0, // min_profit_threshold
+            recipient, // Who owns dust
+            existing_balance_opt, // Pass existing balance for auto-merge
             clock,
             ctx,
         );
@@ -269,7 +271,7 @@ public fun swap_spot_asset_to_stable<AssetType, StableType>(
             let extra_stable = unified_spot_pool::swap_asset_for_stable(
                 spot_pool,
                 asset_profit,
-                0,  // Accept any amount (already profitable from arb)
+                0, // Accept any amount (already profitable from arb)
                 clock,
                 ctx,
             );
@@ -368,7 +370,7 @@ public fun begin_conditional_swaps<AssetType, StableType>(
     let balance = conditional_balance::new<AssetType, StableType>(
         market_id,
         (outcome_count as u8),
-        ctx
+        ctx,
     );
 
     // Return hot potato (NO abilities = must consume)
@@ -440,7 +442,7 @@ public fun swap_in_batch<AssetType, StableType, InputCoin, OutputCoin>(
         escrow,
         coin_in,
         outcome_index,
-        !is_asset_to_stable,  // is_asset = opposite of swap direction
+        !is_asset_to_stable, // is_asset = opposite of swap direction
     );
 
     // Swap in balance (balance-based swap works for ANY outcome count!)
@@ -473,7 +475,7 @@ public fun swap_in_batch<AssetType, StableType, InputCoin, OutputCoin>(
         &mut batch.balance,
         escrow,
         outcome_index,
-        is_asset_to_stable,  // is_asset = swap direction
+        is_asset_to_stable, // is_asset = swap direction
         ctx,
     );
 
@@ -533,7 +535,10 @@ public fun finalize_conditional_swaps<AssetType, StableType>(
     // Burn complete sets and withdraw spot coins
     let spot_asset = if (min_asset > 0) {
         arbitrage::burn_complete_set_and_withdraw_asset<AssetType, StableType>(
-            &mut balance, escrow, min_asset, ctx
+            &mut balance,
+            escrow,
+            min_asset,
+            ctx,
         )
     } else {
         coin::zero<AssetType>(ctx)
@@ -541,7 +546,10 @@ public fun finalize_conditional_swaps<AssetType, StableType>(
 
     let spot_stable = if (min_stable > 0) {
         arbitrage::burn_complete_set_and_withdraw_stable<AssetType, StableType>(
-            &mut balance, escrow, min_stable, ctx
+            &mut balance,
+            escrow,
+            min_stable,
+            ctx,
         )
     } else {
         coin::zero<StableType>(ctx)

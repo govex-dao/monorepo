@@ -1,24 +1,18 @@
 #[test_only]
 module account_actions::vault_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-};
+use account_actions::vault;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-};
-use account_actions::{
-    vault,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -43,7 +37,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -174,7 +171,7 @@ fun test_create_and_withdraw_from_stream() {
         1000, // min_interval_ms
         10, // max_beneficiaries
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify stream exists
@@ -195,7 +192,7 @@ fun test_create_and_withdraw_from_stream() {
         stream_id,
         500,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     assert!(withdrawn_coin.value() == 500);
 
@@ -234,7 +231,7 @@ fun test_withdraw_before_start() {
         1000,
         10,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Try to withdraw before start - should fail
@@ -245,7 +242,7 @@ fun test_withdraw_before_start() {
         stream_id,
         100,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(coin);
@@ -284,7 +281,7 @@ fun test_withdraw_before_cliff() {
         1000,
         10,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time but not past cliff
@@ -298,7 +295,7 @@ fun test_withdraw_before_cliff() {
         stream_id,
         100,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(coin);
@@ -335,7 +332,7 @@ fun test_cancel_stream() {
         1000,
         10,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time to 30% vested
@@ -349,7 +346,7 @@ fun test_cancel_stream() {
         vault_name,
         stream_id,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Should refund unvested amount (70% = 700)
@@ -394,7 +391,7 @@ fun test_withdrawal_limit() {
         1000,
         10,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time to fully vested
@@ -408,7 +405,7 @@ fun test_withdrawal_limit() {
         stream_id,
         200, // More than limit
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(coin);
@@ -446,7 +443,7 @@ fun test_min_interval() {
         10_000, // min_interval_ms = 10 seconds
         10,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time to vested
@@ -460,7 +457,7 @@ fun test_min_interval() {
         stream_id,
         100,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     destroy(coin1);
 
@@ -471,7 +468,7 @@ fun test_min_interval() {
         stream_id,
         100,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     destroy(coin2);

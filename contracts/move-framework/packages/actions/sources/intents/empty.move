@@ -1,21 +1,19 @@
 module account_actions::empty_intents;
 
-// === Imports ===
-
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    intents::Params,
-    intent_interface,
-};
 use account_actions::version;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
+
+// === Imports ===
 
 // === Aliases ===
 
 use fun intent_interface::build_intent as Account.build_intent;
 use fun intent_interface::process_intent as Account.process_intent;
 
-// === Structs ===    
+// === Structs ===
 
 /// Intent Witness defining an intent with no action.
 public struct EmptyIntent() has copy, drop;
@@ -28,13 +26,13 @@ public fun request_empty<Config, Outcome: store>(
     account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
 
     account.build_intent!(
         params,
-        outcome, 
+        outcome,
         b"".to_string(),
         version::current(),
         EmptyIntent(),
@@ -48,10 +46,5 @@ public fun execute_empty<Config, Outcome: store>(
     executable: &mut Executable<Outcome>,
     account: &mut Account<Config>,
 ) {
-    account.process_intent!(
-        executable, 
-        version::current(), 
-        EmptyIntent(), 
-        |_executable, _iw| {},
-    )
+    account.process_intent!(executable, version::current(), EmptyIntent(), |_executable, _iw| {})
 }

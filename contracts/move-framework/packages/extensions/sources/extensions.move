@@ -3,10 +3,10 @@
 
 module account_extensions::extensions;
 
-// === Imports ===
-
 use std::string::String;
 use sui::table::{Self, Table};
+
+// === Imports ===
 
 // === Errors ===
 
@@ -72,10 +72,7 @@ public fun version(package_version: &PackageVersion): u64 {
 }
 
 /// Returns the latest address and version for a given name
-public fun get_latest_for_name(
-    extensions: &Extensions,
-    name: String,
-): (address, u64) {
+public fun get_latest_for_name(extensions: &Extensions, name: String): (address, u64) {
     let history = extensions.by_name.borrow(name);
     let package_version = history[history.length() - 1];
 
@@ -83,12 +80,7 @@ public fun get_latest_for_name(
 }
 
 /// Returns true if the package (name, addr, version) is in the list
-public fun is_extension(
-    extensions: &Extensions,
-    name: String,
-    addr: address,
-    version: u64,
-): bool {
+public fun is_extension(extensions: &Extensions, name: String, addr: address, version: u64): bool {
     if (!extensions.by_name.contains(name)) return false;
     let history = extensions.by_name.borrow(name);
     let opt_idx = history.find_index!(|h| h.addr == addr);
@@ -101,7 +93,13 @@ public fun is_extension(
 // === Admin functions ===
 
 /// Adds a new extension to the list
-public fun add(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
+public fun add(
+    extensions: &mut Extensions,
+    _: &AdminCap,
+    name: String,
+    addr: address,
+    version: u64,
+) {
     assert!(!extensions.by_name.contains(name), EExtensionAlreadyExists);
     assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
     let history = vector[PackageVersion { addr, version }];
@@ -121,7 +119,13 @@ public fun remove(extensions: &mut Extensions, _: &AdminCap, name: String) {
 }
 
 /// Removes the version from the history of a package
-public fun remove_version(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
+public fun remove_version(
+    extensions: &mut Extensions,
+    _: &AdminCap,
+    name: String,
+    addr: address,
+    version: u64,
+) {
     let history = extensions.by_name.borrow_mut(name);
     let (exists, idx) = history.index_of(&PackageVersion { addr, version });
     assert!(exists, EExtensionNotFound);
@@ -129,7 +133,13 @@ public fun remove_version(extensions: &mut Extensions, _: &AdminCap, name: Strin
 }
 
 /// Adds a new version to the history of a package
-public fun update(extensions: &mut Extensions, _: &AdminCap, name: String, addr: address, version: u64) {
+public fun update(
+    extensions: &mut Extensions,
+    _: &AdminCap,
+    name: String,
+    addr: address,
+    version: u64,
+) {
     assert!(extensions.by_name.contains(name), EExtensionNotFound);
     assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
     extensions.by_name.borrow_mut(name).push_back(PackageVersion { addr, version });
@@ -180,7 +190,12 @@ public fun remove_for_testing(extensions: &mut Extensions, name: String) {
 }
 
 #[test_only]
-public fun remove_version_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {
+public fun remove_version_for_testing(
+    extensions: &mut Extensions,
+    name: String,
+    addr: address,
+    version: u64,
+) {
     let history = extensions.by_name.borrow_mut(name);
     let (exists, idx) = history.index_of(&PackageVersion { addr, version });
     assert!(exists, EExtensionNotFound);
@@ -188,14 +203,24 @@ public fun remove_version_for_testing(extensions: &mut Extensions, name: String,
 }
 
 #[test_only]
-public fun update_for_testing(extensions: &mut Extensions, name: String, addr: address, version: u64) {
+public fun update_for_testing(
+    extensions: &mut Extensions,
+    name: String,
+    addr: address,
+    version: u64,
+) {
     assert!(!extensions.by_addr.contains(addr), EExtensionAlreadyExists);
     extensions.by_name.borrow_mut(name).push_back(PackageVersion { addr, version });
     extensions.by_addr.add(addr, name);
 }
 
 #[test_only]
-public fun new_for_testing_with_addrs(addr1: address, addr2: address, addr3: address, ctx: &mut TxContext): Extensions {
+public fun new_for_testing_with_addrs(
+    addr1: address,
+    addr2: address,
+    addr3: address,
+    ctx: &mut TxContext,
+): Extensions {
     let mut extensions = new_for_testing(ctx);
 
     extensions.add_for_testing(b"AccountProtocol".to_string(), addr1, 1);

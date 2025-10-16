@@ -13,14 +13,14 @@
 
 module futarchy_markets_primitives::conditional_balance;
 
-use sui::object::{Self, UID, ID};
-use sui::coin::Coin;
-use sui::event;
-use sui::display::{Self, Display};
-use sui::package::{Self, Publisher};
+use futarchy_markets_primitives::coin_escrow;
 use std::string::{Self, String};
 use std::vector;
-use futarchy_markets_primitives::coin_escrow;
+use sui::coin::Coin;
+use sui::display::{Self, Display};
+use sui::event;
+use sui::object::{Self, UID, ID};
+use sui::package::{Self, Publisher};
 
 // === One-Time Witness ===
 public struct CONDITIONAL_BALANCE has drop {}
@@ -74,10 +74,9 @@ public struct BalanceWrapped has copy, drop {
 /// balances[5] = Outcome 2 stable balance
 public struct ConditionalMarketBalance<phantom AssetType, phantom StableType> has key, store {
     id: UID,
-    market_id: ID,  // ID of the market this balance belongs to
+    market_id: ID, // ID of the market this balance belongs to
     outcome_count: u8,
-    version: u8,  // For future migrations
-
+    version: u8, // For future migrations
     /// Dense vector: [out0_asset, out0_stable, out1_asset, out1_stable, ...]
     /// Index formula: idx = (outcome_idx * 2) + (is_asset ? 0 : 1)
     balances: vector<u64>,
@@ -100,13 +99,26 @@ public fun create_display(
 ): (Publisher, Display<ConditionalMarketBalance<sui::sui::SUI, sui::sui::SUI>>) {
     let publisher = package::claim(otw, ctx);
 
-    let mut display = display::new<ConditionalMarketBalance<sui::sui::SUI, sui::sui::SUI>>(&publisher, ctx);
+    let mut display = display::new<ConditionalMarketBalance<sui::sui::SUI, sui::sui::SUI>>(
+        &publisher,
+        ctx,
+    );
 
     // NFT fields with dynamic object ID for user identification
     // Template syntax {id} gets filled with actual object ID by Sui
     display::add(&mut display, string::utf8(b"name"), string::utf8(b"Govex Incomplete Set - {id}"));
-    display::add(&mut display, string::utf8(b"description"), string::utf8(b"Incomplete conditional token set from Govex futarchy. Contains dust from spot swaps. Object ID: {id}. Check if this has value before burning. Redeem after proposal resolves to claim winning outcome."));
-    display::add(&mut display, string::utf8(b"image_url"), string::utf8(b"https://govex.ai/nft/incomplete-set.png"));
+    display::add(
+        &mut display,
+        string::utf8(b"description"),
+        string::utf8(
+            b"Incomplete conditional token set from Govex futarchy. Contains dust from spot swaps. Object ID: {id}. Check if this has value before burning. Redeem after proposal resolves to claim winning outcome.",
+        ),
+    );
+    display::add(
+        &mut display,
+        string::utf8(b"image_url"),
+        string::utf8(b"https://govex.ai/nft/incomplete-set.png"),
+    );
     display::add(&mut display, string::utf8(b"project_url"), string::utf8(b"https://govex.ai"));
     display::add(&mut display, string::utf8(b"creator"), string::utf8(b"Govex protocol"));
 
@@ -283,7 +295,8 @@ public fun merge<AssetType, StableType>(
     };
 
     // Destroy source (now logically empty after merge)
-    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances: _ } = src;
+    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances: _ } =
+        src;
     object::delete(id);
 }
 
@@ -291,7 +304,7 @@ public fun merge<AssetType, StableType>(
 ///
 /// Used before destroying the balance object.
 public fun is_empty<AssetType, StableType>(
-    balance: &ConditionalMarketBalance<AssetType, StableType>
+    balance: &ConditionalMarketBalance<AssetType, StableType>,
 ): bool {
     is_empty_vector(&balance.balances)
 }
@@ -301,9 +314,10 @@ public fun is_empty<AssetType, StableType>(
 /// Aborts if any balance is non-zero.
 /// This ensures we don't accidentally lose funds.
 public fun destroy_empty<AssetType, StableType>(
-    balance: ConditionalMarketBalance<AssetType, StableType>
+    balance: ConditionalMarketBalance<AssetType, StableType>,
 ) {
-    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances } = balance;
+    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances } =
+        balance;
     assert!(is_empty_vector(&balances), ENotEmpty);
     object::delete(id);
 }
@@ -312,28 +326,28 @@ public fun destroy_empty<AssetType, StableType>(
 
 /// Get the market ID this balance tracks
 public fun market_id<AssetType, StableType>(
-    balance: &ConditionalMarketBalance<AssetType, StableType>
+    balance: &ConditionalMarketBalance<AssetType, StableType>,
 ): ID {
     balance.market_id
 }
 
 /// Get the number of outcomes
 public fun outcome_count<AssetType, StableType>(
-    balance: &ConditionalMarketBalance<AssetType, StableType>
+    balance: &ConditionalMarketBalance<AssetType, StableType>,
 ): u8 {
     balance.outcome_count
 }
 
 /// Get immutable reference to balance vector (for advanced operations)
 public fun borrow_balances<AssetType, StableType>(
-    balance: &ConditionalMarketBalance<AssetType, StableType>
+    balance: &ConditionalMarketBalance<AssetType, StableType>,
 ): &vector<u64> {
     &balance.balances
 }
 
 /// Get object ID
 public fun id<AssetType, StableType>(
-    balance: &ConditionalMarketBalance<AssetType, StableType>
+    balance: &ConditionalMarketBalance<AssetType, StableType>,
 ): ID {
     object::uid_to_inner(&balance.id)
 }
@@ -427,7 +441,7 @@ public fun unwrap_to_coin<AssetType, StableType, ConditionalCoinType>(
         (outcome_idx as u64),
         is_asset,
         amount,
-        ctx
+        ctx,
     );
 
     // Only clear balance after successful mint
@@ -497,14 +511,14 @@ public fun wrap_coin<AssetType, StableType, ConditionalCoinType>(
     assert!((outcome_idx as u64) < registered_count, EOutcomeNotRegistered);
 
     let amount = coin.value();
-    assert!(amount > 0, EInvalidBalanceAccess);  // Consistency with unwrap
+    assert!(amount > 0, EInvalidBalanceAccess); // Consistency with unwrap
 
     // Burn coin back to escrow
     coin_escrow::burn_conditional<AssetType, StableType, ConditionalCoinType>(
         escrow,
         (outcome_idx as u64),
         is_asset,
-        coin
+        coin,
     );
 
     // Add to balance
@@ -543,7 +557,7 @@ public fun new_with_amounts<AssetType, StableType>(
 #[test_only]
 /// Get mutable reference to balances (for testing)
 public fun borrow_balances_mut_for_testing<AssetType, StableType>(
-    balance: &mut ConditionalMarketBalance<AssetType, StableType>
+    balance: &mut ConditionalMarketBalance<AssetType, StableType>,
 ): &mut vector<u64> {
     &mut balance.balances
 }
@@ -552,8 +566,9 @@ public fun borrow_balances_mut_for_testing<AssetType, StableType>(
 /// Destroy balance unconditionally for testing (even if non-empty)
 /// ONLY use in tests - production code should use destroy_empty
 public fun destroy_for_testing<AssetType, StableType>(
-    balance: ConditionalMarketBalance<AssetType, StableType>
+    balance: ConditionalMarketBalance<AssetType, StableType>,
 ) {
-    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances: _ } = balance;
+    let ConditionalMarketBalance { id, market_id: _, outcome_count: _, version: _, balances: _ } =
+        balance;
     object::delete(id);
 }

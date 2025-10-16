@@ -4,10 +4,10 @@
 /// Users don't call this directly - use swap_entry.move instead.
 module futarchy_markets_core::swap_core;
 
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::conditional_balance::{Self};
 use futarchy_markets_core::early_resolve;
 use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_balance;
 use futarchy_one_shot_utils::math;
 use sui::clock::Clock;
 use sui::coin::{Self, Coin};
@@ -37,7 +37,7 @@ const STATE_TRADING: u8 = 2; // Must match proposal.move STATE_TRADING
 /// Hot potato that enforces early resolve metrics update at end of swap session
 /// No abilities = must be consumed by finalize_swap_session()
 public struct SwapSession {
-    market_id: ID,  // Track which market this session is for
+    market_id: ID, // Track which market this session is for
 }
 
 // === Session Management ===
@@ -109,7 +109,7 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
 
     // Step 1: Validate session and market
     {
-        let market_state = coin_escrow::get_market_state(escrow);  // Immutable borrow
+        let market_state = coin_escrow::get_market_state(escrow); // Immutable borrow
         let market_id = futarchy_markets_core::market_state::market_id(market_state);
         assert!(session.market_id == market_id, ESessionMismatch);
     }; // market_state dropped here
@@ -132,13 +132,16 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
         };
 
         // Execute swap
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (outcome_idx as u8),
+        );
         let amount_out = pool.swap_asset_to_stable(
             market_id,
             amount_in,
             min_amount_out,
             clock,
-            ctx
+            ctx,
         );
 
         // Update price in leaderboard (O(log N))
@@ -146,7 +149,7 @@ public fun swap_asset_to_stable<AssetType, StableType, AssetConditionalCoin, Sta
         futarchy_markets_core::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
-            new_price
+            new_price,
         );
 
         amount_out
@@ -185,7 +188,7 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
 
     // Step 1: Validate session and market
     {
-        let market_state = coin_escrow::get_market_state(escrow);  // Immutable borrow
+        let market_state = coin_escrow::get_market_state(escrow); // Immutable borrow
         let market_id = futarchy_markets_core::market_state::market_id(market_state);
         assert!(session.market_id == market_id, ESessionMismatch);
     }; // market_state dropped here
@@ -208,13 +211,16 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
         };
 
         // Execute swap
-        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, (outcome_idx as u8));
+        let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+            market_state,
+            (outcome_idx as u8),
+        );
         let amount_out = pool.swap_stable_to_asset(
             market_id,
             amount_in,
             min_amount_out,
             clock,
-            ctx
+            ctx,
         );
 
         // Update price in leaderboard (O(log N))
@@ -222,7 +228,7 @@ public fun swap_stable_to_asset<AssetType, StableType, AssetConditionalCoin, Sta
         futarchy_markets_core::market_state::update_price_in_leaderboard(
             market_state,
             outcome_idx,
-            new_price
+            new_price,
         );
 
         amount_out
@@ -320,10 +326,7 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
 
     // CRITICAL SECURITY: Validate balance belongs to this market
     // Prevents exploiting price differences between markets
-    assert!(
-        conditional_balance::market_id(balance) == market_id,
-        EProposalMismatch
-    );
+    assert!(conditional_balance::market_id(balance) == market_id, EProposalMismatch);
 
     // Validate outcome exists in market
     let market_outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
@@ -339,13 +342,16 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
     conditional_balance::sub_from_balance(balance, outcome_idx, true, amount_in);
 
     // Calculate swap through AMM (reuse market_state and market_id)
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, outcome_idx);
+    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        market_state,
+        outcome_idx,
+    );
     let amount_out = pool.swap_asset_to_stable(
         market_id,
         amount_in,
         min_amount_out,
         clock,
-        ctx
+        ctx,
     );
 
     assert!(amount_out >= min_amount_out, EInsufficientOutput);
@@ -355,7 +361,7 @@ public fun swap_balance_asset_to_stable<AssetType, StableType>(
     futarchy_markets_core::market_state::update_price_in_leaderboard(
         market_state,
         (outcome_idx as u64),
-        new_price
+        new_price,
     );
 
     // Add to stable balance (output)
@@ -406,10 +412,7 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
 
     // CRITICAL SECURITY: Validate balance belongs to this market
     // Prevents exploiting price differences between markets
-    assert!(
-        conditional_balance::market_id(balance) == market_id,
-        EProposalMismatch
-    );
+    assert!(conditional_balance::market_id(balance) == market_id, EProposalMismatch);
 
     // Validate outcome exists in market
     let market_outcome_count = futarchy_markets_core::market_state::outcome_count(market_state);
@@ -425,13 +428,16 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
     conditional_balance::sub_from_balance(balance, outcome_idx, false, amount_in);
 
     // Calculate swap through AMM (reuse market_state and market_id)
-    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(market_state, outcome_idx);
+    let pool = futarchy_markets_core::market_state::get_pool_mut_by_outcome(
+        market_state,
+        outcome_idx,
+    );
     let amount_out = pool.swap_stable_to_asset(
         market_id,
         amount_in,
         min_amount_out,
         clock,
-        ctx
+        ctx,
     );
 
     assert!(amount_out >= min_amount_out, EInsufficientOutput);
@@ -441,7 +447,7 @@ public fun swap_balance_stable_to_asset<AssetType, StableType>(
     futarchy_markets_core::market_state::update_price_in_leaderboard(
         market_state,
         (outcome_idx as u64),
-        new_price
+        new_price,
     );
 
     // Add to asset balance (output)

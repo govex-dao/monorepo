@@ -1,8 +1,8 @@
 module futarchy_one_shot_utils::metadata;
 
 use std::string::String;
-use sui::table::{Self, Table};
 use sui::bag::{Self, Bag};
+use sui::table::{Self, Table};
 
 // === Errors ===
 const EInvalidMetadataLength: u64 = 0; // Keys and values vectors must have same length
@@ -23,49 +23,45 @@ const MAX_ENTRIES: u64 = 50; // Maximum number of metadata entries
 public fun new_from_vectors(
     keys: vector<String>,
     values: vector<String>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Table<String, String> {
     let keys_len = keys.length();
     let values_len = values.length();
-    
+
     // Validate input
     assert!(keys_len == values_len, EInvalidMetadataLength);
     assert!(keys_len <= MAX_ENTRIES, EInvalidMetadataLength);
-    
+
     let mut metadata = table::new<String, String>(ctx);
     let mut i = 0;
-    
+
     while (i < keys_len) {
         let key = &keys[i];
         let value = &values[i];
-        
+
         // Validate key and value
         assert!(key.length() > 0, EEmptyKey);
         assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
         assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
-        
+
         // Check for duplicates
         assert!(!table::contains(&metadata, *key), EDuplicateKey);
-        
+
         table::add(&mut metadata, *key, *value);
         i = i + 1;
     };
-    
+
     metadata
 }
 
 /// Add a single key-value pair to an existing metadata table
-public fun add_entry(
-    metadata: &mut Table<String, String>,
-    key: String,
-    value: String
-) {
+public fun add_entry(metadata: &mut Table<String, String>, key: String, value: String) {
     // Validate
     assert!(key.length() > 0, EEmptyKey);
     assert!(key.length() <= MAX_KEY_LENGTH, EKeyTooLong);
     assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
     assert!(table::length(metadata) < MAX_ENTRIES, EInvalidMetadataLength);
-    
+
     if (table::contains(metadata, key)) {
         // Update existing entry
         table::remove(metadata, key);
@@ -77,13 +73,9 @@ public fun add_entry(
 }
 
 /// Update an existing entry in the metadata table
-public fun update_entry(
-    metadata: &mut Table<String, String>,
-    key: String,
-    value: String
-) {
+public fun update_entry(metadata: &mut Table<String, String>, key: String, value: String) {
     assert!(value.length() <= MAX_VALUE_LENGTH, EValueTooLong);
-    
+
     // Update existing entry
     if (table::contains(metadata, key)) {
         let val_ref = table::borrow_mut(metadata, key);
@@ -95,26 +87,17 @@ public fun update_entry(
 }
 
 /// Remove an entry from the metadata table
-public fun remove_entry(
-    metadata: &mut Table<String, String>,
-    key: String
-): String {
+public fun remove_entry(metadata: &mut Table<String, String>, key: String): String {
     table::remove(metadata, key)
 }
 
 /// Check if a key exists in the metadata
-public fun contains_key(
-    metadata: &Table<String, String>,
-    key: &String
-): bool {
+public fun contains_key(metadata: &Table<String, String>, key: &String): bool {
     table::contains(metadata, *key)
 }
 
 /// Get a value from the metadata table
-public fun get_value(
-    metadata: &Table<String, String>,
-    key: &String
-): &String {
+public fun get_value(metadata: &Table<String, String>, key: &String): &String {
     table::borrow(metadata, *key)
 }
 
@@ -127,7 +110,7 @@ public fun length(metadata: &Table<String, String>): u64 {
 public fun validate_metadata_vectors(
     keys: &vector<String>,
     values: &vector<String>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     let keys_len = keys.length();
     let values_len = values.length();

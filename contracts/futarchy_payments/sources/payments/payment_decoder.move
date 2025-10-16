@@ -1,14 +1,20 @@
 /// Decoder for payment actions with proper BCS validation
 module futarchy_payments::payment_decoder;
 
-use std::{string::String, type_name, option};
-use sui::{object::{Self, UID}, bcs, dynamic_object_field, tx_context::TxContext};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use futarchy_payments::payment_actions::{Self as payment_actions,
+use futarchy_payments::payment_actions::{
+    Self as payment_actions,
     CreatePaymentAction,
-    CancelPaymentAction,
+    CancelPaymentAction
 };
+use std::option;
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+use sui::tx_context::TxContext;
 
 // === Errors ===
 
@@ -178,7 +184,7 @@ public fun deserialize_create_payment_action<CoinType>(
         description,
         max_per_withdrawal,
         min_interval_ms,
-        max_beneficiaries
+        max_beneficiaries,
     )
 }
 

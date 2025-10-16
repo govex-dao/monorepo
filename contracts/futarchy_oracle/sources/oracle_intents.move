@@ -1,11 +1,13 @@
 /// Oracle intent builders for price-based minting grants
 module futarchy_oracle::oracle_intents;
 
-use std::string::String;
-use sui::{clock::Clock, bcs, object::ID};
 use account_protocol::intents::{Self, Intent};
-use futarchy_oracle::oracle_actions;
 use futarchy_core::action_types;
+use futarchy_oracle::oracle_actions;
+use std::string::String;
+use sui::bcs;
+use sui::clock::Clock;
+use sui::object::ID;
 
 // === Intent Builder Functions ===
 
@@ -56,7 +58,10 @@ public fun create_grant_in_intent<Outcome: store, AssetType, StableType, IW: dro
     );
 
     intents::add_typed_action(
-        intent, action_types::create_oracle_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::create_oracle_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 
@@ -68,7 +73,10 @@ public fun cancel_grant_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = oracle_actions::new_cancel_grant(grant_id);
     intents::add_typed_action(
-        intent, action_types::cancel_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::cancel_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 
@@ -81,7 +89,10 @@ public fun pause_grant_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = oracle_actions::new_pause_grant(grant_id, pause_duration_ms);
     intents::add_typed_action(
-        intent, action_types::pause_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::pause_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 
@@ -93,7 +104,10 @@ public fun unpause_grant_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = oracle_actions::new_unpause_grant(grant_id);
     intents::add_typed_action(
-        intent, action_types::unpause_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::unpause_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 
@@ -105,7 +119,10 @@ public fun emergency_freeze_grant_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = oracle_actions::new_emergency_freeze_grant(grant_id);
     intents::add_typed_action(
-        intent, action_types::emergency_freeze_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::emergency_freeze_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 
@@ -117,7 +134,10 @@ public fun emergency_unfreeze_grant_in_intent<Outcome: store, IW: drop>(
 ) {
     let action = oracle_actions::new_emergency_unfreeze_grant(grant_id);
     intents::add_typed_action(
-        intent, action_types::emergency_unfreeze_grant(), bcs::to_bytes(&action), intent_witness
+        intent,
+        action_types::emergency_unfreeze_grant(),
+        bcs::to_bytes(&action),
+        intent_witness,
     );
 }
 

@@ -10,20 +10,16 @@
 
 module account_actions::vesting_intents;
 
-// === Imports ===
-
+use account_actions::version;
+use account_actions::vesting;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
 use std::string::String;
 use sui::object::ID;
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    intents::Params,
-    intent_interface,
-};
-use account_actions::{
-    vesting,
-    version,
-};
+
+// === Imports ===
 
 // === Aliases ===
 
@@ -45,7 +41,7 @@ public fun request_toggle_vesting_pause<Config, Outcome: store>(
     outcome: Outcome,
     vesting_id: ID,
     pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
 
@@ -58,7 +54,7 @@ public fun request_toggle_vesting_pause<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             vesting::new_toggle_vesting_pause(intent, vesting_id, pause_duration_ms, iw);
-        }
+        },
     );
 }
 
@@ -70,7 +66,7 @@ public fun request_toggle_vesting_freeze<Config, Outcome: store>(
     outcome: Outcome,
     vesting_id: ID,
     freeze: bool, // true = freeze, false = unfreeze
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
 
@@ -83,7 +79,7 @@ public fun request_toggle_vesting_freeze<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             vesting::new_toggle_vesting_freeze(intent, vesting_id, freeze, iw);
-        }
+        },
     );
 }
 
@@ -93,7 +89,7 @@ public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     vesting: &mut vesting::Vesting<CoinType>,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
@@ -107,9 +103,9 @@ public fun execute_toggle_vesting_pause<Config, Outcome: store, CoinType>(
                 clock,
                 version::current(),
                 iw,
-                ctx
+                ctx,
             );
-        }
+        },
     );
 }
 
@@ -119,7 +115,7 @@ public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     vesting: &mut vesting::Vesting<CoinType>,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
@@ -132,8 +128,8 @@ public fun execute_toggle_vesting_freeze<Config, Outcome: store, CoinType>(
                 vesting,
                 clock,
                 version::current(),
-                iw
+                iw,
             );
-        }
+        },
     );
 }

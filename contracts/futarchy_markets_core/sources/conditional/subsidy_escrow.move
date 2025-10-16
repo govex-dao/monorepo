@@ -3,30 +3,30 @@
 /// This module handles escrow creation, cranking, and finalization
 module futarchy_markets_core::subsidy_escrow;
 
-use std::option::{Self, Option};
-use sui::object::{Self, UID, ID};
-use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
-use sui::clock::{Self, Clock};
-use sui::tx_context::{Self, TxContext};
-use sui::sui::SUI;
-use sui::transfer;
-use sui::event;
-use futarchy_one_shot_utils::math;
 use futarchy_core::subsidy_config::{Self, ProtocolSubsidyConfig};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_one_shot_utils::math;
+use std::option::{Self, Option};
+use sui::balance::{Self, Balance};
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::object::{Self, UID, ID};
+use sui::sui::SUI;
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
 // === Errors ===
-const ESubsidyExhausted: u64 = 0;           // All cranks completed
-const EProposalMismatch: u64 = 1;           // Escrow not for this proposal
-const EAmmMismatch: u64 = 2;                // AMM ID not in escrow's tracked list
-const EInsufficientBalance: u64 = 3;        // Not enough SUI in escrow
-const ETooEarlyCrank: u64 = 4;              // Cranking too fast (min interval not met)
-const EProposalFinalized: u64 = 5;          // Cannot crank after finalization
-const EZeroSubsidy: u64 = 7;                // Subsidy amount is zero
+const ESubsidyExhausted: u64 = 0; // All cranks completed
+const EProposalMismatch: u64 = 1; // Escrow not for this proposal
+const EAmmMismatch: u64 = 2; // AMM ID not in escrow's tracked list
+const EInsufficientBalance: u64 = 3; // Not enough SUI in escrow
+const ETooEarlyCrank: u64 = 4; // Cranking too fast (min interval not met)
+const EProposalFinalized: u64 = 5; // Cannot crank after finalization
+const EZeroSubsidy: u64 = 7; // Subsidy amount is zero
 
 // === Constants ===
-const MIN_CRANK_INTERVAL_MS: u64 = 300_000;  // 5 minutes minimum between cranks
+const MIN_CRANK_INTERVAL_MS: u64 = 300_000; // 5 minutes minimum between cranks
 
 // === Structs ===
 
@@ -35,15 +35,15 @@ const MIN_CRANK_INTERVAL_MS: u64 = 300_000;  // 5 minutes minimum between cranks
 /// NOTE: This is an OWNED object (store only), not a shared object.
 /// It lives inside the Proposal struct to ensure automatic cleanup.
 public struct SubsidyEscrow has store {
-    proposal_id: ID,                            // Which proposal this subsidizes
-    dao_id: ID,                                 // Which DAO this belongs to (for refund)
-    amm_ids: vector<ID>,                        // Allowed AMM IDs (security check)
-    subsidy_balance: Balance<SUI>,              // DAO treasury funds to drip feed
-    total_subsidy: u64,                         // Original treasury amount
-    cranks_completed: u64,                      // How many cranks done
-    total_cranks: u64,                          // Total cranks allowed
-    keeper_fee_per_crank: u64,                  // Flat keeper fee
-    last_crank_time: Option<u64>,              // Last crank timestamp (for rate limiting)
+    proposal_id: ID, // Which proposal this subsidizes
+    dao_id: ID, // Which DAO this belongs to (for refund)
+    amm_ids: vector<ID>, // Allowed AMM IDs (security check)
+    subsidy_balance: Balance<SUI>, // DAO treasury funds to drip feed
+    total_subsidy: u64, // Original treasury amount
+    cranks_completed: u64, // How many cranks done
+    total_cranks: u64, // Total cranks allowed
+    keeper_fee_per_crank: u64, // Flat keeper fee
+    last_crank_time: Option<u64>, // Last crank timestamp (for rate limiting)
 }
 
 // === Events ===
@@ -63,7 +63,7 @@ public struct SubsidyCranked has copy, drop {
     proposal_id: ID,
     crank_number: u64,
     total_cranks: u64,
-    subsidy_distributed: u64,       // Amount added to AMMs (after keeper fee)
+    subsidy_distributed: u64, // Amount added to AMMs (after keeper fee)
     amount_per_amm: u64,
     outcome_count: u64,
     keeper_fee: u64,
@@ -76,16 +76,21 @@ public struct SubsidyFinalized has copy, drop {
     proposal_id: ID,
     dao_id: ID,
     cranks_completed: u64,
-    remaining_balance: u64,         // Returned to DAO treasury
+    remaining_balance: u64, // Returned to DAO treasury
     timestamp: u64,
 }
 
 // === Getters for SubsidyEscrow ===
 public fun escrow_proposal_id(escrow: &SubsidyEscrow): ID { escrow.proposal_id }
+
 public fun escrow_dao_id(escrow: &SubsidyEscrow): ID { escrow.dao_id }
+
 public fun escrow_total_subsidy(escrow: &SubsidyEscrow): u64 { escrow.total_subsidy }
+
 public fun escrow_cranks_completed(escrow: &SubsidyEscrow): u64 { escrow.cranks_completed }
+
 public fun escrow_total_cranks(escrow: &SubsidyEscrow): u64 { escrow.total_cranks }
+
 public fun escrow_remaining_balance(escrow: &SubsidyEscrow): u64 { escrow.subsidy_balance.value() }
 
 // === Public Functions ===
@@ -276,11 +281,7 @@ public fun crank_subsidy(
 /// Finalize escrow and return remaining balance to DAO treasury
 /// Called after proposal ends (win or lose)
 /// NOTE: This now CONSUMES the escrow (automatic cleanup)
-public fun finalize_escrow(
-    escrow: SubsidyEscrow,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<SUI> {
+public fun finalize_escrow(escrow: SubsidyEscrow, clock: &Clock, ctx: &mut TxContext): Coin<SUI> {
     let SubsidyEscrow {
         proposal_id,
         dao_id,
@@ -337,7 +338,7 @@ public fun create_test_escrow(
         total_subsidy,
         cranks_completed: 0,
         total_cranks,
-        keeper_fee_per_crank: 100_000_000,  // 0.1 SUI default
+        keeper_fee_per_crank: 100_000_000, // 0.1 SUI default
         last_crank_time: option::none(),
     }
 }

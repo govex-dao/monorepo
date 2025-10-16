@@ -1,8 +1,8 @@
 module futarchy_one_shot_utils::vectors;
 
 use std::string::String;
-use sui::vec_set;
 use sui::coin::{Self, Coin};
+use sui::vec_set;
 
 // === Introduction ===
 // Vector Methods and processing
@@ -64,12 +64,12 @@ public fun is_duplicate_message(outcome_messages: &vector<String>, new_message: 
 /// Merges a vector of coins into a single coin
 public fun merge_coins<T>(mut coins: vector<Coin<T>>, ctx: &mut TxContext): Coin<T> {
     assert!(!coins.is_empty(), 0);
-    
+
     let mut merged = coins.pop_back();
     while (!coins.is_empty()) {
         coin::join(&mut merged, coins.pop_back());
     };
     coins.destroy_empty();
-    
+
     merged
 }

@@ -41,12 +41,12 @@ use futarchy_one_shot_utils::math;
 ///
 /// Use `direct_output` for accurate user output prediction.
 /// Use `expected_arb_profit` to understand available arbitrage (for arbitrage bots, not users).
-public struct SwapQuote has drop, copy {
+public struct SwapQuote has copy, drop {
     amount_in: u64,
-    direct_output: u64,          // Output user receives from direct swap
-    optimal_arb_amount: u64,     // Optimal amount to arbitrage (on current state)
-    expected_arb_profit: u128,   // Arbitrage profit available (on current state, not added to user output!)
-    is_arb_available: bool,      // Whether arbitrage opportunity exists
+    direct_output: u64, // Output user receives from direct swap
+    optimal_arb_amount: u64, // Optimal amount to arbitrage (on current state)
+    expected_arb_profit: u128, // Arbitrage profit available (on current state, not added to user output!)
+    is_arb_available: bool, // Whether arbitrage opportunity exists
 }
 
 // === Aggregator Interface ===
@@ -83,23 +83,26 @@ public fun get_quote_asset_to_stable<AssetType, StableType>(
     // ✅ Active-set pruning (40-60% gas reduction)
     // ✅ Early exit checks
     // ✅ Checks both directions automatically
-    let (optimal_arb_amount, expected_arb_profit, _is_spot_to_cond) =
-        arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
-            spot,
-            conditionals,
-            direct_output,
-            0,
-        );
+    let (
+        optimal_arb_amount,
+        expected_arb_profit,
+        _is_spot_to_cond,
+    ) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        spot,
+        conditionals,
+        direct_output,
+        0,
+    );
 
     // 3. Check if arbitrage opportunity exists (for arbitrage bots, not user profit!)
     let is_arb_available = optimal_arb_amount > 0 && expected_arb_profit > 0;
 
     SwapQuote {
         amount_in,
-        direct_output,        // User receives this
-        optimal_arb_amount,   // Arbitrage amount (on current state)
-        expected_arb_profit,  // Arbitrage profit (for arbitrage bot, NOT user!)
-        is_arb_available,     // Whether arbitrage exists
+        direct_output, // User receives this
+        optimal_arb_amount, // Arbitrage amount (on current state)
+        expected_arb_profit, // Arbitrage profit (for arbitrage bot, NOT user!)
+        is_arb_available, // Whether arbitrage exists
     }
 }
 
@@ -112,22 +115,25 @@ public fun get_quote_stable_to_asset<AssetType, StableType>(
     let direct_output = unified_spot_pool::simulate_swap_stable_to_asset(spot, amount_in);
 
     // Use NEW EFFICIENT BIDIRECTIONAL SOLVER (same as above)
-    let (optimal_arb_amount, expected_arb_profit, _is_spot_to_cond) =
-        arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
-            spot,
-            conditionals,
-            direct_output,
-            0,
-        );
+    let (
+        optimal_arb_amount,
+        expected_arb_profit,
+        _is_spot_to_cond,
+    ) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+        spot,
+        conditionals,
+        direct_output,
+        0,
+    );
 
     let is_arb_available = optimal_arb_amount > 0 && expected_arb_profit > 0;
 
     SwapQuote {
         amount_in,
-        direct_output,        // User receives this
-        optimal_arb_amount,   // Arbitrage amount (on current state)
-        expected_arb_profit,  // Arbitrage profit (for arbitrage bot, NOT user!)
-        is_arb_available,     // Whether arbitrage exists
+        direct_output, // User receives this
+        optimal_arb_amount, // Arbitrage amount (on current state)
+        expected_arb_profit, // Arbitrage profit (for arbitrage bot, NOT user!)
+        is_arb_available, // Whether arbitrage exists
     }
 }
 
@@ -178,7 +184,11 @@ public fun simulate_pure_arbitrage_asset_to_stable<AssetType, StableType>(
     conditionals: &vector<LiquidityPool>,
     user_swap_output: u64,
 ): (u64, u128) {
-    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+    let (
+        amount,
+        profit,
+        is_spot_to_cond,
+    ) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         user_swap_output,
@@ -200,7 +210,11 @@ public fun simulate_pure_arbitrage_stable_to_asset<AssetType, StableType>(
     conditionals: &vector<LiquidityPool>,
     user_swap_output: u64,
 ): (u64, u128) {
-    let (amount, profit, is_spot_to_cond) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
+    let (
+        amount,
+        profit,
+        is_spot_to_cond,
+    ) = arbitrage_math::compute_optimal_arbitrage_for_n_outcomes(
         spot,
         conditionals,
         user_swap_output,
@@ -249,7 +263,7 @@ public fun quote_arb_profit_bps(quote: &SwapQuote): u64 {
         let bps = math::mul_div_mixed(
             quote.expected_arb_profit,
             10000,
-            quote.direct_output as u128
+            quote.direct_output as u128,
         );
         (bps as u64)
     } else {

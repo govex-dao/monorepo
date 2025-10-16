@@ -30,12 +30,12 @@
 
 module futarchy_markets_operations::price_based_unlocks_oracle;
 
-use sui::clock::Clock;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
-use std::vector;
 use std::option;
+use std::vector;
+use sui::clock::Clock;
 
 // ============================================================================
 // Constants
@@ -67,8 +67,10 @@ public fun get_lending_twap<AssetType, StableType>(
 ): u128 {
     // Liquidity-weighted oracle: read from conditionals when spot has <50% liquidity
     // Only read from conditionals if: locked AND conditional_ratio >= 50%
-    if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+    if (
+        unified_spot_pool::is_locked_for_proposal(spot_pool) &&
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS
+    ) {
         // Conditionals have >=50% (spot has <=50%) - trust conditionals
         get_highest_conditional_lending_twap(conditional_pools, clock)
     } else {
@@ -76,7 +78,6 @@ public fun get_lending_twap<AssetType, StableType>(
         unified_spot_pool::get_lending_twap(spot_pool, clock)
     }
 }
-
 
 /// Get instantaneous price (TWAP-based when reading from conditionals)
 /// NOTE: Returns TWAP from conditional pools, not true instant price from reserves
@@ -87,8 +88,10 @@ public fun get_spot_price<AssetType, StableType>(
     _clock: &Clock,
 ): u128 {
     // Liquidity-weighted oracle: read from conditionals when spot has <50% liquidity
-    if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+    if (
+        unified_spot_pool::is_locked_for_proposal(spot_pool) &&
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS
+    ) {
         get_highest_conditional_twap(conditional_pools)
     } else {
         unified_spot_pool::get_spot_price(spot_pool)
@@ -107,8 +110,10 @@ public fun get_geometric_governance_twap<AssetType, StableType>(
     clock: &Clock,
 ): u128 {
     // For governance, we want the 90-day checkpoint-based TWAP (manipulation-resistant)
-    if (unified_spot_pool::is_locked_for_proposal(spot_pool) &&
-        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS) {
+    if (
+        unified_spot_pool::is_locked_for_proposal(spot_pool) &&
+        unified_spot_pool::get_conditional_liquidity_ratio_percent(spot_pool) >= ORACLE_CONDITIONAL_THRESHOLD_BPS
+    ) {
         // Conditionals have >=50% (spot has <=50%) - read from conditionals
         get_highest_conditional_governance_twap(conditional_pools, clock)
     } else {
@@ -123,10 +128,7 @@ public fun get_geometric_governance_twap<AssetType, StableType>(
 
 /// Get highest lending TWAP (30-minute arithmetic) from conditional pools
 /// Used when spot has <50% liquidity during proposals
-fun get_highest_conditional_lending_twap(
-    pools: &vector<LiquidityPool>,
-    clock: &Clock,
-): u128 {
+fun get_highest_conditional_lending_twap(pools: &vector<LiquidityPool>, clock: &Clock): u128 {
     assert!(!pools.is_empty(), ENoOracles);
 
     let mut highest_twap = 0u128;
@@ -148,10 +150,7 @@ fun get_highest_conditional_lending_twap(
 
 /// Get highest 90-day TWAP from conditional pools
 /// Used when spot has <50% liquidity during proposals
-fun get_highest_conditional_governance_twap(
-    pools: &vector<LiquidityPool>,
-    clock: &Clock,
-): u128 {
+fun get_highest_conditional_governance_twap(pools: &vector<LiquidityPool>, clock: &Clock): u128 {
     assert!(!pools.is_empty(), ENoOracles);
 
     let mut highest_twap = 0u128;
@@ -208,7 +207,7 @@ fun get_highest_conditional_twap(pools: &vector<LiquidityPool>): u128 {
 public fun is_twap_available<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     _conditional_pools: &vector<LiquidityPool>,
-    _seconds: u64,  // Note: Currently ignored, spot TWAP readiness is based on 90-day window
+    _seconds: u64, // Note: Currently ignored, spot TWAP readiness is based on 90-day window
     clock: &Clock,
 ): bool {
     // Check if spot's base fair value TWAP is ready (requires 90 days of history)

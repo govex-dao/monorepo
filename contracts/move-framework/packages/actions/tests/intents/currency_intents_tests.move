@@ -1,27 +1,21 @@
 #[test_only]
 module account_actions::currency_intents_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin, TreasuryCap},
-    sui::SUI,
-};
-use std::option;
+use account_actions::currency;
+use account_actions::currency_intents;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-    deps,
-};
-use account_actions::{
-    currency,
-    currency_intents,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intents;
+use std::option;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -46,7 +40,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     destroy(cap);
@@ -78,7 +75,14 @@ fun test_request_disable_rules() {
     // Create disable rules intent
     let key = b"disable".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Disable".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Disable".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth2 = account.new_auth(version::current(), Witness());
     currency_intents::request_disable_rules<_, _, SUI>(
@@ -86,17 +90,23 @@ fun test_request_disable_rules() {
         &mut account,
         params,
         outcome,
-        true,  // mint
-        true,  // burn
+        true, // mint
+        true, // burn
         false, // update_symbol
         false, // update_name
         false, // update_description
         false, // update_icon
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Execute
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     currency_intents::execute_disable_rules<Config, Outcome, SUI>(&mut executable, &mut account);
     account.confirm_execution(executable);
 
@@ -115,7 +125,14 @@ fun test_request_disable_rules_without_lock() {
 
     let key = b"disable".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Disable".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Disable".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth = account.new_auth(version::current(), Witness());
 
@@ -125,8 +142,13 @@ fun test_request_disable_rules_without_lock() {
         &mut account,
         params,
         outcome,
-        true, false, false, false, false, false,
-        scenario.ctx()
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        scenario.ctx(),
     );
 
     end(scenario, extensions, account, clock);
@@ -144,7 +166,14 @@ fun test_request_mint_and_transfer_single() {
     // Create mint and transfer intent
     let key = b"mint_transfer".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Mint and Transfer".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Mint and Transfer".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth2 = account.new_auth(version::current(), Witness());
     currency_intents::request_mint_and_transfer<_, _, SUI>(
@@ -154,12 +183,22 @@ fun test_request_mint_and_transfer_single() {
         outcome,
         vector[100],
         vector[RECIPIENT1],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Execute
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
-    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(
+        &mut executable,
+        &mut account,
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
     // Verify recipient received coin
@@ -184,7 +223,14 @@ fun test_request_mint_and_transfer_multiple() {
     // Create mint and transfer intent with multiple recipients
     let key = b"mint_multi".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Mint Multiple".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Mint Multiple".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth2 = account.new_auth(version::current(), Witness());
     currency_intents::request_mint_and_transfer<_, _, SUI>(
@@ -194,14 +240,32 @@ fun test_request_mint_and_transfer_multiple() {
         outcome,
         vector[100, 200, 300],
         vector[RECIPIENT1, RECIPIENT2, OWNER],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Execute all three mints
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
-    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
-    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
-    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(&mut executable, &mut account, scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
+    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(
+        &mut executable,
+        &mut account,
+        scenario.ctx(),
+    );
+    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(
+        &mut executable,
+        &mut account,
+        scenario.ctx(),
+    );
+    currency_intents::execute_mint_and_transfer<Config, Outcome, SUI>(
+        &mut executable,
+        &mut account,
+        scenario.ctx(),
+    );
     account.confirm_execution(executable);
 
     // Verify all recipients
@@ -234,7 +298,14 @@ fun test_request_mint_and_transfer_length_mismatch() {
 
     let key = b"mismatch".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Mismatch".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Mismatch".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth2 = account.new_auth(version::current(), Witness());
 
@@ -244,9 +315,9 @@ fun test_request_mint_and_transfer_length_mismatch() {
         &mut account,
         params,
         outcome,
-        vector[100, 200],  // 2 amounts
+        vector[100, 200], // 2 amounts
         vector[RECIPIENT1], // 1 recipient
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, account, clock);
@@ -265,16 +336,48 @@ fun test_request_mint_and_transfer_mint_disabled() {
     // Disable mint first
     let key1 = b"disable".to_string();
     let outcome = Outcome {};
-    let params1 = intents::new_params(key1, b"Disable".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params1 = intents::new_params(
+        key1,
+        b"Disable".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
     let auth1 = account.new_auth(version::current(), Witness());
-    currency_intents::request_disable_rules<_, _, SUI>(auth1, &mut account, params1, outcome, true, false, false, false, false, false, scenario.ctx());
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(key1, &clock, version::current(), Witness(), scenario.ctx());
+    currency_intents::request_disable_rules<_, _, SUI>(
+        auth1,
+        &mut account,
+        params1,
+        outcome,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        scenario.ctx(),
+    );
+    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+        key1,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     currency_intents::execute_disable_rules<Config, Outcome, SUI>(&mut exec1, &mut account);
     account.confirm_execution(exec1);
 
     // Try to mint (should fail)
     let key2 = b"mint".to_string();
-    let params2 = intents::new_params(key2, b"Mint".to_string(), vector[0], 2000, &clock, scenario.ctx());
+    let params2 = intents::new_params(
+        key2,
+        b"Mint".to_string(),
+        vector[0],
+        2000,
+        &clock,
+        scenario.ctx(),
+    );
     let auth2 = account.new_auth(version::current(), Witness());
 
     // Should abort - mint is disabled
@@ -285,7 +388,7 @@ fun test_request_mint_and_transfer_mint_disabled() {
         outcome,
         vector[100],
         vector[RECIPIENT1],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, account, clock);
@@ -303,7 +406,14 @@ fun test_request_mint_and_transfer_exceeds_max_supply() {
 
     let key = b"mint".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Mint".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Mint".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
     let auth2 = account.new_auth(version::current(), Witness());
 
     // Should abort - total exceeds max supply
@@ -312,9 +422,9 @@ fun test_request_mint_and_transfer_exceeds_max_supply() {
         &mut account,
         params,
         outcome,
-        vector[30, 30],  // Total 60 > max 50
+        vector[30, 30], // Total 60 > max 50
         vector[RECIPIENT1, RECIPIENT2],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, account, clock);
@@ -337,7 +447,14 @@ fun test_request_withdraw_and_burn() {
     scenario.next_tx(OWNER);
     let key = b"burn".to_string();
     let outcome = Outcome {};
-    let params = intents::new_params(key, b"Burn".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params = intents::new_params(
+        key,
+        b"Burn".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
 
     let auth2 = account.new_auth(version::current(), Witness());
     currency_intents::request_withdraw_and_burn<_, _, SUI>(
@@ -347,14 +464,24 @@ fun test_request_withdraw_and_burn() {
         outcome,
         coin_id,
         100,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Execute
     scenario.next_tx(OWNER);
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     let receiving = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
-    currency_intents::execute_withdraw_and_burn<Config, Outcome, SUI>(&mut executable, &mut account, receiving);
+    currency_intents::execute_withdraw_and_burn<Config, Outcome, SUI>(
+        &mut executable,
+        &mut account,
+        receiving,
+    );
     account.confirm_execution(executable);
 
     // Verify burn was recorded
@@ -377,17 +504,49 @@ fun test_request_withdraw_and_burn_disabled() {
     // Disable burn
     let key1 = b"disable".to_string();
     let outcome = Outcome {};
-    let params1 = intents::new_params(key1, b"Disable".to_string(), vector[0], 1000, &clock, scenario.ctx());
+    let params1 = intents::new_params(
+        key1,
+        b"Disable".to_string(),
+        vector[0],
+        1000,
+        &clock,
+        scenario.ctx(),
+    );
     let auth1 = account.new_auth(version::current(), Witness());
-    currency_intents::request_disable_rules<_, _, SUI>(auth1, &mut account, params1, outcome, false, true, false, false, false, false, scenario.ctx());
-    let (_, mut exec1) = account.create_executable<_, Outcome, _>(key1, &clock, version::current(), Witness(), scenario.ctx());
+    currency_intents::request_disable_rules<_, _, SUI>(
+        auth1,
+        &mut account,
+        params1,
+        outcome,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        scenario.ctx(),
+    );
+    let (_, mut exec1) = account.create_executable<_, Outcome, _>(
+        key1,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     currency_intents::execute_disable_rules<Config, Outcome, SUI>(&mut exec1, &mut account);
     account.confirm_execution(exec1);
 
     // Try to burn (should fail)
     let coin_id = object::id_from_address(@0x1);
     let key2 = b"burn".to_string();
-    let params2 = intents::new_params(key2, b"Burn".to_string(), vector[0], 2000, &clock, scenario.ctx());
+    let params2 = intents::new_params(
+        key2,
+        b"Burn".to_string(),
+        vector[0],
+        2000,
+        &clock,
+        scenario.ctx(),
+    );
     let auth2 = account.new_auth(version::current(), Witness());
 
     // Should abort - burn is disabled
@@ -398,7 +557,7 @@ fun test_request_withdraw_and_burn_disabled() {
         outcome,
         coin_id,
         100,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, account, clock);

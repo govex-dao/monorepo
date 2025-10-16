@@ -4,17 +4,21 @@
 #[test_only]
 module futarchy_markets_operations::market_init_strategies_tests;
 
+use futarchy_markets_operations::market_init_strategies::{
+    Self,
+    ConditionalRaiseConfig,
+    ConditionalBuybackConfig
+};
 use sui::test_utils;
-use futarchy_markets_operations::market_init_strategies::{Self, ConditionalRaiseConfig, ConditionalBuybackConfig};
 
 // === ConditionalRaiseConfig Constructor Tests ===
 
 #[test]
 fun test_new_conditional_raise_config_basic() {
     let config = market_init_strategies::new_conditional_raise_config(
-        1u8,           // target_outcome (YES)
-        1000000u64,    // mint_amount
-        950000u64,     // min_stable_out (5% slippage tolerance)
+        1u8, // target_outcome (YES)
+        1000000u64, // mint_amount
+        950000u64, // min_stable_out (5% slippage tolerance)
     );
 
     assert!(market_init_strategies::raise_target_outcome(&config) == 1, 0);
@@ -40,7 +44,7 @@ fun test_new_conditional_raise_config_outcome_zero() {
 #[test]
 fun test_new_conditional_raise_config_high_outcome() {
     let config = market_init_strategies::new_conditional_raise_config(
-        5u8,           // Higher outcome number
+        5u8, // Higher outcome number
         2000000u64,
         1900000u64,
     );
@@ -54,7 +58,7 @@ fun test_new_conditional_raise_config_high_outcome() {
 fun test_new_conditional_raise_config_zero_mint() {
     let config = market_init_strategies::new_conditional_raise_config(
         1u8,
-        0u64,          // Zero mint amount - should fail
+        0u64, // Zero mint amount - should fail
         950000u64,
     );
     test_utils::destroy(config);
@@ -66,7 +70,7 @@ fun test_new_conditional_raise_config_zero_min_out() {
     let config = market_init_strategies::new_conditional_raise_config(
         1u8,
         1000000u64,
-        0u64,          // Zero min_stable_out - should fail
+        0u64, // Zero min_stable_out - should fail
     );
     test_utils::destroy(config);
 }
@@ -193,7 +197,7 @@ fun test_raise_getters_comprehensive() {
 #[test]
 fun test_raise_getters_max_u8_outcome() {
     let config = market_init_strategies::new_conditional_raise_config(
-        255u8,  // Max u8 value
+        255u8, // Max u8 value
         1000u64,
         900u64,
     );
@@ -306,7 +310,7 @@ fun test_raise_config_tight_slippage() {
     let config = market_init_strategies::new_conditional_raise_config(
         1u8,
         1000000u64,
-        999000u64,  // 99.9% of mint amount
+        999000u64, // 99.9% of mint amount
     );
 
     assert!(market_init_strategies::raise_min_stable_out(&config) == 999000, 0);
@@ -319,7 +323,7 @@ fun test_raise_config_loose_slippage() {
     let config = market_init_strategies::new_conditional_raise_config(
         1u8,
         1000000u64,
-        800000u64,  // 80% of mint amount
+        800000u64, // 80% of mint amount
     );
 
     assert!(market_init_strategies::raise_min_stable_out(&config) == 800000, 0);
@@ -392,10 +396,16 @@ fun test_raise_config_copy_drop() {
     let config2 = config1;
 
     // Both should have same values
-    assert!(market_init_strategies::raise_target_outcome(&config1) ==
-            market_init_strategies::raise_target_outcome(&config2), 0);
-    assert!(market_init_strategies::raise_mint_amount(&config1) ==
-            market_init_strategies::raise_mint_amount(&config2), 1);
+    assert!(
+        market_init_strategies::raise_target_outcome(&config1) ==
+            market_init_strategies::raise_target_outcome(&config2),
+        0,
+    );
+    assert!(
+        market_init_strategies::raise_mint_amount(&config1) ==
+            market_init_strategies::raise_mint_amount(&config2),
+        1,
+    );
 
     test_utils::destroy(config1);
     test_utils::destroy(config2);

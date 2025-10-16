@@ -8,17 +8,16 @@
 
 module futarchy_markets_core::arbitrage;
 
-use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::market_state;
 use futarchy_markets_core::swap_core::{Self, SwapSession};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-// swap_position_registry removed - balances transferred directly to users
-use sui::coin::{Self, Coin};
-use sui::clock::Clock;
-use sui::object::{Self, ID};
-use sui::event;
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::market_state;
 use std::option;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::object::{Self, ID};
 
 // === Errors ===
 const EZeroAmount: u64 = 0;
@@ -125,16 +124,30 @@ public fun execute_optimal_spot_arbitrage<AssetType, StableType>(
         // Destroy zero asset coin
         coin::destroy_zero(asset_for_arb);
         execute_spot_arb_stable_to_asset_direction(
-            spot_pool, escrow, session,
-            stable_for_arb, min_profit, recipient, existing_balance_opt, clock, ctx
+            spot_pool,
+            escrow,
+            session,
+            stable_for_arb,
+            min_profit,
+            recipient,
+            existing_balance_opt,
+            clock,
+            ctx,
         )
     } else if (asset_amt > 0 && stable_amt == 0) {
         // Asset→Stable→Conditionals→Asset arbitrage
         // Destroy zero stable coin
         coin::destroy_zero(stable_for_arb);
         execute_spot_arb_asset_to_stable_direction(
-            spot_pool, escrow, session,
-            asset_for_arb, min_profit, recipient, existing_balance_opt, clock, ctx
+            spot_pool,
+            escrow,
+            session,
+            asset_for_arb,
+            min_profit,
+            recipient,
+            existing_balance_opt,
+            clock,
+            ctx,
         )
     } else {
         // No coins or both coins provided - just return them and empty/existing balance
@@ -186,7 +199,11 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
 
     // 1. Swap spot stable → spot asset
     let asset_from_spot = unified_spot_pool::swap_stable_for_asset(
-        spot_pool, stable_for_arb, 0, clock, ctx
+        spot_pool,
+        stable_for_arb,
+        0,
+        clock,
+        ctx,
     );
     let asset_amt = asset_from_spot.value();
 
@@ -199,7 +216,9 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
 
     // 3. Deposit asset to escrow for quantum mint
     let (deposited_asset, _) = coin_escrow::deposit_spot_coins(
-        escrow, asset_from_spot, coin::zero<StableType>(ctx)
+        escrow,
+        asset_from_spot,
+        coin::zero<StableType>(ctx),
     );
 
     // 4. Add to balance (quantum: same amount in ALL outcomes)
@@ -213,8 +232,14 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
     i = 0u8;
     while ((i as u64) < outcome_count) {
         swap_core::swap_balance_asset_to_stable<AssetType, StableType>(
-            session, escrow, &mut arb_balance,
-            i, asset_amt, 0, clock, ctx
+            session,
+            escrow,
+            &mut arb_balance,
+            i,
+            asset_amt,
+            0,
+            clock,
+            ctx,
         );
         i = i + 1;
     };
@@ -224,7 +249,10 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
 
     // 7. Burn complete set → withdraw spot stable
     let profit_stable = burn_complete_set_and_withdraw_stable(
-        &mut arb_balance, escrow, min_stable, ctx
+        &mut arb_balance,
+        escrow,
+        min_stable,
+        ctx,
     );
 
     // Validate profit meets minimum
@@ -234,7 +262,7 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
     let net_profit_stable = if (profit_stable.value() >= stable_amt) {
         profit_stable.value() - stable_amt
     } else {
-        0  // Loss case - report as 0 profit
+        0 // Loss case - report as 0 profit
     };
 
     // Emit event
@@ -252,10 +280,10 @@ fun execute_spot_arb_stable_to_asset_direction<AssetType, StableType>(
     // 8. Merge dust into existing balance OR return new balance
     let final_balance = if (option::is_some(&existing_balance_opt)) {
         let mut existing = option::extract(&mut existing_balance_opt);
-        conditional_balance::merge(&mut existing, arb_balance);  // Merge new dust into existing
+        conditional_balance::merge(&mut existing, arb_balance); // Merge new dust into existing
         existing
     } else {
-        arb_balance  // Return new balance
+        arb_balance // Return new balance
     };
     option::destroy_none(existing_balance_opt);
 
@@ -284,7 +312,11 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
 
     // 1. Swap spot asset → spot stable
     let stable_from_spot = unified_spot_pool::swap_asset_for_stable(
-        spot_pool, asset_for_arb, 0, clock, ctx
+        spot_pool,
+        asset_for_arb,
+        0,
+        clock,
+        ctx,
     );
     let stable_amt = stable_from_spot.value();
 
@@ -297,7 +329,9 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
 
     // 3. Deposit stable to escrow for quantum mint
     let (_, deposited_stable) = coin_escrow::deposit_spot_coins(
-        escrow, coin::zero<AssetType>(ctx), stable_from_spot
+        escrow,
+        coin::zero<AssetType>(ctx),
+        stable_from_spot,
     );
 
     // 4. Add to balance (quantum: same amount in ALL outcomes)
@@ -311,8 +345,14 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
     i = 0u8;
     while ((i as u64) < outcome_count) {
         swap_core::swap_balance_stable_to_asset<AssetType, StableType>(
-            session, escrow, &mut arb_balance,
-            i, stable_amt, 0, clock, ctx
+            session,
+            escrow,
+            &mut arb_balance,
+            i,
+            stable_amt,
+            0,
+            clock,
+            ctx,
         );
         i = i + 1;
     };
@@ -322,7 +362,10 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
 
     // 7. Burn complete set → withdraw spot asset
     let profit_asset = burn_complete_set_and_withdraw_asset(
-        &mut arb_balance, escrow, min_asset, ctx
+        &mut arb_balance,
+        escrow,
+        min_asset,
+        ctx,
     );
 
     // Validate profit meets minimum
@@ -332,7 +375,7 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
     let net_profit_asset = if (profit_asset.value() >= asset_amt) {
         profit_asset.value() - asset_amt
     } else {
-        0  // Loss case - report as 0 profit
+        0 // Loss case - report as 0 profit
     };
 
     // Emit event
@@ -350,10 +393,10 @@ fun execute_spot_arb_asset_to_stable_direction<AssetType, StableType>(
     // 8. Merge dust into existing balance OR return new balance
     let final_balance = if (option::is_some(&existing_balance_opt)) {
         let mut existing = option::extract(&mut existing_balance_opt);
-        conditional_balance::merge(&mut existing, arb_balance);  // Merge new dust into existing
+        conditional_balance::merge(&mut existing, arb_balance); // Merge new dust into existing
         existing
     } else {
-        arb_balance  // Return new balance
+        arb_balance // Return new balance
     };
     option::destroy_none(existing_balance_opt);
 
@@ -385,7 +428,7 @@ public fun burn_complete_set_and_withdraw_stable<AssetType, StableType>(
 
     // Withdraw from escrow
     let (asset, stable) = coin_escrow::withdraw_from_escrow(escrow, 0, amount, ctx);
-    coin::destroy_zero(asset);  // Destroy zero asset coin
+    coin::destroy_zero(asset); // Destroy zero asset coin
     stable
 }
 
@@ -411,7 +454,6 @@ public fun burn_complete_set_and_withdraw_asset<AssetType, StableType>(
 
     // Withdraw from escrow
     let (asset, stable) = coin_escrow::withdraw_from_escrow(escrow, amount, 0, ctx);
-    coin::destroy_zero(stable);  // Destroy zero stable coin
+    coin::destroy_zero(stable); // Destroy zero stable coin
     asset
 }
-

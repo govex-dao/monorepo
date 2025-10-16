@@ -4,7 +4,7 @@
 /// - Dependencies may include: Cetus CLMM, Scallop, custom DAO packages, etc.
 ///
 /// Changes in this fork:
-/// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N) 
+/// - new(), new_latest_extensions(), new_inner(): Use VecSet for O(N log N)
 ///   duplicate detection during construction instead of O(N²) nested loops
 /// - Storage remains vector-based to maintain `copy` + `drop` abilities
 /// - Lookups remain O(N) which is acceptable for N≤20
@@ -26,18 +26,18 @@
 /// Dependencies are the packages that an Account object can call.
 /// They are stored in a vector and can be modified through an intent.
 /// AccountProtocol is the only mandatory dependency, found at index 0.
-/// 
+///
 /// For improved security, we provide a whitelist of allowed packages in Extensions.
 /// If unverified_allowed is false, then only these packages can be added.
 
 module account_protocol::deps;
 
-// === Imports ===
-
-use std::string::String;
-use sui::vec_set::{Self, VecSet};
 use account_extensions::extensions::Extensions;
 use account_protocol::version_witness::{Self, VersionWitness};
+use std::string::String;
+use sui::vec_set::{Self, VecSet};
+
+// === Imports ===
 
 // === Errors ===
 
@@ -79,11 +79,14 @@ public fun new(
     addresses: vector<address>,
     mut versions: vector<u64>,
 ): Deps {
-    assert!(names.length() == addresses.length() && addresses.length() == versions.length(), EDepsNotSameLength);
+    assert!(
+        names.length() == addresses.length() && addresses.length() == versions.length(),
+        EDepsNotSameLength,
+    );
     assert!(
         names[0] == b"AccountProtocol".to_string() &&
-        extensions.is_extension(names[0], addresses[0], versions[0]), 
-        EAccountProtocolMissing
+        extensions.is_extension(names[0], addresses[0], versions[0]),
+        EAccountProtocolMissing,
     );
     // second dependency must be AccountConfig (we don't know the name)
     assert!(names[1] != b"AccountActions".to_string(), EAccountConfigMissing);
@@ -95,17 +98,17 @@ public fun new(
 
     names.zip_do!(addresses, |name, addr| {
         let version = versions.remove(0);
-        
+
         // O(log N) duplicate checking instead of O(N²)
         assert!(!name_set.contains(&name), EDepAlreadyExists);
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
-        
+
         // verify extensions
-        if (!unverified_allowed) 
+        if (!unverified_allowed)
             assert!(extensions.is_extension(name, addr, version), ENotExtension);
-        
+
         // add dep
         inner.push_back(Dep { name, addr, version });
     });
@@ -115,27 +118,24 @@ public fun new(
 
 /// Creates a new Deps struct from latest packages for names.
 /// Unverified packages are not allowed after this operation.
-public fun new_latest_extensions(
-    extensions: &Extensions,
-    names: vector<String>,
-): Deps {
+public fun new_latest_extensions(extensions: &Extensions, names: vector<String>): Deps {
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
 
     let mut inner = vector<Dep>[];
     // Use VecSet for O(log N) duplicate detection
     let mut name_set = vec_set::empty<String>();
     let mut addr_set = vec_set::empty<address>();
-    
+
     names.do!(|name| {
         // O(log N) duplicate checking
         assert!(!name_set.contains(&name), EDepAlreadyExists);
-        
+
         let (addr, version) = extensions.get_latest_for_name(name);
-        
+
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
-        
+
         // add dep
         inner.push_back(Dep { name, addr, version });
     });
@@ -150,7 +150,10 @@ public fun new_inner(
     addresses: vector<address>,
     mut versions: vector<u64>,
 ): Deps {
-    assert!(names.length() == addresses.length() && addresses.length() == versions.length(), EDepsNotSameLength);
+    assert!(
+        names.length() == addresses.length() && addresses.length() == versions.length(),
+        EDepsNotSameLength,
+    );
     // AccountProtocol is mandatory and cannot be removed
     assert!(names[0] == b"AccountProtocol".to_string(), EAccountProtocolMissing);
     // second dependency must be AccountConfig (we don't know the name)
@@ -164,17 +167,17 @@ public fun new_inner(
 
     names.zip_do!(addresses, |name, addr| {
         let version = versions.remove(0);
-        
+
         // O(log N) duplicate checking
         assert!(!name_set.contains(&name), EDepAlreadyExists);
         assert!(!addr_set.contains(&addr), EDepAlreadyExists);
         name_set.insert(name);
         addr_set.insert(addr);
-        
+
         // verify extensions
-        if (!deps.unverified_allowed) 
+        if (!deps.unverified_allowed)
             assert!(extensions.is_extension(name, addr, version), ENotExtension);
-        
+
         // add dep
         inner.push_back(Dep { name, addr, version });
     });
@@ -295,9 +298,20 @@ public fun toggle_unverified_allowed_for_testing(deps: &mut Deps) {
 
 #[test]
 fun test_new_and_getters() {
-    let extensions = account_extensions::extensions::new_for_testing_with_addrs(@account_protocol, @0x1, @0x2, &mut tx_context::dummy());
+    let extensions = account_extensions::extensions::new_for_testing_with_addrs(
+        @account_protocol,
+        @0x1,
+        @0x2,
+        &mut tx_context::dummy(),
+    );
 
-    let _deps = new(&extensions, false, vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()], vector[@account_protocol, @0x1], vector[1, 1]);
+    let _deps = new(
+        &extensions,
+        false,
+        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()],
+        vector[@account_protocol, @0x1],
+        vector[1, 1],
+    );
     // assertions
     let deps = new_for_testing();
     let witness = version_witness::new_for_testing(@account_protocol);
@@ -315,7 +329,7 @@ fun test_new_and_getters() {
     assert!(dep.name() == b"AccountProtocol".to_string());
     assert!(dep.addr() == @account_protocol);
     assert!(dep.version() == 1);
-    
+
     sui::test_utils::destroy(extensions);
 }
 
@@ -371,16 +385,16 @@ fun test_toggle_unverified_allowed() {
 
 #[test]
 fun test_contains_name_empty_deps() {
-    let deps = Deps { 
+    let deps = Deps {
         inner: vector[],
-        unverified_allowed: false 
+        unverified_allowed: false,
     };
     assert!(!deps.contains_name(b"AccountProtocol".to_string()));
 }
 
 #[test]
 fun test_contains_addr_empty_deps() {
-    let deps = Deps { 
+    let deps = Deps {
         inner: vector[],
         unverified_allowed: false,
     };

@@ -15,7 +15,7 @@ public struct IntentCreated has copy, drop {
     key: String,
     proposal: address,
     outcome_index: u64,
-    when_ms: u64
+    when_ms: u64,
 }
 
 /// Emitted when an intent's actions are executed
@@ -23,7 +23,7 @@ public struct IntentExecuted has copy, drop {
     key: String,
     proposal: address,
     outcome_index: u64,
-    when_ms: u64
+    when_ms: u64,
 }
 
 /// Emitted when an intent is cancelled/cleaned.
@@ -33,7 +33,7 @@ public struct IntentCancelled has copy, drop {
     outcome_index: u64,
     key_hash: vector<u8>,
     reason: u8,
-    when_ms: u64
+    when_ms: u64,
 }
 
 public fun emit_created(key: String, proposal: address, outcome_index: u64, when_ms: u64) {
@@ -49,7 +49,7 @@ public fun emit_cancelled(
     outcome_index: u64,
     key_hash: vector<u8>,
     reason: u8,
-    when_ms: u64
+    when_ms: u64,
 ) {
     event::emit(IntentCancelled { proposal, outcome_index, key_hash, reason, when_ms })
 }

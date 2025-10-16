@@ -1,10 +1,6 @@
 /// Decoder for policy actions in futarchy DAOs
 module futarchy_multisig::policy_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name::{Self, TypeName}, option::{Self, Option}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs, tx_context::TxContext};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_multisig::policy_actions::{
@@ -12,8 +8,17 @@ use futarchy_multisig::policy_actions::{
     SetObjectPolicyAction,
     RegisterCouncilAction,
     RemoveTypePolicyAction,
-    RemoveObjectPolicyAction,
+    RemoveObjectPolicyAction
 };
+use std::option::{Self, Option};
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+use sui::tx_context::TxContext;
+
+// === Imports ===
 
 // === Helper Functions ===
 
@@ -117,19 +122,23 @@ public fun decode_set_type_policy_action(
     ];
 
     if (execution_council_id.is_some()) {
-        fields.push_back(schema::new_field(
-            b"execution_council_id".to_string(),
-            (*execution_council_id.borrow()).to_string(),
-            b"ID".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"execution_council_id".to_string(),
+                (*execution_council_id.borrow()).to_string(),
+                b"ID".to_string(),
+            ),
+        );
     };
 
     if (change_council_id.is_some()) {
-        fields.push_back(schema::new_field(
-            b"change_council_id".to_string(),
-            (*change_council_id.borrow()).to_string(),
-            b"ID".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"change_council_id".to_string(),
+                (*change_council_id.borrow()).to_string(),
+                b"ID".to_string(),
+            ),
+        );
     };
 
     fields
@@ -190,19 +199,23 @@ public fun decode_set_object_policy_action(
     ];
 
     if (execution_council_id.is_some()) {
-        fields.push_back(schema::new_field(
-            b"execution_council_id".to_string(),
-            (*execution_council_id.borrow()).to_string(),
-            b"ID".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"execution_council_id".to_string(),
+                (*execution_council_id.borrow()).to_string(),
+                b"ID".to_string(),
+            ),
+        );
     };
 
     if (change_council_id.is_some()) {
-        fields.push_back(schema::new_field(
-            b"change_council_id".to_string(),
-            (*change_council_id.borrow()).to_string(),
-            b"ID".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"change_council_id".to_string(),
+                (*change_council_id.borrow()).to_string(),
+                b"ID".to_string(),
+            ),
+        );
     };
 
     fields
@@ -272,10 +285,7 @@ public fun decode_remove_object_policy_action(
 // === Registration Functions ===
 
 /// Register all policy decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_set_type_policy_decoder(registry, ctx);
     register_set_object_policy_decoder(registry, ctx);
     register_register_council_decoder(registry, ctx);
@@ -283,37 +293,25 @@ public fun register_decoders(
     register_remove_object_policy_decoder(registry, ctx);
 }
 
-fun register_set_type_policy_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_set_type_policy_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SetTypePolicyActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SetTypePolicyAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_set_object_policy_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_set_object_policy_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SetObjectPolicyActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SetObjectPolicyAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_register_council_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_register_council_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RegisterCouncilActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RegisterCouncilAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_remove_type_policy_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_remove_type_policy_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RemoveTypePolicyActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RemoveTypePolicyAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

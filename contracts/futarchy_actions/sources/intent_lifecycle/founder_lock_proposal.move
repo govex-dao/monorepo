@@ -3,29 +3,25 @@
 /// Markets decide if this decentralization would increase the DAO's value.
 module futarchy_actions::founder_lock_proposal;
 
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::Expired;
+use account_protocol::version_witness::VersionWitness;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_markets_core::conditional_amm;
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_core::spot_conditional_quoter;
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use std::option::{Self, Option};
 use std::string::{Self, String};
 use std::vector;
-use std::option::{Self, Option};
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::object::{Self, ID, UID};
 use sui::transfer;
 use sui::tx_context::{Self, TxContext};
-use sui::object::{Self, ID, UID};
-use sui::event;
-use account_protocol::{
-    intents::{Expired},
-    executable::{Self, Executable},
-    account::{Self, Account},
-    version_witness::VersionWitness,
-};
-use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_markets_core::{
-    proposal::{Self, Proposal},
-    unified_spot_pool::{Self, UnifiedSpotPool},
-    spot_conditional_quoter,
-    conditional_amm,
-};
 
 // === Errors ===
 const EInvalidTiers: u64 = 0;
@@ -95,7 +91,7 @@ public struct FounderLockReturned has copy, drop {
 // === Structs ===
 
 /// A price tier defining lock conditions
-public struct PriceTier has store, copy, drop {
+public struct PriceTier has copy, drop, store {
     /// TWAP price threshold to trigger this tier (scaled by 1e12)
     twap_threshold: u128,
     /// Amount to lock at this price
@@ -120,33 +116,26 @@ public fun new_price_tier(
 /// Founder lock proposal for token locking
 public struct FounderLockProposal<phantom AssetType, phantom StableType> has key, store {
     id: UID,
-
     // Proposer info
     proposer: address,
     withdrawal_recipient: address,
-
     // Commitment details
     committed_amount: u64,
     committed_coins: Balance<AssetType>,
-
     // Price-based lock tiers (ordered by price)
     tiers: vector<PriceTier>,
-
     // Execution results
     locked_amount: u64,
     unlock_time: Option<u64>,
     tier_reached: Option<u64>,
-
     // Proposal state
     proposal_id: ID, // ID of the associated Proposal object
     executed: bool,
     withdrawn: bool,
-
     // Timestamps
     created_at: u64,
     trading_start: u64,
     trading_end: u64,
-
     // Metadata
     description: String,
 }
@@ -267,9 +256,10 @@ public fun execute_founder_lock<AssetType, StableType>(
         let tier = vector::borrow(&founder_lock.tiers, index);
 
         founder_lock.locked_amount = tier.lock_amount;
-        founder_lock.unlock_time = option::some(
-            clock.timestamp_ms() + tier.lock_duration_ms
-        );
+        founder_lock.unlock_time =
+            option::some(
+                clock.timestamp_ms() + tier.lock_duration_ms,
+            );
         founder_lock.tier_reached = option::some(index);
 
         // Return excess tokens if any
@@ -277,7 +267,7 @@ public fun execute_founder_lock<AssetType, StableType>(
         if (excess_amount > 0) {
             let excess_coins = coin::from_balance(
                 balance::split(&mut founder_lock.committed_coins, excess_amount),
-                ctx
+                ctx,
             );
             transfer::public_transfer(excess_coins, founder_lock.proposer);
         };
@@ -293,7 +283,7 @@ public fun execute_founder_lock<AssetType, StableType>(
         // No tier reached, return all tokens
         let all_coins = coin::from_balance(
             balance::withdraw_all(&mut founder_lock.committed_coins),
-            ctx
+            ctx,
         );
         transfer::public_transfer(all_coins, founder_lock.proposer);
 
@@ -344,7 +334,7 @@ public entry fun withdraw_unlocked_tokens<AssetType, StableType>(
 
     let withdrawal_coins = coin::from_balance(
         balance::withdraw_all(&mut founder_lock.committed_coins),
-        ctx
+        ctx,
     );
 
     transfer::public_transfer(withdrawal_coins, founder_lock.withdrawal_recipient);
@@ -383,56 +373,56 @@ public entry fun update_withdrawal_recipient<AssetType, StableType>(
 // === Getter Functions ===
 
 public fun get_proposer<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): address {
     founder_lock.proposer
 }
 
 public fun get_withdrawal_recipient<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): address {
     founder_lock.withdrawal_recipient
 }
 
 public fun get_committed_amount<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): u64 {
     founder_lock.committed_amount
 }
 
 public fun get_locked_amount<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): u64 {
     founder_lock.locked_amount
 }
 
 public fun get_unlock_time<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): Option<u64> {
     founder_lock.unlock_time
 }
 
 public fun is_executed<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): bool {
     founder_lock.executed
 }
 
 public fun is_withdrawn<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): bool {
     founder_lock.withdrawn
 }
 
 public fun get_tier_count<AssetType, StableType>(
-    founder_lock: &FounderLockProposal<AssetType, StableType>
+    founder_lock: &FounderLockProposal<AssetType, StableType>,
 ): u64 {
     vector::length(&founder_lock.tiers)
 }
 
 public fun get_tier_at<AssetType, StableType>(
     founder_lock: &FounderLockProposal<AssetType, StableType>,
-    index: u64
+    index: u64,
 ): &PriceTier {
     vector::borrow(&founder_lock.tiers, index)
 }

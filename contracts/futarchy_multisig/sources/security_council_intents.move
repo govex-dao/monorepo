@@ -229,8 +229,15 @@ public fun execute_accept_and_lock_cap_with_dao_check(
         abort ENotCoExecution  // Security council needs a policy to act
     };
 
-    // Policy exists - TODO: check the policy mode to see if council is allowed
-    // For now, assume if a policy exists, it allows some council involvement
+    // Policy exists - ensure the mode actually permits council participation
+    let action_type = type_name::with_defining_ids<UpgradeCap>();
+    let mode = policy_registry::get_type_mode(reg, action_type);
+    let council_allowed =
+        mode == policy_registry::MODE_COUNCIL_ONLY() ||
+        mode == policy_registry::MODE_DAO_OR_COUNCIL() ||
+        mode == policy_registry::MODE_DAO_AND_COUNCIL();
+    assert!(council_allowed, ENotCoExecution);
+
     execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
 }
 

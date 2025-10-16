@@ -1,20 +1,20 @@
 #[test_only]
 module futarchy_markets_core::swap_core_tests;
 
-use sui::test_scenario::{Self as ts};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_core::swap_core::{Self, SwapSession};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm;
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
+use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
+use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use std::option;
+use std::string;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::object;
-use futarchy_markets_core::swap_core::{Self, SwapSession};
-use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
-use futarchy_markets_primitives::market_state::{Self, MarketState};
-use futarchy_markets_primitives::conditional_amm;
-use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
-use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
-use std::string;
-use std::option;
+use sui::test_scenario as ts;
 
 // === Constants ===
 const INITIAL_RESERVE: u64 = 1_000_000_000; // 1,000 tokens per outcome
@@ -95,7 +95,7 @@ fun initialize_amm_pools(escrow: &mut TokenEscrow<TEST_COIN_A, TEST_COIN_B>, ctx
             1000, // minimal asset_reserve
             1000, // minimal stable_reserve
             &clock,
-            ctx
+            ctx,
         );
         vector::push_back(&mut pools, pool);
         i = i + 1;
@@ -126,7 +126,13 @@ fun add_liquidity_to_pools(
         let pool = market_state::borrow_amm_pool_mut(market_state, (i as u64));
         let asset_coin = coin::mint_for_testing<TEST_COIN_A>(reserve_per_outcome, ctx);
         let stable_coin = coin::mint_for_testing<TEST_COIN_B>(reserve_per_outcome, ctx);
-        conditional_amm::add_liquidity_for_testing(pool, asset_coin, stable_coin, DEFAULT_FEE_BPS, ctx);
+        conditional_amm::add_liquidity_for_testing(
+            pool,
+            asset_coin,
+            stable_coin,
+            DEFAULT_FEE_BPS,
+            ctx,
+        );
         i = i + 1;
     };
 }
@@ -160,7 +166,7 @@ fun create_test_proposal_trading(
         sui::balance::zero(),
         @0xC, // treasury_address
         vector[option::none(), option::none()],
-        ctx
+        ctx,
     );
 
     // Transition to TRADING state
@@ -375,7 +381,11 @@ fun test_swap_balance_asset_to_stable_multiple_outcomes() {
 }
 
 #[test]
-#[expected_failure(abort_code = 2)] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
+#[
+    expected_failure(
+        abort_code = 2,
+    ),
+] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
 fun test_swap_balance_asset_to_stable_insufficient_output() {
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
@@ -592,13 +602,34 @@ fun test_swap_balance_stable_to_asset_multiple_swaps_same_outcome() {
 
     // Perform multiple swaps in same outcome
     let out1 = swap_core::swap_balance_stable_to_asset(
-        &session, &mut escrow, &mut balance, 1, 5000, 0, &clock, ctx
+        &session,
+        &mut escrow,
+        &mut balance,
+        1,
+        5000,
+        0,
+        &clock,
+        ctx,
     );
     let out2 = swap_core::swap_balance_stable_to_asset(
-        &session, &mut escrow, &mut balance, 1, 5000, 0, &clock, ctx
+        &session,
+        &mut escrow,
+        &mut balance,
+        1,
+        5000,
+        0,
+        &clock,
+        ctx,
     );
     let out3 = swap_core::swap_balance_stable_to_asset(
-        &session, &mut escrow, &mut balance, 1, 5000, 0, &clock, ctx
+        &session,
+        &mut escrow,
+        &mut balance,
+        1,
+        5000,
+        0,
+        &clock,
+        ctx,
     );
 
     assert!(out1 > 0, 0);
@@ -621,7 +652,11 @@ fun test_swap_balance_stable_to_asset_multiple_swaps_same_outcome() {
 }
 
 #[test]
-#[expected_failure(abort_code = 2)] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
+#[
+    expected_failure(
+        abort_code = 2,
+    ),
+] // EExcessiveSlippage (from conditional_amm, fires before swap_core check)
 fun test_swap_balance_stable_to_asset_insufficient_output() {
     let mut scenario = ts::begin(@0x1);
     let ctx = ts::ctx(&mut scenario);
@@ -686,8 +721,26 @@ fun test_complete_swap_session_workflow() {
     let session = swap_core::begin_swap_session(&escrow);
 
     // 2. Perform multiple swaps
-    swap_core::swap_balance_asset_to_stable(&session, &mut escrow, &mut balance, 0, 10000, 0, &clock, ctx);
-    swap_core::swap_balance_stable_to_asset(&session, &mut escrow, &mut balance, 1, 15000, 0, &clock, ctx);
+    swap_core::swap_balance_asset_to_stable(
+        &session,
+        &mut escrow,
+        &mut balance,
+        0,
+        10000,
+        0,
+        &clock,
+        ctx,
+    );
+    swap_core::swap_balance_stable_to_asset(
+        &session,
+        &mut escrow,
+        &mut balance,
+        1,
+        15000,
+        0,
+        &clock,
+        ctx,
+    );
 
     // 3. Finalize session (updates metrics once)
     swap_core::finalize_swap_session(session, &mut proposal, &mut escrow, &clock);
@@ -728,8 +781,26 @@ fun test_swap_with_5_outcomes() {
     // Swap in all 5 outcomes
     let mut i = 0u8;
     while ((i as u64) < 5) {
-        swap_core::swap_balance_asset_to_stable(&session, &mut escrow, &mut balance, i, 3000, 0, &clock, ctx);
-        swap_core::swap_balance_stable_to_asset(&session, &mut escrow, &mut balance, i, 4000, 0, &clock, ctx);
+        swap_core::swap_balance_asset_to_stable(
+            &session,
+            &mut escrow,
+            &mut balance,
+            i,
+            3000,
+            0,
+            &clock,
+            ctx,
+        );
+        swap_core::swap_balance_stable_to_asset(
+            &session,
+            &mut escrow,
+            &mut balance,
+            i,
+            4000,
+            0,
+            &clock,
+            ctx,
+        );
         i = i + 1;
     };
 

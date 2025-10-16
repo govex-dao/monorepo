@@ -2,31 +2,24 @@
 /// Combines basic and advanced configuration intent creation
 module futarchy_actions::config_intents;
 
-// === Imports ===
-use std::{
-    string::String,
-    ascii::String as AsciiString,
-    option::{Self, Option},
-    type_name,
-    bcs,
-};
-use sui::{
-    clock::Clock,
-    url::Url,
-    tx_context::TxContext,
-};
-use account_protocol::{
-    account::Account,
-    executable::Executable,
-    intents::{Self, Intent, Params},
-    intent_interface,
-    schema::{Self, ActionDecoderRegistry},
-};
-use futarchy_core::version;
+use account_protocol::account::Account;
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::schema::{Self, ActionDecoderRegistry};
 use futarchy_actions::config_actions;
 use futarchy_core::action_types;
-use futarchy_core::futarchy_config::FutarchyConfig;
 use futarchy_core::dao_config;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
+use std::ascii::String as AsciiString;
+use std::bcs;
+use std::option::{Self, Option};
+use std::string::String;
+use std::type_name;
+use sui::clock::Clock;
+use sui::tx_context::TxContext;
+use sui::url::Url;
 
 // === Use Fun Aliases === (removed, using add_action_spec directly)
 
@@ -46,12 +39,12 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
     params: Params,
     outcome: Outcome,
     enabled: bool,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     // Enforce decoder exists for this action type
     schema::assert_decoder_exists(
         registry,
-        type_name::with_defining_ids<config_actions::SetProposalsEnabledAction>()
+        type_name::with_defining_ids<config_actions::SetProposalsEnabledAction>(),
     );
 
     // Use standard DAO settings for intent params (expiry, etc.)
@@ -68,9 +61,9 @@ public fun create_set_proposals_enabled_intent<Outcome: store + drop + copy>(
             intent.add_typed_action(
                 action_types::set_proposals_enabled(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -81,12 +74,12 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
     params: Params,
     outcome: Outcome,
     new_name: String,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     // Enforce decoder exists for this action type
     schema::assert_decoder_exists(
         registry,
-        type_name::with_defining_ids<config_actions::UpdateNameAction>()
+        type_name::with_defining_ids<config_actions::UpdateNameAction>(),
     );
 
     account.build_intent!(
@@ -102,9 +95,9 @@ public fun create_update_name_intent<Outcome: store + drop + copy>(
             intent.add_typed_action(
                 action_types::update_name(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -118,7 +111,7 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
     name: AsciiString,
     icon_url: Url,
     description: String,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -131,15 +124,15 @@ public fun create_update_metadata_intent<Outcome: store + drop + copy>(
             let action = config_actions::new_metadata_update_action(
                 option::some(name),
                 option::some(icon_url),
-                option::some(description)
+                option::some(description),
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::set_metadata(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -152,7 +145,7 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
     trading_period_ms: u64,
     min_asset_amount: u64,
     min_stable_amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -167,15 +160,15 @@ public fun create_update_trading_params_intent<Outcome: store + drop + copy>(
                 option::some(min_stable_amount),
                 option::some(review_period_ms),
                 option::some(trading_period_ms),
-                option::none() // amm_total_fee_bps
+                option::none(), // amm_total_fee_bps
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_trading_config(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -188,7 +181,7 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
     step_max: u64,
     initial_observation: u128,
     threshold: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -202,15 +195,15 @@ public fun create_update_twap_config_intent<Outcome: store + drop + copy>(
                 option::some(start_delay),
                 option::some(step_max),
                 option::some(initial_observation),
-                option::some(threshold)
+                option::some(threshold),
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_twap_config(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -223,7 +216,7 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
     max_outcomes: u64,
     max_actions_per_outcome: u64,
     required_bond_amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -241,15 +234,15 @@ public fun create_update_governance_intent<Outcome: store + drop + copy>(
                 option::none(), // max_intents_per_outcome - not specified
                 option::none(), // proposal_intent_expiry_ms - not specified
                 option::none(), // optimistic_challenge_fee - not specified
-                option::none()  // optimistic_challenge_period_ms - not specified
+                option::none(), // optimistic_challenge_period_ms - not specified
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_governance(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -266,7 +259,7 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
     proposal_intent_expiry_ms: Option<u64>,
     optimistic_challenge_fee: Option<u64>,
     optimistic_challenge_period_ms: Option<u64>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -284,15 +277,15 @@ public fun create_update_governance_flexible_intent<Outcome: store + drop + copy
                 max_intents_per_outcome,
                 proposal_intent_expiry_ms,
                 optimistic_challenge_fee,
-                optimistic_challenge_period_ms
+                optimistic_challenge_period_ms,
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_governance(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -305,7 +298,7 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
     dao_treasury_bps: u16,
     protocol_bps: u16,
     burn_bps: u16,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -319,15 +312,15 @@ public fun create_update_slash_distribution_intent<Outcome: store + drop + copy>
                 slasher_reward_bps,
                 dao_treasury_bps,
                 protocol_bps,
-                burn_bps
+                burn_bps,
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_slash_distribution(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -339,7 +332,7 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
     max_proposer_funded: u64,
     max_concurrent_proposals: u64,
     fee_escalation_basis_points: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.build_intent!(
         params,
@@ -353,15 +346,15 @@ public fun create_update_queue_params_intent<Outcome: store + drop + copy>(
                 option::some(max_proposer_funded),
                 option::some(max_concurrent_proposals),
                 option::none(), // max_queue_size - not specified
-                option::some(fee_escalation_basis_points)
+                option::some(fee_escalation_basis_points),
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_queue_params(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -373,12 +366,12 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
     outcome: Outcome,
     use_outcome_index: Option<bool>,
     conditional_metadata: Option<Option<dao_config::ConditionalMetadata>>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     // Enforce decoder exists for this action type
     schema::assert_decoder_exists(
         registry,
-        type_name::with_defining_ids<config_actions::ConditionalMetadataUpdateAction>()
+        type_name::with_defining_ids<config_actions::ConditionalMetadataUpdateAction>(),
     );
 
     account.build_intent!(
@@ -391,15 +384,15 @@ public fun create_update_conditional_metadata_intent<Outcome: store + drop + cop
         |intent, iw| {
             let action = config_actions::new_conditional_metadata_update_action(
                 use_outcome_index,
-                conditional_metadata
+                conditional_metadata,
             );
             let action_bytes = bcs::to_bytes(&action);
             intent.add_typed_action(
                 action_types::update_conditional_metadata(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -414,7 +407,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
     twap_step_max: u64,
     twap_initial_observation: u128,
     twap_threshold: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     create_update_twap_config_intent(
         account,
@@ -424,7 +417,7 @@ public fun create_update_twap_params_intent<Outcome: store + drop + copy>(
         twap_step_max,
         twap_initial_observation,
         twap_threshold,
-        ctx
+        ctx,
     );
 }
 
@@ -436,7 +429,7 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
     max_proposer_funded: u64,
     max_concurrent_proposals: u64,
     fee_escalation_basis_points: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     create_update_queue_params_intent(
         account,
@@ -445,7 +438,7 @@ public fun create_update_fee_params_intent<Outcome: store + drop + copy>(
         max_proposer_funded,
         max_concurrent_proposals,
         fee_escalation_basis_points,
-        ctx
+        ctx,
     );
 }
 

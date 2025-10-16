@@ -1,7 +1,8 @@
 #[test_only]
 module futarchy_core::futarchy_config_tests;
 
-use futarchy_core::{futarchy_config, dao_config};
+use futarchy_core::dao_config;
+use futarchy_core::futarchy_config;
 use std::string;
 use sui::test_scenario as ts;
 
@@ -16,10 +17,10 @@ public struct TestStable has drop {}
 #[test]
 fun test_new_slash_distribution_valid() {
     let dist = futarchy_config::new_slash_distribution(
-        2500,  // 25% slasher reward
-        2500,  // 25% dao treasury
-        2500,  // 25% protocol
-        2500,  // 25% burn
+        2500, // 25% slasher reward
+        2500, // 25% dao treasury
+        2500, // 25% protocol
+        2500, // 25% burn
     );
 
     assert!(futarchy_config::slasher_reward_bps(&dist) == 2500, 0);
@@ -32,10 +33,10 @@ fun test_new_slash_distribution_valid() {
 #[expected_failure(abort_code = futarchy_config::EInvalidSlashDistribution)]
 fun test_new_slash_distribution_not_100_percent() {
     futarchy_config::new_slash_distribution(
-        2500,  // 25%
-        2500,  // 25%
-        2500,  // 25%
-        2000,  // 20% - Total is 95%, not 100%!
+        2500, // 25%
+        2500, // 25%
+        2500, // 25%
+        2000, // 20% - Total is 95%, not 100%!
     );
 }
 
@@ -43,10 +44,10 @@ fun test_new_slash_distribution_not_100_percent() {
 #[expected_failure(abort_code = futarchy_config::EInvalidSlashDistribution)]
 fun test_new_slash_distribution_exceeds_100_percent() {
     futarchy_config::new_slash_distribution(
-        3000,  // 30%
-        3000,  // 30%
-        3000,  // 30%
-        3000,  // 30% - Total is 120%!
+        3000, // 30%
+        3000, // 30%
+        3000, // 30%
+        3000, // 30% - Total is 120%!
     );
 }
 
@@ -54,7 +55,7 @@ fun test_new_slash_distribution_exceeds_100_percent() {
 fun test_new_slash_distribution_all_to_one() {
     // Valid: all 100% to slasher
     let dist = futarchy_config::new_slash_distribution(
-        10000,  // 100% slasher
+        10000, // 100% slasher
         0,
         0,
         0,
@@ -70,7 +71,7 @@ fun test_new_slash_distribution_all_burned() {
         0,
         0,
         0,
-        10000,  // 100% burn
+        10000, // 100% burn
     );
 
     assert!(futarchy_config::burn_bps(&dist) == 10000, 0);
@@ -101,7 +102,10 @@ fun test_new_futarchy_config_basic() {
     );
 
     let slash_dist = futarchy_config::new_slash_distribution(
-        2500, 2500, 2500, 2500
+        2500,
+        2500,
+        2500,
+        2500,
     );
 
     let config = futarchy_config::new<TestAsset, TestStable>(
@@ -142,7 +146,10 @@ fun test_new_futarchy_config_invalid_slash() {
     );
 
     let invalid_slash = futarchy_config::new_slash_distribution(
-        5000, 5000, 5000, 5000  // 200%!
+        5000,
+        5000,
+        5000,
+        5000, // 200%!
     );
 
     futarchy_config::new<TestAsset, TestStable>(
@@ -180,10 +187,10 @@ fun test_with_rewards() {
 
     let updated = futarchy_config::with_rewards(
         config,
-        5_000_000,  // proposal_pass_reward
-        3_000_000,  // outcome_win_reward
-        2_000_000_000,  // review_to_trading_fee
-        2_000_000_000,  // finalization_fee
+        5_000_000, // proposal_pass_reward
+        3_000_000, // outcome_win_reward
+        2_000_000_000, // review_to_trading_fee
+        2_000_000_000, // finalization_fee
     );
 
     assert!(futarchy_config::proposal_pass_reward(&updated) == 5_000_000, 0);
@@ -217,7 +224,7 @@ fun test_with_verification_level() {
     let slash_dist = futarchy_config::new_slash_distribution(2500, 2500, 2500, 2500);
     let config = futarchy_config::new<TestAsset, TestStable>(dao_config, slash_dist);
 
-    let updated = futarchy_config::with_verification_level(config, 3);  // Premium
+    let updated = futarchy_config::with_verification_level(config, 3); // Premium
 
     assert!(futarchy_config::verification_level(&updated) == 3, 0);
 }
@@ -278,10 +285,10 @@ fun test_with_slash_distribution() {
     let config = futarchy_config::new<TestAsset, TestStable>(dao_config, old_slash);
 
     let new_slash = futarchy_config::new_slash_distribution(
-        5000,  // 50% slasher
-        2000,  // 20% dao
-        2000,  // 20% protocol
-        1000,  // 10% burn
+        5000, // 50% slasher
+        2000, // 20% dao
+        2000, // 20% protocol
+        1000, // 10% burn
     );
 
     let updated = futarchy_config::with_slash_distribution(config, new_slash);
@@ -326,7 +333,7 @@ fun test_dao_state_proposal_counters() {
     futarchy_config::decrement_active_proposals(&mut state);
 
     assert!(futarchy_config::active_proposals(&state) == 1, 4);
-    assert!(futarchy_config::total_proposals(&state) == 2, 5);  // Total never decrements
+    assert!(futarchy_config::total_proposals(&state) == 2, 5); // Total never decrements
 
     futarchy_config::destroy_dao_state_for_testing(state);
 }
@@ -362,7 +369,10 @@ fun test_dao_state_attestation_url() {
     assert!(futarchy_config::attestation_url(&state) == &string::utf8(b""), 0);
 
     futarchy_config::set_attestation_url(&mut state, string::utf8(b"https://verify.dao.com"));
-    assert!(futarchy_config::attestation_url(&state) == &string::utf8(b"https://verify.dao.com"), 1);
+    assert!(
+        futarchy_config::attestation_url(&state) == &string::utf8(b"https://verify.dao.com"),
+        1,
+    );
 
     futarchy_config::destroy_dao_state_for_testing(state);
 }
@@ -405,7 +415,7 @@ fun test_new_futarchy_outcome() {
 
     let outcome = futarchy_config::new_futarchy_outcome(
         string::utf8(b"test_intent"),
-        1000000,  // min_execution_time
+        1000000, // min_execution_time
     );
 
     assert!(futarchy_config::outcome_min_execution_time(&outcome) == 1000000, 0);
@@ -423,7 +433,7 @@ fun test_new_futarchy_outcome_full() {
         string::utf8(b"test_intent"),
         option::some(proposal_id),
         option::some(market_id),
-        true,  // approved
+        true, // approved
         1000000,
     );
 

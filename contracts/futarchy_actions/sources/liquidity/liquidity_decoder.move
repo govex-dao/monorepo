@@ -1,13 +1,8 @@
 /// Decoder for liquidity-related actions in futarchy DAOs
 module futarchy_actions::liquidity_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name, option::{Self, Option}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-// Import action structs from liquidity_actions (now properly exported)
 use futarchy_actions::liquidity_actions::{
     CreatePoolAction,
     UpdatePoolParamsAction,
@@ -16,8 +11,16 @@ use futarchy_actions::liquidity_actions::{
     CollectFeesAction,
     WithdrawFeesAction,
     SetPoolStatusAction,
+    AddLiquidityAction
 };
-use futarchy_actions::liquidity_actions::{AddLiquidityAction};
+use std::option::{Self, Option};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -129,21 +132,25 @@ public fun decode_update_pool_params_action<AssetType, StableType>(
     ];
 
     if (new_fee_bps.is_some()) {
-        fields.push_back(schema::new_field(
-            b"new_fee_bps".to_string(),
-            new_fee_bps.destroy_some().to_string(),
-            b"u64".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"new_fee_bps".to_string(),
+                new_fee_bps.destroy_some().to_string(),
+                b"u64".to_string(),
+            ),
+        );
     } else {
         new_fee_bps.destroy_none();
     };
 
     if (new_protocol_fee_bps.is_some()) {
-        fields.push_back(schema::new_field(
-            b"new_protocol_fee_bps".to_string(),
-            new_protocol_fee_bps.destroy_some().to_string(),
-            b"u64".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"new_protocol_fee_bps".to_string(),
+                new_protocol_fee_bps.destroy_some().to_string(),
+                b"u64".to_string(),
+            ),
+        );
     } else {
         new_protocol_fee_bps.destroy_none();
     };
@@ -165,10 +172,7 @@ fun peel_option_u64(bcs_data: &mut bcs::BCS): Option<u64> {
 // === Registration Functions ===
 
 /// Register all liquidity decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_create_pool_decoder(registry, ctx);
     register_update_pool_params_decoder(registry, ctx);
     register_add_liquidity_decoder(registry, ctx);
@@ -179,74 +183,59 @@ public fun register_decoders(
     register_set_pool_status_decoder(registry, ctx);
 }
 
-fun register_create_pool_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_pool_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreatePoolActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<CreatePoolAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        CreatePoolAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_update_pool_params_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_update_pool_params_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = UpdatePoolParamsActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<UpdatePoolParamsAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_add_liquidity_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_add_liquidity_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = AddLiquidityActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<AddLiquidityAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        AddLiquidityAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_remove_liquidity_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_remove_liquidity_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RemoveLiquidityActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<RemoveLiquidityAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        RemoveLiquidityAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_swap_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_swap_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SwapActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SwapAction<AssetPlaceholder, StablePlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_collect_fees_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_collect_fees_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CollectFeesActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<CollectFeesAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        CollectFeesAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-
-fun register_withdraw_fees_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_withdraw_fees_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = WithdrawFeesActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<WithdrawFeesAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        WithdrawFeesAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_set_pool_status_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_set_pool_status_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SetPoolStatusActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SetPoolStatusAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

@@ -4,14 +4,14 @@
 /// If proposal fails → Anyone can crank to refund depositor + claim gas reward
 module futarchy_vault::deposit_escrow;
 
-use std::string::String;
 use std::option::{Self, Option};
+use std::string::String;
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
 use sui::object::{Self, ID, UID};
 use sui::transfer;
-use sui::event;
 use sui::tx_context::TxContext;
 
 // === Errors ===
@@ -24,10 +24,15 @@ const EAlreadyCranked: u64 = 5;
 
 // Public error code accessors for testing
 public fun e_insufficient_deposit(): u64 { EInsufficientDeposit }
+
 public fun e_already_executed(): u64 { EAlreadyExecuted }
+
 public fun e_not_depositor(): u64 { ENotDepositor }
+
 public fun e_proposal_still_active(): u64 { EProposalStillActive }
+
 public fun e_insufficient_gas_reward(): u64 { EInsufficientGasReward }
+
 public fun e_already_cranked(): u64 { EAlreadyCranked }
 
 // === Constants ===
@@ -65,28 +70,21 @@ public struct DepositCranked has copy, drop {
 /// Escrow holding user deposit until proposal outcome
 public struct DepositEscrow<phantom CoinType> has key, store {
     id: UID,
-
     // Depositor info
     depositor: address,
-
     // Escrowed coins
     deposit_amount: u64,
     escrowed_coins: Balance<CoinType>,
-
     // Gas reward for cranker (deducted from deposit if failed)
     gas_reward: u64,
-
     // Optional proposal ID this deposit is tied to
     proposal_id: Option<ID>,
-
     // Execution state
-    executed: bool,     // Moved to vault
-    cranked: bool,      // Refunded to depositor
-
+    executed: bool, // Moved to vault
+    cranked: bool, // Refunded to depositor
     // Timestamps
     created_at: u64,
-    deadline: u64,      // After this, can be cranked
-
+    deadline: u64, // After this, can be cranked
     // Metadata
     description: String,
 }
@@ -150,7 +148,7 @@ public fun accept_deposit<CoinType: drop>(
     // Withdraw all coins from escrow
     let deposit_coin = coin::from_balance(
         balance::withdraw_all(&mut escrow.escrowed_coins),
-        ctx
+        ctx,
     );
 
     escrow.executed = true;
@@ -182,13 +180,13 @@ public fun crank_failed_deposit<CoinType: drop>(
     // Split gas reward for cranker
     let gas_reward_coin = coin::from_balance(
         balance::split(&mut escrow.escrowed_coins, escrow.gas_reward),
-        ctx
+        ctx,
     );
 
     // Remaining goes back to depositor
     let refund_coin = coin::from_balance(
         balance::withdraw_all(&mut escrow.escrowed_coins),
-        ctx
+        ctx,
     );
 
     let refund_amount = coin::value(&refund_coin);

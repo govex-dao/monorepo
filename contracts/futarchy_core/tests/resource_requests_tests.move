@@ -14,7 +14,7 @@ public struct AddLiquidityAction has drop, store {}
 public struct MintTokensAction has drop, store {}
 
 // Complex action with fields
-public struct ComplexAction has store, drop {
+public struct ComplexAction has drop, store {
     amount: u64,
     recipient: address,
 }
@@ -25,7 +25,9 @@ public struct ComplexAction has store, drop {
 fun test_new_request_basic() {
     let mut scenario = ts::begin(ADMIN);
 
-    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     let request_id = resource_requests::request_id(&request);
     assert!(object::id_to_address(&request_id) != @0x0, 0);
@@ -38,8 +40,12 @@ fun test_new_request_basic() {
 fun test_new_request_different_types_have_different_ids() {
     let mut scenario = ts::begin(ADMIN);
 
-    let request1: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
-    let request2: ResourceRequest<AddLiquidityAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let request1: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
+    let request2: ResourceRequest<AddLiquidityAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     let id1 = resource_requests::request_id(&request1);
     let id2 = resource_requests::request_id(&request2);
@@ -57,7 +63,9 @@ fun test_new_request_different_types_have_different_ids() {
 fun test_add_and_get_context() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     resource_requests::add_context(&mut request, string::utf8(b"amount"), 1000000u64);
     resource_requests::add_context(&mut request, string::utf8(b"recipient"), @0xCAFE);
@@ -76,7 +84,9 @@ fun test_add_and_get_context() {
 fun test_has_context() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     assert!(!resource_requests::has_context(&request, string::utf8(b"amount")), 0);
 
@@ -93,7 +103,9 @@ fun test_has_context() {
 fun test_take_context() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     resource_requests::add_context(&mut request, string::utf8(b"amount"), 1000000u64);
 
@@ -112,17 +124,26 @@ fun test_take_context() {
 fun test_multiple_context_values() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     // Add multiple values of different types
     resource_requests::add_context(&mut request, string::utf8(b"amount"), 1000000u64);
     resource_requests::add_context(&mut request, string::utf8(b"recipient"), @0xCAFE);
-    resource_requests::add_context(&mut request, string::utf8(b"description"), string::utf8(b"Test pool"));
+    resource_requests::add_context(
+        &mut request,
+        string::utf8(b"description"),
+        string::utf8(b"Test pool"),
+    );
 
     // Get all values
     let amount: u64 = resource_requests::get_context(&request, string::utf8(b"amount"));
     let recipient: address = resource_requests::get_context(&request, string::utf8(b"recipient"));
-    let description: string::String = resource_requests::get_context(&request, string::utf8(b"description"));
+    let description: string::String = resource_requests::get_context(
+        &request,
+        string::utf8(b"description"),
+    );
 
     assert!(amount == 1000000, 0);
     assert!(recipient == @0xCAFE, 1);
@@ -138,7 +159,9 @@ fun test_multiple_context_values() {
 fun test_fulfill_returns_receipt() {
     let mut scenario = ts::begin(ADMIN);
 
-    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
     let request_id = resource_requests::request_id(&request);
 
     let receipt: ResourceReceipt<CreatePoolAction> = resource_requests::fulfill(request);
@@ -153,7 +176,9 @@ fun test_fulfill_returns_receipt() {
 fun test_fulfill_with_context() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     resource_requests::add_context(&mut request, string::utf8(b"amount"), 1000000u64);
 
@@ -167,7 +192,9 @@ fun test_fulfill_with_context() {
 fun test_receipt_drops_cleanly() {
     let mut scenario = ts::begin(ADMIN);
 
-    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     let receipt = resource_requests::fulfill(request);
 
@@ -249,7 +276,9 @@ fun test_context_mut_direct_access() {
 
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     // Get mutable UID and add field directly
     let context = resource_requests::context_mut(&mut request);
@@ -276,8 +305,12 @@ fun test_different_action_types_are_distinct() {
     let mut scenario = ts::begin(ADMIN);
 
     // Create requests for different action types
-    let request1: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
-    let request2: ResourceRequest<AddLiquidityAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let request1: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
+    let request2: ResourceRequest<AddLiquidityAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     let id1 = resource_requests::request_id(&request1);
     let id2 = resource_requests::request_id(&request2);
@@ -302,13 +335,18 @@ fun test_request_fulfill_pattern() {
     let mut scenario = ts::begin(ADMIN);
 
     // 1. Action creates request with context
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
     resource_requests::add_context(&mut request, string::utf8(b"pool_fee"), 30u64);
     resource_requests::add_context(&mut request, string::utf8(b"initial_price"), 1000000u128);
 
     // 2. Caller extracts context to fulfill request
     let pool_fee: u64 = resource_requests::take_context(&mut request, string::utf8(b"pool_fee"));
-    let initial_price: u128 = resource_requests::take_context(&mut request, string::utf8(b"initial_price"));
+    let initial_price: u128 = resource_requests::take_context(
+        &mut request,
+        string::utf8(b"initial_price"),
+    );
 
     assert!(pool_fee == 30, 0);
     assert!(initial_price == 1000000, 1);
@@ -345,7 +383,9 @@ fun test_action_storage_and_extraction_pattern() {
 fun test_sequential_context_operations() {
     let mut scenario = ts::begin(ADMIN);
 
-    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(ts::ctx(&mut scenario));
+    let mut request: ResourceRequest<CreatePoolAction> = resource_requests::new_request(
+        ts::ctx(&mut scenario),
+    );
 
     // Add
     resource_requests::add_context(&mut request, string::utf8(b"step1"), 100u64);

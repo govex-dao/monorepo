@@ -13,25 +13,19 @@
 /// ```
 module futarchy_factory::init_actions;
 
-use std::option::{Self, Option};
-use std::string::{Self, String};
-use sui::{
-    clock::Clock,
-    event,
-    coin::Coin,
-    tx_context::TxContext,
-    object,
-    transfer,
-};
-use account_protocol::{
-    account::{Self, Account},
-};
-use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig},
-    priority_queue::{Self, ProposalQueue},
-};
+use account_protocol::account::{Self, Account};
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::priority_queue::{Self, ProposalQueue};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_types::action_specs::{Self, ActionSpec, InitActionSpecs};
+use std::option::{Self, Option};
+use std::string::{Self, String};
+use sui::clock::Clock;
+use sui::coin::Coin;
+use sui::event;
+use sui::object;
+use sui::transfer;
+use sui::tx_context::TxContext;
 
 /// Special witness for init actions that bypass voting
 public struct InitWitness has drop {}
@@ -49,19 +43,18 @@ public struct InitResult has drop {
 /// Event emitted for each init action attempted (for launchpad tracking)
 public struct InitActionAttempted has copy, drop {
     dao_id: address,
-    action_type: String,  // TypeName as string
+    action_type: String, // TypeName as string
     action_index: u64,
     success: bool,
 }
 
 /// Event for init batch completion
 public struct InitBatchCompleted has copy, drop {
-    dao_id: address, 
+    dao_id: address,
     total_actions: u64,
     successful_actions: u64,
     failed_actions: u64,
 }
-
 
 // === PTB Entry Functions for Init Actions ===
 
@@ -111,7 +104,7 @@ public entry fun init_create_liquidity_pool<AssetType: drop, StableType: drop>(
         asset_coin,
         stable_coin,
         0, // min_lp_out
-        ctx
+        ctx,
     );
 
     // Transfer LP tokens to the pool itself for initial liquidity
@@ -124,19 +117,12 @@ public entry fun init_queue_settings<StableType>(
     proposal_bond: u64,
     queue: &mut ProposalQueue<StableType>,
     ctx: &mut TxContext,
-) {
-    // Configure queue parameters during initialization
-    // Queue configuration is handled through governance config
-    // max_queue_size and proposal_bond are set during DAO creation
-}
+) {}
 
 /// Get witness for init actions
 public fun init_witness(): InitWitness {
     InitWitness {}
 }
-
-
-
 
 // === Init Action Entry Functions ===
 // Note: Each action module should expose its own init entry functions
@@ -153,16 +139,20 @@ public fun init_witness(): InitWitness {
 /// )
 /// ```
 
-
 // === Constants ===
 const MAX_INIT_ACTIONS: u64 = 50; // Reasonable limit to prevent gas issues
 
 // === Public Getters for InitResult ===
 public fun result_succeeded(result: &InitResult): u64 { result.succeeded }
+
 public fun result_failed(result: &InitResult): u64 { result.failed }
+
 public fun result_first_error(result: &InitResult): &Option<String> { &result.first_error }
+
 public fun result_failed_index(result: &InitResult): &Option<u64> { &result.failed_action_index }
+
 public fun result_is_complete_success(result: &InitResult): bool { result.failed == 0 }
+
 public fun result_is_partial_success(result: &InitResult): bool {
     result.succeeded > 0 && result.failed > 0 && result.partial_execution_allowed
 }

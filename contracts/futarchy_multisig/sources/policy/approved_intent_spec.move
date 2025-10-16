@@ -6,15 +6,13 @@
 /// 3. System validates object exists, matches DAO, not expired
 module futarchy_multisig::approved_intent_spec;
 
-use std::string::String;
-use sui::{
-    clock::Clock,
-    event,
-    object::{Self, ID, UID},
-    transfer,
-    tx_context::TxContext,
-};
 use futarchy_types::action_specs::InitActionSpecs;
+use std::string::String;
+use sui::clock::Clock;
+use sui::event;
+use sui::object::{Self, ID, UID};
+use sui::transfer;
+use sui::tx_context::TxContext;
 
 // === Errors ===
 const EApprovalExpired: u64 = 1;
@@ -158,10 +156,7 @@ public fun validate_and_get_intent_spec_bytes(
 /// Revoke an approval (callable via council governance action)
 /// SECURITY: Once revoked, approval cannot be used for new proposals
 /// NOTE: Does not affect proposals already created with this approval
-public fun revoke_approval(
-    approved: &mut ApprovedIntentSpec,
-    clock: &Clock,
-) {
+public fun revoke_approval(approved: &mut ApprovedIntentSpec, clock: &Clock) {
     // Don't fail if already revoked (idempotent)
     if (approved.revoked) {
         return
@@ -180,10 +175,7 @@ public fun revoke_approval(
 }
 
 /// Increment usage counter (mutable access to shared object)
-public fun increment_usage(
-    approved: &mut ApprovedIntentSpec,
-    clock: &Clock,
-) {
+public fun increment_usage(approved: &mut ApprovedIntentSpec, clock: &Clock) {
     approved.used_count = approved.used_count + 1;
 
     event::emit(IntentSpecApprovalUsed {
@@ -196,10 +188,7 @@ public fun increment_usage(
 
 /// Delete an approval (only callable by DAO or council governance)
 /// Takes ownership of the shared object and deletes it
-public fun delete_approval(
-    approved: ApprovedIntentSpec,
-    clock: &Clock,
-) {
+public fun delete_approval(approved: ApprovedIntentSpec, clock: &Clock) {
     let ApprovedIntentSpec {
         id,
         intent_spec_bytes: _,
@@ -233,9 +222,7 @@ public fun intent_spec_bytes(approved: &ApprovedIntentSpec): &vector<u8> {
 }
 
 /// Get approval metadata
-public fun get_metadata(
-    approved: &ApprovedIntentSpec
-): (ID, ID, ID, u64, u64, String, u64) {
+public fun get_metadata(approved: &ApprovedIntentSpec): (ID, ID, ID, u64, u64, String, u64) {
     (
         object::id(approved),
         approved.dao_id,

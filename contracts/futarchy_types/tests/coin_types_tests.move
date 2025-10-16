@@ -2,8 +2,8 @@
 module futarchy_types::coin_types_tests;
 
 use futarchy_types::coin_types::{USDC, USDT};
-use std::type_name;
 use std::ascii;
+use std::type_name;
 
 // === Type Name Tests ===
 // Note: Witness structs can't be instantiated outside their defining module

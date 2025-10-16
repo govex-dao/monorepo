@@ -18,12 +18,16 @@
 /// Decoder for access control actions - tightly coupled with access control action definitions
 module account_actions::access_control_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
-use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
 use account_actions::access_control::{BorrowAction, ReturnAction};
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -58,7 +62,7 @@ public fun decode_borrow_action<Cap>(
             b"action_type".to_string(),
             b"BorrowAction".to_string(),
             b"String".to_string(),
-        )
+        ),
     ]
 }
 
@@ -76,34 +80,25 @@ public fun decode_return_action<Cap>(
             b"action_type".to_string(),
             b"ReturnAction".to_string(),
             b"String".to_string(),
-        )
+        ),
     ]
 }
 
 // === Registration Functions ===
 
 /// Register all access control decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_borrow_decoder(registry, ctx);
     register_return_decoder(registry, ctx);
 }
 
-fun register_borrow_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_borrow_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = BorrowActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<BorrowAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_return_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_return_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = ReturnActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ReturnAction<CapPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

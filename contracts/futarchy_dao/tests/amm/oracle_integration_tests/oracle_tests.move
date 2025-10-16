@@ -17,7 +17,6 @@ const TWAP_PRICE_CAP_WINDOW_PERIOD: u64 = 60000;
 // For testing extreme values, define a maximum u64 constant.
 const U64_MAX: u64 = 18446744073709551615;
 
-
 // Define a high price constant for testing
 const HIGH_INIT_PRICE: u128 = 1_000_000_000_000_000u128; // 1 quadrillion
 // Define a very large step size to prevent capping for this high price
@@ -226,7 +225,6 @@ fun test_multiple_write_observations_consistency() {
         oracle::write_observation(&mut oracle_inst, obs1_time, obs1_price);
         // State after obs1: last_timestamp=62000, total_cumulative_price=10,500,000, last_window_twap=11000
 
-
         // --- Observation 2 ---
         // Timestamp: 64000 (62000 + 2000)
         // Price: 9500
@@ -239,7 +237,6 @@ fun test_multiple_write_observations_consistency() {
         oracle::write_observation(&mut oracle_inst, obs2_time, obs2_price);
         // State after obs2: last_timestamp=64000, total_cumulative_price=30,500,000, last_window_twap=11000
 
-
         // --- Observation 3 ---
         // Timestamp: 67000 (64000 + 3000)
         // Price: 12000
@@ -251,7 +248,6 @@ fun test_multiple_write_observations_consistency() {
         let obs3_price = 12000;
         oracle::write_observation(&mut oracle_inst, obs3_time, obs3_price);
         // State after obs3: last_timestamp=67000, total_cumulative_price=66,500,000, last_window_twap=11000
-
 
         // Final expected cumulative price:
         // (Accumulation from 61000 to 62000: 10500 * 1000 = 10,500,000)
@@ -579,17 +575,17 @@ fun test_twap_over_week_with_irregular_updates() {
     let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
     let ctx = test::ctx(&mut scenario);
     let mut oracle_inst = setup_test_oracle(ctx);
-    
+
     // Define test constants
     let delay_threshold = MARKET_START_TIME + TWAP_START_DELAY; // 3000
     let week_in_ms: u64 = 604_800_000; // 7 days in milliseconds
     let day_in_ms: u64 = 86_400_000; // 1 day in milliseconds
-    
+
     // ---- Day 1: Initial price observation ----
     let time1 = delay_threshold + 1000; // Shortly after delay threshold
     let price1: u128 = 11500; // Exceeds allowed cap
     oracle::write_observation(&mut oracle_inst, time1, price1);
-    
+
     // ---- Day 2: Price drop ----
     let time2 = delay_threshold + day_in_ms + 5000; // ~1 day later
     let price2: u128 = 8000; // Price decrease
@@ -600,29 +596,27 @@ fun test_twap_over_week_with_irregular_updates() {
     let price3: u128 = 12500;
     oracle::write_observation(&mut oracle_inst, time3, price3);
 
-    
     // ---- Day 6: Another price update ----
     let time4 = delay_threshold + 5 * day_in_ms + 8000; // ~5 days later
     let price4: u128 = 9800;
     oracle::write_observation(&mut oracle_inst, time4, price4);
-    
+
     // ---- End of week: Final observation ----
     let final_time = delay_threshold + week_in_ms - 1000; // End of week
     let final_price: u128 = 11000;
-    
+
     // Set clock to final time for TWAP calculation
     clock::set_for_testing(&mut clock_inst, final_time);
-    
+
     // Final observation to ensure last_timestamp == clock time (required by get_twap)
     oracle::write_observation(&mut oracle_inst, final_time, final_price);
 
-    
     // Get actual TWAP from oracle
     let actual_twap = oracle::get_twap(&oracle_inst, &clock_inst);
 
     // Assert that calculated TWAP matches oracle's TWAP exactly
     assert!(actual_twap == 10656, 0);
-    
+
     oracle::destroy_for_testing(oracle_inst);
     clock::destroy_for_testing(clock_inst);
     test::end(scenario);
@@ -634,82 +628,82 @@ fun test_twap_over_year_with_ten_swaps() {
     let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
     let ctx = test::ctx(&mut scenario);
     let mut oracle_inst = setup_test_oracle(ctx);
-    
+
     // Define test constants
     let delay_threshold = MARKET_START_TIME + TWAP_START_DELAY; // 3000
     let year_in_ms: u64 = 31_536_000_000; // 365 days in milliseconds
     let month_in_ms: u64 = 2_592_000_000; // ~30 days in milliseconds
-    
+
     // Initialize manual TWAP calculation variables
     let mut total_weighted_price: u256 = 0;
     let mut last_observation_time = delay_threshold;
-    
+
     // Array of observation times throughout the year (roughly monthly)
     // Add some irregularity to test real-world scenarios
     let observation_times = vector[
-        delay_threshold + 500_000,                    // Initial observation
-        delay_threshold + month_in_ms,                // Month 1
-        delay_threshold + month_in_ms * 2 + 300_000,  // Month 2 (with offset)
-        delay_threshold + month_in_ms * 3 - 200_000,  // Month 3 (with offset)
-        delay_threshold + month_in_ms * 5 + 100_000,  // Month 5 (skipped a month)
-        delay_threshold + month_in_ms * 6 + 400_000,  // Month 6
-        delay_threshold + month_in_ms * 8 - 300_000,  // Month 8 (skipped a month)
-        delay_threshold + month_in_ms * 9 + 250_000,  // Month 9
+        delay_threshold + 500_000, // Initial observation
+        delay_threshold + month_in_ms, // Month 1
+        delay_threshold + month_in_ms * 2 + 300_000, // Month 2 (with offset)
+        delay_threshold + month_in_ms * 3 - 200_000, // Month 3 (with offset)
+        delay_threshold + month_in_ms * 5 + 100_000, // Month 5 (skipped a month)
+        delay_threshold + month_in_ms * 6 + 400_000, // Month 6
+        delay_threshold + month_in_ms * 8 - 300_000, // Month 8 (skipped a month)
+        delay_threshold + month_in_ms * 9 + 250_000, // Month 9
         delay_threshold + month_in_ms * 10 - 150_000, // Month 10
-        delay_threshold + year_in_ms - 100_000        // End of year
+        delay_threshold + year_in_ms - 100_000, // End of year
     ];
-    
+
     // Array of price observations (create a realistic price pattern)
     let observation_prices = vector[
-        12000,  // Initial rise
-        13500,  // Month 1: continued rise
-        11000,  // Month 2: correction
-        12500,  // Month 3: recovery
-        14000,  // Month 5: new high
-        12000,  // Month 6: another correction
-        9000,   // Month 8: significant drop
-        10500,  // Month 9: partial recovery
-        11800,  // Month 10: continued recovery
-        13000   // End of year: strong finish
+        12000, // Initial rise
+        13500, // Month 1: continued rise
+        11000, // Month 2: correction
+        12500, // Month 3: recovery
+        14000, // Month 5: new high
+        12000, // Month 6: another correction
+        9000, // Month 8: significant drop
+        10500, // Month 9: partial recovery
+        11800, // Month 10: continued recovery
+        13000, // End of year: strong finish
     ];
-    
+
     // Process each observation
     let mut i = 0;
     while (i < 10) {
         let observation_time = *vector::borrow(&observation_times, i);
         let observation_price = *vector::borrow(&observation_prices, i);
-        
+
         // Write observation to oracle
         oracle::write_observation(&mut oracle_inst, observation_time, observation_price);
-        
+
         // Get the capped price (after oracle's internal capping logic)
         let capped_price = oracle::last_price(&oracle_inst);
-        
+
         // Calculate time-weighted contribution
         let time_diff = observation_time - last_observation_time;
         let contribution = (capped_price as u256) * (time_diff as u256);
         total_weighted_price = total_weighted_price + contribution;
-        
+
         // Update tracking variables for next iteration
         last_observation_time = observation_time;
-        
+
         i = i + 1;
     };
-    
+
     // Set clock to final observation time for TWAP calculation
     let final_time = *vector::borrow(&observation_times, 9); // Last observation time
     clock::set_for_testing(&mut clock_inst, final_time);
-    
+
     // Calculate expected TWAP
     let total_period = final_time - delay_threshold;
     let expected_twap = total_weighted_price / (total_period as u256);
-    
+
     // Get actual TWAP from oracle
     let actual_twap = oracle::get_twap(&oracle_inst, &clock_inst);
-    
+
     // Assert that calculated TWAP matches oracle's TWAP exactly
     assert!(actual_twap == (expected_twap as u128), 0);
-    
+
     oracle::destroy_for_testing(oracle_inst);
     clock::destroy_for_testing(clock_inst);
     test::end(scenario);
@@ -719,7 +713,7 @@ fun test_twap_over_year_with_ten_swaps() {
 fun test_initial_high_price_no_swaps() {
     let (mut scenario, mut clock_inst) = setup_scenario_and_clock();
     {
-        let current_time = 1719182400000; 
+        let current_time = 1719182400000;
         clock::set_for_testing(&mut clock_inst, current_time);
         let ctx = test::ctx(&mut scenario);
 
@@ -731,9 +725,9 @@ fun test_initial_high_price_no_swaps() {
         let delay_threshold = market_start_time + twap_start_delay; // 0
 
         let mut oracle_inst = oracle::new_oracle(
-            HIGH_INIT_PRICE,    // 1 quadrillion
-            twap_start_delay,   // 0
-            LARGE_TWAP_STEP,    // u64::max_value!
+            HIGH_INIT_PRICE, // 1 quadrillion
+            twap_start_delay, // 0
+            LARGE_TWAP_STEP, // u64::max_value!
             ctx,
         );
         oracle::set_oracle_start_time(&mut oracle_inst, market_start_time);
@@ -748,7 +742,6 @@ fun test_initial_high_price_no_swaps() {
 
         // Simulate time passing after the delay threshold.
         // Since delay is 0, any time > 0 is past the delay.
-
 
         // Set the clock to this time.
         clock::set_for_testing(&mut clock_inst, current_time + 100_000);

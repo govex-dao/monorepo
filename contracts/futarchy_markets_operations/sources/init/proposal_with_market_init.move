@@ -148,16 +148,16 @@
 /// ```
 module futarchy_markets_operations::proposal_with_market_init;
 
-use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_core::market_init_helpers;
 use futarchy_markets_core::market_init_strategies::{
     Self,
     ConditionalRaiseConfig,
     ConditionalBuybackConfig
 };
-use futarchy_markets_core::market_init_helpers;
-use sui::coin::{Self, Coin};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 
 // === Errors ===
 const EInvalidRaiseConfig: u64 = 0;
@@ -185,7 +185,12 @@ const EInvalidBuybackConfig: u64 = 1;
 ///
 /// ## Returns
 /// - Stable coins to be deposited back to DAO vault (caller's responsibility)
-public fun execute_raise_on_proposal<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun execute_raise_on_proposal<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     minted_coins: Coin<AssetType>,
@@ -198,11 +203,16 @@ public fun execute_raise_on_proposal<AssetType, StableType, AssetConditionalCoin
     // Validate config before execution
     assert!(
         market_init_helpers::validate_raise_config(&config, outcome_count),
-        EInvalidRaiseConfig
+        EInvalidRaiseConfig,
     );
 
     // Execute the strategy
-    market_init_strategies::execute_conditional_raise<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    market_init_strategies::execute_conditional_raise<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+        StableConditionalCoin,
+    >(
         proposal,
         escrow,
         minted_coins,
@@ -236,7 +246,12 @@ public fun execute_raise_on_proposal<AssetType, StableType, AssetConditionalCoin
 /// ## Returns
 /// - Vector of asset coins (one per outcome, some may be zero-value)
 /// - Caller can burn these or deposit to vault
-public fun execute_buyback_on_proposal<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+public fun execute_buyback_on_proposal<
+    AssetType,
+    StableType,
+    AssetConditionalCoin,
+    StableConditionalCoin,
+>(
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut TokenEscrow<AssetType, StableType>,
     withdrawn_stable: Coin<StableType>,
@@ -249,11 +264,16 @@ public fun execute_buyback_on_proposal<AssetType, StableType, AssetConditionalCo
     // Validate config before execution
     assert!(
         market_init_helpers::validate_buyback_config(&config, outcome_count),
-        EInvalidBuybackConfig
+        EInvalidBuybackConfig,
     );
 
     // Execute the strategy
-    market_init_strategies::execute_conditional_buyback<AssetType, StableType, AssetConditionalCoin, StableConditionalCoin>(
+    market_init_strategies::execute_conditional_buyback<
+        AssetType,
+        StableType,
+        AssetConditionalCoin,
+        StableConditionalCoin,
+    >(
         proposal,
         escrow,
         withdrawn_stable,
@@ -282,6 +302,6 @@ public fun merge_asset_coins<AssetType>(
     };
 
     let mut base = asset_coins.pop_back();
-    base.join_vec(asset_coins);  // Uses Sui's join_vec
+    base.join_vec(asset_coins); // Uses Sui's join_vec
     base
 }

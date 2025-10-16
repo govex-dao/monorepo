@@ -1,12 +1,10 @@
 module futarchy_core::multisig_execution_fee_manager;
 
-use sui::{
-    coin::{Self, Coin},
-    balance::{Self, Balance},
-    sui::SUI,
-    clock::Clock,
-    event,
-};
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::sui::SUI;
 
 // === Errors ===
 const EInvalidFeeAmount: u64 = 0;
@@ -61,7 +59,7 @@ public fun collect_execution_fee(
     intent_count: u64,
     fee_coin: Coin<SUI>,
     clock: &Clock,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     let total_fee = fee_coin.value();
     assert!(total_fee > 0, EInvalidFeeAmount);
@@ -102,7 +100,7 @@ public fun collect_execution_fee(
 public fun claim_executor_rewards(
     manager: &mut MultisigExecutionFeeManager,
     amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     assert!(amount > 0, EInvalidFeeAmount);
     assert!(manager.executor_rewards.value() >= amount, EInvalidFeeAmount);
@@ -124,7 +122,7 @@ public fun executor_rewards(manager: &MultisigExecutionFeeManager): u64 {
 public fun withdraw_protocol_revenue(
     manager: &mut MultisigExecutionFeeManager,
     amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     assert!(amount > 0, EInvalidFeeAmount);
     assert!(manager.protocol_revenue.value() >= amount, EInvalidFeeAmount);
@@ -133,9 +131,6 @@ public fun withdraw_protocol_revenue(
 
 /// Calculate the execution fee for a batch of intents
 /// Base fee multiplied by number of intents
-public fun calculate_execution_fee(
-    base_fee_per_intent: u64,
-    intent_count: u64,
-): u64 {
+public fun calculate_execution_fee(base_fee_per_intent: u64, intent_count: u64): u64 {
     base_fee_per_intent * intent_count
 }

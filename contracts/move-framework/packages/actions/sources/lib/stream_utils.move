@@ -24,9 +24,9 @@
 
 module account_actions::stream_utils;
 
-// === Imports ===
-
 use std::u128;
+
+// === Imports ===
 
 // === Constants ===
 //
@@ -55,10 +55,10 @@ public fun calculate_linear_vested(
 ): u64 {
     if (current_time < start_time) return 0;
     if (current_time >= end_time) return total_amount;
-    
+
     let duration = end_time - start_time;
     let elapsed = current_time - start_time;
-    
+
     // Use u128 to prevent overflow in multiplication
     let vested = (total_amount as u128) * (elapsed as u128) / (duration as u128);
     (vested as u64)
@@ -74,17 +74,13 @@ public fun calculate_vested_with_cliff(
 ): u64 {
     // Nothing vests before cliff
     if (current_time < cliff_time) return 0;
-    
+
     // After cliff, calculate linear vesting
     calculate_linear_vested(total_amount, start_time, end_time, current_time)
 }
 
 /// Calculates effective time accounting for pause duration
-public fun calculate_effective_time(
-    current_time: u64,
-    end_time: u64,
-    paused_duration: u64,
-): u64 {
+public fun calculate_effective_time(current_time: u64, end_time: u64, paused_duration: u64): u64 {
     let effective_end = end_time + paused_duration;
     if (current_time > effective_end) {
         effective_end
@@ -102,24 +98,21 @@ public fun validate_time_parameters(
 ): bool {
     // End must be after start
     if (end_time <= start_time) return false;
-    
+
     // Start must be in future or present
     if (start_time < current_time) return false;
-    
+
     // If cliff exists, must be between start and end
     if (cliff_time_opt.is_some()) {
         let cliff = *cliff_time_opt.borrow();
         if (cliff < start_time || cliff > end_time) return false;
     };
-    
+
     true
 }
 
 /// Calculates pause duration between two timestamps
-public fun calculate_pause_duration(
-    paused_at: u64,
-    resumed_at: u64,
-): u64 {
+public fun calculate_pause_duration(paused_at: u64, resumed_at: u64): u64 {
     if (resumed_at > paused_at) {
         resumed_at - paused_at
     } else {
@@ -141,10 +134,7 @@ public fun check_rate_limit(
 }
 
 /// Checks if withdrawal amount respects maximum limit
-public fun check_withdrawal_limit(
-    amount: u64,
-    max_per_withdrawal: u64,
-): bool {
+public fun check_withdrawal_limit(amount: u64, max_per_withdrawal: u64): bool {
     if (max_per_withdrawal == 0) {
         true
     } else {
@@ -163,28 +153,28 @@ public fun calculate_claimable(
     cliff_time_opt: &Option<u64>,
 ): u64 {
     let effective_time = calculate_effective_time(
-        current_time, 
-        end_time, 
-        paused_duration
+        current_time,
+        end_time,
+        paused_duration,
     );
-    
+
     let vested = if (cliff_time_opt.is_some()) {
         calculate_vested_with_cliff(
             total_amount,
             start_time,
             end_time + paused_duration,
             *cliff_time_opt.borrow(),
-            effective_time
+            effective_time,
         )
     } else {
         calculate_linear_vested(
             total_amount,
             start_time,
             end_time + paused_duration,
-            effective_time
+            effective_time,
         )
     };
-    
+
     if (vested > claimed_amount) {
         vested - claimed_amount
     } else {
@@ -206,33 +196,33 @@ public fun split_vested_unvested(
     let effective_time = calculate_effective_time(
         current_time,
         end_time,
-        paused_duration
+        paused_duration,
     );
-    
+
     let vested = if (cliff_time_opt.is_some()) {
         calculate_vested_with_cliff(
             total_amount,
             start_time,
             end_time + paused_duration,
             *cliff_time_opt.borrow(),
-            effective_time
+            effective_time,
         )
     } else {
         calculate_linear_vested(
             total_amount,
             start_time,
             end_time + paused_duration,
-            effective_time
+            effective_time,
         )
     };
-    
+
     // Calculate amounts
     let unvested_claimed = if (claimed_amount > vested) {
         claimed_amount - vested
     } else {
         0
     };
-    
+
     let to_pay_beneficiary = if (vested > claimed_amount) {
         let owed = vested - claimed_amount;
         if (owed > balance_remaining) {
@@ -243,13 +233,13 @@ public fun split_vested_unvested(
     } else {
         0
     };
-    
+
     let to_refund = if (balance_remaining > to_pay_beneficiary) {
         balance_remaining - to_pay_beneficiary
     } else {
         0
     };
-    
+
     (to_pay_beneficiary, to_refund, unvested_claimed)
 }
 
@@ -257,10 +247,7 @@ public fun split_vested_unvested(
 
 /// Calculate pause_until timestamp for timed pause
 /// Returns None for indefinite pause (pause_duration_ms == 0)
-public fun calculate_pause_until(
-    current_time: u64,
-    pause_duration_ms: u64,
-): Option<u64> {
+public fun calculate_pause_until(current_time: u64, pause_duration_ms: u64): Option<u64> {
     if (pause_duration_ms == 0) {
         std::option::none() // Indefinite pause
     } else {
@@ -270,10 +257,7 @@ public fun calculate_pause_until(
 }
 
 /// Check if timed pause has expired
-public fun is_pause_expired(
-    paused_until_opt: &Option<u64>,
-    current_time: u64,
-): bool {
+public fun is_pause_expired(paused_until_opt: &Option<u64>, current_time: u64): bool {
     if (paused_until_opt.is_none()) {
         false // Indefinite pause - never expires
     } else {
@@ -282,10 +266,7 @@ public fun is_pause_expired(
 }
 
 /// Validate pause duration doesn't overflow
-public fun validate_pause_duration(
-    current_time: u64,
-    pause_duration_ms: u64,
-): bool {
+public fun validate_pause_duration(current_time: u64, pause_duration_ms: u64): bool {
     if (pause_duration_ms == 0) {
         true // Indefinite pause is valid
     } else {
@@ -297,10 +278,7 @@ public fun validate_pause_duration(
 // === Expiry Helpers ===
 
 /// Check if stream/vesting has expired
-public fun is_expired(
-    expiry_opt: &Option<u64>,
-    current_time: u64,
-): bool {
+public fun is_expired(expiry_opt: &Option<u64>, current_time: u64): bool {
     if (expiry_opt.is_none()) {
         false // No expiry
     } else {
@@ -309,10 +287,7 @@ public fun is_expired(
 }
 
 /// Validate expiry is in the future
-public fun validate_expiry(
-    current_time: u64,
-    expiry_timestamp: u64,
-): bool {
+public fun validate_expiry(current_time: u64, expiry_timestamp: u64): bool {
     expiry_timestamp > current_time
 }
 
@@ -367,16 +342,16 @@ public fun next_vesting_time(
 public fun test_linear_vesting() {
     // Test before start
     assert!(calculate_linear_vested(1000, 100, 200, 50) == 0);
-    
+
     // Test at start
     assert!(calculate_linear_vested(1000, 100, 200, 100) == 0);
-    
+
     // Test halfway
     assert!(calculate_linear_vested(1000, 100, 200, 150) == 500);
-    
+
     // Test at end
     assert!(calculate_linear_vested(1000, 100, 200, 200) == 1000);
-    
+
     // Test after end
     assert!(calculate_linear_vested(1000, 100, 200, 250) == 1000);
 }
@@ -385,10 +360,10 @@ public fun test_linear_vesting() {
 public fun test_cliff_vesting() {
     // Test before cliff
     assert!(calculate_vested_with_cliff(1000, 100, 200, 130, 120) == 0);
-    
+
     // Test at cliff
     assert!(calculate_vested_with_cliff(1000, 100, 200, 130, 130) == 300);
-    
+
     // Test after cliff
     assert!(calculate_vested_with_cliff(1000, 100, 200, 130, 150) == 500);
 }
@@ -397,10 +372,10 @@ public fun test_cliff_vesting() {
 public fun test_effective_time() {
     // Test no pause
     assert!(calculate_effective_time(150, 200, 0) == 150);
-    
+
     // Test with pause, before adjusted end
     assert!(calculate_effective_time(150, 200, 50) == 150);
-    
+
     // Test with pause, after adjusted end
     assert!(calculate_effective_time(300, 200, 50) == 250);
 }

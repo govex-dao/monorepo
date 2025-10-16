@@ -1,8 +1,8 @@
 #[test_only]
 module futarchy_core::version_tests;
 
-use futarchy_core::version;
 use account_protocol::version_witness::{Self, VersionWitness};
+use futarchy_core::version;
 
 // === Basic Version Tests ===
 

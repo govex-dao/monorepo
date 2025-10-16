@@ -1,22 +1,18 @@
 #[test_only]
 module futarchy_markets_primitives::conditional_balance_escrow_tests;
 
-use futarchy_markets_primitives::{
-    conditional_balance,
-    coin_escrow,
-    market_state,
-    cond0_asset::{Self, COND0_ASSET},
-    cond0_stable::{Self, COND0_STABLE},
-    cond1_asset::{Self, COND1_ASSET},
-    cond1_stable::{Self, COND1_STABLE},
-};
-use sui::{
-    test_scenario as ts,
-    test_utils::destroy,
-    sui::SUI,
-    coin::{Self, TreasuryCap, CoinMetadata},
-    object::{Self, ID},
-};
+use futarchy_markets_primitives::coin_escrow;
+use futarchy_markets_primitives::cond0_asset::{Self, COND0_ASSET};
+use futarchy_markets_primitives::cond0_stable::{Self, COND0_STABLE};
+use futarchy_markets_primitives::cond1_asset::{Self, COND1_ASSET};
+use futarchy_markets_primitives::cond1_stable::{Self, COND1_STABLE};
+use futarchy_markets_primitives::conditional_balance;
+use futarchy_markets_primitives::market_state;
+use sui::coin::{Self, TreasuryCap, CoinMetadata};
+use sui::object::{Self, ID};
+use sui::sui::SUI;
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
 // Test coin types
 public struct USDC has drop {}
@@ -38,9 +34,7 @@ fun end(scenario: ts::Scenario) {
 
 /// Creates escrow and registers conditional caps for 2-outcome market
 /// Returns (market_id, escrow)
-fun setup_escrow_with_caps(
-    scenario: &mut ts::Scenario
-): (ID, coin_escrow::TokenEscrow<SUI, USDC>) {
+fun setup_escrow_with_caps(scenario: &mut ts::Scenario): (ID, coin_escrow::TokenEscrow<SUI, USDC>) {
     // Initialize conditional coin types (creates TreasuryCaps and transfers to sender)
     cond0_asset::init_for_testing(ts::ctx(scenario));
     cond0_stable::init_for_testing(ts::ctx(scenario));
@@ -72,7 +66,7 @@ fun setup_escrow_with_caps(
         &mut escrow,
         0,
         cond0_asset_cap,
-        cond0_stable_cap
+        cond0_stable_cap,
     );
 
     // Register conditional caps for outcome 1
@@ -80,7 +74,7 @@ fun setup_escrow_with_caps(
         &mut escrow,
         1,
         cond1_asset_cap,
-        cond1_stable_cap
+        cond1_stable_cap,
     );
 
     // Destroy metadata (not needed for tests)
@@ -105,7 +99,7 @@ fun test_unwrap_to_coin_basic() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::set_balance(&mut balance, 0, true, 1000);
@@ -116,7 +110,7 @@ fun test_unwrap_to_coin_basic() {
         &mut escrow,
         0,
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify coin amount
@@ -129,7 +123,7 @@ fun test_unwrap_to_coin_basic() {
     coin::burn_for_testing(coin);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -144,7 +138,7 @@ fun test_unwrap_to_coin_stable() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::set_balance(&mut balance, 1, false, 5000);
@@ -155,7 +149,7 @@ fun test_unwrap_to_coin_stable() {
         &mut escrow,
         1,
         false,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify
@@ -166,7 +160,7 @@ fun test_unwrap_to_coin_stable() {
     coin::burn_for_testing(coin);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -182,7 +176,7 @@ fun test_unwrap_wrong_market_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         wrong_market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::set_balance(&mut balance, 0, true, 1000);
@@ -193,14 +187,14 @@ fun test_unwrap_wrong_market_fails() {
         &mut escrow,
         0,
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Cleanup (won't reach here)
     coin::burn_for_testing(coin);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -216,7 +210,7 @@ fun test_unwrap_unregistered_outcome_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::set_balance(&mut balance, 2, true, 1000);
@@ -225,9 +219,9 @@ fun test_unwrap_unregistered_outcome_fails() {
     let coin = conditional_balance::unwrap_to_coin<SUI, USDC, COND0_ASSET>(
         &mut balance,
         &mut escrow,
-        2,  // Unregistered outcome
+        2, // Unregistered outcome
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Cleanup (won't reach here)
@@ -235,7 +229,7 @@ fun test_unwrap_unregistered_outcome_fails() {
     conditional_balance::set_balance(&mut balance, 2, true, 0);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -251,7 +245,7 @@ fun test_unwrap_zero_balance_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Balance is 0, unwrap should fail
@@ -260,14 +254,14 @@ fun test_unwrap_zero_balance_fails() {
         &mut escrow,
         0,
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Cleanup (won't reach here)
     coin::burn_for_testing(coin);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -284,7 +278,7 @@ fun test_wrap_coin_basic() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
     conditional_balance::set_balance(&mut balance, 0, true, 2000);
 
@@ -294,7 +288,7 @@ fun test_wrap_coin_basic() {
         &mut escrow,
         0,
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Balance should now be zero
@@ -306,7 +300,7 @@ fun test_wrap_coin_basic() {
         &mut escrow,
         coin,
         0,
-        true
+        true,
     );
 
     // Verify balance increased back to original
@@ -331,7 +325,7 @@ fun test_wrap_coin_accumulates() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Start with 1000
@@ -344,7 +338,7 @@ fun test_wrap_coin_accumulates() {
         &mut escrow,
         0,
         false,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // After unwrap, balance should be 0, set it back to 1000
@@ -356,7 +350,7 @@ fun test_wrap_coin_accumulates() {
         &mut escrow,
         coin,
         0,
-        false
+        false,
     );
 
     // Verify accumulated (1000 + 500 = 1500)
@@ -382,7 +376,7 @@ fun test_wrap_coin_wrong_market_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         wrong_market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let coin = coin::mint_for_testing<COND0_ASSET>(1000, ts::ctx(&mut scenario));
@@ -393,13 +387,13 @@ fun test_wrap_coin_wrong_market_fails() {
         &mut escrow,
         coin,
         0,
-        true
+        true,
     );
 
     // Cleanup (won't reach here)
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -414,7 +408,7 @@ fun test_wrap_coin_zero_amount_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Create zero-value coin
@@ -426,13 +420,13 @@ fun test_wrap_coin_zero_amount_fails() {
         &mut escrow,
         coin,
         1,
-        true
+        true,
     );
 
     // Cleanup (won't reach here)
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }
 
@@ -449,7 +443,7 @@ fun test_unwrap_wrap_roundtrip() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set initial balance
@@ -461,7 +455,7 @@ fun test_unwrap_wrap_roundtrip() {
         &mut escrow,
         0,
         true,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify balance is now zero
@@ -474,7 +468,7 @@ fun test_unwrap_wrap_roundtrip() {
         &mut escrow,
         coin,
         0,
-        true
+        true,
     );
 
     // Verify back to original amount
@@ -484,6 +478,6 @@ fun test_unwrap_wrap_roundtrip() {
     conditional_balance::set_balance(&mut balance, 0, true, 0);
     conditional_balance::destroy_empty(balance);
     coin_escrow::destroy_for_testing(escrow);
-    
+
     end(scenario);
 }

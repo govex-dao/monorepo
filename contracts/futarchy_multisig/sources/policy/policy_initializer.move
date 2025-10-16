@@ -2,10 +2,10 @@
 /// This module re-exports type-based policy initialization functions
 module futarchy_multisig::policy_initializer;
 
-use std::option::Option;
-use sui::object::ID;
 use futarchy_multisig::policy_registry::PolicyRegistry;
 use futarchy_multisig::type_policy_initializer;
+use std::option::Option;
+use sui::object::ID;
 
 // === Re-export Functions ===
 
@@ -26,7 +26,7 @@ public fun init_treasury_policies(
         vault_spend_delay_ms,
         vault_deposit_delay_ms,
         currency_mint_delay_ms,
-        currency_burn_delay_ms
+        currency_burn_delay_ms,
     )
 }
 
@@ -47,7 +47,7 @@ public fun init_governance_policies(
         metadata_update_delay_ms,
         trading_params_delay_ms,
         governance_update_delay_ms,
-        create_proposal_delay_ms
+        create_proposal_delay_ms,
     )
 }
 
@@ -68,7 +68,7 @@ public fun init_security_policies(
         package_upgrade_delay_ms,
         package_commit_delay_ms,
         package_restrict_delay_ms,
-        dissolution_delay_ms
+        dissolution_delay_ms,
     )
 }
 
@@ -89,7 +89,7 @@ public fun init_protocol_admin_policies(
         factory_paused_delay_ms,
         dao_creation_fee_delay_ms,
         proposal_fee_delay_ms,
-        monthly_dao_fee_delay_ms
+        monthly_dao_fee_delay_ms,
     )
 }
 
@@ -108,7 +108,7 @@ public fun init_liquidity_policies(
         treasury_council,
         create_pool_delay_ms,
         add_liquidity_delay_ms,
-        remove_liquidity_delay_ms
+        remove_liquidity_delay_ms,
     )
 }
 

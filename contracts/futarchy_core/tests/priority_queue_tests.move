@@ -123,7 +123,10 @@ fun test_priority_fee_dominates_timestamp() {
     let score_low_fee_early = priority_queue::create_priority_score(100, 1000);
 
     // High fee dominates even though timestamp is much later
-    let result = priority_queue::compare_priority_scores(&score_high_fee_late, &score_low_fee_early);
+    let result = priority_queue::compare_priority_scores(
+        &score_high_fee_late,
+        &score_low_fee_early,
+    );
     assert!(result == COMPARE_GREATER, 0);
 }
 
@@ -306,8 +309,14 @@ fun test_realistic_proposal_fees() {
     let proposal_100_sui = priority_queue::create_priority_score(100_000_000_000, 1000000); // 100 SUI
 
     // Higher fee proposals should rank higher
-    assert!(priority_queue::compare_priority_scores(&proposal_100_sui, &proposal_10_sui) == COMPARE_GREATER, 0);
-    assert!(priority_queue::compare_priority_scores(&proposal_10_sui, &proposal_1_sui) == COMPARE_GREATER, 1);
+    assert!(
+        priority_queue::compare_priority_scores(&proposal_100_sui, &proposal_10_sui) == COMPARE_GREATER,
+        0,
+    );
+    assert!(
+        priority_queue::compare_priority_scores(&proposal_10_sui, &proposal_1_sui) == COMPARE_GREATER,
+        1,
+    );
 }
 
 #[test]

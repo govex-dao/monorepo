@@ -1,16 +1,16 @@
 #[test_only]
 module futarchy_markets_operations::proposal_with_market_init_tests;
 
-use futarchy_markets_operations::proposal_with_market_init;
-use futarchy_markets_operations::market_init_helpers;
 use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_operations::market_init_helpers;
+use futarchy_markets_operations::proposal_with_market_init;
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_primitives::market_state;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
-use sui::coin::{Self, Coin};
 use sui::clock::{Self, Clock};
-use sui::test_scenario::{Self as test};
+use sui::coin::{Self, Coin};
+use sui::test_scenario as test;
 use sui::test_utils;
 
 // === Test Constants ===
@@ -32,8 +32,8 @@ fun create_test_proposal(
 ): Proposal<TEST_COIN_A, TEST_COIN_B> {
     proposal::create_test_proposal<TEST_COIN_A, TEST_COIN_B>(
         outcome_count,
-        0,      // winning_outcome (doesn't matter for PREMARKET)
-        false,  // NOT finalized
+        0, // winning_outcome (doesn't matter for PREMARKET)
+        false, // NOT finalized
         ctx,
     )
 }
@@ -218,7 +218,7 @@ fun test_execute_raise_invalid_outcome_too_high() {
 
     // Create config for outcome 5 (doesn't exist)
     let config = market_init_helpers::new_raise_config(
-        5,       // outcome too high
+        5, // outcome too high
         1000000,
         900000,
     );
@@ -230,8 +230,8 @@ fun test_execute_raise_invalid_outcome_too_high() {
     let stable_coins = proposal_with_market_init::execute_raise_on_proposal<
         TEST_COIN_A,
         TEST_COIN_B,
-        TEST_COIN_A,  // AssetConditionalCoin (simplified)
-        TEST_COIN_B,  // StableConditionalCoin (simplified)
+        TEST_COIN_A, // AssetConditionalCoin (simplified)
+        TEST_COIN_B, // StableConditionalCoin (simplified)
     >(&mut proposal, &mut escrow, minted_coins, config, &clock, ctx);
 
     // Cleanup (won't reach here)
@@ -255,7 +255,7 @@ fun test_execute_raise_invalid_outcome_zero() {
 
     // Create config for outcome 0 (REJECT - invalid for raise)
     let config = market_init_helpers::new_raise_config(
-        0,       // outcome 0 is REJECT
+        0, // outcome 0 is REJECT
         1000000,
         900000,
     );
@@ -291,7 +291,7 @@ fun test_execute_raise_invalid_outcome_at_boundary() {
 
     // Create config for outcome 3 (equals outcome_count, invalid)
     let config = market_init_helpers::new_raise_config(
-        3,       // outcome 3 doesn't exist
+        3, // outcome 3 doesn't exist
         1000000,
         900000,
     );
@@ -329,7 +329,7 @@ fun test_execute_buyback_invalid_outcome_count_too_few() {
 
     // Create config with only 2 outcomes (mismatched)
     let config = market_init_helpers::new_buyback_config(
-        vector[0, 500000],      // Only 2 outcomes
+        vector[0, 500000], // Only 2 outcomes
         vector[0, 450000],
     );
 
@@ -367,7 +367,7 @@ fun test_execute_buyback_invalid_outcome_count_too_many() {
 
     // Create config with 3 outcomes (mismatched)
     let config = market_init_helpers::new_buyback_config(
-        vector[0, 500000, 300000],  // 3 outcomes
+        vector[0, 500000, 300000], // 3 outcomes
         vector[0, 450000, 270000],
     );
 

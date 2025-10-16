@@ -1,10 +1,6 @@
 /// Decoder for dissolution-related actions in futarchy DAOs
 module futarchy_lifecycle::dissolution_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
 use futarchy_lifecycle::dissolution_actions::{
@@ -16,8 +12,15 @@ use futarchy_lifecycle::dissolution_actions::{
     CancelAllStreamsAction,
     WithdrawAmmLiquidityAction,
     DistributeAssetsAction,
-    CreateAuctionAction,
+    CreateAuctionAction
 };
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -377,10 +380,7 @@ public fun decode_create_auction_action(
 // === Registration Functions ===
 
 /// Register all dissolution decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_initiate_dissolution_decoder(registry, ctx);
     register_batch_distribute_decoder(registry, ctx);
     register_finalize_dissolution_decoder(registry, ctx);
@@ -401,10 +401,7 @@ fun register_initiate_dissolution_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_batch_distribute_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_batch_distribute_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = BatchDistributeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<BatchDistributeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -419,10 +416,7 @@ fun register_finalize_dissolution_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_cancel_dissolution_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_cancel_dissolution_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CancelDissolutionActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CancelDissolutionAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -437,10 +431,7 @@ fun register_calculate_pro_rata_shares_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_cancel_all_streams_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_cancel_all_streams_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CancelAllStreamsActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CancelAllStreamsAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
@@ -451,23 +442,19 @@ fun register_withdraw_amm_liquidity_decoder(
     ctx: &mut TxContext,
 ) {
     let decoder = WithdrawAmmLiquidityActionDecoder { id: object::new(ctx) };
-    let type_key = type_name::with_defining_ids<WithdrawAmmLiquidityAction<AssetPlaceholder, StablePlaceholder>>();
+    let type_key = type_name::with_defining_ids<
+        WithdrawAmmLiquidityAction<AssetPlaceholder, StablePlaceholder>,
+    >();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_distribute_assets_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_distribute_assets_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = DistributeAssetsActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<DistributeAssetsAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_create_auction_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_auction_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreateAuctionActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CreateAuctionAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

@@ -2,18 +2,17 @@
 /// Allows other protocols to discover and compose with LP positions
 module futarchy_markets_operations::position_nft;
 
+use std::ascii;
+use std::option::{Self, Option};
 use std::string::{Self, String};
 use std::type_name::{Self, TypeName};
-use std::option::{Self, Option};
-use std::ascii;
-
-use sui::object::{Self, UID, ID};
-use sui::tx_context::{Self, TxContext};
-use sui::transfer;
 use sui::clock::{Self, Clock};
-use sui::event;
 use sui::display::{Self, Display};
+use sui::event;
+use sui::object::{Self, UID, ID};
 use sui::package::{Self, Publisher};
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 use sui::vec_map::{Self, VecMap};
 
 // === Errors ===
@@ -151,10 +150,7 @@ fun init(otw: POSITION_NFT, ctx: &mut TxContext) {
 
 /// Update the image URL for all future LP position NFTs
 /// Package-private so it can only be called through governance actions
-public(package) fun update_position_image(
-    config: &mut PositionImageConfig,
-    new_url: String,
-) {
+public(package) fun update_position_image(config: &mut PositionImageConfig, new_url: String) {
     config.image_url = new_url;
 }
 
@@ -257,7 +253,7 @@ public fun mint_spot_position<AssetType, StableType>(
         fee_bps,
         position_created_ms: timestamp,
         last_updated_ms: timestamp,
-        metadata: vec_map::empty(),  // Initialize empty metadata
+        metadata: vec_map::empty(), // Initialize empty metadata
     }
 }
 
@@ -276,11 +272,12 @@ public fun increase_spot_position<AssetType, StableType>(
     position.last_updated_ms = clock.timestamp_ms();
 
     // Update description with new amount
-    position.description = format_spot_description(
-        &position.coin_type_asset,
-        &position.coin_type_stable,
-        position.lp_amount
-    );
+    position.description =
+        format_spot_description(
+            &position.coin_type_asset,
+            &position.coin_type_stable,
+            position.lp_amount,
+        );
 }
 
 /// Decrease liquidity in spot position
@@ -300,11 +297,12 @@ public fun decrease_spot_position<AssetType, StableType>(
 
     if (position.lp_amount > 0) {
         // Update description with new amount
-        position.description = format_spot_description(
-            &position.coin_type_asset,
-            &position.coin_type_stable,
-            position.lp_amount
-        );
+        position.description =
+            format_spot_description(
+                &position.coin_type_asset,
+                &position.coin_type_stable,
+                position.lp_amount,
+            );
     };
 
     position.lp_amount
@@ -329,7 +327,7 @@ public fun burn_spot_position<AssetType, StableType>(
         fee_bps: _,
         position_created_ms: _,
         last_updated_ms: _,
-        metadata: _,  // Metadata is dropped when position burns
+        metadata: _, // Metadata is dropped when position burns
     } = position;
 
     event::emit(SpotPositionBurned {
@@ -372,7 +370,7 @@ public fun mint_conditional_position<AssetType, StableType>(
         &stable_type,
         outcome_index,
         lp_amount,
-        proposal_id
+        proposal_id,
     );
     let image_url = string::utf8(DEFAULT_POSITION_NFT_IMAGE);
 
@@ -402,7 +400,7 @@ public fun mint_conditional_position<AssetType, StableType>(
         is_winning_outcome: false,
         position_created_ms: timestamp,
         last_updated_ms: timestamp,
-        metadata: vec_map::empty(),  // Initialize empty metadata
+        metadata: vec_map::empty(), // Initialize empty metadata
     }
 }
 
@@ -428,13 +426,14 @@ public fun increase_conditional_position<AssetType, StableType>(
     position.last_updated_ms = clock.timestamp_ms();
 
     // Update description with new amount
-    position.description = format_conditional_description(
-        &position.coin_type_asset,
-        &position.coin_type_stable,
-        position.outcome_index,
-        position.lp_amount,
-        position.proposal_id
-    );
+    position.description =
+        format_conditional_description(
+            &position.coin_type_asset,
+            &position.coin_type_stable,
+            position.outcome_index,
+            position.lp_amount,
+            position.proposal_id,
+        );
 }
 
 /// Decrease liquidity in conditional position
@@ -454,13 +453,14 @@ public fun decrease_conditional_position<AssetType, StableType>(
 
     if (position.lp_amount > 0) {
         // Update description
-        position.description = format_conditional_description(
-            &position.coin_type_asset,
-            &position.coin_type_stable,
-            position.outcome_index,
-            position.lp_amount,
-            position.proposal_id
-        );
+        position.description =
+            format_conditional_description(
+                &position.coin_type_asset,
+                &position.coin_type_stable,
+                position.outcome_index,
+                position.lp_amount,
+                position.proposal_id,
+            );
     };
 
     position.lp_amount
@@ -488,7 +488,7 @@ public fun burn_conditional_position<AssetType, StableType>(
         is_winning_outcome: _,
         position_created_ms: _,
         last_updated_ms: _,
-        metadata: _,  // Metadata is dropped when position burns
+        metadata: _, // Metadata is dropped when position burns
     } = position;
 
     event::emit(ConditionalPositionBurned {
@@ -508,20 +508,20 @@ public fun burn_conditional_position<AssetType, StableType>(
 
 /// Get spot position details
 public fun get_spot_position_info<AssetType, StableType>(
-    position: &SpotLPPosition<AssetType, StableType>
+    position: &SpotLPPosition<AssetType, StableType>,
 ): (ID, u64, TypeName, TypeName, u64) {
     (
         position.pool_id,
         position.lp_amount,
         position.coin_type_asset,
         position.coin_type_stable,
-        position.fee_bps
+        position.fee_bps,
     )
 }
 
 /// Get conditional position details
 public fun get_conditional_position_info<AssetType, StableType>(
-    position: &ConditionalLPPosition<AssetType, StableType>
+    position: &ConditionalLPPosition<AssetType, StableType>,
 ): (ID, ID, u8, u64, TypeName, TypeName, u64, bool) {
     (
         position.pool_id,
@@ -531,31 +531,27 @@ public fun get_conditional_position_info<AssetType, StableType>(
         position.coin_type_asset,
         position.coin_type_stable,
         position.fee_bps,
-        position.is_winning_outcome
+        position.is_winning_outcome,
     )
 }
 
 /// Get spot LP amount
 public fun get_spot_lp_amount<AssetType, StableType>(
-    position: &SpotLPPosition<AssetType, StableType>
+    position: &SpotLPPosition<AssetType, StableType>,
 ): u64 {
     position.lp_amount
 }
 
 /// Get conditional LP amount
 public fun get_conditional_lp_amount<AssetType, StableType>(
-    position: &ConditionalLPPosition<AssetType, StableType>
+    position: &ConditionalLPPosition<AssetType, StableType>,
 ): u64 {
     position.lp_amount
 }
 
 // === Helper Functions ===
 
-fun format_spot_description(
-    asset_type: &TypeName,
-    stable_type: &TypeName,
-    lp_amount: u64
-): String {
+fun format_spot_description(asset_type: &TypeName, stable_type: &TypeName, lp_amount: u64): String {
     // Format: "LP Position: {lp_amount} shares in {Asset}/{Stable} pool"
     let mut desc = string::utf8(b"LP Position: ");
     string::append(&mut desc, u64_to_string(lp_amount));
@@ -572,7 +568,7 @@ fun format_conditional_description(
     stable_type: &TypeName,
     outcome_index: u8,
     lp_amount: u64,
-    proposal_id: ID
+    proposal_id: ID,
 ): String {
     // Format: "Conditional LP: {lp_amount} shares in Outcome {index} for Proposal {id}"
     let mut desc = string::utf8(b"Conditional LP: ");
@@ -618,7 +614,7 @@ fun u8_to_string(value: u8): String {
 /// Initialize display for spot positions
 public fun create_spot_display<AssetType, StableType>(
     publisher: &Publisher,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Display<SpotLPPosition<AssetType, StableType>> {
     let keys = vector[
         string::utf8(b"name"),
@@ -646,7 +642,7 @@ public fun create_spot_display<AssetType, StableType>(
         publisher,
         keys,
         values,
-        ctx
+        ctx,
     );
 
     display::update_version(&mut display);
@@ -656,7 +652,7 @@ public fun create_spot_display<AssetType, StableType>(
 /// Initialize display for conditional positions
 public fun create_conditional_display<AssetType, StableType>(
     publisher: &Publisher,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Display<ConditionalLPPosition<AssetType, StableType>> {
     let keys = vector[
         string::utf8(b"name"),
@@ -690,7 +686,7 @@ public fun create_conditional_display<AssetType, StableType>(
         publisher,
         keys,
         values,
-        ctx
+        ctx,
     );
 
     display::update_version(&mut display);
@@ -699,26 +695,46 @@ public fun create_conditional_display<AssetType, StableType>(
 
 #[test_only]
 public fun destroy_spot_position_for_testing<AssetType, StableType>(
-    position: SpotLPPosition<AssetType, StableType>
+    position: SpotLPPosition<AssetType, StableType>,
 ) {
     let SpotLPPosition {
-        id, pool_id: _, lp_amount: _, name: _, description: _, image_url: _,
-        coin_type_asset: _, coin_type_stable: _, fee_bps: _,
-        position_created_ms: _, last_updated_ms: _, metadata: _
+        id,
+        pool_id: _,
+        lp_amount: _,
+        name: _,
+        description: _,
+        image_url: _,
+        coin_type_asset: _,
+        coin_type_stable: _,
+        fee_bps: _,
+        position_created_ms: _,
+        last_updated_ms: _,
+        metadata: _,
     } = position;
     object::delete(id);
 }
 
 #[test_only]
 public fun destroy_conditional_position_for_testing<AssetType, StableType>(
-    position: ConditionalLPPosition<AssetType, StableType>
+    position: ConditionalLPPosition<AssetType, StableType>,
 ) {
     let ConditionalLPPosition {
-        id, pool_id: _, market_id: _, outcome_index: _, lp_amount: _,
-        name: _, description: _, image_url: _,
-        coin_type_asset: _, coin_type_stable: _, fee_bps: _,
-        proposal_id: _, is_winning_outcome: _,
-        position_created_ms: _, last_updated_ms: _, metadata: _
+        id,
+        pool_id: _,
+        market_id: _,
+        outcome_index: _,
+        lp_amount: _,
+        name: _,
+        description: _,
+        image_url: _,
+        coin_type_asset: _,
+        coin_type_stable: _,
+        fee_bps: _,
+        proposal_id: _,
+        is_winning_outcome: _,
+        position_created_ms: _,
+        last_updated_ms: _,
+        metadata: _,
     } = position;
     object::delete(id);
 }

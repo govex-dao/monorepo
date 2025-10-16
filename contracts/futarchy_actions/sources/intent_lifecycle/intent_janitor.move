@@ -1,23 +1,18 @@
 /// Public cleanup functions for expired intents
-/// Sui's storage rebate system naturally incentivizes cleanup - 
+/// Sui's storage rebate system naturally incentivizes cleanup -
 /// cleaners get the storage deposit back when deleting objects
 module futarchy_actions::intent_janitor;
 
-use std::string::String;
-use sui::{
-    clock::Clock,
-    event,
-    table::{Self, Table},
-};
-use account_protocol::{
-    account::{Self, Account},
-    intents::{Self, Expired},
-};
-use futarchy_core::version;
+use account_protocol::account::{Self, Account};
+use account_protocol::intents::{Self, Expired};
 use futarchy_actions::config_actions;
 use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_markets_core::{
-};
+use futarchy_core::version;
+use futarchy_markets_core::;
+use std::string::String;
+use sui::clock::Clock;
+use sui::event;
+use sui::table::{Self, Table};
 
 // === Constants ===
 
@@ -72,11 +67,11 @@ public fun cleanup_expired_futarchy_intents(
     ctx: &mut TxContext,
 ) {
     assert!(max_to_clean <= MAX_CLEANUP_PER_CALL, ECleanupLimitExceeded);
-    
+
     let mut cleaned = 0u64;
     let dao_id = object::id(account);
     let cleaner = ctx.sender();
-    
+
     // Try to clean up to max_to_clean intents
     while (cleaned < max_to_clean) {
         // Find next expired intent
@@ -84,20 +79,17 @@ public fun cleanup_expired_futarchy_intents(
         if (intent_key_opt.is_none()) {
             break // No more expired intents
         };
-        
+
         let intent_key = intent_key_opt.extract();
-        
+
         // Try to delete it as FutarchyOutcome type
         if (try_delete_expired_futarchy_intent(account, intent_key, clock, ctx)) {
             cleaned = cleaned + 1;
-        } else {
-            // Could not delete this intent (wrong type or not expired)
-            // Continue to next one
-        };
+        } else {};
     };
-    
+
     assert!(cleaned > 0, ENoExpiredIntents);
-    
+
     // Emit event
     event::emit(IntentsCleaned {
         dao_id,
@@ -120,9 +112,9 @@ public fun cleanup_all_expired_intents(
         if (intent_key_opt.is_none()) {
             break
         };
-        
+
         let intent_key = intent_key_opt.extract();
-        
+
         // Try to delete it - continue even if this specific one fails
         // (might be wrong type or other issue)
         try_delete_expired_futarchy_intent(account, intent_key, clock, ctx);
@@ -138,15 +130,15 @@ public(package) fun cleanup_expired_intents_automatic(
     ctx: &mut TxContext,
 ) {
     let mut cleaned = 0u64;
-    
+
     while (cleaned < max_to_clean) {
         let mut intent_key_opt = find_next_expired_intent(account, clock, ctx);
         if (intent_key_opt.is_none()) {
             break
         };
-        
+
         let intent_key = intent_key_opt.extract();
-        
+
         if (try_delete_expired_futarchy_intent(account, intent_key, clock, ctx)) {
             cleaned = cleaned + 1;
         };
@@ -154,12 +146,9 @@ public(package) fun cleanup_expired_intents_automatic(
 }
 
 /// Check if maintenance is needed and emit event if so
-public fun check_maintenance_needed(
-    account: &Account<FutarchyConfig>,
-    clock: &Clock,
-) {
+public fun check_maintenance_needed(account: &Account<FutarchyConfig>, clock: &Clock) {
     let expired_count = count_expired_intents(account, clock);
-    
+
     if (expired_count > 10) {
         event::emit(MaintenanceNeeded {
             dao_id: object::id(account),
@@ -174,7 +163,7 @@ public fun check_maintenance_needed(
 /// Get or initialize the intent index
 fun get_or_init_intent_index(
     account: &mut Account<FutarchyConfig>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): &mut IntentIndex {
     // Initialize if doesn't exist
     if (!account::has_managed_data(account, IntentIndexKey {})) {
@@ -187,14 +176,14 @@ fun get_or_init_intent_index(
             account,
             IntentIndexKey {},
             index,
-            version::current()
+            version::current(),
         );
     };
-    
+
     account::borrow_managed_data_mut(
         account,
         IntentIndexKey {},
-        version::current()
+        version::current(),
     )
 }
 
@@ -203,7 +192,7 @@ public(package) fun register_intent(
     account: &mut Account<FutarchyConfig>,
     key: String,
     expiration_time: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     let index = get_or_init_intent_index(account, ctx);
     vector::push_back(&mut index.keys, key);
@@ -214,31 +203,31 @@ public(package) fun register_intent(
 fun find_next_expired_intent(
     account: &mut Account<FutarchyConfig>,
     clock: &Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Option<String> {
     // Get the index
     let index = get_or_init_intent_index(account, ctx);
-    
+
     let current_time = clock.timestamp_ms();
     let keys = &index.keys;
     let expiration_times = &index.expiration_times;
     let len = vector::length(keys);
-    
+
     if (len == 0) {
         return option::none()
     };
-    
+
     // Start from last scan position for round-robin
     let mut checked = 0;
     let mut pos = index.scan_position;
-    
+
     while (checked < len) {
         if (pos >= len) {
             pos = 0; // Wrap around
         };
-        
+
         let key = vector::borrow(keys, pos);
-        
+
         // Check if this intent is expired
         if (table::contains(expiration_times, *key)) {
             let expiry = *table::borrow(expiration_times, *key);
@@ -248,11 +237,11 @@ fun find_next_expired_intent(
                 return option::some(*key)
             }
         };
-        
+
         pos = pos + 1;
         checked = checked + 1;
     };
-    
+
     option::none()
 }
 
@@ -268,7 +257,7 @@ fun try_delete_expired_futarchy_intent(
     if (!intents::contains(intents_store, key)) {
         return false
     };
-    
+
     // Try to delete as FutarchyOutcome type
     // This will fail if the intent has a different outcome type
     let can_delete = {
@@ -277,7 +266,7 @@ fun try_delete_expired_futarchy_intent(
         // For now, we'll assume a standard outcome type
         true // TODO: Implement proper outcome type checking
     };
-    
+
     if (can_delete) {
         // TODO: This requires the correct outcome type
         // For now, skip deletion
@@ -287,10 +276,10 @@ fun try_delete_expired_futarchy_intent(
         //     clock
         // );
         // destroy_expired(expired);
-        
+
         // Remove from index
         remove_from_index(account, key, ctx);
-        
+
         true
     } else {
         false
@@ -303,35 +292,33 @@ fun destroy_expired(expired: Expired) {
     // This would require knowing all possible action types
     // Instead, we'll just destroy it if it's already empty
     // or abort if it has actions (shouldn't happen with FutarchyOutcome)
-    
+
     // Destroy the expired intent (will abort if not empty)
     intents::destroy_empty_expired(expired);
 }
 
 /// Count expired intents
-fun count_expired_intents(
-    account: &Account<FutarchyConfig>,
-    clock: &Clock,
-): u64 {
+fun count_expired_intents(account: &Account<FutarchyConfig>, clock: &Clock): u64 {
     // Check if index exists
     if (!account::has_managed_data(account, IntentIndexKey {})) {
         return 0
     };
-    
+
     let index: &IntentIndex = account::borrow_managed_data(
         account,
         IntentIndexKey {},
-        version::current()
+        version::current(),
     );
-    
+
     let current_time = clock.timestamp_ms();
     let mut count = 0u64;
     let keys = &index.keys;
     let expiration_times = &index.expiration_times;
     let len = vector::length(keys);
-    
+
     let mut i = 0;
-    while (i < len && i < 100) { // Limit scan to prevent gas exhaustion
+    while (i < len && i < 100) {
+        // Limit scan to prevent gas exhaustion
         let key = vector::borrow(keys, i);
         if (table::contains(expiration_times, *key)) {
             let expiry = *table::borrow(expiration_times, *key);
@@ -341,32 +328,28 @@ fun count_expired_intents(
         };
         i = i + 1;
     };
-    
+
     count
 }
 
 /// Remove an intent from the index after deletion
-fun remove_from_index(
-    account: &mut Account<FutarchyConfig>,
-    key: String,
-    ctx: &mut TxContext
-) {
+fun remove_from_index(account: &mut Account<FutarchyConfig>, key: String, ctx: &mut TxContext) {
     let index = get_or_init_intent_index(account, ctx);
-    
+
     // Remove from expiration times table
     if (table::contains(&index.expiration_times, key)) {
         table::remove(&mut index.expiration_times, key);
     };
-    
+
     // Remove from keys vector (expensive but necessary)
     let keys = &mut index.keys;
     let len = vector::length(keys);
     let mut i = 0;
-    
+
     while (i < len) {
         if (*vector::borrow(keys, i) == key) {
             vector::swap_remove(keys, i);
-            
+
             // Adjust scan position if needed
             if (index.scan_position > i) {
                 index.scan_position = index.scan_position - 1;

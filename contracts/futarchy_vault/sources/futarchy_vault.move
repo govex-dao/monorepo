@@ -165,7 +165,31 @@ public entry fun deposit_revenue<CoinType: drop>(
     });
 }
 
-// TODO: Fix deposit_new_coin_type - vault::deposit signature changed
+/// GOVERNANCE: Initial deposit for a newly allowed coin type
+/// Uses config Auth to call the managed vault::deposit API
+public fun deposit_new_coin_type<CoinType: drop>(
+    account: &mut Account<FutarchyConfig>,
+    coin: Coin<CoinType>,
+    vault_name: String,
+    version: VersionWitness,
+) {
+    // Ensure vault exists
+    let has_vault = vault::has_vault(account, string::clone(&vault_name));
+    assert!(has_vault, EVaultNotInitialized);
+
+    // Only allow deposits for approved coin types
+    let allowed: &AllowedCoinTypes = account::borrow_managed_data(
+        &*account,
+        ALLOWED_COINS_KEY,
+        version::current(),
+    );
+    let type_key = type_name::with_defining_ids<CoinType>();
+    assert!(allowed.types.contains(&type_key), ECoinTypeNotAllowed);
+
+    // Use config Auth to perform the deposit (creates balance entry when needed)
+    let auth = account::new_auth(account, version, FutarchyConfigWitness {});
+    vault::deposit(auth, account, vault_name, coin);
+}
 
 /// GOVERNANCE ONLY: Add a new coin type to the allowed list
 /// This should only be called through a governance proposal

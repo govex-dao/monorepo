@@ -10,20 +10,16 @@
 
 module account_actions::vault_intents;
 
-// === Imports ===
-
+use account_actions::transfer as acc_transfer;
+use account_actions::vault;
+use account_actions::version;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
 use std::string::String;
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    intents::Params,
-    intent_interface,
-};
-use account_actions::{
-    transfer as acc_transfer,
-    vault,
-    version,
-};
+
+// === Imports ===
 
 // === Aliases ===
 
@@ -46,24 +42,24 @@ public struct SpendAndTransferIntent() has copy, drop;
 /// Creates a SpendAndTransferIntent and adds it to an Account.
 public fun request_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
     vault_name: String,
     amounts: vector<u64>,
     recipients: vector<address>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     assert!(amounts.length() == recipients.length(), ENotSameLength);
-    
+
     let vault = vault::borrow_vault(account, vault_name);
     assert!(vault.coin_type_exists<CoinType>(), ECoinTypeDoesntExist);
     assert!(
-        amounts.fold!(0u64, |sum, amount| sum + amount) <= vault.coin_type_value<CoinType>(), 
-        EInsufficientFunds
+        amounts.fold!(0u64, |sum, amount| sum + amount) <= vault.coin_type_value<CoinType>(),
+        EInsufficientFunds,
     );
-    
+
     account.build_intent!(
         params,
         outcome,
@@ -74,24 +70,30 @@ public fun request_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
         |intent, iw| amounts.zip_do!(recipients, |amount, recipient| {
             vault::new_spend<_, CoinType, _>(intent, vault_name, amount, iw);
             acc_transfer::new_transfer(intent, recipient, iw);
-        })
+        }),
     );
 }
 
 /// Executes a SpendAndTransferIntent, transfers coins from the vault to the recipients. Can be looped over.
 public fun execute_spend_and_transfer<Config, Outcome: store, CoinType: drop>(
-    executable: &mut Executable<Outcome>, 
-    account: &mut Account<Config>, 
-    ctx: &mut TxContext
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
         version::current(),
         SpendAndTransferIntent(),
         |executable, iw| {
-            let coin = vault::do_spend<_, _, CoinType, _>(executable, account, version::current(), iw, ctx);
+            let coin = vault::do_spend<_, _, CoinType, _>(
+                executable,
+                account,
+                version::current(),
+                iw,
+                ctx,
+            );
             acc_transfer::do_transfer(executable, coin, iw);
-        }
+        },
     );
 }
 
@@ -106,7 +108,7 @@ public fun request_toggle_stream_pause<Config, Outcome: store>(
     vault_name: String,
     stream_id: ID,
     pause_duration_ms: u64, // 0 = unpause, >0 = pause for duration
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
 
@@ -119,7 +121,7 @@ public fun request_toggle_stream_pause<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             vault::new_toggle_stream_pause(intent, vault_name, stream_id, pause_duration_ms, iw);
-        }
+        },
     );
 }
 
@@ -132,7 +134,7 @@ public fun request_toggle_stream_freeze<Config, Outcome: store>(
     vault_name: String,
     stream_id: ID,
     freeze: bool, // true = freeze, false = unfreeze
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
 
@@ -145,7 +147,7 @@ public fun request_toggle_stream_freeze<Config, Outcome: store>(
         ctx,
         |intent, iw| {
             vault::new_toggle_stream_freeze(intent, vault_name, stream_id, freeze, iw);
-        }
+        },
     );
 }
 
@@ -157,7 +159,7 @@ public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     vault_name: String,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
@@ -171,9 +173,9 @@ public fun execute_toggle_stream_pause<Config, Outcome: store, CoinType>(
                 clock,
                 version::current(),
                 iw,
-                ctx
+                ctx,
             );
-        }
+        },
     );
 }
 
@@ -183,7 +185,7 @@ public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
     account: &mut Account<Config>,
     vault_name: String,
     clock: &sui::clock::Clock,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.process_intent!(
         executable,
@@ -196,9 +198,8 @@ public fun execute_toggle_stream_freeze<Config, Outcome: store, CoinType>(
                 vault_name,
                 clock,
                 version::current(),
-                iw
+                iw,
             );
-        }
+        },
     );
 }
-

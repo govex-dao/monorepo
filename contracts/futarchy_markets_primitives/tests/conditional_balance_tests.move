@@ -2,12 +2,10 @@
 module futarchy_markets_primitives::conditional_balance_tests;
 
 use futarchy_markets_primitives::conditional_balance;
-use sui::{
-    test_scenario as ts,
-    test_utils::destroy,
-    sui::SUI,
-};
 use std::string;
+use sui::sui::SUI;
+use sui::test_scenario as ts;
+use sui::test_utils::destroy;
 
 // Test coin types
 public struct USDC has drop {}
@@ -35,7 +33,7 @@ fun test_new_balance_minimal_outcomes() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2, // MIN_OUTCOMES
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify initialization
@@ -61,7 +59,7 @@ fun test_new_balance_many_outcomes() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         10,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     assert!(conditional_balance::outcome_count(&balance) == 10, 0);
@@ -83,7 +81,7 @@ fun test_new_balance_max_outcomes() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         200, // MAX_OUTCOMES
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     assert!(conditional_balance::outcome_count(&balance) == 200, 0);
@@ -105,7 +103,7 @@ fun test_new_balance_too_few_outcomes_fails() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         1, // Below MIN_OUTCOMES (2)
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::destroy_empty(balance);
@@ -121,7 +119,7 @@ fun test_new_balance_too_many_outcomes_fails() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         201, // Above MAX_OUTCOMES (200)
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     conditional_balance::destroy_empty(balance);
@@ -138,15 +136,15 @@ fun test_set_and_get_balance() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set various balances
-    conditional_balance::set_balance(&mut balance, 0, true, 1000);  // out0 asset
+    conditional_balance::set_balance(&mut balance, 0, true, 1000); // out0 asset
     conditional_balance::set_balance(&mut balance, 0, false, 2000); // out0 stable
-    conditional_balance::set_balance(&mut balance, 1, true, 3000);  // out1 asset
+    conditional_balance::set_balance(&mut balance, 1, true, 3000); // out1 asset
     conditional_balance::set_balance(&mut balance, 1, false, 4000); // out1 stable
-    conditional_balance::set_balance(&mut balance, 2, true, 5000);  // out2 asset
+    conditional_balance::set_balance(&mut balance, 2, true, 5000); // out2 asset
     conditional_balance::set_balance(&mut balance, 2, false, 6000); // out2 stable
 
     // Verify all balances
@@ -177,7 +175,7 @@ fun test_add_to_balance() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Add to balance multiple times
@@ -205,7 +203,7 @@ fun test_sub_from_balance() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set initial balance
@@ -234,7 +232,7 @@ fun test_sub_from_balance_insufficient_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set balance to 100
@@ -256,7 +254,7 @@ fun test_get_balance_invalid_outcome_fails() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2, // Only outcomes 0 and 1 valid
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Try to access outcome 2 - should fail
@@ -275,7 +273,7 @@ fun test_set_balance_invalid_outcome_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3, // Only outcomes 0, 1, 2 valid
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Try to set outcome 3 - should fail
@@ -295,14 +293,14 @@ fun test_index_layout_2_outcomes() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set balances: [out0_asset, out0_stable, out1_asset, out1_stable]
-    conditional_balance::set_balance(&mut balance, 0, true, 10);   // idx 0
-    conditional_balance::set_balance(&mut balance, 0, false, 20);  // idx 1
-    conditional_balance::set_balance(&mut balance, 1, true, 30);   // idx 2
-    conditional_balance::set_balance(&mut balance, 1, false, 40);  // idx 3
+    conditional_balance::set_balance(&mut balance, 0, true, 10); // idx 0
+    conditional_balance::set_balance(&mut balance, 0, false, 20); // idx 1
+    conditional_balance::set_balance(&mut balance, 1, true, 30); // idx 2
+    conditional_balance::set_balance(&mut balance, 1, false, 40); // idx 3
 
     // Verify layout via direct vector access
     let balances_ref = conditional_balance::borrow_balances(&balance);
@@ -329,15 +327,15 @@ fun test_index_layout_3_outcomes() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set balances with pattern: outcome_idx * 100 + (is_asset ? 10 : 20)
-    conditional_balance::set_balance(&mut balance, 0, true, 10);   // idx 0
-    conditional_balance::set_balance(&mut balance, 0, false, 20);  // idx 1
-    conditional_balance::set_balance(&mut balance, 1, true, 110);  // idx 2
+    conditional_balance::set_balance(&mut balance, 0, true, 10); // idx 0
+    conditional_balance::set_balance(&mut balance, 0, false, 20); // idx 1
+    conditional_balance::set_balance(&mut balance, 1, true, 110); // idx 2
     conditional_balance::set_balance(&mut balance, 1, false, 120); // idx 3
-    conditional_balance::set_balance(&mut balance, 2, true, 210);  // idx 4
+    conditional_balance::set_balance(&mut balance, 2, true, 210); // idx 4
     conditional_balance::set_balance(&mut balance, 2, false, 220); // idx 5
 
     // Verify layout
@@ -371,7 +369,7 @@ fun test_find_min_balance_empty() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // All balances are zero
@@ -390,7 +388,7 @@ fun test_find_min_balance_all_equal() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set all asset balances to 1000
@@ -417,7 +415,7 @@ fun test_find_min_balance_different_values() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         4,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set different stable balances: [3000, 1000, 5000, 2000]
@@ -448,11 +446,11 @@ fun test_find_min_balance_first_is_min() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // First outcome has minimum
-    conditional_balance::set_balance(&mut balance, 0, true, 100);  // Minimum
+    conditional_balance::set_balance(&mut balance, 0, true, 100); // Minimum
     conditional_balance::set_balance(&mut balance, 1, true, 500);
     conditional_balance::set_balance(&mut balance, 2, true, 1000);
 
@@ -475,13 +473,13 @@ fun test_find_min_balance_last_is_min() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Last outcome has minimum
     conditional_balance::set_balance(&mut balance, 0, true, 5000);
     conditional_balance::set_balance(&mut balance, 1, true, 3000);
-    conditional_balance::set_balance(&mut balance, 2, true, 1000);  // Minimum
+    conditional_balance::set_balance(&mut balance, 2, true, 1000); // Minimum
 
     assert!(conditional_balance::find_min_balance(&balance, true) == 1000, 0);
 
@@ -502,11 +500,11 @@ fun test_find_min_balance_asset_vs_stable_independent() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set different mins for asset and stable
-    conditional_balance::set_balance(&mut balance, 0, true, 1000);  // Asset min = 1000
+    conditional_balance::set_balance(&mut balance, 0, true, 1000); // Asset min = 1000
     conditional_balance::set_balance(&mut balance, 1, true, 2000);
     conditional_balance::set_balance(&mut balance, 0, false, 5000);
     conditional_balance::set_balance(&mut balance, 1, false, 3000); // Stable min = 3000
@@ -535,7 +533,7 @@ fun test_is_empty_on_new_balance() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     assert!(conditional_balance::is_empty(&balance), 0);
@@ -552,7 +550,7 @@ fun test_is_empty_after_setting_and_clearing() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Initially empty
@@ -585,7 +583,7 @@ fun test_destroy_non_empty_fails() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set a balance
@@ -611,7 +609,7 @@ fun test_new_with_amounts_helper() {
         market_id,
         2,
         initial,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Verify all balances were set correctly
@@ -640,7 +638,7 @@ fun test_getters() {
     let balance = conditional_balance::new<SUI, USDC>(
         market_id,
         5,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Test market_id getter
@@ -671,7 +669,7 @@ fun test_add_zero_amount() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set initial balance
@@ -696,7 +694,7 @@ fun test_sub_zero_amount() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set initial balance
@@ -721,7 +719,7 @@ fun test_add_to_max_value_near_overflow() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set to value near max
@@ -747,7 +745,7 @@ fun test_add_causes_overflow() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Set to max value
@@ -769,7 +767,7 @@ fun test_borrow_balances_mut_helper() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         2,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Use test helper to get mutable reference
@@ -801,7 +799,7 @@ fun test_full_lifecycle() {
     let mut balance = conditional_balance::new<SUI, USDC>(
         market_id,
         3,
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     // Simulate quantum liquidity deposit (same amount to all outcomes)

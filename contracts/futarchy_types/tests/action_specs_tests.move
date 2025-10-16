@@ -1,9 +1,9 @@
 #[test_only]
 module futarchy_types::action_specs_tests;
 
-use std::type_name;
 use futarchy_types::action_specs;
 use futarchy_types::coin_types::{USDC, USDT};
+use std::type_name;
 
 // === Test Structs ===
 

@@ -1,21 +1,17 @@
 #[test_only]
 module account_protocol::config_intents_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-};
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-    intents,
-    config,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::config;
+use account_protocol::deps;
+use account_protocol::intents;
+use account_protocol::version;
+use sui::clock::{Self, Clock};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -47,7 +43,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     // add external dep
     extensions.add(&cap, b"External".to_string(), @0xABC, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -66,15 +65,15 @@ fun end(scenario: Scenario, extensions: Extensions, account: Account<Config>, cl
 
 #[test]
 fun test_edit_config_metadata() {
-    let (scenario, extensions, mut account, clock) = start();    
+    let (scenario, extensions, mut account, clock) = start();
     assert!(account.metadata().size() == 0);
 
     let auth = account.new_auth(version::current(), Witness());
     config::edit_metadata(
-        auth, 
+        auth,
         &mut account,
-        vector[b"name".to_string()], 
-        vector[b"New Name".to_string()], 
+        vector[b"name".to_string()],
+        vector[b"New Name".to_string()],
     );
 
     assert!(account.metadata().get(b"name".to_string()) == b"New Name".to_string());
@@ -106,7 +105,7 @@ fun test_update_extensions_to_latest() {
 //     let (scenario, mut extensions, mut account, clock) = start();
 //     assert!(account.deps().get_by_name(b"AccountProtocol".to_string()).version() == 1);
 //     extensions.update_for_testing(b"AccountProtocol".to_string(), @0x3, 2);
-    
+
 //     account.deps_mut(version::current()).toggle_unverified_allowed_for_testing();
 //     // Need to use proper config actions to add unverified deps
 //     let auth = account.new_auth(version::current(), Witness());
@@ -124,39 +123,49 @@ fun test_update_extensions_to_latest() {
 
 #[test]
 fun test_request_execute_config_deps() {
-    let (mut scenario, extensions, mut account, clock) = start();    
+    let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
     let auth = account.new_auth(version::current(), Witness());
     let params = intents::new_params(
-        key, 
-        b"".to_string(), 
+        key,
+        b"".to_string(),
         vector[0],
-        1, 
+        1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     config::request_config_deps(
-        auth, 
-        &mut account, 
+        auth,
+        &mut account,
         params,
-        Outcome {}, 
+        Outcome {},
         &extensions,
-        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string(), b"External".to_string()], 
-        vector[@account_protocol, @0x11, @0xABC], 
-        vector[1, 2, 1], 
-        scenario.ctx()
+        vector[
+            b"AccountProtocol".to_string(),
+            b"AccountConfig".to_string(),
+            b"External".to_string(),
+        ],
+        vector[@account_protocol, @0x11, @0xABC],
+        vector[1, 2, 1],
+        scenario.ctx(),
     );
     assert!(!account.deps().contains_name(b"External".to_string()));
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     config::execute_config_deps<Config, Outcome>(&mut executable, &mut account, &extensions);
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Config, Outcome>(key);
     config::delete_config_deps(&mut expired);
     expired.destroy_empty();
-    
+
     let package = account.deps().get_by_name(b"External".to_string());
     assert!(package.addr() == @0xABC);
     assert!(package.version() == 1);
@@ -166,31 +175,31 @@ fun test_request_execute_config_deps() {
 
 #[test]
 fun test_config_deps_expired() {
-    let (mut scenario, extensions, mut account, mut clock) = start();    
+    let (mut scenario, extensions, mut account, mut clock) = start();
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
     let auth = account.new_auth(version::current(), Witness());
     let params = intents::new_params(
-        key, 
-        b"".to_string(), 
+        key,
+        b"".to_string(),
         vector[0],
-        1, 
+        1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     config::request_config_deps(
-        auth, 
-        &mut account, 
+        auth,
+        &mut account,
         params,
-        Outcome {}, 
+        Outcome {},
         &extensions,
-        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()], 
-        vector[@account_protocol, @0x11], 
-        vector[1, 2], 
-        scenario.ctx()
+        vector[b"AccountProtocol".to_string(), b"AccountConfig".to_string()],
+        vector[@account_protocol, @0x11],
+        vector[1, 2],
+        scenario.ctx(),
     );
-    
+
     let mut expired = account.delete_expired_intent<Config, Outcome>(key, &clock);
     config::delete_config_deps(&mut expired);
     expired.destroy_empty();
@@ -200,34 +209,40 @@ fun test_config_deps_expired() {
 
 #[test]
 fun test_request_execute_toggle_unverified_allowed() {
-    let (mut scenario, extensions, mut account, clock) = start();    
+    let (mut scenario, extensions, mut account, clock) = start();
     let key = b"dummy".to_string();
 
     let auth = account.new_auth(version::current(), Witness());
     let params = intents::new_params(
-        key, 
-        b"".to_string(), 
+        key,
+        b"".to_string(),
         vector[0],
-        1, 
+        1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     config::request_toggle_unverified_allowed(
-        auth, 
+        auth,
         &mut account,
         params,
-        Outcome {}, 
-        scenario.ctx()
+        Outcome {},
+        scenario.ctx(),
     );
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     config::execute_toggle_unverified_allowed<Config, Outcome>(&mut executable, &mut account);
     account.confirm_execution(executable);
 
     let mut expired = account.destroy_empty_intent<Config, Outcome>(key);
     config::delete_toggle_unverified_allowed(&mut expired);
     expired.destroy_empty();
-    
+
     assert!(account.deps().unverified_allowed() == true);
 
     end(scenario, extensions, account, clock);
@@ -235,27 +250,27 @@ fun test_request_execute_toggle_unverified_allowed() {
 
 #[test]
 fun test_toggle_unverified_allowed_expired() {
-    let (mut scenario, extensions, mut account, mut clock) = start();    
+    let (mut scenario, extensions, mut account, mut clock) = start();
     clock.increment_for_testing(1);
     let key = b"dummy".to_string();
 
     let auth = account.new_auth(version::current(), Witness());
     let params = intents::new_params(
-        key, 
-        b"".to_string(), 
+        key,
+        b"".to_string(),
         vector[0],
-        1, 
+        1,
         &clock,
-        scenario.ctx()
-    );  
+        scenario.ctx(),
+    );
     config::request_toggle_unverified_allowed(
-        auth, 
+        auth,
         &mut account,
         params,
         Outcome {},
-        scenario.ctx()
+        scenario.ctx(),
     );
-    
+
     let mut expired = account.delete_expired_intent<Config, Outcome>(key, &clock);
     config::delete_toggle_unverified_allowed(&mut expired);
     expired.destroy_empty();

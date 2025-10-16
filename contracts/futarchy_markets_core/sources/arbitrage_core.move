@@ -6,15 +6,14 @@
 
 module futarchy_markets_core::arbitrage_core;
 
+use futarchy_markets_core::arbitrage_math;
+use futarchy_markets_core::proposal::Proposal;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_core::proposal::Proposal;
-use futarchy_markets_core::arbitrage_math;
 use futarchy_markets_primitives::market_state;
-// swap_position_registry removed - balances transferred directly to users
-use sui::coin::{Self, Coin};
 use sui::balance::{Self, Balance};
 use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 
 // === Errors ===
 const EInsufficientProfit: u64 = 1;
@@ -55,7 +54,7 @@ public fun spot_swap_stable_to_asset<AssetType, StableType>(
     unified_spot_pool::swap_stable_for_asset(
         spot_pool,
         stable_for_arb,
-        0,  // No intermediate minimum (atomic execution)
+        0, // No intermediate minimum (atomic execution)
         clock,
         ctx,
     )
@@ -141,7 +140,9 @@ public fun burn_and_withdraw_conditional_asset<AssetType, StableType, CondAsset>
 ): Coin<AssetType> {
     let amount = conditional.value();
     coin_escrow::burn_conditional_asset<AssetType, StableType, CondAsset>(
-        escrow, outcome_idx, conditional
+        escrow,
+        outcome_idx,
+        conditional,
     );
     coin_escrow::withdraw_asset_balance(escrow, amount, ctx)
 }
@@ -156,7 +157,9 @@ public fun burn_and_withdraw_conditional_stable<AssetType, StableType, CondStabl
 ): Coin<StableType> {
     let amount = conditional.value();
     coin_escrow::burn_conditional_stable<AssetType, StableType, CondStable>(
-        escrow, outcome_idx, conditional
+        escrow,
+        outcome_idx,
+        conditional,
     );
     coin_escrow::withdraw_stable_balance(escrow, amount, ctx)
 }

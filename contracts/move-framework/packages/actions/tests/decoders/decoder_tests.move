@@ -1,23 +1,19 @@
 #[test_only]
 module account_actions::decoder_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    bcs,
-};
+use account_actions::access_control_decoder;
+use account_actions::currency_decoder;
+use account_actions::kiosk_decoder;
+use account_actions::package_upgrade_decoder;
+use account_actions::transfer_decoder;
+use account_actions::vault_decoder;
+use account_actions::vesting_decoder;
 use account_protocol::schema::{Self, ActionDecoderRegistry};
-use account_actions::{
-    access_control_decoder,
-    currency_decoder,
-    kiosk_decoder,
-    package_upgrade_decoder,
-    transfer_decoder,
-    vault_decoder,
-    vesting_decoder,
-};
+use sui::bcs;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 

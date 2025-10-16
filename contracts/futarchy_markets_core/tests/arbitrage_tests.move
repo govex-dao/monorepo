@@ -1,21 +1,21 @@
 #[test_only]
 module futarchy_markets_core::arbitrage_tests;
 
-use sui::test_scenario::{Self as ts};
+use futarchy_markets_core::arbitrage;
+use futarchy_markets_core::swap_core;
+use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
+use futarchy_markets_primitives::market_state::{Self, MarketState};
+use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
+use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use std::option;
+use std::string;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::object;
-use futarchy_markets_core::arbitrage;
-use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_core::swap_core;
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::conditional_balance::{Self, ConditionalMarketBalance};
-use futarchy_markets_primitives::market_state::{Self, MarketState};
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
-use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
-use std::string;
-use std::option;
+use sui::test_scenario as ts;
 
 // === Constants ===
 const INITIAL_SPOT_RESERVE: u64 = 10_000_000_000; // 10,000 tokens (9 decimals)
@@ -110,7 +110,7 @@ fun initialize_amm_pools(escrow: &mut TokenEscrow<TEST_COIN_A, TEST_COIN_B>, ctx
             1000, // minimal asset_reserve
             1000, // minimal stable_reserve
             &clock,
-            ctx
+            ctx,
         );
         vector::push_back(&mut pools, pool);
         i = i + 1;

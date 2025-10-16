@@ -2,18 +2,18 @@
 module futarchy::coin_escrow_tests;
 
 use futarchy::coin_escrow;
-use futarchy::conditional_token::{Self as token, ConditionalToken}; // Alias needed
+use futarchy::conditional_token::{Self as token, ConditionalToken};
+use futarchy::fee;
+use futarchy::liquidity_interact;
 use futarchy::market_state;
-use futarchy::liquidity_interact; 
-use futarchy::proposal::{Self, Proposal}; // Added
-use futarchy::fee; 
+use futarchy::proposal::{Self, Proposal};
 use futarchy::swap;
-use sui::balance::{Self, Balance}; // Alias needed
+use std::string::{Self, String};
+use sui::balance::{Self, Balance};
 use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin}; // Alias needed
+use sui::coin::{Self, Coin};
+use sui::test_scenario::{Self as test, Scenario, next_tx};
 use sui::test_utils;
-use sui::test_scenario::{Self as test, Scenario, next_tx}; 
-use std::string::{Self, String}; 
 
 // Define dummy types to stand in for actual asset and stable types.
 public struct DummyAsset has copy, drop, store {}
@@ -72,7 +72,6 @@ fun setup_market_with_escrow(
     (ms_to_return, escrow)
 }
 
-
 // Helper to register supplies for all outcomes
 fun register_all_supplies(
     escrow: &mut coin_escrow::TokenEscrow<DummyAsset, DummyStable>,
@@ -122,7 +121,7 @@ fun add_asset_balance<AssetType, StableType>(
     // If called *before* register_all_supplies, this will fail.
     // Assuming it's called after supplies are registered.
     if (!market_state::is_trading_active(coin_escrow::get_market_state(escrow))) {
-         market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(escrow));
+        market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(escrow));
     };
 
     let mut tokens = coin_escrow::mint_complete_set_asset(escrow, coin_in, &clock, ctx);
@@ -148,11 +147,10 @@ fun add_stable_balance<AssetType, StableType>(
     let coin_in = coin::mint_for_testing<StableType>(amount, ctx);
     let clock = clock::create_for_testing(ctx);
 
-     // Initialize trading if not already initialized
-     if (!market_state::is_trading_active(coin_escrow::get_market_state(escrow))) {
-          market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(escrow));
-     };
-
+    // Initialize trading if not already initialized
+    if (!market_state::is_trading_active(coin_escrow::get_market_state(escrow))) {
+        market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(escrow));
+    };
 
     let mut tokens = coin_escrow::mint_complete_set_stable(escrow, coin_in, &clock, ctx);
 
@@ -430,7 +428,6 @@ fun test_extract_stable_fees() {
     test_utils::destroy(escrow);
 }
 
-
 #[test]
 fun test_swap_token_asset_to_stable() {
     let mut ctx = create_test_context();
@@ -460,7 +457,7 @@ fun test_swap_token_asset_to_stable() {
         outcome_idx,
         asset_value,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Swap the asset token for a stable token
@@ -470,7 +467,7 @@ fun test_swap_token_asset_to_stable() {
         outcome_idx,
         asset_value, // Assuming 1:1 swap for simplicity in test
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify the stable token properties
@@ -485,7 +482,7 @@ fun test_swap_token_asset_to_stable() {
         outcome_idx,
         asset_value, // Assuming 1:1 swap
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify the asset token properties
@@ -530,7 +527,7 @@ fun test_redeem_winning_tokens() {
         outcome_idx,
         asset_value,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     let stable_token = coin_escrow::create_stable_token_for_testing(
@@ -538,7 +535,7 @@ fun test_redeem_winning_tokens() {
         outcome_idx,
         asset_value,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Now finalize the market with outcome 0 as winner
@@ -549,7 +546,7 @@ fun test_redeem_winning_tokens() {
         &mut escrow,
         asset_token, // Consumed
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify the redeemed asset amount
@@ -560,7 +557,7 @@ fun test_redeem_winning_tokens() {
         &mut escrow,
         stable_token, // Consumed
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify the redeemed stable amount
@@ -619,7 +616,7 @@ fun test_register_supplies_incorrect_sequence() {
     // Try to register outcome 2 (skipping 1) - should fail
     coin_escrow::register_supplies(&mut escrow, 2, asset_supply2, stable_supply2, lp_supply2);
 
-     // Cleanup in case of unexpected success (won't be reached)
+    // Cleanup in case of unexpected success (won't be reached)
     market_state::destroy_for_testing(ms);
     test_utils::destroy(escrow);
 }
@@ -710,7 +707,7 @@ fun test_redeem_winning_tokens_market_not_finalized() {
         0,
         100,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Try to redeem winning token without finalizing the market
@@ -718,7 +715,7 @@ fun test_redeem_winning_tokens_market_not_finalized() {
         &mut escrow,
         token,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
@@ -750,7 +747,7 @@ fun test_redeem_wrong_outcome_token() {
         1, // Non-winning outcome
         100,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Finalize with outcome 0 as winner
@@ -761,7 +758,7 @@ fun test_redeem_wrong_outcome_token() {
         &mut escrow,
         token, // Consumed
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
@@ -792,12 +789,12 @@ fun test_deposit_initial_liquidity_with_imbalanced_outcomes() {
     let mut asset_amounts = vector::empty<u64>();
     let mut stable_amounts = vector::empty<u64>();
 
-    vector::push_back(&mut asset_amounts, 100);  // Outcome 0
+    vector::push_back(&mut asset_amounts, 100); // Outcome 0
     vector::push_back(&mut asset_amounts, 1000); // Outcome 1 (Max Asset)
-    vector::push_back(&mut asset_amounts, 500);  // Outcome 2
+    vector::push_back(&mut asset_amounts, 500); // Outcome 2
 
     vector::push_back(&mut stable_amounts, 2000); // Outcome 0 (Max Stable)
-    vector::push_back(&mut stable_amounts, 200);  // Outcome 1
+    vector::push_back(&mut stable_amounts, 200); // Outcome 1
     vector::push_back(&mut stable_amounts, 1000); // Outcome 2
 
     // Create clock for timestamp
@@ -815,7 +812,7 @@ fun test_deposit_initial_liquidity_with_imbalanced_outcomes() {
         initial_asset,
         initial_stable,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Check balances after deposit (should equal max amounts provided)
@@ -847,8 +844,8 @@ fun test_remove_liquidity_insufficient_funds() {
     let (asset_coin_out, stable_coin_out) = coin_escrow::remove_liquidity(
         &mut escrow,
         1000, // more than available asset
-        500,  // less than available stable (but asset check fails first)
-        &mut ctx
+        500, // less than available stable (but asset check fails first)
+        &mut ctx,
     );
 
     // Should not reach here
@@ -876,31 +873,42 @@ fun test_verify_token_set_duplicate_outcomes() {
 
     // Create tokens for testing using the helper (which mints complete sets internally)
     let token0a = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 100, &clock, &mut ctx
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     // Need to mint another *complete set* to get another token 0 reliably
     let token0b = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 100, &clock, &mut ctx
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     let token1 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 1, 100, &clock, &mut ctx
+        &mut escrow,
+        1,
+        100,
+        &clock,
+        &mut ctx,
     );
-
 
     // Create a token set with duplicate outcomes (0, 0, 1) - missing outcome 2
     let mut tokens = vector::empty<ConditionalToken>();
     vector::push_back(&mut tokens, token0a);
     vector::push_back(&mut tokens, token0b); // Duplicate outcome 0
-    vector::push_back(&mut tokens, token1);  // Missing outcome 2
+    vector::push_back(&mut tokens, token1); // Missing outcome 2
 
     // Try to redeem set with duplicate/missing outcomes - should fail in verify_token_set
     let redeemed = coin_escrow::redeem_complete_set_asset(
         &mut escrow,
         tokens, // Consumed
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
@@ -935,12 +943,14 @@ fun test_mint_after_finalization() {
         &mut escrow,
         asset_coin,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
     let sender = tx_context::sender(&mut ctx);
-    while (!vector::is_empty(&tokens)) { transfer::public_transfer(vector::pop_back(&mut tokens), sender)};
+    while (!vector::is_empty(&tokens)) {
+        transfer::public_transfer(vector::pop_back(&mut tokens), sender)
+    };
     vector::destroy_empty(tokens);
     clock::destroy_for_testing(clock);
     market_state::destroy_for_testing(ms);
@@ -969,12 +979,15 @@ fun test_swap_after_trading_ended() {
 
     // Create token (requires trading active)
     let token = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 100, &clock, &mut ctx
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     // End trading
     market_state::finalize_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
-
 
     // Attempt swap - should fail
     let stable_token = coin_escrow::swap_token_asset_to_stable(
@@ -983,7 +996,7 @@ fun test_swap_after_trading_ended() {
         0,
         100,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
@@ -1031,7 +1044,11 @@ fun test_mint_redeem_large_outcome_set() {
 // ===== Edge Cases and Error Conditions =====
 
 #[test]
-#[expected_failure(abort_code = coin_escrow::EIncorrectSequence)] // verify_token_set expects full set
+#[
+    expected_failure(
+        abort_code = coin_escrow::EIncorrectSequence,
+    ),
+] // verify_token_set expects full set
 fun test_redeem_incomplete_token_set() {
     let mut ctx = create_test_context();
     let outcome_count = 3;
@@ -1048,11 +1065,19 @@ fun test_redeem_incomplete_token_set() {
 
     // Create tokens for only 2 of the 3 outcomes using the helper
     let token0 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 100, &clock, &mut ctx
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     let token1 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 1, 100, &clock, &mut ctx
+        &mut escrow,
+        1,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     // Create an incomplete set (missing outcome 2)
@@ -1065,7 +1090,7 @@ fun test_redeem_incomplete_token_set() {
         &mut escrow,
         tokens, // Consumed
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Should not reach here
@@ -1083,7 +1108,8 @@ fun test_init_market_with_max_outcomes() {
 
     // Register supplies (only register a few to avoid test timeout)
     let mut i = 0;
-    while (i < 10) { // Register only first 10 for performance
+    while (i < 10) {
+        // Register only first 10 for performance
         let market_state_ref = coin_escrow::get_market_state(&escrow);
         let asset_supply = token::new_supply(
             copy market_state_ref,
@@ -1157,7 +1183,7 @@ fun test_liquidity_deposit_and_withdrawal_sequence() {
         initial_asset,
         initial_stable,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Check balances after deposit
@@ -1167,7 +1193,10 @@ fun test_liquidity_deposit_and_withdrawal_sequence() {
 
     // Remove partial liquidity
     let (asset_coin1, stable_coin1) = coin_escrow::remove_liquidity(
-        &mut escrow, 300, 600, &mut ctx
+        &mut escrow,
+        300,
+        600,
+        &mut ctx,
     );
 
     // Check balances after first withdrawal
@@ -1177,7 +1206,10 @@ fun test_liquidity_deposit_and_withdrawal_sequence() {
 
     // Remove remaining liquidity
     let (asset_coin2, stable_coin2) = coin_escrow::remove_liquidity(
-        &mut escrow, 700, 1400, &mut ctx
+        &mut escrow,
+        700,
+        1400,
+        &mut ctx,
     );
 
     // Check balances after second withdrawal
@@ -1216,7 +1248,11 @@ fun test_swap_token_value_changes() {
 
     // Create token for testing
     let token_in = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 1000, &clock, &mut ctx
+        &mut escrow,
+        0,
+        1000,
+        &clock,
+        &mut ctx,
     );
 
     // Perform swap with amount_out different from token value
@@ -1226,7 +1262,7 @@ fun test_swap_token_value_changes() {
         0,
         1500, // Different value than input token had
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify output token has the specified amount
@@ -1240,7 +1276,7 @@ fun test_swap_token_value_changes() {
         0,
         800, // Different value again
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     assert!(token::value(&token_final) == 800, 2);
@@ -1274,16 +1310,28 @@ fun test_winning_redemption_with_multiple_tokens() {
 
     // Create tokens for outcome 0 (which will be the winner)
     let token1 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 1000, &clock, &mut ctx
+        &mut escrow,
+        0,
+        1000,
+        &clock,
+        &mut ctx,
     );
 
     let token2 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 2000, &clock, &mut ctx
+        &mut escrow,
+        0,
+        2000,
+        &clock,
+        &mut ctx,
     );
 
     // Also create some tokens for other outcomes
     let losing_token = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 1, 1500, &clock, &mut ctx
+        &mut escrow,
+        1,
+        1500,
+        &clock,
+        &mut ctx,
     );
 
     // Finalize market with outcome 0 as winner
@@ -1291,11 +1339,17 @@ fun test_winning_redemption_with_multiple_tokens() {
 
     // Redeem the winning tokens
     let balance1 = coin_escrow::redeem_winning_tokens_asset(
-        &mut escrow, token1, &clock, &mut ctx // Consumed
+        &mut escrow,
+        token1,
+        &clock,
+        &mut ctx, // Consumed
     );
 
     let balance2 = coin_escrow::redeem_winning_tokens_asset(
-        &mut escrow, token2, &clock, &mut ctx // Consumed
+        &mut escrow,
+        token2,
+        &clock,
+        &mut ctx, // Consumed
     );
 
     // Verify redeemed amounts
@@ -1333,7 +1387,10 @@ fun test_boundary_values() {
     // Test with a very small amount (1)
     let small_coin = coin::mint_for_testing<DummyAsset>(1, &mut ctx);
     let small_tokens = coin_escrow::mint_complete_set_asset(
-        &mut escrow, small_coin, &clock, &mut ctx
+        &mut escrow,
+        small_coin,
+        &clock,
+        &mut ctx,
     );
 
     // Check that small amount was minted correctly (vector has 1 element)
@@ -1341,7 +1398,10 @@ fun test_boundary_values() {
 
     // Redeem the small amount
     let small_balance = coin_escrow::redeem_complete_set_asset(
-        &mut escrow, small_tokens, &clock, &mut ctx // Consumed
+        &mut escrow,
+        small_tokens,
+        &clock,
+        &mut ctx, // Consumed
     );
 
     assert!(balance::value(&small_balance) == 1, 1);
@@ -1350,7 +1410,10 @@ fun test_boundary_values() {
     let large_amount = 9223372036854775807u64; // u64::MAX / 2 = 2^63 - 1
     let large_coin = coin::mint_for_testing<DummyAsset>(large_amount, &mut ctx);
     let large_tokens = coin_escrow::mint_complete_set_asset(
-        &mut escrow, large_coin, &clock, &mut ctx
+        &mut escrow,
+        large_coin,
+        &clock,
+        &mut ctx,
     );
 
     // Check that large amount was minted correctly
@@ -1358,7 +1421,10 @@ fun test_boundary_values() {
 
     // Redeem the large amount
     let large_balance = coin_escrow::redeem_complete_set_asset(
-        &mut escrow, large_tokens, &clock, &mut ctx // Consumed
+        &mut escrow,
+        large_tokens,
+        &clock,
+        &mut ctx, // Consumed
     );
 
     assert!(balance::value(&large_balance) == large_amount, 3);
@@ -1375,7 +1441,8 @@ fun test_boundary_values() {
 
 #[test]
 #[expected_failure(abort_code = market_state::EOutcomeOutOfBounds)]
-fun test_register_supplies_invalid_outcome_fixed() { // Renamed slightly
+fun test_register_supplies_invalid_outcome_fixed() {
+    // Renamed slightly
     let mut ctx = create_test_context();
     let outcome_count = 2;
     let (ms, mut escrow) = setup_market_with_escrow(outcome_count, &mut ctx);
@@ -1393,7 +1460,8 @@ fun test_register_supplies_invalid_outcome_fixed() { // Renamed slightly
 
 #[test]
 #[expected_failure(abort_code = coin_escrow::EWrongOutcome)]
-fun test_redeem_wrong_outcome_token_fixed() { // Already fixed above, this is just confirmation
+fun test_redeem_wrong_outcome_token_fixed() {
+    // Already fixed above, this is just confirmation
     let mut ctx = create_test_context();
     let outcome_count = 2;
     let (ms, mut escrow) = setup_market_with_escrow(outcome_count, &mut ctx);
@@ -1403,13 +1471,20 @@ fun test_redeem_wrong_outcome_token_fixed() { // Already fixed above, this is ju
     market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
 
     let token = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 1, 100, &clock, &mut ctx
+        &mut escrow,
+        1,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     market_state::finalize_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
 
     let redeemed = coin_escrow::redeem_winning_tokens_asset(
-        &mut escrow, token, &clock, &mut ctx
+        &mut escrow,
+        token,
+        &clock,
+        &mut ctx,
     );
 
     balance::destroy_for_testing(redeemed);
@@ -1436,7 +1511,12 @@ fun test_supply_tracking_fixed() {
 
     // Mint tokens
     let asset_coin = coin::mint_for_testing<DummyAsset>(1000, &mut ctx);
-    let mut tokens = coin_escrow::mint_complete_set_asset(&mut escrow, asset_coin, &clock, &mut ctx);
+    let mut tokens = coin_escrow::mint_complete_set_asset(
+        &mut escrow,
+        asset_coin,
+        &clock,
+        &mut ctx,
+    );
 
     // Check supply after minting
     {
@@ -1448,7 +1528,7 @@ fun test_supply_tracking_fixed() {
     {
         let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0); // Get mut borrow again
         let token_to_burn = vector::pop_back(&mut tokens); // Take the single token
-        token_to_burn.burn(asset_supply,  &clock, &mut ctx); // Burn it
+        token_to_burn.burn(asset_supply, &clock, &mut ctx); // Burn it
 
         // Check supply after burning (re-borrow needed if burn didn't extend borrow)
         let asset_supply = coin_escrow::get_asset_supply(&mut escrow, 0); // Re-borrow mutably
@@ -1461,7 +1541,6 @@ fun test_supply_tracking_fixed() {
     market_state::destroy_for_testing(ms);
     test_utils::destroy(escrow);
 }
-
 
 #[test]
 #[expected_failure(abort_code = coin_escrow::EWrongMarket)]
@@ -1479,9 +1558,21 @@ fun test_verify_token_set_wrong_market_fixed() {
     market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow2));
 
     // Create a token from market 1
-    let token1 = coin_escrow::create_asset_token_for_testing(&mut escrow1, 0, 100, &clock, &mut ctx);
+    let token1 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow1,
+        0,
+        100,
+        &clock,
+        &mut ctx,
+    );
     // Create a token from market 2
-    let token2 = coin_escrow::create_asset_token_for_testing(&mut escrow2, 1, 100, &clock, &mut ctx);
+    let token2 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow2,
+        1,
+        100,
+        &clock,
+        &mut ctx,
+    );
 
     // Create a mixed vector
     let mut tokens = vector::empty<ConditionalToken>();
@@ -1511,9 +1602,21 @@ fun test_verify_token_set_mixed_types_fixed() {
     market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
 
     // Create an asset token
-    let asset_token = coin_escrow::create_asset_token_for_testing(&mut escrow, 0, 100, &clock, &mut ctx);
+    let asset_token = coin_escrow::create_asset_token_for_testing(
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
+    );
     // Create a stable token
-    let stable_token = coin_escrow::create_stable_token_for_testing(&mut escrow, 1, 100, &clock, &mut ctx);
+    let stable_token = coin_escrow::create_stable_token_for_testing(
+        &mut escrow,
+        1,
+        100,
+        &clock,
+        &mut ctx,
+    );
 
     // Create a mixed vector
     let mut tokens = vector::empty<ConditionalToken>();
@@ -1529,7 +1632,6 @@ fun test_verify_token_set_mixed_types_fixed() {
     test_utils::destroy(escrow);
 }
 
-
 #[test]
 #[expected_failure(abort_code = coin_escrow::EInsufficientBalance)] // verify_token_set amount check
 fun test_verify_token_set_different_amounts_fixed() {
@@ -1542,8 +1644,20 @@ fun test_verify_token_set_different_amounts_fixed() {
     market_state::init_trading_for_testing(coin_escrow::get_market_state_mut(&mut escrow));
 
     // Create tokens with different underlying amounts using the helper
-    let token_100_outcome0 = coin_escrow::create_asset_token_for_testing(&mut escrow, 0, 100, &clock, &mut ctx);
-    let token_200_outcome1 = coin_escrow::create_asset_token_for_testing(&mut escrow, 1, 200, &clock, &mut ctx);
+    let token_100_outcome0 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
+    );
+    let token_200_outcome1 = coin_escrow::create_asset_token_for_testing(
+        &mut escrow,
+        1,
+        200,
+        &clock,
+        &mut ctx,
+    );
 
     // Create a vector with tokens representing different mint amounts
     let mut mixed_tokens = vector::empty<ConditionalToken>();
@@ -1551,7 +1665,12 @@ fun test_verify_token_set_different_amounts_fixed() {
     vector::push_back(&mut mixed_tokens, token_200_outcome1);
 
     // Try to redeem tokens with different amounts - should fail in verify_token_set
-    let redeemed = coin_escrow::redeem_complete_set_asset(&mut escrow, mixed_tokens, &clock, &mut ctx);
+    let redeemed = coin_escrow::redeem_complete_set_asset(
+        &mut escrow,
+        mixed_tokens,
+        &clock,
+        &mut ctx,
+    );
 
     balance::destroy_for_testing(redeemed); // Should not reach
     clock::destroy_for_testing(clock);
@@ -1585,20 +1704,36 @@ fun test_burn_unused_tokens() {
 
     // Create tokens for all outcomes
     let losing_token1 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 1, 500, &clock, &mut ctx
+        &mut escrow,
+        1,
+        500,
+        &clock,
+        &mut ctx,
     );
-    
+
     let losing_token2 = coin_escrow::create_stable_token_for_testing(
-        &mut escrow, 2, 300, &clock, &mut ctx
+        &mut escrow,
+        2,
+        300,
+        &clock,
+        &mut ctx,
     );
-    
+
     let losing_token3 = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 2, 200, &clock, &mut ctx
+        &mut escrow,
+        2,
+        200,
+        &clock,
+        &mut ctx,
     );
 
     // Also create a winning token to ensure it's not accidentally burned
     let winning_token = coin_escrow::create_asset_token_for_testing(
-        &mut escrow, 0, 100, &clock, &mut ctx
+        &mut escrow,
+        0,
+        100,
+        &clock,
+        &mut ctx,
     );
 
     // Finalize market with outcome 0 as winner
@@ -1615,7 +1750,7 @@ fun test_burn_unused_tokens() {
         &mut escrow,
         tokens_to_burn,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify winning token can still be redeemed
@@ -1623,7 +1758,7 @@ fun test_burn_unused_tokens() {
         &mut escrow,
         winning_token,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     assert!(balance::value(&redeemed) == 100, 0);
@@ -1658,7 +1793,7 @@ fun test_mint_and_burn_single_conditional_token() {
         1000, // amount
         tx_context::sender(&mut ctx), // recipient
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify token properties
@@ -1674,7 +1809,7 @@ fun test_mint_and_burn_single_conditional_token() {
         500, // amount
         tx_context::sender(&mut ctx), // recipient
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify stable token properties
@@ -1690,7 +1825,7 @@ fun test_mint_and_burn_single_conditional_token() {
         200, // amount
         tx_context::sender(&mut ctx), // recipient
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Verify LP token properties
@@ -1708,7 +1843,7 @@ fun test_mint_and_burn_single_conditional_token() {
         &mut escrow,
         asset_token,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Check supply after burning
@@ -1722,7 +1857,7 @@ fun test_mint_and_burn_single_conditional_token() {
         &mut escrow,
         stable_token,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Burn the LP token
@@ -1730,7 +1865,7 @@ fun test_mint_and_burn_single_conditional_token() {
         &mut escrow,
         lp_token,
         &clock,
-        &mut ctx
+        &mut ctx,
     );
 
     // Clean up
@@ -1742,5 +1877,3 @@ fun test_mint_and_burn_single_conditional_token() {
 // Note: test_admin_sweep_escrow is not included because it requires an EscrowAdminCap
 // which is not exposed for testing. The admin sweep functionality would need
 // integration testing or a test-only version of the function.
-
-}

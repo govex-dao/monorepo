@@ -2,14 +2,14 @@
 #[test_only]
 module futarchy_oracle::oracle_decoder_tests;
 
+use account_protocol::schema;
+use futarchy_oracle::oracle_actions;
+use futarchy_oracle::oracle_decoder;
 use std::string;
-use sui::test_scenario::{Self as ts};
 use sui::bcs;
 use sui::object;
+use sui::test_scenario as ts;
 use sui::test_utils;
-use account_protocol::schema;
-use futarchy_oracle::oracle_decoder;
-use futarchy_oracle::oracle_actions;
 
 // Test coin types
 public struct ASSET has drop {}
@@ -31,7 +31,7 @@ fun test_decode_create_oracle_grant_single_recipient() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CreateOracleGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let action = oracle_actions::new_create_oracle_grant<ASSET, STABLE>(
@@ -77,7 +77,7 @@ fun test_decode_create_oracle_grant_multiple_recipients() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CreateOracleGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let recipient2 = @0x0000000000000000000000000000000000000000000000000000000000000002;
@@ -85,7 +85,20 @@ fun test_decode_create_oracle_grant_multiple_recipients() {
     let action = oracle_actions::new_create_oracle_grant<ASSET, STABLE>(
         vector[RECIPIENT, recipient2],
         vector[100_000, 200_000],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b"Multi recipient"),
     );
 
@@ -108,7 +121,7 @@ fun test_decode_create_oracle_grant_all_fields() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CreateOracleGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let action = oracle_actions::new_create_oracle_grant<ASSET, STABLE>(
@@ -157,10 +170,12 @@ fun test_decode_cancel_grant() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CancelGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
     let action = oracle_actions::new_cancel_grant(grant_id);
 
     let action_data = bcs::to_bytes(&action);
@@ -184,10 +199,12 @@ fun test_decode_pause_grant() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::PauseGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
     let action = oracle_actions::new_pause_grant(grant_id, 86400000); // 1 day
 
     let action_data = bcs::to_bytes(&action);
@@ -211,10 +228,12 @@ fun test_decode_unpause_grant() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::UnpauseGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
     let action = oracle_actions::new_unpause_grant(grant_id);
 
     let action_data = bcs::to_bytes(&action);
@@ -235,10 +254,12 @@ fun test_decode_emergency_freeze_grant() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::EmergencyFreezeGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
     let action = oracle_actions::new_emergency_freeze_grant(grant_id);
 
     let action_data = bcs::to_bytes(&action);
@@ -259,10 +280,12 @@ fun test_decode_emergency_unfreeze_grant() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::EmergencyUnfreezeGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let grant_id = object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000001234);
+    let grant_id = object::id_from_address(
+        @0x0000000000000000000000000000000000000000000000000000000000001234,
+    );
     let action = oracle_actions::new_emergency_unfreeze_grant(grant_id);
 
     let action_data = bcs::to_bytes(&action);
@@ -283,13 +306,26 @@ fun test_decode_grant_with_empty_description() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CreateOracleGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
     let action = oracle_actions::new_create_oracle_grant<ASSET, STABLE>(
         vector[RECIPIENT],
         vector[100_000],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         string::utf8(b""), // Empty description
     );
 
@@ -311,15 +347,30 @@ fun test_decode_grant_with_long_description() {
     let mut scenario = ts::begin(ADMIN);
 
     let decoder = create_decoder_for_testing<oracle_decoder::CreateOracleGrantActionDecoder>(
-        ts::ctx(&mut scenario)
+        ts::ctx(&mut scenario),
     );
 
-    let long_desc = string::utf8(b"This is a very long description that contains multiple words and should still be decoded correctly without any issues");
+    let long_desc = string::utf8(
+        b"This is a very long description that contains multiple words and should still be decoded correctly without any issues",
+    );
 
     let action = oracle_actions::new_create_oracle_grant<ASSET, STABLE>(
         vector[RECIPIENT],
         vector[100_000],
-        0, 3, 4, 0, 1_000_000, 2_000_000_000, 0, 1, 0, 10, 0, 0, false, true,
+        0,
+        3,
+        4,
+        0,
+        1_000_000,
+        2_000_000_000,
+        0,
+        1,
+        0,
+        10,
+        0,
+        0,
+        false,
+        true,
         long_desc,
     );
 

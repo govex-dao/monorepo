@@ -18,12 +18,16 @@
 /// Decoder for kiosk actions - tightly coupled with kiosk action definitions
 module account_actions::kiosk_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs};
-use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
 use account_actions::kiosk::{TakeAction, ListAction};
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID, ID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -55,23 +59,29 @@ public fun decode_take_action(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"nft_id".to_string(),
-        nft_id.id_to_address().to_string(),
-        b"ID".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"nft_id".to_string(),
+            nft_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"recipient".to_string(),
-        recipient.to_string(),
-        b"address".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"recipient".to_string(),
+            recipient.to_string(),
+            b"address".to_string(),
+        ),
+    );
 
     fields
 }
@@ -92,23 +102,29 @@ public fun decode_list_action(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"nft_id".to_string(),
-        nft_id.id_to_address().to_string(),
-        b"ID".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"nft_id".to_string(),
+            nft_id.id_to_address().to_string(),
+            b"ID".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"price".to_string(),
-        price.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"price".to_string(),
+            price.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
     fields
 }
@@ -116,27 +132,18 @@ public fun decode_list_action(
 // === Registration Functions ===
 
 /// Register all kiosk decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_take_decoder(registry, ctx);
     register_list_decoder(registry, ctx);
 }
 
-fun register_take_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_take_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = TakeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<TakeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_list_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_list_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = ListActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ListAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

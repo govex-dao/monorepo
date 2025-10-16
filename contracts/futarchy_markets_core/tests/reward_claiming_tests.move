@@ -1,17 +1,17 @@
 #[test_only]
 module futarchy_markets_core::reward_claiming_tests;
 
-use sui::test_scenario::{Self as ts};
+use futarchy_core::subsidy_config;
+use futarchy_markets_core::proposal::{Self, Proposal};
+use futarchy_markets_core::subsidy_escrow;
+use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::market_state;
+use sui::balance;
 use sui::clock::{Self, Clock};
 use sui::coin::{Self, Coin};
 use sui::sui::SUI;
-use sui::balance;
-use futarchy_markets_core::subsidy_escrow;
-use futarchy_core::subsidy_config;
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::market_state;
-use futarchy_markets_core::proposal::{Self, Proposal};
+use sui::test_scenario as ts;
 
 // === Test Constants ===
 const MIN_CRANK_INTERVAL_MS: u64 = 300_000; // 5 minutes

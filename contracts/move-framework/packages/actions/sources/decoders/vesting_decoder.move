@@ -18,17 +18,21 @@
 /// Decoder for vesting actions - tightly coupled with vesting action definitions
 module account_actions::vesting_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID, ID}, dynamic_object_field, bcs};
-use account_protocol::{schema::{Self, ActionDecoderRegistry, HumanReadableField}, bcs_validation};
 use account_actions::vesting::{
     CreateVestingAction,
     CancelVestingAction,
     ToggleVestingPauseAction,
-    ToggleVestingFreezeAction,
+    ToggleVestingFreezeAction
 };
+use account_protocol::bcs_validation;
+use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID, ID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -83,81 +87,103 @@ public fun decode_create_vesting_action<CoinType>(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"amount".to_string(),
-        amount.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"amount".to_string(),
+            amount.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"start_timestamp".to_string(),
-        start_timestamp.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"start_timestamp".to_string(),
+            start_timestamp.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"end_timestamp".to_string(),
-        end_timestamp.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"end_timestamp".to_string(),
+            end_timestamp.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"cliff_time".to_string(),
-        if (cliff_time.is_some()) {
-            cliff_time.destroy_some().to_string()
-        } else {
-            cliff_time.destroy_none();
-            b"None".to_string()
-        },
-        b"Option<u64>".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"cliff_time".to_string(),
+            if (cliff_time.is_some()) {
+                cliff_time.destroy_some().to_string()
+            } else {
+                cliff_time.destroy_none();
+                b"None".to_string()
+            },
+            b"Option<u64>".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"recipient".to_string(),
-        recipient.to_string(),
-        b"address".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"recipient".to_string(),
+            recipient.to_string(),
+            b"address".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"max_beneficiaries".to_string(),
-        max_beneficiaries.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"max_beneficiaries".to_string(),
+            max_beneficiaries.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"max_per_withdrawal".to_string(),
-        max_per_withdrawal.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"max_per_withdrawal".to_string(),
+            max_per_withdrawal.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"min_interval_ms".to_string(),
-        min_interval_ms.to_string(),
-        b"u64".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"min_interval_ms".to_string(),
+            min_interval_ms.to_string(),
+            b"u64".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"is_transferable".to_string(),
-        if (is_transferable) { b"true" } else { b"false" }.to_string(),
-        b"bool".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"is_transferable".to_string(),
+            if (is_transferable) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"is_cancelable".to_string(),
-        if (is_cancelable) { b"true" } else { b"false" }.to_string(),
-        b"bool".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"is_cancelable".to_string(),
+            if (is_cancelable) { b"true" } else { b"false" }.to_string(),
+            b"bool".to_string(),
+        ),
+    );
 
-    fields.push_back(schema::new_field(
-        b"metadata".to_string(),
-        if (metadata.is_some()) {
-            metadata.destroy_some().to_string()
-        } else {
-            metadata.destroy_none();
-            b"None".to_string()
-        },
-        b"Option<String>".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"metadata".to_string(),
+            if (metadata.is_some()) {
+                metadata.destroy_some().to_string()
+            } else {
+                metadata.destroy_none();
+                b"None".to_string()
+            },
+            b"Option<String>".to_string(),
+        ),
+    );
 
     fields
 }
@@ -179,7 +205,7 @@ public fun decode_cancel_vesting_action(
             b"vesting_id".to_string(),
             vesting_id.id_to_address().to_string(),
             b"ID".to_string(),
-        )
+        ),
     ]
 }
 
@@ -246,29 +272,20 @@ public fun decode_toggle_vesting_freeze_action(
 // === Registration Functions ===
 
 /// Register all vesting decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_create_vesting_decoder(registry, ctx);
     register_cancel_vesting_decoder(registry, ctx);
     register_toggle_vesting_pause_decoder(registry, ctx);
     register_toggle_vesting_freeze_decoder(registry, ctx);
 }
 
-fun register_create_vesting_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_create_vesting_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CreateVestingActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CreateVestingAction<CoinPlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_cancel_vesting_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_cancel_vesting_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CancelVestingActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CancelVestingAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

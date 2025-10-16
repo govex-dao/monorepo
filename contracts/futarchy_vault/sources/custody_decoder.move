@@ -1,16 +1,16 @@
 /// Decoder for custody actions in futarchy DAOs
 module futarchy_vault::custody_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use futarchy_vault::custody_actions::{
-    ApproveCustodyAction,
-    AcceptIntoCustodyAction,
-};
+use futarchy_vault::custody_actions::{ApproveCustodyAction, AcceptIntoCustodyAction};
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -110,18 +110,12 @@ public fun decode_accept_into_custody_action<R>(
 // === Registration Functions ===
 
 /// Register all custody decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_approve_custody_decoder(registry, ctx);
     register_accept_into_custody_decoder(registry, ctx);
 }
 
-fun register_approve_custody_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_approve_custody_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = ApproveCustodyActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ApproveCustodyAction<ResourcePlaceholder>>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

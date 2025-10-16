@@ -2,8 +2,8 @@
 module futarchy::math_tests;
 
 use futarchy::math;
-use std::u256;
 use std::u128;
+use std::u256;
 use std::u64;
 
 #[test]
@@ -196,7 +196,10 @@ public fun test_mul_div_mixed() {
     let b_val_intermediate_overflow = 200u64;
     let c_val_intermediate_overflow = 100u128;
     let expected_res_intermediate_overflow = a_val_intermediate_overflow * 2; // This u128 * literal is fine
-    assert!(math::mul_div_mixed(a_val_intermediate_overflow, b_val_intermediate_overflow, c_val_intermediate_overflow) == expected_res_intermediate_overflow, 13);
+    assert!(
+        math::mul_div_mixed(a_val_intermediate_overflow, b_val_intermediate_overflow, c_val_intermediate_overflow) == expected_res_intermediate_overflow,
+        13,
+    );
 
     // 15. Max value interactions: (u128_max/2 * 2) / 1.
     // u128_max is odd (2^128 - 1). u128_max / 2 (integer division) truncates to (2^127 - 1).
@@ -220,4 +223,3 @@ public fun test_mul_div_mixed_result_overflow() {
     let u128_max = u128::max_value!();
     math::mul_div_mixed(u128_max, 2u64, 1u128);
 }
-

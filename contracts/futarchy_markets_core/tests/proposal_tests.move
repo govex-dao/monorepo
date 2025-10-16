@@ -1,20 +1,20 @@
 #[test_only]
 module futarchy_markets_core::proposal_tests;
 
-use sui::test_scenario::{Self as ts, Scenario};
-use sui::clock::{Self, Clock};
-use sui::coin::{Self, Coin, TreasuryCap};
-use sui::balance;
-use sui::test_utils;
-use std::string::{Self, String};
-use std::option;
 use futarchy_markets_core::proposal;
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
-use futarchy_markets_primitives::market_state::{Self};
-use futarchy_markets_primitives::conditional_amm::{LiquidityPool};
+use futarchy_markets_primitives::conditional_amm::LiquidityPool;
+use futarchy_markets_primitives::market_state;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
 use futarchy_types::action_specs::{Self, InitActionSpecs};
+use std::option;
+use std::string::{Self, String};
+use sui::balance;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin, TreasuryCap};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils;
 
 // === Test Constants ===
 
@@ -123,7 +123,10 @@ fun test_initialize_market_basic_two_outcomes() {
         let proposal_id = create_test_proposal_id(ctx);
         let dao_id = object::id_from_address(DAO_ADDR);
 
-        let (actual_proposal_id, market_state_id, state) = proposal::initialize_market<TEST_COIN_A, TEST_COIN_B>(
+        let (actual_proposal_id, market_state_id, state) = proposal::initialize_market<
+            TEST_COIN_A,
+            TEST_COIN_B,
+        >(
             proposal_id,
             dao_id,
             REVIEW_PERIOD_MS,
@@ -186,7 +189,10 @@ fun test_initialize_market_three_outcomes() {
         let proposal_id = create_test_proposal_id(ctx);
         let dao_id = object::id_from_address(DAO_ADDR);
 
-        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<TEST_COIN_A, TEST_COIN_B>(
+        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<
+            TEST_COIN_A,
+            TEST_COIN_B,
+        >(
             proposal_id,
             dao_id,
             REVIEW_PERIOD_MS,
@@ -695,7 +701,7 @@ fun test_proposal_getters() {
             fee_escrow,
             TREASURY_ADDR,
             vector[option::none(), option::none(), option::none()], // intent_specs
-            ctx
+            ctx,
         );
 
         // Test getters
@@ -760,7 +766,7 @@ fun test_outcome_creator_getters() {
             fee_escrow,
             TREASURY_ADDR,
             vector[option::none(), option::none()],
-            ctx
+            ctx,
         );
 
         // Test outcome creator getters
@@ -823,7 +829,7 @@ fun test_get_outcome_creator_out_of_bounds() {
             fee_escrow,
             TREASURY_ADDR,
             vector[option::none(), option::none()],
-            ctx
+            ctx,
         );
 
         // This should fail - accessing index 2 when only 0 and 1 exist
@@ -861,7 +867,10 @@ fun test_proposal_with_single_outcome() {
         let proposal_id = create_test_proposal_id(ctx);
         let dao_id = object::id_from_address(DAO_ADDR);
 
-        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<TEST_COIN_A, TEST_COIN_B>(
+        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<
+            TEST_COIN_A,
+            TEST_COIN_B,
+        >(
             proposal_id,
             dao_id,
             REVIEW_PERIOD_MS,
@@ -922,7 +931,10 @@ fun test_proposal_with_max_outcomes() {
         let proposal_id = create_test_proposal_id(ctx);
         let dao_id = object::id_from_address(DAO_ADDR);
 
-        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<TEST_COIN_A, TEST_COIN_B>(
+        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<
+            TEST_COIN_A,
+            TEST_COIN_B,
+        >(
             proposal_id,
             dao_id,
             REVIEW_PERIOD_MS,
@@ -986,7 +998,10 @@ fun test_proposal_liquidity_distribution() {
         let proposal_id = create_test_proposal_id(ctx);
         let dao_id = object::id_from_address(DAO_ADDR);
 
-        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<TEST_COIN_A, TEST_COIN_B>(
+        let (_actual_proposal_id, _market_state_id, state) = proposal::initialize_market<
+            TEST_COIN_A,
+            TEST_COIN_B,
+        >(
             proposal_id,
             dao_id,
             REVIEW_PERIOD_MS,

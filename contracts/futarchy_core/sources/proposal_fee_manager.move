@@ -1,18 +1,16 @@
 module futarchy_core::proposal_fee_manager;
 
-use sui::{
-    coin::{Self, Coin},
-    balance::{Self, Balance},
-    sui::SUI,
-    bag::{Self, Bag},
-    clock::Clock,
-    event,
-    transfer
-};
 use futarchy_core::futarchy_config::{Self, SlashDistribution};
 use futarchy_core::proposal_quota_registry;
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
+use sui::bag::{Self, Bag};
+use sui::balance::{Self, Balance};
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::sui::SUI;
+use sui::transfer;
 
 // === Errors ===
 const EInvalidFeeAmount: u64 = 0;
@@ -64,9 +62,9 @@ public fun new(ctx: &mut TxContext): ProposalFeeManager {
 
 /// Called by the DAO when a proposal is submitted to the queue
 public fun deposit_proposal_fee(
-    manager: &mut ProposalFeeManager, 
-    proposal_id: ID, 
-    fee_coin: Coin<SUI>
+    manager: &mut ProposalFeeManager,
+    proposal_id: ID,
+    fee_coin: Coin<SUI>,
 ) {
     assert!(fee_coin.value() > 0, EInvalidFeeAmount);
     let fee_balance = fee_coin.into_balance();
@@ -79,13 +77,17 @@ public fun deposit_queue_fee(
     manager: &mut ProposalFeeManager,
     fee_coin: Coin<SUI>,
     clock: &Clock,
-    ctx: &TxContext
+    ctx: &TxContext,
 ) {
     let amount = fee_coin.value();
     if (amount > 0) {
         // Split fee: 80% to queue, 20% to protocol (same as conditional AMM fees)
         // Use mul_div pattern for precision and overflow safety
-        let protocol_share = math::mul_div_to_64(amount, constants::conditional_protocol_fee_share_bps(), constants::total_fee_bps());
+        let protocol_share = math::mul_div_to_64(
+            amount,
+            constants::conditional_protocol_fee_share_bps(),
+            constants::total_fee_bps(),
+        );
         let queue_share = amount - protocol_share;
 
         let mut fee_balance = fee_coin.into_balance();
@@ -113,7 +115,7 @@ public fun add_to_proposal_fee(
     manager: &mut ProposalFeeManager,
     proposal_id: ID,
     additional_fee: Coin<SUI>,
-    clock: &Clock
+    clock: &Clock,
 ) {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
     assert!(additional_fee.value() > 0, EInvalidFeeAmount);
@@ -137,15 +139,15 @@ public fun add_to_proposal_fee(
 /// Called by the DAO when activating a proposal
 /// Returns a fixed reward to the activator and keeps the rest as protocol revenue
 public fun take_activator_reward(
-    manager: &mut ProposalFeeManager, 
-    proposal_id: ID, 
-    ctx: &mut TxContext
+    manager: &mut ProposalFeeManager,
+    proposal_id: ID,
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
-    
+
     let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
     let total_fee = fee_balance.value();
-    
+
     if (total_fee == 0) {
         return coin::from_balance(fee_balance, ctx)
     };
@@ -167,64 +169,65 @@ public fun take_activator_reward(
 /// Distributes the slashed fee according to the SlashDistribution configuration
 /// Returns coins for slasher and DAO treasury
 public fun slash_proposal_fee_with_distribution(
-    manager: &mut ProposalFeeManager, 
+    manager: &mut ProposalFeeManager,
     proposal_id: ID,
     slash_config: &SlashDistribution,
-    ctx: &mut TxContext
-): (Coin<SUI>, Coin<SUI>) { // Returns (slasher_reward, dao_treasury)
+    ctx: &mut TxContext,
+): (Coin<SUI>, Coin<SUI>) {
+    // Returns (slasher_reward, dao_treasury)
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
-    
+
     let mut fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
     let total_amount = fee_balance.value();
-    
+
     if (total_amount == 0) {
         fee_balance.destroy_zero();
         return (coin::zero(ctx), coin::zero(ctx))
     };
-    
+
     // Calculate distributions using getter functions with proper rounding
     // Use multiply-then-divide to minimize rounding errors
     let slasher_bps = futarchy_config::slasher_reward_bps(slash_config) as u64;
     let dao_bps = futarchy_config::dao_treasury_bps(slash_config) as u64;
     let protocol_bps = futarchy_config::protocol_bps(slash_config) as u64;
     let burn_bps = futarchy_config::burn_bps(slash_config) as u64;
-    
+
     // Calculate amounts with better precision
     let slasher_amount = (total_amount * slasher_bps) / 10000;
     let dao_amount = (total_amount * dao_bps) / 10000;
     let protocol_amount = (total_amount * protocol_bps) / 10000;
-    
+
     // For burn amount, ensure we account for all remaining funds
     // This prevents dust from being left over due to rounding
     let distributed_so_far = slasher_amount + dao_amount + protocol_amount;
     let burn_amount = if (total_amount > distributed_so_far) {
-        total_amount - distributed_so_far  // All remaining goes to burn
+        total_amount - distributed_so_far // All remaining goes to burn
     } else {
-        0  // Safety check, shouldn't happen with valid bps
+        0 // Safety check, shouldn't happen with valid bps
     };
-    
+
     // No need for separate remainder handling now
     let final_protocol_amount = protocol_amount;
-    
+
     // Create slasher reward coin
     let slasher_reward = if (slasher_amount > 0) {
         coin::from_balance(fee_balance.split(slasher_amount), ctx)
     } else {
         coin::zero(ctx)
     };
-    
+
     // Create DAO treasury coin
     let dao_coin = if (dao_amount > 0) {
         coin::from_balance(fee_balance.split(dao_amount), ctx)
     } else {
         coin::zero(ctx)
     };
-    
+
     // Add protocol's share to revenue
     if (final_protocol_amount > 0) {
         manager.protocol_revenue.join(fee_balance.split(final_protocol_amount));
     };
-    
+
     // Handle burn amount - SUI cannot be directly burned, so we add to a burn vault
     // This effectively removes them from circulation by locking them permanently
     if (burn_amount > 0) {
@@ -235,14 +238,14 @@ public fun slash_proposal_fee_with_distribution(
         manager.protocol_revenue.join(burn_balance);
         // TODO: Consider adding a separate burn_vault: Balance<SUI> field to track burned amounts
     };
-    
+
     // Destroy any remaining dust
     if (fee_balance.value() > 0) {
         manager.protocol_revenue.join(fee_balance);
     } else {
         fee_balance.destroy_zero();
     };
-    
+
     (slasher_reward, dao_coin)
 }
 
@@ -255,7 +258,7 @@ public fun protocol_revenue(manager: &ProposalFeeManager): u64 {
 public fun withdraw_protocol_revenue(
     manager: &mut ProposalFeeManager,
     amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     coin::from_balance(manager.protocol_revenue.split(amount), ctx)
 }
@@ -268,7 +271,7 @@ public fun withdraw_protocol_revenue(
 public fun refund_proposal_fee(
     manager: &mut ProposalFeeManager,
     proposal_id: ID,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     assert!(manager.pending_proposal_fees.contains(proposal_id), EProposalFeeNotFound);
     let fee_balance: Balance<SUI> = manager.pending_proposal_fees.remove(proposal_id);
@@ -295,7 +298,7 @@ public fun get_proposal_fee(manager: &ProposalFeeManager, proposal_id: ID): u64 
 public fun pay_proposal_creator_reward(
     manager: &mut ProposalFeeManager,
     reward_amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     if (manager.protocol_revenue.value() >= reward_amount) {
         coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
@@ -315,7 +318,7 @@ public fun pay_proposal_creator_reward(
 public fun pay_outcome_creator_reward(
     manager: &mut ProposalFeeManager,
     reward_amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     if (manager.protocol_revenue.value() >= reward_amount) {
         coin::from_balance(manager.protocol_revenue.split(reward_amount), ctx)
@@ -332,10 +335,7 @@ public fun pay_outcome_creator_reward(
 
 /// Collect fee for advancing proposal state
 /// Called when advancing from review to trading or when finalizing
-public fun collect_advancement_fee(
-    manager: &mut ProposalFeeManager,
-    fee_coin: Coin<SUI>
-) {
+public fun collect_advancement_fee(manager: &mut ProposalFeeManager, fee_coin: Coin<SUI>) {
     manager.protocol_revenue.join(fee_coin.into_balance());
 }
 
@@ -355,7 +355,7 @@ public fun calculate_fee_with_quota(
         quota_registry,
         dao_id,
         proposer,
-        clock
+        clock,
     );
 
     if (has_quota) {
@@ -380,10 +380,7 @@ public fun use_quota_for_proposal(
 
 /// Deposit revenue into protocol revenue (e.g., from proposal fee escrow)
 /// Used when proposal fees are not fully refunded and should go to protocol
-public fun deposit_revenue(
-    manager: &mut ProposalFeeManager,
-    revenue_coin: Coin<SUI>
-) {
+public fun deposit_revenue(manager: &mut ProposalFeeManager, revenue_coin: Coin<SUI>) {
     manager.protocol_revenue.join(revenue_coin.into_balance());
 }
 
@@ -395,7 +392,7 @@ public fun refund_outcome_creator_fees(
     manager: &mut ProposalFeeManager,
     outcome_creator: address,
     refund_amount: u64,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Coin<SUI> {
     if (manager.protocol_revenue.value() >= refund_amount) {
         coin::from_balance(manager.protocol_revenue.split(refund_amount), ctx)

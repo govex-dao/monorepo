@@ -1,8 +1,8 @@
 #[test_only]
 module futarchy_markets_operations::market_init_helpers_tests;
 
-use futarchy_markets_operations::market_init_helpers;
 use futarchy_markets_core::market_init_strategies;
+use futarchy_markets_operations::market_init_helpers;
 
 // === Batch 1: Conditional Raise Config Tests ===
 
@@ -10,9 +10,9 @@ use futarchy_markets_core::market_init_strategies;
 fun test_new_raise_config_basic() {
     // Create a basic raise config
     let config = market_init_helpers::new_raise_config(
-        1,       // target_outcome (YES)
+        1, // target_outcome (YES)
         1000000, // mint_amount
-        900000,  // min_stable_out (10% slippage tolerance)
+        900000, // min_stable_out (10% slippage tolerance)
     );
 
     // Verify getters return correct values
@@ -25,7 +25,7 @@ fun test_new_raise_config_basic() {
 fun test_raise_config_outcome_zero() {
     // Test with outcome 0 (REJECT - should still work, though unusual)
     let config = market_init_helpers::new_raise_config(
-        0,      // target_outcome (REJECT)
+        0, // target_outcome (REJECT)
         500000,
         450000,
     );
@@ -38,7 +38,7 @@ fun test_raise_config_outcome_zero() {
 fun test_raise_config_high_outcome() {
     // Test with higher outcome number (multi-outcome proposal)
     let config = market_init_helpers::new_raise_config(
-        5,        // outcome 5
+        5, // outcome 5
         2000000,
         1800000,
     );
@@ -122,8 +122,8 @@ fun test_validate_raise_config_outcome_zero() {
 #[test]
 fun test_new_buyback_config_basic() {
     // Create a basic buyback config for 3 outcomes
-    let outcome_amounts = vector[0, 500000, 300000];  // Skip outcome 0 (REJECT)
-    let min_asset_outs = vector[0, 450000, 270000];   // 10% slippage tolerance
+    let outcome_amounts = vector[0, 500000, 300000]; // Skip outcome 0 (REJECT)
+    let min_asset_outs = vector[0, 450000, 270000]; // 10% slippage tolerance
 
     let config = market_init_helpers::new_buyback_config(
         outcome_amounts,
@@ -150,7 +150,7 @@ fun test_new_buyback_config_basic() {
 #[test]
 fun test_buyback_config_two_outcomes() {
     // Simple YES/NO proposal
-    let outcome_amounts = vector[0, 1000000];  // Only YES gets buyback
+    let outcome_amounts = vector[0, 1000000]; // Only YES gets buyback
     let min_asset_outs = vector[0, 900000];
 
     let config = market_init_helpers::new_buyback_config(
@@ -197,7 +197,7 @@ fun test_buyback_config_zero_amounts() {
 #[test]
 fun test_buyback_config_max_amounts() {
     // Test with very large amounts
-    let max = 9223372036854775807u64;  // u64::MAX / 2
+    let max = 9223372036854775807u64; // u64::MAX / 2
     let outcome_amounts = vector[0, max];
     let min_asset_outs = vector[0, max - 1000];
 
@@ -233,7 +233,7 @@ fun test_validate_buyback_config_two_outcomes() {
 
 #[test]
 fun test_validate_buyback_config_count_mismatch() {
-    let outcome_amounts = vector[0, 500000, 300000];  // 3 outcomes
+    let outcome_amounts = vector[0, 500000, 300000]; // 3 outcomes
     let min_asset_outs = vector[0, 450000, 270000];
     let config = market_init_helpers::new_buyback_config(outcome_amounts, min_asset_outs);
 
@@ -301,7 +301,7 @@ fun test_raise_with_tight_slippage() {
     let config = market_init_helpers::new_raise_config(
         1,
         1000000,
-        990000,  // 99% of expected output (1% slippage)
+        990000, // 99% of expected output (1% slippage)
     );
 
     assert!(market_init_helpers::raise_min_stable_out(&config) == 990000, 0);
@@ -311,7 +311,7 @@ fun test_raise_with_tight_slippage() {
 fun test_buyback_with_wide_slippage() {
     // Test with wide slippage tolerance (20%)
     let outcome_amounts = vector[0, 1000000];
-    let min_asset_outs = vector[0, 800000];  // 80% of expected output (20% slippage)
+    let min_asset_outs = vector[0, 800000]; // 80% of expected output (20% slippage)
 
     let config = market_init_helpers::new_buyback_config(
         outcome_amounts,
@@ -325,7 +325,7 @@ fun test_buyback_with_wide_slippage() {
 #[test]
 fun test_buyback_single_outcome_large_amount() {
     // Test concentrating entire buyback on one outcome
-    let outcome_amounts = vector[0, 10000000, 0, 0];  // All on outcome 1
+    let outcome_amounts = vector[0, 10000000, 0, 0]; // All on outcome 1
     let min_asset_outs = vector[0, 9000000, 0, 0];
 
     let config = market_init_helpers::new_buyback_config(
@@ -341,7 +341,7 @@ fun test_buyback_single_outcome_large_amount() {
 fun test_raise_outcome_boundary() {
     // Test with outcome at exact boundary (last valid outcome)
     let config = market_init_helpers::new_raise_config(
-        9,  // Outcome 9 (10th outcome, 0-indexed)
+        9, // Outcome 9 (10th outcome, 0-indexed)
         1000000,
         900000,
     );
@@ -352,7 +352,7 @@ fun test_raise_outcome_boundary() {
     // Invalid for 10 outcomes (target must be >= 1, so outcome 0 invalid for raise)
     // But outcome 9 should be valid
     let config_out_of_bounds = market_init_helpers::new_raise_config(
-        10,  // Outcome 10 doesn't exist
+        10, // Outcome 10 doesn't exist
         1000000,
         900000,
     );
@@ -364,7 +364,7 @@ fun test_raise_outcome_boundary() {
 #[test]
 fun test_buyback_heavily_skewed() {
     // Test with heavily skewed distribution
-    let outcome_amounts = vector[0, 9000000, 100000];  // 90:1 ratio
+    let outcome_amounts = vector[0, 9000000, 100000]; // 90:1 ratio
     let min_asset_outs = vector[0, 8000000, 90000];
 
     let config = market_init_helpers::new_buyback_config(

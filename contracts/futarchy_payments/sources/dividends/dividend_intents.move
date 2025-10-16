@@ -1,12 +1,12 @@
 /// User-facing API for creating dividend-related intents
 module futarchy_payments::dividend_intents;
 
-// === Imports ===
-use std::bcs;
-use sui::{object::ID, clock::Clock};
 use account_protocol::intents::Intent;
-use futarchy_payments::dividend_actions;
 use futarchy_core::action_types;
+use futarchy_payments::dividend_actions;
+use std::bcs;
+use sui::clock::Clock;
+use sui::object::ID;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -36,10 +36,7 @@ public fun create_dividend_in_intent<Outcome: store, CoinType, IW: drop>(
 }
 
 /// Create a unique key for a dividend intent
-public fun create_dividend_key(
-    operation: std::string::String,
-    clock: &Clock,
-): std::string::String {
+public fun create_dividend_key(operation: std::string::String, clock: &Clock): std::string::String {
     let mut key = b"dividend_".to_string();
     key.append(operation);
     key.append(b"_".to_string());

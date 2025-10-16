@@ -1,21 +1,16 @@
 module futarchy_actions::liquidity_intents;
 
-// === Imports ===
-use std::{string::String, type_name};
-use sui::{
-    clock::Clock,
-    object::ID,
-    bcs,
-};
-use account_protocol::{
-    intents::{Self, Intent},
-};
-
-use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
-use std::option;
+use account_protocol::intents::{Self, Intent};
 use futarchy_actions::liquidity_actions;
 use futarchy_core::action_types;
+use std::option;
+use std::string::String;
+use std::type_name;
+use sui::bcs;
+use sui::clock::Clock;
+use sui::object::ID;
 
+use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
 // === Witness ===
 
 /// Witness type for liquidity intents
@@ -47,7 +42,7 @@ public fun add_liquidity_to_intent<Outcome: store, AssetType, StableType, IW: dr
     intent.add_typed_action(
         action_types::add_liquidity(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -67,7 +62,7 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
         intent,
         pool_id,
         token_id,
-        copy intent_witness
+        copy intent_witness,
     );
 
     // Step 2: queue the actual remove liquidity action
@@ -82,7 +77,7 @@ public fun remove_liquidity_from_intent<Outcome: store, AssetType, StableType, I
     intent.add_typed_action(
         action_types::remove_liquidity(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -102,7 +97,7 @@ public fun withdraw_lp_token_from_intent<Outcome: store, AssetType, StableType, 
     intent.add_typed_action(
         action_types::withdraw_lp_token(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -126,7 +121,7 @@ public fun create_pool_to_intent<Outcome: store, AssetType, StableType, IW: drop
     intent.add_typed_action(
         action_types::create_pool(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -148,7 +143,7 @@ public fun update_pool_params_to_intent<Outcome: store, IW: drop>(
     intent.add_typed_action(
         action_types::update_pool_params(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -168,7 +163,7 @@ public fun set_pool_status_to_intent<Outcome: store, IW: drop>(
     intent.add_typed_action(
         action_types::set_pool_status(),
         action_data,
-        intent_witness
+        intent_witness,
     );
     // Action struct has drop ability, will be automatically dropped
 }
@@ -205,7 +200,7 @@ public fun create_and_configure_pool<Outcome: store, AssetType, StableType, IW: 
         initial_stable_amount,
         fee_bps,
         minimum_liquidity,
-        intent_witness
+        intent_witness,
     );
 
     // Note: Subsequent actions that need the pool_id should be added to the same intent
@@ -213,10 +208,7 @@ public fun create_and_configure_pool<Outcome: store, AssetType, StableType, IW: 
 }
 
 /// Create a unique key for a liquidity intent
-public fun create_liquidity_key(
-    operation: String,
-    clock: &Clock,
-): String {
+public fun create_liquidity_key(operation: String, clock: &Clock): String {
     let mut key = b"liquidity_".to_string();
     key.append(operation);
     key.append(b"_".to_string());

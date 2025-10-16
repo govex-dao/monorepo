@@ -74,10 +74,12 @@
 /// but execution is blocked until the delay expires.
 module futarchy_multisig::weighted_multisig;
 
-use std::string::String;
-use std::option::{Self, Option};
-use sui::{vec_set::{Self, VecSet}, clock::Clock, object::ID};
 use futarchy_multisig::weighted_list::{Self, WeightedList};
+use std::option::{Self, Option};
+use std::string::String;
+use sui::clock::Clock;
+use sui::object::ID;
+use sui::vec_set::{Self, VecSet};
 
 // === Errors ===
 const EThresholdNotMet: u64 = 1;
@@ -99,19 +101,20 @@ const ERecipientDaoMismatch: u64 = 14;
 
 /// Witness for this config module, required by the account protocol.
 public struct Witness has drop {}
+
 /// Get the witness for this module.
 public fun witness(): Witness { Witness {} }
 
 /// Optional time lock configuration for proposals
 /// Set delay_ms to 0 to disable time lock (immediate execution)
-public struct TimeLockConfig has store, copy, drop {
+public struct TimeLockConfig has copy, drop, store {
     /// Default delay in milliseconds (0 = disabled)
     default_delay_ms: u64,
 }
 
 /// Dead man switch configuration
 /// Tracks inactivity timeout for failover mechanism
-public struct DeadManSwitchConfig has store, copy, drop {
+public struct DeadManSwitchConfig has copy, drop, store {
     /// Inactivity threshold in milliseconds before switch activates (e.g., 30 days = 2592000000)
     /// 0 = disabled
     timeout_ms: u64,
@@ -124,16 +127,13 @@ public struct WeightedMultisig has store {
     members: WeightedList,
     /// The sum of weights required for an intent to be approved.
     threshold: u64,
-
     // === SECURITY: Stale Proposal Prevention ===
     /// Configuration nonce - incremented on any membership/threshold change
     /// Used to invalidate stale proposals automatically (same pattern as Gnosis Safe)
     nonce: u64,
-
     // === SECURITY: Time Lock ===
     /// Optional time lock configuration (default: no delay)
     time_lock: TimeLockConfig,
-
     // === SECURITY: Dead Man Switch ===
     /// Dead man switch configuration
     dead_man_switch: DeadManSwitchConfig,
@@ -141,7 +141,6 @@ public struct WeightedMultisig has store {
     dead_man_switch_recipient: Option<ID>,
     /// Last activity timestamp for dead-man switch tracking
     last_activity_ms: u64,
-
     // === INTEGRATION: DAO Relationship ===
     /// The DAO that owns this security council (optional for backwards compatibility)
     dao_id: Option<ID>,
@@ -149,16 +148,14 @@ public struct WeightedMultisig has store {
 
 /// The outcome object for a weighted multisig. Tracks approvals for a specific intent.
 /// Uses nonce-based staleness detection (same pattern as Gnosis Safe and Squads Protocol)
-public struct Approvals has store, drop, copy {
+public struct Approvals has copy, drop, store {
     // === CORE: Approval Tracking ===
     /// The set of addresses that have approved. The weight is looked up from the config.
     approvers: VecSet<address>,
-
     // === SECURITY: Stale Proposal Prevention ===
     /// The config nonce when this proposal was created
     /// If this doesn't match current nonce, the proposal is stale
     created_at_nonce: u64,
-
     // === SECURITY: Time Lock ===
     /// Timestamp when this proposal was created (for time lock calculation)
     created_at_ms: u64,
@@ -170,38 +167,48 @@ public struct Approvals has store, drop, copy {
 
 /// Create a new mutable weighted multisig configuration with current time from clock.
 /// Properly initializes the dead-man switch tracking.
-public fun new(members: vector<address>, weights: vector<u64>, threshold: u64, clock: &Clock): WeightedMultisig {
+public fun new(
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+    clock: &Clock,
+): WeightedMultisig {
     new_with_immutability(members, weights, threshold, false, clock)
 }
 
 /// Create a new immutable weighted multisig configuration that cannot change its membership.
 /// Useful for fixed governance structures or permanent payment distributions.
-public fun new_immutable(members: vector<address>, weights: vector<u64>, threshold: u64, clock: &Clock): WeightedMultisig {
+public fun new_immutable(
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
+    clock: &Clock,
+): WeightedMultisig {
     new_with_immutability(members, weights, threshold, true, clock)
 }
 
 /// Create a new weighted multisig with specified mutability.
 fun new_with_immutability(
-    members: vector<address>, 
-    weights: vector<u64>, 
-    threshold: u64, 
+    members: vector<address>,
+    weights: vector<u64>,
+    threshold: u64,
     is_immutable: bool,
-    clock: &Clock
+    clock: &Clock,
 ): WeightedMultisig {
     assert!(threshold > 0, EInvalidArguments);
-    
+
     // Use the weighted_list module to create and validate the member list with specified mutability
     let member_list = weighted_list::new_with_immutability(members, weights, is_immutable);
     let total_weight = weighted_list::total_weight(&member_list);
-    
+
     // Validate threshold is achievable
     assert!(threshold <= total_weight, EThresholdUnreachable);
-    
+
     // Initialize with current timestamp for proper dead-man switch tracking
     let multisig = WeightedMultisig {
         members: member_list,
         threshold,
-        nonce: 0,  // Start at 0 like Gnosis Safe
+        nonce: 0, // Start at 0 like Gnosis Safe
         last_activity_ms: clock.timestamp_ms(),
         dao_id: option::none(), // Can be set later with set_dao_id
         time_lock: TimeLockConfig { default_delay_ms: 0 }, // Default: no time lock
@@ -223,13 +230,12 @@ public fun new_with_time_lock(
     weights: vector<u64>,
     threshold: u64,
     time_lock_delay_ms: u64,
-    clock: &Clock
+    clock: &Clock,
 ): WeightedMultisig {
     let mut multisig = new_with_immutability(members, weights, threshold, false, clock);
     multisig.time_lock.default_delay_ms = time_lock_delay_ms;
     multisig
 }
-
 
 /// Create a fresh, empty Approvals outcome for a new intent.
 /// Note: If time lock is configured, you must call this from a function that has Clock parameter.
@@ -257,19 +263,15 @@ public fun new_approvals(config: &WeightedMultisig): Approvals {
         approvers: vec_set::empty(),
         created_at_nonce: config.nonce,
         created_at_ms: 0,
-        earliest_execution_ms: 0,  // Safe: time lock is disabled (asserted above)
+        earliest_execution_ms: 0, // Safe: time lock is disabled (asserted above)
     }
 }
 
 /// A member approves an intent, modifying its outcome.
-public fun approve_intent(
-    outcome: &mut Approvals,
-    config: &WeightedMultisig,
-    sender: address,
-) {
+public fun approve_intent(outcome: &mut Approvals, config: &WeightedMultisig, sender: address) {
     // Check if proposal is still valid (not stale)
     assert!(outcome.created_at_nonce == config.nonce, EProposalStale);
-    
+
     assert!(weighted_list::contains(&config.members, &sender), ENotMember);
     assert!(!outcome.approvers.contains(&sender), EAlreadyApproved);
     outcome.approvers.insert(sender);
@@ -287,10 +289,7 @@ public fun validate_outcome(
 
     // Check if time lock has expired (if configured)
     if (config.time_lock.default_delay_ms > 0) {
-        assert!(
-            clock.timestamp_ms() >= outcome.earliest_execution_ms,
-            ETimeLockNotExpired
-        );
+        assert!(clock.timestamp_ms() >= outcome.earliest_execution_ms, ETimeLockNotExpired);
     };
 
     let mut current_weight = 0u64;
@@ -341,18 +340,18 @@ public fun update_membership(
     // Create a new member list and update the existing one
     weighted_list::update(&mut config.members, new_members, new_weights);
     let new_total_weight = weighted_list::total_weight(&config.members);
-    
+
     assert!(new_threshold > 0 && new_threshold <= new_total_weight, EThresholdUnreachable);
-    
+
     // Update the threshold
     config.threshold = new_threshold;
-    
+
     // INCREMENT NONCE - This invalidates all pending proposals!
     config.nonce = config.nonce + 1;
-    
+
     // Set activity to current time on membership update
     config.last_activity_ms = clock.timestamp_ms();
-    
+
     // Verify multisig-specific invariants after modification
     check_multisig_invariants(config);
 }
@@ -614,13 +613,8 @@ public(package) fun set_time_lock_delay(config: &mut WeightedMultisig, delay_ms:
     config.time_lock.default_delay_ms = delay_ms;
 }
 
-
 /// Check if a proposal can be executed (time lock expired and threshold met)
-public fun can_execute(
-    outcome: &Approvals,
-    config: &WeightedMultisig,
-    clock: &Clock,
-): bool {
+public fun can_execute(outcome: &Approvals, config: &WeightedMultisig, clock: &Clock): bool {
     // Check if stale
     if (outcome.created_at_nonce != config.nonce) {
         return false
@@ -648,10 +642,7 @@ public fun can_execute(
 }
 
 /// Get the time remaining until a proposal can be executed (0 if executable now)
-public fun time_until_executable(
-    outcome: &Approvals,
-    clock: &Clock,
-): u64 {
+public fun time_until_executable(outcome: &Approvals, clock: &Clock): u64 {
     let now = clock.timestamp_ms();
     if (now >= outcome.earliest_execution_ms) {
         0
@@ -668,21 +659,21 @@ public fun time_until_executable(
 /// 1. Threshold must be > 0
 /// 2. Threshold must be <= total weight of all members
 /// 3. Last activity timestamp must be > 0 (initialized)
-/// 
+///
 /// Note: The members list validity is guaranteed by the weighted_list module's
 /// own invariant checks, which are automatically called during list operations.
 public fun check_multisig_invariants(config: &WeightedMultisig) {
     // Invariant 1: Threshold must be greater than zero
     assert!(config.threshold > 0, EInvariantThresholdZero);
-    
+
     // Invariant 2: Threshold must be achievable (not greater than total weight)
     // The weighted_list module ensures total_weight is always valid
     let total_weight = weighted_list::total_weight(&config.members);
     assert!(config.threshold <= total_weight, EInvariantThresholdTooHigh);
-    
+
     // Invariant 3: Last activity timestamp must be valid (> 0 means initialized)
     assert!(config.last_activity_ms > 0, EInvariantInvalidTimestamp);
-    
+
     // Note: We don't need to check members list validity here because:
     // - weighted_list::new() checks invariants during creation
     // - weighted_list::update() checks invariants during updates
@@ -690,10 +681,7 @@ public fun check_multisig_invariants(config: &WeightedMultisig) {
 }
 
 /// Additional validation that can be called to ensure approval state is valid
-public fun validate_approvals(
-    outcome: &Approvals,
-    config: &WeightedMultisig
-) {
+public fun validate_approvals(outcome: &Approvals, config: &WeightedMultisig) {
     // All approvers must be members
     let approvers = outcome.approvers.into_keys();
     let mut i = 0;
@@ -710,12 +698,12 @@ public fun validate_approvals(
 public fun is_healthy(config: &WeightedMultisig): bool {
     // Check multisig-specific invariants without aborting
     if (config.threshold == 0) return false;
-    
+
     let total_weight = weighted_list::total_weight(&config.members);
     if (config.threshold > total_weight) return false;
-    
+
     if (config.last_activity_ms == 0) return false;
-    
+
     // The weighted list is guaranteed to be valid by its own invariants,
     // but we can double-check for monitoring purposes
     weighted_list::verify_invariants(&config.members)

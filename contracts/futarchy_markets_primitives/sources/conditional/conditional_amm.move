@@ -1,36 +1,36 @@
 module futarchy_markets_primitives::conditional_amm;
 
-use futarchy_one_shot_utils::math;
-use sui::object::{Self, ID, UID};
 use futarchy_markets_primitives::futarchy_twap_oracle::{Self, Oracle};
 use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
+use futarchy_one_shot_utils::math;
+use std::u64;
+use sui::balance::{Self, Balance};
 use sui::clock::Clock;
 use sui::event;
-use std::u64;
-use sui::tx_context::TxContext;  // Audit fix: missing import
-use sui::balance::{Self, Balance};  // For LP reward system
-use sui::sui::SUI;  // For LP reward system
+use sui::object::{Self, ID, UID};
+use sui::sui::SUI;
+use sui::tx_context::TxContext;
 
 // === Introduction ===
 // This is a Uniswap V2-style XY=K AMM implementation for futarchy prediction markets.
-// 
+//
 // === Live-Flow Model Architecture ===
 // This AMM is part of the "live-flow" liquidity model which allows dynamic liquidity
 // management even while proposals are active. Key features:
-// 
+//
 // 1. **No Liquidity Locking**: Unlike traditional prediction markets, liquidity providers
 //    can add or remove liquidity at any time, even during active proposals.
-// 
+//
 // 2. **Conditional Token Pools**: Each AMM pool trades conditional tokens (not spot tokens)
 //    for a specific outcome. This allows the spot pool to remain liquid.
-// 
+//
 // 3. **Proportional Liquidity**: When LPs add/remove from the spot pool during active
 //    proposals, liquidity is proportionally distributed/collected across all outcome AMMs.
-// 
+//
 // 4. **LP Token Architecture**: Each AMM pool has its own LP token type, but in the live-flow
 //    model, these are managed internally. LPs only receive spot pool LP tokens.
-// 
+//
 // The flow works as follows:
 // - Add liquidity: Spot tokens → Mint conditional tokens → Distribute to AMMs
 // - Remove liquidity: Collect from AMMs → Redeem conditional tokens → Return spot tokens
@@ -66,11 +66,10 @@ public struct LiquidityPool has key, store {
     asset_reserve: u64,
     stable_reserve: u64,
     fee_percent: u64,
-    oracle: Oracle,  // Futarchy oracle (for determining winner, internal use)
-    simple_twap: SimpleTWAP,  // SimpleTWAP oracle (for external consumers)
+    oracle: Oracle, // Futarchy oracle (for determining winner, internal use)
+    simple_twap: SimpleTWAP, // SimpleTWAP oracle (for external consumers)
     protocol_fees: u64, // Track accumulated stable fees
     lp_supply: u64, // Track total LP shares for this pool
-
     // Bucket tracking for LP withdrawal system
     // LIVE: Came from spot.LIVE via quantum split (will recombine to spot.LIVE)
     // TRANSITIONING: Came from spot.TRANSITIONING via quantum split (will recombine to spot.WITHDRAW_ONLY)
@@ -81,12 +80,11 @@ public struct LiquidityPool has key, store {
     stable_transitioning: u64,
     lp_live: u64,
     lp_transitioning: u64,
-
     // LP Reward System (Subsidy Distribution)
     // NOTE: Only for CONDITIONAL pools (not spot pools)
     // Subsidies are distributed to LPs as SUI rewards (not added to reserves)
-    lp_rewards: Balance<SUI>,  // Accumulated SUI rewards from subsidies
-    rewards_per_lp_share_accumulator: u128,  // Fixed-point accumulator (scaled by 1e9)
+    lp_rewards: Balance<SUI>, // Accumulated SUI rewards from subsidies
+    rewards_per_lp_share_accumulator: u128, // Fixed-point accumulator (scaled by 1e9)
 }
 
 // === Events ===
@@ -174,15 +172,13 @@ public fun new_pool(
         simple_twap: simple_twap_oracle,
         protocol_fees: 0,
         lp_supply: 0, // Start at 0 so first provider logic works correctly
-
         // Initialize all liquidity in LIVE bucket (from quantum split)
         asset_live: initial_asset,
         asset_transitioning: 0,
         stable_live: initial_stable,
         stable_transitioning: 0,
-        lp_live: 0,  // Will be set when LP is added
+        lp_live: 0, // Will be set when LP is added
         lp_transitioning: 0,
-
         // LP Reward System (initialized empty)
         lp_rewards: balance::zero<SUI>(),
         rewards_per_lp_share_accumulator: 0,
@@ -219,7 +215,11 @@ public fun swap_asset_to_stable(
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's asset reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, constants::conditional_lp_fee_share_bps(), constants::total_fee_bps());
+    let lp_share = math::mul_div_to_64(
+        total_fee,
+        constants::conditional_lp_fee_share_bps(),
+        constants::total_fee_bps(),
+    );
     let protocol_share = total_fee - lp_share;
 
     // Amount used for the swap calculation (after removing fees)
@@ -319,7 +319,11 @@ public fun swap_stable_to_asset(
     // 5. `amount_in_after_fee` is used to calculate the swap output.
     // 6. The pool's stable reserve increases by `amount_in_after_fee + lp_share`, growing `k`.
     let total_fee = calculate_fee(amount_in, pool.fee_percent);
-    let lp_share = math::mul_div_to_64(total_fee, constants::conditional_lp_fee_share_bps(), constants::total_fee_bps());
+    let lp_share = math::mul_div_to_64(
+        total_fee,
+        constants::conditional_lp_fee_share_bps(),
+        constants::total_fee_bps(),
+    );
     let protocol_share = total_fee - lp_share;
 
     // Amount used for the swap calculation
@@ -410,7 +414,7 @@ public fun add_liquidity_proportional(
 ): u64 {
     assert!(asset_amount > 0, EZeroAmount);
     assert!(stable_amount > 0, EZeroAmount);
-    
+
     // Calculate LP tokens to mint based on current pool state
     let (lp_to_mint, new_lp_supply) = if (pool.lp_supply == 0) {
         // First liquidity provider - bootstrap the pool
@@ -428,7 +432,11 @@ public fun add_liquidity_proportional(
     } else {
         // Subsequent providers - mint proportionally
         let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve);
-        let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve);
+        let lp_from_stable = math::mul_div_to_64(
+            stable_amount,
+            pool.lp_supply,
+            pool.stable_reserve,
+        );
 
         // SECURITY: Enforce balanced liquidity to prevent price manipulation attacks
         // Calculate the imbalance between asset and stable contributions
@@ -451,7 +459,7 @@ public fun add_liquidity_proportional(
         let minted = math::min(lp_from_asset, lp_from_stable);
         (minted, pool.lp_supply + minted)
     };
-    
+
     // Slippage protection: ensure LP tokens minted meet minimum expectation
     assert!(lp_to_mint >= min_lp_out, EExcessiveSlippage);
 
@@ -502,7 +510,7 @@ public fun remove_liquidity_proportional(
     pool: &mut LiquidityPool,
     lp_amount: u64,
     clock: &Clock,
-    ctx: &TxContext
+    ctx: &TxContext,
 ): (u64, u64) {
     // Check for zero liquidity in the pool first to provide a more accurate error message
     assert!(pool.lp_supply > 0, EZeroLiquidity);
@@ -536,8 +544,8 @@ public fun remove_liquidity_proportional(
     // Formula: (asset - asset_to_remove) * (stable - stable_to_remove) < asset * stable
     //          AND result >= MINIMUM_LIQUIDITY
     let k_after = (pool.asset_reserve as u128) * (pool.stable_reserve as u128);
-    assert!(k_after < k_before, EKInvariantViolation);  // Must decrease
-    assert!(k_after >= (MINIMUM_LIQUIDITY as u128), ELowLiquidity);  // But stay above min
+    assert!(k_after < k_before, EKInvariantViolation); // Must decrease
+    assert!(k_after >= (MINIMUM_LIQUIDITY as u128), ELowLiquidity); // But stay above min
 
     // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
@@ -556,10 +564,7 @@ public fun remove_liquidity_proportional(
     (asset_to_remove, stable_to_remove)
 }
 
-public fun empty_all_amm_liquidity(
-    pool: &mut LiquidityPool,
-    _ctx: &mut TxContext,
-): (u64, u64) {
+public fun empty_all_amm_liquidity(pool: &mut LiquidityPool, _ctx: &mut TxContext): (u64, u64) {
     // Capture full reserves before zeroing them out
     let asset_amount_out = pool.asset_reserve;
     let stable_amount_out = pool.stable_reserve;
@@ -657,10 +662,7 @@ public fun quote_swap_stable_to_asset(pool: &LiquidityPool, amount_in: u64): u64
 /// No fees charged to maximize arbitrage efficiency
 ///
 /// AUDIT FIX: Now MUTATES reserves (Q3: swaps should always update state)
-public(package) fun feeless_swap_asset_to_stable(
-    pool: &mut LiquidityPool,
-    amount_in: u64,
-): u64 {
+public(package) fun feeless_swap_asset_to_stable(pool: &mut LiquidityPool, amount_in: u64): u64 {
     assert!(amount_in > 0, EZeroAmount);
     assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EPoolEmpty);
 
@@ -696,10 +698,7 @@ public(package) fun feeless_swap_asset_to_stable(
 /// Feeless swap stable→asset (for internal arbitrage only)
 ///
 /// AUDIT FIX: Now MUTATES reserves (Q3: swaps should always update state)
-public(package) fun feeless_swap_stable_to_asset(
-    pool: &mut LiquidityPool,
-    amount_in: u64,
-): u64 {
+public(package) fun feeless_swap_stable_to_asset(pool: &mut LiquidityPool, amount_in: u64): u64 {
     assert!(amount_in > 0, EZeroAmount);
     assert!(pool.asset_reserve > 0 && pool.stable_reserve > 0, EPoolEmpty);
 
@@ -736,10 +735,7 @@ public(package) fun feeless_swap_stable_to_asset(
 /// Pure function for arbitrage optimization
 ///
 /// STANDARD UNISWAP V2 FEE MODEL: Fee charged on INPUT (consistent with swap execution)
-public fun simulate_swap_asset_to_stable(
-    pool: &LiquidityPool,
-    amount_in: u64,
-): u64 {
+public fun simulate_swap_asset_to_stable(pool: &LiquidityPool, amount_in: u64): u64 {
     if (amount_in == 0) return 0;
     if (pool.asset_reserve == 0 || pool.stable_reserve == 0) return 0;
 
@@ -763,10 +759,7 @@ public fun simulate_swap_asset_to_stable(
 }
 
 /// Simulate stable→asset swap without executing
-public fun simulate_swap_stable_to_asset(
-    pool: &LiquidityPool,
-    amount_in: u64,
-): u64 {
+public fun simulate_swap_stable_to_asset(pool: &LiquidityPool, amount_in: u64): u64 {
     if (amount_in == 0) return 0;
     if (pool.asset_reserve == 0 || pool.stable_reserve == 0) return 0;
 
@@ -799,12 +792,12 @@ fun calculate_price_impact(
     let amount_in_256 = (amount_in as u256);
     let reserve_out_256 = (reserve_out as u256);
     let reserve_in_256 = (reserve_in as u256);
-    
+
     // Calculate ideal output with u256 to prevent overflow
     let ideal_out_256 = (amount_in_256 * reserve_out_256) / reserve_in_256;
     assert!(ideal_out_256 <= (std::u128::max_value!() as u256), EOverflow);
     let ideal_out = (ideal_out_256 as u128);
-    
+
     // The assert below ensures that `ideal_out` is always greater than or equal to `amount_out`.
     // This prevents underflow when calculating `ideal_out - (amount_out as u128)`.
     assert!(ideal_out >= (amount_out as u128), EOverflow); // Ensure no underflow
@@ -841,11 +834,7 @@ fun calculate_fee(amount: u64, fee_percent: u64): u64 {
     math::mul_div_to_64(amount, fee_percent, FEE_SCALE)
 }
 
-public fun calculate_output(
-    amount_in_with_fee: u64,
-    reserve_in: u64,
-    reserve_out: u64,
-): u64 {
+public fun calculate_output(amount_in_with_fee: u64, reserve_in: u64, reserve_out: u64): u64 {
     assert!(reserve_in > 0 && reserve_out > 0, EPoolEmpty);
 
     let denominator = reserve_in + amount_in_with_fee;
@@ -898,10 +887,7 @@ public fun reset_protocol_fees(pool: &mut LiquidityPool) {
 /// - Hard-backed (actual SUI tokens deposited)
 ///
 /// CRITICAL: Only callable by subsidy_escrow module
-public fun accumulate_subsidy_rewards(
-    pool: &mut LiquidityPool,
-    subsidy: Balance<SUI>,
-) {
+public fun accumulate_subsidy_rewards(pool: &mut LiquidityPool, subsidy: Balance<SUI>) {
     let subsidy_amount = subsidy.value();
     assert!(subsidy_amount > 0, EZeroAmount);
     assert!(pool.lp_supply > 0, EZeroLiquidity); // Prevent division by zero
@@ -910,7 +896,8 @@ public fun accumulate_subsidy_rewards(
     let reward_per_share = (subsidy_amount as u128) * 1_000_000_000 / (pool.lp_supply as u128);
 
     // Update accumulator
-    pool.rewards_per_lp_share_accumulator = pool.rewards_per_lp_share_accumulator + reward_per_share;
+    pool.rewards_per_lp_share_accumulator =
+        pool.rewards_per_lp_share_accumulator + reward_per_share;
 
     // Add subsidy to reward pool (actual tokens!)
     pool.lp_rewards.join(subsidy);
@@ -918,11 +905,7 @@ public fun accumulate_subsidy_rewards(
 
 /// Get accumulated rewards for an LP amount (view function)
 /// Returns claimable SUI amount
-public fun get_claimable_rewards(
-    pool: &LiquidityPool,
-    lp_amount: u64,
-    already_claimed: u128,
-): u64 {
+public fun get_claimable_rewards(pool: &LiquidityPool, lp_amount: u64, already_claimed: u128): u64 {
     if (lp_amount == 0) { return 0 };
 
     // Calculate total earned: lp_amount * accumulator / 1e9
@@ -958,9 +941,7 @@ public fun get_lp_rewards(pool: &LiquidityPool): u64 {
 /// ## Security
 /// - Caller must verify LP ownership and DAO check
 /// - All tokens are extracted (hard backing proof)
-public fun extract_all_rewards(
-    pool: &mut LiquidityPool,
-): Balance<SUI> {
+public fun extract_all_rewards(pool: &mut LiquidityPool): Balance<SUI> {
     let reward_amount = pool.lp_rewards.value();
 
     // Extract all rewards, leaving pool with zero balance
@@ -1035,7 +1016,7 @@ public fun create_test_pool(
         stable_reserve,
         fee_percent,
         oracle: oracle_obj,
-        simple_twap: pass_through_PCW_TWAP_oracle::new_default(initial_price, clock),  // Windowed capped TWAP
+        simple_twap: pass_through_PCW_TWAP_oracle::new_default(initial_price, clock), // Windowed capped TWAP
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
         // Initialize all liquidity in LIVE bucket for testing
@@ -1072,7 +1053,7 @@ public fun create_pool_for_testing(
         initial_price,
         0, // twap_start_delay - Use 0 which is always a valid multiple of TWAP_PRICE_CAP_WINDOW
         100, // twap_step_max (ppm)
-        ctx
+        ctx,
     );
 
     let simple_twap = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
@@ -1136,7 +1117,7 @@ public fun add_liquidity_for_testing<AssetType, StableType>(
     pool: &mut LiquidityPool,
     asset_coin: sui::coin::Coin<AssetType>,
     stable_coin: sui::coin::Coin<StableType>,
-    _fee_bps: u16,  // Not used in test helper, kept for API compatibility
+    _fee_bps: u16, // Not used in test helper, kept for API compatibility
     _ctx: &mut TxContext,
 ) {
     // Extract amounts from coins
@@ -1159,9 +1140,19 @@ public fun add_liquidity_for_testing<AssetType, StableType>(
         pool.lp_supply = k;
     } else {
         // Subsequent providers - mint proportionally
-        let lp_from_asset = math::mul_div_to_64(asset_amount, pool.lp_supply, pool.asset_reserve - asset_amount);
-        let lp_from_stable = math::mul_div_to_64(stable_amount, pool.lp_supply, pool.stable_reserve - stable_amount);
-        let lp_to_mint = if (lp_from_asset < lp_from_stable) { lp_from_asset } else { lp_from_stable };
+        let lp_from_asset = math::mul_div_to_64(
+            asset_amount,
+            pool.lp_supply,
+            pool.asset_reserve - asset_amount,
+        );
+        let lp_from_stable = math::mul_div_to_64(
+            stable_amount,
+            pool.lp_supply,
+            pool.stable_reserve - stable_amount,
+        );
+        let lp_to_mint = if (lp_from_asset < lp_from_stable) { lp_from_asset } else {
+            lp_from_stable
+        };
         pool.lp_supply = pool.lp_supply + lp_to_mint;
     };
 }

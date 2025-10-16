@@ -1,10 +1,10 @@
 #[test_only]
 module account_actions::version_tests;
 
-// === Imports ===
-
 use account_actions::version;
 use account_protocol::version_witness;
+
+// === Imports ===
 
 // === Tests ===
 

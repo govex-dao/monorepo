@@ -13,7 +13,7 @@ fun init(witness: COND0_STABLE, ctx: &mut TxContext) {
         b"",
         b"",
         option::none(),
-        ctx
+        ctx,
     );
     transfer::public_transfer(treasury_cap, ctx.sender());
     transfer::public_transfer(metadata, ctx.sender());

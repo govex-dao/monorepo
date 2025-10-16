@@ -4,10 +4,10 @@
 #[test_only]
 module futarchy_vault::custody_decoder_tests;
 
+use futarchy_vault::custody_actions;
 use std::string;
 use sui::bcs;
 use sui::object;
-use futarchy_vault::custody_actions;
 
 // Test resource type
 public struct TestResource has drop {}
@@ -27,7 +27,7 @@ fun test_approve_custody_serialization_basic() {
         obj_id,
         key,
         context,
-        expires_at
+        expires_at,
     );
 
     // Serialize - this is the contract that decoder relies on
@@ -50,7 +50,7 @@ fun test_approve_custody_serialization_empty_strings() {
         obj_id,
         empty,
         empty,
-        0
+        0,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -71,7 +71,7 @@ fun test_approve_custody_serialization_unicode() {
         obj_id,
         unicode_key,
         unicode_context,
-        5000
+        5000,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -93,7 +93,7 @@ fun test_approve_custody_serialization_max_timestamp() {
         obj_id,
         key,
         context,
-        max_time
+        max_time,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -113,7 +113,7 @@ fun test_accept_into_custody_serialization_basic() {
     let action = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         key,
-        context
+        context,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -130,7 +130,7 @@ fun test_accept_into_custody_serialization_empty_strings() {
     let action = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         empty,
-        empty
+        empty,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -142,13 +142,17 @@ fun test_accept_into_custody_serialization_empty_strings() {
 #[test]
 fun test_accept_into_custody_serialization_long_strings() {
     let obj_id = object::id_from_address(@0x3);
-    let long_key = string::utf8(b"very_long_resource_key_with_lots_of_characters_for_testing_edge_cases_1234567890");
-    let long_context = string::utf8(b"very_long_context_string_with_detailed_information_about_custody_acceptance_process");
+    let long_key = string::utf8(
+        b"very_long_resource_key_with_lots_of_characters_for_testing_edge_cases_1234567890",
+    );
+    let long_context = string::utf8(
+        b"very_long_context_string_with_detailed_information_about_custody_acceptance_process",
+    );
 
     let action = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         long_key,
-        long_context
+        long_context,
     );
 
     let serialized = bcs::to_bytes(&action);
@@ -173,7 +177,7 @@ fun test_serialization_deterministic() {
         obj_id,
         key,
         context,
-        expires
+        expires,
     );
 
     let action2 = custody_actions::create_approve_custody<TestResource>(
@@ -181,7 +185,7 @@ fun test_serialization_deterministic() {
         obj_id,
         key,
         context,
-        expires
+        expires,
     );
 
     // Serialize both
@@ -204,13 +208,13 @@ fun test_accept_serialization_deterministic() {
     let action1 = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         key,
-        context
+        context,
     );
 
     let action2 = custody_actions::create_accept_into_custody<TestResource>(
         obj_id,
         key,
-        context
+        context,
     );
 
     let ser1 = bcs::to_bytes(&action1);
@@ -238,13 +242,13 @@ fun test_custody_workflow_serialization() {
         resource_id,
         key,
         approve_context,
-        1000000
+        1000000,
     );
 
     let accept_action = custody_actions::create_accept_into_custody<TestResource>(
         resource_id,
         key,
-        accept_context
+        accept_context,
     );
 
     // Both should serialize successfully

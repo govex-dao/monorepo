@@ -3,31 +3,31 @@ module futarchy_one_shot_utils::strategy;
 // === Constants for Strategy Types ===
 const STRATEGY_AND: u8 = 0;
 const STRATEGY_OR: u8 = 1;
-const STRATEGY_EITHER: u8 = 2;  // XOR
+const STRATEGY_EITHER: u8 = 2; // XOR
 const STRATEGY_THRESHOLD: u8 = 3;
 
 /// Strategy for combining multiple approval conditions
 /// Uses constants instead of magic numbers for clarity
-public struct Strategy has copy, drop, store { 
-    kind: u8, 
-    m: u64,  // For threshold: minimum approvals required
-    n: u64   // For threshold: total number of conditions
+public struct Strategy has copy, drop, store {
+    kind: u8,
+    m: u64, // For threshold: minimum approvals required
+    n: u64, // For threshold: total number of conditions
 }
 
-public fun and(): Strategy { 
-    Strategy { kind: STRATEGY_AND, m: 0, n: 0 } 
+public fun and(): Strategy {
+    Strategy { kind: STRATEGY_AND, m: 0, n: 0 }
 }
 
-public fun or(): Strategy { 
-    Strategy { kind: STRATEGY_OR, m: 0, n: 0 } 
+public fun or(): Strategy {
+    Strategy { kind: STRATEGY_OR, m: 0, n: 0 }
 }
 
-public fun either(): Strategy { 
-    Strategy { kind: STRATEGY_EITHER, m: 0, n: 0 } 
+public fun either(): Strategy {
+    Strategy { kind: STRATEGY_EITHER, m: 0, n: 0 }
 }
 
-public fun threshold(m: u64, n: u64): Strategy { 
-    Strategy { kind: STRATEGY_THRESHOLD, m, n } 
+public fun threshold(m: u64, n: u64): Strategy {
+    Strategy { kind: STRATEGY_THRESHOLD, m, n }
 }
 
 /// Combine boolean gates. Extend by adding more sources as needed.

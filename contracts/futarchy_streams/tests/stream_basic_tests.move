@@ -1,26 +1,20 @@
 #[test_only]
 module futarchy_streams::stream_basic_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin,
-    sui::SUI,
-};
-use std::string;
+use account_actions::vault;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-};
-use account_actions::{
-    vault,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
 use futarchy_streams::stream_actions;
+use std::string;
+use sui::clock::{Self, Clock};
+use sui::coin;
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -59,8 +53,8 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
             b"AccountProtocol".to_string(),
             b"AccountActions".to_string(),
             b"FutarchyCore".to_string(),
-            b"FutarchyStreams".to_string()
-        ]
+            b"FutarchyStreams".to_string(),
+        ],
     );
 
     let mut account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
@@ -106,14 +100,14 @@ fun test_create_vault_stream_directly() {
         0, // min_interval_ms (no minimum)
         1, // max_beneficiaries
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify stream was created
     let (_, total_amount, claimed_amount, start_time, end_time, _, _) = vault::stream_info(
         &account,
         string::utf8(b"treasury"),
-        stream_id
+        stream_id,
     );
 
     assert!(total_amount == 100_000, 0);
@@ -143,7 +137,7 @@ fun test_claim_from_vault_stream() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time by 500 seconds (50% vested)
@@ -154,7 +148,7 @@ fun test_claim_from_vault_stream() {
         &account,
         string::utf8(b"treasury"),
         stream_id,
-        &clock
+        &clock,
     );
 
     // Should be approximately 50,000 (50% vested)
@@ -170,7 +164,7 @@ fun test_claim_from_vault_stream() {
         stream_id,
         claimable,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(coin.value() == claimable, 1);
@@ -179,7 +173,7 @@ fun test_claim_from_vault_stream() {
     let (_, _, claimed_amount, _, _, _, _) = vault::stream_info(
         &account,
         string::utf8(b"treasury"),
-        stream_id
+        stream_id,
     );
 
     assert!(claimed_amount == claimable, 2);
@@ -207,7 +201,7 @@ fun test_cancel_vault_stream() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance time slightly
@@ -221,7 +215,7 @@ fun test_cancel_vault_stream() {
         string::utf8(b"treasury"),
         stream_id,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Should get refund for unclaimed portion
@@ -254,7 +248,7 @@ fun test_stream_with_cliff() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Try to claim before cliff - should get 0
@@ -263,7 +257,7 @@ fun test_stream_with_cliff() {
         &account,
         string::utf8(b"treasury"),
         stream_id,
-        &clock
+        &clock,
     );
 
     assert!(claimable_before == 0, 0);
@@ -274,7 +268,7 @@ fun test_stream_with_cliff() {
         &account,
         string::utf8(b"treasury"),
         stream_id,
-        &clock
+        &clock,
     );
 
     // Should have vested amount now
@@ -302,45 +296,60 @@ fun test_multiple_withdrawals() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     scenario.next_tx(RECIPIENT);
 
     // First withdrawal at 25%
     clock.increment_for_testing(250_000);
-    let claimable1 = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
+    let claimable1 = vault::calculate_claimable(
+        &account,
+        string::utf8(b"treasury"),
+        stream_id,
+        &clock,
+    );
     let coin1 = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
         claimable1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Second withdrawal at 50%
     clock.increment_for_testing(250_000);
-    let claimable2 = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
+    let claimable2 = vault::calculate_claimable(
+        &account,
+        string::utf8(b"treasury"),
+        stream_id,
+        &clock,
+    );
     let coin2 = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
         claimable2,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Third withdrawal at 75%
     clock.increment_for_testing(250_000);
-    let claimable3 = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
+    let claimable3 = vault::calculate_claimable(
+        &account,
+        string::utf8(b"treasury"),
+        stream_id,
+        &clock,
+    );
     let coin3 = vault::withdraw_from_stream<Config, SUI>(
         &mut account,
         string::utf8(b"treasury"),
         stream_id,
         claimable3,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify progressive claiming
@@ -374,7 +383,7 @@ fun test_full_vesting() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance to 100% vested
@@ -383,7 +392,12 @@ fun test_full_vesting() {
     scenario.next_tx(RECIPIENT);
 
     // Claim all
-    let claimable = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
+    let claimable = vault::calculate_claimable(
+        &account,
+        string::utf8(b"treasury"),
+        stream_id,
+        &clock,
+    );
     assert!(claimable == 100_000, 0);
 
     let coin = vault::withdraw_from_stream<Config, SUI>(
@@ -392,7 +406,7 @@ fun test_full_vesting() {
         stream_id,
         claimable,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     assert!(coin.value() == 100_000, 1);
@@ -423,14 +437,19 @@ fun test_stream_end_time() {
         0,
         1,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Advance past end time
     clock.increment_for_testing(2_000_000);
 
     // Claimable should be capped at 100% (100,000)
-    let claimable = vault::calculate_claimable(&account, string::utf8(b"treasury"), stream_id, &clock);
+    let claimable = vault::calculate_claimable(
+        &account,
+        string::utf8(b"treasury"),
+        stream_id,
+        &clock,
+    );
     assert!(claimable == 100_000, 0);
 
     end(scenario, extensions, account, clock);

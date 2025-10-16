@@ -18,20 +18,15 @@
 
 module futarchy_actions::commitment_proposal;
 
-// === Imports ===
-use std::{
-    string::String,
-    option::{Self, Option},
-};
-use sui::{
-    balance::Balance,
-    coin::{Self, Coin},
-    clock::Clock,
-    event,
-    object::{Self, UID, ID},
-    transfer,
-    tx_context::TxContext,
-};
+use std::option::{Self, Option};
+use std::string::String;
+use sui::balance::Balance;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
+use sui::event;
+use sui::object::{Self, UID, ID};
+use sui::transfer;
+use sui::tx_context::TxContext;
 
 // === Errors ===
 const EInvalidTierConfiguration: u64 = 1;
@@ -65,7 +60,7 @@ const CANCELABLE_NEVER: u8 = 2;
 // === Structs ===
 
 /// Price-based lock tier
-public struct PriceTier has store, copy, drop {
+public struct PriceTier has copy, drop, store {
     /// TWAP price threshold to trigger this tier (in price_scale precision)
     twap_threshold: u128,
     /// Amount of tokens to lock at this tier
@@ -77,34 +72,27 @@ public struct PriceTier has store, copy, drop {
 /// Commitment proposal where founder/whale locks tokens based on price performance
 public struct CommitmentProposal<phantom AssetType> has key, store {
     id: UID,
-
     // Proposer info
     proposer: address,
     withdrawal_recipient: address,
-
     // Commitment details
     committed_amount: u64,
     committed_coins: Balance<AssetType>,
-
     // Price-based lock tiers (sorted ascending by threshold)
     tiers: vector<PriceTier>,
-
     // Execution results
-    tier_reached: Option<u64>,  // Index of tier that was executed
+    tier_reached: Option<u64>, // Index of tier that was executed
     locked_amount: u64,
     unlock_time: Option<u64>,
-    withdrawn: bool,  // Prevents double-withdrawal
-
+    withdrawn: bool, // Prevents double-withdrawal
     // Cancelability
     cancelable_before_trading: bool,
     trading_started: bool,
-
     // Standard proposal tracking
-    proposal_state: u8,  // Uses proposal_state constants
+    proposal_state: u8, // Uses proposal_state constants
     created_at: u64,
     trading_start: u64,
     trading_end: u64,
-
     // Associated conditional market proposal ID
     market_proposal_id: Option<ID>,
 }
@@ -215,12 +203,7 @@ fun find_highest_tier(current_value: u128, tier_thresholds: &vector<u128>): (u64
 }
 
 /// Checks if an escrow can be canceled at current time
-fun can_cancel(
-    cancelable_mode: u8,
-    start_time: u64,
-    current_time: u64,
-    has_started: bool,
-): bool {
+fun can_cancel(cancelable_mode: u8, start_time: u64, current_time: u64, has_started: bool): bool {
     if (cancelable_mode == CANCELABLE_ALWAYS) {
         return true
     };
@@ -243,7 +226,7 @@ fun can_cancel(
 /// Checks if time lock has expired
 fun is_unlocked(unlock_time_opt: &Option<u64>, current_time: u64): bool {
     if (unlock_time_opt.is_none()) {
-        return true  // No lock = already unlocked
+        return true // No lock = already unlocked
     };
 
     let unlock_time = *unlock_time_opt.borrow();
@@ -287,10 +270,7 @@ public fun create_commitment_proposal<AssetType>(
     assert!(validate_tiers_sorted(&thresholds), ETiersNotSorted);
 
     // Validate tier amounts don't exceed total committed
-    assert!(
-        validate_tier_amounts(&amounts, committed_amount),
-        ETierAmountsExceedTotal
-    );
+    assert!(validate_tier_amounts(&amounts, committed_amount), ETierAmountsExceedTotal);
 
     let id = object::new(ctx);
     let proposal_id = id.to_inner();
@@ -328,9 +308,7 @@ public fun create_commitment_proposal<AssetType>(
 }
 
 /// Marks trading as started (called when market opens)
-public fun mark_trading_started<AssetType>(
-    proposal: &mut CommitmentProposal<AssetType>,
-) {
+public fun mark_trading_started<AssetType>(proposal: &mut CommitmentProposal<AssetType>) {
     proposal.trading_started = true;
     proposal.proposal_state = STATE_TRADING;
 }
@@ -339,14 +317,14 @@ public fun mark_trading_started<AssetType>(
 /// Returns coins to refund to proposer (unlocked portion)
 public fun execute_commitment<AssetType>(
     proposal: &mut CommitmentProposal<AssetType>,
-    accept_market_twap: u128,  // TWAP from conditional ACCEPT market
+    accept_market_twap: u128, // TWAP from conditional ACCEPT market
     clock: &Clock,
     ctx: &mut TxContext,
 ): Coin<AssetType> {
     assert!(
         proposal.proposal_state == STATE_TRADING ||
         proposal.proposal_state == STATE_PENDING,
-        EInvalidState
+        EInvalidState,
     );
 
     // Find highest tier reached
@@ -360,7 +338,7 @@ public fun execute_commitment<AssetType>(
 
     let (tier_index, tier_found) = find_highest_tier(
         accept_market_twap,
-        &tier_thresholds
+        &tier_thresholds,
     );
 
     let current_time = clock.timestamp_ms();
@@ -416,7 +394,7 @@ public fun cancel_commitment<AssetType>(
         },
         proposal.trading_start,
         clock.timestamp_ms(),
-        proposal.trading_started
+        proposal.trading_started,
     );
 
     assert!(cancelable, ECannotCancelAfterTrading);
@@ -448,10 +426,7 @@ public fun withdraw_locked_commitment<AssetType>(
     assert!(!proposal.withdrawn, EAlreadyWithdrawn);
 
     // Check unlock
-    assert!(
-        is_unlocked(&proposal.unlock_time, clock.timestamp_ms()),
-        EStillLocked
-    );
+    assert!(is_unlocked(&proposal.unlock_time, clock.timestamp_ms()), EStillLocked);
 
     let amount = proposal.committed_coins.value();
     let unlocked_coins = proposal.committed_coins.withdraw_all();
@@ -521,9 +496,7 @@ public fun withdrawal_recipient<AssetType>(proposal: &CommitmentProposal<AssetTy
     proposal.withdrawal_recipient
 }
 
-public fun is_cancelable_before_trading<AssetType>(
-    proposal: &CommitmentProposal<AssetType>
-): bool {
+public fun is_cancelable_before_trading<AssetType>(proposal: &CommitmentProposal<AssetType>): bool {
     proposal.cancelable_before_trading
 }
 

@@ -7,20 +7,20 @@ module futarchy_core::subsidy_config;
 const EInvalidConfig: u64 = 0;
 
 const DEFAULT_CRANK_STEPS: u64 = 100;
-const DEFAULT_SUBSIDY_PER_OUTCOME_PER_CRANK: u64 = 100_000_000;  // 0.1 SUI per outcome per crank
-const DEFAULT_KEEPER_FEE_PER_CRANK: u64 = 100_000_000;           // 0.1 SUI per crank (flat)
-const MIN_CRANK_INTERVAL_MS: u64 = 300_000;                      // 5 minutes minimum between cranks
+const DEFAULT_SUBSIDY_PER_OUTCOME_PER_CRANK: u64 = 100_000_000; // 0.1 SUI per outcome per crank
+const DEFAULT_KEEPER_FEE_PER_CRANK: u64 = 100_000_000; // 0.1 SUI per crank (flat)
+const MIN_CRANK_INTERVAL_MS: u64 = 300_000; // 5 minutes minimum between cranks
 
 // === Struct ===
 
 /// Protocol-level configuration for liquidity subsidy system
 /// Stored in DaoConfig
-public struct ProtocolSubsidyConfig has store, copy, drop {
-    enabled: bool,                              // If true, subsidies are enabled
-    subsidy_per_outcome_per_crank: u64,         // SUI amount per outcome per crank
-    crank_steps: u64,                           // Total cranks allowed (default: 100)
-    keeper_fee_per_crank: u64,                  // Flat SUI fee per crank (default: 0.1 SUI)
-    min_crank_interval_ms: u64,                 // Minimum time between cranks
+public struct ProtocolSubsidyConfig has copy, drop, store {
+    enabled: bool, // If true, subsidies are enabled
+    subsidy_per_outcome_per_crank: u64, // SUI amount per outcome per crank
+    crank_steps: u64, // Total cranks allowed (default: 100)
+    keeper_fee_per_crank: u64, // Flat SUI fee per crank (default: 0.1 SUI)
+    min_crank_interval_ms: u64, // Minimum time between cranks
 }
 
 // === Constructor Functions ===
@@ -59,20 +59,25 @@ public fun new_protocol_config_custom(
 
 /// Calculate total subsidy needed for a proposal
 /// Formula: subsidy_per_outcome_per_crank × outcome_count × crank_steps
-public fun calculate_total_subsidy(
-    config: &ProtocolSubsidyConfig,
-    outcome_count: u64,
-): u64 {
+public fun calculate_total_subsidy(config: &ProtocolSubsidyConfig, outcome_count: u64): u64 {
     config.subsidy_per_outcome_per_crank * outcome_count * config.crank_steps
 }
 
 // === Getters ===
 
 public fun protocol_enabled(config: &ProtocolSubsidyConfig): bool { config.enabled }
-public fun subsidy_per_outcome_per_crank(config: &ProtocolSubsidyConfig): u64 { config.subsidy_per_outcome_per_crank }
+
+public fun subsidy_per_outcome_per_crank(config: &ProtocolSubsidyConfig): u64 {
+    config.subsidy_per_outcome_per_crank
+}
+
 public fun crank_steps(config: &ProtocolSubsidyConfig): u64 { config.crank_steps }
+
 public fun keeper_fee_per_crank(config: &ProtocolSubsidyConfig): u64 { config.keeper_fee_per_crank }
-public fun min_crank_interval_ms(config: &ProtocolSubsidyConfig): u64 { config.min_crank_interval_ms }
+
+public fun min_crank_interval_ms(config: &ProtocolSubsidyConfig): u64 {
+    config.min_crank_interval_ms
+}
 
 // === Setters ===
 

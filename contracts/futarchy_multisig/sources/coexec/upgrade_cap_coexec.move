@@ -2,31 +2,25 @@
 /// Enforced when DAO sets policy "UpgradeCap:Custodian" -> council_id in policy_registry.
 module futarchy_multisig::upgrade_cap_coexec;
 
-use std::{string::{Self, String}, hash, vector};
-use sui::{
-    clock::Clock,
-    object::{Self, ID},
-    package::UpgradeCap,
-    transfer::Receiving,
-    tx_context::TxContext,
-};
-use account_protocol::{
-    account::{Self, Account},
-    executable::{Self, Executable},
-    owned, // withdraw helper
-};
-use futarchy_core::version;
-use futarchy_core::futarchy_config::{Self, FutarchyConfig};
-use futarchy_multisig::{
-    coexec_common,
-    security_council,
-};
-use futarchy_multisig::{
-    security_council_actions,
-    weighted_multisig::{Self, WeightedMultisig, Approvals},
-};
-use futarchy_vault::custody_actions;
 use account_actions::package_upgrade;
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::owned;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_core::version;
+use futarchy_multisig::coexec_common;
+use futarchy_multisig::security_council;
+use futarchy_multisig::security_council_actions;
+use futarchy_multisig::weighted_multisig::{Self, WeightedMultisig, Approvals};
+use futarchy_vault::custody_actions;
+use std::hash;
+use std::string::{Self, String};
+use std::vector;
+use sui::clock::Clock;
+use sui::object::{Self, ID};
+use sui::package::UpgradeCap;
+use sui::transfer::Receiving;
+use sui::tx_context::TxContext;
 
 // Error codes
 const ECapIdMismatch: u64 = 1001;
@@ -78,8 +72,12 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::advance_action(&mut council_exec);
 
     // Validate action type
-    assert!(action_type == b"custody_accept".to_string(), coexec_common::error_action_type_mismatch());
-    assert!(resource_key.bytes().length() >= 11 &&
+    assert!(
+        action_type == b"custody_accept".to_string(),
+        coexec_common::error_action_type_mismatch(),
+    );
+    assert!(
+        resource_key.bytes().length() >= 11 &&
             // Check if resource_key starts with "UpgradeCap:"
             {
                 let key_bytes = resource_key.bytes();
@@ -95,21 +93,25 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
                 };
                 matches && key_bytes.length() >= 11
             },
-            EPackageNameMismatch);
+        EPackageNameMismatch,
+    );
 
     // Extract package_name from metadata
     // metadata should be: ["package_name", <name>]
     assert!(metadata.length() == 2, coexec_common::error_metadata_missing());
-    assert!(*metadata.borrow(0) == b"package_name".to_string(), coexec_common::error_metadata_missing());
+    assert!(
+        *metadata.borrow(0) == b"package_name".to_string(),
+        coexec_common::error_metadata_missing(),
+    );
     let pkg_name_expected = metadata.borrow(1);
-    
+
     // Validate basic requirements
     assert!(dao_id == object::id(dao), coexec_common::error_dao_mismatch());
     assert!(clock.timestamp_ms() < expires_at, coexec_common::error_expired());
-    
+
     // Verify council is the UpgradeCap custodian
     coexec_common::enforce_custodian_policy(dao, council, b"UpgradeCap:Custodian".to_string());
-    
+
     // Extract the accept action to get the cap
     // Get the action data and deserialize it
     let accept_action_data = coexec_common::get_current_action_data(&futarchy_exec);
@@ -124,25 +126,25 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::advance_action(&mut futarchy_exec);
 
     let pkg_name_council_ref = &pkg_name_from_accept;
-    
+
     // Validate package names match
     assert!(*pkg_name_expected == pkg_name_from_accept, EPackageNameMismatch);
-    
+
     // Withdraw the cap from the receipt and lock it into the council
     let cap = owned::do_withdraw_object(
         &mut futarchy_exec,
         dao,
         cap_receipt,
-        version::current()
+        version::current(),
     );
-    
+
     // Strong object identity check
     assert!(object::id(&cap) == cap_id_expected, EWrongCapObject);
-    
+
     // Lock the cap under council management
     let auth = security_council::authenticate(council, ctx);
     package_upgrade::lock_cap(auth, council, cap, pkg_name_from_accept, 0);
-    
+
     // Record the council approval for this intent
     let intent_key = executable::intent(&futarchy_exec).key();
     let generic_approval = futarchy_config::new_custody_approval(
@@ -150,16 +152,16 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
         resource_key,
         cap_id_expected,
         expires_at,
-        ctx
+        ctx,
     );
     futarchy_config::record_council_approval_generic(
         dao,
         intent_key,
         generic_approval,
         clock,
-        ctx
+        ctx,
     );
-    
+
     // Confirm both executables atomically
     coexec_common::confirm_both_executables(dao, council, futarchy_exec, council_exec);
 }

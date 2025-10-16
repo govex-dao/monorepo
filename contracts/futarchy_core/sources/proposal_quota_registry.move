@@ -2,11 +2,9 @@
 /// Tracks recurring proposal quotas (N proposals per period at reduced fee)
 module futarchy_core::proposal_quota_registry;
 
-use sui::{
-    table::{Self, Table},
-    clock::Clock,
-    event,
-};
+use sui::clock::Clock;
+use sui::event;
+use sui::table::{Self, Table};
 
 // === Errors ===
 const EInvalidQuotaParams: u64 = 0;
@@ -15,7 +13,7 @@ const EWrongDao: u64 = 1;
 // === Structs ===
 
 /// Recurring quota: N proposals per period at reduced fee
-public struct QuotaInfo has store, copy, drop {
+public struct QuotaInfo has copy, drop, store {
     /// Number of proposals allowed per period
     quota_amount: u64,
     /// Time period in milliseconds (e.g., 30 days = 2_592_000_000)
@@ -248,7 +246,11 @@ public fun has_quota(registry: &ProposalQuotaRegistry, user: address): bool {
 // === Getter Functions ===
 
 public fun quota_amount(info: &QuotaInfo): u64 { info.quota_amount }
+
 public fun quota_period_ms(info: &QuotaInfo): u64 { info.quota_period_ms }
+
 public fun reduced_fee(info: &QuotaInfo): u64 { info.reduced_fee }
+
 public fun period_start_ms(info: &QuotaInfo): u64 { info.period_start_ms }
+
 public fun used_in_period(info: &QuotaInfo): u64 { info.used_in_period }

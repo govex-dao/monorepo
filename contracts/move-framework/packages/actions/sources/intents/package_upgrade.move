@@ -1,22 +1,16 @@
 module account_actions::package_upgrade_intents;
 
-// === Imports ===
-
+use account_actions::package_upgrade;
+use account_actions::version;
+use account_protocol::account::{Account, Auth};
+use account_protocol::executable::Executable;
+use account_protocol::intent_interface;
+use account_protocol::intents::Params;
 use std::string::String;
-use sui::{
-    package::{Self, UpgradeTicket, UpgradeReceipt},
-    clock::Clock,
-};
-use account_protocol::{
-    account::{Account, Auth},
-    executable::Executable,
-    intents::Params,
-    intent_interface,
-};
-use account_actions::{
-    package_upgrade,
-    version,
-};
+use sui::clock::Clock;
+use sui::package::{Self, UpgradeTicket, UpgradeReceipt};
+
+// === Imports ===
 
 // === Aliases ===
 
@@ -42,20 +36,20 @@ public struct RestrictPolicyIntent() has copy, drop;
 /// Creates an UpgradePackageIntent and adds it to an Account.
 public fun request_upgrade_package<Config, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
     package_name: String,
     digest: vector<u8>,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
 
     assert!(package_upgrade::has_cap(account, package_name), ENoLock);
     assert!(
-        params.execution_times()[0] >= params.creation_time() + package_upgrade::get_time_delay(account, package_name), 
-        ETimeDelay
+        params.execution_times()[0] >= params.creation_time() + package_upgrade::get_time_delay(account, package_name),
+        ETimeDelay,
     );
 
     account.build_intent!(
@@ -82,9 +76,15 @@ public fun execute_upgrade_package<Config, Outcome: store>(
         executable,
         version::current(),
         UpgradePackageIntent(),
-        |executable, iw| package_upgrade::do_upgrade(executable, account, clock, version::current(), iw)
+        |executable, iw| package_upgrade::do_upgrade(
+            executable,
+            account,
+            clock,
+            version::current(),
+            iw,
+        ),
     )
-}    
+}
 
 /// Need to consume the ticket to upgrade the package before completing the intent.
 
@@ -97,19 +97,25 @@ public fun execute_commit_upgrade<Config, Outcome: store>(
         executable,
         version::current(),
         UpgradePackageIntent(),
-        |executable, iw| package_upgrade::do_commit(executable, account, receipt, version::current(), iw)
+        |executable, iw| package_upgrade::do_commit(
+            executable,
+            account,
+            receipt,
+            version::current(),
+            iw,
+        ),
     )
 }
 
 /// Creates a RestrictPolicyIntent and adds it to an Account.
 public fun request_restrict_policy<Config, Outcome: store>(
     auth: Auth,
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     params: Params,
     outcome: Outcome,
     package_name: String,
     policy: u8,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     account.verify(auth);
     params.assert_single_execution();
@@ -120,7 +126,7 @@ public fun request_restrict_policy<Config, Outcome: store>(
         policy == package::additive_policy() ||
         policy == package::dep_only_policy() ||
         policy == 255, // make immutable
-        EInvalidPolicy
+        EInvalidPolicy,
     );
 
     account.build_intent!(
@@ -143,6 +149,6 @@ public fun execute_restrict_policy<Config, Outcome: store>(
         executable,
         version::current(),
         RestrictPolicyIntent(),
-        |executable, iw| package_upgrade::do_restrict(executable, account, version::current(), iw)
+        |executable, iw| package_upgrade::do_restrict(executable, account, version::current(), iw),
     );
 }

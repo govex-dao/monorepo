@@ -2,9 +2,9 @@
 /// Used by dividend actions to safely access treasury vaults
 module futarchy_payments::vault_access;
 
-use std::string::String;
-use account_protocol::account::Account;
 use account_actions::vault::{Self, Vault};
+use account_protocol::account::Account;
+use std::string::String;
 
 // === Errors ===
 
@@ -21,25 +21,18 @@ const ETreasuryVaultRequired: u64 = 3;
 
 /// Get treasury vault with clear error message
 /// Aborts with ETreasuryVaultRequired if account doesn't have "treasury" vault
-public fun get_treasury_vault<Config: store>(
-    account: &Account<Config>,
-): &Vault {
+public fun get_treasury_vault<Config: store>(account: &Account<Config>): &Vault {
     let vault_name = b"treasury".to_string();
 
     // Check if vault exists
-    assert!(
-        vault::has_vault(account, vault_name),
-        ETreasuryVaultRequired
-    );
+    assert!(vault::has_vault(account, vault_name), ETreasuryVaultRequired);
 
     vault::borrow_vault(account, vault_name)
 }
 
 /// Get vault balance for a specific coin type
 /// Returns 0 if vault doesn't have this coin type
-public fun get_treasury_balance<Config: store, CoinType: drop>(
-    account: &Account<Config>,
-): u64 {
+public fun get_treasury_balance<Config: store, CoinType: drop>(account: &Account<Config>): u64 {
     let treasury = get_treasury_vault(account);
     vault::coin_type_value<CoinType>(treasury)
 }
@@ -51,10 +44,7 @@ public fun assert_treasury_balance<Config: store, CoinType: drop>(
     required_amount: u64,
 ) {
     let available = get_treasury_balance<Config, CoinType>(account);
-    assert!(
-        available >= required_amount,
-        EInsufficientTreasuryBalance
-    );
+    assert!(available >= required_amount, EInsufficientTreasuryBalance);
 }
 
 // === Error Message Helpers ===

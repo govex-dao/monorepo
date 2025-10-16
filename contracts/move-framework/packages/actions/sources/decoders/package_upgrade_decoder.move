@@ -17,13 +17,17 @@
 /// Decoder for package upgrade actions
 module account_actions::package_upgrade_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name, vector};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
+use account_actions::package_upgrade::{UpgradeAction, CommitAction, RestrictAction};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
-use account_actions::package_upgrade::{UpgradeAction, CommitAction, RestrictAction};
+use std::string::String;
+use std::type_name;
+use std::vector;
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Decoder Objects ===
 
@@ -58,18 +62,22 @@ public fun decode_upgrade_action(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
     // Convert digest bytes to hex string for readability
-    fields.push_back(schema::new_field(
-        b"digest".to_string(),
-        bytes_to_hex_string(digest),
-        b"vector<u8>".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"digest".to_string(),
+            bytes_to_hex_string(digest),
+            b"vector<u8>".to_string(),
+        ),
+    );
 
     fields
 }
@@ -90,7 +98,7 @@ public fun decode_commit_action(
             b"name".to_string(),
             name,
             b"String".to_string(),
-        )
+        ),
     ]
 }
 
@@ -108,11 +116,13 @@ public fun decode_restrict_action(
 
     let mut fields = vector::empty();
 
-    fields.push_back(schema::new_field(
-        b"name".to_string(),
-        name,
-        b"String".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"name".to_string(),
+            name,
+            b"String".to_string(),
+        ),
+    );
 
     // Convert policy u8 to human-readable string
     let policy_str = if (policy == 0) {
@@ -127,11 +137,13 @@ public fun decode_restrict_action(
         b"unknown"
     };
 
-    fields.push_back(schema::new_field(
-        b"policy".to_string(),
-        policy_str.to_string(),
-        b"u8".to_string(),
-    ));
+    fields.push_back(
+        schema::new_field(
+            b"policy".to_string(),
+            policy_str.to_string(),
+            b"u8".to_string(),
+        ),
+    );
 
     fields
 }
@@ -145,7 +157,8 @@ fun bytes_to_hex_string(bytes: vector<u8>): String {
 
     let mut i = 0;
     let len = bytes.length();
-    while (i < len && i < 8) { // Show first 8 bytes for brevity
+    while (i < len && i < 8) {
+        // Show first 8 bytes for brevity
         let byte = bytes[i];
         result.push_back(hex_chars[(byte >> 4) as u64]);
         result.push_back(hex_chars[(byte & 0x0f) as u64]);
@@ -162,37 +175,25 @@ fun bytes_to_hex_string(bytes: vector<u8>): String {
 // === Registration Functions ===
 
 /// Register all package upgrade decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     register_upgrade_decoder(registry, ctx);
     register_commit_decoder(registry, ctx);
     register_restrict_decoder(registry, ctx);
 }
 
-fun register_upgrade_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_upgrade_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = UpgradeActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<UpgradeAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_commit_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_commit_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = CommitActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<CommitAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_restrict_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_restrict_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = RestrictActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<RestrictAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

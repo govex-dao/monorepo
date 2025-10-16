@@ -3,14 +3,12 @@
 /// Allows proposal creators to acquire coin pairs without requiring two transactions
 module futarchy_one_shot_utils::coin_registry;
 
-use sui::{
-    coin::{TreasuryCap, CoinMetadata, Coin},
-    sui::SUI,
-    event,
-    clock::Clock,
-    dynamic_field,
-};
 use futarchy_one_shot_utils::coin_validation;
+use sui::clock::Clock;
+use sui::coin::{TreasuryCap, CoinMetadata, Coin};
+use sui::dynamic_field;
+use sui::event;
+use sui::sui::SUI;
 
 // === Errors ===
 const ENoCoinSetsAvailable: u64 = 0;
@@ -28,8 +26,8 @@ const MAX_COIN_SETS: u64 = 100_000;
 public struct CoinSet<phantom T> has store {
     treasury_cap: TreasuryCap<T>,
     metadata: CoinMetadata<T>,
-    owner: address,  // Who deposited this set and gets paid
-    fee: u64,        // Fee in SUI to acquire this set
+    owner: address, // Who deposited this set and gets paid
+    fee: u64, // Fee in SUI to acquire this set
 }
 
 /// Global registry storing available coin sets
@@ -151,7 +149,10 @@ public fun take_coin_set<T>(
     ctx: &mut TxContext,
 ): Coin<SUI> {
     // Check exists
-    assert!(dynamic_field::exists_with_type<ID, CoinSet<T>>(&registry.id, cap_id), ENoCoinSetsAvailable);
+    assert!(
+        dynamic_field::exists_with_type<ID, CoinSet<T>>(&registry.id, cap_id),
+        ENoCoinSetsAvailable,
+    );
 
     // Remove from registry
     let coin_set: CoinSet<T> = dynamic_field::remove(&mut registry.id, cap_id);
@@ -214,9 +215,6 @@ public fun get_owner<T>(registry: &CoinRegistry, cap_id: ID): address {
 // === Helper Functions for Proposals ===
 
 /// Validate coin set in registry without removing it
-public fun validate_coin_set_in_registry(
-    registry: &CoinRegistry,
-    cap_id: ID,
-): bool {
+public fun validate_coin_set_in_registry(registry: &CoinRegistry, cap_id: ID): bool {
     dynamic_field::exists_(&registry.id, cap_id)
 }

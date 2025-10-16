@@ -44,16 +44,14 @@
 /// ```
 module futarchy_factory::launchpad_rewards;
 
+use futarchy_one_shot_utils::constants;
+use futarchy_oracle::oracle_actions::{Self, RecipientMint};
 use std::string::{Self, String};
 use std::vector;
-use sui::coin::TreasuryCap;
 use sui::clock::Clock;
+use sui::coin::TreasuryCap;
 use sui::object::ID;
 use sui::tx_context::TxContext;
-use futarchy_oracle::{
-    oracle_actions::{Self, RecipientMint},
-};
-use futarchy_one_shot_utils::constants;
 
 // === Errors ===
 const EInvalidFounderAllocation: u64 = 1;
@@ -81,7 +79,7 @@ const MAX_FOUNDER_ALLOCATION_BPS: u64 = 2000; // Max 20% for founders
 /// - founder_allocations_bps = [400, 350, 250] (40%, 35%, 25% of the 10%)
 public fun setup_founder_rewards<AssetType>(
     dao_id: ID,
-    launchpad_price: u128,  // Raise price (stable/token) scaled 1e12
+    launchpad_price: u128, // Raise price (stable/token) scaled 1e12
     treasury_cap: &TreasuryCap<AssetType>,
     founders: vector<address>,
     founder_allocations_bps: vector<u64>,
@@ -130,7 +128,7 @@ public fun setup_founder_rewards<AssetType>(
         unlock_delay_ms,
         linear_vesting,
         clock,
-        ctx
+        ctx,
     )
 }
 
@@ -185,10 +183,12 @@ fun setup_tiered_founder_rewards<AssetType>(
             // (amount_per_tier * founder_bps) / 10000
             let founder_tier_amount = (amount_per_tier * founder_bps) / 10000;
 
-            recipients.push_back(oracle_actions::new_recipient_mint(
-                founder_addr,
-                founder_tier_amount,
-            ));
+            recipients.push_back(
+                oracle_actions::new_recipient_mint(
+                    founder_addr,
+                    founder_tier_amount,
+                ),
+            );
 
             founder_idx = founder_idx + 1;
         };
@@ -214,13 +214,13 @@ fun setup_tiered_founder_rewards<AssetType>(
 
     // Create the shared PriceBasedMintGrant object with proper DAO ID
     oracle_actions::create_milestone_rewards<AssetType, sui::sui::SUI>(
-        launchpad_price,  // Launchpad raise price for strike calculations
+        launchpad_price, // Launchpad raise price for strike calculations
         price_multipliers,
         recipients_per_tier,
         descriptions,
         earliest_time,
         latest_time,
-        dao_id,  // Actual DAO ID passed from caller
+        dao_id, // Actual DAO ID passed from caller
         clock,
         ctx,
     );

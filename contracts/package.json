@@ -1,0 +1,12 @@
+{
+    "name": "futarchy-contracts",
+    "private": true,
+    "devDependencies": {
+        "@mysten/prettier-plugin-move": "^0.3.1",
+        "prettier": "^3.6.2"
+    },
+    "scripts": {
+        "prettier": "prettier --write '**/*.move'",
+        "prettier:check": "prettier --check '**/*.move'"
+    }
+}

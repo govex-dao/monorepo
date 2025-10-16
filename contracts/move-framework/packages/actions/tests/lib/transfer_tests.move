@@ -1,26 +1,20 @@
 #[test_only]
 module account_actions::transfer_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-};
+use account_actions::transfer as acc_transfer;
+use account_actions::version;
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents,
-    deps,
-    intent_interface,
-};
-use account_actions::{
-    transfer as acc_transfer,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intent_interface;
+use account_protocol::intents;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Macros ===
 
@@ -55,7 +49,10 @@ fun start(): (Scenario, Extensions, Account<Config>, Clock) {
     extensions.add(&cap, b"AccountProtocol".to_string(), @account_protocol, 1);
     extensions.add(&cap, b"AccountActions".to_string(), @account_actions, 1);
 
-    let deps = deps::new_latest_extensions(&extensions, vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()]);
+    let deps = deps::new_latest_extensions(
+        &extensions,
+        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
+    );
     let account = account::new(Config {}, deps, version::current(), Witness(), scenario.ctx());
     let clock = clock::create_for_testing(scenario.ctx());
     // create world
@@ -85,7 +82,7 @@ fun test_transfer_basic() {
         vector[0], // execute immediately
         1000, // expiration
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Build the intent using the intent interface
@@ -98,7 +95,7 @@ fun test_transfer_basic() {
         scenario.ctx(),
         |intent, iw| {
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
-        }
+        },
     );
 
     // Create executable
@@ -107,7 +104,7 @@ fun test_transfer_basic() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Verify outcome (Outcome has copy + drop, so we can just compare directly)
@@ -145,7 +142,7 @@ fun test_transfer_to_sender() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -157,7 +154,7 @@ fun test_transfer_to_sender() {
         scenario.ctx(),
         |intent, iw| {
             acc_transfer::new_transfer_to_sender(intent, iw);
-        }
+        },
     );
 
     // Create executable (OWNER is the sender)
@@ -166,7 +163,7 @@ fun test_transfer_to_sender() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Create a coin to transfer
@@ -177,7 +174,7 @@ fun test_transfer_to_sender() {
         &mut executable,
         coin,
         TransferIntent(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.confirm_execution(executable);
@@ -204,7 +201,7 @@ fun test_multiple_transfers() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -218,7 +215,7 @@ fun test_multiple_transfers() {
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
             acc_transfer::new_transfer(intent, @0xDEAD, iw);
             acc_transfer::new_transfer(intent, @0xFACE, iw);
-        }
+        },
     );
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(
@@ -226,7 +223,7 @@ fun test_multiple_transfers() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Create coins and execute each transfer
@@ -272,7 +269,7 @@ fun test_transfer_different_types() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -285,7 +282,7 @@ fun test_transfer_different_types() {
         |intent, iw| {
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
-        }
+        },
     );
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(
@@ -293,7 +290,7 @@ fun test_transfer_different_types() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Transfer different coin types
@@ -301,7 +298,11 @@ fun test_transfer_different_types() {
     let test_coin = coin::mint_for_testing<TEST_COIN>(500, scenario.ctx());
 
     acc_transfer::do_transfer<Outcome, Coin<SUI>, _>(&mut executable, sui_coin, TransferIntent());
-    acc_transfer::do_transfer<Outcome, Coin<TEST_COIN>, _>(&mut executable, test_coin, TransferIntent());
+    acc_transfer::do_transfer<Outcome, Coin<TEST_COIN>, _>(
+        &mut executable,
+        test_coin,
+        TransferIntent(),
+    );
 
     account.confirm_execution(executable);
 
@@ -347,7 +348,7 @@ fun test_delete_transfer_action() {
         vector[0], // Execute immediately (will be consumed)
         clock.timestamp_ms() + 1000, // Expiration in future
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -359,7 +360,7 @@ fun test_delete_transfer_action() {
         scenario.ctx(),
         |intent, iw| {
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
-        }
+        },
     );
 
     // Execute the intent to consume the execution time
@@ -368,7 +369,7 @@ fun test_delete_transfer_action() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let coin = coin::mint_for_testing<SUI>(50, scenario.ctx());
@@ -396,7 +397,7 @@ fun test_transfer_mixed_with_sender() {
         vector[0],
         1000,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     account.build_intent!(
@@ -410,7 +411,7 @@ fun test_transfer_mixed_with_sender() {
             acc_transfer::new_transfer(intent, RECIPIENT, iw);
             acc_transfer::new_transfer_to_sender(intent, iw);
             acc_transfer::new_transfer(intent, @0xBEEF, iw);
-        }
+        },
     );
 
     let (_, mut executable) = account.create_executable<_, Outcome, _>(
@@ -418,7 +419,7 @@ fun test_transfer_mixed_with_sender() {
         &clock,
         version::current(),
         Witness(),
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let coin1 = coin::mint_for_testing<SUI>(111, scenario.ctx());
@@ -426,7 +427,12 @@ fun test_transfer_mixed_with_sender() {
     let coin3 = coin::mint_for_testing<SUI>(333, scenario.ctx());
 
     acc_transfer::do_transfer<Outcome, Coin<SUI>, _>(&mut executable, coin1, TransferIntent());
-    acc_transfer::do_transfer_to_sender<Outcome, Coin<SUI>, _>(&mut executable, coin2, TransferIntent(), scenario.ctx());
+    acc_transfer::do_transfer_to_sender<Outcome, Coin<SUI>, _>(
+        &mut executable,
+        coin2,
+        TransferIntent(),
+        scenario.ctx(),
+    );
     acc_transfer::do_transfer<Outcome, Coin<SUI>, _>(&mut executable, coin3, TransferIntent());
 
     account.confirm_execution(executable);

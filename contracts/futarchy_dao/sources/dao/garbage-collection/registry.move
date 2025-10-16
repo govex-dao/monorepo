@@ -1,46 +1,34 @@
 module futarchy_dao::gc_registry;
 
-use account_protocol::{
-    intents::Expired,
-    account::Account,
-    owned,
-};
-use account_actions::{
-    package_upgrade,
-    vault,
-    currency,
-    kiosk,
-    access_control,
-    vesting,
-    transfer,
-};
+use account_actions::access_control;
+use account_actions::currency;
+use account_actions::kiosk;
+use account_actions::package_upgrade;
+use account_actions::transfer;
+use account_actions::vault;
+use account_actions::vesting;
+use account_protocol::account::Account;
+use account_protocol::intents::Expired;
+use account_protocol::owned;
+use futarchy_actions::commitment_actions;
+use futarchy_actions::config_actions;
+use futarchy_actions::founder_lock_actions;
+use futarchy_actions::governance_actions;
+use futarchy_actions::liquidity_actions;
+use futarchy_actions::memo_actions;
+use futarchy_actions::platform_fee_actions;
+use futarchy_actions::quota_actions;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
-use futarchy_actions::{
-    config_actions,
-    memo_actions,
-    liquidity_actions,
-    governance_actions,
-    quota_actions,
-    founder_lock_actions,
-};
-use futarchy_lifecycle::dissolution_actions;
-use futarchy_legal_actions::{
-    dao_file_actions,
-};
-use futarchy_streams::stream_actions;
-use futarchy_oracle::oracle_actions;
-use futarchy_multisig::{
-    security_council_actions,
-    policy_actions,
-};
-use futarchy_payments::dividend_actions;
-use futarchy_vault::deposit_escrow_actions;
-use futarchy_actions::{
-    commitment_actions,
-    platform_fee_actions,
-};
-use futarchy_legal_actions::walrus_renewal;
 use futarchy_governance_actions::protocol_admin_actions;
+use futarchy_legal_actions::dao_file_actions;
+use futarchy_legal_actions::walrus_renewal;
+use futarchy_lifecycle::dissolution_actions;
+use futarchy_multisig::policy_actions;
+use futarchy_multisig::security_council_actions;
+use futarchy_oracle::oracle_actions;
+use futarchy_payments::dividend_actions;
+use futarchy_streams::stream_actions;
+use futarchy_vault::deposit_escrow_actions;
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.

@@ -8,9 +8,9 @@
 /// - init_from_prices(): O(N)
 module futarchy_markets_primitives::price_leaderboard;
 
+use futarchy_one_shot_utils::binary_heap;
 use std::vector;
 use sui::table::{Self, Table};
-use futarchy_one_shot_utils::binary_heap;
 
 // === Errors ===
 const EInsufficientOutcomes: u64 = 0;
@@ -26,14 +26,13 @@ public struct PriceLeaderboard has store {
     /// Max heap: heap[0] = highest price (winner)
     /// Each node stores (outcome_index, price)
     heap: vector<PriceNode>,
-
     /// Fast lookup: outcome_index → position in heap
     /// Enables O(1) find + O(log N) update
     outcome_to_heap_index: Table<u64, u64>,
 }
 
 /// Heap node storing outcome and its price
-public struct PriceNode has store, copy, drop {
+public struct PriceNode has copy, drop, store {
     outcome_index: u64,
     price: u128,
 }
@@ -51,10 +50,7 @@ public fun new(ctx: &mut TxContext): PriceLeaderboard {
 /// Initialize leaderboard from outcome prices
 /// prices[i] = price for outcome i
 /// Complexity: O(N) using Floyd's heapify algorithm
-public fun init_from_prices(
-    prices: vector<u128>,
-    ctx: &mut TxContext,
-): PriceLeaderboard {
+public fun init_from_prices(prices: vector<u128>, ctx: &mut TxContext): PriceLeaderboard {
     let n = prices.length();
     let mut heap = vector::empty<PriceNode>();
     let mut index_map = table::new<u64, u64>(ctx);
@@ -122,16 +118,9 @@ public fun get_winner_and_spread(leaderboard: &PriceLeaderboard): (u64, u128, u1
 
 /// Update price for an outcome in O(log N)
 /// Maintains heap invariant by bubbling up or down as needed
-public fun update_price(
-    leaderboard: &mut PriceLeaderboard,
-    outcome_index: u64,
-    new_price: u128,
-) {
+public fun update_price(leaderboard: &mut PriceLeaderboard, outcome_index: u64, new_price: u128) {
     // O(1) lookup of heap position
-    assert!(
-        table::contains(&leaderboard.outcome_to_heap_index, outcome_index),
-        EOutcomeNotFound
-    );
+    assert!(table::contains(&leaderboard.outcome_to_heap_index, outcome_index), EOutcomeNotFound);
     let heap_idx = *table::borrow(&leaderboard.outcome_to_heap_index, outcome_index);
 
     // Get old price
@@ -152,10 +141,7 @@ public fun update_price(
 }
 
 /// Get price for a specific outcome in O(1)
-public fun get_price(
-    leaderboard: &PriceLeaderboard,
-    outcome_index: u64,
-): u128 {
+public fun get_price(leaderboard: &PriceLeaderboard, outcome_index: u64): u128 {
     let heap_idx = *table::borrow(&leaderboard.outcome_to_heap_index, outcome_index);
     leaderboard.heap[heap_idx].price
 }
@@ -189,10 +175,7 @@ public fun get_all_prices(leaderboard: &PriceLeaderboard): vector<u128> {
 
 /// Build max heap from unordered vector - O(N)
 /// Uses Floyd's algorithm: start from last non-leaf and sift down
-fun build_max_heap(
-    heap: &mut vector<PriceNode>,
-    index_map: &mut Table<u64, u64>,
-) {
+fun build_max_heap(heap: &mut vector<PriceNode>, index_map: &mut Table<u64, u64>) {
     let n = heap.length();
     if (n <= 1) return;
 
@@ -207,11 +190,7 @@ fun build_max_heap(
 
 /// Bubble node up towards root (when price increases)
 /// Max heap property: parent.price >= child.price
-fun sift_up(
-    heap: &mut vector<PriceNode>,
-    index_map: &mut Table<u64, u64>,
-    mut idx: u64,
-) {
+fun sift_up(heap: &mut vector<PriceNode>, index_map: &mut Table<u64, u64>, mut idx: u64) {
     while (idx > 0) {
         let parent_idx = binary_heap::parent(idx);
 
@@ -228,11 +207,7 @@ fun sift_up(
 
 /// Bubble node down away from root (when price decreases)
 /// Swaps with largest child until heap property restored
-fun sift_down(
-    heap: &mut vector<PriceNode>,
-    index_map: &mut Table<u64, u64>,
-    mut idx: u64,
-) {
+fun sift_down(heap: &mut vector<PriceNode>, index_map: &mut Table<u64, u64>, mut idx: u64) {
     let n = heap.length();
 
     loop {
@@ -260,12 +235,7 @@ fun sift_down(
 
 /// Swap two nodes and update index map
 /// Maintains invariant: index_map[outcome_idx] = heap_position
-fun swap_nodes(
-    heap: &mut vector<PriceNode>,
-    index_map: &mut Table<u64, u64>,
-    i: u64,
-    j: u64,
-) {
+fun swap_nodes(heap: &mut vector<PriceNode>, index_map: &mut Table<u64, u64>, i: u64, j: u64) {
     // Get nodes
     let node_i = heap[i];
     let node_j = heap[j];

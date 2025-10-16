@@ -14,23 +14,23 @@ const EValueExceedsU64: u64 = 2;
 // === Public Functions ===
 // Multiplies two u64 values and divides by a third, checking for overflow
 // Returns (a * b) / c
-// 
+//
 // SAFETY: The product of two u64 values can be at most (2^64 - 1)^2 = 2^128 - 2^65 + 1,
 // which is less than 2^128 and therefore always fits in a u128. This property ensures
 // that the intermediate multiplication a_128 * b_128 will never overflow.
 // The division by c then reduces the result, and we verify it fits in u64 before casting.
 public fun mul_div_to_64(a: u64, b: u64, c: u64): u64 {
     assert!(c != 0, EDivideByZero);
-    
+
     // Cast to u128 to prevent overflow during multiplication
     // SAFE: Product of two u64s always fits in u128 (see safety note above)
     let a_128 = (a as u128);
     let b_128 = (b as u128);
     let c_128 = (c as u128);
-    
+
     // Perform the multiplication and division
     let result = (a_128 * b_128) / c_128;
-    
+
     // Ensure the result fits back into u64
     assert!(result <= (u64::max_value!() as u128), EOverflow);
     (result as u64)
@@ -60,21 +60,21 @@ public fun mul_div_mixed(a: u128, b: u64, c: u128): u128 {
 
 // Safely multiplies two u64 values and divides by a third, rounding up
 // Returns ceil((a * b) / c)
-// 
+//
 // SAFETY: Same as mul_div_to_64 - the product of two u64s always fits in u128.
 // The rounding up operation adds at most (c-1) to the numerator before division.
 public fun mul_div_up(a: u64, b: u64, c: u64): u64 {
     assert!(c != 0, EDivideByZero);
-    
+
     // Cast to u128 to prevent overflow during multiplication
     // SAFE: Product of two u64s always fits in u128
     let a_128 = (a as u128);
     let b_128 = (b as u128);
     let c_128 = (c as u128);
-    
+
     // Calculate the numerator (product of a and b)
     let numerator = a_128 * b_128;
-    
+
     // Perform division with rounding up
     let result = if (numerator == 0) {
         0
@@ -84,7 +84,7 @@ public fun mul_div_up(a: u64, b: u64, c: u64): u64 {
         assert!(sum >= numerator, EOverflow); // Verify no overflow in addition
         sum / c_128
     };
-    
+
     // Ensure the result fits back into u64
     assert!(result <= (u64::max_value!() as u128), EOverflow);
     (result as u64)
@@ -128,15 +128,15 @@ public fun max(a: u64, b: u64): u64 {
 public fun sqrt(n: u64): u64 {
     if (n == 0) return 0;
     if (n < 4) return 1;
-    
+
     // Initial guess: half of n
     let mut x = n / 2;
     let mut last_x = x;
-    
+
     loop {
         // Newton's iteration: x = (x + n/x) / 2
         x = (x + n / x) / 2;
-        
+
         // Check convergence
         if (x >= last_x) {
             return last_x;
@@ -149,15 +149,15 @@ public fun sqrt(n: u64): u64 {
 public fun sqrt_u128(n: u128): u128 {
     if (n == 0) return 0;
     if (n < 4) return 1;
-    
+
     // Initial guess
     let mut x = n / 2;
     let mut last_x = x;
-    
+
     loop {
         // Newton's iteration
         x = (x + n / x) / 2;
-        
+
         // Check convergence
         if (x >= last_x) {
             return last_x;

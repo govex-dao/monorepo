@@ -4,13 +4,13 @@
 #[test_only]
 module futarchy_markets_operations::price_based_unlocks_oracle_tests;
 
-use sui::test_scenario::{Self as ts};
-use sui::clock::{Self, Clock};
-use futarchy_markets_operations::price_based_unlocks_oracle;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_primitives::conditional_amm::{LiquidityPool};
+use futarchy_markets_operations::price_based_unlocks_oracle;
+use futarchy_markets_primitives::conditional_amm::LiquidityPool;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
+use sui::clock::{Self, Clock};
+use sui::test_scenario as ts;
 
 // === Test Helpers ===
 
@@ -31,7 +31,7 @@ fun create_spot_pool(
         asset_reserve,
         stable_reserve,
         fee_bps,
-        ctx
+        ctx,
     )
 }
 
@@ -51,7 +51,11 @@ fun test_get_spot_price_basic() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price (should read from spot pool since no aggregator)
-        let price = price_based_unlocks_oracle::get_spot_price(&spot_pool, &conditional_pools, &clock);
+        let price = price_based_unlocks_oracle::get_spot_price(
+            &spot_pool,
+            &conditional_pools,
+            &clock,
+        );
 
         // Price should be positive (reserves are 1:1, so price ~1)
         assert!(price > 0, 0);
@@ -80,7 +84,11 @@ fun test_get_spot_price_different_reserves() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price
-        let price = price_based_unlocks_oracle::get_spot_price(&spot_pool, &conditional_pools, &clock);
+        let price = price_based_unlocks_oracle::get_spot_price(
+            &spot_pool,
+            &conditional_pools,
+            &clock,
+        );
 
         // Price should reflect 2:1 ratio (price = stable/asset = 10B/5B = 2e12)
         assert!(price > 0, 0);
@@ -115,7 +123,7 @@ fun test_is_twap_available_no_aggregator() {
             &spot_pool,
             &conditional_pools,
             1800u64,
-            &clock
+            &clock,
         );
 
         assert!(available == false, 0);
@@ -146,7 +154,11 @@ fun test_get_spot_price_zero_reserves() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price (should return 0 for empty pool)
-        let price = price_based_unlocks_oracle::get_spot_price(&spot_pool, &conditional_pools, &clock);
+        let price = price_based_unlocks_oracle::get_spot_price(
+            &spot_pool,
+            &conditional_pools,
+            &clock,
+        );
 
         assert!(price == 0, 0);
 

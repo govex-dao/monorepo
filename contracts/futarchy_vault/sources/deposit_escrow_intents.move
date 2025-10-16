@@ -1,17 +1,20 @@
 /// Deposit Escrow Intents - Intent builders for accepting deposits
 module futarchy_vault::deposit_escrow_intents;
 
+use account_protocol::account::Account;
+use account_protocol::intent_interface;
+use account_protocol::intents::{Self, Intent, Params};
+use account_protocol::schema::{Self, ActionDecoderRegistry};
+use futarchy_core::action_types;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
+use futarchy_vault::deposit_escrow_actions;
 use std::string::String;
 use std::type_name;
-use sui::{clock::Clock, object::ID, bcs, tx_context::TxContext};
-use account_protocol::{
-    account::Account,
-    intents::{Self, Intent, Params},
-    intent_interface,
-    schema::{Self, ActionDecoderRegistry},
-};
-use futarchy_core::{futarchy_config::FutarchyConfig, action_types, version};
-use futarchy_vault::deposit_escrow_actions;
+use sui::bcs;
+use sui::clock::Clock;
+use sui::object::ID;
+use sui::tx_context::TxContext;
 
 // === Aliases ===
 use fun intent_interface::build_intent as Account.build_intent;
@@ -30,12 +33,12 @@ public fun create_accept_deposit_intent<Outcome: store + drop + copy>(
     outcome: Outcome,
     escrow_id: ID,
     vault_name: String,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ) {
     // Enforce decoder exists
     schema::assert_decoder_exists(
         registry,
-        type_name::with_defining_ids<deposit_escrow_actions::AcceptDepositAction>()
+        type_name::with_defining_ids<deposit_escrow_actions::AcceptDepositAction>(),
     );
 
     account.build_intent!(
@@ -54,9 +57,9 @@ public fun create_accept_deposit_intent<Outcome: store + drop + copy>(
             intent.add_typed_action(
                 action_types::accept_deposit(),
                 action_bytes,
-                iw
+                iw,
             );
-        }
+        },
     );
 }
 
@@ -75,10 +78,7 @@ public fun add_accept_deposit<Outcome: store, IW: drop>(
 }
 
 /// Create unique key for deposit escrow intent
-public fun create_deposit_escrow_key(
-    operation: String,
-    clock: &Clock,
-): String {
+public fun create_deposit_escrow_key(operation: String, clock: &Clock): String {
     let mut key = b"deposit_escrow_".to_string();
     key.append(operation);
     key.append(b"_".to_string());

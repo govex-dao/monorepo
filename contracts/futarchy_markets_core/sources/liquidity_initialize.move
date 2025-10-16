@@ -1,7 +1,7 @@
 module futarchy_markets_core::liquidity_initialize;
 
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::TokenEscrow;
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use sui::balance::Balance;
 use sui::clock::Clock;
 

@@ -1,12 +1,15 @@
 /// Decoder for security council actions in futarchy DAOs
 module futarchy_multisig::security_council_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name::{Self, TypeName}};
-use sui::{object::{Self, UID}, dynamic_object_field, bcs};
 use account_protocol::bcs_validation;
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use futarchy_multisig::optimistic_intents::{
+    CreateOptimisticIntentAction,
+    ChallengeOptimisticIntentsAction,
+    ExecuteOptimisticIntentAction,
+    CancelOptimisticIntentAction,
+    CleanupExpiredIntentsAction
+};
 use futarchy_multisig::security_council_actions::{
     CreateSecurityCouncilAction,
     UpdateCouncilMembershipAction,
@@ -16,21 +19,22 @@ use futarchy_multisig::security_council_actions::{
     CouncilCreateOptimisticIntentAction,
     CouncilExecuteOptimisticIntentAction,
     CouncilCancelOptimisticIntentAction,
-    CouncilApproveIntentSpecAction,
+    CouncilApproveIntentSpecAction
 };
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::bcs;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
+
 // SetPolicyFromPlaceholderAction needs to be defined
-public struct SetPolicyFromPlaceholderAction has store, copy, drop {
+public struct SetPolicyFromPlaceholderAction has copy, drop, store {
     council_id: ID,
     policy: vector<u8>,
     mode: u8,
 }
-use futarchy_multisig::optimistic_intents::{
-    CreateOptimisticIntentAction,
-    ChallengeOptimisticIntentsAction,
-    ExecuteOptimisticIntentAction,
-    CancelOptimisticIntentAction,
-    CleanupExpiredIntentsAction,
-};
 
 // === Decoder Objects ===
 
@@ -473,11 +477,13 @@ public fun decode_set_policy_from_placeholder_action(
 
     if (type_name.is_some()) {
         let name = type_name.destroy_some();
-        fields.push_back(schema::new_field(
-            b"type_name".to_string(),
-            type_name::into_string(name).into_bytes().to_string(),
-            b"TypeName".to_string(),
-        ));
+        fields.push_back(
+            schema::new_field(
+                b"type_name".to_string(),
+                type_name::into_string(name).into_bytes().to_string(),
+                b"TypeName".to_string(),
+            ),
+        );
     } else {
         type_name.destroy_none();
     };
@@ -613,10 +619,7 @@ public fun decode_cleanup_expired_intents_action(
 // === Registration Functions ===
 
 /// Register all security council decoders
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     // Security council actions
     register_update_council_membership_decoder(registry, ctx);
     register_unlock_and_return_upgrade_cap_decoder(registry, ctx);
@@ -657,19 +660,13 @@ fun register_unlock_and_return_upgrade_cap_decoder(
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_approve_generic_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_approve_generic_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = ApproveGenericActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<ApproveGenericAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);
 }
 
-fun register_sweep_intents_decoder(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+fun register_sweep_intents_decoder(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     let decoder = SweepIntentsActionDecoder { id: object::new(ctx) };
     let type_key = type_name::with_defining_ids<SweepIntentsAction>();
     dynamic_object_field::add(schema::registry_id_mut(registry), type_key, decoder);

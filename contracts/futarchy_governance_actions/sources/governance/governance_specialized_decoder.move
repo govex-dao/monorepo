@@ -2,11 +2,13 @@
 /// Note: This module handles governance intents that don't have explicit action structs
 module futarchy_governance_actions::governance_specialized_decoder;
 
-// === Imports ===
-
-use std::{string::String, type_name};
-use sui::{object::{Self, UID}, dynamic_object_field};
 use account_protocol::schema::{Self, ActionDecoderRegistry, HumanReadableField};
+use std::string::String;
+use std::type_name;
+use sui::dynamic_object_field;
+use sui::object::{Self, UID};
+
+// === Imports ===
 
 // === Placeholder Decoder ===
 
@@ -22,20 +24,11 @@ public struct GovernanceIntentPlaceholderDecoder has key, store {
 /// Register governance specialized decoders
 /// Note: Most governance operations in this module create intents directly
 /// rather than using action structs, so minimal decoders are needed
-public fun register_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     // Register placeholder for completeness
     // Actual governance intents use vault_intents, currency_intents, etc.
     // which already have their own decoders in the account_actions package
     register_placeholder_decoder(registry, ctx);
 }
 
-fun register_placeholder_decoder(
-    _registry: &mut ActionDecoderRegistry,
-    _ctx: &mut TxContext,
-) {
-    // No action structs to decode in governance_intents
-    // The module creates intents using other modules' actions
-}
+fun register_placeholder_decoder(_registry: &mut ActionDecoderRegistry, _ctx: &mut TxContext) {}

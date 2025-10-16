@@ -1,21 +1,18 @@
 #[test_only]
 module futarchy_legal_actions::dao_file_registry_tests;
 
-// === Imports ===
-
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-};
-use account_protocol::{
-    account::{Self, Account},
-    deps,
-    version_witness,
-};
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use futarchy_core::{futarchy_config::FutarchyConfig, version};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::version_witness;
+use futarchy_core::futarchy_config::FutarchyConfig;
+use futarchy_core::version;
 use futarchy_legal_actions::dao_file_registry::{Self, DaoFileRegistry};
+use sui::clock::{Self, Clock};
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -49,14 +46,19 @@ fun start(): (Scenario, Extensions, Clock, Account<FutarchyConfig>) {
             b"AccountProtocol".to_string(),
             b"AccountActions".to_string(),
             b"FutarchyCore".to_string(),
-        ]
+        ],
     );
     let account = account::new(config, deps, version::current(), Witness(), scenario.ctx());
 
     (scenario, extensions, clock, account)
 }
 
-fun end(scenario: Scenario, extensions: Extensions, clock: Clock, account: Account<FutarchyConfig>) {
+fun end(
+    scenario: Scenario,
+    extensions: Extensions,
+    clock: Clock,
+    account: Account<FutarchyConfig>,
+) {
     destroy(extensions);
     destroy(clock);
     destroy(account);
@@ -101,7 +103,7 @@ fun test_create_root_document() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, clock, account);
@@ -125,7 +127,7 @@ fun test_add_text_chunk() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Add text chunk
@@ -134,7 +136,7 @@ fun test_add_text_chunk() {
         doc_id,
         b"Article I: Purpose".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, clock, account);
@@ -156,7 +158,7 @@ fun test_add_multiple_chunks() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Add multiple chunks
@@ -165,7 +167,7 @@ fun test_add_multiple_chunks() {
         doc_id,
         b"Article I".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     dao_file_registry::add_chunk_with_text(
@@ -173,7 +175,7 @@ fun test_add_multiple_chunks() {
         doc_id,
         b"Article II".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     dao_file_registry::add_chunk_with_text(
@@ -181,7 +183,7 @@ fun test_add_multiple_chunks() {
         doc_id,
         b"Article III".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     end(scenario, extensions, clock, account);
@@ -205,7 +207,7 @@ fun test_update_text_chunk() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let chunk_id = dao_file_registry::add_chunk_with_text(
@@ -213,7 +215,7 @@ fun test_update_text_chunk() {
         doc_id,
         b"Original text".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Update chunk
@@ -246,7 +248,7 @@ fun test_remove_text_chunk() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let chunk_id = dao_file_registry::add_chunk_with_text(
@@ -254,7 +256,7 @@ fun test_remove_text_chunk() {
         doc_id,
         b"To be removed".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Remove chunk
@@ -286,7 +288,7 @@ fun test_set_chunk_immutable() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     let chunk_id = dao_file_registry::add_chunk_with_text(
@@ -294,7 +296,7 @@ fun test_set_chunk_immutable() {
         doc_id,
         b"Immutable text".to_string(),
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Set chunk immutable
@@ -324,7 +326,7 @@ fun test_set_document_immutable() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Set document immutable
@@ -368,7 +370,7 @@ fun test_set_insert_allowed() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Disable insert
@@ -393,7 +395,7 @@ fun test_set_remove_allowed() {
         b"bylaws".to_string(),
         current_time,
         &clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     // Disable remove

@@ -12,14 +12,8 @@ fun test_new_from_vectors_basic() {
     let mut scenario = test_scenario::begin(@0x1);
     let ctx = test_scenario::ctx(&mut scenario);
 
-    let keys = vector[
-        string::utf8(b"name"),
-        string::utf8(b"description"),
-    ];
-    let values = vector[
-        string::utf8(b"Test DAO"),
-        string::utf8(b"A test DAO"),
-    ];
+    let keys = vector[string::utf8(b"name"), string::utf8(b"description")];
+    let values = vector[string::utf8(b"Test DAO"), string::utf8(b"A test DAO")];
 
     let table = metadata::new_from_vectors(keys, values, ctx);
 
@@ -105,7 +99,9 @@ fun test_new_from_vectors_key_too_long() {
     let ctx = test_scenario::ctx(&mut scenario);
 
     // Create a key longer than MAX_KEY_LENGTH (64)
-    let long_key = string::utf8(b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"); // 75 chars
+    let long_key = string::utf8(
+        b"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    ); // 75 chars
     let keys = vector[long_key];
     let values = vector[string::utf8(b"value")];
 
@@ -157,15 +153,27 @@ fun test_new_from_vectors_max_entries() {
 
     // Create 10 entries to test multiple entries
     let keys = vector[
-        string::utf8(b"key1"), string::utf8(b"key2"), string::utf8(b"key3"),
-        string::utf8(b"key4"), string::utf8(b"key5"), string::utf8(b"key6"),
-        string::utf8(b"key7"), string::utf8(b"key8"), string::utf8(b"key9"),
+        string::utf8(b"key1"),
+        string::utf8(b"key2"),
+        string::utf8(b"key3"),
+        string::utf8(b"key4"),
+        string::utf8(b"key5"),
+        string::utf8(b"key6"),
+        string::utf8(b"key7"),
+        string::utf8(b"key8"),
+        string::utf8(b"key9"),
         string::utf8(b"key10"),
     ];
     let values = vector[
-        string::utf8(b"val1"), string::utf8(b"val2"), string::utf8(b"val3"),
-        string::utf8(b"val4"), string::utf8(b"val5"), string::utf8(b"val6"),
-        string::utf8(b"val7"), string::utf8(b"val8"), string::utf8(b"val9"),
+        string::utf8(b"val1"),
+        string::utf8(b"val2"),
+        string::utf8(b"val3"),
+        string::utf8(b"val4"),
+        string::utf8(b"val5"),
+        string::utf8(b"val6"),
+        string::utf8(b"val7"),
+        string::utf8(b"val8"),
+        string::utf8(b"val9"),
         string::utf8(b"val10"),
     ];
 
@@ -390,10 +398,7 @@ fun test_duplicate_key_rejected() {
         string::utf8(b"name"),
         string::utf8(b"name"), // Duplicate!
     ];
-    let values = vector[
-        string::utf8(b"value1"),
-        string::utf8(b"value2"),
-    ];
+    let values = vector[string::utf8(b"value1"), string::utf8(b"value2")];
 
     let table = metadata::new_from_vectors(keys, values, ctx);
     sui::table::drop(table);

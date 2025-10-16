@@ -1,11 +1,11 @@
 module futarchy_markets_operations::spot_conditional_quoter;
 
-use std::option::{Self, Option};
-use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_core::proposal::{Self, Proposal};
-use futarchy_markets_primitives::coin_escrow::TokenEscrow;
-use futarchy_markets_primitives::market_state::MarketState;
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
+use futarchy_markets_primitives::coin_escrow::TokenEscrow;
+use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
+use futarchy_markets_primitives::market_state::MarketState;
+use std::option::{Self, Option};
 use sui::clock::Clock;
 
 // === Introduction ===
@@ -67,33 +67,33 @@ public fun quote_spot_asset_to_stable<AssetType, StableType>(
     // Validate inputs
     assert!(amount_in > 0, EZeroAmount);
     assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    
+
     // Verify market is active
     let market_state = escrow.get_market_state();
     assert!(market_state.is_trading_active(), EMarketNotActive);
-    
+
     // Step 1: Complete set minting creates amount_in of each conditional token
     let conditional_asset_amount = amount_in;
 
     // Step 2: Get the AMM for this outcome
     let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
-    
+
     // Step 3: Calculate swap output for asset -> stable
     let stable_out = conditional_amm::quote_swap_asset_to_stable(
         amm,
-        conditional_asset_amount
+        conditional_asset_amount,
     );
-    
+
     // Step 4: Complete set redemption would give us stable_out spot tokens
     // (other outcomes would have excess conditional tokens returned)
-    
+
     // Calculate effective price (scaled by 1e12 for precision)
     let effective_price = if (amount_in > 0) {
         (stable_out as u128) * 1_000_000_000_000 / (amount_in as u128)
     } else {
         0
     };
-    
+
     // Calculate price impact
     let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(amm);
     let spot_price_before = if (asset_reserve > 0) {
@@ -101,12 +101,12 @@ public fun quote_spot_asset_to_stable<AssetType, StableType>(
     } else {
         0
     };
-    
+
     let price_impact_bps = calculate_price_impact(
         spot_price_before as u64,
-        effective_price as u64
+        effective_price as u64,
     );
-    
+
     SpotQuote {
         amount_out: stable_out,
         effective_price: effective_price as u64,
@@ -127,32 +127,32 @@ public fun quote_spot_stable_to_asset<AssetType, StableType>(
     // Validate inputs
     assert!(amount_in > 0, EZeroAmount);
     assert!(outcome_idx < proposal.outcome_count(), EInvalidOutcome);
-    
+
     // Verify market is active
     let market_state = escrow.get_market_state();
     assert!(market_state.is_trading_active(), EMarketNotActive);
-    
+
     // Step 1: Complete set minting creates amount_in of each conditional token
     let conditional_stable_amount = amount_in;
 
     // Step 2: Get the AMM for this outcome
     let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
-    
+
     // Step 3: Calculate swap output for stable -> asset
     let asset_out = conditional_amm::quote_swap_stable_to_asset(
         amm,
-        conditional_stable_amount
+        conditional_stable_amount,
     );
-    
+
     // Step 4: Complete set redemption would give us asset_out spot tokens
-    
+
     // Calculate effective price (scaled by 1e12 for precision)
     let effective_price = if (amount_in > 0) {
         (asset_out as u128) * 1_000_000_000_000 / (amount_in as u128)
     } else {
         0
     };
-    
+
     // Calculate price impact
     let (asset_reserve, stable_reserve) = conditional_amm::get_reserves(amm);
     let spot_price_before = if (stable_reserve > 0) {
@@ -160,12 +160,12 @@ public fun quote_spot_stable_to_asset<AssetType, StableType>(
     } else {
         0
     };
-    
+
     let price_impact_bps = calculate_price_impact(
         spot_price_before as u64,
-        effective_price as u64
+        effective_price as u64,
     );
-    
+
     SpotQuote {
         amount_out: asset_out,
         effective_price: effective_price as u64,
@@ -189,9 +189,9 @@ public fun quote_spot_asset_to_stable_detailed<AssetType, StableType>(
         escrow,
         outcome_idx,
         amount_in,
-        clock
+        clock,
     );
-    
+
     // Get AMM for detailed calculations
     let amm = proposal.get_pool_by_outcome(escrow, (outcome_idx as u8));
     let (asset_reserve_before, stable_reserve_before) = conditional_amm::get_reserves(amm);
@@ -199,7 +199,7 @@ public fun quote_spot_asset_to_stable_detailed<AssetType, StableType>(
     // Calculate reserves after trade
     let asset_reserve_after = asset_reserve_before + amount_in;
     let stable_reserve_after = stable_reserve_before - quote.amount_out;
-    
+
     // Calculate spot prices
     let spot_price_before = if (asset_reserve_before > 0) {
         (stable_reserve_before as u128) * 1_000_000_000_000 / (asset_reserve_before as u128)
@@ -212,11 +212,11 @@ public fun quote_spot_asset_to_stable_detailed<AssetType, StableType>(
     } else {
         0
     };
-    
+
     // Calculate excess tokens (all non-traded outcomes)
     let outcome_count = proposal.outcome_count();
     let excess_conditional_tokens = (outcome_count - 1) * amount_in;
-    
+
     DetailedSpotQuote {
         quote,
         conditional_tokens_created: outcome_count * amount_in,
@@ -240,7 +240,7 @@ public fun quote_spot_stable_to_asset_detailed<AssetType, StableType>(
         escrow,
         outcome_idx,
         amount_in,
-        clock
+        clock,
     );
 
     // Get AMM for detailed calculations
@@ -250,7 +250,7 @@ public fun quote_spot_stable_to_asset_detailed<AssetType, StableType>(
     // Calculate reserves after trade
     let stable_reserve_after = stable_reserve_before + amount_in;
     let asset_reserve_after = asset_reserve_before - quote.amount_out;
-    
+
     // Calculate spot prices
     let spot_price_before = if (stable_reserve_before > 0) {
         (asset_reserve_before as u128) * 1_000_000_000_000 / (stable_reserve_before as u128)
@@ -263,11 +263,11 @@ public fun quote_spot_stable_to_asset_detailed<AssetType, StableType>(
     } else {
         0
     };
-    
+
     // Calculate excess tokens
     let outcome_count = proposal.outcome_count();
     let excess_conditional_tokens = (outcome_count - 1) * amount_in;
-    
+
     DetailedSpotQuote {
         quote,
         conditional_tokens_created: outcome_count * amount_in,
@@ -285,19 +285,19 @@ public fun find_best_asset_to_stable_route<AssetType, StableType>(
     clock: &Clock,
 ): (u64, SpotQuote) {
     assert!(amount_in > 0, EZeroAmount);
-    
+
     let outcome_count = proposal.outcome_count();
     assert!(outcome_count > 0, EInvalidOutcome);
-    
+
     let mut best_outcome = 0;
     let mut best_quote = quote_spot_asset_to_stable(
         proposal,
         escrow,
         0,
         amount_in,
-        clock
+        clock,
     );
-    
+
     let mut i = 1;
     while (i < outcome_count) {
         let quote = quote_spot_asset_to_stable(
@@ -305,17 +305,17 @@ public fun find_best_asset_to_stable_route<AssetType, StableType>(
             escrow,
             i,
             amount_in,
-            clock
+            clock,
         );
-        
+
         if (quote.amount_out > best_quote.amount_out) {
             best_outcome = i;
             best_quote = quote;
         };
-        
+
         i = i + 1;
     };
-    
+
     (best_outcome, best_quote)
 }
 
@@ -327,19 +327,19 @@ public fun find_best_stable_to_asset_route<AssetType, StableType>(
     clock: &Clock,
 ): (u64, SpotQuote) {
     assert!(amount_in > 0, EZeroAmount);
-    
+
     let outcome_count = proposal.outcome_count();
     assert!(outcome_count > 0, EInvalidOutcome);
-    
+
     let mut best_outcome = 0;
     let mut best_quote = quote_spot_stable_to_asset(
         proposal,
         escrow,
         0,
         amount_in,
-        clock
+        clock,
     );
-    
+
     let mut i = 1;
     while (i < outcome_count) {
         let quote = quote_spot_stable_to_asset(
@@ -347,17 +347,17 @@ public fun find_best_stable_to_asset_route<AssetType, StableType>(
             escrow,
             i,
             amount_in,
-            clock
+            clock,
         );
-        
+
         if (quote.amount_out > best_quote.amount_out) {
             best_outcome = i;
             best_quote = quote;
         };
-        
+
         i = i + 1;
     };
-    
+
     (best_outcome, best_quote)
 }
 
@@ -368,13 +368,13 @@ fun calculate_price_impact(price_before: u64, effective_price: u64): u64 {
     if (price_before == 0) {
         return 0
     };
-    
+
     let diff = if (effective_price > price_before) {
         effective_price - price_before
     } else {
         price_before - effective_price
     };
-    
+
     // Calculate impact as basis points (1 bp = 0.01%)
     let impact = (diff as u128) * 10000 / (price_before as u128);
     impact as u64
@@ -431,11 +431,7 @@ public fun get_combined_oracle_price<AssetType, StableType>(
 }
 
 /// Check if a price meets a threshold condition
-public fun check_price_threshold(
-    price: u128,
-    threshold: u128,
-    is_above_threshold: bool,
-): bool {
+public fun check_price_threshold(price: u128, threshold: u128, is_above_threshold: bool): bool {
     if (is_above_threshold) {
         price >= threshold
     } else {

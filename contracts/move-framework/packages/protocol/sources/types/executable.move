@@ -19,11 +19,10 @@
 
 module account_protocol::executable;
 
-// === Imports ===
-
-use std::type_name::{Self, TypeName};
 use account_protocol::intents::{Self, Intent};
+use std::type_name::{Self, TypeName};
 
+// === Imports ===
 
 // === Structs ===
 
@@ -51,34 +50,27 @@ public fun action_idx<Outcome: store>(executable: &Executable<Outcome>): u64 {
 // The dispatcher must deserialize them when needed
 
 /// Get the type of the current action
-public fun current_action_type<Outcome: store>(
-    executable: &Executable<Outcome>
-): TypeName {
+public fun current_action_type<Outcome: store>(executable: &Executable<Outcome>): TypeName {
     let specs = executable.intent().action_specs();
     intents::action_spec_type(specs.borrow(executable.action_idx))
 }
 
 /// Check if current action matches a specific type
 public fun is_current_action<Outcome: store, T: store + drop + copy>(
-    executable: &Executable<Outcome>
+    executable: &Executable<Outcome>,
 ): bool {
     let current_type = current_action_type(executable);
     current_type == type_name::with_defining_ids<T>()
 }
 
 /// Get type of action at specific index
-public fun action_type_at<Outcome: store>(
-    executable: &Executable<Outcome>,
-    idx: u64
-): TypeName {
+public fun action_type_at<Outcome: store>(executable: &Executable<Outcome>, idx: u64): TypeName {
     let specs = executable.intent().action_specs();
     intents::action_spec_type(specs.borrow(idx))
 }
 
 /// Increment the action index to mark progress
-public fun increment_action_idx<Outcome: store>(
-    executable: &mut Executable<Outcome>
-) {
+public fun increment_action_idx<Outcome: store>(executable: &mut Executable<Outcome>) {
     executable.action_idx = executable.action_idx + 1;
 }
 
@@ -89,7 +81,7 @@ public fun increment_action_idx<Outcome: store>(
 
 public(package) fun new<Outcome: store>(
     intent: Intent<Outcome>,
-    _ctx: &mut TxContext,  // No longer needed, kept for API compatibility
+    _ctx: &mut TxContext, // No longer needed, kept for API compatibility
 ): Executable<Outcome> {
     Executable {
         intent,
@@ -115,7 +107,7 @@ use sui::clock;
 #[test_only]
 public struct TestOutcome has copy, drop, store {}
 #[test_only]
-public struct TestAction has store, drop {}
+public struct TestAction has drop, store {}
 #[test_only]
 public struct TestActionType has drop {}
 #[test_only]
@@ -125,30 +117,30 @@ public struct TestIntentWitness() has drop;
 fun test_new_executable() {
     let ctx = &mut tx_context::dummy();
     let clock = clock::create_for_testing(ctx);
-    
+
     let params = intents::new_params(
         b"test_key".to_string(),
         b"test_description".to_string(),
         vector[1000],
         2000,
         &clock,
-        ctx
+        ctx,
     );
-    
+
     let intent = intents::new_intent(
         params,
         TestOutcome {},
         b"test_role".to_string(),
         @0xCAFE,
         TestIntentWitness(),
-        ctx
+        ctx,
     );
-    
+
     let executable = new(intent, ctx);
 
     assert_eq(action_idx(&executable), 0);
     assert_eq(intent(&executable).key(), b"test_key".to_string());
-    
+
     test_destroy(executable);
     test_destroy(clock);
 }
@@ -166,31 +158,31 @@ fun test_new_executable() {
 fun test_destroy_executable() {
     let ctx = &mut tx_context::dummy();
     let clock = clock::create_for_testing(ctx);
-    
+
     let params = intents::new_params(
         b"test_key".to_string(),
         b"test_description".to_string(),
         vector[1000],
         2000,
         &clock,
-        ctx
+        ctx,
     );
-    
+
     let intent = intents::new_intent(
         params,
         TestOutcome {},
         b"test_role".to_string(),
         @0xCAFE,
         TestIntentWitness(),
-        ctx
+        ctx,
     );
-    
+
     let executable = new(intent, ctx);
     let recovered_intent = destroy(executable);
-    
+
     assert_eq(recovered_intent.key(), b"test_key".to_string());
     assert_eq(recovered_intent.description(), b"test_description".to_string());
-    
+
     test_destroy(recovered_intent);
     test_destroy(clock);
 }
@@ -199,25 +191,25 @@ fun test_destroy_executable() {
 fun test_executable_with_multiple_actions() {
     let ctx = &mut tx_context::dummy();
     let clock = clock::create_for_testing(ctx);
-    
+
     let params = intents::new_params(
         b"test_key".to_string(),
         b"test_description".to_string(),
         vector[1000],
         2000,
         &clock,
-        ctx
+        ctx,
     );
-    
+
     let mut intent = intents::new_intent(
         params,
         TestOutcome {},
         b"test_role".to_string(),
         @0xCAFE,
         TestIntentWitness(),
-        ctx
+        ctx,
     );
-    
+
     // Actions are now added as serialized bytes via action specs
     // This test focuses on ExecutionContext functionality
 
@@ -225,7 +217,7 @@ fun test_executable_with_multiple_actions() {
 
     assert_eq(action_idx(&executable), 0);
     assert_eq(intent(&executable).action_specs().length(), 0);
-    
+
     // Actions are now accessed via action specs
     // Incrementing action index to simulate execution
     increment_action_idx(&mut executable);
@@ -234,7 +226,7 @@ fun test_executable_with_multiple_actions() {
     assert_eq(action_idx(&executable), 2);
     increment_action_idx(&mut executable);
     assert_eq(action_idx(&executable), 3);
-    
+
     test_destroy(executable);
     test_destroy(clock);
 }
@@ -243,28 +235,28 @@ fun test_executable_with_multiple_actions() {
 fun test_intent_access() {
     let ctx = &mut tx_context::dummy();
     let clock = clock::create_for_testing(ctx);
-    
+
     let params = intents::new_params(
         b"test_key".to_string(),
         b"test_description".to_string(),
         vector[1000],
         2000,
         &clock,
-        ctx
+        ctx,
     );
-    
+
     let intent = intents::new_intent(
         params,
         TestOutcome {},
         b"test_role".to_string(),
         @0xCAFE,
         TestIntentWitness(),
-        ctx
+        ctx,
     );
-    
+
     let executable = new(intent, ctx);
     let intent_ref = intent(&executable);
-    
+
     assert_eq(intent_ref.key(), b"test_key".to_string());
     assert_eq(intent_ref.description(), b"test_description".to_string());
     assert_eq(intent_ref.account(), @0xCAFE);
@@ -272,8 +264,7 @@ fun test_intent_access() {
     role.append_utf8(b"::executable");
     role.append_utf8(b"::test_role");
     assert_eq(intent_ref.role(), role);
-    
+
     test_destroy(executable);
     test_destroy(clock);
 }
-

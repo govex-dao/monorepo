@@ -3,20 +3,15 @@
 /// The actual intent creation must be done by the governance system that provides the Outcome
 module futarchy_streams::stream_intents;
 
-// === Imports ===
-use std::{
-    string::String,
-    option::Option,
-    bcs,
-};
-use sui::clock::Clock;
 use account_actions::vault;
-use account_protocol::{
-    intents::Intent,
-};
-use futarchy_streams::stream_actions;
-use futarchy_core::action_types;
 use account_extensions::framework_action_types;
+use account_protocol::intents::Intent;
+use futarchy_core::action_types;
+use futarchy_streams::stream_actions;
+use std::bcs;
+use std::option::Option;
+use std::string::String;
+use sui::clock::Clock;
 
 // === Use Fun Aliases ===
 use fun account_protocol::intents::add_typed_action as Intent.add_typed_action;
@@ -108,7 +103,7 @@ public fun create_isolated_stream_in_intent<Outcome: store, CoinType, IW: copy +
         intent,
         b"treasury".to_string(),
         total_amount,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -158,7 +153,7 @@ public fun create_recurring_payment_in_intent<Outcome: store, CoinType, IW: copy
         intent,
         b"treasury".to_string(),
         total_funding,
-        intent_witness
+        intent_witness,
     );
 }
 
@@ -176,7 +171,7 @@ public fun execute_payment_in_intent<Outcome: store, CoinType, IW: copy + drop>(
             intent,
             b"treasury".to_string(),
             *amount.borrow(),
-            intent_witness
+            intent_witness,
         );
     };
 
@@ -205,10 +200,7 @@ public fun cancel_stream_in_intent<Outcome: store, CoinType, IW: drop>(
 }
 
 /// Create a unique key for a stream intent
-public fun create_stream_key(
-    operation: String,
-    clock: &Clock,
-): String {
+public fun create_stream_key(operation: String, clock: &Clock): String {
     let mut key = b"stream_".to_string();
     key.append(operation);
     key.append(b"_".to_string());

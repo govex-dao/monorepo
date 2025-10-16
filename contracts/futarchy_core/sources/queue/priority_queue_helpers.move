@@ -1,6 +1,12 @@
 module futarchy_core::priority_queue_helpers;
 
-use futarchy_core::priority_queue::{Self, ProposalData, QueuedProposal, ProposalQueue, QueueMutationAuth};
+use futarchy_core::priority_queue::{
+    Self,
+    ProposalData,
+    QueuedProposal,
+    ProposalQueue,
+    QueueMutationAuth
+};
 use std::string::String;
 use sui::coin::Coin;
 

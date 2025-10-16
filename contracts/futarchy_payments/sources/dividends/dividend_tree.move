@@ -3,23 +3,19 @@
 /// Uses address-prefix bucketing for O(1) lookup (256 buckets max)
 module futarchy_payments::dividend_tree;
 
-use std::{
-    string::String,
-    type_name::{Self, TypeName},
-};
-use sui::{
-    object::{Self, UID, ID},
-    dynamic_field,
-    table::{Self, Table},
-    tx_context::TxContext,
-    address,
-    hash::blake2b256,
-    bcs,
-};
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::address;
+use sui::bcs;
+use sui::dynamic_field;
+use sui::hash::blake2b256;
+use sui::object::{Self, UID, ID};
+use sui::table::{Self, Table};
+use sui::tx_context::TxContext;
 
 // === Constants ===
-const MAX_RECIPIENTS_PER_BUCKET: u64 = 1000000;  // 1M per bucket (safe with prefix bucketing)
-const MAX_PREFIX_LENGTH: u64 = 32;  // Max bytes in address prefix
+const MAX_RECIPIENTS_PER_BUCKET: u64 = 1000000; // 1M per bucket (safe with prefix bucketing)
+const MAX_PREFIX_LENGTH: u64 = 32; // Max bytes in address prefix
 
 // === Errors ===
 const EBucketAlreadyExists: u64 = 1;
@@ -37,7 +33,7 @@ const EInvalidNonce: u64 = 11;
 /// Uses variable-length address prefix (1-32 bytes)
 /// Longer prefixes = more specific buckets for dense address spaces
 public struct BucketKey has copy, drop, store {
-    prefix: vector<u8>,  // Variable length: 1-32 bytes
+    prefix: vector<u8>, // Variable length: 1-32 bytes
 }
 
 /// The main dividend tree object
@@ -66,7 +62,7 @@ public struct DividendTree has key, store {
 /// A bucket containing recipients with same address prefix
 /// Stored as a dynamic field on DividendTree
 public struct RecipientBucket has store {
-    recipients: Table<address, u64>,     // address => amount (for lookup)
+    recipients: Table<address, u64>, // address => amount (for lookup)
     addresses_for_crank: vector<address>, // ONLY for deterministic cranking iteration
     // Note: Addresses stored to enable resumable cranking, not for duplicate lookup
 }
@@ -74,10 +70,7 @@ public struct RecipientBucket has store {
 // === Public Functions ===
 
 /// Create a new dividend tree
-public fun create_tree<CoinType>(
-    description: String,
-    ctx: &mut TxContext,
-): DividendTree {
+public fun create_tree<CoinType>(description: String, ctx: &mut TxContext): DividendTree {
     let mut tree = DividendTree {
         id: object::new(ctx),
         coin_type: type_name::get<CoinType>(),
@@ -178,10 +171,7 @@ public fun add_bucket(
 /// This hashes the raw CSV data: addr1||amt1||addr2||amt2||...
 /// For large buckets (>1000 recipients), hash in chunks off-chain and pass final hash
 /// For small buckets (<1000 recipients), can hash on-chain here
-public fun hash_bucket_data(
-    recipients: &vector<address>,
-    amounts: &vector<u64>,
-) : vector<u8> {
+public fun hash_bucket_data(recipients: &vector<address>, amounts: &vector<u64>): vector<u8> {
     assert!(recipients.length() == amounts.length(), EMismatchedLength);
     assert!(recipients.length() <= 1000, 0); // Only for small buckets
 
@@ -206,11 +196,7 @@ public fun hash_bucket_data(
 /// Bucket storage (add_bucket) can be in any order for efficiency
 /// expected_nonce: Must match current build_nonce to enforce sequential ordering
 /// bucket_hash: Hash of bucket data (from hash_bucket_data or computed off-chain)
-public fun add_bucket_hash(
-    tree: &mut DividendTree,
-    bucket_hash: vector<u8>,
-    expected_nonce: u64,
-) {
+public fun add_bucket_hash(tree: &mut DividendTree, bucket_hash: vector<u8>, expected_nonce: u64) {
     assert!(!tree.finalized, ETreeFinalized);
     assert!(tree.build_nonce == expected_nonce, EInvalidNonce);
 
@@ -275,12 +261,7 @@ public fun address_has_prefix(addr: address, prefix: &vector<u8>): bool {
 
 /// Get tree info
 public fun tree_info(tree: &DividendTree): (u64, u64, u64, bool) {
-    (
-        tree.total_recipients,
-        tree.total_amount,
-        tree.num_buckets,
-        tree.finalized,
-    )
+    (tree.total_recipients, tree.total_amount, tree.num_buckets, tree.finalized)
 }
 
 /// Check if tree is finalized
@@ -295,7 +276,10 @@ public fun get_bucket(tree: &DividendTree, prefix: vector<u8>): &RecipientBucket
 }
 
 /// Get bucket mutably
-public(package) fun get_bucket_mut(tree: &mut DividendTree, prefix: vector<u8>): &mut RecipientBucket {
+public(package) fun get_bucket_mut(
+    tree: &mut DividendTree,
+    prefix: vector<u8>,
+): &mut RecipientBucket {
     let key = BucketKey { prefix };
     dynamic_field::borrow_mut(&mut tree.id, key)
 }
@@ -306,7 +290,10 @@ public fun get_bucket_by_key(tree: &DividendTree, key: BucketKey): &RecipientBuc
 }
 
 /// Get bucket mutably by key
-public(package) fun get_bucket_by_key_mut(tree: &mut DividendTree, key: BucketKey): &mut RecipientBucket {
+public(package) fun get_bucket_by_key_mut(
+    tree: &mut DividendTree,
+    key: BucketKey,
+): &mut RecipientBucket {
     dynamic_field::borrow_mut(&mut tree.id, key)
 }
 
@@ -371,7 +358,7 @@ public fun validate_no_prefix_overlap(tree: &DividendTree): bool {
 public fun validate_no_prefix_overlap_range(
     tree: &DividendTree,
     start_idx: u64,
-    end_idx: u64
+    end_idx: u64,
 ): bool {
     let dir = &tree.prefix_directory;
     let len = dir.length();
@@ -397,7 +384,7 @@ public fun validate_no_prefix_overlap_range(
 
                 // Check if prefix_a is a prefix of prefix_b (or vice versa)
                 if (is_prefix_of(prefix_a, prefix_b) || is_prefix_of(prefix_b, prefix_a)) {
-                    return false  // Found overlap
+                    return false // Found overlap
                 };
             };
 
@@ -428,7 +415,7 @@ fun is_prefix_of(prefix_a: &vector<u8>, prefix_b: &vector<u8>): bool {
         i = i + 1;
     };
 
-    true  // All bytes matched, prefix_a is a prefix of prefix_b
+    true // All bytes matched, prefix_a is a prefix of prefix_b
 }
 
 /// Helper: Check if prefix_a <= prefix_b lexicographically
@@ -474,12 +461,12 @@ public fun get_validation_chunk_size(tree: &DividendTree): (u64, u64) {
 
     // Target: ~1000 buckets per chunk (safe gas limit)
     let chunk_size = if (num_buckets <= 1000) {
-        num_buckets  // Small tree, validate all at once
+        num_buckets // Small tree, validate all at once
     } else {
-        1000  // Large tree, validate in chunks
+        1000 // Large tree, validate in chunks
     };
 
-    let num_chunks = (num_buckets + chunk_size - 1) / chunk_size;  // Ceiling division
+    let num_chunks = (num_buckets + chunk_size - 1) / chunk_size; // Ceiling division
 
     (chunk_size, num_chunks)
 }
@@ -495,7 +482,7 @@ public fun get_validation_range(tree: &DividendTree, chunk_index: u64): (u64, u6
 
     let start_idx = chunk_index * chunk_size;
     let end_idx = if (start_idx + chunk_size > num_buckets) {
-        num_buckets  // Last chunk may be smaller
+        num_buckets // Last chunk may be smaller
     } else {
         start_idx + chunk_size
     };
@@ -571,7 +558,7 @@ fun is_address_less_than_prefix(addr: address, prefix: &vector<u8>): bool {
 /// Max 100 addresses per query to avoid gas limits
 public fun batch_query_allocations(
     tree: &DividendTree,
-    addresses: vector<address>
+    addresses: vector<address>,
 ): (vector<bool>, vector<u64>) {
     assert!(addresses.length() <= 100, 0); // Prevent gas limit issues
 
@@ -597,7 +584,7 @@ public fun batch_query_allocations(
 /// Returns (addresses, amounts) - parallel vectors
 public fun get_bucket_recipients_list(
     tree: &DividendTree,
-    prefix: vector<u8>
+    prefix: vector<u8>,
 ): (vector<address>, vector<u64>) {
     if (!has_bucket(tree, prefix)) {
         return (vector::empty(), vector::empty())
@@ -621,10 +608,7 @@ public fun get_bucket_recipients_list(
 
 /// Get bucket summary (for governance overview)
 /// Returns (prefix, recipient_count, total_amount_in_bucket)
-public fun get_bucket_summary(
-    tree: &DividendTree,
-    bucket_index: u64
-): (vector<u8>, u64, u64) {
+public fun get_bucket_summary(tree: &DividendTree, bucket_index: u64): (vector<u8>, u64, u64) {
     let prefix_directory = &tree.prefix_directory;
     assert!(bucket_index < prefix_directory.length(), 0);
 
@@ -672,13 +656,21 @@ public(package) fun bucket_recipients_mut(bucket: &mut RecipientBucket): &mut Ta
 // === Getters for DividendTree fields ===
 
 public fun total_amount(tree: &DividendTree): u64 { tree.total_amount }
+
 public fun total_recipients(tree: &DividendTree): u64 { tree.total_recipients }
+
 public fun num_buckets(tree: &DividendTree): u64 { tree.num_buckets }
+
 public fun coin_type(tree: &DividendTree): TypeName { tree.coin_type }
+
 public fun description(tree: &DividendTree): String { tree.description }
+
 public fun tree_id(tree: &DividendTree): ID { object::id(tree) }
+
 public fun content_hash(tree: &DividendTree): vector<u8> { tree.content_hash }
+
 public fun rolling_hash(tree: &DividendTree): vector<u8> { tree.rolling_hash }
+
 public fun build_nonce(tree: &DividendTree): u64 { tree.build_nonce }
 
 // === Cleanup Functions ===
@@ -715,8 +707,10 @@ public fun delete_tree(tree: DividendTree) {
 
         // Remove bucket if it exists
         if (dynamic_field::exists_(&id, key)) {
-            let RecipientBucket { recipients, addresses_for_crank: _ } =
-                dynamic_field::remove(&mut id, key);
+            let RecipientBucket { recipients, addresses_for_crank: _ } = dynamic_field::remove(
+                &mut id,
+                key,
+            );
 
             // Table has drop ability, will be cleaned up
             recipients.drop();
@@ -754,8 +748,10 @@ public fun delete_tree_range(tree: &mut DividendTree, start_idx: u64, end_idx: u
         let key = BucketKey { prefix };
 
         if (dynamic_field::exists_(&tree.id, key)) {
-            let RecipientBucket { recipients, addresses_for_crank: _ } =
-                dynamic_field::remove(&mut tree.id, key);
+            let RecipientBucket { recipients, addresses_for_crank: _ } = dynamic_field::remove(
+                &mut tree.id,
+                key,
+            );
             recipients.drop();
         };
 

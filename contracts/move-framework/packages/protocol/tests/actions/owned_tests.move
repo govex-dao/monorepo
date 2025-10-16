@@ -1,24 +1,20 @@
 #[test_only]
 module account_protocol::owned_tests;
 
-// === Imports ===
-
-use std::type_name;
-use sui::{
-    test_utils::destroy,
-    test_scenario::{Self as ts, Scenario},
-    clock::{Self, Clock},
-    coin::{Self, Coin},
-    sui::SUI,
-};
 use account_extensions::extensions::{Self, Extensions, AdminCap};
-use account_protocol::{
-    account::{Self, Account},
-    intents::{Self, Intent},
-    deps,
-    owned,
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps;
+use account_protocol::intents::{Self, Intent};
+use account_protocol::owned;
+use account_protocol::version;
+use std::type_name;
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::sui::SUI;
+use sui::test_scenario::{Self as ts, Scenario};
+use sui::test_utils::destroy;
+
+// === Imports ===
 
 // === Constants ===
 
@@ -68,31 +64,31 @@ fun send_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
     let id = object::id(&coin);
     transfer::public_transfer(coin, addr);
-    
+
     scenario.next_tx(OWNER);
     id
 }
 
 fun create_dummy_intent(
     scenario: &mut Scenario,
-    account: &Account<Config>, 
+    account: &Account<Config>,
     clock: &Clock,
 ): Intent<Outcome> {
-        let params = intents::new_params(
-        b"dummy".to_string(), 
-        b"description".to_string(), 
+    let params = intents::new_params(
+        b"dummy".to_string(),
+        b"description".to_string(),
         vector[0],
-        1, 
+        1,
         clock,
-        scenario.ctx()
+        scenario.ctx(),
     );
     account.create_intent(
         params,
-        Outcome {}, 
+        Outcome {},
         b"Degen".to_string(),
         version::current(),
-        DummyIntent(), 
-        scenario.ctx()
+        DummyIntent(),
+        scenario.ctx(),
     )
 }
 
@@ -100,12 +96,12 @@ fun keep_coin(addr: address, amount: u64, scenario: &mut Scenario): ID {
     let coin = coin::mint_for_testing<SUI>(amount, scenario.ctx());
     let id = object::id(&coin);
     transfer::public_transfer(coin, addr);
-    
+
     scenario.next_tx(OWNER);
     id
 }
 
-// === Tests === 
+// === Tests ===
 
 #[test]
 fun test_withdraw_flow() {
@@ -119,7 +115,13 @@ fun test_withdraw_flow() {
     owned::new_withdraw_coin<_, _, _>(&mut intent, &account, coin_type, 5, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     let coin = owned::do_withdraw_coin<_, Outcome, SUI, _>(
         &mut executable,
         &mut account,
@@ -159,7 +161,7 @@ fun test_merge_and_split_2_coins() {
 
     let coin_to_split = coin::mint_for_testing<SUI>(100, scenario.ctx());
     transfer::public_transfer(coin_to_split, account.addr());
-    
+
     scenario.next_tx(OWNER);
     let receiving_to_split = ts::most_recent_receiving_ticket<Coin<SUI>>(&object::id(&account));
     let auth = account.new_auth(version::current(), Witness());
@@ -168,25 +170,25 @@ fun test_merge_and_split_2_coins() {
         &mut account,
         vector[receiving_to_split],
         vector[40, 30],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     scenario.next_tx(OWNER);
     let split_coin0 = scenario.take_from_address_by_id<Coin<SUI>>(
-        account.addr(), 
-        split_coin_ids[0]
+        account.addr(),
+        split_coin_ids[0],
     );
     let split_coin1 = scenario.take_from_address_by_id<Coin<SUI>>(
-        account.addr(), 
-        split_coin_ids[1]
+        account.addr(),
+        split_coin_ids[1],
     );
     assert!(split_coin0.value() == 40);
     assert!(split_coin1.value() == 30);
 
     destroy(split_coin0);
     destroy(split_coin1);
-    end(scenario, extensions, account, clock);          
-}  
+    end(scenario, extensions, account, clock);
+}
 
 #[test]
 fun test_merge_2_coins_and_split() {
@@ -202,19 +204,19 @@ fun test_merge_2_coins_and_split() {
         &mut account,
         vector[ts::receiving_ticket_by_id(id1), ts::receiving_ticket_by_id(id2)],
         vector[100],
-        scenario.ctx()
+        scenario.ctx(),
     );
 
     scenario.next_tx(OWNER);
     let merge_coin = scenario.take_from_address_by_id<Coin<SUI>>(
-        account_address, 
-        merge_coin_id[0]
+        account_address,
+        merge_coin_id[0],
     );
     assert!(merge_coin.value() == 100);
 
     destroy(merge_coin);
-    end(scenario, extensions, account, clock);          
-}  
+    end(scenario, extensions, account, clock);
+}
 
 // REMOVED: test_error_do_withdraw_wrong_object - new API doesn't validate specific object IDs, only type and amount
 // REMOVED: test_error_merge_locked_coins - no locking in new design
@@ -238,7 +240,13 @@ fun test_error_do_withdraw_from_wrong_account() {
     owned::new_withdraw_coin<_, _, _>(&mut intent, &account, coin_type, 5, DummyIntent());
     account2.insert_intent(intent, version::current(), DummyIntent());
 
-    let (_, mut executable) = account2.create_executable<_, Outcome, _>(key, &clock, version::current(), Witness(), scenario.ctx());
+    let (_, mut executable) = account2.create_executable<_, Outcome, _>(
+        key,
+        &clock,
+        version::current(),
+        Witness(),
+        scenario.ctx(),
+    );
     // try to disable from the account that didn't approve the intent
     let coin = owned::do_withdraw_coin<_, Outcome, SUI, _>(
         &mut executable,

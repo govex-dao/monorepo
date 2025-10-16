@@ -19,11 +19,11 @@ fun test_new_protocol_config_defaults() {
 #[test]
 fun test_new_protocol_config_custom_valid() {
     let config = subsidy_config::new_protocol_config_custom(
-        true,        // enabled
+        true, // enabled
         200_000_000, // 0.2 SUI per outcome per crank
-        50,          // 50 cranks
+        50, // 50 cranks
         150_000_000, // 0.15 SUI keeper fee
-        600_000,     // 10 minutes
+        600_000, // 10 minutes
     );
 
     assert!(subsidy_config::protocol_enabled(&config) == true, 0);
@@ -36,7 +36,7 @@ fun test_new_protocol_config_custom_valid() {
 #[test]
 fun test_new_protocol_config_custom_disabled() {
     let config = subsidy_config::new_protocol_config_custom(
-        false,       // disabled
+        false, // disabled
         100_000_000,
         10,
         100_000_000,
@@ -52,7 +52,7 @@ fun test_new_protocol_config_zero_crank_steps_fails() {
     subsidy_config::new_protocol_config_custom(
         true,
         100_000_000,
-        0,           // Invalid: zero crank steps
+        0, // Invalid: zero crank steps
         100_000_000,
         300_000,
     );
@@ -94,7 +94,7 @@ fun test_calculate_total_subsidy_custom_amounts() {
     let config = subsidy_config::new_protocol_config_custom(
         true,
         500_000_000, // 0.5 SUI per outcome per crank
-        20,          // 20 cranks
+        20, // 20 cranks
         100_000_000,
         300_000,
     );
@@ -231,7 +231,7 @@ fun test_multiple_updates() {
 #[test]
 fun test_disabled_config_still_calculates() {
     let config = subsidy_config::new_protocol_config_custom(
-        false,       // disabled
+        false, // disabled
         100_000_000,
         100,
         100_000_000,
@@ -248,7 +248,7 @@ fun test_very_large_subsidy_calculation() {
     let config = subsidy_config::new_protocol_config_custom(
         true,
         1_000_000_000, // 1 SUI per outcome per crank
-        1000,          // 1000 cranks
+        1000, // 1000 cranks
         100_000_000,
         300_000,
     );
@@ -263,10 +263,10 @@ fun test_very_large_subsidy_calculation() {
 fun test_minimal_config() {
     let config = subsidy_config::new_protocol_config_custom(
         true,
-        1,           // Minimal subsidy
-        1,           // Minimal cranks
-        1,           // Minimal keeper fee
-        0,           // No interval
+        1, // Minimal subsidy
+        1, // Minimal cranks
+        1, // Minimal keeper fee
+        0, // No interval
     );
 
     assert!(subsidy_config::subsidy_per_outcome_per_crank(&config) == 1, 0);
@@ -293,7 +293,7 @@ fun test_config_has_copy() {
     assert!(
         subsidy_config::crank_steps(&config1) ==
         subsidy_config::crank_steps(&config2),
-        2
+        2,
     );
 }
 

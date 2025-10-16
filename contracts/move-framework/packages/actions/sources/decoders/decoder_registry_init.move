@@ -25,19 +25,19 @@
 /// Registers all decoders during protocol deployment
 module account_actions::decoder_registry_init;
 
-// === Imports ===
-
-use sui::{transfer, object::{Self, ID, UID}, event};
+use account_actions::access_control_decoder;
+use account_actions::currency_decoder;
+use account_actions::kiosk_decoder;
+use account_actions::package_upgrade_decoder;
+use account_actions::transfer_decoder;
+use account_actions::vault_decoder;
+use account_actions::vesting_decoder;
 use account_protocol::schema::{Self, ActionDecoderRegistry};
-use account_actions::{
-    vault_decoder,
-    currency_decoder,
-    package_upgrade_decoder,
-    vesting_decoder,
-    transfer_decoder,
-    kiosk_decoder,
-    access_control_decoder,
-};
+use sui::event;
+use sui::object::{Self, ID, UID};
+use sui::transfer;
+
+// === Imports ===
 
 // === Events ===
 
@@ -105,10 +105,7 @@ public fun get_registry_id(info: &RegistryInfo): ID {
 }
 
 /// Register all decoders from all action modules
-public fun register_all_decoders(
-    registry: &mut ActionDecoderRegistry,
-    ctx: &mut TxContext,
-) {
+public fun register_all_decoders(registry: &mut ActionDecoderRegistry, ctx: &mut TxContext) {
     // Register vault action decoders
     vault_decoder::register_decoders(registry, ctx);
 

@@ -20,52 +20,47 @@
 
 /// This is the core module managing the account Account<Config>.
 /// It provides the apis to create, approve and execute intents with actions.
-/// 
+///
 /// The flow is as follows:
-///   1. An intent is created by stacking actions into it. 
+///   1. An intent is created by stacking actions into it.
 ///      Actions are pushed from first to last, they must be executed then destroyed in the same order.
-///   2. When the intent is resolved (threshold reached, quorum reached, etc), it can be executed. 
-///      This returns an Executable hot potato constructed from certain fields of the validated Intent. 
+///   2. When the intent is resolved (threshold reached, quorum reached, etc), it can be executed.
+///      This returns an Executable hot potato constructed from certain fields of the validated Intent.
 ///      It is directly passed into action functions to enforce account approval for an action to be executed.
-///   3. The module that created the intent must destroy all of the actions and the Executable after execution 
-///      by passing the same witness that was used for instantiation. 
+///   3. The module that created the intent must destroy all of the actions and the Executable after execution
+///      by passing the same witness that was used for instantiation.
 ///      This prevents the actions or the intent to be stored instead of executed.
-/// 
+///
 /// Dependencies can create and manage dynamic fields for an account.
 /// They should use custom types as keys to enable access only via the accessors defined.
-/// 
-/// Functions related to authentication, intent resolution, state of intents and config for an account type 
+///
+/// Functions related to authentication, intent resolution, state of intents and config for an account type
 /// must be called from the module that defines the config of the account.
 /// They necessitate a config_witness to ensure the caller is a dependency of the account.
-/// 
+///
 /// The rest of the functions manipulating the common state of accounts are only called within this package.
 
 module account_protocol::account;
 
-// === Imports ===
+use account_extensions::extensions;
+use account_protocol::deps::{Self, Deps};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intents, Intent, Expired, Params};
+use account_protocol::metadata::{Self, Metadata};
+use account_protocol::version;
+use account_protocol::version_witness::{Self, VersionWitness};
+use std::option::Option;
+use std::string::String;
+use std::type_name::{Self, TypeName};
+use sui::clock::Clock;
+use sui::dynamic_field as df;
+use sui::dynamic_object_field as dof;
+use sui::event;
+use sui::package;
+use sui::transfer::Receiving;
+use sui::vec_set::{Self, VecSet};
 
-use std::{
-    string::String,
-    type_name::{Self, TypeName},
-    option::Option,
-};
-use sui::{
-    transfer::Receiving,
-    clock::Clock,
-    dynamic_field as df,
-    dynamic_object_field as dof,
-    package,
-    vec_set::{Self, VecSet},
-    event,
-};
-use account_protocol::{
-    metadata::{Self, Metadata},
-    deps::{Self, Deps},
-    version_witness::{Self, VersionWitness},
-    intents::{Self, Intents, Intent, Expired, Params},
-    executable::{Self, Executable},
-    version,
-};
+// === Imports ===
 
 // === Errors ===
 
@@ -122,9 +117,6 @@ public struct ObjectTrackerState has copy, store {
 
 // === Events ===
 
-
-
-
 /// Protected type ensuring provenance, authenticate an address to an account.
 public struct Auth {
     // address of the account that created the auth
@@ -136,12 +128,12 @@ public struct Auth {
 
 /// Maximum whitelist size - can be changed in future upgrades
 public fun max_whitelist_size(): u64 {
-    50  // Reasonable limit - can increase in upgrades if needed
+    50 // Reasonable limit - can increase in upgrades if needed
 }
 
 /// Default max objects - can be changed in future upgrades
 public fun default_max_objects(): u128 {
-    10000  // Adjust this in future upgrades if needed
+    10000 // Adjust this in future upgrades if needed
 }
 
 //**************************************************************************************************//
@@ -153,22 +145,25 @@ fun init(otw: ACCOUNT, ctx: &mut TxContext) {
 }
 
 /// Initialize object tracking for an account (called during account creation)
-public(package) fun init_object_tracker<Config>(
-    account: &mut Account<Config>,
-    max_objects: u128,
-) {
+public(package) fun init_object_tracker<Config>(account: &mut Account<Config>, max_objects: u128) {
     if (!df::exists_(&account.id, ObjectTracker {})) {
-        df::add(&mut account.id, ObjectTracker {}, ObjectTrackerState {
-            object_count: 0,
-            deposits_open: true,
-            max_objects: if (max_objects > 0) max_objects else default_max_objects(),
-            whitelisted_types: vec_set::empty(),
-        });
+        df::add(
+            &mut account.id,
+            ObjectTracker {},
+            ObjectTrackerState {
+                object_count: 0,
+                deposits_open: true,
+                max_objects: if (max_objects > 0) max_objects else default_max_objects(),
+                whitelisted_types: vec_set::empty(),
+            },
+        );
     }
 }
 
 /// Get or create object tracker state
-public(package) fun ensure_object_tracker<Config>(account: &mut Account<Config>): &mut ObjectTrackerState {
+public(package) fun ensure_object_tracker<Config>(
+    account: &mut Account<Config>,
+): &mut ObjectTrackerState {
     if (!df::exists_(&account.id, ObjectTracker {})) {
         init_object_tracker(account, default_max_objects());
     };
@@ -180,15 +175,15 @@ public(package) fun apply_deposit_config<Config>(
     account: &mut Account<Config>,
     enable: bool,
     new_max: Option<u128>,
-    reset_counter: bool
+    reset_counter: bool,
 ) {
     let tracker = ensure_object_tracker(account);
     tracker.deposits_open = enable;
-    
+
     if (new_max.is_some()) {
         tracker.max_objects = *new_max.borrow();
     };
-    
+
     if (reset_counter) {
         tracker.object_count = 0;
     };
@@ -198,7 +193,7 @@ public(package) fun apply_deposit_config<Config>(
 public(package) fun apply_whitelist_changes<Config>(
     account: &mut Account<Config>,
     add_types: &vector<String>,
-    remove_types: &vector<String>
+    remove_types: &vector<String>,
 ) {
     let tracker = ensure_object_tracker(account);
 
@@ -217,36 +212,36 @@ public(package) fun apply_whitelist_changes<Config>(
         if (!vec_set::contains(&tracker.whitelisted_types, &type_str)) {
             assert!(
                 vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
-                EWhitelistTooLarge
+                EWhitelistTooLarge,
             );
             vec_set::insert(&mut tracker.whitelisted_types, type_str);
         };
         i = i + 1;
     };
-    
+
     // Whitelist updated
 }
 
 /// Verifies all actions have been processed and destroys the executable.
 /// Called to complete the intent execution.
 public fun confirm_execution<Config, Outcome: drop + store>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     executable: Executable<Outcome>,
 ) {
     let actions_length = executable.intent().action_specs().length();
     assert!(executable.action_idx() == actions_length, EActionsRemaining);
-    
+
     let intent = executable.destroy();
     intent.assert_is_account(account.addr());
-    
+
     account.intents.add_intent(intent);
 }
 
 /// Destroys an intent if it has no remaining execution.
 /// Expired needs to be emptied by deleting each action in the bag within their own module.
 public fun destroy_empty_intent<Config, Outcome: store + drop>(
-    account: &mut Account<Config>, 
-    key: String, 
+    account: &mut Account<Config>,
+    key: String,
 ): Expired {
     assert!(account.intents.get<Outcome>(key).execution_times().is_empty(), ECantBeRemovedYet);
     account.intents.destroy_intent<Outcome>(key)
@@ -255,25 +250,28 @@ public fun destroy_empty_intent<Config, Outcome: store + drop>(
 /// Destroys an intent if it has expired.
 /// Expired needs to be emptied by deleting each action in the bag within their own module.
 public fun delete_expired_intent<Config, Outcome: store + drop>(
-    account: &mut Account<Config>, 
-    key: String, 
+    account: &mut Account<Config>,
+    key: String,
     clock: &Clock,
 ): Expired {
-    assert!(clock.timestamp_ms() >= account.intents.get<Outcome>(key).expiration_time(), EHasntExpired);
+    assert!(
+        clock.timestamp_ms() >= account.intents.get<Outcome>(key).expiration_time(),
+        EHasntExpired,
+    );
     account.intents.destroy_intent<Outcome>(key)
 }
 
 /// Asserts that the function is called from the module defining the config of the account.
 public(package) fun assert_is_config_module<Config, CW: drop>(
-    _account: &Account<Config>, 
-    _config_witness: CW
+    _account: &Account<Config>,
+    _config_witness: CW,
 ) {
     let account_type = type_name::with_defining_ids<Config>();
     let witness_type = type_name::with_defining_ids<CW>();
     assert!(
         account_type.address_string() == witness_type.address_string() &&
         account_type.module_string() == witness_type.module_string(),
-        ENotCalledFromConfigModule
+        ENotCalledFromConfigModule,
     );
 }
 
@@ -303,7 +301,7 @@ public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
 public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, ctx: &TxContext) {
     let type_name = type_name::with_defining_ids<T>();
     let is_coin = is_coin_type(type_name);
-    
+
     // Check if type is whitelisted
     let is_whitelisted = {
         let tracker = ensure_object_tracker(account);
@@ -311,7 +309,7 @@ public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, c
         let type_str = ascii_str.to_string();
         vec_set::contains(&tracker.whitelisted_types, &type_str)
     };
-    
+
     // Only apply restrictions to non-coin, non-whitelisted types
     if (!is_coin && !is_whitelisted) {
         // Get tracker state for checking
@@ -319,34 +317,31 @@ public fun keep<Config, T: key + store>(account: &mut Account<Config>, obj: T, c
             let tracker = ensure_object_tracker(account);
             (tracker.deposits_open, ctx.sender() == account.addr())
         };
-        
+
         // Check if deposits are allowed
         if (!deposits_open) {
             // Allow self-deposits even when closed
             assert!(sender_is_self, EDepositsDisabled);
         };
-        
+
         // Now update tracker state
         let tracker = ensure_object_tracker(account);
-        
+
         // Increment counter only for restricted types
         tracker.object_count = tracker.object_count + 1;
-        
+
         // Auto-disable if hitting threshold
         if (tracker.object_count >= tracker.max_objects) {
             tracker.deposits_open = false;
             // Auto-disabled deposits at threshold
         };
     };
-    
+
     transfer::public_transfer(obj, account.addr());
 }
 
 /// Unpacks and verifies the Auth matches the account.
-public fun verify<Config>(
-    account: &Account<Config>,
-    auth: Auth,
-) {
+public fun verify<Config>(account: &Account<Config>, auth: Auth) {
     let Auth { account_addr } = auth;
 
     assert!(account.addr() == account_addr, EWrongAccount);
@@ -357,11 +352,11 @@ public fun verify<Config>(
 //**************************************************************************************************//
 
 /// The following functions are used to compose intents in external modules and packages.
-/// 
+///
 /// The proper instantiation and execution of an intent is ensured by an intent witness.
 /// This is a drop only type defined in the intent module preventing other modules to misuse the intent.
-/// 
-/// Additionally, these functions require a version witness which is a protected type for the protocol. 
+///
+/// Additionally, these functions require a version witness which is a protected type for the protocol.
 /// It is checked against the dependencies of the account to ensure the package being called is authorized.
 /// VersionWitness is a wrapper around a type defined in the version of the package being called.
 /// It behaves like a witness but it is usable in the entire package instead of in a single module.
@@ -374,24 +369,24 @@ public fun create_intent<Config, Outcome: store, IW: drop>(
     managed_name: String, // managed struct/object name for the role
     version_witness: VersionWitness, // proof of the package address that creates the intent
     intent_witness: IW, // intent witness
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Intent<Outcome> {
     // ensures the package address is a dependency for this account
-    account.deps().check(version_witness); 
+    account.deps().check(version_witness);
 
     params.new_intent(
         outcome,
         managed_name,
         account.addr(),
         intent_witness,
-        ctx
+        ctx,
     )
 }
 
 /// Adds an intent to the account. Can only be called from a dependency of the account.
 public fun insert_intent<Config, Outcome: store, IW: drop>(
-    account: &mut Account<Config>, 
-    intent: Intent<Outcome>, 
+    account: &mut Account<Config>,
+    intent: Intent<Outcome>,
     version_witness: VersionWitness,
     intent_witness: IW,
 ) {
@@ -412,8 +407,8 @@ public fun insert_intent<Config, Outcome: store, IW: drop>(
 
 /// Adds a managed data struct to the account.
 public fun add_managed_data<Config, Key: copy + drop + store, Data: store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     data: Data,
     version_witness: VersionWitness,
 ) {
@@ -424,8 +419,8 @@ public fun add_managed_data<Config, Key: copy + drop + store, Data: store>(
 
 /// Checks if a managed data struct exists in the account.
 public fun has_managed_data<Config, Key: copy + drop + store>(
-    account: &Account<Config>, 
-    key: Key, 
+    account: &Account<Config>,
+    key: Key,
 ): bool {
     df::exists_(&account.id, key)
 }
@@ -433,7 +428,7 @@ public fun has_managed_data<Config, Key: copy + drop + store>(
 /// Borrows a managed data struct from the account.
 public fun borrow_managed_data<Config, Key: copy + drop + store, Data: store>(
     account: &Account<Config>,
-    key: Key, 
+    key: Key,
     version_witness: VersionWitness,
 ): &Data {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
@@ -443,8 +438,8 @@ public fun borrow_managed_data<Config, Key: copy + drop + store, Data: store>(
 
 /// Borrows a managed data struct mutably from the account.
 public fun borrow_managed_data_mut<Config, Key: copy + drop + store, Data: store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     version_witness: VersionWitness,
 ): &mut Data {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
@@ -454,8 +449,8 @@ public fun borrow_managed_data_mut<Config, Key: copy + drop + store, Data: store
 
 /// Removes a managed data struct from the account.
 public fun remove_managed_data<Config, Key: copy + drop + store, A: store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     version_witness: VersionWitness,
 ): A {
     assert!(has_managed_data(account, key), EManagedDataDoesntExist);
@@ -465,8 +460,8 @@ public fun remove_managed_data<Config, Key: copy + drop + store, A: store>(
 
 /// Adds a managed object to the account.
 public fun add_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     asset: Asset,
     version_witness: VersionWitness,
 ) {
@@ -477,8 +472,8 @@ public fun add_managed_asset<Config, Key: copy + drop + store, Asset: key + stor
 
 /// Checks if a managed object exists in the account.
 public fun has_managed_asset<Config, Key: copy + drop + store>(
-    account: &Account<Config>, 
-    key: Key, 
+    account: &Account<Config>,
+    key: Key,
 ): bool {
     dof::exists_(&account.id, key)
 }
@@ -486,7 +481,7 @@ public fun has_managed_asset<Config, Key: copy + drop + store>(
 /// Borrows a managed object from the account.
 public fun borrow_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
     account: &Account<Config>,
-    key: Key, 
+    key: Key,
     version_witness: VersionWitness,
 ): &Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
@@ -496,8 +491,8 @@ public fun borrow_managed_asset<Config, Key: copy + drop + store, Asset: key + s
 
 /// Borrows a managed object mutably from the account.
 public fun borrow_managed_asset_mut<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     version_witness: VersionWitness,
 ): &mut Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
@@ -507,8 +502,8 @@ public fun borrow_managed_asset_mut<Config, Key: copy + drop + store, Asset: key
 
 /// Removes a managed object from the account.
 public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + store>(
-    account: &mut Account<Config>, 
-    key: Key, 
+    account: &mut Account<Config>,
+    key: Key,
     version_witness: VersionWitness,
 ): Asset {
     assert!(has_managed_asset(account, key), EManagedAssetDoesntExist);
@@ -521,7 +516,7 @@ public fun remove_managed_asset<Config, Key: copy + drop + store, Asset: key + s
 //**************************************************************************************************//
 
 /// The following functions are used to define account and intent behavior for a specific account type/config.
-/// 
+///
 /// They must be implemented in the module that defines the config of the account, which must be a dependency of the account.
 /// We provide higher level macros to facilitate the implementation of these functions.
 
@@ -531,7 +526,7 @@ public fun new<Config, CW: drop>(
     deps: Deps,
     version_witness: VersionWitness,
     config_witness: CW,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Account<Config> {
     let account = Account<Config> {
         id: object::new(ctx),
@@ -577,13 +572,13 @@ public fun create_executable<Config, Outcome: store + copy, CW: drop>(
 
     (
         *intent.outcome(),
-        executable::new(intent, ctx) // ctx no longer used but kept for API compatibility
+        executable::new(intent, ctx), // ctx no longer used but kept for API compatibility
     )
 }
 
 /// Returns a mutable reference to the intents of the account. Can only be called from the config module.
 public fun intents_mut<Config, CW: drop>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Intents {
@@ -595,7 +590,7 @@ public fun intents_mut<Config, CW: drop>(
 
 /// Returns a mutable reference to the config of the account. Can only be called from the config module.
 public fun config_mut<Config, CW: drop>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     version_witness: VersionWitness,
     config_witness: CW,
 ): &mut Config {
@@ -650,7 +645,7 @@ public fun is_accepting_objects<Config>(account: &Account<Config>): bool {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
         tracker.deposits_open && tracker.object_count < tracker.max_objects
     } else {
-        true  // Default open if not initialized
+        true // Default open if not initialized
     }
 }
 
@@ -663,14 +658,14 @@ public fun configure_object_deposits<Config>(
     reset_counter: bool,
 ) {
     account.verify(auth);
-    
+
     let tracker = ensure_object_tracker(account);
     tracker.deposits_open = enable;
-    
+
     if (new_max.is_some()) {
         tracker.max_objects = *new_max.borrow();
     };
-    
+
     if (reset_counter) {
         tracker.object_count = 0;
     };
@@ -703,7 +698,7 @@ public fun manage_type_whitelist<Config>(
             // Check size limit before adding
             assert!(
                 vec_set::size(&tracker.whitelisted_types) < max_whitelist_size(),
-                EWhitelistTooLarge
+                EWhitelistTooLarge,
             );
             vec_set::insert(&mut tracker.whitelisted_types, type_str);
         };
@@ -716,7 +711,7 @@ public fun manage_type_whitelist<Config>(
 public fun get_whitelisted_types<Config>(account: &Account<Config>): vector<String> {
     if (df::exists_(&account.id, ObjectTracker {})) {
         let tracker: &ObjectTrackerState = df::borrow(&account.id, ObjectTracker {});
-        vec_set::into_keys(tracker.whitelisted_types)  // Convert VecSet to vector
+        vec_set::into_keys(tracker.whitelisted_types) // Convert VecSet to vector
     } else {
         vector::empty()
     }
@@ -741,9 +736,11 @@ fun is_coin_type(type_name: TypeName): bool {
     // Check if the type is a Coin type by checking if it starts with
     // the Coin module prefix from the Sui framework
     let type_addr = type_name::address_string(&type_name);
-    
+
     // Check if this is from the Sui framework and the module is "coin"
-    if (type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()) {
+    if (
+        type_addr == b"0000000000000000000000000000000000000000000000000000000000000002".to_ascii_string()
+    ) {
         let module_name = type_name::module_string(&type_name);
         module_name == b"coin".to_ascii_string()
     } else {
@@ -757,7 +754,7 @@ fun is_coin_type(type_name: TypeName): bool {
 
 /// Returns a mutable reference to the metadata of the account.
 public(package) fun metadata_mut<Config>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     version_witness: VersionWitness,
 ): &mut Metadata {
     // ensures the package address is a dependency for this account
@@ -767,7 +764,7 @@ public(package) fun metadata_mut<Config>(
 
 /// Returns a mutable reference to the dependencies of the account.
 public(package) fun deps_mut<Config>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     version_witness: VersionWitness,
 ): &mut Deps {
     // ensures the package address is a dependency for this account
@@ -777,39 +774,36 @@ public(package) fun deps_mut<Config>(
 
 /// Receives an object from an account with tracking, only used in owned action lib module.
 public(package) fun receive<Config, T: key + store>(
-    account: &mut Account<Config>, 
+    account: &mut Account<Config>,
     receiving: Receiving<T>,
 ): T {
     let type_name = type_name::with_defining_ids<T>();
     let is_coin = is_coin_type(type_name);
-    
+
     let tracker = ensure_object_tracker(account);
     let ascii_str = type_name::into_string(type_name);
     let type_str = ascii_str.to_string();
     let is_whitelisted = vec_set::contains(&tracker.whitelisted_types, &type_str);
-    
+
     // Only count non-coin, non-whitelisted types
     if (!is_coin && !is_whitelisted) {
         tracker.object_count = tracker.object_count + 1;
-        
+
         // Auto-disable if hitting threshold
         if (tracker.object_count >= tracker.max_objects) {
             tracker.deposits_open = false;
         };
     };
-    
+
     transfer::public_receive(&mut account.id, receiving)
 }
 
 /// Track when an object leaves the account (withdrawal/burn/transfer)
-public(package) fun track_object_removal<Config>(
-    account: &mut Account<Config>,
-    _object_id: ID,
-) {
+public(package) fun track_object_removal<Config>(account: &mut Account<Config>, _object_id: ID) {
     let tracker = ensure_object_tracker(account);
     assert!(tracker.object_count > 0, EObjectCountUnderflow);
     tracker.object_count = tracker.object_count - 1;
-    
+
     // Re-enable deposits if we're back under 50% of threshold
     if (tracker.object_count < tracker.max_objects / 2) {
         tracker.deposits_open = true;
@@ -818,7 +812,6 @@ public(package) fun track_object_removal<Config>(
 
 // REMOVED: lock_object and unlock_object - no locking in new design
 // Conflicts between intents are natural in DAO governance
-
 
 //**************************************************************************************************//
 // Tests                                                                                            //
@@ -843,8 +836,6 @@ public fun not_config_witness(): Witness {
 
 #[test_only]
 use sui::test_utils::{assert_eq, destroy};
-use account_extensions::extensions;
-
 #[test_only]
 public struct TestConfig has copy, drop, store {}
 #[test_only]
@@ -859,21 +850,21 @@ public struct WrongWitness() has drop;
 public struct TestKey has copy, drop, store {}
 #[test_only]
 public struct TestData has copy, drop, store {
-    value: u64
+    value: u64,
 }
 #[test_only]
 public struct TestAsset has key, store {
-    id: UID
+    id: UID,
 }
 
 #[test]
 fun test_addr() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let account_addr = addr(&account);
-    
+
     assert_eq(account_addr, object::id(&account).to_address());
     destroy(account);
 }
@@ -882,10 +873,10 @@ fun test_addr() {
 fun test_verify_auth() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let auth = Auth { account_addr: account.addr() };
-    
+
     // Should not abort
     verify(&account, auth);
     destroy(account);
@@ -895,10 +886,10 @@ fun test_verify_auth() {
 fun test_verify_auth_wrong_account() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let auth = Auth { account_addr: @0xBAD };
-    
+
     verify(&account, auth);
     destroy(account);
 }
@@ -907,23 +898,23 @@ fun test_verify_auth_wrong_account() {
 fun test_managed_data_flow() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let data = TestData { value: 42 };
-    
+
     // Test add
     add_managed_data(&mut account, key, data, version::current());
     assert!(has_managed_data(&account, key));
-    
+
     // Test borrow
     let borrowed_data = borrow_managed_data(&account, key, version::current());
     assert_eq(*borrowed_data, data);
-    
+
     // Test borrow_mut
     let borrowed_mut_data = borrow_managed_data_mut(&mut account, key, version::current());
     assert_eq(*borrowed_mut_data, data);
-    
+
     // Test remove
     let removed_data = remove_managed_data(&mut account, key, version::current());
     assert_eq(removed_data, data);
@@ -935,12 +926,12 @@ fun test_managed_data_flow() {
 fun test_add_managed_data_already_exists() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let data1 = TestData { value: 42 };
     let data2 = TestData { value: 100 };
-    
+
     add_managed_data(&mut account, key, data1, version::current());
     add_managed_data(&mut account, key, data2, version::current());
     destroy(account);
@@ -950,10 +941,10 @@ fun test_add_managed_data_already_exists() {
 fun test_borrow_managed_data_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     borrow_managed_data<_, TestKey, TestData>(&account, key, version::current());
     destroy(account);
 }
@@ -962,10 +953,10 @@ fun test_borrow_managed_data_doesnt_exist() {
 fun test_borrow_managed_data_mut_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     borrow_managed_data_mut<_, TestKey, TestData>(&mut account, key, version::current());
     destroy(account);
 }
@@ -974,10 +965,10 @@ fun test_borrow_managed_data_mut_doesnt_exist() {
 fun test_remove_managed_data_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     remove_managed_data<_, TestKey, TestData>(&mut account, key, version::current());
     destroy(account);
 }
@@ -986,22 +977,30 @@ fun test_remove_managed_data_doesnt_exist() {
 fun test_managed_asset_flow() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let asset = TestAsset { id: object::new(ctx) };
     let asset_id = object::id(&asset);
-    
+
     // Test add
     add_managed_asset(&mut account, key, asset, version::current());
     assert!(has_managed_asset(&account, key), 0);
-    
+
     // Test borrow
-    let borrowed_asset = borrow_managed_asset<_, TestKey, TestAsset>(&account, key, version::current());
+    let borrowed_asset = borrow_managed_asset<_, TestKey, TestAsset>(
+        &account,
+        key,
+        version::current(),
+    );
     assert_eq(object::id(borrowed_asset), asset_id);
-    
+
     // Test remove
-    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(&mut account, key, version::current());
+    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+        &mut account,
+        key,
+        version::current(),
+    );
     assert_eq(object::id(&removed_asset), asset_id);
     assert!(!has_managed_asset(&account, key));
     destroy(account);
@@ -1012,10 +1011,10 @@ fun test_managed_asset_flow() {
 fun test_has_managed_data_false() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     assert!(!has_managed_data(&account, key));
     destroy(account);
 }
@@ -1024,10 +1023,10 @@ fun test_has_managed_data_false() {
 fun test_has_managed_asset_false() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     assert!(!has_managed_asset(&account, key));
     destroy(account);
 }
@@ -1036,12 +1035,12 @@ fun test_has_managed_asset_false() {
 fun test_add_managed_asset_already_exists() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
     let asset1 = TestAsset { id: object::new(ctx) };
     let asset2 = TestAsset { id: object::new(ctx) };
-    
+
     add_managed_asset(&mut account, key, asset1, version::current());
     add_managed_asset(&mut account, key, asset2, version::current());
     destroy(account);
@@ -1051,10 +1050,10 @@ fun test_add_managed_asset_already_exists() {
 fun test_borrow_managed_asset_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     borrow_managed_asset<_, TestKey, TestAsset>(&account, key, version::current());
     destroy(account);
 }
@@ -1063,10 +1062,10 @@ fun test_borrow_managed_asset_doesnt_exist() {
 fun test_borrow_managed_asset_mut_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
+
     borrow_managed_asset_mut<_, TestKey, TestAsset>(&mut account, key, version::current());
     destroy(account);
 }
@@ -1075,11 +1074,15 @@ fun test_borrow_managed_asset_mut_doesnt_exist() {
 fun test_remove_managed_asset_doesnt_exist() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let mut account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let key = TestKey {};
-    
-    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(&mut account, key, version::current());
+
+    let removed_asset = remove_managed_asset<_, TestKey, TestAsset>(
+        &mut account,
+        key,
+        version::current(),
+    );
     destroy(removed_asset);
     destroy(account);
 }
@@ -1088,10 +1091,10 @@ fun test_remove_managed_asset_doesnt_exist() {
 fun test_new_auth() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
     let auth = new_auth(&account, version::current(), TestWitness());
-    
+
     assert_eq(auth.account_addr, account.addr());
     destroy(account);
     destroy(auth);
@@ -1101,9 +1104,9 @@ fun test_new_auth() {
 fun test_metadata_access() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    
+
     // Should not abort - just testing access
     assert_eq(metadata(&account).size(), 0);
     destroy(account);
@@ -1113,9 +1116,9 @@ fun test_metadata_access() {
 fun test_config_access() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    
+
     // Should not abort - just testing access
     config(&account);
     destroy(account);
@@ -1125,9 +1128,9 @@ fun test_config_access() {
 fun test_assert_is_config_module_correct_witness() {
     let ctx = &mut tx_context::dummy();
     let deps = deps::new_for_testing();
-    
+
     let account = new(TestConfig {}, deps, version::current(), TestWitness(), ctx);
-    
+
     // Should not abort
     assert_is_config_module(&account, TestWitness());
     destroy(account);
@@ -1211,7 +1214,10 @@ public fun check_can_receive_object<Config, T>(account: &Account<Config>) {
     let ascii_str = type_name::into_string(type_name);
     let type_str = ascii_str.to_string();
 
-    assert!(tracker.deposits_open || tracker.whitelisted_types.contains(&type_str), EDepositsDisabled);
+    assert!(
+        tracker.deposits_open || tracker.whitelisted_types.contains(&type_str),
+        EDepositsDisabled,
+    );
 
     // For test purposes, we'll treat all objects the same
     // In production, coins don't count against limits but for tests this is fine

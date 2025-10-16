@@ -3,28 +3,19 @@
 /// All dynamic state and object references are stored as dynamic fields on the Account
 module futarchy_core::futarchy_config;
 
-// === Imports ===
-use std::{
-    string::{Self, String},
-    type_name,
-    option::{Self, Option},
-};
-use sui::{
-    object::ID,
-    clock::Clock,
-    dynamic_field as df,
-    tx_context::TxContext,
-};
-use account_protocol::{
-    account::{Self, Account},
-    deps::{Self, Deps},
-    version_witness::VersionWitness,
-};
 use account_extensions::extensions::Extensions;
-use futarchy_core::{
-    dao_config::{Self, DaoConfig},
-    version,
-};
+use account_protocol::account::{Self, Account};
+use account_protocol::deps::{Self, Deps};
+use account_protocol::version_witness::VersionWitness;
+use futarchy_core::dao_config::{Self, DaoConfig};
+use futarchy_core::version;
+use std::option::{Self, Option};
+use std::string::{Self, String};
+use std::type_name;
+use sui::clock::Clock;
+use sui::dynamic_field as df;
+use sui::object::ID;
+use sui::tx_context::TxContext;
 
 // === Constants ===
 
@@ -48,7 +39,7 @@ const ELaunchpadPriceAlreadySet: u64 = 101;
 // === Structs ===
 
 /// Configuration for how slashed proposal fees are distributed
-public struct SlashDistribution has store, drop, copy {
+public struct SlashDistribution has copy, drop, store {
     /// Percentage (in basis points) that goes to the slasher who evicted the proposal
     slasher_reward_bps: u16,
     /// Percentage (in basis points) that goes to the DAO treasury
@@ -61,7 +52,7 @@ public struct SlashDistribution has store, drop, copy {
 
 /// Multisig and optimistic intent configuration
 /// Extensible config struct for security council behavior
-public struct MultisigConfig has store, copy, drop {
+public struct MultisigConfig has copy, drop, store {
     /// If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
     /// If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
     optimistic_intent_challenge_enabled: bool,
@@ -74,14 +65,12 @@ public struct MultisigConfig has store, copy, drop {
 /// Create default multisig config (safe defaults)
 public fun default_multisig_config(): MultisigConfig {
     MultisigConfig {
-        optimistic_intent_challenge_enabled: true,  // Safe default: require 10-day challenge
+        optimistic_intent_challenge_enabled: true, // Safe default: require 10-day challenge
     }
 }
 
 /// Create custom multisig config
-public fun new_multisig_config(
-    optimistic_intent_challenge_enabled: bool,
-): MultisigConfig {
+public fun new_multisig_config(optimistic_intent_challenge_enabled: bool): MultisigConfig {
     MultisigConfig {
         optimistic_intent_challenge_enabled,
     }
@@ -96,40 +85,36 @@ public fun multisig_config_challenge_enabled(config: &MultisigConfig): bool {
 /// Enables proposals to resolve early when markets reach consensus
 ///
 /// To disable: set min_proposal_duration_ms = max_proposal_duration_ms (no early resolve window)
-public struct EarlyResolveConfig has store, copy, drop {
+public struct EarlyResolveConfig has copy, drop, store {
     // Time bounds
-    min_proposal_duration_ms: u64,       // e.g., 43_200_000 (12 hours) - safety floor
-    max_proposal_duration_ms: u64,       // e.g., 172_800_000 (48 hours) - max capital lock
-
+    min_proposal_duration_ms: u64, // e.g., 43_200_000 (12 hours) - safety floor
+    max_proposal_duration_ms: u64, // e.g., 172_800_000 (48 hours) - max capital lock
     // Winner stability thresholds - TWAP-based
-    min_winner_spread: u128,             // e.g., 50_000_000_000 (5% in 1e12 scale)
-    min_time_since_last_flip_ms: u64,   // e.g., 14_400_000 (4 hours) - simple stability check
-
+    min_winner_spread: u128, // e.g., 50_000_000_000 (5% in 1e12 scale)
+    min_time_since_last_flip_ms: u64, // e.g., 14_400_000 (4 hours) - simple stability check
     // NEW: Flip-based stability (window approach)
-    max_flips_in_window: u64,           // e.g., 1 (RECOMMENDED: 1 flip max)
-    flip_window_duration_ms: u64,       // e.g., 86_400_000 (24 hours)
-
+    max_flips_in_window: u64, // e.g., 1 (RECOMMENDED: 1 flip max)
+    flip_window_duration_ms: u64, // e.g., 86_400_000 (24 hours)
     // NEW: TWAP-scaled flip tolerance
     // If enabled: Higher TWAP spread = more flip tolerance
     // Formula: effective_max_flips = max_flips_in_window * (current_spread / min_winner_spread)
     // Example: If spread is 30% and min is 5%, allow 6x more flips (1 → 6 flips)
-    enable_twap_scaling: bool,           // RECOMMENDED: false (use fixed flip limit)
-
+    enable_twap_scaling: bool, // RECOMMENDED: false (use fixed flip limit)
     // Keeper incentives
-    keeper_reward_bps: u64,              // e.g., 10 bps (0.1%) of protocol fees
+    keeper_reward_bps: u64, // e.g., 10 bps (0.1%) of protocol fees
 }
 
 /// Create default early resolve config (disabled by default: min = max)
 public fun default_early_resolve_config(): EarlyResolveConfig {
     EarlyResolveConfig {
-        min_proposal_duration_ms: 86_400_000,      // 24 hours
-        max_proposal_duration_ms: 86_400_000,      // 24 hours (same = disabled)
-        min_winner_spread: 50_000_000_000,         // 0.05 (5%)
-        min_time_since_last_flip_ms: 14_400_000,  // 4 hours
-        max_flips_in_window: 1,                    // RECOMMENDED: 1 flip max
-        flip_window_duration_ms: 86_400_000,      // 24 hours
-        enable_twap_scaling: false,                // RECOMMENDED: false (conservative)
-        keeper_reward_bps: 10,                     // 0.1% of fees
+        min_proposal_duration_ms: 86_400_000, // 24 hours
+        max_proposal_duration_ms: 86_400_000, // 24 hours (same = disabled)
+        min_winner_spread: 50_000_000_000, // 0.05 (5%)
+        min_time_since_last_flip_ms: 14_400_000, // 4 hours
+        max_flips_in_window: 1, // RECOMMENDED: 1 flip max
+        flip_window_duration_ms: 86_400_000, // 24 hours
+        enable_twap_scaling: false, // RECOMMENDED: false (conservative)
+        keeper_reward_bps: 10, // 0.1% of fees
     }
 }
 
@@ -197,39 +182,32 @@ public fun early_resolve_twap_scaling_enabled(config: &EarlyResolveConfig): bool
 
 /// Pure Futarchy configuration struct
 /// All dynamic state and object references are stored on the Account<FutarchyConfig> object
-public struct FutarchyConfig has store, copy, drop {
+public struct FutarchyConfig has copy, drop, store {
     // Type information
     asset_type: String,
     stable_type: String,
-
     // Core DAO configuration
     config: DaoConfig,
-
     // Slash distribution configuration
     slash_distribution: SlashDistribution,
-
     // Reward configurations (paid from protocol revenue in SUI)
     // Set to 0 to disable rewards (default), or configure per DAO
-    proposal_pass_reward: u64,    // Reward for proposal creator when proposal passes (in SUI, default: 0)
-    outcome_win_reward: u64,       // Reward for winning outcome creator (in SUI, default: 0)
-    review_to_trading_fee: u64,   // Fee to advance from review to trading (in SUI)
-    finalization_fee: u64,         // Fee to finalize proposal after trading (in SUI)
-
+    proposal_pass_reward: u64, // Reward for proposal creator when proposal passes (in SUI, default: 0)
+    outcome_win_reward: u64, // Reward for winning outcome creator (in SUI, default: 0)
+    review_to_trading_fee: u64, // Fee to advance from review to trading (in SUI)
+    finalization_fee: u64, // Fee to finalize proposal after trading (in SUI)
     // Verification configuration
-    verification_level: u8,        // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
-    dao_score: u64,                // DAO quality score (0-unlimited, higher = better, admin-set only)
-
+    verification_level: u8, // 0 = unverified, 1 = basic, 2 = standard, 3 = premium
+    dao_score: u64, // DAO quality score (0-unlimited, higher = better, admin-set only)
     // Security Council Optimistic Intent Challenge Period
     // If true: MODE_COUNCIL_ONLY actions have 10-day challenge period (DAO can challenge)
     // If false: MODE_COUNCIL_ONLY actions execute instantly (full council delegation)
     // Default: true (safer, gives DAO oversight of council actions)
     optimistic_intent_challenge_enabled: bool,
-
     // Write-once immutable starting price from launchpad raise
     // Once set to Some(price), can NEVER be changed
     // Used to enforce: 1) AMM initialization ratio, 2) founder reward minimum price
     launchpad_initial_price: Option<u128>,
-
     // Early resolve configuration
     early_resolve_config: EarlyResolveConfig,
 }
@@ -270,7 +248,8 @@ public fun new<AssetType: drop, StableType: drop>(
     slash_distribution: SlashDistribution,
 ): FutarchyConfig {
     // Validate slash distribution
-    let total_bps = (slash_distribution.slasher_reward_bps as u64) +
+    let total_bps =
+        (slash_distribution.slasher_reward_bps as u64) +
                    (slash_distribution.dao_treasury_bps as u64) +
                    (slash_distribution.protocol_bps as u64) +
                    (slash_distribution.burn_bps as u64);
@@ -281,15 +260,15 @@ public fun new<AssetType: drop, StableType: drop>(
         stable_type: type_name::get<StableType>().into_string().to_string(),
         config: dao_config,
         slash_distribution,
-        proposal_pass_reward: 0,    // No default reward (DAO must configure)
-        outcome_win_reward: 0,       // No default reward (DAO must configure)
-        review_to_trading_fee: 1_000_000_000,    // 1 SUI default
-        finalization_fee: 1_000_000_000,         // 1 SUI default
-        verification_level: 0,                    // Unverified by default
-        dao_score: 0,                              // No score by default
-        optimistic_intent_challenge_enabled: true,  // Safe default: require 10-day challenge period
-        launchpad_initial_price: option::none(),   // Not set initially
-        early_resolve_config: default_early_resolve_config(),  // Disabled by default
+        proposal_pass_reward: 0, // No default reward (DAO must configure)
+        outcome_win_reward: 0, // No default reward (DAO must configure)
+        review_to_trading_fee: 1_000_000_000, // 1 SUI default
+        finalization_fee: 1_000_000_000, // 1 SUI default
+        verification_level: 0, // Unverified by default
+        dao_score: 0, // No score by default
+        optimistic_intent_challenge_enabled: true, // Safe default: require 10-day challenge period
+        launchpad_initial_price: option::none(), // Not set initially
+        early_resolve_config: default_early_resolve_config(), // Disabled by default
     }
 }
 
@@ -312,7 +291,8 @@ public fun new_slash_distribution(
     burn_bps: u16,
 ): SlashDistribution {
     // Validate total equals 100%
-    let total_bps = (slasher_reward_bps as u64) +
+    let total_bps =
+        (slasher_reward_bps as u64) +
                    (dao_treasury_bps as u64) +
                    (protocol_bps as u64) +
                    (burn_bps as u64);
@@ -474,10 +454,7 @@ public fun with_rewards(
     }
 }
 
-public fun with_verification_level(
-    config: FutarchyConfig,
-    verification_level: u8,
-): FutarchyConfig {
+public fun with_verification_level(config: FutarchyConfig, verification_level: u8): FutarchyConfig {
     FutarchyConfig {
         asset_type: config.asset_type,
         stable_type: config.stable_type,
@@ -495,10 +472,7 @@ public fun with_verification_level(
     }
 }
 
-public fun with_dao_score(
-    config: FutarchyConfig,
-    dao_score: u64,
-): FutarchyConfig {
+public fun with_dao_score(config: FutarchyConfig, dao_score: u64): FutarchyConfig {
     FutarchyConfig {
         asset_type: config.asset_type,
         stable_type: config.stable_type,
@@ -567,7 +541,7 @@ public fun with_optimistic_intent_challenge_enabled(
 // === Council Approval Functions ===
 
 /// Represents a custody approval from a council
-public struct CustodyApproval has store, copy, drop {
+public struct CustodyApproval has copy, drop, store {
     dao_id: ID,
     resource_key: String,
     resource_id: ID,
@@ -618,7 +592,7 @@ public fun record_council_approval_generic<Config: store>(
 // === FutarchyOutcome Type ===
 
 /// Outcome for futarchy proposals - represents the intent execution metadata
-public struct FutarchyOutcome has store, drop, copy {
+public struct FutarchyOutcome has copy, drop, store {
     // Intent key is the primary identifier - links to the intent in account storage
     intent_key: String,
     // These fields are set when proposal is created/approved
@@ -629,10 +603,7 @@ public struct FutarchyOutcome has store, drop, copy {
 }
 
 /// Creates a new FutarchyOutcome for intent creation (before proposal exists)
-public fun new_futarchy_outcome(
-    intent_key: String,
-    min_execution_time: u64,
-): FutarchyOutcome {
+public fun new_futarchy_outcome(intent_key: String, min_execution_time: u64): FutarchyOutcome {
     FutarchyOutcome {
         intent_key,
         proposal_id: option::none(),
@@ -670,10 +641,7 @@ public fun set_outcome_proposal_and_market(
 }
 
 /// Marks outcome as approved after proposal passes
-public fun set_outcome_approved(
-    outcome: &mut FutarchyOutcome,
-    approved: bool,
-) {
+public fun set_outcome_approved(outcome: &mut FutarchyOutcome, approved: bool) {
     outcome.approved = approved;
 }
 
@@ -779,7 +747,10 @@ public fun state_paused(): u8 {
     DAO_STATE_PAUSED
 }
 
-public fun internal_config_mut(account: &mut Account<FutarchyConfig>, version: account_protocol::version_witness::VersionWitness): &mut FutarchyConfig {
+public fun internal_config_mut(
+    account: &mut Account<FutarchyConfig>,
+    version: account_protocol::version_witness::VersionWitness,
+): &mut FutarchyConfig {
     account::config_mut<FutarchyConfig, ConfigWitness>(account, version, ConfigWitness {})
 }
 
@@ -915,7 +886,10 @@ public fun set_max_amm_swap_percent_bps(config: &mut FutarchyConfig, percent_bps
     dao_config::set_max_amm_swap_percent_bps(trading_params, percent_bps);
 }
 
-public fun set_conditional_liquidity_ratio_percent(config: &mut FutarchyConfig, ratio_percent: u64) {
+public fun set_conditional_liquidity_ratio_percent(
+    config: &mut FutarchyConfig,
+    ratio_percent: u64,
+) {
     let trading_params = dao_config::trading_params_mut(&mut config.config);
     dao_config::set_conditional_liquidity_ratio_percent(trading_params, ratio_percent);
 }
@@ -927,22 +901,19 @@ public fun set_use_outcome_index(config: &mut FutarchyConfig, use_index: bool) {
 
 public fun set_conditional_metadata(
     config: &mut FutarchyConfig,
-    metadata: Option<dao_config::ConditionalMetadata>
+    metadata: Option<dao_config::ConditionalMetadata>,
 ) {
     let coin_config = dao_config::conditional_coin_config_mut(&mut config.config);
     dao_config::set_conditional_metadata(coin_config, metadata);
 }
 
-public fun set_optimistic_intent_challenge_enabled(
-    config: &mut FutarchyConfig,
-    enabled: bool
-) {
+public fun set_optimistic_intent_challenge_enabled(config: &mut FutarchyConfig, enabled: bool) {
     config.optimistic_intent_challenge_enabled = enabled;
 }
 
 public fun set_early_resolve_config(
     config: &mut FutarchyConfig,
-    early_resolve_config: EarlyResolveConfig
+    early_resolve_config: EarlyResolveConfig,
 ) {
     config.early_resolve_config = early_resolve_config;
 }
@@ -954,13 +925,17 @@ public fun update_slash_distribution(
     protocol_bps: u16,
     burn_bps: u16,
 ) {
-    assert!(slasher_reward_bps + dao_treasury_bps + protocol_bps + burn_bps == 10000, EInvalidSlashDistribution);
-    config.slash_distribution = SlashDistribution {
-        slasher_reward_bps,
-        dao_treasury_bps,
-        protocol_bps,
-        burn_bps,
-    };
+    assert!(
+        slasher_reward_bps + dao_treasury_bps + protocol_bps + burn_bps == 10000,
+        EInvalidSlashDistribution,
+    );
+    config.slash_distribution =
+        SlashDistribution {
+            slasher_reward_bps,
+            dao_treasury_bps,
+            protocol_bps,
+            burn_bps,
+        };
 }
 
 public fun set_proposals_enabled(state: &mut DaoState, enabled: bool) {
@@ -978,15 +953,12 @@ public fun set_proposals_enabled(state: &mut DaoState, enabled: bool) {
 public fun new_with_extensions(
     extensions: &Extensions,
     config: FutarchyConfig,
-    ctx: &mut TxContext
+    ctx: &mut TxContext,
 ): Account<FutarchyConfig> {
     // Create dependencies using Extensions for validation
     let deps = deps::new_latest_extensions(
         extensions,
-        vector[
-            b"AccountProtocol".to_string(),
-            b"FutarchyCore".to_string()
-        ]
+        vector[b"AccountProtocol".to_string(), b"FutarchyCore".to_string()],
     );
 
     // Create account with FutarchyConfig using the config witness
@@ -995,16 +967,13 @@ public fun new_with_extensions(
         deps,
         version::current(),
         ConfigWitness {},
-        ctx
+        ctx,
     )
 }
 
 /// Test version that creates account without Extensions validation
 #[test_only]
-public fun new_account_test(
-    config: FutarchyConfig,
-    ctx: &mut TxContext
-): Account<FutarchyConfig> {
+public fun new_account_test(config: FutarchyConfig, ctx: &mut TxContext): Account<FutarchyConfig> {
     // Create dependencies for testing without Extensions
     let deps = deps::new_for_testing();
 
@@ -1014,42 +983,54 @@ public fun new_account_test(
         deps,
         version::current(),
         ConfigWitness {},
-        ctx
+        ctx,
     )
 }
 
 /// Get mutable access to internal config for test scenarios
 #[test_only]
-public fun internal_config_mut_test(
-    account: &mut Account<FutarchyConfig>
-): &mut FutarchyConfig {
+public fun internal_config_mut_test(account: &mut Account<FutarchyConfig>): &mut FutarchyConfig {
     account::config_mut<FutarchyConfig, ConfigWitness>(
         account,
         version::current(),
-        ConfigWitness {}
+        ConfigWitness {},
     )
 }
 
 #[test_only]
 /// Create Auth for testing
 public fun new_auth_for_testing(
-    account: &Account<FutarchyConfig>
+    account: &Account<FutarchyConfig>,
 ): account_protocol::account::Auth {
     account::new_auth<FutarchyConfig, ConfigWitness>(
         account,
         version::current(),
-        ConfigWitness {}
+        ConfigWitness {},
     )
 }
 
 /// Set the proposal queue ID as a dynamic field on the account
 public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id: Option<ID>) {
     if (queue_id.is_some()) {
-        account::add_managed_data(account, ProposalQueueKey {}, queue_id.destroy_some(), version::current());
+        account::add_managed_data(
+            account,
+            ProposalQueueKey {},
+            queue_id.destroy_some(),
+            version::current(),
+        );
     } else {
         // Remove the field if setting to none
-        if (account::has_managed_data<FutarchyConfig, ProposalQueueKey>(account, ProposalQueueKey {})) {
-            let _: ID = account::remove_managed_data(account, ProposalQueueKey {}, version::current());
+        if (
+            account::has_managed_data<FutarchyConfig, ProposalQueueKey>(
+                account,
+                ProposalQueueKey {},
+            )
+        ) {
+            let _: ID = account::remove_managed_data(
+                account,
+                ProposalQueueKey {},
+                version::current(),
+            );
         }
     }
 }
@@ -1057,7 +1038,9 @@ public fun set_proposal_queue_id(account: &mut Account<FutarchyConfig>, queue_id
 /// Get the proposal queue ID from dynamic field
 public fun get_proposal_queue_id(account: &Account<FutarchyConfig>): Option<ID> {
     if (account::has_managed_data<FutarchyConfig, ProposalQueueKey>(account, ProposalQueueKey {})) {
-        option::some(*account::borrow_managed_data(account, ProposalQueueKey {}, version::current()))
+        option::some(
+            *account::borrow_managed_data(account, ProposalQueueKey {}, version::current()),
+        )
     } else {
         option::none()
     }
@@ -1085,10 +1068,7 @@ public fun authenticate(account: &Account<FutarchyConfig>, ctx: &TxContext): Con
 ///
 /// @param config - Mutable FutarchyConfig (only accessible during initialization or via internal_config_mut)
 /// @param price - Initial launchpad price in 1e12 scale (e.g., $2.00 = 2_000_000_000_000)
-public fun set_launchpad_initial_price(
-    config: &mut FutarchyConfig,
-    price: u128,
-) {
+public fun set_launchpad_initial_price(config: &mut FutarchyConfig, price: u128) {
     assert!(config.launchpad_initial_price.is_none(), ELaunchpadPriceAlreadySet);
     config.launchpad_initial_price = option::some(price);
 }
@@ -1111,6 +1091,4 @@ public fun destroy_dao_state_for_testing(state: DaoState) {
         attestation_url: _,
         verification_pending: _,
     } = state;
-}
-
 }

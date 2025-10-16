@@ -3,28 +3,22 @@
 /// Challenges trigger futarchy markets using standard proposal fees
 module futarchy_actions::optimistic_proposal;
 
+use account_protocol::account::{Self, Account};
+use account_protocol::executable::{Self, Executable};
+use account_protocol::intents::{Self, Intent, ActionSpec};
+use futarchy_core::dao_config;
+use futarchy_core::futarchy_config::{Self, FutarchyConfig};
+use futarchy_markets_core::proposal::{Self, Proposal};
+use std::option::{Self, Option};
 use std::string::{Self, String};
 use std::vector;
-use std::option::{Self, Option};
 use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
 use sui::clock::{Self, Clock};
-use sui::tx_context::{Self, TxContext};
-use sui::object::{Self, ID, UID};
+use sui::coin::{Self, Coin};
 use sui::event;
+use sui::object::{Self, ID, UID};
 use sui::transfer;
-use account_protocol::{
-    executable::{Self, Executable},
-    account::{Self, Account},
-    intents::{Self, Intent, ActionSpec},
-};
-use futarchy_core::{
-    futarchy_config::{Self, FutarchyConfig},
-    dao_config,
-};
-use futarchy_markets_core::{
-    proposal::{Self, Proposal},
-};
+use sui::tx_context::{Self, TxContext};
 
 // === Errors ===
 const ENotOptimistic: u64 = 0;
@@ -79,25 +73,20 @@ public struct ChallengeResolved has copy, drop {
 /// An optimistic proposal that executes unless challenged
 public struct OptimisticProposal has key, store {
     id: UID,
-    
     // Core proposal data
     proposer: address,
     intent_specs: vector<ActionSpec>, // The action blueprints to execute
     description: String,
-    
     // Challenge mechanics
     challenge_period_end: u64,
     is_challenged: bool,
     challenger: Option<address>,
-    
     // If challenged, links to futarchy proposal
     futarchy_proposal_id: Option<ID>,
     challenge_succeeded: Option<bool>,
-    
     // Execution state
     executed: bool,
     created_at: u64,
-    
     // Metadata
     metadata: String,
 }
@@ -106,23 +95,23 @@ public struct OptimisticProposal has key, store {
 public struct CreateOptimisticProposalAction has store {
     intent: Intent<String>,
     description: String,
-    challenge_period_ms: u64,  // If 0, uses DAO config default
+    challenge_period_ms: u64, // If 0, uses DAO config default
     metadata: String,
 }
 
 /// Action to challenge an optimistic proposal
-public struct ChallengeOptimisticProposalAction has store, drop {
+public struct ChallengeOptimisticProposalAction has drop, store {
     optimistic_proposal_id: ID,
     challenge_description: String,
 }
 
 /// Action to execute an unchallenged optimistic proposal
-public struct ExecuteOptimisticProposalAction has store, drop {
+public struct ExecuteOptimisticProposalAction has drop, store {
     optimistic_proposal_id: ID,
 }
 
 /// Action to resolve a challenge after futarchy markets decide
-public struct ResolveChallengeAction has store, drop {
+public struct ResolveChallengeAction has drop, store {
     optimistic_proposal_id: ID,
     futarchy_proposal_id: ID,
 }
@@ -134,7 +123,7 @@ public fun create_optimistic_proposal(
     proposer: address,
     intent_specs: vector<ActionSpec>,
     description: String,
-    challenge_period_ms: u64,  // If 0, uses DAO config default
+    challenge_period_ms: u64, // If 0, uses DAO config default
     metadata: String,
     account: &Account<FutarchyConfig>,
     clock: &Clock,
@@ -149,19 +138,19 @@ public fun create_optimistic_proposal(
         assert!(challenge_period_ms > 0, EInvalidFeeAmount);
         challenge_period_ms
     };
-    
+
     let id = object::new(ctx);
     let proposal_id = object::uid_to_inner(&id);
     let created_at = clock.timestamp_ms();
     let challenge_period_end = created_at + actual_challenge_period;
-    
+
     event::emit(OptimisticProposalCreated {
         proposal_id,
         proposer,
         challenge_period_end,
         description: description,
     });
-    
+
     OptimisticProposal {
         id,
         proposer,
@@ -195,20 +184,20 @@ public fun challenge_optimistic_proposal<AssetType>(
     assert!(now < optimistic.challenge_period_end, EChallengePeriodEnded);
     assert!(!optimistic.is_challenged, EAlreadyChallenged);
     assert!(!optimistic.executed, EAlreadyExecuted);
-    
+
     // Get the required fee amount from DAO config
     let futarchy_config = account::config(account);
     let fee_amount = futarchy_config::optimistic_challenge_fee(futarchy_config);
     assert!(coin::value(&fee_coin) >= fee_amount, EInvalidFeeAmount);
-    
+
     // Transfer fee to DAO treasury (challenger loses this if challenge fails)
     transfer::public_transfer(fee_coin, account::addr(account));
-    
+
     // Mark as challenged
     optimistic.is_challenged = true;
     optimistic.challenger = option::some(challenger);
     optimistic.futarchy_proposal_id = option::some(futarchy_proposal_id);
-    
+
     event::emit(ProposalChallenged {
         proposal_id: object::id(optimistic),
         challenger,
@@ -229,14 +218,14 @@ public fun execute_optimistic_proposal(
     assert!(!optimistic.executed, EAlreadyExecuted);
     assert!(!optimistic.is_challenged, EAlreadyChallenged);
     assert!(clock.timestamp_ms() >= optimistic.challenge_period_end, EChallengePeriodNotEnded);
-    
+
     optimistic.executed = true;
-    
+
     event::emit(OptimisticProposalExecuted {
         proposal_id: object::id(optimistic),
         timestamp: clock.timestamp_ms(),
     });
-    
+
     // Intent execution would be handled separately
     // The intent remains stored in the proposal for reference
 }
@@ -254,14 +243,15 @@ public fun resolve_challenge<AssetType, StableType>(
     assert!(optimistic.is_challenged, ENotOptimistic);
     assert!(option::is_none(&optimistic.challenge_succeeded), EChallengeAlreadyResolved);
     assert!(proposal::is_finalized(futarchy_proposal), EProposalNotFinalized);
-    
+
     // Check if the futarchy proposal passed (challenge failed) or failed (challenge succeeded)
     // If futarchy REJECTS the optimistic proposal, the challenge succeeded
-    let challenge_succeeded = !proposal::is_winning_outcome_set(futarchy_proposal) || 
+    let challenge_succeeded =
+        !proposal::is_winning_outcome_set(futarchy_proposal) || 
                              proposal::get_winning_outcome(futarchy_proposal) == 1; // REJECT outcome
-    
+
     optimistic.challenge_succeeded = option::some(challenge_succeeded);
-    
+
     // Handle fee based on challenge result
     let challenger_refunded = if (challenge_succeeded && option::is_some(&optimistic.challenger)) {
         // Challenge succeeded - refund challenger
@@ -280,7 +270,7 @@ public fun resolve_challenge<AssetType, StableType>(
         };
         false
     };
-    
+
     // If challenge failed, the optimistic proposal can still execute
     if (!challenge_succeeded) {
         // Proposal was validated by markets, can execute
@@ -289,13 +279,13 @@ public fun resolve_challenge<AssetType, StableType>(
         // Challenge succeeded, proposal is blocked
         optimistic.executed = true; // Mark as executed to prevent future execution
     };
-    
+
     event::emit(ChallengeResolved {
         proposal_id: object::id(optimistic),
         challenge_succeeded,
         challenger_refunded,
     });
-    
+
     // Destroy the Option if it still contains a coin (shouldn't happen in normal flow)
     if (option::is_some(&refund_coin)) {
         let leftover_coin = option::extract(&mut refund_coin);
@@ -306,19 +296,13 @@ public fun resolve_challenge<AssetType, StableType>(
 
 // === Getter Functions ===
 
-public fun is_challengeable(
-    optimistic: &OptimisticProposal,
-    clock: &Clock,
-): bool {
+public fun is_challengeable(optimistic: &OptimisticProposal, clock: &Clock): bool {
     !optimistic.is_challenged && 
     !optimistic.executed && 
     clock.timestamp_ms() < optimistic.challenge_period_end
 }
 
-public fun is_executable(
-    optimistic: &OptimisticProposal,
-    clock: &Clock,
-): bool {
+public fun is_executable(optimistic: &OptimisticProposal, clock: &Clock): bool {
     !optimistic.executed && 
     !optimistic.is_challenged && 
     clock.timestamp_ms() >= optimistic.challenge_period_end

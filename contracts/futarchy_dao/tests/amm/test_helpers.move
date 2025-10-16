@@ -2,12 +2,10 @@
 module futarchy::test_helpers;
 
 use futarchy::conditional_amm::{Self, LiquidityPool};
-use sui::{
-    test_scenario::{Self as test, Scenario, ctx},
-    coin::{Self, Coin},
-    clock::{Self, Clock},
-    object::{Self, ID},
-};
+use sui::clock::{Self, Clock};
+use sui::coin::{Self, Coin};
+use sui::object::{Self, ID};
+use sui::test_scenario::{Self as test, Scenario, ctx};
 
 // Common test addresses
 const ADMIN: address = @0xA;
@@ -22,7 +20,7 @@ const INITIAL_RESERVE: u64 = 1_000_000;
 public fun create_test_pool_with_reserves(
     asset_reserve: u64,
     stable_reserve: u64,
-    scenario: &mut Scenario
+    scenario: &mut Scenario,
 ): LiquidityPool {
     let dummy_market_id = object::id_from_address(ADMIN);
     conditional_amm::create_test_pool(
@@ -31,7 +29,7 @@ public fun create_test_pool_with_reserves(
         DEFAULT_SWAP_FEE,
         asset_reserve,
         stable_reserve,
-        ctx(scenario)
+        ctx(scenario),
     )
 }
 
