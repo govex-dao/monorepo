@@ -1,7 +1,7 @@
 module futarchy_markets_primitives::conditional_amm;
 
 use futarchy_markets_primitives::futarchy_twap_oracle::{Self, Oracle};
-use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
+use futarchy_markets_primitives::PCW_TWAP_oracle::{Self, SimpleTWAP};
 use futarchy_one_shot_utils::constants;
 use futarchy_one_shot_utils::math;
 use std::u64;
@@ -155,7 +155,7 @@ public fun new_pool(
 
     // Initialize SimpleTWAP oracle (for external consumers)
     // Windowed TWAP with 1% per minute capping (default config)
-    let simple_twap_oracle = pass_through_PCW_TWAP_oracle::new_default(
+    let simple_twap_oracle = PCW_TWAP_oracle::new_default(
         initial_price,
         clock,
     );
@@ -260,7 +260,7 @@ public fun swap_asset_to_stable(
     );
 
     // Update SimpleTWAP oracle (for external consumers)
-    pass_through_PCW_TWAP_oracle::update(&mut pool.simple_twap, old_price, clock);
+    PCW_TWAP_oracle::update(&mut pool.simple_twap, old_price, clock);
 
     // Update reserves. The amount added to the asset reserve is the portion used for the swap
     // PLUS the LP share of the fee. The protocol share was already removed.
@@ -364,7 +364,7 @@ public fun swap_stable_to_asset(
     );
 
     // Update SimpleTWAP oracle (for external consumers)
-    pass_through_PCW_TWAP_oracle::update(&mut pool.simple_twap, old_price, clock);
+    PCW_TWAP_oracle::update(&mut pool.simple_twap, old_price, clock);
 
     // Update reserves. The amount added to the stable reserve is the portion used for the swap
     // PLUS the LP share of the fee. The protocol share was already removed.
@@ -488,7 +488,7 @@ public fun add_liquidity_proportional(
 
     // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
-    pass_through_PCW_TWAP_oracle::update(&mut pool.simple_twap, new_price, clock);
+    PCW_TWAP_oracle::update(&mut pool.simple_twap, new_price, clock);
 
     event::emit(LiquidityAdded {
         market_id: pool.market_id,
@@ -549,7 +549,7 @@ public fun remove_liquidity_proportional(
 
     // Update SimpleTWAP after liquidity change
     let new_price = get_current_price(pool);
-    pass_through_PCW_TWAP_oracle::update(&mut pool.simple_twap, new_price, clock);
+    PCW_TWAP_oracle::update(&mut pool.simple_twap, new_price, clock);
 
     event::emit(LiquidityRemoved {
         market_id: pool.market_id,
@@ -1016,7 +1016,7 @@ public fun create_test_pool(
         stable_reserve,
         fee_percent,
         oracle: oracle_obj,
-        simple_twap: pass_through_PCW_TWAP_oracle::new_default(initial_price, clock), // Windowed capped TWAP
+        simple_twap: PCW_TWAP_oracle::new_default(initial_price, clock), // Windowed capped TWAP
         protocol_fees: 0,
         lp_supply: (MINIMUM_LIQUIDITY as u64),
         // Initialize all liquidity in LIVE bucket for testing
@@ -1056,7 +1056,7 @@ public fun create_pool_for_testing(
         ctx,
     );
 
-    let simple_twap = pass_through_PCW_TWAP_oracle::new_default(initial_price, &clock);
+    let simple_twap = PCW_TWAP_oracle::new_default(initial_price, &clock);
     clock::destroy_for_testing(clock);
 
     LiquidityPool {

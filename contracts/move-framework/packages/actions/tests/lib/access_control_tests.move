@@ -308,7 +308,7 @@ fun test_delete_borrow_action() {
     account.confirm_execution(executable);
 
     // Now destroy the empty intent
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key);
+    let mut expired = account.destroy_empty_intent<_, Outcome>(key, scenario.ctx());
     access_control::delete_borrow<TestCap>(&mut expired);
     access_control::delete_return<TestCap>(&mut expired);
     expired.destroy_empty();

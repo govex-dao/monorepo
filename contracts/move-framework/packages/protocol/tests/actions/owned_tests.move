@@ -148,7 +148,7 @@ fun test_withdraw_expired() {
     owned::new_withdraw_coin<_, _, _>(&mut intent, &account, coin_type, 5, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);
+    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock, scenario.ctx());
     owned::delete_withdraw_coin(&mut expired, &mut account);
     expired.destroy_empty();
 
@@ -280,7 +280,7 @@ fun test_error_delete_withdraw_from_wrong_account() {
     owned::new_withdraw_coin<_, _, _>(&mut intent, &account, coin_type, 5, DummyIntent());
     account.insert_intent(intent, version::current(), DummyIntent());
 
-    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock);
+    let mut expired = account.delete_expired_intent<_, Outcome>(key, &clock, scenario.ctx());
     owned::delete_withdraw_coin(&mut expired, &mut account2);
     expired.destroy_empty();
 

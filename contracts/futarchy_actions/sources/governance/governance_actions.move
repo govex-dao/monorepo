@@ -1085,6 +1085,7 @@ public entry fun recreate_proposal_chain(
             reservation.policy_mode, // ✅ Inherit parent's policy data
             reservation.required_council_id,
             reservation.council_approval_proof,
+            false, // used_quota - Recreation doesn't use quota
             clock,
             ctx
         );

@@ -273,42 +273,6 @@ public fun accept_deposit(): AcceptDeposit {
     AcceptDeposit { phantom: false }
 }
 
-// === Founder Lock Action Types ===
-
-public struct CreateFounderLock has drop {}
-public struct CreateFounderLockProposal has drop {
-    phantom: bool,
-}
-
-public fun create_founder_lock_proposal(): CreateFounderLockProposal {
-    CreateFounderLockProposal { phantom: false }
-}
-
-public struct UnlockFounderTokens has drop {}
-public struct UpdateFounderLockRecipient has drop {
-    phantom: bool,
-}
-
-public fun update_founder_lock_recipient(): UpdateFounderLockRecipient {
-    UpdateFounderLockRecipient { phantom: false }
-}
-
-public struct WithdrawUnlockedTokens has drop {
-    phantom: bool,
-}
-
-public fun withdraw_unlocked_tokens(): WithdrawUnlockedTokens {
-    WithdrawUnlockedTokens { phantom: false }
-}
-
-public struct ExecuteFounderLock has drop {
-    phantom: bool,
-}
-
-public fun execute_founder_lock(): ExecuteFounderLock {
-    ExecuteFounderLock { phantom: false }
-}
-
 // === Commitment Proposal Action Types ===
 
 public struct CreateCommitmentProposal has drop {}
@@ -628,11 +592,6 @@ public fun update_treasury_address(): TypeName {
 public fun withdraw_protocol_fees(): TypeName {
     type_name::with_defining_ids<WithdrawProtocolFees>()
 }
-
-// Founder lock actions
-public fun create_founder_lock(): TypeName { type_name::with_defining_ids<CreateFounderLock>() }
-
-public fun unlock_founder_tokens(): TypeName { type_name::with_defining_ids<UnlockFounderTokens>() }
 
 // Package upgrade actions
 public fun package_upgrade(): TypeName { type_name::with_defining_ids<PackageUpgrade>() }

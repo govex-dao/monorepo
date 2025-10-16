@@ -96,6 +96,8 @@ const EInvalidDeadManSwitchRecipient: u64 = 11;
 const ENotInactive: u64 = 12;
 const ENoDeadManSwitch: u64 = 13;
 const ERecipientDaoMismatch: u64 = 14;
+const EDeadManSwitchAlreadyTriggered: u64 = 15;
+const EDeadManSwitchNotEligible: u64 = 16;
 
 // === Structs ===
 
@@ -118,6 +120,8 @@ public struct DeadManSwitchConfig has copy, drop, store {
     /// Inactivity threshold in milliseconds before switch activates (e.g., 30 days = 2592000000)
     /// 0 = disabled
     timeout_ms: u64,
+    /// Whether the dead man switch has been triggered (council marked as inactive)
+    triggered: bool,
 }
 
 /// The configuration for a weighted multisig account.
@@ -212,7 +216,7 @@ fun new_with_immutability(
         last_activity_ms: clock.timestamp_ms(),
         dao_id: option::none(), // Can be set later with set_dao_id
         time_lock: TimeLockConfig { default_delay_ms: 0 }, // Default: no time lock
-        dead_man_switch: DeadManSwitchConfig { timeout_ms: 0 }, // Default: disabled
+        dead_man_switch: DeadManSwitchConfig { timeout_ms: 0, triggered: false }, // Default: disabled
         dead_man_switch_recipient: option::none(), // Can be set later with set_dead_man_switch_recipient
     };
 
@@ -457,6 +461,17 @@ public fun dead_man_switch_timeout_ms(config: &WeightedMultisig): u64 {
     config.dead_man_switch.timeout_ms
 }
 
+/// Check if the dead man switch has been triggered
+public fun is_dead_man_switch_triggered(config: &WeightedMultisig): bool {
+    config.dead_man_switch.triggered
+}
+
+/// Mark the dead man switch as triggered (package-only)
+/// This is called when a permissionless failover is executed
+public(package) fun mark_dead_man_switch_triggered(config: &mut WeightedMultisig) {
+    config.dead_man_switch.triggered = true;
+}
+
 /// Check if the multisig is inactive and dead man switch should trigger
 /// Returns true if:
 /// 1. Dead man switch is configured (has recipient and timeout > 0)
@@ -475,8 +490,8 @@ public fun is_inactive(config: &WeightedMultisig, clock: &Clock): bool {
     inactive_duration >= config.dead_man_switch.timeout_ms
 }
 
-/// Validate that a recipient still belongs to the same DAO at execution time.
-/// This re-validates the relationship that was checked at setup time.
+/// Validate that a recipient multisig still belongs to the same DAO at execution time.
+/// Use this when the recipient is ANOTHER MULTISIG (not the DAO itself).
 ///
 /// CRITICAL: This prevents TOCTOU (Time-Of-Check-Time-Of-Use) attacks where:
 /// 1. Multisig A sets recipient = Multisig B (both same DAO, validated)
@@ -485,7 +500,7 @@ public fun is_inactive(config: &WeightedMultisig, clock: &Clock): bool {
 ///
 /// Parameters:
 /// - inactive_config: The config of the inactive multisig triggering the switch
-/// - recipient_config: The config of the recipient (must be provided for validation)
+/// - recipient_config: The config of the recipient multisig
 ///
 /// Aborts if recipient no longer belongs to the same DAO.
 public fun validate_recipient_at_execution(
@@ -494,32 +509,51 @@ public fun validate_recipient_at_execution(
 ) {
     // Get the recipient ID from inactive multisig
     assert!(option::is_some(&inactive_config.dead_man_switch_recipient), ENoDeadManSwitch);
-    let recipient_id = *option::borrow(&inactive_config.dead_man_switch_recipient);
 
     // If inactive multisig has a parent DAO, validate recipient still belongs to same DAO
     if (option::is_some(&inactive_config.dao_id)) {
         let our_dao_id = *option::borrow(&inactive_config.dao_id);
 
-        // Recipient must STILL belong to same DAO (re-validation at execution time)
-        let valid_recipient = if (option::is_none(&recipient_config.dao_id)) {
-            // Recipient has no dao_id - this is only valid if recipient IS the DAO itself
-            // In this case, we can't validate further without the DAO object
-            // The caller must ensure recipient_id == our_dao_id
-            false // Require explicit DAO validation by caller
-        } else {
-            // Recipient is another multisig - must still have same dao_id
-            *option::borrow(&recipient_config.dao_id) == our_dao_id
-        };
-
-        assert!(valid_recipient, ERecipientDaoMismatch);
+        // Recipient must be another multisig with same dao_id
+        assert!(option::is_some(&recipient_config.dao_id), ERecipientDaoMismatch);
+        assert!(*option::borrow(&recipient_config.dao_id) == our_dao_id, ERecipientDaoMismatch);
     };
 
     // Note: Additional validation that recipient_config actually belongs to recipient_id
     // is the caller's responsibility (by providing the correct config object)
 }
 
-/// Check if dead man switch can be triggered for a specific recipient
-/// This is the main validation function that should be called before any failover.
+/// Validate that the recipient is the parent DAO at execution time.
+/// Use this when the recipient IS the DAO itself (not another multisig).
+///
+/// This function validates that:
+/// 1. The inactive council has a DAO link
+/// 2. The recipient ID matches the parent DAO ID
+/// 3. The provided dao_id matches the parent DAO ID
+///
+/// Parameters:
+/// - inactive_config: The config of the inactive multisig triggering the switch
+/// - dao_id: The ID of the DAO account that should be the recipient
+///
+/// Aborts if the recipient is not the expected DAO.
+public fun validate_dao_recipient_at_execution(
+    inactive_config: &WeightedMultisig,
+    dao_id: ID,
+) {
+    // Get the recipient ID from inactive multisig
+    assert!(option::is_some(&inactive_config.dead_man_switch_recipient), ENoDeadManSwitch);
+    let recipient_id = *option::borrow(&inactive_config.dead_man_switch_recipient);
+
+    // Recipient must be the parent DAO
+    assert!(option::is_some(&inactive_config.dao_id), ERecipientDaoMismatch);
+    let our_dao_id = *option::borrow(&inactive_config.dao_id);
+
+    // Validate both recipient and provided dao_id match parent DAO (removes redundancy)
+    assert!(recipient_id == our_dao_id && dao_id == our_dao_id, ERecipientDaoMismatch);
+}
+
+/// Check if dead man switch can be triggered for a multisig recipient.
+/// Use this when the recipient is ANOTHER MULTISIG (not the DAO itself).
 ///
 /// Validates:
 /// 1. Inactive multisig has a dead man switch configured
@@ -533,19 +567,8 @@ public fun can_trigger_dead_man_switch(
     recipient_config: &WeightedMultisig,
     clock: &Clock,
 ): bool {
-    // Must have recipient configured
-    if (option::is_none(&inactive_config.dead_man_switch_recipient)) {
-        return false
-    };
-
-    // Must have timeout enabled
-    if (inactive_config.dead_man_switch.timeout_ms == 0) {
-        return false
-    };
-
-    // Must be inactive long enough
-    let inactive_duration = clock.timestamp_ms() - inactive_config.last_activity_ms;
-    if (inactive_duration < inactive_config.dead_man_switch.timeout_ms) {
+    // Check basic eligibility (timeout + inactivity)
+    if (!check_basic_dead_man_switch_eligibility(inactive_config, clock)) {
         return false
     };
 
@@ -554,13 +577,84 @@ public fun can_trigger_dead_man_switch(
     if (option::is_some(&inactive_config.dao_id)) {
         let our_dao_id = *option::borrow(&inactive_config.dao_id);
 
+        // Recipient must be another multisig with same dao_id
         if (option::is_none(&recipient_config.dao_id)) {
-            return false // Can't validate without DAO context
+            return false // Not a multisig
         };
 
         if (*option::borrow(&recipient_config.dao_id) != our_dao_id) {
             return false // DAO mismatch
         };
+    };
+
+    true
+}
+
+/// Check basic dead man switch eligibility (timeout + inactivity).
+/// Returns true if the multisig has been inactive long enough to trigger failover.
+/// This is the common validation used by both multisig and DAO recipient checks.
+fun check_basic_dead_man_switch_eligibility(
+    config: &WeightedMultisig,
+    clock: &Clock,
+): bool {
+    // Must have recipient configured
+    if (option::is_none(&config.dead_man_switch_recipient)) {
+        return false
+    };
+
+    // Must have timeout enabled
+    if (config.dead_man_switch.timeout_ms == 0) {
+        return false
+    };
+
+    // Must be inactive long enough
+    let inactive_duration = clock.timestamp_ms() - config.last_activity_ms;
+    inactive_duration >= config.dead_man_switch.timeout_ms
+}
+
+/// Check if dead man switch can be triggered when recipient is the parent DAO.
+/// Use this when the recipient IS the DAO itself (not another multisig).
+///
+/// Validates:
+/// 1. Inactive multisig has a dead man switch configured
+/// 2. Timeout is enabled (> 0)
+/// 3. Inactivity period exceeds timeout
+/// 4. Multisig belongs to a DAO (not standalone)
+/// 5. Recipient ID matches the expected DAO ID
+/// 6. Dead man switch has not already been triggered
+///
+/// Returns true only if ALL conditions are met.
+public fun can_trigger_dead_man_switch_for_dao(
+    inactive_config: &WeightedMultisig,
+    dao_id: ID,
+    clock: &Clock,
+): bool {
+    // Check if already triggered
+    if (inactive_config.dead_man_switch.triggered) {
+        return false
+    };
+
+    // Check basic eligibility (timeout + inactivity)
+    if (!check_basic_dead_man_switch_eligibility(inactive_config, clock)) {
+        return false
+    };
+
+    let recipient_id = *option::borrow(&inactive_config.dead_man_switch_recipient);
+
+    // SECURITY: Standalone multisigs cannot have DAO recipients
+    if (option::is_none(&inactive_config.dao_id)) {
+        return false
+    };
+
+    let our_dao_id = *option::borrow(&inactive_config.dao_id);
+
+    // Validate recipient IS the parent DAO
+    if (recipient_id != our_dao_id) {
+        return false // Wrong recipient
+    };
+
+    if (dao_id != our_dao_id) {
+        return false // Provided dao_id doesn't match parent
     };
 
     true

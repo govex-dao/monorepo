@@ -21,10 +21,9 @@ public fun decode_collect_platform_fee_action(
     _decoder: &CollectPlatformFeeActionDecoder,
     action_data: vector<u8>,
 ): vector<HumanReadableField> {
-    let CollectPlatformFeeAction {
-        vault_name,
-        max_amount,
-    } = platform_fee_actions::collect_platform_fee_action_from_bytes(action_data);
+    let action = platform_fee_actions::collect_platform_fee_action_from_bytes(action_data);
+    let vault_name = platform_fee_actions::get_vault_name(&action);
+    let max_amount = platform_fee_actions::get_max_amount(&action);
 
     vector[
         schema::new_field(

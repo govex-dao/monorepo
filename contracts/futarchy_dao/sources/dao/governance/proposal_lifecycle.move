@@ -86,57 +86,26 @@ public struct ProposalEarlyResolvedEvent has copy, drop {
     timestamp: u64,
 }
 
-/// Execute approved proposal with fee coin for second-order proposals
-public entry fun execute_approved_proposal_with_fee<AssetType, StableType, IW: copy + drop>(
+/// Convenience wrapper that returns the governance executable for PTB composition.
+/// Prefer calling `futarchy_dao::ptb_executor::begin_execution` directly.
+public entry fun execute_approved_proposal_with_fee<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
     proposal: &mut Proposal<AssetType, StableType>,
     market: &MarketState,
-    intent_witness: IW,
-    queue: &mut priority_queue::ProposalQueue<FutarchyConfig>,
     fee_manager: &mut ProposalFeeManager,
-    registry: &mut governance_actions::ProposalReservationRegistry,
     fee_coin: Coin<sui::sui::SUI>,
     clock: &Clock,
     ctx: &mut TxContext,
-) {
-    // Verify market is finalized
-    assert!(market_state::is_finalized(market), EMarketNotFinalized);
-
-    // Verify proposal was approved (YES outcome won)
-    let winning_outcome = market_state::get_winning_outcome(market);
-    assert!(winning_outcome == OUTCOME_ACCEPTED, EProposalNotApproved);
-
-    // Deposit the execution fee for this proposal
-    proposal_fee_manager::deposit_proposal_fee(
-        fee_manager,
-        proposal::get_id(proposal),
-        fee_coin,
-    );
-
-    // Create the outcome object (using existing FutarchyOutcome structure)
-    let outcome = futarchy_config::new_futarchy_outcome(
-        b"jit_execution".to_string(), // Temporary key for just-in-time execution
-        clock.timestamp_ms(), // min_execution_time
-    );
-
-    // Execute the proposal intent with IntentSpec
-    let executable = governance_intents::execute_proposal_intent<
-        AssetType,
-        StableType,
-        FutarchyOutcome,
-    >(
+) -> Executable<FutarchyOutcome> {
+    futarchy_dao::ptb_executor::begin_execution(
         account,
         proposal,
         market,
-        winning_outcome,
-        outcome,
+        fee_manager,
+        fee_coin,
         clock,
         ctx,
-    );
-
-    // This function is deprecated - execution now happens via PTB pattern
-    // Use ptb_executor module for execution instead
-    abort 0 // Function not implemented - use PTB-based execution
+    )
 }
 
 /// Emitted when the next proposal is reserved (locked) into PREMARKET
@@ -318,39 +287,6 @@ public fun finalize_proposal_market<AssetType, StableType>(
         spot_pool,
         fee_manager,
         false,
-        clock,
-        ctx,
-    );
-}
-
-/// DEPRECATED: Finalizes a proposal's market with subsidy escrow cleanup (OLD PATTERN)
-///
-/// This function is deprecated because SubsidyEscrow is now stored inline in Proposal.
-/// Use finalize_proposal_market() instead - it automatically handles inline escrow cleanup.
-///
-/// This function is kept for backward compatibility with old proposals that used the
-/// separate shared object pattern, but should not be used for new proposals.
-public fun finalize_proposal_market_with_subsidy<AssetType, StableType>(
-    account: &mut Account<FutarchyConfig>,
-    registry: &mut ProposalReservationRegistry,
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
-    market_state: &mut MarketState,
-    spot_pool: &mut UnifiedSpotPool<AssetType, StableType>,
-    fee_manager: &mut ProposalFeeManager,
-    _subsidy_escrow: &mut subsidy_escrow_mod::SubsidyEscrow,
-    clock: &Clock,
-    ctx: &mut TxContext,
-) {
-    // Just call the standard finalization function which handles inline escrow
-    finalize_proposal_market(
-        account,
-        registry,
-        proposal,
-        escrow,
-        market_state,
-        spot_pool,
-        fee_manager,
         clock,
         ctx,
     );
@@ -674,40 +610,6 @@ public entry fun try_early_resolve<AssetType, StableType>(
     });
 }
 
-/// Executes an approved proposal's intent (generic version)
-/// NOTE: This function is deprecated - use PTB-based execution via ptb_executor module
-public fun execute_approved_proposal<AssetType, StableType, IW: copy + drop>(
-    _account: &mut Account<FutarchyConfig>,
-    _proposal: &mut Proposal<AssetType, StableType>,
-    _market: &MarketState,
-    _intent_witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // This function is deprecated - execution now happens via PTB pattern
-    // Use ptb_executor module for execution instead
-    abort 0 // Function not implemented - use PTB-based execution
-}
-
-/// Executes an approved proposal's intent with known asset types
-/// NOTE: This function is deprecated - use PTB-based execution via ptb_executor module
-public fun execute_approved_proposal_typed<
-    AssetType: drop + store,
-    StableType: drop + store,
-    IW: copy + drop,
->(
-    _account: &mut Account<FutarchyConfig>,
-    _proposal: &mut Proposal<AssetType, StableType>,
-    _market: &MarketState,
-    _intent_witness: IW,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // This function is deprecated - execution now happens via PTB pattern
-    // Use ptb_executor module for execution instead
-    abort 0 // Function not implemented - use PTB-based execution
-}
-
 /// Reserve the next proposal into PREMARKET (no liquidity), only if the current
 /// proposal's trading end is within the premarket threshold.
 public entry fun reserve_next_proposal_for_premarket<AssetType, StableType>(
@@ -996,38 +898,6 @@ public entry fun create_subsidy_escrow_for_proposal<AssetType, StableType>(
     // CRITICAL CHANGE: Store escrow INLINE in Proposal (automatic cleanup!)
     // This eliminates the orphan problem - escrow is deleted when proposal is deleted
     proposal::store_subsidy_escrow(proposal, subsidy_escrow);
-}
-
-/// Finalize subsidy escrow for a proposal (DEPRECATED - use finalize_proposal_market with escrow param)
-///
-/// NOTE: This standalone function is kept for backward compatibility and emergency use cases.
-/// The preferred approach is to pass the subsidy escrow to finalize_proposal_market() as an
-/// Option<&mut SubsidyEscrow> parameter, which automatically handles finalization.
-///
-/// This function should only be used if:
-/// 1. You need to finalize an escrow separately from the proposal
-/// 2. The proposal was already finalized without the escrow parameter
-///
-/// Example PTB flow (DEPRECATED):
-/// ```
-/// finalize_proposal_market(..., option::none(), ...);  // Old way without escrow
-/// finalize_subsidy_escrow_for_proposal(account, escrow, clock, ctx);  // Cleanup separately
-/// ```
-///
-/// Preferred PTB flow:
-/// ```
-/// finalize_proposal_market(..., option::some(&mut escrow), ...);  // Automatic cleanup
-/// ```
-public fun finalize_subsidy_escrow_for_proposal(
-    _account: &mut Account<FutarchyConfig>,
-    _subsidy_escrow: &mut SubsidyEscrow,
-    _clock: &Clock,
-    _ctx: &mut TxContext,
-) {
-    // This function is deprecated - subsidy escrow cleanup now happens inline
-    // during finalize_proposal_market() via proposal::extract_subsidy_escrow()
-    // Use finalize_proposal_market() with inline escrow instead
-    abort 0 // Function not implemented - use inline escrow cleanup
 }
 
 /// Crank subsidy for a proposal (uses inline escrow)

@@ -7,19 +7,19 @@
 /// USED BY:
 /// - Conditional AMMs during proposals (outcome evaluation)
 /// - Proposal resolution (determining winners based on TWAP)
-/// - NOT for external protocols (use price_based_unlocks_oracle instead)
+/// - NOT for external protocols (use pass_through_oracle instead)
 ///
 /// KEY FEATURES:
 /// - Write-through pattern (MUST update before reading)
 /// - Price capping to prevent manipulation up or down
 /// - Complex window-based accumulation
 /// - Designed specifically for futarchy mechanics
-/// - Internal use only (wrapped by price_based_unlocks_oracle for external access)
+/// - Internal use only (wrapped by pass_through_oracle for external access)
 ///
 /// BEHAVIOR:
 /// - During proposals: Each conditional AMM maintains its own oracle
 /// - After finalization: Winning outcome's TWAP fills gap in spot oracle
-/// - External protocols use price_based_unlocks_oracle (pass-through wrapper)
+/// - External protocols use pass_through_oracle (pass-through wrapper)
 ///
 /// WHY IT EXISTS:
 /// Futarchy needs precise, manipulation-resistant price discovery during
@@ -27,7 +27,7 @@
 /// are always fresh and prevents time-based manipulation attacks.
 ///
 /// FOR EXTERNAL INTEGRATIONS:
-/// Use price_based_unlocks_oracle.move instead - it provides a standard Uniswap-like
+/// Use pass_through_oracle.move instead - it provides a standard Uniswap-like
 /// interface that automatically switches between spot and conditional oracles
 /// without requiring understanding of futarchy mechanics.
 ///

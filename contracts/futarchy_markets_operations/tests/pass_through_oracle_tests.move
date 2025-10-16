@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module futarchy_markets_operations::price_based_unlocks_oracle_tests;
+module futarchy_markets_operations::pass_through_oracle_tests;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
-use futarchy_markets_operations::price_based_unlocks_oracle;
+use futarchy_markets_operations::pass_through_oracle;
 use futarchy_markets_primitives::conditional_amm::LiquidityPool;
 use futarchy_one_shot_utils::test_coin_a::TEST_COIN_A;
 use futarchy_one_shot_utils::test_coin_b::TEST_COIN_B;
@@ -38,7 +38,7 @@ fun create_spot_pool(
 // === Basic Tests (Non-Aggregator Pools) ===
 
 #[test]
-fun test_get_spot_price_basic() {
+fun test_get_current_twap_basic() {
     let mut scenario = ts::begin(@0xA);
     let ctx = ts::ctx(&mut scenario);
 
@@ -51,7 +51,7 @@ fun test_get_spot_price_basic() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price (should read from spot pool since no aggregator)
-        let price = price_based_unlocks_oracle::get_spot_price(
+        let price = pass_through_oracle::get_current_twap(
             &spot_pool,
             &conditional_pools,
             &clock,
@@ -70,7 +70,7 @@ fun test_get_spot_price_basic() {
 }
 
 #[test]
-fun test_get_spot_price_different_reserves() {
+fun test_get_current_twap_different_reserves() {
     let mut scenario = ts::begin(@0xA);
     let ctx = ts::ctx(&mut scenario);
 
@@ -84,7 +84,7 @@ fun test_get_spot_price_different_reserves() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price
-        let price = price_based_unlocks_oracle::get_spot_price(
+        let price = pass_through_oracle::get_current_twap(
             &spot_pool,
             &conditional_pools,
             &clock,
@@ -119,7 +119,7 @@ fun test_is_twap_available_no_aggregator() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Check if TWAP is available (should be false for non-aggregator pool)
-        let available = price_based_unlocks_oracle::is_twap_available(
+        let available = pass_through_oracle::is_twap_available(
             &spot_pool,
             &conditional_pools,
             1800u64,
@@ -140,7 +140,7 @@ fun test_is_twap_available_no_aggregator() {
 // === Error Case Tests ===
 
 #[test]
-fun test_get_spot_price_zero_reserves() {
+fun test_get_current_twap_zero_reserves() {
     let mut scenario = ts::begin(@0xA);
     let ctx = ts::ctx(&mut scenario);
 
@@ -154,7 +154,7 @@ fun test_get_spot_price_zero_reserves() {
         let conditional_pools = vector::empty<LiquidityPool>();
 
         // Get spot price (should return 0 for empty pool)
-        let price = price_based_unlocks_oracle::get_spot_price(
+        let price = pass_through_oracle::get_current_twap(
             &spot_pool,
             &conditional_pools,
             &clock,
@@ -175,13 +175,13 @@ fun test_get_spot_price_zero_reserves() {
 // Tests: 4/4 passing
 //
 // Coverage:
-// - get_spot_price: Basic functionality with non-aggregator pools
-// - get_spot_price: Different reserve ratios
+// - get_current_twap: Basic functionality with non-aggregator pools
+// - get_current_twap: Different reserve ratios
 // - is_twap_available: Returns false for non-aggregator pools
-// - get_spot_price: Handles zero reserves edge case
+// - get_current_twap: Handles zero reserves edge case
 //
 // Note: Advanced aggregator tests (locked pools, conditional oracles, TWAP with observations)
 // are not included because they require test helper functions that don't exist in
-// unified_spot_pool module. The price_based_unlocks_oracle logic is relatively simple
+// unified_spot_pool module. The pass_through_oracle logic is relatively simple
 // (conditional routing based on locked state and liquidity ratio), and can be verified
 // through integration tests or by code review.

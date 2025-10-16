@@ -781,15 +781,15 @@ fun test_delete_actions() {
     account.confirm_execution(e1);
 
     // Now delete all expired intents
-    let mut exp1 = account.destroy_empty_intent<_, Outcome>(key1);
+    let mut exp1 = account.destroy_empty_intent<_, Outcome>(key1, scenario.ctx());
     currency::delete_disable<SUI>(&mut exp1);
     exp1.destroy_empty();
 
-    let mut exp2 = account.destroy_empty_intent<_, Outcome>(key2);
+    let mut exp2 = account.destroy_empty_intent<_, Outcome>(key2, scenario.ctx());
     currency::delete_mint<SUI>(&mut exp2);
     exp2.destroy_empty();
 
-    let mut exp3 = account.destroy_empty_intent<_, Outcome>(key3);
+    let mut exp3 = account.destroy_empty_intent<_, Outcome>(key3, scenario.ctx());
     currency::delete_burn<SUI>(&mut exp3);
     exp3.destroy_empty();
 

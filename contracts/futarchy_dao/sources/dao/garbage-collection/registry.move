@@ -12,7 +12,6 @@ use account_protocol::intents::Expired;
 use account_protocol::owned;
 use futarchy_actions::commitment_actions;
 use futarchy_actions::config_actions;
-use futarchy_actions::founder_lock_actions;
 use futarchy_actions::governance_actions;
 use futarchy_actions::liquidity_actions;
 use futarchy_actions::memo_actions;
@@ -356,23 +355,6 @@ public fun delete_walrus_renewal(expired: &mut Expired) {
 // === Quota Actions ===
 public fun delete_set_quotas(expired: &mut Expired) {
     quota_actions::delete_set_quotas(expired);
-}
-
-// === Founder Lock Actions ===
-public fun delete_create_founder_lock_proposal<AssetType>(expired: &mut Expired) {
-    founder_lock_actions::delete_create_founder_lock_proposal<AssetType>(expired);
-}
-
-public fun delete_execute_founder_lock(expired: &mut Expired) {
-    founder_lock_actions::delete_execute_founder_lock(expired);
-}
-
-public fun delete_update_founder_lock_recipient(expired: &mut Expired) {
-    founder_lock_actions::delete_update_founder_lock_recipient(expired);
-}
-
-public fun delete_withdraw_unlocked_tokens(expired: &mut Expired) {
-    founder_lock_actions::delete_withdraw_unlocked_tokens(expired);
 }
 
 // === Protocol Admin Actions ===

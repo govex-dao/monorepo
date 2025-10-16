@@ -47,7 +47,7 @@ use futarchy_markets_core::{
     unified_spot_pool::UnifiedSpotPool,
     conditional_amm::LiquidityPool,
 };
-use futarchy_markets_operations::price_based_unlocks_oracle;
+use futarchy_markets_operations::pass_through_oracle;
 
 // === Constants ===
 
@@ -1066,7 +1066,7 @@ public fun claim_grant<AssetType, StableType>(
     };
 
     // Read 90-day governance TWAP from oracle (checkpoint-based)
-    let current_price = price_based_unlocks_oracle::get_geometric_governance_twap(
+    let current_price = pass_through_oracle::get_geometric_governance_twap(
         spot_pool,
         conditional_pools,
         clock
@@ -1355,7 +1355,7 @@ public fun dev_inspect_check_price_condition<AssetType, StableType>(
     clock: &Clock,
 ): PriceCheckResult {
     // Get current price from oracle (same as claim_grant does)
-    let current_price = price_based_unlocks_oracle::get_geometric_governance_twap(
+    let current_price = pass_through_oracle::get_geometric_governance_twap(
         spot_pool,
         conditional_pools,
         clock

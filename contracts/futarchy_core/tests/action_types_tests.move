@@ -22,14 +22,6 @@ fun test_deposit_escrow_constructor() {
     let _accept = action_types::accept_deposit();
 }
 
-#[test]
-fun test_founder_lock_constructors() {
-    let _create = action_types::create_founder_lock_proposal();
-    let _update = action_types::update_founder_lock_recipient();
-    let _withdraw = action_types::withdraw_unlocked_tokens();
-    let _execute = action_types::execute_founder_lock();
-}
-
 // === TypeName Accessor Tests ===
 
 #[test]

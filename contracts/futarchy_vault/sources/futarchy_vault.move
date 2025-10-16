@@ -174,12 +174,12 @@ public fun deposit_new_coin_type<CoinType: drop>(
     version: VersionWitness,
 ) {
     // Ensure vault exists
-    let has_vault = vault::has_vault(account, string::clone(&vault_name));
+    let has_vault = vault::has_vault(account, vault_name);
     assert!(has_vault, EVaultNotInitialized);
 
     // Only allow deposits for approved coin types
     let allowed: &AllowedCoinTypes = account::borrow_managed_data(
-        &*account,
+        account,
         ALLOWED_COINS_KEY,
         version::current(),
     );

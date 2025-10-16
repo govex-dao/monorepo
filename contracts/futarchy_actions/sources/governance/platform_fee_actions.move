@@ -160,3 +160,15 @@ public(package) fun collect_platform_fee_action_from_bytes(bytes: vector<u8>): C
         max_amount: bcs.peel_u64(),
     }
 }
+
+// === Getter Functions ===
+
+/// Get vault_name from CollectPlatformFeeAction
+public fun get_vault_name(action: &CollectPlatformFeeAction): String {
+    action.vault_name
+}
+
+/// Get max_amount from CollectPlatformFeeAction
+public fun get_max_amount(action: &CollectPlatformFeeAction): u64 {
+    action.max_amount
+}

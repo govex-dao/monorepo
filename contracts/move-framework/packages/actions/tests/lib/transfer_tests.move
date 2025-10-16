@@ -377,7 +377,7 @@ fun test_delete_transfer_action() {
     account.confirm_execution(executable);
 
     // Now the intent has no more execution times and can be destroyed
-    let mut expired = account.destroy_empty_intent<_, Outcome>(key);
+    let mut expired = account.destroy_empty_intent<_, Outcome>(key, scenario.ctx());
     acc_transfer::delete_transfer(&mut expired);
     expired.destroy_empty();
 

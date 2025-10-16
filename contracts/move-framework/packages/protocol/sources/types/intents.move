@@ -523,6 +523,7 @@ public(package) fun pop_front_execution_time<Outcome>(
 public(package) fun destroy_intent<Outcome: store + drop>(
     intents: &mut Intents,
     key: String,
+    ctx: &mut TxContext,
 ): Expired {
     let Intent<Outcome> { account, action_specs, key, .. } = intents.inner.remove(key);
     let num_actions = action_specs.length();
@@ -533,13 +534,13 @@ public(package) fun destroy_intent<Outcome: store + drop>(
         i = i + 1;
     };
 
-    // ✅ FIXED: Generate unique ID from intent key for proper tracking and debugging
-    // - Hash key to get exactly 32 bytes (id_from_bytes requires 32 bytes)
+    // ✅ PROPER FIX: Use Sui's native UID generation for unique intent tracking
+    // - Creates a proper unique ID via object::new(ctx)
+    // - Follows Sui best practices for object identification
     // - Enables proper intent tracking in logs and events
-    // - Old approach: Hardcoded @0x0 made all intents indistinguishable
-    use sui::hash;
-    let key_hash = hash::keccak256(&key.into_bytes());
-    let intent_id = object::id_from_bytes(key_hash);
+    let uid = object::new(ctx);
+    let intent_id = uid.to_inner();
+    uid.delete();
 
     Expired { account, action_specs, executed_actions, intent_id }
 }
@@ -760,9 +761,9 @@ fun test_remove_action() {
     let action_data2 = bcs::to_bytes(&TestAction {});
     intent.add_typed_action(TestActionType {}, action_data2, TestIntentWitness());
     add_intent(&mut intents, intent);
-    
-    let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string());
-    
+
+    let mut expired = intents.destroy_intent<TestOutcome>(b"test_key".to_string(), ctx);
+
     let _action1 = expired.remove_action_spec();
     let _action2 = expired.remove_action_spec();
 

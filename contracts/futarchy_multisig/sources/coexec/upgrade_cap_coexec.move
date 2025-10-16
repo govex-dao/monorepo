@@ -26,6 +26,7 @@ use sui::tx_context::TxContext;
 const ECapIdMismatch: u64 = 1001;
 const EPackageNameMismatch: u64 = 1002;
 const EWrongCapObject: u64 = 1003;
+const EWrongActionType: u64 = 1004;
 
 /// Require 2-of-2 for accepting/locking an UpgradeCap:
 /// - DAO must have type policy BorrowAction<UpgradeCap> pointing to Security Council
@@ -130,6 +131,13 @@ public fun execute_accept_and_lock_with_council<FutarchyOutcome: store + drop + 
     coexec_common::enforce_custodian_policy_for_type<UpgradeCap>(dao, council);
 
     // Extract the accept action to get the cap
+    // Validate DAO action type for security
+    let dao_action_type = coexec_common::get_current_action_type(&futarchy_exec);
+    assert!(
+        dao_action_type == std::type_name::get<custody_actions::ApproveCustodyAction<UpgradeCap>>(),
+        EWrongActionType
+    );
+
     // Get the action data and deserialize it
     let accept_action_data = coexec_common::get_current_action_data(&futarchy_exec);
     let mut accept_bcs = bcs::new(*accept_action_data);

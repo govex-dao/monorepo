@@ -149,7 +149,7 @@ fun test_getters() {
     assert!(outcome == true);
 
     // check expired getters
-    let expired = intents.destroy_intent<bool>(b"one".to_string());
+    let expired = intents.destroy_intent<bool>(b"one".to_string(), scenario.ctx());
     assert!(expired.account() == @0xACC);
     assert!(0 == 0);
     assert!(expired.expired_action_count() == 0);
@@ -186,7 +186,7 @@ fun test_add_remove_action() {
     assert!(intent.action_count() == 1);
     intents.add_intent(intent);
 
-    let mut expired = intents.destroy_intent<bool>(b"one".to_string());
+    let mut expired = intents.destroy_intent<bool>(b"one".to_string(), scenario.ctx());
     let _spec = expired.remove_action_spec();
 
     destroy(intents);
@@ -252,7 +252,7 @@ fun test_add_destroy_intent() {
     intents.add_intent(intent);
     // remove intent
     let _time = intents.get_mut<bool>(b"one".to_string()).pop_front_execution_time();
-    let expired = intents.destroy_intent<bool>(b"one".to_string());
+    let expired = intents.destroy_intent<bool>(b"one".to_string(), scenario.ctx());
     assert!(expired.account() == @0xACC);
     assert!(0 == 0);
     assert!(expired.expired_action_count() == 0);
@@ -368,7 +368,7 @@ fun test_error_delete_intent_actions_not_empty() {
     intent.add_typed_action(DummyActionType {}, action_data, DummyIntent());
     intents.add_intent(intent);
     // remove intent
-    let expired = intents.destroy_intent<bool>(b"one".to_string());
+    let expired = intents.destroy_intent<bool>(b"one".to_string(), scenario.ctx());
     expired.destroy_empty();
 
     destroy(intents);

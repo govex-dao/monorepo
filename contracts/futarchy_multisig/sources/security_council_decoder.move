@@ -263,28 +263,35 @@ public fun decode_sweep_intents_action(
 }
 
 /// Decode a CouncilCreateOptimisticIntentAction
+/// Struct fields: dao_id, intent_key, title, description
 public fun decode_council_create_optimistic_intent_action(
     _decoder: &CouncilCreateOptimisticIntentActionDecoder,
     action_data: vector<u8>,
 ): vector<HumanReadableField> {
     let mut bcs_data = bcs::new(action_data);
 
+    let dao_id = bcs::peel_address(&mut bcs_data);
     let intent_key = bcs::peel_vec_u8(&mut bcs_data).to_string();
-    let challenge_period_ms = bcs::peel_u64(&mut bcs_data);
+    let title = bcs::peel_vec_u8(&mut bcs_data).to_string();
     let description = bcs::peel_vec_u8(&mut bcs_data).to_string();
 
     bcs_validation::validate_all_bytes_consumed(bcs_data);
 
     vector[
         schema::new_field(
+            b"dao_id".to_string(),
+            dao_id.to_string(),
+            b"ID".to_string(),
+        ),
+        schema::new_field(
             b"intent_key".to_string(),
             intent_key,
             b"String".to_string(),
         ),
         schema::new_field(
-            b"challenge_period_ms".to_string(),
-            challenge_period_ms.to_string(),
-            b"u64".to_string(),
+            b"title".to_string(),
+            title,
+            b"String".to_string(),
         ),
         schema::new_field(
             b"description".to_string(),

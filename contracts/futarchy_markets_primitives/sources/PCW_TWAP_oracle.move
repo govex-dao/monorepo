@@ -36,7 +36,7 @@
 ///
 /// ============================================================================
 
-module futarchy_markets_primitives::pass_through_PCW_TWAP_oracle;
+module futarchy_markets_primitives::PCW_TWAP_oracle;
 
 use std::option;
 use std::vector;

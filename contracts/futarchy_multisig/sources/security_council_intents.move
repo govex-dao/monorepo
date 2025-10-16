@@ -439,9 +439,10 @@ public fun execute_create_security_council<Outcome: store + drop + copy>(
     executable::increment_action_idx(&mut executable);
     // We already deserialized the data above, no need to get it from action
 
-    // Build council account
-    let council = security_council::new(
+    // Build council account with DAO link
+    let council = security_council::new_dao_council(
         extensions,
+        object::id(dao),  // Link council to parent DAO
         members,
         weights,
         threshold,

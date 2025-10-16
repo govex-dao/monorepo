@@ -370,14 +370,12 @@ public fun new_disable<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent - action used as witness preserves CoinType in TypeName
+    // Add to intent with type marker (not action struct)
     intent.add_typed_action(
-        action,  // ✅ Preserves CoinType parameter in TypeName
+        framework_action_types::currency_disable(),  // Type marker
         action_data,
         intent_witness
     );
-
-    // No destroy needed - action consumed by add_typed_action
 }
 
 /// Processes a DisableAction and disables the permissions marked as true.
@@ -453,14 +451,12 @@ public fun new_update<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent - action used as witness preserves CoinType in TypeName
+    // Add to intent with type marker (not action struct)
     intent.add_typed_action(
-        action,  // ✅ Preserves CoinType parameter in TypeName
+        framework_action_types::currency_update(),  // Type marker
         action_data,
         intent_witness
     );
-
-    // No destroy needed - action consumed by add_typed_action
 }
 
 /// Processes an UpdateAction, updates the CoinMetadata.
@@ -558,15 +554,13 @@ public fun new_mint<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with parameterized type witness
-    // The action struct itself serves as the type witness, preserving CoinType parameter
+    // Add to intent with type marker (not action struct)
+    // Use CurrencyMint marker so validation matches in do_mint
     intent.add_typed_action(
-        action,  // Action moved here, TypeName becomes MintAction<CoinType>
+        framework_action_types::currency_mint(),  // Type marker
         action_data,
         intent_witness
     );
-
-    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Processes a MintAction, mints and returns new coins.
@@ -642,15 +636,13 @@ public fun new_burn<Outcome, CoinType, IW: drop>(
     // Serialize it
     let action_data = bcs::to_bytes(&action);
 
-    // Add to intent with parameterized type witness
-    // The action struct itself serves as the type witness, preserving CoinType parameter
+    // Add to intent with type marker (not action struct)
+    // Use CurrencyBurn marker so validation matches in do_burn
     intent.add_typed_action(
-        action,  // Action moved here, TypeName becomes BurnAction<CoinType>
+        framework_action_types::currency_burn(),  // Type marker
         action_data,
         intent_witness
     );
-
-    // Action already consumed by add_typed_action - no need to destroy
 }
 
 /// Processes a BurnAction, burns coins and returns the amount burned.

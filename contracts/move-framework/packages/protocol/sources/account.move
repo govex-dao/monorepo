@@ -242,9 +242,10 @@ public fun confirm_execution<Config, Outcome: drop + store>(
 public fun destroy_empty_intent<Config, Outcome: store + drop>(
     account: &mut Account<Config>,
     key: String,
+    ctx: &mut TxContext,
 ): Expired {
     assert!(account.intents.get<Outcome>(key).execution_times().is_empty(), ECantBeRemovedYet);
-    account.intents.destroy_intent<Outcome>(key)
+    account.intents.destroy_intent<Outcome>(key, ctx)
 }
 
 /// Destroys an intent if it has expired.
@@ -253,12 +254,13 @@ public fun delete_expired_intent<Config, Outcome: store + drop>(
     account: &mut Account<Config>,
     key: String,
     clock: &Clock,
+    ctx: &mut TxContext,
 ): Expired {
     assert!(
         clock.timestamp_ms() >= account.intents.get<Outcome>(key).expiration_time(),
         EHasntExpired,
     );
-    account.intents.destroy_intent<Outcome>(key)
+    account.intents.destroy_intent<Outcome>(key, ctx)
 }
 
 /// Asserts that the function is called from the module defining the config of the account.
@@ -287,13 +289,14 @@ public fun cancel_intent<Config, Outcome: store + drop, CW: drop>(
     key: String,
     deps_witness: VersionWitness,
     config_witness: CW,
+    ctx: &mut TxContext,
 ): Expired {
     // Ensure the protocol dependency matches what this account expects
     account.deps().check(deps_witness);
     // Only the config module may cancel
     assert_is_config_module(account, config_witness);
     // Convert to Expired - deleters will handle unlocking during drain
-    account.intents.destroy_intent<Outcome>(key)
+    account.intents.destroy_intent<Outcome>(key, ctx)
 }
 
 /// Helper function to transfer an object to the account with tracking.

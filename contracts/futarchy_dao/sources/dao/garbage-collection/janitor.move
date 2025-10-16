@@ -97,11 +97,6 @@ fun drain_all(expired: &mut Expired) {
     // Quota Actions
     gc_registry::delete_set_quotas(expired);
 
-    // Founder Lock Actions (non-generic)
-    gc_registry::delete_execute_founder_lock(expired);
-    gc_registry::delete_update_founder_lock_recipient(expired);
-    gc_registry::delete_withdraw_unlocked_tokens(expired);
-
     // Protocol Admin Actions
     gc_registry::delete_protocol_admin_action(expired);
 
@@ -154,9 +149,6 @@ fun drain_common_generics(expired: &mut Expired) {
 
     // Commitment Actions (phantom AssetType)
     gc_registry::delete_create_commitment_proposal<SUI>(expired);
-
-    // Founder Lock Actions (phantom AssetType)
-    gc_registry::delete_create_founder_lock_proposal<SUI>(expired);
 
     // Liquidity Actions for common pairs (phantom AssetType, StableType)
     drain_liquidity_generic_actions_for_pair<SUI, SUI>(expired);

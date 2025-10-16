@@ -27,6 +27,88 @@ This includes:
 
 **Important Note**: Sui's execution model is atomic and does not have reentrancy risks like Ethereum. Race conditions are also unlikely due to Sui's object-centric model and transaction ordering guarantees. When you see defensive programming patterns in this codebase (like atomic check-and-delete patterns), they are primarily for code clarity and best practices rather than addressing actual race condition risks that would exist in other blockchain environments.
 
+## ⚠️ CRITICAL: NEVER Use Hash-Based IDs When Sui UID Exists
+
+**ALWAYS use Sui's native UID generation instead of hashing strings or data to create IDs.**
+
+### ❌ WRONG Pattern (Hash-Based ID):
+```move
+// TERRIBLE CODE - DO NOT USE!
+let key_hash = sui::hash::keccak256(&key.into_bytes());
+let id = object::id_from_bytes(key_hash);
+```
+
+### ✅ CORRECT Pattern (Sui UID):
+```move
+// PROPER SUI PATTERN - ALWAYS USE THIS!
+let uid = object::new(ctx);
+let id = uid.to_inner();
+uid.delete();
+```
+
+### Why Hash-Based IDs Are Terrible
+
+1. **Not Guaranteed Unique**: Hash collisions are possible (though rare)
+2. **No Sui Object Tracking**: Sui's object system doesn't track these IDs
+3. **Security Issues**: Can be manipulated or predicted
+4. **Anti-Pattern**: Violates Sui's design philosophy
+5. **Defeats Purpose**: Sui's UID system provides guaranteed uniqueness + tracking
+
+### When You Need an ID
+
+**Always add `ctx: &mut TxContext` to the function signature and use `object::new(ctx)`.**
+
+```move
+// If function doesn't have ctx, ADD IT
+public fun create_something(
+    // ... other params ...
+    ctx: &mut TxContext,  // ← ADD THIS
+) {
+    let uid = object::new(ctx);
+    let id = uid.to_inner();
+    uid.delete();
+
+    // Now use `id` for tracking
+}
+```
+
+### Real Example from Codebase
+
+**Before (WRONG):**
+```move
+public(package) fun destroy_intent<Outcome: store + drop>(
+    intents: &mut Intents,
+    key: String,
+): Expired {
+    // TERRIBLE: Hashing string to create ID
+    let key_hash = sui::hash::keccak256(&key.into_bytes());
+    let intent_id = object::id_from_bytes(key_hash);
+    Expired { intent_id, ... }
+}
+```
+
+**After (CORRECT):**
+```move
+public(package) fun destroy_intent<Outcome: store + drop>(
+    intents: &mut Intents,
+    key: String,
+    ctx: &mut TxContext,  // ← ADDED
+): Expired {
+    // PROPER: Using Sui's native UID generation
+    let uid = object::new(ctx);
+    let intent_id = uid.to_inner();
+    uid.delete();
+    Expired { intent_id, ... }
+}
+```
+
+### Summary
+
+- ✅ **DO**: Use `object::new(ctx)` for all ID generation
+- ❌ **DON'T**: Hash strings/data to create IDs with `object::id_from_bytes()`
+- 📝 **ALWAYS**: Add `ctx: &mut TxContext` parameter when needed
+- 🎯 **REMEMBER**: Sui's UID system is built for this - USE IT!
+
 ## BCS Serialization: Action Deserialization Patterns
 
 **CRITICAL**: Use the correct pattern based on whether the action struct has fields.
@@ -505,7 +587,7 @@ claim_grant()
 - Dissolution: `WithdrawAmmLiquidityAction<Asset, Stable>`, `DistributeAssetsAction<CoinType>` (2 actions) ✅
 - Payments/Dividends: `CreatePaymentAction<CoinType>`, `CreateDividendAction<CoinType>` (2 actions) ✅
 - Vault Management: `AddCoinTypeAction<CoinType>`, `RemoveCoinTypeAction<CoinType>` (2 actions) ✅
-- Lifecycle: `CreateFounderLockProposalAction<AssetType>`, `CreateCommitmentProposalAction<AssetType>` (2 actions) ✅
+- Lifecycle: `CreateCommitmentProposalAction<AssetType>` (1 action) ✅
 - Custody: `ApproveCustodyAction<R>`, `AcceptIntoCustodyAction<R>` (2 actions) ✅
 
 **Plus 114 non-parameterized actions** that use ACTION or OBJECT-level policies:

@@ -32,7 +32,7 @@ module futarchy_markets_operations::price_based_unlocks_oracle;
 
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
-use futarchy_markets_primitives::pass_through_PCW_TWAP_oracle::{Self, SimpleTWAP};
+use futarchy_markets_primitives::PCW_TWAP_oracle::{Self, SimpleTWAP};
 use std::option;
 use std::vector;
 use sui::clock::Clock;
@@ -79,10 +79,10 @@ public fun get_lending_twap<AssetType, StableType>(
     }
 }
 
-/// Get instantaneous price (TWAP-based when reading from conditionals)
-/// NOTE: Returns TWAP from conditional pools, not true instant price from reserves
+/// Get current TWAP (reads from conditionals during proposals, spot otherwise)
+/// NOTE: Returns TWAP from conditional pools during proposals, not instant price from reserves
 /// This is acceptable because TWAP updates every block and provides manipulation resistance
-public fun get_spot_price<AssetType, StableType>(
+public fun get_current_twap<AssetType, StableType>(
     spot_pool: &UnifiedSpotPool<AssetType, StableType>,
     conditional_pools: &vector<LiquidityPool>,
     _clock: &Clock,
@@ -137,7 +137,7 @@ fun get_highest_conditional_lending_twap(pools: &vector<LiquidityPool>, _clock: 
     while (i < pools.length()) {
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
-        let twap = pass_through_PCW_TWAP_oracle::get_twap(pool_simple_twap);
+        let twap = PCW_TWAP_oracle::get_twap(pool_simple_twap);
         if (twap > highest_twap) {
             highest_twap = twap;
         };
@@ -169,8 +169,8 @@ fun get_highest_conditional_governance_twap(pools: &vector<LiquidityPool>, clock
 }
 
 fun resolve_long_window(oracle: &SimpleTWAP, clock: &Clock): u128 {
-    let base = pass_through_PCW_TWAP_oracle::get_twap(oracle);
-    let opt = pass_through_PCW_TWAP_oracle::get_ninety_day_twap(oracle, clock);
+    let base = PCW_TWAP_oracle::get_twap(oracle);
+    let opt = PCW_TWAP_oracle::get_ninety_day_twap(oracle, clock);
     if (option::is_some(&opt)) {
         option::destroy_some(opt)
     } else {
@@ -192,7 +192,7 @@ fun get_highest_conditional_twap(pools: &vector<LiquidityPool>): u128 {
         let pool = pools.borrow(i);
         let pool_simple_twap = conditional_amm::get_simple_twap(pool);
         // SimpleTWAP only exposes TWAP, not instant prices
-        let twap = pass_through_PCW_TWAP_oracle::get_twap(pool_simple_twap);
+        let twap = PCW_TWAP_oracle::get_twap(pool_simple_twap);
         if (twap > highest_twap) {
             highest_twap = twap;
         };

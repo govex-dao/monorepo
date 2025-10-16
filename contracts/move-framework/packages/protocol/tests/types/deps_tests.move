@@ -210,29 +210,10 @@ fun test_error_deps_missing_account_protocol_first_element() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = deps::EAccountConfigMissing)]
-fun test_error_deps_missing_account_config_second_element() {
-    let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
-        @account_protocol,
-        @0x1,
-        @0x2,
-        scenario.ctx(),
-    );
-    let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
-
-    let _deps = deps::new(
-        &extensions,
-        false,
-        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
-        vector[@account_protocol, @0x2],
-        vector[1, 1],
-    );
-
-    destroy(cap);
-    destroy(extensions);
-    ts::end(scenario);
-}
+// REMOVED: test_error_deps_missing_account_config_second_element
+// This test checked for negative assertion (names[1] != "AccountActions") which was
+// intentionally removed in favor of type-safe validation via Move's type system.
+// See deps.move:91-109 for detailed rationale.
 
 #[test, expected_failure(abort_code = deps::ENotExtension)]
 fun test_error_deps_add_not_extension_unverified_not_allowed() {
@@ -557,30 +538,10 @@ fun test_error_new_inner_missing_account_config() {
     ts::end(scenario);
 }
 
-#[test, expected_failure(abort_code = deps::EAccountConfigMissing)]
-fun test_error_new_inner_missing_account_config_second_element() {
-    let mut scenario = ts::begin(@0xCAFE);
-    let extensions = extensions::new_for_testing_with_addrs(
-        @account_protocol,
-        @0x1,
-        @0x2,
-        scenario.ctx(),
-    );
-    let cap = package::test_publish(@0xA.to_id(), scenario.ctx());
-
-    let deps = deps::new_for_testing();
-    let _deps = deps::new_inner(
-        &extensions,
-        &deps,
-        vector[b"AccountProtocol".to_string(), b"AccountActions".to_string()],
-        vector[@account_protocol, @0x2],
-        vector[1, 1],
-    );
-
-    destroy(cap);
-    destroy(extensions);
-    ts::end(scenario);
-}
+// REMOVED: test_error_new_inner_missing_account_config_second_element
+// This test checked for negative assertion (names[1] != "AccountActions") which was
+// intentionally removed in favor of type-safe validation via Move's type system.
+// See deps.move:176-179 and deps.move:91-109 for detailed rationale.
 
 // REMOVED: test_error_new_inner_missing_account_config_unverified_disallowed_and_
 // Test name is incomplete and test logic doesn't match the name - appears to be broken/unfinished
