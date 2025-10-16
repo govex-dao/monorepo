@@ -249,8 +249,6 @@ fun test_new_governance_config_basic() {
         1000000, // proposal_fee_per_outcome
         10000000, // required_bond
         5, // max_concurrent_proposals
-        86400000, // recreation_window
-        3, // max_proposal_chain_depth
         500, // fee_escalation_bps
         true, // proposal_creation_enabled
         true, // accept_new_proposals
@@ -596,7 +594,6 @@ fun test_new_dao_config_basic() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     let config = dao_config::new_dao_config(
         trading,
@@ -608,7 +605,6 @@ fun test_new_dao_config_basic() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000, // optimistic_challenge_fee
         259200000, // 3 days challenge period
         500000, // challenge_bounty
@@ -635,7 +631,6 @@ fun test_new_dao_config_zero_challenge_fee() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     dao_config::new_dao_config(
         trading,
@@ -647,7 +642,6 @@ fun test_new_dao_config_zero_challenge_fee() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         0, // Invalid!
         259200000,
         500000,
@@ -670,7 +664,6 @@ fun test_new_dao_config_zero_challenge_period() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     dao_config::new_dao_config(
         trading,
@@ -682,7 +675,6 @@ fun test_new_dao_config_zero_challenge_period() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         0, // Invalid!
         500000,
@@ -705,7 +697,6 @@ fun test_new_dao_config_zero_challenge_bounty() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     dao_config::new_dao_config(
         trading,
@@ -717,7 +708,6 @@ fun test_new_dao_config_zero_challenge_bounty() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         259200000,
         0, // Invalid!
@@ -741,7 +731,6 @@ fun test_validate_config_update_safe_changes() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     let current_config = dao_config::new_dao_config(
         trading,
@@ -753,7 +742,6 @@ fun test_validate_config_update_safe_changes() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         259200000,
         500000,
@@ -786,7 +774,6 @@ fun test_validate_config_update_unsafe_max_concurrent_below_active() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     let current_config = dao_config::new_dao_config(
         trading,
@@ -798,7 +785,6 @@ fun test_validate_config_update_unsafe_max_concurrent_below_active() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         259200000,
         500000,
@@ -828,7 +814,6 @@ fun test_validate_config_update_unsafe_reduce_max_outcomes_with_active() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     let current_config = dao_config::new_dao_config(
         trading,
@@ -840,7 +825,6 @@ fun test_validate_config_update_unsafe_reduce_max_outcomes_with_active() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         259200000,
         500000,
@@ -870,7 +854,6 @@ fun test_validate_config_update_safe_reduce_when_no_active() {
     let coin_config = dao_config::default_conditional_coin_config();
     let quota = dao_config::default_quota_config();
     let multisig = dao_config::default_multisig_config();
-    let subsidy = dao_config::default_subsidy_config();
 
     let current_config = dao_config::new_dao_config(
         trading,
@@ -882,7 +865,6 @@ fun test_validate_config_update_safe_reduce_when_no_active() {
         coin_config,
         quota,
         multisig,
-        subsidy,
         1000000,
         259200000,
         500000,

@@ -34,7 +34,7 @@ no metadata and then rename and go on my way???
 
 # V2 economic incenitves etc
  - [X] get doc fiels reg to proffesional standard
-- [X] commitment actions Cancel able and uncancel able flag
+
 Mint options for employees (right to buy x amount at a given price!!!)
 - [x] remove founder rewards module from launchapd it should now be a preapproved intent spec??
 - [X] Make launchpad have small fee 

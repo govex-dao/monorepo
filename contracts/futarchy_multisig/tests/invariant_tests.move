@@ -118,7 +118,6 @@ fun test_multisig_invariants_enforced() {
 
     assert!(weighted_multisig::threshold(&multisig) == 400, 1);
     assert!(weighted_multisig::total_weight(&multisig) == 600, 2);
-    assert!(weighted_multisig::last_activity_ms(&multisig) > 0, 3);
 
     clock::destroy_for_testing(clock);
     test_scenario::end(scenario);

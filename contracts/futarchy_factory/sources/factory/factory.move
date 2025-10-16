@@ -2,7 +2,7 @@
 /// This is the main entry point for creating DAOs in the Futarchy protocol
 module futarchy_factory::factory;
 
-use account_actions::currency;
+use account_actions::{currency, vault};
 use account_extensions::extensions::Extensions;
 use account_protocol::account::{Self, Account};
 use futarchy_core::dao_config::{
@@ -20,7 +20,6 @@ use futarchy_core::version;
 use futarchy_markets_core::fee::{Self, FeeManager};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool};
 use futarchy_multisig::policy_registry;
-use futarchy_vault::futarchy_vault_init;
 use std::ascii::String as AsciiString;
 use std::option::Option;
 use std::string::String as UTF8String;
@@ -310,7 +309,6 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
-        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -385,8 +383,37 @@ public(package) fun create_dao_internal_with_extensions<AssetType: drop, StableT
     // Initialize the policy registry
     policy_registry::initialize(&mut account, version::current(), ctx);
 
-    // Initialize the vault
-    futarchy_vault_init::initialize(&mut account, version::current(), ctx);
+    // Initialize the default treasury vault using base vault module
+    let auth = account::new_auth(
+        &account,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    vault::open(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+
+    // Pre-approve common coin types for permissionless deposits
+    // This enables anyone to send SUI, AssetType, or StableType to the DAO
+    // (enables revenue/donations without governance proposals)
+    let auth = account::new_auth(
+        &account,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
+
+    let auth = account::new_auth(
+        &account,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
+
+    let auth = account::new_auth(
+        &account,
+        version::current(),
+        futarchy_config::authenticate(&account, ctx),
+    );
+    vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, std::string::utf8(b"treasury"));
 
     // If treasury cap provided, lock it using Move framework's currency module
     if (treasury_cap.is_some()) {
@@ -544,7 +571,6 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
-        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)
@@ -603,14 +629,38 @@ fun create_dao_internal_test<AssetType: drop, StableType>(
 
     // Action registry removed - using statically-typed pattern
 
-    // Initialize the vault (test version uses @account_protocol witness)
+    // Initialize the default treasury vault (test version)
     {
         use account_protocol::version_witness;
-        futarchy_vault_init::initialize(
-            &mut account,
-            version_witness::new_for_testing(@account_protocol),
-            ctx,
+        let test_version = version_witness::new_for_testing(@account_protocol);
+        let auth = account::new_auth(
+            &account,
+            test_version,
+            futarchy_config::authenticate(&account, ctx),
         );
+        vault::open(auth, &mut account, std::string::utf8(b"treasury"), ctx);
+
+        // Pre-approve common coin types for permissionless deposits
+        let auth = account::new_auth(
+            &account,
+            test_version,
+            futarchy_config::authenticate(&account, ctx),
+        );
+        vault::approve_coin_type<FutarchyConfig, SUI>(auth, &mut account, std::string::utf8(b"treasury"));
+
+        let auth = account::new_auth(
+            &account,
+            test_version,
+            futarchy_config::authenticate(&account, ctx),
+        );
+        vault::approve_coin_type<FutarchyConfig, AssetType>(auth, &mut account, std::string::utf8(b"treasury"));
+
+        let auth = account::new_auth(
+            &account,
+            test_version,
+            futarchy_config::authenticate(&account, ctx),
+        );
+        vault::approve_coin_type<FutarchyConfig, StableType>(auth, &mut account, std::string::utf8(b"treasury"));
     };
 
     // If treasury cap provided, lock it using Move framework's currency module
@@ -730,7 +780,6 @@ public fun create_dao_unshared<AssetType: drop + store, StableType: drop + store
         dao_config::default_conditional_coin_config(),
         dao_config::default_quota_config(),
         dao_config::default_multisig_config(),
-        dao_config::default_subsidy_config(),
         10_000_000, // optimistic_challenge_fee
         864_000_000, // optimistic_challenge_period_ms (10 days)
         10_000_000, // challenge_bounty (same as challenge fee - full refund for successful challenges)

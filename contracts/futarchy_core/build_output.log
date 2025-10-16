@@ -1,4 +1,0 @@
-Failed to build Move modules: Unable to parse Move package manifest
-
-Caused by:
-    duplicate key: `futarchy_one_shot_utils` for key `addresses` at line 26 column 1.

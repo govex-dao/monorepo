@@ -11,7 +11,7 @@ futarchy_types = { local = "../futarchy_types" }
 futarchy_core = { local = "../futarchy_core" }
 futarchy_markets_core = { local = "../futarchy_markets_core" }
 futarchy_markets_operations = { local = "../futarchy_markets_operations" }
-futarchy_vault = { local = "../futarchy_vault" }
+futarchy_actions = { local = "../futarchy_actions" }
 futarchy_multisig = { local = "../futarchy_multisig" }
 futarchy_streams = { local = "../futarchy_streams" }
 # futarchy_factory = { local = "../futarchy_factory" } # Moved to governance_actions
@@ -23,7 +23,7 @@ futarchy_one_shot_utils = "0x0f6cb09aea285a7f696141baa758b3525db65d821885e868042
 futarchy_core = "0x2dbaa2eb250746a6e0f787b3c212986ca6b4f15478cf56aaef2f4e477f19bf32"
 futarchy_markets_core = "0x0"
 futarchy_markets_operations = "0x0"
-futarchy_vault = "0x6b87e5ab293c702984c61f31e2af1fa78ec4439e63caf6e0c8fc5e99be99d064"
+futarchy_actions = "0x0393f67d13f180d5dcedb1be3b789c6f20b4b4a478f0d98b58fc2754eb3486d4"
 futarchy_multisig = "0x8e216aa2f6eebad3377ac799c966d076c82dc9f58eccccbbf63bf28b206bc1cb"
 futarchy_streams = "0x8e2848ba3f7102ad614266040f7c4d83cec193dbf91c907365e523b63090915b"
 # futarchy_factory  = "0x0" # Moved to governance_actions

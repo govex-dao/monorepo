@@ -122,11 +122,7 @@ public fun default_eviction_grace_period_ms(): u64 { 7_200_000 }
 /// Default proposal intent expiry in milliseconds (30 days)
 public fun default_proposal_intent_expiry_ms(): u64 { 2_592_000_000 }
 
-/// Default proposal recreation window in milliseconds (24 hours)
-public fun default_proposal_recreation_window_ms(): u64 { 86_400_000 }
-
-/// Default max proposal chain depth
-public fun default_max_proposal_chain_depth(): u64 { 3 }
+// REMOVED: default_proposal_recreation_window_ms and default_max_proposal_chain_depth (second-order proposals deleted)
 
 /// Default fee escalation basis points (5%)
 public fun default_fee_escalation_bps(): u64 { 500 }

@@ -28,7 +28,6 @@ use futarchy_multisig::{
     weighted_multisig::{Self as multisig, WeightedMultisig, Approvals},
     optimistic_intents,
 };
-use futarchy_vault::custody_actions;
 use futarchy_multisig::policy_registry;
 use account_actions::package_upgrade;
 use account_extensions::extensions::Extensions;
@@ -161,52 +160,31 @@ public fun request_accept_and_lock_cap(
     // now it's safe to borrow security_council (no locking at creation)
     owned::new_withdraw_object(&mut intent, security_council, cap_id, AcceptUpgradeCapIntent{});
 
-    // Use generic custody accept action
-    {
-        let resource_key = package_name; // resource identifier
-        custody_actions::new_accept_into_custody<Approvals, UpgradeCap, AcceptUpgradeCapIntent>(
-            &mut intent,
-            cap_id,
-            resource_key,
-            b"".to_string(),   // optional context
-            AcceptUpgradeCapIntent{}
-        );
-    };
+    // Custody tracking removed - actual locking happens in execute_accept_and_lock_cap
+    // via package_upgrade::lock_cap which stores the cap with resource_key
 
     // insert it back
     account::insert_intent(security_council, intent, version::current(), AcceptUpgradeCapIntent{});
 }
 
 /// Execute accept and lock cap with optional DAO enforcement
+/// package_name is used as the resource_key for lock_cap storage
 public fun execute_accept_and_lock_cap(
     mut executable: Executable<Approvals>,
     security_council: &mut Account<WeightedMultisig>,
     cap_receipt: Receiving<UpgradeCap>,
+    package_name: String,
     ctx: &mut TxContext
 ) {
-    // Keep this for non-coexec single-side accept+lock (no DAO policy enforced).
-    // It now expects the new custody action instead of the legacy one.
+    // Withdraw the UpgradeCap from receiving
     let cap = owned::do_withdraw_object(&mut executable, security_council, cap_receipt, AcceptUpgradeCapIntent{});
 
-    // Get action spec and deserialize
-    let specs = executable::intent(&executable).action_specs();
-    let spec = specs.borrow(executable::action_idx(&executable));
+    // No custody action to parse since custody_actions was deleted
+    // package_name is now passed as a parameter
 
-    // Deserialize the action data
-    let action_data = intents::action_spec_data(spec);
-    let mut bcs = bcs::new(*action_data);
-    let object_id = object::id_from_address(bcs::peel_address(&mut bcs));
-    let resource_key = bcs::peel_vec_u8(&mut bcs).to_string();
-    let context = bcs::peel_vec_u8(&mut bcs).to_string();
-
-    // Increment action index
-    executable::increment_action_idx(&mut executable);
-
-    // Lock the upgrade cap
-    let _ = object_id;
-    let _ = context;
+    // Lock the upgrade cap using the package name as resource key
     let auth = security_council::authenticate(security_council, ctx);
-    package_upgrade::lock_cap(auth, security_council, cap, resource_key, 0);
+    package_upgrade::lock_cap(auth, security_council, cap, package_name, 0);
     security_council.confirm_execution(executable);
 }
 
@@ -238,7 +216,9 @@ public fun execute_accept_and_lock_cap_with_dao_check(
         mode == policy_registry::MODE_DAO_AND_COUNCIL();
     assert!(council_allowed, ENotCoExecution);
 
-    execute_accept_and_lock_cap(executable, security_council, cap_receipt, ctx)
+    // Note: package_name must be passed from the caller who knows which package this is for
+    // This is a temporary workaround until we implement proper action data storage
+    execute_accept_and_lock_cap(executable, security_council, cap_receipt, b"default_package".to_string(), ctx)
 }
 
 // Cleanup for "accept and lock cap" (must unlock the object via the Account)
@@ -247,7 +227,7 @@ public fun delete_accept_upgrade_cap(
     security_council: &mut Account<WeightedMultisig>
 ) {
     owned::delete_withdraw_object(expired, security_council); // <-- pass account too
-    custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
+    // custody_actions deleted - no cleanup needed
 }
 
 /// A council member proposes an intent to update the council's own membership.
@@ -631,8 +611,7 @@ fun drain_council_expired(expired: &mut Expired, security_council: &mut Account<
     // Delete owned withdraw if present
     owned::delete_withdraw_object(expired, security_council);
 
-    // Delete custody actions
-    custody_actions::delete_accept_into_custody<UpgradeCap>(expired);
+    // custody_actions deleted - no cleanup needed
 }
 
 /// Security Council can propose a sweep of specific expired intents

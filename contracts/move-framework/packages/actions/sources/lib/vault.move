@@ -131,6 +131,8 @@ public struct Vault has store {
     bag: Bag,
     // streams for time-based vesting withdrawals
     streams: Table<ID, VaultStream>,
+    // approved coin types for permissionless deposits (enables revenue/donations)
+    approved_types: VecSet<TypeName>,
 }
 
 /// Stream for time-based vesting from vault
@@ -271,6 +273,18 @@ public struct SpendAction<phantom CoinType> has store, drop {
     amount: u64,
 }
 
+/// Action to approve a coin type for permissionless deposits
+public struct ApproveCoinTypeAction<phantom CoinType> has store, drop {
+    // vault name
+    name: String,
+}
+
+/// Action to remove approval for a coin type
+public struct RemoveApprovedCoinTypeAction<phantom CoinType> has store, drop {
+    // vault name
+    name: String,
+}
+
 /// Action for toggling stream pause (combines pause/resume)
 public struct ToggleStreamPauseAction has store {
     vault_name: String,
@@ -299,6 +313,7 @@ public fun open<Config>(
     account.add_managed_data(VaultKey(name), Vault {
         bag: bag::new(ctx),
         streams: table::new(ctx),
+        approved_types: vec_set::empty(),
     }, version::current());
 }
 
@@ -322,9 +337,14 @@ public fun deposit<Config, CoinType: drop>(
     };
 }
 
-/// Permissionless deposit - anyone can add to existing coin types
-/// Safe because it only increases DAO assets, never decreases
-public fun deposit_permissionless<Config, CoinType: drop>(
+/// Permissionless deposit for approved coin types
+/// Anyone can deposit coins of types that have been approved by governance
+/// This enables revenue/donations for common tokens (SUI, USDC, etc.)
+/// Safe because:
+/// 1. Only approved types can be deposited
+/// 2. Deposits increase DAO assets, never decrease
+/// 3. Creates balance entry on first deposit if needed
+public fun deposit_approved<Config, CoinType: drop>(
     account: &mut Account<Config>,
     name: String,
     coin: Coin<CoinType>,
@@ -332,11 +352,68 @@ public fun deposit_permissionless<Config, CoinType: drop>(
     let vault: &mut Vault =
         account.borrow_managed_data_mut(VaultKey(name), version::current());
 
-    // Only allow deposits to existing coin types
-    assert!(coin_type_exists<CoinType>(vault), EWrongCoinType);
+    // Only allow deposits of approved coin types
+    let type_key = type_name::with_defining_ids<CoinType>();
+    assert!(vault.approved_types.contains(&type_key), EWrongCoinType);
 
-    let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_name::with_defining_ids<CoinType>());
-    balance_mut.join(coin.into_balance());
+    // Add to existing balance or create new one
+    if (vault.coin_type_exists<CoinType>()) {
+        let balance_mut = vault.bag.borrow_mut<_, Balance<_>>(type_key);
+        balance_mut.join(coin.into_balance());
+    } else {
+        vault.bag.add(type_key, coin.into_balance());
+    }
+}
+
+/// Approve a coin type for permissionless deposits (requires Auth)
+/// After approval, anyone can deposit this coin type to the vault
+public fun approve_coin_type<Config, CoinType>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    name: String,
+) {
+    account.verify(auth);
+
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(VaultKey(name), version::current());
+
+    let type_key = type_name::with_defining_ids<CoinType>();
+    if (!vault.approved_types.contains(&type_key)) {
+        vault.approved_types.insert(type_key);
+    }
+}
+
+/// Remove approval for a coin type (requires Auth)
+/// Prevents future permissionless deposits of this type
+/// Does not affect existing balances
+public fun remove_approved_coin_type<Config, CoinType>(
+    auth: Auth,
+    account: &mut Account<Config>,
+    name: String,
+) {
+    account.verify(auth);
+
+    let vault: &mut Vault =
+        account.borrow_managed_data_mut(VaultKey(name), version::current());
+
+    let type_key = type_name::with_defining_ids<CoinType>();
+    if (vault.approved_types.contains(&type_key)) {
+        vault.approved_types.remove(&type_key);
+    }
+}
+
+/// Check if a coin type is approved for permissionless deposits
+public fun is_coin_type_approved<Config, CoinType>(
+    account: &Account<Config>,
+    name: String,
+): bool {
+    if (!has_vault(account, name)) {
+        return false
+    };
+
+    let vault: &Vault = account.borrow_managed_data(VaultKey(name), version::current());
+    let type_key = type_name::with_defining_ids<CoinType>();
+    vault.approved_types.contains(&type_key)
 }
 
 /// Withdraws coins from a vault with authorization.
@@ -440,6 +517,7 @@ public(package) fun do_deposit_unshared<Config, CoinType: drop>(
         let vault = Vault {
             bag: bag::new(ctx),
             streams: table::new(ctx),
+            approved_types: vec_set::empty(),
         };
         account.add_managed_data(VaultKey(name), vault, version::current());
     };
@@ -514,6 +592,16 @@ public fun destroy_deposit_action<CoinType>(action: DepositAction<CoinType>) {
 /// Destroy a SpendAction after serialization
 public fun destroy_spend_action<CoinType>(action: SpendAction<CoinType>) {
     let SpendAction { name: _, amount: _ } = action;
+}
+
+/// Destroy an ApproveCoinTypeAction after serialization
+public fun destroy_approve_coin_type_action<CoinType>(action: ApproveCoinTypeAction<CoinType>) {
+    let ApproveCoinTypeAction { name: _ } = action;
+}
+
+/// Destroy a RemoveApprovedCoinTypeAction after serialization
+public fun destroy_remove_approved_coin_type_action<CoinType>(action: RemoveApprovedCoinTypeAction<CoinType>) {
+    let RemoveApprovedCoinTypeAction { name: _ } = action;
 }
 
 /// Destroy a ToggleStreamPauseAction after serialization
@@ -627,6 +715,54 @@ public fun new_spend<Outcome, CoinType, IW: drop>(
     // The action struct itself serves as the type witness, preserving CoinType parameter
     intent.add_typed_action(
         action,  // Action moved here, TypeName becomes SpendAction<CoinType>
+        action_data,
+        intent_witness
+    );
+
+    // Action already consumed by add_typed_action - no need to destroy
+}
+
+/// Creates an ApproveCoinTypeAction and adds it to an intent with descriptor.
+public fun new_approve_coin_type<Outcome, CoinType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    name: String,
+    intent_witness: IW,
+) {
+    // Create action struct
+    let action = ApproveCoinTypeAction<CoinType> {
+        name,
+    };
+
+    // Serialize the entire struct directly
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with parameterized type witness
+    intent.add_typed_action(
+        action,  // Action moved here, TypeName becomes ApproveCoinTypeAction<CoinType>
+        action_data,
+        intent_witness
+    );
+
+    // Action already consumed by add_typed_action - no need to destroy
+}
+
+/// Creates a RemoveApprovedCoinTypeAction and adds it to an intent with descriptor.
+public fun new_remove_approved_coin_type<Outcome, CoinType, IW: drop>(
+    intent: &mut Intent<Outcome>,
+    name: String,
+    intent_witness: IW,
+) {
+    // Create action struct
+    let action = RemoveApprovedCoinTypeAction<CoinType> {
+        name,
+    };
+
+    // Serialize the entire struct directly
+    let action_data = bcs::to_bytes(&action);
+
+    // Add to intent with parameterized type witness
+    intent.add_typed_action(
+        action,  // Action moved here, TypeName becomes RemoveApprovedCoinTypeAction<CoinType>
         action_data,
         intent_witness
     );
@@ -809,6 +945,100 @@ public fun do_spend<Config, Outcome: store, CoinType: drop, IW: drop>(
 
 /// Deletes a SpendAction from an expired intent.
 public fun delete_spend<CoinType>(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
+}
+
+/// Processes an ApproveCoinTypeAction and approves the coin type.
+public fun do_approve_coin_type<Config, Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+    _intent_witness: IW,
+) {
+    executable.intent().assert_is_account(account.addr());
+
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::VaultApproveCoinType>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct directly
+    let mut reader = bcs::new(*action_data);
+    let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+
+    let type_key = type_name::with_defining_ids<CoinType>();
+    if (!vault.approved_types.contains(&type_key)) {
+        vault.approved_types.insert(type_key);
+    };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Processes a RemoveApprovedCoinTypeAction and removes the coin type approval.
+public fun do_remove_approved_coin_type<Config, Outcome: store, CoinType, IW: drop>(
+    executable: &mut Executable<Outcome>,
+    account: &mut Account<Config>,
+    version_witness: VersionWitness,
+    _intent_witness: IW,
+) {
+    executable.intent().assert_is_account(account.addr());
+
+    // Get BCS bytes from ActionSpec
+    let specs = executable.intent().action_specs();
+    let spec = specs.borrow(executable.action_idx());
+
+    // CRITICAL: Assert that the action type is what we expect
+    action_validation::assert_action_type<framework_action_types::VaultRemoveApprovedCoinType>(spec);
+
+    let action_data = intents::action_spec_data(spec);
+
+    // Check version before deserialization
+    let spec_version = intents::action_spec_version(spec);
+    assert!(spec_version == 1, EUnsupportedActionVersion);
+
+    // Deserialize the entire action struct directly
+    let mut reader = bcs::new(*action_data);
+    let name = std::string::utf8(bcs::peel_vec_u8(&mut reader));
+
+    // Validate all bytes consumed
+    bcs_validation::validate_all_bytes_consumed(reader);
+
+    let vault: &mut Vault = account.borrow_managed_data_mut(VaultKey(name), version_witness);
+
+    let type_key = type_name::with_defining_ids<CoinType>();
+    if (vault.approved_types.contains(&type_key)) {
+        vault.approved_types.remove(&type_key);
+    };
+
+    // Increment action index
+    executable::increment_action_idx(executable);
+}
+
+/// Deletes an ApproveCoinTypeAction from an expired intent.
+public fun delete_approve_coin_type<CoinType>(expired: &mut Expired) {
+    let _spec = intents::remove_action_spec(expired);
+    // ActionSpec has drop, so it's automatically cleaned up
+    // No need to deserialize the data
+}
+
+/// Deletes a RemoveApprovedCoinTypeAction from an expired intent.
+public fun delete_remove_approved_coin_type<CoinType>(expired: &mut Expired) {
     let _spec = intents::remove_action_spec(expired);
     // ActionSpec has drop, so it's automatically cleaned up
     // No need to deserialize the data

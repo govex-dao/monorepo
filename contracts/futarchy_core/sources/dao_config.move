@@ -2,7 +2,6 @@
 /// Provides centralized configuration structs and validation for futarchy DAOs
 module futarchy_core::dao_config;
 
-use futarchy_core::subsidy_config::{Self as liquidity_subsidy_protocol, ProtocolSubsidyConfig};
 use futarchy_one_shot_utils::constants;
 use std::ascii::{Self, String as AsciiString};
 use std::string::{Self, String};
@@ -81,8 +80,6 @@ public struct GovernanceConfig has copy, drop, store {
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
     max_concurrent_proposals: u64,
-    proposal_recreation_window_ms: u64,
-    max_proposal_chain_depth: u64,
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
@@ -152,7 +149,6 @@ public struct DaoConfig has copy, drop, store {
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     multisig_config: MultisigConfig,
-    subsidy_config: ProtocolSubsidyConfig, // Liquidity subsidy configuration
     optimistic_challenge_fee: u64, // Fee to challenge optimistic proposals, streams, multisig actions
     optimistic_challenge_period_ms: u64, // Time period to challenge optimistic actions (e.g., 10 days)
     challenge_bounty: u64, // Reward paid to successful challengers (for streams, multisig, optimistic proposals)
@@ -238,8 +234,6 @@ public fun new_governance_config(
     proposal_fee_per_outcome: u64,
     required_bond_amount: u64,
     max_concurrent_proposals: u64,
-    proposal_recreation_window_ms: u64,
-    max_proposal_chain_depth: u64,
     fee_escalation_basis_points: u64,
     proposal_creation_enabled: bool,
     accept_new_proposals: bool,
@@ -271,8 +265,6 @@ public fun new_governance_config(
         proposal_fee_per_outcome,
         required_bond_amount,
         max_concurrent_proposals,
-        proposal_recreation_window_ms,
-        max_proposal_chain_depth,
         fee_escalation_basis_points,
         proposal_creation_enabled,
         accept_new_proposals,
@@ -386,7 +378,6 @@ public fun new_dao_config(
     conditional_coin_config: ConditionalCoinConfig,
     quota_config: QuotaConfig,
     multisig_config: MultisigConfig,
-    subsidy_config: ProtocolSubsidyConfig,
     optimistic_challenge_fee: u64,
     optimistic_challenge_period_ms: u64,
     challenge_bounty: u64,
@@ -406,7 +397,6 @@ public fun new_dao_config(
         conditional_coin_config,
         quota_config,
         multisig_config,
-        subsidy_config,
         optimistic_challenge_fee,
         optimistic_challenge_period_ms,
         challenge_bounty,
@@ -476,11 +466,7 @@ public fun required_bond_amount(gov: &GovernanceConfig): u64 { gov.required_bond
 
 public fun max_concurrent_proposals(gov: &GovernanceConfig): u64 { gov.max_concurrent_proposals }
 
-public fun proposal_recreation_window_ms(gov: &GovernanceConfig): u64 {
-    gov.proposal_recreation_window_ms
-}
-
-public fun max_proposal_chain_depth(gov: &GovernanceConfig): u64 { gov.max_proposal_chain_depth }
+// REMOVED: proposal_recreation_window_ms and max_proposal_chain_depth (second-order proposals deleted)
 
 public fun fee_escalation_basis_points(gov: &GovernanceConfig): u64 {
     gov.fee_escalation_basis_points
@@ -628,13 +614,6 @@ public fun multisig_config(config: &DaoConfig): &MultisigConfig { &config.multis
 
 public(package) fun multisig_config_mut(config: &mut DaoConfig): &mut MultisigConfig {
     &mut config.multisig_config
-}
-
-// Subsidy config getters
-public fun subsidy_config(config: &DaoConfig): &ProtocolSubsidyConfig { &config.subsidy_config }
-
-public(package) fun subsidy_config_mut(config: &mut DaoConfig): &mut ProtocolSubsidyConfig {
-    &mut config.subsidy_config
 }
 
 // Challenge config getters (DAO-level)
@@ -809,13 +788,7 @@ public(package) fun set_max_concurrent_proposals(gov: &mut GovernanceConfig, max
     gov.max_concurrent_proposals = max;
 }
 
-public(package) fun set_proposal_recreation_window_ms(gov: &mut GovernanceConfig, window: u64) {
-    gov.proposal_recreation_window_ms = window;
-}
-
-public(package) fun set_max_proposal_chain_depth(gov: &mut GovernanceConfig, depth: u64) {
-    gov.max_proposal_chain_depth = depth;
-}
+// REMOVED: Setters for proposal_recreation_window_ms and max_proposal_chain_depth
 
 public(package) fun set_fee_escalation_basis_points(gov: &mut GovernanceConfig, points: u64) {
     assert!(points <= constants::max_fee_bps(), EInvalidFee);
@@ -925,36 +898,6 @@ public(package) fun set_default_reduced_fee(quota: &mut QuotaConfig, fee: u64) {
     quota.default_reduced_fee = fee;
 }
 
-// Subsidy config setters
-public(package) fun set_subsidy_enabled(subsidy: &mut ProtocolSubsidyConfig, enabled: bool) {
-    liquidity_subsidy_protocol::set_enabled(subsidy, enabled);
-}
-
-public(package) fun set_subsidy_per_outcome_per_crank(
-    subsidy: &mut ProtocolSubsidyConfig,
-    amount: u64,
-) {
-    liquidity_subsidy_protocol::set_subsidy_per_outcome_per_crank(subsidy, amount);
-}
-
-public(package) fun set_subsidy_crank_steps(subsidy: &mut ProtocolSubsidyConfig, steps: u64) {
-    liquidity_subsidy_protocol::set_crank_steps(subsidy, steps);
-}
-
-public(package) fun set_subsidy_keeper_fee_per_crank(
-    subsidy: &mut ProtocolSubsidyConfig,
-    fee: u64,
-) {
-    liquidity_subsidy_protocol::set_keeper_fee_per_crank(subsidy, fee);
-}
-
-public(package) fun set_subsidy_min_crank_interval_ms(
-    subsidy: &mut ProtocolSubsidyConfig,
-    interval: u64,
-) {
-    liquidity_subsidy_protocol::set_min_crank_interval_ms(subsidy, interval);
-}
-
 // === String conversion wrapper functions ===
 
 /// Set DAO name from String (converts to AsciiString)
@@ -996,7 +939,6 @@ public fun update_trading_params(config: &DaoConfig, new_params: TradingParams):
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1015,7 +957,6 @@ public fun update_twap_config(config: &DaoConfig, new_twap: TwapConfig): DaoConf
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1034,7 +975,6 @@ public fun update_governance_config(config: &DaoConfig, new_gov: GovernanceConfi
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1053,7 +993,6 @@ public fun update_metadata_config(config: &DaoConfig, new_meta: MetadataConfig):
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1072,7 +1011,6 @@ public fun update_security_config(config: &DaoConfig, new_sec: SecurityConfig): 
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1091,7 +1029,6 @@ public fun update_storage_config(config: &DaoConfig, new_storage: StorageConfig)
         conditional_coin_config: config.conditional_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1113,7 +1050,6 @@ public fun update_conditional_coin_config(
         conditional_coin_config: new_coin_config,
         quota_config: config.quota_config,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1132,29 +1068,6 @@ public fun update_quota_config(config: &DaoConfig, new_quota: QuotaConfig): DaoC
         conditional_coin_config: config.conditional_coin_config,
         quota_config: new_quota,
         multisig_config: config.multisig_config,
-        subsidy_config: config.subsidy_config,
-        optimistic_challenge_fee: config.optimistic_challenge_fee,
-        optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
-        challenge_bounty: config.challenge_bounty,
-    }
-}
-
-/// Update subsidy configuration (returns new config)
-public fun update_subsidy_config(
-    config: &DaoConfig,
-    new_subsidy: ProtocolSubsidyConfig,
-): DaoConfig {
-    DaoConfig {
-        trading_params: config.trading_params,
-        twap_config: config.twap_config,
-        governance_config: config.governance_config,
-        metadata_config: config.metadata_config,
-        security_config: config.security_config,
-        storage_config: config.storage_config,
-        conditional_coin_config: config.conditional_coin_config,
-        quota_config: config.quota_config,
-        multisig_config: config.multisig_config,
-        subsidy_config: new_subsidy,
         optimistic_challenge_fee: config.optimistic_challenge_fee,
         optimistic_challenge_period_ms: config.optimistic_challenge_period_ms,
         challenge_bounty: config.challenge_bounty,
@@ -1196,8 +1109,6 @@ public fun default_governance_config(): GovernanceConfig {
         proposal_fee_per_outcome: 1000000, // 1 token per outcome
         required_bond_amount: 10000000, // 10 tokens
         max_concurrent_proposals: 5,
-        proposal_recreation_window_ms: constants::default_proposal_recreation_window_ms(),
-        max_proposal_chain_depth: constants::default_max_proposal_chain_depth(),
         fee_escalation_basis_points: constants::default_fee_escalation_bps(),
         proposal_creation_enabled: true,
         accept_new_proposals: true,
@@ -1247,15 +1158,4 @@ public fun default_multisig_config(): MultisigConfig {
     MultisigConfig {
         _reserved: 0,
     }
-}
-
-/// Get default subsidy configuration (disabled by default)
-public fun default_subsidy_config(): ProtocolSubsidyConfig {
-    liquidity_subsidy_protocol::new_protocol_config_custom(
-        false, // disabled by default
-        100_000_000, // 0.1 SUI per outcome per crank
-        100, // 100 cranks default
-        100_000_000, // 0.1 SUI keeper fee per crank
-        300_000, // 5 minutes minimum between cranks
-    )
 }

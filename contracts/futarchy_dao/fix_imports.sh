@@ -22,8 +22,7 @@ find sources -name "*.move" -exec sed -i '' 's/use futarchy_markets::resource_re
 for module in config_actions config_dispatcher config_intents dissolution_actions dissolution_dispatcher dissolution_intents \
               governance_actions governance_dispatcher governance_intents governance_intents intent_janitor intent_spec \
               intent_spec_builder intent_witnesses optimistic_dispatcher optimistic_intents optimistic_proposal \
-              oracle_actions proposal_lifecycle protocol_admin_actions protocol_admin_intents commitment_actions \
-              commitment_dispatcher commitment_proposal liquidity_actions liquidity_dispatcher liquidity_intents \
+              oracle_actions proposal_lifecycle protocol_admin_actions protocol_admin_intents liquidity_actions liquidity_dispatcher liquidity_intents \
               memo_actions memo_dispatcher memo_intents operating_agreement operating_agreement_actions \
               operating_agreement_dispatcher operating_agreement_intents policy_actions policy_dispatcher \
               policy_registry resources security_council security_council_actions security_council_intents \

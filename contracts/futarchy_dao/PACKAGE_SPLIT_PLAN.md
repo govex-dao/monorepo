@@ -90,7 +90,7 @@ futarchy_markets ~40KB        futarchy_governance ~35KB      futarchy_actions ~3
 ├── Market mechanics          ├── Proposals                  ├── All dispatchers
 ├── AMM logic                 ├── Voting mechanisms          ├── Action handlers
 ├── Conditional tokens        ├── Resolution logic           ├── Intent processing
-├── Spot pools               ├── Commitment proposals       └── Resource requests
+├── Spot pools                      └── Resource requests
 ├── Oracle interfaces        ├── Optimistic proposals
 └── Market state            └── Proposal lifecycle
 
@@ -253,9 +253,7 @@ futarchy_utils = { local = "../futarchy_utils" }
 - `proposal.move`
 - `proposal_lifecycle.move`
 - `proposal_fee_manager.move`
-- `commitment_proposal.move`
-- `commitment_actions.move`
-- `commitment_dispatcher.move`
+
 - `optimistic_proposal.move`
 - `optimistic_dispatcher.move`
 - `optimistic_intents.move`

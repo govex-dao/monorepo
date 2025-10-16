@@ -23,7 +23,7 @@ for module in action_dispatcher execute resource_requests \
               intent_janitor intent_spec intent_spec_builder intent_witnesses \
               optimistic_dispatcher optimistic_intents optimistic_proposal \
               oracle_actions proposal_lifecycle protocol_admin_actions protocol_admin_intents \
-              commitment_actions commitment_dispatcher commitment_proposal \
+              
               liquidity_actions liquidity_dispatcher liquidity_intents \
               memo_actions memo_dispatcher memo_intents \
               operating_agreement operating_agreement_actions operating_agreement_dispatcher operating_agreement_intents \

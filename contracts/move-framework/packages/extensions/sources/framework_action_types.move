@@ -32,6 +32,12 @@ public struct VaultDeposit has drop {}
 /// Spend coins from vault
 public struct VaultSpend has drop {}
 
+/// Approve coin type for permissionless deposits
+public struct VaultApproveCoinType has drop {}
+
+/// Remove coin type approval
+public struct VaultRemoveApprovedCoinType has drop {}
+
 // ======== Transfer Actions ========
 
 /// Transfer object ownership
@@ -139,6 +145,10 @@ public struct OwnedWithdrawCoin has drop {}
 public fun vault_deposit(): VaultDeposit { VaultDeposit {} }
 
 public fun vault_spend(): VaultSpend { VaultSpend {} }
+
+public fun vault_approve_coin_type(): VaultApproveCoinType { VaultApproveCoinType {} }
+
+public fun vault_remove_approved_coin_type(): VaultRemoveApprovedCoinType { VaultRemoveApprovedCoinType {} }
 
 public fun transfer_object(): TransferObject { TransferObject {} }
 

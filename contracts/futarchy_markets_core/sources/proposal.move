@@ -3,7 +3,6 @@ module futarchy_markets_core::proposal;
 use futarchy_markets_primitives::conditional_amm::{Self, LiquidityPool};
 use futarchy_markets_primitives::coin_escrow::{Self, TokenEscrow};
 use futarchy_markets_core::liquidity_initialize;
-use futarchy_markets_core::subsidy_escrow::SubsidyEscrow;
 use futarchy_markets_primitives::market_state;
 use futarchy_one_shot_utils::coin_validation;
 use std::ascii::String as AsciiString;
@@ -41,9 +40,6 @@ const ETooManyActions: u64 = 14;
 const EInvalidConditionalCoinCount: u64 = 15;
 const EConditionalCoinAlreadySet: u64 = 16;
 const ENotLiquidityProvider: u64 = 17;
-const EDAOCannotClaimRewards: u64 = 18; // DAO cannot claim subsidy rewards (circular)
-const ESubsidyEscrowAlreadySet: u64 = 19;
-const ENoSubsidyEscrow: u64 = 20;
 
 // === Constants ===
 
@@ -141,11 +137,6 @@ public struct Proposal<phantom AssetType, phantom StableType> has key, store {
     fee_escrow: Balance<StableType>,
     treasury_address: address,
 
-    // Subsidy escrow (owned object, auto-cleanup)
-    // Optional subsidy system that drip-feeds SUI to conditional AMM pools as LP rewards
-    // Stored inline for automatic cleanup when proposal is deleted/finalized
-    subsidy_escrow: Option<SubsidyEscrow>,
-
     // Policy enforcement fields (CRITICAL SECURITY)
     // One entry per outcome - each outcome's IntentSpec (batch of intents) can have different policy requirements
     //
@@ -220,15 +211,6 @@ public struct ProposalOutcomeAdded has copy, drop {
     dao_id: ID,
     new_outcome_idx: u64,
     creator: address,
-    timestamp: u64,
-}
-
-/// Event emitted when LP rewards are claimed
-public struct SubsidyRewardsClaimed has copy, drop {
-    proposal_id: ID,
-    dao_id: ID,
-    liquidity_provider: address,
-    total_rewards_claimed: u64,
     timestamp: u64,
 }
 
@@ -482,8 +464,6 @@ public fun initialize_market<AssetType, StableType>(
         conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
-        // Subsidy escrow (none initially, created separately via create_subsidy_escrow_for_proposal)
-        subsidy_escrow: option::none(),
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
         // For now, initialize with empty/default values (these MUST be set before market activation)
         policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
@@ -605,8 +585,6 @@ public fun new_premarket<AssetType, StableType>(
         conditional_liquidity_ratio_percent,
         fee_escrow,
         treasury_address,
-        // Subsidy escrow (none initially, created separately if needed)
-        subsidy_escrow: option::none(),
         // Policy enforcement - Policy data will be set when IntentSpecs are attached
         // For now, initialize with empty/default values (these MUST be set before market activation)
         policy_modes: vector::tabulate!(outcome_count, |_| 0u8),  // Default: DAO_ONLY
@@ -1560,83 +1538,6 @@ public entry fun set_withdraw_only_mode<AssetType, StableType>(
     proposal.withdraw_only_mode = withdraw_only;
 }
 
-/// Claim accumulated subsidy rewards from conditional AMMs after proposal finalized
-/// Only callable by external liquidity providers (not DAO)
-///
-/// ## Security
-/// - CRITICAL: Prevents DAO from claiming rewards (circular subsidy)
-/// - Only external LPs can claim (uses_dao_liquidity = false)
-/// - Only after finalization (market resolved)
-/// - Only by actual liquidity provider
-///
-/// ## Flow
-/// 1. Verify proposal finalized
-/// 2. Verify caller is liquidity provider
-/// 3. Verify NOT DAO liquidity (prevent circular rewards!)
-/// 4. Extract rewards from all conditional AMM pools
-/// 5. Return as SUI coin
-///
-/// ## Example
-/// ```
-/// // External LP provided 1000 SUI liquidity
-/// // DAO treasury cranked 10 SUI subsidies across 5 markets = 50 SUI total
-/// // LP can claim their share of the 50 SUI rewards
-/// let rewards = claim_conditional_amm_rewards(proposal, escrow, clock, ctx);
-/// // Returns Coin<SUI> with accumulated rewards
-/// ```
-public fun claim_conditional_amm_rewards<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
-    escrow: &mut TokenEscrow<AssetType, StableType>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<sui::sui::SUI> {
-    use sui::coin;
-    use sui::balance;
-
-    // 1. CRITICAL: Check proposal is finalized (market resolved)
-    assert!(proposal.state == STATE_FINALIZED, ENotFinalized);
-
-    // 2. Verify caller is the liquidity provider
-    assert!(proposal.liquidity_provider.is_some(), ENotLiquidityProvider);
-    let provider = *proposal.liquidity_provider.borrow();
-    assert!(tx_context::sender(ctx) == provider, ENotLiquidityProvider);
-
-    // 3. CRITICAL SECURITY: Prevent DAO from claiming subsidy rewards (circular!)
-    // DAO pays for subsidies to incentivize external liquidity
-    // If DAO could claim its own subsidies → pointless circular flow
-    assert!(!proposal.liquidity_config.uses_dao_liquidity, EDAOCannotClaimRewards);
-
-    // 4. Extract rewards from all conditional AMM pools
-    let market_state = coin_escrow::get_market_state_mut(escrow);
-    let pools = market_state::borrow_amm_pools_mut(market_state);
-    let mut total_rewards = balance::zero<sui::sui::SUI>();
-
-    let mut i = 0;
-    while (i < pools.length()) {
-        let pool = &mut pools[i];
-
-        // Extract all accumulated rewards from this pool
-        let pool_rewards = conditional_amm::extract_all_rewards(pool);
-        total_rewards.join(pool_rewards);
-
-        i = i + 1;
-    };
-
-    let total_amount = total_rewards.value();
-
-    // 5. Emit claim event
-    event::emit(SubsidyRewardsClaimed {
-        proposal_id: get_id(proposal),
-        dao_id: get_dao_id(proposal),
-        liquidity_provider: provider,
-        total_rewards_claimed: total_amount,
-        timestamp: clock.timestamp_ms(),
-    });
-
-    // 6. Convert to coin and return to caller
-    coin::from_balance(total_rewards, ctx)
-}
-
 public fun get_outcome_messages<AssetType, StableType>(proposal: &Proposal<AssetType, StableType>): &vector<String> {
     &proposal.outcome_data.outcome_messages
 }
@@ -1890,7 +1791,6 @@ public fun new_for_testing<AssetType, StableType>(
         conditional_liquidity_ratio_percent: 50,  // 50% (base 100, not bps!)
         fee_escrow,
         treasury_address,
-        subsidy_escrow: option::none(),  // No subsidy for test proposals
         policy_modes: vector::tabulate!(outcome_count as u64, |_| 0u8),
         required_council_ids: vector::tabulate!(outcome_count as u64, |_| option::none()),
         council_approval_proofs: vector::tabulate!(outcome_count as u64, |_| option::none()),
@@ -2168,7 +2068,6 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
         conditional_liquidity_ratio_percent: _,
         fee_escrow,
         treasury_address: _,
-        subsidy_escrow,
         policy_modes: _,
         required_council_ids: _,
         council_approval_proofs: _,
@@ -2179,54 +2078,5 @@ public fun destroy_for_testing<AssetType, StableType>(proposal: Proposal<AssetTy
     bag::destroy_empty(conditional_metadata);
     fee_escrow.destroy_zero();
 
-    // Destroy subsidy escrow if present
-    if (subsidy_escrow.is_some()) {
-        let escrow = subsidy_escrow.extract();
-        subsidy_escrow_destroy_for_testing(escrow);
-    } else {
-        subsidy_escrow.destroy_none();
-    };
-
     object::delete(id);
-}
-
-/// Store subsidy escrow inline in proposal (for automatic cleanup)
-/// This replaces the old pattern of sharing SubsidyEscrow as a separate object
-public fun store_subsidy_escrow<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-    escrow: SubsidyEscrow,
-) {
-    // Ensure we don't already have a subsidy escrow
-    assert!(proposal.subsidy_escrow.is_none(), ESubsidyEscrowAlreadySet);
-    option::fill(&mut proposal.subsidy_escrow, escrow);
-}
-
-/// Get mutable reference to subsidy escrow (if present)
-public fun borrow_subsidy_escrow_mut<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-): &mut SubsidyEscrow {
-    assert!(proposal.subsidy_escrow.is_some(), ENoSubsidyEscrow);
-    proposal.subsidy_escrow.borrow_mut()
-}
-
-/// Extract subsidy escrow from proposal (consumes the escrow for finalization)
-public fun extract_subsidy_escrow<AssetType, StableType>(
-    proposal: &mut Proposal<AssetType, StableType>,
-): SubsidyEscrow {
-    assert!(proposal.subsidy_escrow.is_some(), ENoSubsidyEscrow);
-    proposal.subsidy_escrow.extract()
-}
-
-/// Check if proposal has a subsidy escrow
-public fun has_subsidy_escrow<AssetType, StableType>(
-    proposal: &Proposal<AssetType, StableType>,
-): bool {
-    proposal.subsidy_escrow.is_some()
-}
-
-/// Helper function to destroy SubsidyEscrow in tests
-#[test_only]
-fun subsidy_escrow_destroy_for_testing(escrow: SubsidyEscrow) {
-    use futarchy_markets_core::subsidy_escrow;
-    subsidy_escrow::destroy_test_escrow(escrow);
 }

@@ -69,9 +69,7 @@ fun drain_all(expired: &mut Expired) {
     gc_registry::delete_challenge_withdrawals(expired);
     gc_registry::delete_cancel_challenged_withdrawals(expired);
 
-    // Governance Actions
-    gc_registry::delete_create_proposal(expired);
-    gc_registry::delete_proposal_reservation(expired);
+    // REMOVED: Governance Actions (second-order proposals deleted)
 
     // Note: Oracle price reading actions have drop ability, don't need cleanup
     // Only mint actions (which are generic) need cleanup
@@ -79,20 +77,11 @@ fun drain_all(expired: &mut Expired) {
     // Memo Actions
     gc_registry::delete_memo(expired);
 
-    // Platform Fee Actions
-    gc_registry::delete_collect_platform_fee(expired);
-
-    // Deposit Escrow Actions
-    gc_registry::delete_accept_deposit(expired);
+    // REMOVED: Platform Fee Actions (deprecated system deleted)
 
     // Walrus Renewal Actions
     gc_registry::delete_walrus_renewal(expired);
 
-    // Commitment Actions (non-generic ones)
-    gc_registry::delete_execute_commitment(expired);
-    gc_registry::delete_cancel_commitment(expired);
-    gc_registry::delete_update_commitment_recipient(expired);
-    gc_registry::delete_withdraw_commitment(expired);
 
     // Quota Actions
     gc_registry::delete_set_quotas(expired);
@@ -146,9 +135,6 @@ fun drain_common_generics(expired: &mut Expired) {
 
     // Dividend Actions (phantom CoinType)
     gc_registry::delete_create_dividend<SUI>(expired);
-
-    // Commitment Actions (phantom AssetType)
-    gc_registry::delete_create_commitment_proposal<SUI>(expired);
 
     // Liquidity Actions for common pairs (phantom AssetType, StableType)
     drain_liquidity_generic_actions_for_pair<SUI, SUI>(expired);

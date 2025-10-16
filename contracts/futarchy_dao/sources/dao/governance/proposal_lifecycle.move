@@ -5,7 +5,6 @@ use account_actions::vault;
 use account_protocol::account::{Self, Account};
 use account_protocol::executable::{Self, Executable};
 use account_protocol::intents::{Self, Intent};
-use futarchy_actions::governance_actions::{Self, ProposalReservationRegistry};
 use futarchy_core::futarchy_config::{Self, FutarchyConfig, FutarchyOutcome};
 use futarchy_core::priority_queue::{Self, ProposalQueue, QueuedProposal};
 use futarchy_core::proposal_fee_manager::{Self, ProposalFeeManager};
@@ -269,7 +268,6 @@ public fun activate_proposal_from_queue<AssetType, StableType>(
 /// This should be called after trading has ended and TWAP prices are calculated
 public fun finalize_proposal_market<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -280,7 +278,6 @@ public fun finalize_proposal_market<AssetType, StableType>(
 ) {
     finalize_proposal_market_internal(
         account,
-        registry,
         proposal,
         escrow,
         market_state,
@@ -295,7 +292,6 @@ public fun finalize_proposal_market<AssetType, StableType>(
 /// Internal implementation shared by both finalization functions
 fun finalize_proposal_market_internal<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -379,12 +375,9 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
         i = i + 1;
     };
 
-    // --- BEGIN REGISTRY PRUNING ---
-    // Prune expired proposal reservations from the registry to prevent state bloat.
-    // This is done at the end of finalization when we have time to do cleanup.
-    let config = account::config(account);
-    governance_actions::prune_oldest_expired_bucket(registry, config, clock, ctx);
-    // --- END REGISTRY PRUNING ---
+    // --- REMOVED: REGISTRY PRUNING ---
+    // Proposal reservation system deleted (second-order proposals)
+    // --- END REMOVED SECTION ---
 
     // --- BEGIN OUTCOME CREATOR FEE REFUNDS & REWARDS ---
     // Economic model per user requirement:
@@ -495,7 +488,6 @@ fun finalize_proposal_market_internal<AssetType, StableType>(
 /// This function can be called by anyone (typically keepers) to trigger early resolution
 public entry fun try_early_resolve<AssetType, StableType>(
     account: &mut Account<FutarchyConfig>,
-    registry: &mut ProposalReservationRegistry,
     proposal: &mut Proposal<AssetType, StableType>,
     escrow: &mut coin_escrow::TokenEscrow<AssetType, StableType>,
     market_state: &mut MarketState,
@@ -572,7 +564,6 @@ public entry fun try_early_resolve<AssetType, StableType>(
     // Call standard finalization (without subsidy escrow)
     finalize_proposal_market(
         account,
-        registry,
         proposal,
         escrow,
         market_state,

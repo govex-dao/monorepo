@@ -10,7 +10,6 @@ module futarchy_factory::init_framework_actions;
 use account_actions::init_actions;
 use account_protocol::account::Account;
 use futarchy_core::futarchy_config::FutarchyConfig;
-use futarchy_vault::futarchy_vault;
 use std::option;
 use sui::clock::Clock;
 use sui::coin::{Coin, TreasuryCap};
@@ -26,11 +25,11 @@ public entry fun init_vault_deposit<CoinType: drop>(
     coin: Coin<CoinType>,
     ctx: &mut TxContext,
 ) {
-    // Use the default Futarchy vault name
+    // Use the default "treasury" vault name
     init_actions::init_vault_deposit(
         account,
         coin,
-        futarchy_vault::default_vault_name(),
+        b"treasury",
         ctx,
     );
 }

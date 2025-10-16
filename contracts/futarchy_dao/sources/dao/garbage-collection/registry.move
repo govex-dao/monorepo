@@ -10,12 +10,9 @@ use account_actions::vesting;
 use account_protocol::account::Account;
 use account_protocol::intents::Expired;
 use account_protocol::owned;
-use futarchy_actions::commitment_actions;
 use futarchy_actions::config_actions;
-use futarchy_actions::governance_actions;
 use futarchy_actions::liquidity_actions;
 use futarchy_actions::memo_actions;
-use futarchy_actions::platform_fee_actions;
 use futarchy_actions::quota_actions;
 use futarchy_core::futarchy_config::{FutarchyConfig, FutarchyOutcome};
 use futarchy_governance_actions::protocol_admin_actions;
@@ -27,7 +24,6 @@ use futarchy_multisig::security_council_actions;
 use futarchy_oracle::oracle_actions;
 use futarchy_payments::dividend_actions;
 use futarchy_streams::stream_actions;
-use futarchy_vault::deposit_escrow_actions;
 
 /// Register one delete_* per action you actually use in futarchy.
 /// This module serves as a central registry for all delete functions.
@@ -105,21 +101,7 @@ public fun delete_approve_policy_change(expired: &mut Expired) {
 }
 
 // === Vault/Custody Actions ===
-public fun delete_approve_custody<R>(expired: &mut Expired) {
-    futarchy_vault::custody_actions::delete_approve_custody<R>(expired);
-}
-
-public fun delete_accept_into_custody<R>(expired: &mut Expired) {
-    futarchy_vault::custody_actions::delete_accept_into_custody<R>(expired);
-}
-
-public fun delete_add_coin_type<CoinType>(expired: &mut Expired) {
-    futarchy_vault::futarchy_vault::delete_add_coin_type<CoinType>(expired);
-}
-
-public fun delete_remove_coin_type<CoinType>(expired: &mut Expired) {
-    futarchy_vault::futarchy_vault::delete_remove_coin_type<CoinType>(expired);
-}
+// REMOVED: custody_actions deleted, add/remove coin type actions deleted
 
 // === Liquidity Actions ===
 public fun delete_add_liquidity<AssetType, StableType>(expired: &mut Expired) {
@@ -294,13 +276,7 @@ public fun delete_cancel_challenged_withdrawals(expired: &mut Expired) {
 }
 
 // === Governance Actions ===
-public fun delete_create_proposal(expired: &mut Expired) {
-    governance_actions::delete_create_proposal(expired);
-}
-
-public fun delete_proposal_reservation(expired: &mut Expired) {
-    governance_actions::delete_proposal_reservation(expired);
-}
+// REMOVED: Second-order proposals and reservation system deleted
 
 // === Oracle Actions ===
 // NOTE: ConditionalMint and TieredMint have been replaced by PriceBasedMintGrant shared object
@@ -316,36 +292,8 @@ public fun delete_create_dividend<CoinType>(expired: &mut Expired) {
     dividend_actions::delete_create_dividend<CoinType>(expired);
 }
 
-// === Deposit Escrow Actions ===
-public fun delete_accept_deposit(expired: &mut Expired) {
-    deposit_escrow_actions::delete_accept_deposit(expired);
-}
-
-// === Commitment Actions ===
-public fun delete_create_commitment_proposal<AssetType>(expired: &mut Expired) {
-    commitment_actions::delete_create_commitment_proposal<AssetType>(expired);
-}
-
-public fun delete_execute_commitment(expired: &mut Expired) {
-    commitment_actions::delete_execute_commitment(expired);
-}
-
-public fun delete_cancel_commitment(expired: &mut Expired) {
-    commitment_actions::delete_cancel_commitment(expired);
-}
-
-public fun delete_update_commitment_recipient(expired: &mut Expired) {
-    commitment_actions::delete_update_commitment_recipient(expired);
-}
-
-public fun delete_withdraw_commitment(expired: &mut Expired) {
-    commitment_actions::delete_withdraw_commitment(expired);
-}
-
 // === Platform Fee Actions ===
-public fun delete_collect_platform_fee(expired: &mut Expired) {
-    platform_fee_actions::delete_collect_platform_fee(expired);
-}
+// REMOVED: Deprecated platform fee collection system deleted
 
 // === Walrus Renewal Actions ===
 public fun delete_walrus_renewal(expired: &mut Expired) {

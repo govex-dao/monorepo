@@ -30,7 +30,7 @@ use futarchy_core::{
 };
 use futarchy_core::resource_requests::{Self, ResourceRequest, ResourceReceipt};
 use futarchy_markets_core::unified_spot_pool::{Self, UnifiedSpotPool, LPToken};
-use futarchy_vault::lp_token_custody;
+use futarchy_actions::lp_token_custody;
 // AddLiquidityAction defined locally since futarchy_one_shot_utils module doesn't exist
 
 // === Friend Modules === (deprecated in 2024 edition, using public(package) instead)

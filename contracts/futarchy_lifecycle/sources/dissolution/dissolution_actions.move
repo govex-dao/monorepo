@@ -26,9 +26,10 @@ use futarchy_core::{
     action_types,
     resource_requests::{Self as resource_requests, ResourceReceipt, ResourceRequest},
 };
-use futarchy_vault::{futarchy_vault, lp_token_custody};
+use futarchy_actions::lp_token_custody;
 use futarchy_streams::stream_actions;
 use futarchy_lifecycle::dissolution_auction;
+use account_actions::vault;
 
 // === Constants ===
 
@@ -770,13 +771,12 @@ public fun do_distribute_assets<Outcome: store, CoinType: drop, IW: drop>(
 
     // Return any remainder back to sender or destroy if zero
     if (coin::value(&distribution_coin) > 0) {
-        let vault_name = string::utf8(futarchy_vault::default_vault_name());
-        if (futarchy_vault::is_coin_type_allowed<FutarchyConfig, CoinType>(account)) {
-            futarchy_vault::deposit_existing_coin_type<CoinType>(
+        let vault_name = string::utf8(b"treasury");
+        if (vault::is_coin_type_approved<FutarchyConfig, CoinType>(account, vault_name)) {
+            vault::deposit_approved<FutarchyConfig, CoinType>(
                 account,
-                distribution_coin,
                 vault_name,
-                ctx
+                distribution_coin
             );
         } else {
             transfer::public_transfer(distribution_coin, ctx.sender());

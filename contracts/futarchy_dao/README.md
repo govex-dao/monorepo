@@ -31,7 +31,6 @@ find \
   contracts/futarchy_core/sources \
   contracts/futarchy_markets_core/sources \
   contracts/futarchy_markets_operations/sources \
-  contracts/futarchy_vault/sources \
   contracts/futarchy_multisig/sources \
   contracts/futarchy_specialized_actions/sources \
   contracts/futarchy_lifecycle/sources \
@@ -81,7 +80,6 @@ find \
     contracts/futarchy_markets_core/sources \
     contracts/futarchy_markets_operations/sources \
     contracts/futarchy_markets_primitives/sources \
-    contracts/futarchy_vault/sources \
     contracts/futarchy_multisig/sources \
     contracts/futarchy_payments/sources \
     contracts/futarchy_streams/sources \
@@ -92,7 +90,7 @@ find \
     contracts/futarchy_governance_actions/sources \
     contracts/futarchy_actions/sources \
     contracts/futarchy_dao/sources \
-    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_20_packages.txt
+    -type f -name '*.move' ! -name "*test*" ! -name "*Test*" -exec cat {} + > all_19_packages.txt
 ```
 
 

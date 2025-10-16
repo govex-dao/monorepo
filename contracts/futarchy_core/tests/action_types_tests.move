@@ -190,19 +190,7 @@ fun test_file_registry_action_typenames() {
     assert!(add_chunk != set_immutable, 3);
 }
 
-#[test]
-fun test_commitment_proposal_action_typenames() {
-    let create = action_types::create_commitment_proposal();
-    let execute = action_types::execute_commitment();
-    let cancel = action_types::cancel_commitment();
-    let update = action_types::update_commitment_recipient();
-    let withdraw = action_types::withdraw_commitment();
 
-    assert!(create != execute, 0);
-    assert!(execute != cancel, 1);
-    assert!(cancel != update, 2);
-    assert!(update != withdraw, 3);
-}
 
 // === TypeName Equality Tests ===
 
@@ -292,7 +280,7 @@ fun test_all_categories_unique() {
     let admin = action_types::set_factory_paused();
     let verification = action_types::request_verification();
     let file = action_types::create_dao_file_registry();
-    let commitment = action_types::create_commitment_proposal();
+    
 
     // All should be unique
     assert!(config != liquidity, 0);
@@ -306,7 +294,7 @@ fun test_all_categories_unique() {
     assert!(config != admin, 8);
     assert!(config != verification, 9);
     assert!(config != file, 10);
-    assert!(config != commitment, 11);
+    
 
     // Sample a few more cross-category comparisons
     assert!(liquidity != governance, 12);
